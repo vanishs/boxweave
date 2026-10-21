@@ -8,13 +8,13 @@ BoxWeave connects AI coding agents to self-hosted, isolated development environm
 
 ## Install on an Ubuntu server
 
-Once `vanishs/boxweave` has been published:
+The published installer may be run directly, but review the code and prefer a pinned, audited release in production:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
 ```
 
-BoxWeave detects an existing Containarium installation, or invokes its official installer if it is missing (`https://containarium.dev/install.sh`). It installs the Containarium MCP backend, a protected launcher, short-lived JWT rotation, and a verified container SSH host-key synchronization timer. It does **not** delete existing LXC instances.
+BoxWeave detects an existing Containarium installation, or invokes its official installer if it is missing (`https://containarium.dev/install.sh`) with APT-compatible file permissions. It repairs verified Zabbly APT keyring permissions from an interrupted prior attempt and initializes an empty Incus instance that has no storage pool. It installs the Containarium MCP backend, a protected launcher, short-lived JWT rotation, and a verified container SSH host-key synchronization timer. It does **not** delete existing LXC instances.
 
 At completion, the installer prints **two personalized PowerShell commands**. Run **one** of them on the Windows machine that runs Codex:
 
@@ -24,6 +24,15 @@ At completion, the installer prints **two personalized PowerShell commands**. Ru
 The Windows setup generates local SSH key pairs, enrolls only the active transport public key on the Ubuntu host using an existing SSH login, pins the Ubuntu host's ED25519 key, and configures the Codex MCP registration and global `AGENTS.md` policy block.
 
 **No private key is printed by the Ubuntu installer or transferred from Ubuntu to Windows.** Server installation does not require any client-specific Windows username.
+
+**First-boot readiness:** Containarium's core containers may take a while to initialize. BoxWeave now waits up to 15 minutes for the REST API, displaying progress, and fails with targeted diagnostics rather than printing repeated connection errors. See [Troubleshooting](docs/TROUBLESHOOTING.md). This is not a guarantee that Containarium supports every newer Ubuntu release.
+
+For more reliable error detection over SSH, download the installer and run it explicitly instead of using a pipeline:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh -o /tmp/boxweave-install.sh
+sudo bash /tmp/boxweave-install.sh
+```
 
 ### Advanced server options
 
@@ -40,6 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh \
 | `--allow-cidr` / `BOXWEAVE_ALLOWED_CIDRS` | Discovered private Incus managed bridge subnets | Restrict container IPs eligible for host-key synchronization |
 | `--api-url` / `BOXWEAVE_API_URL` | `http://127.0.0.1:8080` | Local Containarium REST API; plaintext HTTP only on loopback |
 | `--sync-interval` / `BOXWEAVE_SYNC_INTERVAL` | `15` | Host-key sync interval in seconds |
+| `--api-ready-timeout` / `BOXWEAVE_API_READY_TIMEOUT` | `900` | Maximum seconds to await Containarium first-boot API readiness (30–3600) |
 | `--repo` / `BOXWEAVE_REPO` | `vanishs/boxweave` | Component source repository |
 | `--ref` / `BOXWEAVE_REF` | `main` | Source branch or tag; pin a reviewed tag for production |
 | `CONTAINARIUM_VERSION` | `latest` | Release tag of the upstream Containarium MCP binary |
@@ -120,11 +130,22 @@ After Windows setup and restarting Codex, verify that MCP server `boxweave` expo
 - Running `curl | sudo bash` executes network-supplied root-level code. Prefer inspecting and pinning an immutable release, and never treat transport TLS as proof that all downloaded code has been reviewed.
 - BoxWeave has no automatic permission to modify unrelated containers or provider infrastructure. Its sync script filters eligible Incus containers by Containarium metadata and name, and confirms host identities before updates.
 
-See [Security](docs/SECURITY.md) and [Legacy migration](docs/MIGRATION.md) before upgrading a previously configured machine.
+See [Security](docs/SECURITY.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Legacy migration](docs/MIGRATION.md) before upgrading a previously configured machine.
 
-## Publish to GitHub
+## Publish or update GitHub
 
-The project is supplied as a source package. It is **not published just by generating this archive**. The following uses the repository owner's GitHub CLI credentials to create a new **public** repository:
+If your repository already exists, **do not** run the initial publication scripts: they intentionally refuse to overwrite existing repositories. To update it, apply the reviewed changes in a normal Git working copy, then commit and push. For example:
+
+```bash
+git clone https://github.com/vanishs/boxweave.git
+cd boxweave
+# Copy the changed files from the verified source package, or apply the included patch.
+git add install.sh README.md docs/ tests/
+git commit -m "fix: harden Ubuntu first-boot installation"
+git push origin main
+```
+
+For a *new*, empty repository, the included publication scripts create a public repository with the owner’s GitHub CLI credentials:
 
 ```bash
 bash publish.sh vanishs/boxweave
@@ -136,7 +157,7 @@ On Windows, from the extracted project folder:
 .\publish.ps1 -Repository 'vanishs/boxweave'
 ```
 
-You need `git`, `gh`, an authenticated `gh auth login` session, and a configured Git commit author. The publishing scripts refuse to overwrite an existing repository or Git history. **Do not run the raw install URL until the repository has been published.**
+You need `git`, `gh`, an authenticated `gh auth login` session, and a configured Git commit author. The initial publishing scripts refuse to overwrite an existing repository or Git history. A repository update should go through ordinary Git commits or a pull request.
 
 ## Development checks
 
@@ -162,8 +183,10 @@ agents/README.md                  Agent-adapter extension point
 providers/containarium/README.md  Current infrastructure-provider interface
 docs/ARCHITECTURE.md              Interfaces and compatibility boundaries
 docs/MIGRATION.md                 Moving from the previous installer
+docs/TROUBLESHOOTING.md           First-boot and interrupted install recovery
 docs/LOCALIZATION.md             Localization convention (planned)
-tests/test_hostkeys.py            Test suite
+tests/test_hostkeys.py            Host-key unit tests
+tests/test_installer_regressions.py  Fresh Ubuntu install regression checks
 publish.sh / publish.ps1          GitHub publication helpers
 .github/workflows/ci.yml         Automated static checks
 ```

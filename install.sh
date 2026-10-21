@@ -14,9 +14,26 @@ SSH_PORT="${BOXWEAVE_SSH_PORT:-}"
 ALLOWED_CIDRS="${BOXWEAVE_ALLOWED_CIDRS:-}"
 API_URL="${BOXWEAVE_API_URL:-http://127.0.0.1:8080}"
 SYNC_INTERVAL="${BOXWEAVE_SYNC_INTERVAL:-15}"
+API_READY_TIMEOUT="${BOXWEAVE_API_READY_TIMEOUT:-900}"
 RAW_BASE="https://raw.githubusercontent.com/${BOXWEAVE_REPO}/${BOXWEAVE_REF}"
 CONFIG_DIR=/etc/boxweave
 BIN=/usr/local/sbin
+INSTALL_PHASE='initialization'
+TMP_INSTALL=''
+TMPDIR_DL=''
+STAGING_FILE=''
+cleanup() {
+  [[ -z "$TMP_INSTALL" ]] || rm -f -- "$TMP_INSTALL"
+  [[ -z "$TMPDIR_DL" ]] || rm -rf -- "$TMPDIR_DL"
+  [[ -z "$STAGING_FILE" ]] || rm -f -- "$STAGING_FILE"
+}
+report_failure() {
+  local code=$?
+  printf '[boxweave] FAILED in phase "%s" (exit %s). The installer can be rerun after the cause is fixed.\n' "$INSTALL_PHASE" "$code" >&2
+  exit "$code"
+}
+trap cleanup EXIT
+trap report_failure ERR
 
 log() { printf '\n[boxweave] %s\n' "$*"; }
 die() { printf '[boxweave] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -25,11 +42,13 @@ usage() {
 Usage: curl -fsSL ${RAW_BASE}/install.sh | sudo bash
        sudo bash install.sh [--user USER] [--ssh-host HOST] [--ssh-port PORT]
                             [--allow-cidr CIDR] [--api-url URL] [--sync-interval SECONDS]
+                            [--api-ready-timeout SECONDS]
                             [--repo OWNER/REPO] [--ref REF]
                             [--jwt-secret-file PATH] [--containariumd-binary PATH]
 Environment: BOXWEAVE_LINUX_USER, BOXWEAVE_SSH_HOST, BOXWEAVE_SSH_PORT,
              BOXWEAVE_ALLOWED_CIDRS, BOXWEAVE_API_URL, BOXWEAVE_SYNC_INTERVAL,
              BOXWEAVE_JWT_SECRET_FILE, BOXWEAVE_CONTAINARIUMD_BINARY,
+             BOXWEAVE_API_READY_TIMEOUT,
              CONTAINARIUM_VERSION, BOXWEAVE_REPO, BOXWEAVE_REF.
 EOF
 }
@@ -43,6 +62,7 @@ while (($#)); do
     --jwt-secret-file) JWT_SECRET_FILE="${2:?}"; shift 2;;
     --containariumd-binary) CONTAINARIUMD_BINARY="${2:?}"; shift 2;;
     --sync-interval) SYNC_INTERVAL="${2:?}"; shift 2;;
+    --api-ready-timeout) API_READY_TIMEOUT="${2:?}"; shift 2;;
     --repo) BOXWEAVE_REPO="${2:?}"; shift 2;;
     --ref) BOXWEAVE_REF="${2:?}"; shift 2;;
     --help|-h) usage; exit 0;;
@@ -66,6 +86,8 @@ TARGET_GID=$(id -g "$LINUX_USER")
 command -v systemctl >/dev/null || die 'systemd is required'
 command -v apt-get >/dev/null || die 'apt is required'
 
+[[ "$API_READY_TIMEOUT" =~ ^[0-9]+$ ]] && ((API_READY_TIMEOUT >= 30 && API_READY_TIMEOUT <= 3600)) || die 'Invalid API ready timeout (30–3600 seconds)'
+
 log "Configuring Ubuntu user $LINUX_USER ($TARGET_HOME)"
 export DEBIAN_FRONTEND=noninteractive
 if ! command -v curl >/dev/null || ! command -v ssh-keygen >/dev/null || ! command -v python3 >/dev/null || ! command -v runuser >/dev/null; then
@@ -73,16 +95,63 @@ if ! command -v curl >/dev/null || ! command -v ssh-keygen >/dev/null || ! comma
   apt-get install -y -qq curl ca-certificates openssh-client python3 util-linux
 fi
 
+# Recover permissions from an earlier interrupted installation without
+# disabling APT signatures or trusting an unknown replacement key.
+repair_zabbly_apt_permissions() {
+  local keyring=/usr/share/keyrings/zabbly-incus.gpg
+  local sourcelist=/etc/apt/sources.list.d/zabbly-incus-stable.list
+  local preferences=/etc/apt/preferences.d/zabbly-incus
+  if [[ -f "$keyring" ]]; then
+    local fingerprint
+    fingerprint=$(gpg --show-keys --with-colons "$keyring" 2>/dev/null | awk -F: '$1=="fpr" {print $10; exit}' || true)
+    [[ "$fingerprint" == '4EFC590696CB15B87C73A3AD82CC8797C838DCFD' ]] ||       die "Unexpected Zabbly APT signing key at $keyring; inspect it manually"
+    chmod 0644 "$keyring"
+  fi
+  if [[ -f "$sourcelist" ]] && grep -Fq 'https://pkgs.zabbly.com/incus/stable' "$sourcelist"; then
+    chmod 0644 "$sourcelist"
+  fi
+  if [[ -f "$preferences" ]] && grep -Fq 'Pin: origin pkgs.zabbly.com' "$preferences"; then
+    chmod 0644 "$preferences"
+  fi
+}
+
+# A sufficiently recent Incus binary may be present without a storage pool.
+# The upstream installer treats this as installed and may skip initialization.
+# Only initialize on a host with zero existing containers and no pool.
+ensure_incus_initialized() {
+  command -v incus >/dev/null || die 'Incus executable not found'
+  incus info >/dev/null || die 'Incus daemon is not reachable'
+  local pools instances
+  pools=$(incus storage list --format json) || die 'Could not list Incus storage pools'
+  if ! python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin) else 1)' <<< "$pools"; then
+    instances=$(incus list --format json) || die 'Could not list Incus containers'
+    python3 -c 'import json,sys; sys.exit(0 if not json.load(sys.stdin) else 1)' <<< "$instances" ||       die 'Incus has containers but no storage pool; manual review required'
+    log 'Incus has no storage pool; initializing default network and storage on this empty host'
+    incus admin init --auto || die 'Incus default initialization failed'
+  fi
+  pools=$(incus storage list --format json) || die 'Could not recheck Incus storage pools'
+  python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin) else 1)' <<< "$pools" ||     die 'Incus has no storage pool after initialization'
+  if incus storage list --format json | python3 -c 'import json,sys; sys.exit(0 if any(p.get("driver") == "dir" for p in json.load(sys.stdin)) else 1)'; then
+    log 'WARNING: Incus uses the dir storage driver. ZFS or btrfs is recommended for stronger per-container storage isolation.'
+  fi
+}
+
+INSTALL_PHASE='provider installation'
+repair_zabbly_apt_permissions
 if ! command -v containarium >/dev/null || ! command -v incus >/dev/null; then
   log 'Containarium missing; downloading official installer from containarium.dev'
-  tmp_install=$(mktemp)
-  trap 'rm -f "${tmp_install:-}"' EXIT
-  curl -fsSL --retry 3 https://containarium.dev/install.sh -o "$tmp_install"
-  bash "$tmp_install"
-  rm -f "$tmp_install"; unset tmp_install
+  TMP_INSTALL=$(mktemp)
+  curl -fsSL --retry 3 https://containarium.dev/install.sh -o "$TMP_INSTALL"
+  # Containarium installs APT keyrings and source lists. APT's _apt user must
+  # read these files; do not propagate BoxWeave's private-file umask 077.
+  (umask 022; bash "$TMP_INSTALL")
+  rm -f "$TMP_INSTALL"; TMP_INSTALL=''
+  repair_zabbly_apt_permissions
 fi
 command -v incus >/dev/null || die 'Incus not found after Containarium installation'
 command -v containarium >/dev/null || die 'Containarium CLI not found after installation'
+INSTALL_PHASE='Incus validation'
+ensure_incus_initialized
 if [[ -z "$CONTAINARIUMD_BINARY" ]]; then
   CONTAINARIUMD_BINARY=$(command -v containariumd || true)
 fi
@@ -90,6 +159,7 @@ fi
 [[ "$CONTAINARIUMD_BINARY" == /* && "$JWT_SECRET_FILE" == /* ]] || die 'Provider binary and JWT secret paths must be absolute'
 [[ -f "$JWT_SECRET_FILE" ]] || die "Provider JWT secret not found: $JWT_SECRET_FILE"
 
+INSTALL_PHASE='SSH transport preparation'
 # Windows SSH requires an OpenSSH server on Ubuntu. Preserve any existing sshd
 # configuration; only install the distribution package when absent.
 if [[ ! -x /usr/sbin/sshd ]]; then
@@ -130,6 +200,7 @@ assert not u.path or u.path == '/'
 assert u.scheme != 'http' or u.hostname in ('localhost', '127.0.0.1', '::1'), 'Plaintext HTTP is allowed only for loopback'
 PY_VALIDATE
 
+INSTALL_PHASE='provider SSH identity preparation'
 # Manage a host-user SSH key that the Containarium provider's LocateOrGenerate sees.
 # Do not silently replace personal keys. Priority: id_ed25519, id_rsa, containarium_ed25519.
 SSH_DIR="$TARGET_HOME/.ssh"
@@ -154,17 +225,33 @@ ssh-keygen -lf "$BOX_PUB" -E sha256 >/dev/null || die "Invalid SSH public key: $
 PRIVATE_BOX_KEY="${BOX_PUB%.pub}"
 runuser -u "$LINUX_USER" -- ssh-keygen -y -P "" -f "$PRIVATE_BOX_KEY" >/dev/null 2>&1 || die "MCP key cannot be opened without a passphrase: $PRIVATE_BOX_KEY"
 
-# Ensure API service is enabled and locally reachable, without exposing an additional listener.
+# Core containers may take several minutes to download and start for the
+# first time. Do not mistake their initialization delay for a failed daemon.
+INSTALL_PHASE='Containarium REST API readiness'
 systemctl enable --now containarium.service >/dev/null || die 'Could not enable/start containarium.service'
-log 'Checking local Containarium REST API'
+log "Waiting up to ${API_READY_TIMEOUT}s for Containarium REST API at $API_URL"
 healthy=0
-for _ in $(seq 1 90); do
-  status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "${API_URL%/}/v1/containers" || true)
-  if [[ "$status" == 200 || "$status" == 401 || "$status" == 403 ]]; then healthy=1; break; fi
-  sleep 2
+start_time=$SECONDS
+last_report=$SECONDS
+while (( SECONDS - start_time < API_READY_TIMEOUT )); do
+  status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 "${API_URL%/}/v1/containers" || true)
+  if [[ "$status" == 200 || "$status" == 401 || "$status" == 403 ]]; then
+    healthy=1
+    break
+  fi
+  if ! systemctl is-active --quiet containarium.service; then
+    die 'Containarium service stopped during first boot. Review: sudo journalctl -u containarium -n 80 --no-pager'
+  fi
+  if (( SECONDS - last_report >= 30 )); then
+    log "Containarium is running; REST API not ready yet ($((SECONDS - start_time))s elapsed, last HTTP status: ${status:-unavailable}). Core containers may still be initializing."
+    last_report=$SECONDS
+  fi
+  sleep 5
 done
-(( healthy == 1 )) || die "Containarium REST API unavailable on $API_URL"
+(( healthy == 1 )) || die "Containarium REST API did not become ready within ${API_READY_TIMEOUT}s. Check 'sudo incus list' and 'sudo journalctl -u containarium -n 80 --no-pager' before rerunning."
+log "Containarium REST API responded with HTTP $status"
 
+INSTALL_PHASE='MCP download and checksum verification'
 log 'Installing Containarium platform MCP with upstream release checksum validation'
 ARCH=$(dpkg --print-architecture)
 case "$ARCH" in amd64|arm64) ;; *) die "Unsupported CPU architecture: $ARCH";; esac
@@ -174,7 +261,6 @@ if [[ "$CONTAINARIUM_VERSION" == latest ]]; then
 fi
 [[ "$CONTAINARIUM_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'Unsupported Containarium release tag'
 TMPDIR_DL=$(mktemp -d)
-trap 'rm -rf "${TMPDIR_DL:-}"' EXIT
 RELEASE_URL="https://github.com/footprintai/containarium/releases/download/${CONTAINARIUM_VERSION}"
 curl -fsSL --retry 3 "$RELEASE_URL/SHA256SUMS.txt" -o "$TMPDIR_DL/SHA256SUMS.txt"
 curl -fsSL --retry 3 "$RELEASE_URL/mcp-server-linux-${ARCH}" -o "$TMPDIR_DL/mcp-server-linux-${ARCH}"
@@ -182,7 +268,7 @@ curl -fsSL --retry 3 "$RELEASE_URL/mcp-server-linux-${ARCH}" -o "$TMPDIR_DL/mcp-
   || die 'Release binary checksum verification failed'
 install -d -o root -g root -m 0755 /usr/local/libexec/boxweave
 install -o root -g root -m 0755 "$TMPDIR_DL/mcp-server-linux-${ARCH}" /usr/local/libexec/boxweave/containarium-mcp-server
-rm -rf "$TMPDIR_DL"; unset TMPDIR_DL
+rm -rf "$TMPDIR_DL"; TMPDIR_DL=''
 
 install -d -o root -g root -m 0755 "$CONFIG_DIR" "$CONFIG_DIR/providers"
 # JSON configuration avoids substituting untrusted paths into root-executed services.
@@ -200,14 +286,15 @@ out.write_text(json.dumps(data, indent=2) + '\n')
 out.chmod(0o600)
 PY
 
+INSTALL_PHASE='BoxWeave service installation'
 log 'Installing trusted SSH host-key sync and automatic token rotation'
 for spec in 'server/hostkeys.py:boxweave-hostkeys' 'server/tokens.py:boxweave-token'; do
   source_file="${spec%%:*}"; target_file="${spec##*:}"
-  staging=$(mktemp)
-  curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$staging"
-  python3 -m py_compile "$staging" || die "Invalid Python source: $source_file"
-  install -o root -g root -m 0755 "$staging" "$BIN/$target_file"
-  rm -f "$staging"
+  STAGING_FILE=$(mktemp)
+  curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$STAGING_FILE"
+  python3 -m py_compile "$STAGING_FILE" || die "Invalid Python source: $source_file"
+  install -o root -g root -m 0755 "$STAGING_FILE" "$BIN/$target_file"
+  rm -f "$STAGING_FILE"; STAGING_FILE=''
 done
 
 # The SSH forced-command entry points only to this root-owned executable.
@@ -286,6 +373,7 @@ for old_timer in containarium-hostkey-sync.timer containarium-token-rotate.timer
   fi
 done
 
+INSTALL_PHASE='BoxWeave service verification'
 # Token generation must pass before timers start. No token contents are printed.
 systemctl daemon-reload
 systemctl start boxweave-token.service || die 'Cannot mint MCP JWT. Inspect journalctl -u boxweave-token.service'
