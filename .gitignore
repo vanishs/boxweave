@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.secret
+*.jwt
+*.token
+*.key
+boxweave
+boxweave.pub
+boxweave_known_hosts
+id_ed25519
+id_rsa
+*.backup-*
+*.old
+.DS_Store
+.vscode/
+.idea/
