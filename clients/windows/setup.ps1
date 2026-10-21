@@ -10,6 +10,8 @@ param(
     [Parameter(Mandatory=$true)][string]$SshHost,
     [ValidateRange(1,65535)][int]$SshPort = 22,
     [Parameter(Mandatory=$true)][string]$SshUser,
+    # Existing SSH login identity for key-only hosts; omit to use password login.
+    [string]$BootstrapIdentityFile = '',
     [Parameter(Mandatory=$true)][string]$ServerHostKey,
     [Parameter(Mandatory=$true)][string]$BoxPublicKeyBase64,
     [Parameter(Mandatory=$true)][string]$McpRemoteCommand,
@@ -223,8 +225,24 @@ mv -f "$tmp" "$HOME/.ssh/authorized_keys"
 $enrollmentScript = $enrollmentScript.Replace('__KEYDATA__', $keyData).Replace('__KEYMATERIAL__', $keyMaterial)
 $sshAuthArgs = @('-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
                  '-o', 'HostKeyAlgorithms=ssh-ed25519', '-p', "$SshPort")
+# Do not let ssh-agent offer unrelated identities during first-time enrollment:
+# sshd may disconnect with "Too many authentication failures" before a password prompt.
+# For SSH-key-only servers, explicitly select the already-authorized bootstrap key.
+if ($BootstrapIdentityFile) {
+    if (-not (Test-Path -LiteralPath $BootstrapIdentityFile -PathType Leaf)) {
+        throw "Bootstrap SSH identity file does not exist: $BootstrapIdentityFile"
+    }
+    $bootstrapKey = (Resolve-Path -LiteralPath $BootstrapIdentityFile).ProviderPath
+    $sshAuthArgs += @('-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none',
+                      '-o', 'PreferredAuthentications=publickey', '-i', $bootstrapKey)
+    Write-Host '[boxweave] Enrolling with the explicitly selected bootstrap SSH identity.'
+} else {
+    $sshAuthArgs += @('-o', 'PubkeyAuthentication=no',
+                      '-o', 'PreferredAuthentications=keyboard-interactive,password')
+    Write-Host '[boxweave] Enrolling with password authentication (SSH agent keys disabled).'
+    Write-Host '         On key-only servers, rerun with -BootstrapIdentityFile PATH.'
+}
 Write-Host '[boxweave] Authorizing the selected transport key on Ubuntu using your EXISTING SSH login.'
-Write-Host '         SSH may ask for the password / passphrase of an existing admin login.'
 $scriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($enrollmentScript))
 $remoteEnrollmentCommand = "printf '%s' '$scriptB64' | base64 -d | sh"
 & $ssh @sshAuthArgs -T "$SshUser@$SshHost" $remoteEnrollmentCommand
