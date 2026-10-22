@@ -12,7 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = (ROOT / 'install.sh').read_text(encoding='utf-8')
 START = 'ensure_incus_initialized() {'
-END = "\nINSTALL_PHASE='provider installation'"
+END = '\n# Refuse to run competing legacy synchronizers'
 FUNC = INSTALLER[INSTALLER.index(START):INSTALLER.index(END)]
 
 

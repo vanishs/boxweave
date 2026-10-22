@@ -36,6 +36,13 @@ sudo bash /tmp/boxweave-install.sh
 
 ### Advanced server options
 
+**Update/fix:** rerun the revised installer to refresh BoxWeave files and repair
+managed services. Saved settings are retained; explicit flags/environment override
+them. Downloads are staged before replacement, managed files are backed up, and
+timers are restarted after validation. Existing Containarium/Incus packages are
+reused. Old locally saved installer copies need to be downloaded again to obtain
+these fixes. See [installation, updates and recovery](docs/INSTALL-UPDATE.md).
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh \
   | sudo bash -s -- --user dev --ssh-host dev.example.net --ssh-port 2222
