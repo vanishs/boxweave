@@ -56,6 +56,8 @@ with open(sshdir / '.boxweave-hostkeys.lock', 'a+') as lock:
 
 
 def cmd(argv, timeout=25, input_data=None, check=True):
+    if argv and argv[0] == 'incus':
+        argv = ['incus', '--force-local', '--project', 'default', *argv[1:]]
     return subprocess.run(argv, input=input_data, text=True, capture_output=True,
                           timeout=timeout, check=check)
 
@@ -162,8 +164,11 @@ def synchronize_one(container, username, home, cidrs, apply):
     fresh = as_json(['incus', 'list', name, '--format', 'json'])
     if len(fresh) != 1 or fresh[0].get('name') != name:
         raise ValueError('Instance disappeared during verification')
-    if fresh[0].get('config', {}).get('volatile.uuid') != uuid:
-        raise ValueError('Instance UUID changed during verification')
+    if fresh[0].get('status', '').lower() != 'running':
+        raise ValueError('Instance stopped during verification')
+    identity_fields = ('name', 'created_at', 'config', 'expanded_config', 'devices', 'expanded_devices', 'profiles', 'type')
+    if any(fresh[0].get(field) != container.get(field) for field in identity_fields):
+        raise ValueError('Instance configuration or identity changed during verification (UUID alone is insufficient)')
     if ip_for(fresh[0], cidrs) != ip:
         raise ValueError('Instance IP changed during verification')
 

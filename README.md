@@ -58,6 +58,22 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh \
 
 There are intentionally **no hard-coded usernames, machine addresses, WSL distribution names, or LXC subnets**. Product-wide paths such as `/etc/boxweave` are stable installation conventions rather than machine-dependent configuration.
 
+## Management commands
+
+The source checkout provides a read-only management CLI:
+
+```bash
+bash boxweave.sh version
+bash boxweave.sh version --components --json
+sudo bash boxweave.sh doctor --api
+sudo bash boxweave.sh box inspect example-container --project default
+```
+
+The updated installer installs this as `boxweave`, for example `boxweave version`.
+BoxWeave's development version is separate from Containarium and Incus versions.
+See [CLI usage and result interpretation](docs/CLI.md) and
+[research integration and future work](docs/RESEARCH-INTEGRATION.md).
+
 ## Platform support
 
 | Role | Current support | Planned extension |
@@ -77,6 +93,8 @@ There are intentionally **no hard-coded usernames, machine addresses, WSL distri
 | `/etc/boxweave/config.json` | Provider configuration, selected Unix user, approved CIDRs |
 | `/etc/boxweave/providers/containarium.env` | Non-secret provider endpoint settings |
 | `/usr/local/bin/boxweave-mcp` | Root-owned SSH forced-command launcher |
+| `/usr/local/bin/boxweave` | Read-only management CLI |
+| `/usr/local/libexec/boxweave/{cli.py,VERSION}` | CLI implementation and BoxWeave version |
 | `/usr/local/libexec/boxweave/containarium-mcp-server` | Bundled upstream MCP backend executable |
 | `/usr/local/sbin/boxweave-hostkeys` | Trusted Incus → SSH host-key reconciler |
 | `/usr/local/sbin/boxweave-token` | MCP authentication-token rotation |

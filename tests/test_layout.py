@@ -18,7 +18,7 @@ class LayoutTests(unittest.TestCase):
                 self.assertTrue((ROOT / name).is_file())
 
     def test_install_paths_and_brand(self):
-        installer = (ROOT / 'install.sh').read_text()
+        installer = (ROOT / 'install.sh').read_text(encoding='utf-8')
         self.assertIn('vanishs/boxweave', installer)
         self.assertIn('/etc/boxweave', installer)
         self.assertIn('boxweave-hostkeys.service', installer)
@@ -28,7 +28,7 @@ class LayoutTests(unittest.TestCase):
         self.assertNotIn('/etc/codex-containarium-bridge', installer)
 
     def test_windows_client_has_vendor_neutral_names_and_explicit_gate(self):
-        content = (ROOT / 'clients/windows/setup.ps1').read_text()
+        content = (ROOT / 'clients/windows/setup.ps1').read_text(encoding='utf-8')
         self.assertIn("[string]$McpName = 'boxweave'", content)
         self.assertIn("[string]$KeyName = 'boxweave'", content)
         self.assertIn("[ValidateSet('Codex')]", content)
@@ -38,12 +38,14 @@ class LayoutTests(unittest.TestCase):
 
     def test_source_and_docs_are_english_only(self):
         for path in ROOT.rglob('*'):
+            if path.relative_to(ROOT).parts[0] in ('outputs', '.git'):
+                continue
             if path.suffix not in ('.py', '.ps1', '.sh', '.md', '.yml', '.json'):
                 continue
             if '__pycache__' in path.parts:
                 continue
             with self.subTest(path=str(path.relative_to(ROOT))):
-                data = path.read_text()
+                data = path.read_text(encoding='utf-8')
                 self.assertFalse(any('\u4e00' <= c <= '\u9fff' for c in data))
 
 

@@ -1,8 +1,10 @@
 import importlib.util
+import copy
 import ipaddress
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 SOURCE = Path(__file__).resolve().parents[1] / 'server' / 'hostkeys.py'
 spec = importlib.util.spec_from_file_location('knownhosts_sync', SOURCE)
@@ -53,6 +55,30 @@ class HostKeySyncTests(unittest.TestCase):
 
     def test_full_set_is_required(self):
         self.assertEqual(set(module.TYPES), {'ed25519', 'ecdsa', 'rsa'})
+
+    def test_incus_commands_use_local_default_project(self):
+        with patch.object(module.subprocess, 'run') as run:
+            module.cmd(['incus', 'list', '--format', 'json'])
+        self.assertEqual(run.call_args.args[0], ['incus', '--force-local', '--project', 'default', 'list', '--format', 'json'])
+
+    def assert_changed_instance_rejected(self, change, message):
+        original = self.box()
+        fresh = copy.deepcopy(original)
+        change(fresh)
+        scan = ''.join('10.143.82.2 ' + algorithm + ' PUBLIC\n' for algorithm in module.TYPES.values())
+        with patch.object(module, 'key_from_incus', return_value='PUBLIC'), \
+             patch.object(module, 'existing_keys', return_value=set()), \
+             patch.object(module, 'cmd', return_value=SimpleNamespace(stdout=scan)) as commands, \
+             patch.object(module, 'as_json', return_value=[fresh]):
+            with self.assertRaisesRegex(ValueError, message):
+                module.synchronize_one(original, 'test', Path('/not-written'), [ipaddress.ip_network('10.143.82.0/24')], True)
+        self.assertEqual(commands.call_count, 1)  # Scan only; no known_hosts write.
+
+    def test_same_uuid_with_changed_configuration_is_rejected(self):
+        self.assert_changed_instance_rejected(lambda b: b['config'].update({'security.nesting': 'true'}), 'UUID alone')
+
+    def test_stopped_instance_is_rejected_before_write(self):
+        self.assert_changed_instance_rejected(lambda b: b.update(status='Stopped'), 'stopped')
 
 
 if __name__ == '__main__':

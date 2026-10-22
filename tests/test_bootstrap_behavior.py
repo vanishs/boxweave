@@ -10,7 +10,7 @@ import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALLER = (ROOT / 'install.sh').read_text()
+INSTALLER = (ROOT / 'install.sh').read_text(encoding='utf-8')
 START = 'ensure_incus_initialized() {'
 END = "\nINSTALL_PHASE='provider installation'"
 FUNC = INSTALLER[INSTALLER.index(START):INSTALLER.index(END)]
@@ -24,12 +24,14 @@ class BootstrapBehaviorTests(unittest.TestCase):
             cli.write_text(textwrap.dedent('''\
                 #!/usr/bin/env bash
                 set -e
+                [[ "$1" == --force-local ]] || exit 41
+                shift
                 if [[ "$1" == info ]]; then exit 0; fi
                 if [[ "$1" == storage && "$2" == list ]]; then
                   if [[ -f "$MOCK_POOL" ]]; then echo '[{"name":"default","driver":"dir"}]'; else echo '[]'; fi
                   exit 0
                 fi
-                if [[ "$1" == list ]]; then cat "$MOCK_INSTANCES"; exit 0; fi
+                if [[ "$1" == list && "$2" == --all-projects ]]; then cat "$MOCK_INSTANCES"; exit 0; fi
                 if [[ "$1" == admin && "$2" == init && "$3" == --auto ]]; then
                   touch "$MOCK_POOL" "$MOCK_INITIALIZED"
                   exit 0

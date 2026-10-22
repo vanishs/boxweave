@@ -8,7 +8,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (ROOT / 'install.sh').read_text()
+SCRIPT = (ROOT / 'install.sh').read_text(encoding='utf-8')
 
 
 class InstallerRegressionTests(unittest.TestCase):
@@ -30,14 +30,15 @@ class InstallerRegressionTests(unittest.TestCase):
 
     def test_uninitialized_existing_incus_is_fixed_without_touching_containers(self):
         self.assertIn('ensure_incus_initialized()', SCRIPT)
-        self.assertIn('incus admin init --auto', SCRIPT)
+        self.assertIn('incus --force-local admin init --auto', SCRIPT)
         self.assertIn("Incus has containers but no storage pool; manual review required", SCRIPT)
         self.assertIn('ensure_incus_initialized\n', SCRIPT)
 
     def test_first_boot_has_configurable_readiness_wait_with_progress(self):
         self.assertIn('BOXWEAVE_API_READY_TIMEOUT:-900', SCRIPT)
         self.assertIn('--api-ready-timeout', SCRIPT)
-        self.assertIn('systemctl is-active --quiet containarium.service', SCRIPT)
+        self.assertIn('systemctl show containarium.service -p ActiveState --value', SCRIPT)
+        self.assertIn('"$daemon_state" != activating', SCRIPT)
         self.assertIn('Core containers may still be initializing.', SCRIPT)
         self.assertIn('REST API did not become ready within', SCRIPT)
         self.assertNotIn('seq 1 90', SCRIPT)

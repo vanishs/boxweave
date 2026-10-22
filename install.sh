@@ -85,6 +85,12 @@ TARGET_GID=$(id -g "$LINUX_USER")
 [[ "${ID:-}" == ubuntu ]] || die 'Only Ubuntu is supported by this installer'
 command -v systemctl >/dev/null || die 'systemd is required'
 command -v apt-get >/dev/null || die 'apt is required'
+if command -v systemd-detect-virt >/dev/null; then
+  container_type=$(systemd-detect-virt --container 2>/dev/null || true)
+  if [[ -n "$container_type" && "$container_type" != none ]]; then
+    log "Container environment: $container_type. Existing Incus is reused; BoxWeave does not require an Incus upgrade just for nesting."
+  fi
+fi
 
 [[ "$API_READY_TIMEOUT" =~ ^[0-9]+$ ]] && ((API_READY_TIMEOUT >= 30 && API_READY_TIMEOUT <= 3600)) || die 'Invalid API ready timeout (30–3600 seconds)'
 
@@ -120,18 +126,18 @@ repair_zabbly_apt_permissions() {
 # Only initialize on a host with zero existing containers and no pool.
 ensure_incus_initialized() {
   command -v incus >/dev/null || die 'Incus executable not found'
-  incus info >/dev/null || die 'Incus daemon is not reachable'
+  incus --force-local info >/dev/null || die 'Local Incus daemon is not reachable'
   local pools instances
-  pools=$(incus storage list --format json) || die 'Could not list Incus storage pools'
+  pools=$(incus --force-local storage list --format json) || die 'Could not list Incus storage pools'
   if ! python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin) else 1)' <<< "$pools"; then
-    instances=$(incus list --format json) || die 'Could not list Incus containers'
+    instances=$(incus --force-local list --all-projects --format json) || die 'Could not list Incus containers across projects'
     python3 -c 'import json,sys; sys.exit(0 if not json.load(sys.stdin) else 1)' <<< "$instances" ||       die 'Incus has containers but no storage pool; manual review required'
     log 'Incus has no storage pool; initializing default network and storage on this empty host'
-    incus admin init --auto || die 'Incus default initialization failed'
+    incus --force-local admin init --auto || die 'Incus default initialization failed'
   fi
-  pools=$(incus storage list --format json) || die 'Could not recheck Incus storage pools'
+  pools=$(incus --force-local storage list --format json) || die 'Could not recheck Incus storage pools'
   python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin) else 1)' <<< "$pools" ||     die 'Incus has no storage pool after initialization'
-  if incus storage list --format json | python3 -c 'import json,sys; sys.exit(0 if any(p.get("driver") == "dir" for p in json.load(sys.stdin)) else 1)'; then
+  if incus --force-local storage list --format json | python3 -c 'import json,sys; sys.exit(0 if any(p.get("driver") == "dir" for p in json.load(sys.stdin)) else 1)'; then
     log 'WARNING: Incus uses the dir storage driver. ZFS or btrfs is recommended for stronger per-container storage isolation.'
   fi
 }
@@ -234,19 +240,27 @@ healthy=0
 start_time=$SECONDS
 last_report=$SECONDS
 while (( SECONDS - start_time < API_READY_TIMEOUT )); do
-  status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 "${API_URL%/}/v1/containers" || true)
+  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+  probe_timeout=$((remaining < 4 ? remaining : 4))
+  status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time "$probe_timeout" "${API_URL%/}/v1/containers" || true)
   if [[ "$status" == 200 || "$status" == 401 || "$status" == 403 ]]; then
     healthy=1
     break
   fi
-  if ! systemctl is-active --quiet containarium.service; then
-    die 'Containarium service stopped during first boot. Review: sudo journalctl -u containarium -n 80 --no-pager'
+  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+  (( remaining > 0 )) || break
+  probe_timeout=$((remaining < 5 ? remaining : 5))
+  daemon_state=$(timeout "${probe_timeout}s" systemctl show containarium.service -p ActiveState --value) || die 'Could not query Containarium service state'
+  if [[ "$daemon_state" != active && "$daemon_state" != activating && "$daemon_state" != reloading ]]; then
+    die "Containarium service is ${daemon_state:-unknown} during first boot. Review: sudo journalctl -u containarium -n 80 --no-pager"
   fi
   if (( SECONDS - last_report >= 30 )); then
     log "Containarium is running; REST API not ready yet ($((SECONDS - start_time))s elapsed, last HTTP status: ${status:-unavailable}). Core containers may still be initializing."
     last_report=$SECONDS
   fi
-  sleep 5
+  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+  (( remaining > 0 )) || break
+  sleep "$((remaining < 5 ? remaining : 5))"
 done
 (( healthy == 1 )) || die "Containarium REST API did not become ready within ${API_READY_TIMEOUT}s. Check 'sudo incus list' and 'sudo journalctl -u containarium -n 80 --no-pager' before rerunning."
 log "Containarium REST API responded with HTTP $status"
@@ -287,6 +301,27 @@ out.chmod(0o600)
 PY
 
 INSTALL_PHASE='BoxWeave service installation'
+log 'Installing the read-only BoxWeave management CLI'
+install -d -o root -g root -m 0755 /usr/local/libexec/boxweave
+for source_file in server/cli.py VERSION; do
+  STAGING_FILE=$(mktemp)
+  curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$STAGING_FILE"
+  if [[ "$source_file" == server/cli.py ]]; then
+    python3 -m py_compile "$STAGING_FILE" || die 'Invalid BoxWeave CLI source'
+    install -o root -g root -m 0644 "$STAGING_FILE" /usr/local/libexec/boxweave/cli.py
+  else
+    grep -Eq '^[0-9A-Za-z.+-]{1,64}$' "$STAGING_FILE" || die 'Invalid BoxWeave version file'
+    install -o root -g root -m 0644 "$STAGING_FILE" /usr/local/libexec/boxweave/VERSION
+  fi
+  rm -f "$STAGING_FILE"; STAGING_FILE=''
+done
+cat >/usr/local/bin/boxweave <<'CLI'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/bin/python3 /usr/local/libexec/boxweave/cli.py "$@"
+CLI
+chown root:root /usr/local/bin/boxweave
+chmod 0755 /usr/local/bin/boxweave
 log 'Installing trusted SSH host-key sync and automatic token rotation'
 for spec in 'server/hostkeys.py:boxweave-hostkeys' 'server/tokens.py:boxweave-token'; do
   source_file="${spec%%:*}"; target_file="${spec##*:}"
