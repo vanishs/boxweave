@@ -141,3 +141,18 @@ After updating the server with the revised installer, rerun `boxweave client`
 and use the newly generated command. An earlier command pins an earlier source
 commit and checksum, so it continues downloading the old script even after a
 fix is published. Do not bypass the checksum check or remove known_hosts entries.
+
+The MCP probe also builds a native process command line. Do not quote every
+argument: WSL can treat quoted switch tokens such as `"-d"` and `"-e"` as shell
+text and exit 127 before SSH starts. The shared process argument encoder leaves
+ordinary tokens bare and quotes only empty values or values containing whitespace
+or quote characters. Empty key-generation passphrases remain explicit arguments.
+Early MCP stream closure now includes the observed process exit status without
+printing raw stderr or credentials.
+
+On 2026-10-22, a read-only Windows PowerShell 5.1 to WSL/SSH diagnostic reproduced
+exit 127 with every argument quoted. Conditional quoting passed initialize,
+tools/list and a read-only provider call with exit 0. That diagnostic did not
+reenroll a client, publish agent configuration or verify GUI recognition.
+PowerShell regression fixtures additionally cover the probe's complete protocol
+sequence, switch quoting, empty arguments and sanitized early-exit reporting.

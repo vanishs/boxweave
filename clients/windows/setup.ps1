@@ -109,6 +109,9 @@ function Set-PinnedHostNative([string]$Path, [string]$Line) {
 }
 
 function Quote-ProcessArgument([string]$Value) {
+    # WSL parses switch tokens from the raw command line; quoting every token can
+    # turn -d/-e into a shell command. Quote only empty, whitespace or quoted values.
+    if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
     return '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
 function ConvertTo-WslScriptCommand([string]$Script, [string[]]$ScriptArguments = @()) {
@@ -160,7 +163,11 @@ function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments) {
                 $read=$process.StandardOutput.BaseStream.ReadAsync($readBuffer,0,$readBuffer.Length)
                 if (-not $read.Wait($remaining)) { throw 'MCP handshake/tool discovery timeout' }
                 $count=$read.Result
-                if ($count -eq 0) { throw 'MCP stream closed before verification' }
+                if ($count -eq 0) {
+                    $exitDetail = 'process still running'
+                    if ($process.WaitForExit(500)) { $exitDetail = 'process exit ' + $process.ExitCode }
+                    throw ('MCP stream closed before verification (' + $exitDetail + ')')
+                }
                 $pendingBytes.AddRange([byte[]]$readBuffer[0..($count-1)])
                 if ($pendingBytes.Count -gt 2097152) { throw 'MCP response limit exceeded' }
                 $newline=$pendingBytes.IndexOf([byte]10)

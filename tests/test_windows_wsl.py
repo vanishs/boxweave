@@ -47,13 +47,42 @@ if '-f' in sys.argv:
  with (pathlib.Path(os.environ['BOXWEAVE_WSL_FIXTURE'])/'generations').open('a') as f:f.write('generated\\n')
 """)
         keygen.chmod(0o755)
+        self.peer=self.bin/'mcp-peer'
+        self.peer.write_text("""#!/usr/bin/python3
+import json,os,pathlib,sys
+root=pathlib.Path(os.environ['BOXWEAVE_WSL_FIXTURE'])
+if '--fail' in sys.argv:
+ sys.stdin.buffer.readline()
+ sys.stderr.write('FAKE_SECRET_DO_NOT_LOG\\n')
+ sys.exit(127)
+methods=[]
+for raw in sys.stdin.buffer:
+ assert raw.startswith(b'{') and raw.endswith(b'\\n')
+ d=json.loads(raw.decode('utf-8'));methods.append(d['method'])
+ if d['method']=='initialize':
+  assert len(methods)==1
+  result={'protocolVersion':'2024-11-05','serverInfo':{'name':'fixture'}}
+ elif d['method']=='notifications/initialized':
+  assert len(methods)==2
+  continue
+ elif d['method']=='tools/list':
+  assert len(methods)==3
+  result={'tools':[{'name':'list_containers'}]}
+ else:
+  assert methods==['initialize','notifications/initialized','tools/list','tools/call']
+  assert d['params']=={'name':'list_containers','arguments':{}}
+  (root/'handshake.json').write_text(json.dumps(methods))
+  result={'content':[]}
+ print(json.dumps({'jsonrpc':'2.0','id':d['id'],'result':result}),flush=True)
+""")
+        self.peer.chmod(0o755)
         self.env=dict(os.environ,HOME=str(self.fixture_home),
                       PATH=str(self.bin)+':'+os.environ['PATH'],
                       BOXWEAVE_WSL_FIXTURE=str(self.root),BOXWEAVE_WSL_PUBLIC=KEY,
                       POWERSHELL_TELEMETRY_OPTOUT='1',POWERSHELL_UPDATECHECK='Off')
     def run_case(self,case,mode='Legacy',body='',arguments=()):
         p=self.root/'fixture.json'
-        p.write_text(json.dumps({'shim':str(self.shim),'pin_base64':base64.b64encode(PIN.encode()).decode(),
+        p.write_text(json.dumps({'shim':str(self.shim),'peer':str(self.peer),'pin_base64':base64.b64encode(PIN.encode()).decode(),
                                  'body':body,'arguments':list(arguments)}))
         return subprocess.run([PWSH,'-NoLogo','-NoProfile','-NonInteractive','-File',
                                str(ROOT/'tests/windows_wsl.ps1'),'-SetupPath',str(ROOT/'clients/windows/setup.ps1'),
@@ -115,5 +144,27 @@ if '-f' in sys.argv:
         r=self.run_case('body',body='exit 23')
         self.assertNotEqual(r.returncode,0)
         self.assertIn('exit code 23',r.stderr)
+
+    def test_process_switches_are_not_unnecessarily_quoted(self):
+        args=['-d','Ubuntu','-e','ssh','-T','-i','/home/user with spaces/.ssh/boxweave','-o','BatchMode=yes']
+        r=self.run_case('process-arguments',arguments=args)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertEqual(r.stdout.strip(),'-d Ubuntu -e ssh -T -i "/home/user with spaces/.ssh/boxweave" -o BatchMode=yes')
+    def test_empty_process_argument_is_preserved(self):
+        r=self.run_case('process-arguments',arguments=['-N',''])
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertEqual(r.stdout.strip(),'-N ""')
+    def test_complete_powershell_mcp_handshake(self):
+        for mode in ('Legacy','Standard'):
+            r=self.run_case('mcp',mode)
+            self.assertEqual(r.returncode,0,r.stderr)
+            self.assertIn('MCP fixture passed',r.stdout)
+            self.assertEqual(json.loads((self.root/'handshake.json').read_text()),
+                             ['initialize','notifications/initialized','tools/list','tools/call'])
+    def test_mcp_early_exit_reports_status_without_raw_stderr(self):
+        r=self.run_case('mcp',arguments=['--fail'])
+        self.assertNotEqual(r.returncode,0)
+        self.assertIn('process exit 127',r.stderr)
+        self.assertNotIn('FAKE_SECRET_DO_NOT_LOG',r.stderr)
 
 if __name__=='__main__':unittest.main()

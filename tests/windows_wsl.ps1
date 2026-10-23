@@ -13,7 +13,7 @@ $WslDistro = 'Fixture Distro'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($SetupPath, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'Setup script failed syntax parsing' }
-$names = @('Assert-Exit','ConvertTo-WslScriptCommand','Invoke-WslScript')
+$names = @('Assert-Exit','ConvertTo-WslScriptCommand','Invoke-WslScript','Quote-ProcessArgument','Test-BoxWeaveMcp')
 $definitions = $ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names
@@ -28,6 +28,13 @@ $keyScript = [regex]::Match($source, "(?ms)^\s*\`$wslScript = @'\r?\n(.*?)\r?\n'
 if (-not $pinScript -or -not $keyScript) { throw 'Shell fixture body missing' }
 try {
     switch ($Case) {
+        'process-arguments' {
+            (@($fixture.arguments) | ForEach-Object { Quote-ProcessArgument $_ }) -join ' '
+        }
+        'mcp' {
+            Test-BoxWeaveMcp -Command $fixture.peer -Arguments @($fixture.arguments)
+            Write-Output 'MCP fixture passed'
+        }
         'original' {
             # This intentionally reproduces the pre-fix call with embedded quotes.
             & $wsl -d $WslDistro -e sh -c $pinScript sh 'boxweave_known_hosts' $fixture.pin_base64
