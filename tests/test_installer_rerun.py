@@ -109,9 +109,10 @@ class InstallerRerunTests(unittest.TestCase):
         for directory in ('etc/boxweave', 'etc/systemd/system', 'run/boxweave-install', 'etc/ssh', 'home/.ssh'):
             (self.root/directory).mkdir(parents=True, exist_ok=True)
         (self.root/'etc/os-release').write_text('ID=ubuntu\n')
-        (self.root/'etc/ssh/ssh_host_ed25519_key.pub').write_text('ssh-ed25519 TEST\n')
+        (self.root/'etc/ssh/ssh_host_ed25519_key.pub').write_text('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIoY7yK5+VYtbzXBFgHguKKWJFTx98DSeDtmDTfS1zA test-public\n')
         for suffix in ('', '.pub'):
             (self.root/('home/.ssh/containarium_ed25519'+suffix)).write_text('TEST FIXTURE\n')
+        (self.root/'home/.ssh/containarium_ed25519.pub').write_text('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIoY7yK5+VYtbzXBFgHguKKWJFTx98DSeDtmDTfS1zA test-public\n')
         secret = self.root/'signing-file'
         secret.touch()  # Existence only: no real secret or key material.
         self.secret = secret
@@ -125,7 +126,7 @@ class InstallerRerunTests(unittest.TestCase):
         text = text.replace('-o root -g root', '-o %s -g %s' % (os.getuid(), os.getgid()))
         self.script = self.root/'install.sh'; self.script.write_text(text)
         assets = {name: (ROOT/name).read_bytes() for name in ('install.sh','server/cli.py','server/hostkeys.py','server/tokens.py',
-                  'server/jobs.py','server/mcp_client.py','server/smoke.py','server/provenance.py','VERSION')}
+                  'server/clients.py','clients/windows/setup.ps1','clients/posix/setup.py','server/jobs.py','server/mcp_client.py','server/smoke.py','server/provenance.py','VERSION')}
         backend = b'#!/bin/sh\nexit 0\n'
         assets['mcp-server-linux-amd64'] = backend
         assets['SHA256SUMS.txt'] = (hashlib.sha256(backend).hexdigest()+'  mcp-server-linux-amd64\n').encode()
@@ -150,6 +151,25 @@ class InstallerRerunTests(unittest.TestCase):
                               '--jwt-secret-file',str(self.secret),'--containariumd-binary',str(self.bin/'containariumd')),
                              CONTAINARIUM_VERSION='v0.110.0')
         self.assertEqual(r.returncode, 0, r.stdout+r.stderr)
+
+    def test_public_client_generator_and_final_instructions(self):
+        self.initial_install()
+        public=self.config.parent/'client.json'
+        self.assertEqual(public.stat().st_mode & 0o777,0o644)
+        self.assertEqual(self.config.stat().st_mode & 0o777,0o600)
+        data=json.loads(public.read_text())
+        self.assertNotIn('jwt_secret_file',data)
+        self.assertEqual(data['source_commit'],'a'*40)
+        self.assertEqual(data['client_sha256']['clients/windows/setup.ps1'],hashlib.sha256(self.assets['clients/windows/setup.ps1']).hexdigest())
+        result=subprocess.run(['python3',str(self.root/'usr/local/libexec/boxweave/cli.py'),'client',
+                               '--os','macos','--agent','cursor','--config',str(public),'--json'],
+                              capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout)['paste_into'],'macOS Terminal')
+        result=self.run_install()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('boxweave client --help',result.stdout)
+        self.assertNotIn('Invoke-WebRequest',result.stdout)
 
     def snapshot(self):
         prefixes = ('etc/boxweave','etc/systemd/system','usr/local')

@@ -271,15 +271,16 @@ fi
 [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]] || die 'Could not resolve a source commit'
 RAW_BASE="https://raw.githubusercontent.com/${BOXWEAVE_REPO}/${SOURCE_COMMIT}"
 curl -fsSL --retry 3 "$RAW_BASE/install.sh" -o "$TMPDIR_DL/reference-install.sh"
-for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py VERSION; do
+for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION; do
   mkdir -p "$TMPDIR_DL/$(dirname "$source_file")"
   curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$TMPDIR_DL/$source_file"
 done
 python3 - "$TMPDIR_DL" <<'PY_SOURCE'
 import ast, pathlib, re, sys
 p = pathlib.Path(sys.argv[1])
-for name in ('cli.py', 'hostkeys.py', 'tokens.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py'):
+for name in ('cli.py', 'hostkeys.py', 'tokens.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py', 'clients.py'):
     ast.parse((p / 'server' / name).read_text(encoding='utf-8'))
+ast.parse((p / 'clients/posix/setup.py').read_text(encoding='utf-8'))
 if not re.fullmatch(r'[0-9A-Za-z.+-]{1,64}', (p / 'VERSION').read_text().strip()):
     sys.exit('Invalid BoxWeave version file')
 PY_SOURCE
@@ -447,6 +448,8 @@ out.write_text(json.dumps(data, indent=2) + '\n')
 out.chmod(0o600)
 PY
 
+python3 "$TMPDIR_DL/server/clients.py" publish "$TMPDIR_DL/config.json" "$TMPDIR_DL/client.json" "$TMPDIR_DL" "$SOURCE_COMMIT" /etc/ssh/ssh_host_ed25519_key.pub
+
 python3 "$TMPDIR_DL/server/provenance.py" build --directory "$TMPDIR_DL" \
   --installer "${BASH_SOURCE[0]:-/dev/stdin}" --repo "$BOXWEAVE_REPO" --ref "$BOXWEAVE_REF" \
   --commit "$SOURCE_COMMIT" --backend "$CONTAINARIUM_VERSION" --daemon "$CONTAINARIUMD_BINARY"
@@ -545,6 +548,8 @@ publish_components() {
   local files=(
     'mcp-server-linux-ARCH:/usr/local/libexec/boxweave/containarium-mcp-server:0755'
     'server/cli.py:/usr/local/libexec/boxweave/cli.py:0644'
+    'server/clients.py:/usr/local/libexec/boxweave/clients.py:0644'
+    'client.json:/etc/boxweave/client.json:0644'
     'server/jobs.py:/usr/local/libexec/boxweave/jobs.py:0644'
     'server/mcp_client.py:/usr/local/libexec/boxweave/mcp_client.py:0644'
     'server/smoke.py:/usr/local/libexec/boxweave/smoke.py:0644'
@@ -619,38 +624,20 @@ systemctl is-active --quiet boxweave-token.timer boxweave-hostkeys.timer || die 
 rm -f "$CONFIG_DIR/update-in-progress"
 TIMERS_PAUSED=0
 
-# A trusted snapshot of host's public ED25519 key, to be pinned on Windows.
-HOSTKEY_PATH=/etc/ssh/ssh_host_ed25519_key.pub
-[[ -f "$HOSTKEY_PATH" ]] || die 'Host ED25519 SSH key not present; ensure OpenSSH server is configured'
-HOSTKEY_B64=$(awk '$1=="ssh-ed25519" {print $2; exit}' "$HOSTKEY_PATH")
-[[ -n "$HOSTKEY_B64" ]] || die 'Invalid SSH host public key'
-BOX_KEY_B64=$(base64 -w0 < "$BOX_PUB")
-FINGERPRINT=$(ssh-keygen -lf "$HOSTKEY_PATH" -E sha256 | awk '{print $2}')
-
-# Display a single copy/paste line. Only PUBLIC key data in command, never secrets.
 cat <<EOF
 
-================================================================================
- BoxWeave server installation/update/repair completed.
- Ubuntu account:       ${LINUX_USER}
- Ubuntu SSH endpoint:  ${SSH_HOST}:${SSH_PORT}
- Server SSH ED25519 fingerprint: ${FINGERPRINT}
- Container public key: ${BOX_PUB}
+====================================================================
+ BoxWeave server installation complete.
 
- On your Windows laptop, run ONE of these PowerShell one-liners, under the
- same Windows account that runs your AI coding agent. No manual file editing.
+ To configure your coding agent, run:
+   boxweave client
 
- A) Native Windows OpenSSH (recommended):
- Invoke-WebRequest '${RAW_BASE}/clients/windows/setup.ps1' -OutFile "\$env:TEMP\\boxweave-setup.ps1"; powershell.exe -NoProfile -ExecutionPolicy Bypass -File "\$env:TEMP\\boxweave-setup.ps1" -SshHost '${SSH_HOST}' -SshPort ${SSH_PORT} -SshUser '${LINUX_USER}' -ServerHostKey '${HOSTKEY_B64}' -BoxPublicKeyBase64 '${BOX_KEY_B64}' -McpRemoteCommand '${LAUNCHER}' -Mode Native -Agent Codex -Provider Containarium
+ For non-interactive usage and client options:
+   boxweave client --help
 
- B) WSL OpenSSH (replace DISTRO using wsl.exe -l -q):
- Invoke-WebRequest '${RAW_BASE}/clients/windows/setup.ps1' -OutFile "\$env:TEMP\\boxweave-setup.ps1"; powershell.exe -NoProfile -ExecutionPolicy Bypass -File "\$env:TEMP\\boxweave-setup.ps1" -SshHost '${SSH_HOST}' -SshPort ${SSH_PORT} -SshUser '${LINUX_USER}' -ServerHostKey '${HOSTKEY_B64}' -BoxPublicKeyBase64 '${BOX_KEY_B64}' -McpRemoteCommand '${LAUNCHER}' -Mode WSL -WslDistro 'DISTRO' -Agent Codex -Provider Containarium
-
- The bootstrap step requires an existing SSH login to ${LINUX_USER}@${SSH_HOST}.
- The new dedicated SSH key only starts MCP; it does not grant a host shell.
- Existing clients normally need no reenrollment unless their endpoint or account
- changes. Reconnect MCP to use a newly installed backend; existing processes
- continue using their original executable.
- Restart your coding agent after the selected client setup finishes.
-================================================================================
+ Choose Windows or macOS, then Codex, Cursor or Claude Code.
+ Run the generated setup command on the client computer.
+ Existing clients normally need no reenrollment for an unchanged endpoint.
+ Reconnect the agent's MCP session after a server update.
+====================================================================
 EOF

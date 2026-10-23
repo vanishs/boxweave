@@ -7,17 +7,20 @@ Both modes preserve the native Windows agent runtime; WSL is only the SSH transp
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][string]$SshHost,
+    [string]$DataBase64 = '',
+    [string]$ProjectPath = '',
+    [switch]$Replace,
+    [string]$SshHost = '',
     [ValidateRange(1,65535)][int]$SshPort = 22,
-    [Parameter(Mandatory=$true)][string]$SshUser,
+    [string]$SshUser = '',
     # Existing SSH login identity for key-only hosts; omit to use password login.
     [string]$BootstrapIdentityFile = '',
-    [Parameter(Mandatory=$true)][string]$ServerHostKey,
-    [Parameter(Mandatory=$true)][string]$BoxPublicKeyBase64,
-    [Parameter(Mandatory=$true)][string]$McpRemoteCommand,
+    [string]$ServerHostKey = '',
+    [string]$BoxPublicKeyBase64 = '',
+    [string]$McpRemoteCommand = '/usr/local/bin/boxweave-mcp',
     [ValidateSet('Native','WSL')][string]$Mode = 'Native',
     [string]$WslDistro = '',
-    [ValidateSet('Codex')][string]$Agent = 'Codex',
+    [ValidateSet('Codex','Cursor','Claude-Code')][string]$Agent = 'Codex',
     [ValidateSet('Containarium')][string]$Provider = 'Containarium',
     [string]$AgentHome = '',
     [string]$McpName = 'boxweave',
@@ -29,7 +32,13 @@ function Assert-Exit([string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)" }
 }
 function Write-Utf8NoBom([string]$Path, [string]$Content) {
-    [System.IO.File]::WriteAllText($Path, $Content, (New-Object System.Text.UTF8Encoding($false)))
+    if ((Test-Path -LiteralPath $Path) -and ((Get-Item -LiteralPath $Path).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing configuration reparse point' }
+    $tmp = Join-Path (Split-Path -Parent $Path) ('.boxweave-' + [guid]::NewGuid())
+    try {
+        [IO.File]::WriteAllText($tmp, $Content, (New-Object System.Text.UTF8Encoding($false)))
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp,$Path,$null) }
+        else { [IO.File]::Move($tmp,$Path) }
+    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force } }
 }
 function Backup-File([string]$Path) {
     if (Test-Path -LiteralPath $Path) {
@@ -51,25 +60,33 @@ function Set-TomlSection([string]$Source, [string]$Header, [string]$Replacement)
 }
 function Update-CodexToml([string]$Path, [string]$Command, [string[]]$Arguments) {
     $text = if (Test-Path -LiteralPath $Path) { [System.IO.File]::ReadAllText($Path) } else { '' }
-    $desktop = [regex]::Match($text, '(?ms)^\[desktop\][^\r\n]*\r?\n.*?(?=^\[|\z)')
-    if ($desktop.Success) {
-        $body = [regex]::Replace($desktop.Value, '(?m)^\s*runCodexInWindowsSubsystemForLinux\s*=\s*[^\r\n]*\r?\n?', '')
-        $replacement = $body.TrimEnd() + "`r`nrunCodexInWindowsSubsystemForLinux = false`r`n"
-        $text = $text.Substring(0, $desktop.Index) + $replacement + $text.Substring($desktop.Index + $desktop.Length)
-    } else {
-        $text = $text.TrimEnd() + "`r`n`r`n[desktop]`r`nrunCodexInWindowsSubsystemForLinux = false`r`n"
+    if ($text -match '(?m)^\s*mcp_servers\s*=' -or $text -match ('(?m)^\[mcp_servers\.' + [regex]::Escape($McpName) + '\.')) { throw 'Inline/nested MCP TOML requires explicit migration' }
+    $header = '(?ms)^\[mcp_servers\.' + [regex]::Escape($McpName) + '\][^\r\n]*\r?\n.*?(?=^\[|\z)'
+    $old = [regex]::Matches($text,$header)
+    if ($old.Count -gt 1) { throw 'Duplicate BoxWeave MCP table' }
+    if ($text -match [regex]::Escape($McpName) -and $old.Count -eq 0) { throw 'Unsupported existing BoxWeave TOML spelling' }
+    if ($old.Count -eq 1 -and -not $Replace) {
+        try {
+            $extra=@($old[0].Value -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#|$|\[|command\s*=|args\s*=|startup_timeout_sec\s*=)' })
+            if ($extra.Count) { throw 'Additional settings need explicit replacement' }
+            $c = [regex]::Match($old[0].Value,'(?m)^command\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json
+            $a = @([regex]::Match($old[0].Value,'(?m)^args\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json)
+            if ($c -ne $Command -or (ConvertTo-Json -InputObject $a -Compress) -cne (ConvertTo-Json -InputObject @($Arguments) -Compress)) { throw 'Different entry' }
+        } catch { throw 'Existing boxweave entry differs; rerun with -Replace after review' }
     }
     $encoded = ($Arguments | ForEach-Object { Quote-Toml $_ }) -join ', '
     $block = '[mcp_servers.' + $McpName + "]`r`ncommand = " + (Quote-Toml $Command) + "`r`nargs = [$encoded]`r`nstartup_timeout_sec = 30`r`n"
     $text = Set-TomlSection -Source $text -Header "mcp_servers.$McpName" -Replacement $block
-    Backup-File $Path
-    Write-Utf8NoBom $Path $text
+    return $text
 }
-function Update-Agents([string]$Path, [string]$Content) {
+function Update-Agents([string]$Path, [string]$Content, [switch]$Preview) {
     $begin = '<!-- BEGIN BOXWEAVE MANAGED -->'
     $end = '<!-- END BOXWEAVE MANAGED -->'
     $managed = $begin + "`r`n" + $Content.Trim() + "`r`n" + $end
     $original = if (Test-Path -LiteralPath $Path) { [System.IO.File]::ReadAllText($Path) } else { '' }
+    $a = [regex]::Matches($original,[regex]::Escape($begin)).Count
+    $b = [regex]::Matches($original,[regex]::Escape($end)).Count
+    if ($a -ne $b -or $a -gt 1 -or ($a -eq 1 -and $original.IndexOf($end) -lt $original.IndexOf($begin))) { throw 'Malformed BoxWeave instruction markers' }
     $pattern = '(?s)' + [regex]::Escape($begin) + '.*?' + [regex]::Escape($end)
     $match = [regex]::Match($original, $pattern)
     if ($match.Success) {
@@ -77,6 +94,7 @@ function Update-Agents([string]$Path, [string]$Content) {
     } else {
         $updated = $original.TrimEnd() + "`r`n`r`n" + $managed + "`r`n"
     }
+    if ($Preview) { return $updated }
     Backup-File $Path
     Write-Utf8NoBom $Path $updated
 }
@@ -90,6 +108,107 @@ function Set-PinnedHostNative([string]$Path, [string]$Line) {
     }
 }
 
+function Quote-ProcessArgument([string]$Value) {
+    return '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
+}
+function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments) {
+    $start=New-Object Diagnostics.ProcessStartInfo
+    $start.FileName=$Command
+    $start.Arguments=(($Arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join ' ')
+    $start.UseShellExecute=$false; $start.CreateNoWindow=$true
+    $start.RedirectStandardInput=$true; $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true
+    $process=New-Object Diagnostics.Process
+    $process.StartInfo=$start
+    $null=$process.Start()
+    $stderrTask=$process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+    $pendingBytes=New-Object 'System.Collections.Generic.List[byte]'
+    $readBuffer=New-Object byte[] 4096
+    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    function Send-Mcp($Message) {
+        $process.StandardInput.WriteLine((ConvertTo-Json -InputObject $Message -Compress -Depth 15))
+        $process.StandardInput.Flush()
+    }
+    function Call-Mcp([int]$Id,[string]$Method,$Parameters) {
+        Send-Mcp @{jsonrpc='2.0';id=$Id;method=$Method;params=$Parameters}
+        for ($budget=0;$budget -lt 256;$budget++) {
+            $remaining=[int]($deadline-[DateTime]::UtcNow).TotalMilliseconds
+            if ($remaining -le 0) { throw 'MCP handshake/tool discovery timeout' }
+            $newline=$pendingBytes.IndexOf([byte]10)
+            while ($newline -lt 0) {
+                $remaining=[int]($deadline-[DateTime]::UtcNow).TotalMilliseconds
+                if ($remaining -le 0) { throw 'MCP handshake/tool discovery timeout' }
+                $read=$process.StandardOutput.BaseStream.ReadAsync($readBuffer,0,$readBuffer.Length)
+                if (-not $read.Wait($remaining)) { throw 'MCP handshake/tool discovery timeout' }
+                $count=$read.Result
+                if ($count -eq 0) { throw 'MCP stream closed before verification' }
+                $pendingBytes.AddRange([byte[]]$readBuffer[0..($count-1)])
+                if ($pendingBytes.Count -gt 2097152) { throw 'MCP response limit exceeded' }
+                $newline=$pendingBytes.IndexOf([byte]10)
+            }
+            $line=[Text.Encoding]::UTF8.GetString($pendingBytes.GetRange(0,$newline).ToArray())
+            $pendingBytes.RemoveRange(0,$newline+1)
+            if (-not $line.Trim()) { continue }
+            $message=ConvertFrom-Json -InputObject $line
+            if ($message.id -eq $Id -and -not $message.method) {
+                if ($message.PSObject.Properties['error']) { throw 'MCP protocol error' }
+                return $message.result
+            }
+            if ($message.method -and $message.PSObject.Properties['id']) {
+                Send-Mcp @{jsonrpc='2.0';id=$message.id;error=@{code=-32601;message='Unsupported client request'}}
+            }
+        }
+        throw 'MCP message budget exceeded'
+    }
+    try {
+        $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.2.0'}}
+        if ($hello.protocolVersion -ne '2024-11-05') { throw 'Unsupported MCP protocol' }
+        Send-Mcp @{jsonrpc='2.0';method='notifications/initialized'}
+        $listing=Call-Mcp 2 'tools/list' @{}
+        if (-not ($listing.tools | Where-Object { $_.name -eq 'list_containers' })) { throw 'Provider list_containers tool unavailable' }
+        $result=Call-Mcp 3 'tools/call' @{name='list_containers';arguments=@{}}
+        if ($result.isError) { throw 'Read-only provider verification failed' }
+    } finally {
+        $process.StandardInput.Close()
+        if (-not $process.WaitForExit(2000)) {
+            & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
+            $null=$process.WaitForExit(2000)
+        }
+        $process.Dispose()
+    }
+}
+
+if ($DataBase64) {
+    $d = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
+    if ($d.os -ne 'windows' -or $d.runtime -ne 'native' -or $d.transport -notin @('native','wsl') -or $d.agent -notin @('codex','cursor','claude-code')) { throw 'Invalid Windows client profile' }
+    if ($d.ssh_port -lt 1 -or $d.ssh_port -gt 65535) { throw 'Invalid SSH port' }
+    if ($d.setup_options) {
+        $opts=$d.setup_options
+        if (-not $BootstrapIdentityFile -and $opts.bootstrap_identity) { $BootstrapIdentityFile=$opts.bootstrap_identity }
+        if (-not $AgentHome -and $opts.agent_home) { $AgentHome=$opts.agent_home }
+        if (-not $ProjectPath -and $opts.project_path) { $ProjectPath=$opts.project_path }
+        if (-not $WslDistro -and $opts.wsl_distro) { $WslDistro=$opts.wsl_distro }
+        if ($opts.replace -eq $true) { $Replace=$true }
+    }
+    if (-not $d.policy -or $d.policy.Length -gt 20000) { throw 'Invalid guidance text' }
+    $SshHost=$d.ssh_host; $SshPort=$d.ssh_port; $SshUser=$d.linux_user
+    $Mode=$d.transport; $Agent=$d.agent; $McpRemoteCommand=$d.launcher
+    if ($d.server_public_key -notmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$') { throw 'Invalid server key' }
+    $ServerHostKey=$Matches[1]
+    $BoxPublicKeyBase64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($d.container_public_key))
+}
+if ($Mode -eq 'WSL' -and -not $WslDistro) {
+    $distros=@(wsl.exe -l -q | ForEach-Object { ($_ -replace [char]0,'').Trim() } | Where-Object { $_ })
+    Assert-Exit 'WSL distribution discovery'
+    if ($distros.Count -eq 1) { $WslDistro=$distros[0] }
+    elseif ($distros.Count -gt 1) {
+        for ($i=0;$i -lt $distros.Count;$i++) { Write-Host ("{0}) {1}" -f ($i+1),$distros[$i]) }
+        $answer=Read-Host 'Select WSL distribution number'
+        if ($answer -notmatch '^[0-9]+$' -or [int]$answer -lt 1 -or [int]$answer -gt $distros.Count) { throw 'Invalid selection; rerun with -WslDistro NAME' }
+        $WslDistro=$distros[[int]$answer-1]
+    } else { throw 'No installed WSL distribution' }
+}
+$claude = if ($Agent -eq 'Claude-Code') { (Get-Command claude -ErrorAction Stop).Source } else { $null }
+if ($claude -and $AgentHome) { throw 'Set CLAUDE_CONFIG_DIR instead of -AgentHome for Claude Code' }
 if ($SshHost -notmatch '^[A-Za-z0-9.:-]+$' -or $SshUser -notmatch '^[a-z_][a-z0-9_-]*$') {
     throw 'Invalid SSH host or Unix user.'
 }
@@ -110,35 +229,58 @@ $sshKeygen = (Get-Command ssh-keygen.exe -ErrorAction Stop).Source
 $wsl = if ($Mode -eq 'WSL') { (Get-Command wsl.exe -ErrorAction Stop).Source } else { $null }
 
 $sshDir = Join-Path $env:USERPROFILE '.ssh'
-$codexDir = if ($AgentHome) { $AgentHome } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$codexDir = if ($AgentHome) { $AgentHome } elseif ($Agent -eq 'Cursor') { Join-Path $env:USERPROFILE '.cursor' } elseif ($Agent -eq 'Claude-Code') { if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' } } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+foreach ($candidate in @($sshDir,$codexDir)) {
+    $ancestor=$candidate
+    while ($ancestor) {
+        if ((Test-Path -LiteralPath $ancestor) -and ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing reparse point in setup path' }
+        $ancestor=Split-Path -Parent $ancestor
+    }
+}
+if ($BootstrapIdentityFile -and -not (Test-Path -LiteralPath $BootstrapIdentityFile -PathType Leaf)) { throw 'Bootstrap identity file not found' }
 New-Item -ItemType Directory -Force $sshDir, $codexDir | Out-Null
 $nativePrivate = Join-Path $sshDir $KeyName
 $nativePublic = "$nativePrivate.pub"
 $nativeKnown = Join-Path $sshDir "${KeyName}_known_hosts"
 $configPath = Join-Path $codexDir 'config.toml'
-$agentsPath = Join-Path $codexDir 'AGENTS.md'
+$agentsPath = Join-Path $codexDir 'AGENTS.override.md'
+if (-not (Test-Path -LiteralPath $agentsPath) -or -not ([IO.File]::ReadAllText($agentsPath)).Trim()) { $agentsPath = Join-Path $codexDir 'AGENTS.md' }
 
+foreach ($candidate in @($nativePrivate,$nativePublic,$nativeKnown,$configPath,$agentsPath)) {
+    if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing identity/configuration reparse point' }
+}
+$nativePubLine = ''
+if ($Mode -eq 'Native') {
 if ((Test-Path -LiteralPath $nativePrivate) -xor (Test-Path -LiteralPath $nativePublic)) {
     throw 'A Windows keypair is incomplete; refusing to overwrite the remaining file.'
 }
 if (-not (Test-Path -LiteralPath $nativePrivate)) {
     Write-Host '[boxweave] Generating a dedicated private/public keypair on Windows.'
-    & $sshKeygen -q -t ed25519 -f $nativePrivate -N '""' -C 'boxweave'
-    Assert-Exit 'Windows ssh-keygen'
+    # Explicit Windows argv quoting preserves the empty passphrase on both 5.1 and 7+.
+    $keyStart=New-Object Diagnostics.ProcessStartInfo
+    $keyStart.FileName=$sshKeygen
+    $keyStart.UseShellExecute=$false; $keyStart.CreateNoWindow=$true
+    $keyStart.Arguments=(@('-q','-t','ed25519','-f',$nativePrivate,'-N','','-C','boxweave') | ForEach-Object { Quote-ProcessArgument $_ }) -join ' '
+    $keyProcess=[Diagnostics.Process]::Start($keyStart)
+    try {
+        if (-not $keyProcess.WaitForExit(30000)) { $keyProcess.Kill(); throw 'SSH key generation timeout' }
+        if ($keyProcess.ExitCode -ne 0) { throw ('SSH key generation failed (exit '+$keyProcess.ExitCode+')') }
+    } finally { $keyProcess.Dispose() }
 }
 & $sshKeygen -lf $nativePublic -E sha256 | Out-Host
 Assert-Exit 'Windows SSH public key validation'
 $nativePubLine = [System.IO.File]::ReadAllText($nativePublic).Trim()
 if ($nativePubLine -notmatch '^ssh-ed25519\s+[a-zA-Z0-9+/=]+') { throw 'Invalid Windows SSH public key.' }
 
+}
 # Pin SSH server identity using the key delivered by the Ubuntu console,
 # never using untrusted ssh-keyscan or StrictHostKeyChecking=no.
-$hostToken = if ($SshPort -eq 22) { $SshHost } else { '[{0}]:{1}' -f $SshHost, $SshPort }
+$hostToken = if ($SshPort -eq 22 -and -not $SshHost.Contains(':')) { $SshHost } else { '[{0}]:{1}' -f $SshHost, $SshPort }
 $pinnedHostLine = "$hostToken ssh-ed25519 $ServerHostKey"
 Set-PinnedHostNative -Path $nativeKnown -Line $pinnedHostLine
 
 $clientPubLine = $nativePubLine
-$transportCommand = 'ssh.exe'
+$transportCommand = $ssh
 $transportArgs = @()
 if ($Mode -eq 'WSL') {
     $wslScript = @'
@@ -149,6 +291,7 @@ sshdir="$HOME/.ssh"
 mkdir -p "$sshdir"
 chmod 700 "$sshdir"
 key="$sshdir/$name"
+test ! -L "$key" && test ! -L "$key.pub"
 if [ -e "$key" ] && [ ! -e "$key.pub" ] || [ -e "$key.pub" ] && [ ! -e "$key" ]; then
     echo 'Incomplete WSL SSH keypair; refusing overwrite' >&2
     exit 2
@@ -157,6 +300,7 @@ if [ ! -e "$key" ]; then
     ssh-keygen -q -t ed25519 -f "$key" -N '' -C 'boxweave-wsl'
 fi
 chmod 600 "$key"
+ssh-keygen -lf "$key.pub" -E sha256 >/dev/null
 cat "$key.pub"
 '@
     Write-Host "[boxweave] Generating/reusing key in WSL distro: $WslDistro"
@@ -174,6 +318,7 @@ cat "$key.pub"
 set -eu
 umask 077
 path="$HOME/.ssh/$1"
+test ! -L "$path"
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 expected=$(printf '%s' "$2" | base64 -d)
@@ -189,20 +334,41 @@ chmod 600 "$path"
     Assert-Exit 'WSL host pinning'
     $linuxKey = "$wslHome/.ssh/$KeyName"
     $linuxKnown = "$wslHome/.ssh/${KeyName}_known_hosts"
-    $transportCommand = 'wsl.exe'
+    $transportCommand = $wsl
     $transportArgs = @('-d', $WslDistro, '-e', 'ssh', '-T', '-i', $linuxKey,
                        '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                        '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$linuxKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-p', "$SshPort",
+                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort",
                        "$SshUser@$SshHost", $McpRemoteCommand)
 } else {
     $transportArgs = @('-T', '-i', $nativePrivate,
                        '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                        '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-p', "$SshPort",
+                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort",
                        "$SshUser@$SshHost", $McpRemoteCommand)
 }
 
+$pendingConfig = ''
+if ($Agent -eq 'Codex') {
+    $pendingConfig = Update-CodexToml -Path $configPath -Command $transportCommand -Arguments $transportArgs
+    if ($DataBase64) { $null=Update-Agents -Path $agentsPath -Content $d.policy -Preview }
+} elseif ($Agent -eq 'Cursor') {
+    $configPath=Join-Path $codexDir 'mcp.json'
+    $obj=if (Test-Path -LiteralPath $configPath) { ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($configPath)) } else { New-Object PSObject }
+    if ($null -eq $obj -or $obj -is [array] -or $obj -is [string] -or $obj -is [ValueType]) { throw 'Invalid Cursor JSON object' }
+    if (-not $obj.PSObject.Properties['mcpServers']) { $obj | Add-Member -NotePropertyName mcpServers -NotePropertyValue (New-Object PSObject) }
+    $servers=$obj.mcpServers
+    if ($null -eq $servers -or $servers -is [array] -or $servers -is [string] -or $servers -is [ValueType]) { throw 'Invalid Cursor MCP object' }
+    $old=$servers.PSObject.Properties[$McpName]
+    if ($old -and -not $Replace -and ($old.Value.command -ne $transportCommand -or (ConvertTo-Json -InputObject @($old.Value.args) -Compress) -cne (ConvertTo-Json -InputObject @($transportArgs) -Compress))) { throw 'Existing boxweave entry differs; rerun with -Replace after review' }
+    $servers | Add-Member -NotePropertyName $McpName -NotePropertyValue ([pscustomobject]@{command=$transportCommand;args=@($transportArgs)}) -Force
+    $pendingConfig=ConvertTo-Json -InputObject $obj -Depth 100
+    if ($ProjectPath -and -not (Test-Path -LiteralPath $ProjectPath -PathType Container)) { throw 'Cursor project path must be an existing local directory' }
+} else {
+    & $claude mcp get $McpName 1>$null 2>$null
+    $existingClaude=($LASTEXITCODE -eq 0)
+    if ($existingClaude -and -not $Replace) { throw 'Existing Claude boxweave entry; rerun with -Replace after review' }
+}
 # Register ONLY the active transport's public key under a restricted sshd key option.
 $restricted = 'restrict,command="' + $McpRemoteCommand + '" ' + $clientPubLine
 $keyData = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($restricted))
@@ -212,6 +378,7 @@ set -eu
 umask 077
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
+test ! -L "$HOME/.ssh/authorized_keys"
 touch "$HOME/.ssh/authorized_keys"
 chmod 600 "$HOME/.ssh/authorized_keys"
 line=$(printf '%s' '__KEYDATA__' | base64 -d)
@@ -224,7 +391,7 @@ mv -f "$tmp" "$HOME/.ssh/authorized_keys"
 '@
 $enrollmentScript = $enrollmentScript.Replace('__KEYDATA__', $keyData).Replace('__KEYMATERIAL__', $keyMaterial)
 $sshAuthArgs = @('-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
-                 '-o', 'HostKeyAlgorithms=ssh-ed25519', '-p', "$SshPort")
+                 '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort")
 # Do not let ssh-agent offer unrelated identities during first-time enrollment:
 # sshd may disconnect with "Too many authentication failures" before a password prompt.
 # For SSH-key-only servers, explicitly select the already-authorized bootstrap key.
@@ -248,7 +415,6 @@ $remoteEnrollmentCommand = "printf '%s' '$scriptB64' | base64 -d | sh"
 & $ssh @sshAuthArgs -T "$SshUser@$SshHost" $remoteEnrollmentCommand
 Assert-Exit 'Restricted SSH key enrollment'
 
-Update-CodexToml -Path $configPath -Command $transportCommand -Arguments $transportArgs
 $agents = @"
 ## BoxWeave remote development environment (Containarium provider)
 
@@ -273,16 +439,41 @@ $agents = @"
 - Never modify ``containarium-core-*`` infrastructure boxes, unrelated projects, host SSH settings, root access, or platform credentials. Obtain permission for destructive operations.
 - The MCP token may have admin privileges; use only requested tools and scopes, never print secrets or private keys.
 "@
-Update-Agents -Path $agentsPath -Content $agents
-
-Write-Host ''
-Write-Host '===================================================================='
-Write-Host 'BoxWeave client configuration complete.'
-Write-Host "Mode:           $Mode"
-Write-Host "Windows key:    $nativePrivate (private key retained on Windows)"
-if ($Mode -eq 'WSL') { Write-Host "WSL key:        $linuxKey (private key retained inside $WslDistro)" }
-Write-Host "Codex TOML:     $configPath"
-Write-Host "Global rules:   $agentsPath"
-Write-Host 'Restart Windows Codex Desktop; its runtime stays Windows-native.'
-Write-Host 'Test list_containers and connect through the BoxWeave MCP registration.'
-Write-Host '===================================================================='
+if ($DataBase64) {
+    if (-not $d.policy -or $d.policy.Length -gt 20000) { throw 'Invalid guidance text' }
+    $agents=$d.policy
+}
+Test-BoxWeaveMcp -Command $transportCommand -Arguments $transportArgs
+if ($Agent -eq 'Claude-Code') {
+    if ($existingClaude -and $Replace) {
+        & $claude mcp remove --scope user $McpName 1>$null 2>$null
+        Assert-Exit 'Claude MCP replacement'
+    }
+    & $claude mcp add --scope user --transport stdio $McpName -- $transportCommand @transportArgs 1>$null 2>$null
+    Assert-Exit 'Claude MCP registration'
+    $rulesDir=Join-Path $codexDir 'rules'
+    $null=New-Item -ItemType Directory -Force -Path $rulesDir
+    $agentsPath=Join-Path $rulesDir 'boxweave.md'
+    Backup-File $agentsPath
+    Write-Utf8NoBom $agentsPath $agents
+} else {
+    Backup-File $configPath
+    Write-Utf8NoBom $configPath $pendingConfig
+    if ($Agent -eq 'Cursor') {
+        $agentsPath=Join-Path $codexDir 'boxweave-user-rules.md'
+        Backup-File $agentsPath
+        Write-Utf8NoBom $agentsPath $agents
+        if ($ProjectPath) {
+            $rulesDir=Join-Path $ProjectPath '.cursor/rules'
+            $null=New-Item -ItemType Directory -Force -Path $rulesDir
+            $projectRule=Join-Path $rulesDir 'boxweave.mdc'
+            Backup-File $projectRule
+            Write-Utf8NoBom $projectRule ("---`nalwaysApply: true`n---`n`n"+$agents)
+        }
+    } else { Update-Agents -Path $agentsPath -Content $agents }
+}
+Write-Host 'MCP initialize/tools/list/read-only provider call: passed.'
+Write-Host "Agent registration: written for $Agent. Reopen the agent and verify BoxWeave in its MCP UI."
+if ($Agent -eq 'Cursor' -and -not $ProjectPath) {
+    Write-Host "Guidance: manual step required. Paste $agentsPath into Cursor Settings > Rules > User Rules."
+} else { Write-Host 'Guidance: written; verify loading in a new session.' }

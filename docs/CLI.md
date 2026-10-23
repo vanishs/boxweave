@@ -22,7 +22,7 @@ the CLI and VERSION files to be available at the selected repository ref.
 
 | Command | Evidence returned |
 | --- | --- |
-| `version` | BoxWeave's own VERSION file, currently an unreleased development version |
+| `version` | BoxWeave's own VERSION file, 0.2.0 |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
 | `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
 | `status` | Configuration availability and selected systemd service/timer states |
@@ -66,3 +66,9 @@ In nested containers, an `unconfined` child AppArmor label does not establish th
 parent's effective policy. The doctor reports namespace evidence and leaves
 effective device filtering unverified. It does not load BPF programs, access
 physical devices, change security policies or require a special LXC image.
+
+## Client configuration
+
+`boxweave client` starts an interactive command generator for Windows/macOS and Codex/Cursor/Claude Code. It performs no enrollment on the server. Use `boxweave client --help` for explicit selection, client-path options and JSON output. See [client setup](CLIENTS.md).
+
+It reads public `/etc/boxweave/client.json`, not credentials. Non-terminal input requires complete choices. Exit 0 means command generation, 2 means invalid/missing input or descriptor, and 130 means cancellation. Existing management/selftest commands retain their behavior.

@@ -87,8 +87,10 @@ def incus_server_version():
 
 def build(directory, installer, repo, ref, commit, backend, daemon):
     p = Path(directory)
-    names = ('cli.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py', 'hostkeys.py', 'tokens.py')
+    names = ('cli.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py', 'hostkeys.py', 'tokens.py', 'clients.py')
     files = {'server/' + name: digest(p / 'server' / name) for name in names}
+    for client in ('clients/windows/setup.ps1', 'clients/posix/setup.py'):
+        files[client] = digest(p / client)
     files['VERSION'] = digest(p / 'VERSION')
     local_hash, reference_hash = digest(installer), digest(p / 'reference-install.sh')
     return {'schema_version': 1, 'state': 'pending', 'prepared_at': utc(),
@@ -130,7 +132,7 @@ def read_public(path):
         result['installer']['differs_from_source'] = flag if type(flag) is bool else None
         hashes = d.get('component_sha256', {})
         result['component_sha256'] = {key: value for key, value in hashes.items()
-                                     if key in ('VERSION', *('server/' + n for n in ('cli.py','jobs.py','mcp_client.py','smoke.py','provenance.py','hostkeys.py','tokens.py')))
+                                     if key in ('VERSION', 'clients/windows/setup.ps1', 'clients/posix/setup.py', *('server/' + n for n in ('cli.py','jobs.py','mcp_client.py','smoke.py','provenance.py','hostkeys.py','tokens.py','clients.py')))
                                      and text(value, r'[a-f0-9]{64}')} if isinstance(hashes, dict) else {}
         return result
     except FileNotFoundError:

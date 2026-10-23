@@ -1,32 +1,7 @@
 # Agent adapters
 
-BoxWeave does not assume that every AI coding agent has the same settings file or permissions model.
+BoxWeave 0.2.0 provides Codex, Cursor and Claude Code adapters through `clients/windows/setup.ps1` and `clients/posix/setup.py`. The `boxweave client` wizard selects OS, agent, runtime and transport. All adapters reuse the Ubuntu restricted launcher and Containarium provider.
 
-Currently supported:
+Codex writes MCP TOML and effective global instructions. Cursor merges global MCP JSON and emits User Rules text or an explicitly selected project rule; global rules still require the manual Settings step. Claude Code uses its official user-scope CLI and a dedicated user rule. See [profiles, prerequisites and validation limits](../docs/CLIENTS.md).
 
-- `codex/`: Codex Desktop on Windows, configured using `clients/windows/setup.ps1`.
-
-Future adapters should implement the agent's MCP registration and instruction policy generation **without changing the Ubuntu transport or the Containarium provider**. Keep agent-specific paths and syntax in the adapter, not in shared server configuration. The Windows script exposes an `-Agent` selector that currently only accepts `Codex`.
-
-## Operational knowledge for agents
-
-Read the repository's [AGENTS.md](../AGENTS.md) for execution rules and the
-[README operating expectations](../README.md#operating-expectations-timeouts-startup-and-nesting)
-for the human-facing explanation. These are shared provider behaviors, not
-Codex-specific exceptions:
-
-- Reconcile a timed-out create against inventory before retrying creation.
-- Wait for provisioning, SSH and provider API readiness within a recorded
-  deadline. Running containers and active daemons can still be initializing.
-- Verify actual MCP connect identity and workload output; API reachability and
-  CLI exit codes alone do not prove end-to-end operation.
-- Use the managed public identity for the MCP host at the current nesting layer.
-- Preserve host-key verification and diagnose persistent errors rather than
-  deleting instances, replacing keys or changing provider infrastructure.
-- Separate the minimal nested smoke test from optional recovery/security audits.
-
-Policy generators should include these rules so newly enrolled agents receive
-them, not just link documents that may be absent from a remote workload checkout.
-Keep deployment-specific addresses and public keys in generated policy only;
-do not embed experiment identities in generic adapter instructions. Existing
-global policy files do not change merely because the repository was edited.
+Generated commands share the provider policy in `server/clients.py`, including ambiguous-create reconciliation, bounded readiness, exact managed public identity, remote execution and network constraints. Legacy Windows parameter calls retain their inline policy. Never embed test-specific endpoints or keys in generic adapters. Actual UI recognition and instruction loading require per-client checks.

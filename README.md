@@ -2,7 +2,7 @@
 
 **Your agents. Your machines. Connected.**
 
-BoxWeave connects AI coding agents to self-hosted, isolated development environments through an infrastructure provider and an MCP-compatible interface. The first implementation uses **Containarium + Incus/LXC** on Ubuntu, with a **Codex Desktop** adapter for Windows (native OpenSSH or WSL OpenSSH).
+BoxWeave connects AI coding agents to self-hosted, isolated development environments through an infrastructure provider and an MCP-compatible interface. The first implementation uses **Containarium + Incus/LXC** on Ubuntu, with **Windows and macOS** client setup for **Codex, Cursor and Claude Code** over restricted SSH.
 
 > **Project status: preview.** Ubuntu 24.04 LXC installation and a nested MCP create/connect/Python workflow have been tested, including a first-install fix discovered during that test. A clean bare-metal Ubuntu installation and fresh Windows client enrollment have not been validated together end to end. See the [actual test results and limitations](docs/TEST-BOXWEAVE-LXC.md); review privileged scripts before use.
 
@@ -16,12 +16,9 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | 
 
 BoxWeave detects an existing Containarium installation, or invokes its official installer if it is missing (`https://containarium.dev/install.sh`) with APT-compatible file permissions. It repairs verified Zabbly APT keyring permissions from an interrupted prior attempt and initializes an empty Incus instance that has no storage pool. It installs the Containarium MCP backend, a protected launcher, short-lived JWT rotation, and a verified container SSH host-key synchronization timer. It does **not** delete existing LXC instances.
 
-At completion, the installer prints **two personalized PowerShell commands**. Run **one** of them on the Windows machine that runs Codex:
+At completion, run **`boxweave client`** on the server. Its interactive wizard selects Windows/macOS, agent and Windows native/WSL execution mode, then prints a command for the client computer. Use `boxweave client --help` for parameter-based generation.
 
-- **Native**: Windows `ssh.exe` transports MCP messages over SSH.
-- **WSL**: `wsl.exe -d DISTRO -e ssh` transports MCP messages from a chosen WSL distribution. The **Codex process remains Windows-native** in either mode.
-
-The Windows setup generates local SSH key pairs, enrolls only the active transport public key on the Ubuntu host using an existing SSH login, pins the Ubuntu host's ED25519 key, and configures the Codex MCP registration and global `AGENTS.md` policy block.
+Setup pins the server identity, enrolls a public transport key using an existing SSH login, verifies authenticated MCP operation, and configures the agent. macOS/WSL CLI setup requires Python 3.11+. Cursor global User Rules require the displayed manual Settings step. See [client setup and validation limits](docs/CLIENTS.md).
 
 **No private key is printed by the Ubuntu installer or transferred from Ubuntu to Windows.** Server installation does not require any client-specific Windows username.
 
@@ -163,12 +160,12 @@ generated plan. See [task, readiness and provenance details](docs/TASKS-AND-SELF
 | Role | Current support | Planned extension |
 | --- | --- | --- |
 | Server | Ubuntu + systemd + Containarium + Incus/LXC | Additional infrastructure providers |
-| Client OS | Windows PowerShell 5.1+, Native OpenSSH or WSL OpenSSH | macOS, Linux clients |
-| Coding agent | Codex Desktop for Windows | Claude Code and other MCP-capable coding agents |
+| Client OS | Windows native / WSL SSH bridge / WSL CLI; macOS native SSH | Standalone Linux clients |
+| Coding agent | Codex, Cursor, Claude Code adapters (see client validation limits) | Other MCP-capable agents |
 | Protocol | MCP over restricted SSH | Additional authenticated transports |
 | UI language | English (`en-US` initial convention) | Localized messages via future locale packs |
 
-**A planned integration is not a working integration.** The directories under `clients/macos/`, `clients/linux/`, `agents/`, and `providers/` are reserved extension points; see [Architecture](docs/ARCHITECTURE.md) and [Localization](docs/LOCALIZATION.md).
+**A planned integration is not a working integration.** Standalone Linux and additional providers remain extension points; see [Architecture](docs/ARCHITECTURE.md) and [Localization](docs/LOCALIZATION.md).
 
 ## Files installed on the Ubuntu host
 
@@ -178,7 +175,8 @@ generated plan. See [task, readiness and provenance details](docs/TASKS-AND-SELF
 | `/etc/boxweave/providers/containarium.env` | Non-secret provider endpoint settings |
 | `/usr/local/bin/boxweave-mcp` | Root-owned SSH forced-command launcher |
 | `/usr/local/bin/boxweave` | Read-only management CLI |
-| `/usr/local/libexec/boxweave/{cli.py,VERSION}` | CLI implementation and BoxWeave version |
+| `/usr/local/libexec/boxweave/{cli.py,clients.py,VERSION}` | CLI, client generator and version |
+| `/etc/boxweave/client.json` | Public endpoint/keys and pinned client asset hashes (0644) |
 | `/usr/local/libexec/boxweave/{jobs,mcp_client,smoke,provenance}.py` | Task receipts, approved smoke tests and provenance helpers |
 | `/etc/boxweave/install-manifest.json` | Recorded installation source, hashes and completion state |
 | `/usr/local/libexec/boxweave/containarium-mcp-server` | Bundled upstream MCP backend executable |

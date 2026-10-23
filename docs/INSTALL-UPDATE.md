@@ -101,3 +101,9 @@ Ubuntu (exit 0). After moving the installer lock into a root-only runtime
 directory, all 10 installer sandbox tests were rerun and passed (exit 0).
 `bash -n install.sh` and `git diff --check` also passed. The revised installer
 has not been executed against the live Ubuntu host's installed services.
+
+## Client handoff in 0.2.0
+
+Server installation retains the workflow above. It additionally stages the client generator and source hashes, publishes `/etc/boxweave/client.json` atomically at 0644, and leaves privileged `config.json` at 0600. Client source hashes are included in provenance.
+
+After successful completion, the final message prompts the human or agent to run `boxweave client` or `boxweave client --help`. It no longer prints Windows/Codex-specific commands or starts a wizard in an installer pipeline. Setup downloads are pinned to the installed source commit and checked against recorded SHA256. That source ref must contain the new client files before this installer is deployed. See [client setup](CLIENTS.md).

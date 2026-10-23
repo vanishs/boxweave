@@ -1,11 +1,11 @@
 # Architecture and extension points
 
-BoxWeave is a vendor-neutral product interface around provider-specific execution services. The initial integration remains intentionally small: Containarium as the infrastructure provider and Codex Desktop as the Windows coding agent.
+BoxWeave is a vendor-neutral product interface around provider-specific execution services. The initial integration remains intentionally small: Containarium as the infrastructure provider and Windows/macOS setup for Codex, Cursor and Claude Code.
 
 ```text
 Human request
-  -> Agent adapter (Codex now; others later)
-  -> Client transport (Windows Native SSH / WSL SSH now)
+  -> Agent adapter (Codex / Cursor / Claude Code)
+  -> Client transport (Windows Native / WSL SSH, macOS SSH)
   -> BoxWeave restricted SSH launcher (Ubuntu)
   -> Provider MCP server (Containarium now)
   -> Provider API (loopback) -> Incus/LXC instances
@@ -24,19 +24,11 @@ Human request
 
 ## Current implementation boundaries
 
-The source tree reserves these integration locations:
+The client generator is `server/clients.py`, registered by `server/cli.py`. It implements the wizard, compatibility validation, public descriptor publication and pinned command rendering.
 
-```text
-clients/windows/      implemented: PowerShell with Native / WSL transports
-clients/macos/        planned: macOS installer and ssh/Keychain handling
-clients/linux/        planned: POSIX SSH installer
-agents/codex/        implemented by clients/windows/setup.ps1
-agents/<agent>/      planned: agent-specific MCP and instruction adapters
-providers/containarium/ current upstream integration
-providers/<backend>/  planned: alternate infrastructure providers
-```
+`clients/windows/setup.ps1` handles native Windows agents with native/WSL SSH. `clients/posix/setup.py` handles macOS and WSL CLIs. Agent adapters reuse the existing restricted launcher and provider. See [client setup and validation limits](CLIENTS.md).
 
-Use `-Agent` and `-Provider` selectors as explicit compatibility gates. They currently only accept `Codex` and `Containarium`: an unknown integration must fail clearly rather than silently writing a Codex-specific configuration for another client.
+Only public enrollment metadata is published in `/etc/boxweave/client.json` (0644); privileged configuration remains 0600. Downloads are pinned to the installed commit and checked against recorded client asset hashes. Standalone Linux and additional providers remain future extension points.
 
 Suggested future provider interface (design placeholder, **not yet implemented**): `discover`, `provision`, `get`, `connect`, `destroy`, `expose`, `health`. Future agent adapter inputs: `mcp_name`, `mcp_command`, `mcp_args`, `public_box_key`, `policy_template`. Providers and agents can each evolve without renaming the BoxWeave binary, timers or configuration root.
 

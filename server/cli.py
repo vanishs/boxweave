@@ -316,6 +316,8 @@ def parser():
     output_options(inspect)
     inspect.add_argument('name')
     inspect.add_argument('--project', default='default', help='Explicit Incus project (default: default)')
+    from clients import add_parser
+    add_parser(commands)
     job = commands.add_parser('job', help='Explicit local command jobs with durable receipts')
     job.add_argument('arguments', nargs=argparse.REMAINDER)
     smoke = commands.add_parser('selftest', help='Plan or run an approved nested MCP smoke test')
@@ -325,6 +327,9 @@ def parser():
 
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.command == 'client':
+        from clients import run
+        return run(args)
     if args.command in ('job', 'selftest'):
         if args.command == 'job':
             from jobs import main as entry

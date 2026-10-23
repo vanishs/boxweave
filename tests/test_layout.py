@@ -25,13 +25,14 @@ class LayoutTests(unittest.TestCase):
         self.assertIn('boxweave-token.service', installer)
         self.assertIn('/usr/local/bin/boxweave-mcp', installer)
         self.assertIn('clients/windows/setup.ps1', installer)
+        self.assertIn('boxweave client --help', installer)
         self.assertNotIn('/etc/codex-containarium-bridge', installer)
 
     def test_windows_client_has_vendor_neutral_names_and_explicit_gate(self):
         content = (ROOT / 'clients/windows/setup.ps1').read_text(encoding='utf-8')
         self.assertIn("[string]$McpName = 'boxweave'", content)
         self.assertIn("[string]$KeyName = 'boxweave'", content)
-        self.assertIn("[ValidateSet('Codex')]", content)
+        self.assertIn("[ValidateSet('Codex','Cursor','Claude-Code')]", content)
         self.assertIn("[ValidateSet('Containarium')]", content)
         self.assertIn("[ValidateSet('Native','WSL')]", content)
         self.assertNotIn('codex_containarium', content)

@@ -1,25 +1,5 @@
 # Codex adapter
 
-**Status: implemented for Windows Codex Desktop (Native or WSL SSH transport).**
+BoxWeave 0.2.0 configures Codex on native Windows, macOS and WSL CLI. Native Windows supports native or WSL SSH without changing desktop runtime preferences.
 
-Configuration artifacts:
-
-- `<Codex home>/config.toml`: native desktop agent runtime and `[mcp_servers.boxweave]` registration.
-- `<Codex home>/AGENTS.md`: managed `BOXWEAVE` policy block.
-
-The `clients/windows/setup.ps1` script is the current adapter entry point. It uses the current Windows user's `%USERPROFILE%\.codex` directory unless `-AgentHome` (or `CODEX_HOME`) is provided. Do not rename the two Codex-defined filenames to `boxweave.*`.
-
-The server's Containarium MCP tool names are unchanged; only their MCP **registration namespace** is `boxweave`.
-
-The generated managed policy includes bounded startup/provisioning retries,
-ambiguous-create reconciliation, service/oneshot interpretation, per-layer public
-key identities and the minimum requirements for a nested MCP smoke test. See the
-[shared execution instructions](../../AGENTS.md) and
-[verified nested test](../../docs/TEST-BOXWEAVE-LXC.md).
-
-Changing the generator does not immediately rewrite an existing user's global
-AGENTS.md. The updated rules are emitted when the client setup is next run through
-its normal enrollment workflow. Do not run enrollment solely to refresh prose
-without authorization, or overwrite the user's unmanaged instructions. Markdown
-backticks in the expandable PowerShell policy here-string must be escaped so
-generated rules do not contain unintended control characters.
+Artifacts: Codex home `config.toml` with `[mcp_servers.boxweave]`, and a managed block in effective global `AGENTS.md` or existing nonempty `AGENTS.override.md`. Honor `CODEX_HOME` and explicit client agent-home options. Preserve unrelated content; unusual TOML spellings fail rather than being guessed at. POSIX setup requires Python 3.11+, but not the Codex CLI. See [client setup](../../docs/CLIENTS.md).
