@@ -32,6 +32,8 @@ if name == 'curl':
         print('401', end=''); sys.exit(0)
     if url.endswith('/latest'):
         print('{"tag_name":"v0.111.0"}'); sys.exit(0)
+    if '/commits/' in url:
+        print(json.dumps({'sha':'a'*40}));sys.exit(0)
     assets = json.loads((r/'assets.json').read_text())
     key = next((k for k in assets if url.endswith('/'+k)), None)
     if key is None: sys.exit('Unexpected download: '+url)
@@ -56,12 +58,22 @@ elif name == 'systemctl':
         else: print('loaded' if (r/'etc/systemd/system'/units[0]).exists() else 'not-found')
     elif a[0] == 'is-active':
         sys.exit(0 if all(state.get(u)=='active' for u in units) else 3)
+    elif a[0] == 'is-failed':
+        sys.exit(0 if any(state.get(u)=='failed' for u in units) else 1)
+    elif a[0] == 'reset-failed':
+        if any(u not in state for u in units): sys.exit(1)
+        for u in units:
+            if state[u]=='failed': state[u]='inactive'
+        statefile.write_text(json.dumps(state))
     elif a[0] in ('start','restart','stop'):
-        if os.environ.get('FAIL_SERVICE') in units: sys.exit(1)
+        if a[0] in ('start','restart') and os.environ.get('FAIL_SERVICE') in units:
+            state[os.environ['FAIL_SERVICE']]='failed'
+            statefile.write_text(json.dumps(state))
+            sys.exit(1)
         if a[0]=='stop' and broken: sys.exit(1)
         for u in units: state[u]='inactive' if a[0]=='stop' else 'active'
         statefile.write_text(json.dumps(state))
-    elif a[0] not in ('enable','daemon-reload','reset-failed'):
+    elif a[0] not in ('enable','daemon-reload'):
         sys.exit('Unexpected systemctl action')
 elif name == 'ssh-keygen':
     if '-A' in a: sys.exit('Unexpected host identity generation')
@@ -112,7 +124,8 @@ class InstallerRerunTests(unittest.TestCase):
         text = text.replace('/usr/bin/ssh-keygen', str(self.bin/'ssh-keygen'))
         text = text.replace('-o root -g root', '-o %s -g %s' % (os.getuid(), os.getgid()))
         self.script = self.root/'install.sh'; self.script.write_text(text)
-        assets = {name: (ROOT/name).read_bytes() for name in ('server/cli.py','server/hostkeys.py','server/tokens.py','VERSION')}
+        assets = {name: (ROOT/name).read_bytes() for name in ('install.sh','server/cli.py','server/hostkeys.py','server/tokens.py',
+                  'server/jobs.py','server/mcp_client.py','server/smoke.py','server/provenance.py','VERSION')}
         backend = b'#!/bin/sh\nexit 0\n'
         assets['mcp-server-linux-amd64'] = backend
         assets['SHA256SUMS.txt'] = (hashlib.sha256(backend).hexdigest()+'  mcp-server-linux-amd64\n').encode()
@@ -126,6 +139,8 @@ class InstallerRerunTests(unittest.TestCase):
         env = {k:v for k,v in os.environ.items() if not k.startswith('BOXWEAVE_') and k != 'CONTAINARIUM_VERSION'}
         env.update(PATH=str(self.bin)+':'+env['PATH'], FAKE_ROOT=str(self.root), FAKE_USER=self.user, SUDO_USER='root')
         env.update(extra)
+        if getattr(self,'pipe_mode',False):
+            return subprocess.run(['bash','-s','--',*args], input=self.script.read_text(), env=env, capture_output=True, text=True, timeout=25)
         return subprocess.run(['bash', str(self.script), *args], env=env, capture_output=True, text=True, timeout=25)
 
     def initial_install(self):
@@ -192,6 +207,8 @@ class InstallerRerunTests(unittest.TestCase):
         r=self.run_install()
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)
         self.assertFalse((self.config.parent/'update-in-progress').exists())
+        states=json.loads((self.root/'unit-state.json').read_text())
+        self.assertNotEqual(states['boxweave-token.service'],'failed')
 
     def test_corrupt_config_is_not_replaced(self):
         self.initial_install()
@@ -211,6 +228,11 @@ class InstallerRerunTests(unittest.TestCase):
         self.assertEqual((self.root/'usr/local/sbin/boxweave-hostkeys').read_bytes(),self.assets['server/hostkeys.py'])
         self.assertEqual((self.root/'usr/local/libexec/boxweave/VERSION').read_bytes(),b'0.1.0-next\n')
         self.assertTrue(any((self.root/'var/backups/boxweave').glob('update-*/files/*')))
+        manifest=json.loads((self.root/'etc/boxweave/install-manifest.json').read_text())
+        self.assertEqual(manifest['state'],'complete')
+        self.assertEqual(manifest['source']['resolved_commit'],'a'*40)
+        self.assertEqual(manifest['boxweave_version'],'0.1.0-next')
+        self.assertEqual(manifest['mcp_backend']['sha256'],hashlib.sha256(self.assets['mcp-server-linux-amd64']).hexdigest())
 
     def test_checksum_failure_and_concurrent_run_do_not_publish(self):
         import fcntl
@@ -263,6 +285,14 @@ class InstallerRerunTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(),replacement.read_bytes())
         self.assertIsNone(child.poll())
         child.terminate(); child.wait(timeout=5)
+
+    def test_stdin_installer_records_unknown_source_without_reading_pipe(self):
+        self.pipe_mode=True
+        self.initial_install()
+        manifest=json.loads((self.root/'etc/boxweave/install-manifest.json').read_text())
+        self.assertEqual(manifest['state'],'complete')
+        self.assertIsNone(manifest['installer']['sha256'])
+        self.assertIsNone(manifest['installer']['differs_from_source'])
 
 
 if __name__ == '__main__':

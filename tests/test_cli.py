@@ -109,9 +109,32 @@ class CLITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'config.json'
             path.write_text(json.dumps({'provider': 'containarium', 'schema_version': 1, 'jwt': 'SECRET_JWT'}))
-            with patch.object(cli, 'service_state', return_value={'status': 'active'}), contextlib.redirect_stdout(io.StringIO()) as out:
+            def healthy(unit):
+                if unit in cli.ONESHOTS:
+                    return {'status':'inactive','state':{'Result':'success','ExecMainStatus':'0','ExecMainStartTimestampMonotonic':'1'}}
+                return {'status':'active','state':{'UnitFileState':'enabled'}}
+            with patch.object(cli, 'service_state', side_effect=healthy), contextlib.redirect_stdout(io.StringIO()) as out:
                 code = cli.main(['status', '--config', str(path), '--json'])
             self.assertEqual(code, 0);self.assertNotIn('SECRET_JWT', out.getvalue())
+
+    def test_pending_update_never_reports_ready(self):
+        services={unit:{'status':'active','state':{'UnitFileState':'enabled'}} for unit in cli.SERVICES}
+        oneshots={unit:{'status':'inactive','state':{'Result':'success','ExecMainStatus':'0','ExecMainStartTimestampMonotonic':'1'}} for unit in cli.ONESHOTS}
+        self.assertEqual(cli.installation_state(True,services,oneshots,False)['state'],'ready')
+        self.assertEqual(cli.installation_state(True,services,oneshots,True)['state'],'incomplete')
+        services['boxweave-token.timer']['state']['UnitFileState']='disabled'
+        self.assertEqual(cli.installation_state(True,services,oneshots,False)['state'],'incomplete')
+
+    def test_starting_and_failed_have_distinct_states(self):
+        services={unit:{'status':'active','state':{'UnitFileState':'enabled'}} for unit in cli.SERVICES}
+        oneshots={unit:{'status':'inactive','state':{'Result':'success','ExecMainStatus':'0','ExecMainStartTimestampMonotonic':'1'}} for unit in cli.ONESHOTS}
+        services['containarium.service']['status']='starting'
+        self.assertEqual(cli.installation_state(True,services,oneshots,False)['state'],'starting')
+        services['containarium.service']['status']='failed'
+        self.assertEqual(cli.installation_state(True,services,oneshots,False)['state'],'failed')
+        services['containarium.service']['status']='active'
+        oneshots['boxweave-token.service']['state']['ExecMainStartTimestampMonotonic']='0'
+        self.assertEqual(cli.installation_state(True,services,oneshots,False)['state'],'incomplete')
 
     def test_command_time_budget(self):
         result = cli.command([sys.executable, '-c', 'import time;time.sleep(30)'], timeout=0.1)

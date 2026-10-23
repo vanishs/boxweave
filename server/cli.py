@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only BoxWeave management CLI. Python standard library only."""
+"""BoxWeave diagnostics and explicitly requested local jobs. Standard library only."""
 import argparse
 import hashlib
 import json
@@ -14,8 +14,12 @@ from urllib.parse import quote, urlsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import build_opener, HTTPRedirectHandler, ProxyHandler
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from provenance import read_public
+
 CONFIG = Path('/etc/boxweave/config.json')
 SERVICES = ('incus.service', 'containarium.service', 'boxweave-hostkeys.timer', 'boxweave-token.timer')
+ONESHOTS = ('boxweave-hostkeys.service', 'boxweave-token.service')
 VERSION_FILE = Path(__file__).resolve().parent / 'VERSION'
 if not VERSION_FILE.is_file():
     VERSION_FILE = Path(__file__).resolve().parents[1] / 'VERSION'
@@ -112,11 +116,13 @@ def component_versions():
 
 def service_state(unit):
     r = command(['systemctl', 'show', unit, '-p', 'LoadState', '-p', 'ActiveState',
-                 '-p', 'SubState', '-p', 'Result', '-p', 'MainPID'])
+                 '-p', 'SubState', '-p', 'Result', '-p', 'MainPID', '-p', 'UnitFileState',
+                 '-p', 'ExecMainStatus', '-p', 'ExecMainStartTimestampMonotonic'])
     values = dict(line.split('=', 1) for line in r['stdout'].splitlines() if '=' in line)
     # Only return bounded state identifiers, never ExecStart/Environment or raw output.
     safe = {key: value for key, value in values.items()
-            if key in ('LoadState', 'ActiveState', 'SubState', 'Result', 'MainPID')
+            if key in ('LoadState', 'ActiveState', 'SubState', 'Result', 'MainPID',
+                       'UnitFileState', 'ExecMainStatus', 'ExecMainStartTimestampMonotonic')
             and re.fullmatch(r'[a-z0-9_-]{1,64}', value)}
     if safe.get('LoadState') == 'not-found':
         status = 'missing'
@@ -229,8 +235,10 @@ def inspect_box(name, project):
 def health(args):
     config, error = load_config(args.config)
     services = {unit: service_state(unit) for unit in SERVICES}
+    oneshots = {unit: service_state(unit) for unit in ONESHOTS}
     result = {'command': args.command, 'boxweave': product_version(),
-              'configuration': {'status': 'available' if config is not None else error}, 'services': services}
+              'configuration': {'status': 'available' if config is not None else error}, 'services': services,
+              'oneshots': oneshots}
     if config is not None:
         result['configuration']['provider'] = config.get('provider') if config.get('provider') == 'containarium' else 'unknown'
         result['configuration']['schema_version'] = config.get('schema_version') if type(config.get('schema_version')) is int else None
@@ -242,13 +250,47 @@ def health(args):
                            'BoxWeave, the provider CLI, the MCP backend and the Incus server have separate versions.']
         if args.api:
             result['api'] = api_reachability(config) if config is not None else {'status': 'skipped', 'reason': 'configuration_unavailable'}
-    failed = any(s['status'] == 'failed' for s in services.values())
-    incomplete = config is None or any(s['status'] in ('unknown', 'missing') for s in services.values())
+    try:
+        marker = args.config.parent / 'update-in-progress'
+        marker.stat(); pending = True
+    except FileNotFoundError:
+        pending = False
+    except OSError:
+        pending = None
+    installation = installation_state(config is not None, services, oneshots, pending)
     if 'api' in result:
-        failed = failed or result['api']['status'] in ('unreachable', 'unexpected_http_status')
-        incomplete = incomplete or result['api']['status'] == 'skipped'
-    result['overall'] = 'failed' if failed else 'incomplete' if incomplete else 'observed'
-    return result, 1 if failed else 2 if incomplete else 0
+        api = result['api']['status']
+        if api == 'unexpected_http_status': installation.update(state='failed')
+        elif api in ('unreachable', 'skipped') and installation['state'] == 'ready': installation.update(state='incomplete')
+        if api != 'reachable': installation['reasons'].append('requested_api_probe_' + api)
+    result['installation'] = installation
+    result['installation_state'] = result['overall'] = installation['state']
+    return result, 0 if installation['state'] == 'ready' else 1 if installation['state'] == 'failed' else 2
+
+
+def installation_state(configured, services, oneshots, pending):
+    reasons, failed, starting = [], False, False
+    if not configured: reasons.append('configuration_unavailable')
+    if pending is not False: reasons.append('update_pending' if pending else 'update_marker_unreadable')
+    for unit, record in {**services, **oneshots}.items():
+        status, state = record['status'], record.get('state', {})
+        if status == 'failed' or state.get('Result') not in (None, 'success'):
+            failed = True; reasons.append(unit + ':failed')
+        elif status == 'starting' or (unit in oneshots and status == 'active' and state.get('SubState') != 'exited'):
+            starting = True; reasons.append(unit + ':starting')
+        elif unit in services:
+            if status != 'active': reasons.append(unit + ':' + status)
+            if unit.endswith('.timer') and state.get('UnitFileState') != 'enabled': reasons.append(unit + ':not_enabled')
+            if unit == 'containarium.service' and state.get('UnitFileState') != 'enabled': reasons.append(unit + ':not_enabled')
+        else:
+            completed = (status in ('inactive', 'active') and state.get('Result') == 'success'
+                         and state.get('ExecMainStatus') == '0'
+                         and state.get('ExecMainStartTimestampMonotonic', '0').isdigit()
+                         and int(state.get('ExecMainStartTimestampMonotonic', '0')) > 0)
+            if not completed: reasons.append(unit + ':successful_run_not_verified')
+    state = 'failed' if failed else 'incomplete' if pending is not False or not configured else 'starting' if starting else 'incomplete' if reasons else 'ready'
+    return {'state': state, 'pending_update': pending, 'reasons': reasons,
+            'scope': 'local_installation_readiness; not authenticated MCP or security certification'}
 
 
 def parser():
@@ -261,6 +303,8 @@ def parser():
     v = commands.add_parser('version', help='BoxWeave source version; no provider connection')
     output_options(v)
     v.add_argument('--components', action='store_true', help='Also query client binary versions (not server/API health)')
+    v.add_argument('--verbose', action='store_true', help='Include recorded installation provenance')
+    v.add_argument('--manifest', type=Path, default=CONFIG.parent / 'install-manifest.json')
     for name in ('status', 'doctor'):
         sub = commands.add_parser(name, help='Read-only ' + name)
         output_options(sub)
@@ -272,15 +316,27 @@ def parser():
     output_options(inspect)
     inspect.add_argument('name')
     inspect.add_argument('--project', default='default', help='Explicit Incus project (default: default)')
+    job = commands.add_parser('job', help='Explicit local command jobs with durable receipts')
+    job.add_argument('arguments', nargs=argparse.REMAINDER)
+    smoke = commands.add_parser('selftest', help='Plan or run an approved nested MCP smoke test')
+    smoke.add_argument('arguments', nargs=argparse.REMAINDER)
     return p
 
 
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.command in ('job', 'selftest'):
+        if args.command == 'job':
+            from jobs import main as entry
+        else:
+            from smoke import main as entry
+        return entry(args.arguments)
     if args.command == 'version':
         result, code = {'boxweave': product_version()}, 0
         if args.components:
             result['components'] = component_versions()
+        if args.verbose:
+            result['provenance'] = read_public(args.manifest)
     elif args.command == 'box':
         try:
             result, code = inspect_box(args.name, args.project)
@@ -290,7 +346,7 @@ def main(argv=None):
         result, code = health(args)
     if args.json:
         print(json.dumps(result, ensure_ascii=True, indent=2))
-    elif args.command == 'version':
+    elif args.command == 'version' and not args.verbose:
         print('BoxWeave ' + result['boxweave'])
         for name, value in result.get('components', {}).items():
             print(name + ': ' + (value['version'] or value['status']))

@@ -1,8 +1,8 @@
 # BoxWeave management CLI
 
 The management CLI uses Python 3's standard library and is independent of the MCP
-transport. It performs read-only observations: no installation, repairs, service
-starts, instance lifecycle actions, or package upgrades.
+transport. Version/status/doctor/inspect perform read-only observations. Explicit
+job and selftest commands execute approved tasks; see [tasks and selftest](TASKS-AND-SELFTEST.md).
 
 From a source checkout on Ubuntu:
 
@@ -24,6 +24,7 @@ the CLI and VERSION files to be available at the selected repository ref.
 | --- | --- |
 | `version` | BoxWeave's own VERSION file, currently an unreleased development version |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
+| `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
 | `status` | Configuration availability and selected systemd service/timer states |
 | `doctor` | Status, component versions, container detection and current AppArmor namespace observations |
 | `doctor --api` | Adds a three-second unauthenticated loopback API reachability probe |
@@ -37,11 +38,12 @@ privileges itself.
 
 ## Interpretation
 
-Exit code 0 means the requested observation completed; it is not a security
-certification or proof that every service is ready. Exit code 1 indicates a
-reported failed service, requested API probe failure, or failed instance query.
-Exit code 2 indicates incomplete observations or invalid command arguments.
-Inactive and starting services are reported as such rather than called corrupt.
+For status/doctor, exit 0 now means local installation_state=ready, exit 1 is
+failed, and exit 2 is starting/incomplete. Required timers must be enabled and
+active; successful inactive oneshots are accepted only with a recorded execution.
+A pending-update marker prevents ready. This is not a security certification or
+proof of authenticated MCP execution. For inspect, failed queries exit 1; invalid
+arguments exit 2. See the [state and task result semantics](TASKS-AND-SELFTEST.md).
 
 An HTTP 200, 401 or 403 response establishes reachability only. Authentication,
 MCP execution, application health and LAN access still require their own tests.

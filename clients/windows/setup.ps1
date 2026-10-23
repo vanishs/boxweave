@@ -252,19 +252,25 @@ Update-CodexToml -Path $configPath -Command $transportCommand -Arguments $transp
 $agents = @"
 ## BoxWeave remote development environment (Containarium provider)
 
-- Use MCP server **$McpName** (BoxWeave with the Containarium provider) for provisioning and managing LXC containers. Use its dynamic `connect` tool inside an existing box, not a separate per-box MCP registration.
-- Ubuntu SSH endpoint: **${SshHost}:${SshPort}**, Unix user: **${SshUser}**. SSH transport mode: **$Mode**. The dedicated transport key is restricted by OpenSSH `restrict,command=`; it is NOT a general Ubuntu shell credential.
+- Use MCP server **$McpName** (BoxWeave with the Containarium provider) for provisioning and managing LXC containers. Use its dynamic ``connect`` tool inside an existing box, not a separate per-box MCP registration.
+- Ubuntu SSH endpoint: **${SshHost}:${SshPort}**, Unix user: **${SshUser}**. SSH transport mode: **$Mode**. The dedicated transport key is restricted by OpenSSH ``restrict,command=``; it is NOT a general Ubuntu shell credential.
 - The managed Ubuntu-to-container public SSH key is exactly:
 
   $boxPub
 
-- When creating a container that requires `connect`, pass that COMPLETE public-key line via `create_container.ssh_keys`. Never substitute the Windows/WSL transport key. Do not assume a public-key fingerprint is enough.
+- When creating a container that requires ``connect``, pass that COMPLETE public-key line via ``create_container.ssh_keys``. Never substitute the Windows/WSL transport key. Do not assume a public-key fingerprint is enough.
 - Reuse a suitable existing project container; otherwise provision an isolated box. Query box state before connecting and verify actual results afterward.
-- If container creation times out, first query `list_containers`/`get_container` before retrying. Do NOT create duplicates, force-delete or overwrite resources.
-- After recreation, `knownhosts: key mismatch` can indicate IP reuse; wait for the host-side trusted Incus synchronization and retry within a bounded window. Never disable SSH verification or edit Ubuntu `known_hosts` from Codex.
+- A timed-out create request can still succeed. Query ``list_containers``/``get_container`` with the original logical name before any new create. Do NOT duplicate, rename, force-delete or overwrite a partially provisioned resource.
+- Running does not prove SSH provisioning is complete. Allow package/key setup to finish, retry ``connect`` within the deadline, and verify ``whoami && hostname`` before work. Diagnose persistent failures with read-only tools, including ``debug_container`` when supported.
+- Unless the user specifies another limit, use one 600-second deadline per provisioning, installation or readiness phase, polling about every 15-30 seconds. Do not reset the allowance on each retry. Preserve background job logs and actual exit codes; transport timeouts or disconnects do not establish completion. The installer's ``--api-ready-timeout`` bounds only API waiting, not total installation time.
+- An active Containarium daemon may still be waiting for core containers/PostgreSQL before the API listens. Inspect progress and wait rather than restarting or deleting infrastructure. HTTP 200/401/403 proves reachability only; authenticated operation requires real MCP calls.
+- Use ``sudo boxweave status`` / ``sudo boxweave doctor --api`` when configuration permissions require it. Exit 0 is an observation: inspect service states, required timers, installer exit code and ``/etc/boxweave/update-in-progress``. A successful oneshot can be inactive/dead; check Result=success and ExecMainStatus=0, with its timer active/waiting and enabled. Only reset failed state for actually failed units.
+- After recreation, ``knownhosts: key mismatch`` can indicate IP reuse; wait for the host-side trusted Incus synchronization and retry within a bounded window. Never disable SSH verification or edit Ubuntu ``known_hosts`` from Codex.
+- For a requested nested smoke test, use ordinary Ubuntu LXC -> inner BoxWeave MCP -> disposable workload LXC -> Python hello world. Do not make special images, Incus upgrades, cold backups or security audits prerequisites. Reuse compatible Incus; report security capabilities separately when unverified.
+- Each nested MCP host has its own managed Ubuntu-to-container public identity; discover and verify that layer's FULL public key instead of assuming the outer key above applies. Never read/export private keys or JWT contents. Start the inner managed launcher as its configured non-root user and use an MCP client with initialize/initialized, tool discovery and tools/call. Direct Incus execution is not proof of inner MCP operation; verify identity and stdout/exit code through inner ``connect``.
 - Develop, test and deploy applications INSIDE each project's LXC. Prefer non-root container user and use systemd/Compose for persistence if appropriate. Verify health, reboot persistence and requested LAN access.
 - Use Containarium port passthrough only when explicitly required. Never assume it provides LAN-only source-IP enforcement; protect sensitive services with authentication/network restrictions.
-- Never modify `containarium-core-*` infrastructure boxes, unrelated projects, host SSH settings, root access, or platform credentials. Obtain permission for destructive operations.
+- Never modify ``containarium-core-*`` infrastructure boxes, unrelated projects, host SSH settings, root access, or platform credentials. Obtain permission for destructive operations.
 - The MCP token may have admin privileges; use only requested tools and scopes, never print secrets or private keys.
 "@
 Update-Agents -Path $agentsPath -Content $agents

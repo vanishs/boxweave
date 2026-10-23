@@ -37,10 +37,10 @@ unverified instead of being turned into automatic repairs.
 
 ## Future work, not implemented
 
-- Add a small nested integration scenario using ordinary Ubuntu images: outer
-  installation, inner installation, one disposable workload, observable results
-  and scoped cleanup. Reuse compatible installed Incus; upgrade only for a
-  demonstrated requirement.
+- The inner MCP smoke scenario is now implemented in `scripts/nested_smoke.py`
+  and `boxweave selftest`, with confirmed plans, persisted creation intent and
+  bounded readiness retries. It requires an already installed parent BoxWeave;
+  automated outer installation and authorized cleanup remain future work.
 - Fix exact-name addressing in the upstream provider MCP. The local CLI offers
   literal inspection, but does not patch the provider binary.
 - Add provider adapters behind the CLI's observation functions as another

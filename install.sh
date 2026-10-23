@@ -253,6 +253,7 @@ INSTALL_PHASE='MCP download and checksum verification'
 log 'Staging all BoxWeave components and the checksum-verified MCP backend before replacing installed files'
 MCP_RELEASE="$CONTAINARIUM_VERSION"
 ARCH=$(dpkg --print-architecture)
+export ARCH
 case "$ARCH" in amd64|arm64) ;; *) die "Unsupported CPU architecture: $ARCH";; esac
 if [[ "$CONTAINARIUM_VERSION" == latest ]]; then
   release_json=$(curl -fsSL --retry 3 'https://api.github.com/repos/footprintai/containarium/releases/latest')
@@ -260,14 +261,24 @@ if [[ "$CONTAINARIUM_VERSION" == latest ]]; then
 fi
 [[ "$CONTAINARIUM_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'Unsupported Containarium release tag'
 TMPDIR_DL=$(mktemp -d)
-for source_file in server/cli.py server/hostkeys.py server/tokens.py VERSION; do
+# Resolve a mutable ref once, so all fetched components belong to one commit.
+if [[ "$BOXWEAVE_REF" =~ ^[a-f0-9]{40}$ ]]; then
+  SOURCE_COMMIT="$BOXWEAVE_REF"
+else
+  commit_json=$(curl -fsSL --retry 3 "https://api.github.com/repos/$BOXWEAVE_REPO/commits/$BOXWEAVE_REF")
+  SOURCE_COMMIT=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])' <<< "$commit_json")
+fi
+[[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]] || die 'Could not resolve a source commit'
+RAW_BASE="https://raw.githubusercontent.com/${BOXWEAVE_REPO}/${SOURCE_COMMIT}"
+curl -fsSL --retry 3 "$RAW_BASE/install.sh" -o "$TMPDIR_DL/reference-install.sh"
+for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py VERSION; do
   mkdir -p "$TMPDIR_DL/$(dirname "$source_file")"
   curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$TMPDIR_DL/$source_file"
 done
 python3 - "$TMPDIR_DL" <<'PY_SOURCE'
 import ast, pathlib, re, sys
 p = pathlib.Path(sys.argv[1])
-for name in ('cli.py', 'hostkeys.py', 'tokens.py'):
+for name in ('cli.py', 'hostkeys.py', 'tokens.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py'):
     ast.parse((p / 'server' / name).read_text(encoding='utf-8'))
 if not re.fullmatch(r'[0-9A-Za-z.+-]{1,64}', (p / 'VERSION').read_text().strip()):
     sys.exit('Invalid BoxWeave version file')
@@ -436,6 +447,10 @@ out.write_text(json.dumps(data, indent=2) + '\n')
 out.chmod(0o600)
 PY
 
+python3 "$TMPDIR_DL/server/provenance.py" build --directory "$TMPDIR_DL" \
+  --installer "${BASH_SOURCE[0]:-/dev/stdin}" --repo "$BOXWEAVE_REPO" --ref "$BOXWEAVE_REF" \
+  --commit "$SOURCE_COMMIT" --backend "$CONTAINARIUM_VERSION" --daemon "$CONTAINARIUMD_BINARY"
+
 INSTALL_PHASE='BoxWeave service installation'
 log 'Preparing BoxWeave launchers and service units'
 cat >"$TMPDIR_DL/boxweave" <<'CLI'
@@ -530,11 +545,16 @@ publish_components() {
   local files=(
     'mcp-server-linux-ARCH:/usr/local/libexec/boxweave/containarium-mcp-server:0755'
     'server/cli.py:/usr/local/libexec/boxweave/cli.py:0644'
+    'server/jobs.py:/usr/local/libexec/boxweave/jobs.py:0644'
+    'server/mcp_client.py:/usr/local/libexec/boxweave/mcp_client.py:0644'
+    'server/smoke.py:/usr/local/libexec/boxweave/smoke.py:0644'
+    'server/provenance.py:/usr/local/libexec/boxweave/provenance.py:0644'
     'VERSION:/usr/local/libexec/boxweave/VERSION:0644'
     'boxweave:/usr/local/bin/boxweave:0755'
     'server/hostkeys.py:/usr/local/sbin/boxweave-hostkeys:0755'
     'server/tokens.py:/usr/local/sbin/boxweave-token:0755'
     'config.json:/etc/boxweave/config.json:0600'
+    'install-manifest.json:/etc/boxweave/install-manifest.json:0600'
     'containarium.env:/etc/boxweave/providers/containarium.env:0644'
     'boxweave-mcp:/usr/local/bin/boxweave-mcp:0755'
     'boxweave-hostkeys.service:/etc/systemd/system/boxweave-hostkeys.service:0644'
@@ -583,12 +603,19 @@ publish_components
 # Token generation must pass before timers start. No token contents are printed.
 systemctl daemon-reload
 /usr/bin/python3 /usr/local/libexec/boxweave/cli.py --version
-systemctl reset-failed boxweave-token.service boxweave-hostkeys.service
+for unit in boxweave-token.service boxweave-hostkeys.service; do
+  # Fresh oneshot units may be unloaded even after daemon-reload. reset-failed
+  # fails for them; only clear an actual failed state before retrying a service.
+  if systemctl is-failed --quiet "$unit"; then
+    systemctl reset-failed "$unit"
+  fi
+done
 systemctl start boxweave-token.service || die 'Cannot mint MCP JWT. Inspect journalctl -u boxweave-token.service'
 systemctl start boxweave-hostkeys.service || die 'Host-key sync failed. Inspect journalctl -u boxweave-hostkeys.service'
 systemctl enable boxweave-token.timer boxweave-hostkeys.timer >/dev/null
 systemctl restart boxweave-token.timer boxweave-hostkeys.timer
 systemctl is-active --quiet boxweave-token.timer boxweave-hostkeys.timer || die 'Managed timers did not become active'
+/usr/bin/python3 /usr/local/libexec/boxweave/provenance.py complete "$CONFIG_DIR/install-manifest.json"
 rm -f "$CONFIG_DIR/update-in-progress"
 TIMERS_PAUSED=0
 
