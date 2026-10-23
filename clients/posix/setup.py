@@ -87,61 +87,280 @@ def checked(args, **kwargs):
     if result.returncode: raise RuntimeError('Command failed: '+Path(args[0]).name+' (exit '+str(result.returncode)+')')
     return result
 
-def probe(command, args, timeout=30):
-    """Bounded thread-based pipes; no raw provider output or SSH diagnostics."""
-    p = subprocess.Popen([command,*args],stdin=subprocess.PIPE,stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL,start_new_session=True)
-    inbox = queue.Queue(maxsize=64)
-    def reader():
+class DiagnosticError(RuntimeError):
+    def __init__(self, code, stage, message):
+        super().__init__(message)
+        self.code, self.stage = code, stage
+
+
+class DiagnosticTimeout(DiagnosticError, TimeoutError): pass
+
+
+def probe(command, args, timeout=30, evidence=None):
+    """Bound every pipe operation with one monotonic deadline; never return payloads."""
+    import selectors
+    evidence = evidence if evidence is not None else {}
+    stage = 'transport'
+    started = time.monotonic()
+    deadline = started + timeout
+    p = subprocess.Popen([command, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    evidence['process_exit_code'] = None
+    selector = selectors.DefaultSelector()
+    buffer = b''
+    observed = 0
+    ident = 0
+
+    def remaining():
+        value = deadline-time.monotonic()
+        if value <= 0: raise TimeoutError('MCP timeout')
+        return value
+
+    def wait(stream, event):
+        selector.register(stream, event)
         try:
-            while True:
-                line = p.stdout.readline(2*1024*1024+1)
-                if not line: break
-                if len(line)>2*1024*1024: raise ValueError()
-                inbox.put_nowait(line)
-        except (ValueError,queue.Full): pass
-        finally:
-            try: inbox.put_nowait(None)
-            except queue.Full: pass
-    threading.Thread(target=reader,daemon=True).start()
-    deadline = time.monotonic()+timeout
+            if not selector.select(remaining()): raise TimeoutError('MCP timeout')
+        finally: selector.unregister(stream)
+
     def send(value):
-        p.stdin.write((json.dumps(value)+'\n').encode()); p.stdin.flush()
-    def call(ident,method,params):
+        data = (json.dumps(value)+'\n').encode()
+        while data:
+            wait(p.stdin, selectors.EVENT_WRITE)
+            try: count = os.write(p.stdin.fileno(), data)
+            except BlockingIOError: continue
+            data = data[count:]
+
+    def invalid():
+        raise DiagnosticError('PROTOCOL_INVALID', stage, 'Invalid MCP response')
+
+    def call(method, params):
+        nonlocal ident, buffer, observed
+        ident += 1
         send({'jsonrpc':'2.0','id':ident,'method':method,'params':params})
         for _ in range(256):
-            remaining=deadline-time.monotonic()
-            if remaining<=0: raise TimeoutError('MCP handshake/tool discovery timeout')
-            try: raw=inbox.get(timeout=remaining)
-            except queue.Empty: raise TimeoutError('MCP handshake/tool discovery timeout') from None
-            if raw is None: raise RuntimeError('MCP stream closed; process exit '+str(p.poll()))
-            value=json.loads(raw)
-            if value.get('id')==ident and 'method' not in value:
-                if 'error' in value: raise RuntimeError('MCP returned a protocol error')
-                return value['result']
-            if 'method' in value and 'id' in value:
-                send({'jsonrpc':'2.0','id':value['id'],'error':{'code':-32601,'message':'Unsupported client request'}})
-        raise RuntimeError('MCP message budget exceeded')
+            while b'\n' not in buffer:
+                wait(p.stdout, selectors.EVENT_READ)
+                try: chunk = os.read(p.stdout.fileno(), 65536)
+                except BlockingIOError: continue
+                if not chunk:
+                    evidence['process_exit_code'] = p.poll()
+                    raise DiagnosticError('TRANSPORT_FAILED', stage, 'MCP stream closed')
+                observed += len(chunk)
+                buffer += chunk
+                if len(buffer)>2097152 or observed>8388608:
+                    raise DiagnosticError('RESPONSE_LIMIT', stage, 'MCP response limit exceeded')
+            line, buffer = buffer.split(b'\n', 1)
+            if not line.strip(): continue
+            try: value = json.loads(line)
+            except (ValueError, UnicodeError): invalid()
+            if not isinstance(value, dict) or value.get('jsonrpc') != '2.0': invalid()
+            if 'method' in value:
+                if 'id' in value:
+                    send({'jsonrpc':'2.0','id':value['id'],'error':{'code':-32601,'message':'Unsupported client request'}})
+                continue
+            if type(value.get('id')) is not int or value['id'] != ident: invalid()
+            if ('result' in value) == ('error' in value): invalid()
+            if 'error' in value:
+                raise DiagnosticError('PROVIDER_CALL_FAILED' if stage=='provider_call' else 'PROTOCOL_INVALID',
+                                      stage, 'MCP returned a protocol error')
+            if not isinstance(value['result'], dict): invalid()
+            return value['result']
+        raise DiagnosticError('RESPONSE_LIMIT', stage, 'MCP message budget exceeded')
+
     try:
-        result=call(1,'initialize',{'protocolVersion':'2024-11-05','capabilities':{},
-                                 'clientInfo':{'name':'boxweave-client','version':'0.2.0'}})
-        if result.get('protocolVersion')!='2024-11-05': raise RuntimeError('Unsupported negotiated MCP protocol')
+        os.set_blocking(p.stdin.fileno(), False)
+        os.set_blocking(p.stdout.fileno(), False)
+        stage = 'initialize'
+        result = call('initialize', {'protocolVersion':'2024-11-05','capabilities':{},
+                                    'clientInfo':{'name':'boxweave-client','version':'0.2.0'}})
+        if result.get('protocolVersion') != '2024-11-05':
+            raise DiagnosticError('PROTOCOL_UNSUPPORTED', stage, 'Unsupported negotiated MCP protocol')
+        if not isinstance(result.get('capabilities'),dict) or not isinstance(result['capabilities'].get('tools'),dict): invalid()
+        evidence['protocol_version'] = result['protocolVersion']
+        evidence['initialize'] = 'passed'
         send({'jsonrpc':'2.0','method':'notifications/initialized'})
-        tools=call(2,'tools/list',{}).get('tools',[])
-        names=[t.get('name','') for t in tools]
-        target=next((n for n in names if n=='list_containers'),None)
-        if not target: raise RuntimeError('Provider list_containers tool unavailable')
-        result=call(3,'tools/call',{'name':target,'arguments':{}})
-        if result.get('isError'): raise RuntimeError('Read-only provider verification failed')
+        stage = 'discovery'
+        params, seen = {}, set()
+        for page in range(16):
+            result = call('tools/list', params)
+            tools = result.get('tools')
+            if not isinstance(tools,list) or any(not isinstance(t,dict) or not isinstance(t.get('name'),str) for t in tools): invalid()
+            evidence['tool_pages'] = page+1
+            if any(t['name']=='list_containers' for t in tools): break
+            cursor = result.get('nextCursor')
+            if cursor is None:
+                raise DiagnosticError('TOOL_UNAVAILABLE', stage, 'Provider list_containers tool unavailable')
+            if not isinstance(cursor,str) or not cursor or cursor in seen: invalid()
+            seen.add(cursor); params={'cursor':cursor}
+        else: raise DiagnosticError('RESPONSE_LIMIT', stage, 'MCP page limit exceeded')
+        evidence['discovery'] = 'passed'
+        stage = 'provider_call'
+        result = call('tools/call', {'name':'list_containers','arguments':{}})
+        if 'isError' in result and type(result['isError']) is not bool: invalid()
+        if result.get('isError'):
+            raise DiagnosticError('PROVIDER_CALL_FAILED', stage, 'Read-only provider verification failed')
+        content = result.get('content')
+        if not isinstance(content,list): invalid()
+        for block in content:
+            if not isinstance(block,dict) or block.get('type') not in ('text','image','audio','resource','resource_link'): invalid()
+            if block['type']=='text' and not isinstance(block.get('text'),str): invalid()
+            if block['type'] in ('image','audio') and (not isinstance(block.get('data'),str) or not isinstance(block.get('mimeType'),str)): invalid()
+            if block['type']=='resource' and not isinstance(block.get('resource'),dict): invalid()
+            if block['type']=='resource_link' and not isinstance(block.get('uri'),str): invalid()
+        evidence['provider_call'] = 'passed'
         return True
+    except TimeoutError:
+        raise DiagnosticTimeout('DEADLINE_EXCEEDED', stage, 'MCP timeout') from None
     finally:
+        selector.close()
         p.stdin.close()
         try: os.killpg(p.pid,signal.SIGTERM)
         except ProcessLookupError: pass
         try: p.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            os.killpg(p.pid,signal.SIGKILL); p.wait(timeout=2)
+            try: os.killpg(p.pid,signal.SIGKILL)
+            except ProcessLookupError: pass
+            p.wait(timeout=2)
         p.stdout.close()
+        evidence['cleanup'] = 'completed'
+        evidence['elapsed_ms'] = round((time.monotonic()-started)*1000)
+
+
+def diagnostic_profile(data):
+    if not isinstance(data,dict): raise ValueError()
+    for key,pattern in {'ssh_host':r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}',
+                        'linux_user':r'[a-z_][a-z0-9_-]{0,63}',
+                        'launcher':r'/[A-Za-z0-9_./-]+'}.items():
+        if not isinstance(data.get(key),str) or not re.fullmatch(pattern,data[key]): raise ValueError()
+    if type(data.get('ssh_port')) is not int or not 1<=data['ssh_port']<=65535: raise ValueError()
+    if data.get('agent') not in ('codex','cursor','claude-code'): raise ValueError()
+    if (data.get('os'),data.get('runtime'),data.get('transport')) not in (
+        ('macos','native','native'),('windows','wsl','wsl')): raise ValueError()
+    if data['agent']=='cursor' and data['runtime']=='wsl': raise ValueError()
+    key=data.get('server_public_key','')
+    if not isinstance(key,str) or not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?',key): raise ValueError()
+    blob=base64.b64decode(key.split()[1],validate=True)
+    if len(blob)!=51 or blob[:15]!=b'\x00\x00\x00\x0bssh-ed25519': raise ValueError()
+    return data
+
+
+def diagnose(args):
+    report={'schema_version':1,'operation':'client_diagnose','overall':'incomplete',
+            'connection':'unverified','registration':'unverified','guidance':'unverified',
+            'agent_ui':'unverified','stages':[],'process_exit_code':None,'cleanup':'not_started'}
+    started=time.monotonic()
+    def record(stage,status,code):
+        report['stages'].append({'id':stage,'status':status,'code':code,
+                                 'elapsed_ms':round((time.monotonic()-started)*1000)})
+    def fail(code,stage,status='incomplete'):
+        record(stage,status,code)
+        raise DiagnosticError(code,stage,'Diagnostic check did not pass')
+    def safe_file(path):
+        if any(x.is_symlink() for x in (path,*path.parents)):
+            fail('INPUT_INVALID','input')
+        if path.exists() and path.stat().st_size>1048576: fail('INPUT_INVALID','input')
+    try:
+        if args.replace or args.bootstrap_identity or args.project_path: fail('INPUT_INVALID','input')
+        try:
+            if len(args.data_base64)>65536: raise ValueError()
+            d=diagnostic_profile(json.loads(base64.b64decode(args.data_base64,validate=True)))
+            options=d.get('setup_options',{})
+            if not isinstance(options,dict): raise ValueError()
+            if any(options.get(k) for k in ('replace','bootstrap_identity','project_path')): raise ValueError()
+            if not 1<=args.timeout<=300: raise ValueError()
+        except (ValueError,TypeError,KeyError): fail('INPUT_INVALID','input')
+        record('input','passed','OK')
+        if d['os']=='macos' and sys.platform!='darwin': fail('PROFILE_UNSUPPORTED','runtime')
+        if d['runtime']=='wsl':
+            try: wsl='microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower()
+            except OSError: wsl=False
+            if not wsl: fail('PROFILE_UNSUPPORTED','runtime')
+        ssh=shutil.which('ssh')
+        if not ssh: fail('RUNTIME_MISSING','runtime')
+        report.update(runtime=d['os']+'-'+d['runtime'],transport=d['transport'])
+        record('runtime','passed','OK')
+        key=Path.home()/'.ssh/boxweave';known=Path.home()/'.ssh/boxweave_known_hosts'
+        for path in (key,known): safe_file(path)
+        if not key.is_file(): fail('IDENTITY_MISSING','trust')
+        if not known.is_file(): fail('PIN_MISSING','trust')
+        host=d['ssh_host']
+        token='['+host+']:'+str(d['ssh_port']) if d['ssh_port']!=22 or ':' in host else host
+        expected=token+' '+' '.join(d['server_public_key'].split()[:2])
+        if known.read_text().strip()!=expected: fail('PIN_MISMATCH','trust','failed')
+        record('trust','passed','OK')
+        transport=['-T','-i',str(key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
+                   '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
+                   '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+                   '-p',str(d['ssh_port']),d['linux_user']+'@'+host,d['launcher']]
+        home=Path(args.agent_home or options.get('agent_home') or
+                  os.environ.get('CODEX_HOME') or Path.home()/'.codex').expanduser()
+        if d['agent']=='cursor': home=Path(args.agent_home or options.get('agent_home') or Path.home()/'.cursor').expanduser()
+        if d['agent']=='claude-code':
+            report['registration']='unsupported'
+            record('registration','incomplete','REGISTRATION_UNSUPPORTED')
+            home=Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude')
+        else:
+            config=home/('config.toml' if d['agent']=='codex' else 'mcp.json');safe_file(config)
+            try:
+                parsed=(tomllib.loads(config.read_text()) if d['agent']=='codex' else json.loads(config.read_text()))
+                entry=parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave')
+                if not isinstance(entry,dict) or set(entry)-{'command','args','startup_timeout_sec','enabled'}: raise ValueError()
+                matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True
+                report['registration']='matched' if matched else 'mismatch'
+                record('registration','passed' if matched else 'failed','OK' if matched else 'REGISTRATION_MISMATCH')
+            except FileNotFoundError:
+                report['registration']='missing';record('registration','incomplete','REGISTRATION_MISSING')
+            except (ValueError,AttributeError,TypeError):
+                report['registration']='unsupported';record('registration','incomplete','REGISTRATION_UNSUPPORTED')
+        guidance=(home/'AGENTS.override.md' if d['agent']=='codex' else home/'boxweave-user-rules.md' if d['agent']=='cursor' else home/'rules/boxweave.md')
+        if d['agent']=='codex':
+            safe_file(guidance)
+            if not guidance.exists() or not guidance.read_text().strip(): guidance=home/'AGENTS.md'
+        safe_file(guidance)
+        report['guidance']='present' if guidance.is_file() and BEGIN in guidance.read_text() else 'unverified'
+        if d['agent']=='cursor': report['guidance']='manual'
+        record('guidance','passed' if report['guidance']=='present' else 'unverified',
+               'FILE_PRESENT' if report['guidance']=='present' else 'MANUAL_VERIFICATION_REQUIRED')
+        evidence={}
+        try:
+            # Controlled profile: never execute commands from an agent registration.
+            probe(ssh,['-F','/dev/null',*transport[:1],'-o','IdentityAgent=none',
+                       '-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no',*transport[1:]],
+                  timeout=args.timeout,evidence=evidence)
+            report['connection']='passed'
+        except DiagnosticError as error:
+            report['connection']='failed';record(error.stage,'failed',error.code)
+        finally:
+            for stage in ('initialize','discovery','provider_call'):
+                if evidence.get(stage)=='passed': record(stage,'passed','OK')
+            for name in ('protocol_version','process_exit_code','cleanup','tool_pages'):
+                if name in evidence: report[name]=evidence[name]
+    except DiagnosticError:
+        pass
+    except (OSError,ValueError,TypeError,AttributeError):
+        record('input','incomplete','INPUT_UNAVAILABLE')
+    except KeyboardInterrupt:
+        record('interruption','incomplete','INTERRUPTED');report['overall']='incomplete'
+        print(json.dumps(report));return 130
+    states={x['status'] for x in report['stages']}
+    report['overall']='failed' if 'failed' in states else 'incomplete' if 'incomplete' in states else 'passed'
+    code={'passed':0,'failed':1,'incomplete':2}[report['overall']]
+    if args.report:
+        try:
+            destination=Path(args.report).expanduser();safe_file(destination)
+            if destination.exists(): raise ValueError()
+            # Explicit export only; never overwrite a report or create parent directories.
+            fd,temporary=tempfile.mkstemp(prefix='.boxweave-report-',dir=destination.parent)
+            try:
+                with os.fdopen(fd,'w') as output:
+                    output.write(json.dumps(report,indent=2)+'\n');output.flush();os.fsync(output.fileno())
+                os.link(temporary,destination)
+            finally: os.unlink(temporary)
+        except (OSError,ValueError,DiagnosticError):
+            record('report','failed','REPORT_WRITE_FAILED');report['overall']='failed';code=1
+    print(json.dumps(report,indent=2))
+    return code
+
 
 def validate_data(d):
     if not isinstance(d,dict): raise ValueError('Invalid client data')
@@ -244,7 +463,7 @@ def setup(args):
         'chmod 600 "$HOME/.ssh/authorized_keys"\n'
         'tmp=$(mktemp "$HOME/.ssh/.boxweave-XXXXXX")\ntrap \'rm -f "$tmp"\' EXIT\n'
         'awk -v key='+shlex.quote(material)+' \'{ keep=1; for(i=1;i<=NF;i++) if($i==key) keep=0; if(keep) print $0 }\' "$HOME/.ssh/authorized_keys" > "$tmp"\n'
-        "printf '%s' '"+encoded+"' | base64 -d >> \"$tmp\"\nprintf '\\n' >> \"$tmp\"\n"
+        "printf '%s' '"+encoded+"' | base64 -d >> \"$tmp\"\nprintf '\n' >> \"$tmp\"\n"
         'chmod 600 "$tmp"\nmv -f "$tmp" "$HOME/.ssh/authorized_keys"\n')
     common=['-T','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
             '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-p',str(d['ssh_port'])]
@@ -272,11 +491,16 @@ def setup(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-base64',required=True,help='Public connection descriptor emitted by boxweave client')
+    parser.add_argument('--diagnose',action='store_true',help='Observe existing client connection; never enroll or repair')
+    parser.add_argument('--timeout',type=float,default=30,help='Protocol budget in seconds (1-300); cleanup adds at most four seconds')
+    parser.add_argument('--report',help='Create a new private diagnostic report file')
     parser.add_argument('--bootstrap-identity',help='Existing authorized SSH identity; never copied')
     parser.add_argument('--agent-home')
     parser.add_argument('--project-path',help='Optional local Cursor workspace for a project rule')
     parser.add_argument('--replace',action='store_true',help='Replace the reviewed boxweave MCP entry only')
     args=parser.parse_args()
+    if args.diagnose: return diagnose(args)
+    if args.report: parser.error('--report requires --diagnose')
     try: setup(args); return 0
     except (ValueError,OSError,RuntimeError,subprocess.TimeoutExpired) as error:
         print('BoxWeave setup incomplete: '+str(error),file=sys.stderr)

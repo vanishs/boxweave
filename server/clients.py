@@ -82,6 +82,7 @@ def publish(config, destination, staged, commit, host_key):
 
 def add_parser(commands):
     p = commands.add_parser('client', help='Generate a client setup command; interactive by default')
+    p.add_argument('--diagnose', action='store_true', help='Generate a read-only diagnostic command for an enrolled client')
     p.add_argument('--os', choices=('windows','macos'))
     p.add_argument('--agent', choices=AGENTS)
     p.add_argument('--runtime', choices=('native','wsl'))
@@ -146,6 +147,7 @@ def render(d, profile, options=None):
     payload.update(profile)
     payload['setup_options'] = options
     payload['policy'] = POLICY.format(**d)
+    diagnostic = bool(options.get('diagnose'))
     encoded = base64.b64encode(json.dumps(payload).encode()).decode()
     base = 'https://raw.githubusercontent.com/{}/{}'.format(d['source_repo'],d['source_commit'])
     if profile['os'] == 'windows' and profile['runtime'] == 'native':
@@ -161,6 +163,11 @@ def render(d, profile, options=None):
         # Launch a child with process-scoped policy so .ps1 works under standard Windows defaults.
         command = command.replace("& $bwFile -DataBase64", "& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bwFile -DataBase64")
         command = command.replace(" } finally", "; if ($LASTEXITCODE -ne 0) { throw 'BoxWeave client setup failed' } } finally")
+        if diagnostic:
+            command=command.replace("-DataBase64 "+psquote(encoded), "-Diagnose -DataBase64 "+psquote(encoded))
+            command=command.replace("if ($LASTEXITCODE -ne 0) { throw 'BoxWeave client setup failed' }",
+                                    "$bwExit=$LASTEXITCODE")
+            command += "; $global:LASTEXITCODE=$bwExit"
         shell = 'Windows PowerShell'
     else:
         asset = 'clients/posix/setup.py'
@@ -171,8 +178,13 @@ def render(d, profile, options=None):
                   "python3 -c "+shlex.quote("import hashlib,pathlib,sys; sys.exit(0 if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest()==sys.argv[2] else 'BoxWeave client checksum mismatch')")+
                   " \"$bw_dir/setup.py\" "+shlex.quote(d['client_sha256'][asset])+"; "
                   "python3 \"$bw_dir/setup.py\" --data-base64 "+shlex.quote(encoded))
+        if diagnostic: script += ' --diagnose'
         command = 'bash -c '+shlex.quote(script)
         shell = 'WSL terminal (the Linux user running the CLI)' if profile['runtime']=='wsl' else 'macOS Terminal'
+    if diagnostic:
+        return {'profile':profile,'operation':'client_diagnose','paste_into':shell,'command':command,
+                'notes':['Diagnosis uses existing enrolled keys and pins; it never repairs setup.',
+                         'JSON reports connection and registration separately; agent UI loading remains unverified.']}
     return {'profile':profile,'paste_into':shell,'command':command,
             'notes':['Setup uses an existing authorized SSH login for public-key enrollment.',
                      'Cursor User Rules require a manual Settings step unless a project rule is explicitly installed.',
@@ -183,8 +195,11 @@ def render(d, profile, options=None):
 
 def run(args):
     try:
+        diagnostic=getattr(args,'diagnose',False)
+        if diagnostic and (args.replace or args.bootstrap_identity or args.project_path):
+            raise ValueError('--diagnose does not support enrollment, replacement or project overlays')
         profile = selection(args)
-        if sys.stdin.isatty() and not getattr(args,'json',False) and not args.replace:
+        if sys.stdin.isatty() and not getattr(args,'json',False) and not args.replace and not diagnostic:
             args.replace = choose('Replace an existing BoxWeave MCP registration?',
                                   [('No: preserve conflicting entries', False),
                                    ('Yes: replace the BoxWeave entry (backups retained)', True)])
@@ -196,6 +211,7 @@ def run(args):
         if args.ssh_host: data['ssh_host'] = args.ssh_host
         if args.ssh_port is not None: data['ssh_port'] = args.ssh_port
         options = {key:getattr(args,key,None) for key in ('bootstrap_identity','agent_home','project_path','wsl_distro','replace')}
+        if diagnostic: options['diagnose']=True
         if options['wsl_distro'] and not (profile['os']=='windows' and profile['runtime']=='native' and profile['transport']=='wsl'):
             raise ValueError('--wsl-distro requires a native Windows agent with WSL SSH')
         if options['project_path'] and profile['agent']!='cursor':

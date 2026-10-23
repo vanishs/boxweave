@@ -8,6 +8,9 @@ Both modes preserve the native Windows agent runtime; WSL is only the SSH transp
 [CmdletBinding()]
 param(
     [string]$DataBase64 = '',
+    [switch]$Diagnose,
+    [ValidateRange(1,300)][double]$Timeout = 30,
+    [string]$ReportPath = '',
     [string]$ProjectPath = '',
     [switch]$Replace,
     [string]$SshHost = '',
@@ -134,75 +137,298 @@ function Invoke-WslScript([string]$Script, [string[]]$ScriptArguments = @(), [st
     Assert-Exit $What
 }
 
-function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments) {
+function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments,[double]$Timeout=30,[hashtable]$Evidence=@{}) {
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $stage='transport'
     $start=New-Object Diagnostics.ProcessStartInfo
     $start.FileName=$Command
-    $start.Arguments=(($Arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join ' ')
+    $start.Arguments=(@($Arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join ' ')
     $start.UseShellExecute=$false; $start.CreateNoWindow=$true
     $start.RedirectStandardInput=$true; $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true
     $process=New-Object Diagnostics.Process
     $process.StartInfo=$start
     $null=$process.Start()
+    $Evidence.process_exit_code=$null
     $stderrTask=$process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
     $pendingBytes=New-Object 'System.Collections.Generic.List[byte]'
     $readBuffer=New-Object byte[] 4096
-    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    function Remaining-Mcp {
+        $left=[int]($Timeout*1000-$clock.ElapsedMilliseconds)
+        if ($left -le 0) { throw 'DEADLINE_EXCEEDED: MCP timeout' }
+        return $left
+    }
     function Send-Mcp($Message) {
-        $process.StandardInput.WriteLine((ConvertTo-Json -InputObject $Message -Compress -Depth 15))
-        $process.StandardInput.Flush()
+        $Evidence.write_pending=$true
+        $task=$process.StandardInput.WriteLineAsync((ConvertTo-Json -InputObject $Message -Compress -Depth 15))
+        if (-not $task.Wait((Remaining-Mcp))) { throw 'DEADLINE_EXCEEDED: MCP timeout' }
+        $task=$process.StandardInput.FlushAsync()
+        if (-not $task.Wait((Remaining-Mcp))) { throw 'DEADLINE_EXCEEDED: MCP timeout' }
+        $Evidence.write_pending=$false
     }
     function Call-Mcp([int]$Id,[string]$Method,$Parameters) {
         Send-Mcp @{jsonrpc='2.0';id=$Id;method=$Method;params=$Parameters}
         for ($budget=0;$budget -lt 256;$budget++) {
-            $remaining=[int]($deadline-[DateTime]::UtcNow).TotalMilliseconds
-            if ($remaining -le 0) { throw 'MCP handshake/tool discovery timeout' }
             $newline=$pendingBytes.IndexOf([byte]10)
             while ($newline -lt 0) {
-                $remaining=[int]($deadline-[DateTime]::UtcNow).TotalMilliseconds
-                if ($remaining -le 0) { throw 'MCP handshake/tool discovery timeout' }
                 $read=$process.StandardOutput.BaseStream.ReadAsync($readBuffer,0,$readBuffer.Length)
-                if (-not $read.Wait($remaining)) { throw 'MCP handshake/tool discovery timeout' }
+                if (-not $read.Wait((Remaining-Mcp))) { throw 'DEADLINE_EXCEEDED: MCP timeout' }
                 $count=$read.Result
                 if ($count -eq 0) {
-                    $exitDetail = 'process still running'
-                    if ($process.WaitForExit(500)) { $exitDetail = 'process exit ' + $process.ExitCode }
-                    throw ('MCP stream closed before verification (' + $exitDetail + ')')
+                    $exitDetail='process still running'
+                    if ($process.WaitForExit(100)) { $Evidence.process_exit_code=$process.ExitCode;$exitDetail='process exit '+$process.ExitCode }
+                    throw ('TRANSPORT_FAILED: MCP stream closed before verification ('+$exitDetail+')')
                 }
                 $pendingBytes.AddRange([byte[]]$readBuffer[0..($count-1)])
-                if ($pendingBytes.Count -gt 2097152) { throw 'MCP response limit exceeded' }
+                $Evidence.bytes=[long]$Evidence.bytes+$count
+                if ($pendingBytes.Count -gt 2097152 -or $Evidence.bytes -gt 8388608) { throw 'RESPONSE_LIMIT: MCP response limit exceeded' }
                 $newline=$pendingBytes.IndexOf([byte]10)
             }
             $line=[Text.Encoding]::UTF8.GetString($pendingBytes.GetRange(0,$newline).ToArray())
             $pendingBytes.RemoveRange(0,$newline+1)
             if (-not $line.Trim()) { continue }
-            $message=ConvertFrom-Json -InputObject $line
-            if ($message.id -eq $Id -and -not $message.method) {
-                if ($message.PSObject.Properties['error']) { throw 'MCP protocol error' }
-                return $message.result
+            try { $message=ConvertFrom-Json -InputObject $line -ErrorAction Stop } catch { throw 'PROTOCOL_INVALID: Invalid MCP response' }
+            if (-not ($message -is [pscustomobject]) -or $message.jsonrpc -cne '2.0') { throw 'PROTOCOL_INVALID: Invalid MCP envelope' }
+            if ($message.PSObject.Properties['method']) {
+                if ($message.PSObject.Properties['id']) { Send-Mcp @{jsonrpc='2.0';id=$message.id;error=@{code=-32601;message='Unsupported client request'}} }
+                continue
             }
-            if ($message.method -and $message.PSObject.Properties['id']) {
-                Send-Mcp @{jsonrpc='2.0';id=$message.id;error=@{code=-32601;message='Unsupported client request'}}
-            }
+            if ((-not ($message.id -is [int]) -and -not ($message.id -is [long])) -or $message.id -ne $Id) { throw 'PROTOCOL_INVALID: Invalid response ID' }
+            $hasResult=$null -ne $message.PSObject.Properties['result']
+            $hasError=$null -ne $message.PSObject.Properties['error']
+            if ($hasResult -eq $hasError) { throw 'PROTOCOL_INVALID: Invalid MCP result' }
+            if ($hasError) { throw 'PROVIDER_CALL_FAILED: MCP protocol error' }
+            if (-not ($message.result -is [pscustomobject])) { throw 'PROTOCOL_INVALID: Invalid MCP result' }
+            return $message.result
         }
-        throw 'MCP message budget exceeded'
+        throw 'RESPONSE_LIMIT: MCP message budget exceeded'
     }
     try {
+        $stage='initialize'; $Evidence.stage=$stage
         $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.2.0'}}
-        if ($hello.protocolVersion -ne '2024-11-05') { throw 'Unsupported MCP protocol' }
+        if ($hello.protocolVersion -cne '2024-11-05') { throw 'PROTOCOL_UNSUPPORTED: Unsupported MCP protocol' }
+        if(-not ($hello.capabilities -is [pscustomobject]) -or -not ($hello.capabilities.tools -is [pscustomobject])){throw 'PROTOCOL_INVALID: Tools capability missing'}
+        $Evidence.protocol_version=$hello.protocolVersion; $Evidence.initialize='passed'
         Send-Mcp @{jsonrpc='2.0';method='notifications/initialized'}
-        $listing=Call-Mcp 2 'tools/list' @{}
-        if (-not ($listing.tools | Where-Object { $_.name -eq 'list_containers' })) { throw 'Provider list_containers tool unavailable' }
-        $result=Call-Mcp 3 'tools/call' @{name='list_containers';arguments=@{}}
-        if ($result.isError) { throw 'Read-only provider verification failed' }
+        $stage='discovery'; $Evidence.stage=$stage
+        $parameters=@{}; $seen=New-Object 'System.Collections.Generic.HashSet[string]'
+        $id=2; $found=$false
+        for($page=0;$page -lt 16;$page++){
+            $listing=Call-Mcp $id 'tools/list' $parameters; $id++
+            if (-not ($listing.tools -is [array])) { throw 'PROTOCOL_INVALID: Invalid tools list' }
+            foreach($tool in $listing.tools){
+                if (-not ($tool -is [pscustomobject]) -or -not ($tool.name -is [string])) { throw 'PROTOCOL_INVALID: Invalid tool' }
+                if ($tool.name -ceq 'list_containers') { $found=$true }
+            }
+            $Evidence.tool_pages=$page+1
+            if($found){break}
+            if(-not $listing.PSObject.Properties['nextCursor']){throw 'TOOL_UNAVAILABLE: Provider list_containers tool unavailable'}
+            if(-not ($listing.nextCursor -is [string]) -or -not $listing.nextCursor -or -not $seen.Add($listing.nextCursor)){throw 'PROTOCOL_INVALID: Invalid discovery cursor'}
+            $parameters=@{cursor=$listing.nextCursor}
+        }
+        if(-not $found){throw 'RESPONSE_LIMIT: MCP page limit exceeded'}
+        $Evidence.discovery='passed'
+        $stage='provider_call'; $Evidence.stage=$stage
+        $result=Call-Mcp $id 'tools/call' @{name='list_containers';arguments=@{}}
+        if($result.PSObject.Properties['isError'] -and -not ($result.isError -is [bool])){throw 'PROTOCOL_INVALID: Invalid tool result'}
+        if($result.isError){throw 'PROVIDER_CALL_FAILED: Read-only provider verification failed'}
+        if(-not ($result.content -is [array])){throw 'PROTOCOL_INVALID: Invalid tool content'}
+        foreach($block in $result.content){
+            if(-not ($block -is [pscustomobject]) -or $block.type -cnotin @('text','image','audio','resource','resource_link')){throw 'PROTOCOL_INVALID: Invalid content block'}
+            if($block.type -ceq 'text' -and -not ($block.text -is [string])){throw 'PROTOCOL_INVALID: Invalid text block'}
+            if($block.type -cin @('image','audio') -and (-not ($block.data -is [string]) -or -not ($block.mimeType -is [string]))){throw 'PROTOCOL_INVALID: Invalid media block'}
+            if($block.type -ceq 'resource' -and -not ($block.resource -is [pscustomobject])){throw 'PROTOCOL_INVALID: Invalid resource block'}
+            if($block.type -ceq 'resource_link' -and -not ($block.uri -is [string])){throw 'PROTOCOL_INVALID: Invalid resource link'}
+        }
+        $Evidence.provider_call='passed'
     } finally {
-        $process.StandardInput.Close()
-        if (-not $process.WaitForExit(2000)) {
-            & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
+        # Async writes may still be pending; dispose after bounded tree termination.
+        if (-not $Evidence.write_pending) { try {$process.StandardInput.Close()} catch {} }
+        if (-not $process.WaitForExit(1000)) {
+            try { & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null } catch {}
+            if (-not $process.HasExited) { try {$process.Kill()} catch {} }
             $null=$process.WaitForExit(2000)
         }
+        $Evidence.cleanup=if($process.HasExited){'completed'}else{'incomplete'}
+        $Evidence.elapsed_ms=$clock.ElapsedMilliseconds
         $process.Dispose()
     }
 }
+
+function Invoke-BoxWeaveDiagnostic {
+    $report=[ordered]@{schema_version=1;operation='client_diagnose';overall='incomplete';connection='unverified';registration='unverified';guidance='unverified';agent_ui='unverified';stages=@();process_exit_code=$null;cleanup='not_started'}
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    function Record-Diagnostic($Stage,$Status,$Code){
+        $report.stages+=@{id=$Stage;status=$Status;code=$Code;elapsed_ms=$clock.ElapsedMilliseconds}
+    }
+    function Stop-Diagnostic($Code,$Stage,$Status='incomplete'){
+        Record-Diagnostic $Stage $Status $Code
+        throw 'Diagnostic stopped'
+    }
+    function Safe-DiagnosticPath([string]$Path){
+        $candidate=[IO.Path]::GetFullPath($Path)
+        while($candidate){
+            if(Test-Path -LiteralPath $candidate){
+                $item=Get-Item -Force -LiteralPath $candidate
+                if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){Stop-Diagnostic 'INPUT_INVALID' 'input'}
+                if(-not $item.PSIsContainer -and $item.Length -gt 1048576){Stop-Diagnostic 'INPUT_INVALID' 'input'}
+            }
+            $candidate=Split-Path -Parent $candidate
+        }
+    }
+    function Read-WslDiagnostic([string[]]$Arguments){
+        $info=New-Object Diagnostics.ProcessStartInfo
+        $info.FileName=$wslExe;$info.Arguments=(@($Arguments | ForEach-Object {Quote-ProcessArgument $_}) -join ' ')
+        $info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+        $proc=New-Object Diagnostics.Process;$proc.StartInfo=$info;$null=$proc.Start()
+        $null=$proc.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $bytes=New-Object byte[] 8193;$length=0;$timer=[Diagnostics.Stopwatch]::StartNew()
+        try{
+            while($length -lt $bytes.Length){
+                $left=[int](10000-$timer.ElapsedMilliseconds)
+                if($left -le 0){throw 'WSL preflight timeout'}
+                $read=$proc.StandardOutput.BaseStream.ReadAsync($bytes,$length,$bytes.Length-$length)
+                if(-not $read.Wait($left)){throw 'WSL preflight timeout'}
+                if($read.Result -eq 0){break}
+                $length+=$read.Result
+            }
+            if($length -ge $bytes.Length -or -not $proc.WaitForExit(1000) -or $proc.ExitCode -ne 0){throw 'WSL preflight failed'}
+            return [Text.Encoding]::UTF8.GetString($bytes,0,$length)
+        } finally {
+            if(-not $proc.HasExited){try{& taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null}catch{};if(-not $proc.HasExited){try{$proc.Kill()}catch{}};$null=$proc.WaitForExit(2000)}
+            $proc.Dispose()
+        }
+    }
+    try{
+        if($Replace -or $BootstrapIdentityFile -or $ProjectPath -or -not $DataBase64 -or $DataBase64.Length -gt 65536){Stop-Diagnostic 'INPUT_INVALID' 'input'}
+        try{
+            $d=ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
+            if($d.os -cne 'windows' -or $d.runtime -cne 'native' -or $d.transport -cnotin @('native','wsl') -or $d.agent -cnotin @('codex','cursor','claude-code')){throw 'profile'}
+            if($d.ssh_host -cnotmatch '^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$' -or $d.linux_user -cnotmatch '^[a-z_][a-z0-9_-]{0,63}$' -or $d.launcher -cnotmatch '^/[A-Za-z0-9_./-]+$'){throw 'endpoint'}
+            if($d.ssh_port -is [string] -or $d.ssh_port -is [bool] -or $d.ssh_port -lt 1 -or $d.ssh_port -gt 65535){throw 'port'}
+            if($d.server_public_key -cnotmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$'){throw 'key'}
+            $keyBlob=[Convert]::FromBase64String($Matches[1])
+            if($keyBlob.Length -ne 51 -or [Text.Encoding]::ASCII.GetString($keyBlob,4,11) -cne 'ssh-ed25519'){throw 'key'}
+            if($d.setup_options.replace -or $d.setup_options.bootstrap_identity -or $d.setup_options.project_path){throw 'mutation'}
+        } catch {Stop-Diagnostic 'INPUT_INVALID' 'input'}
+        Record-Diagnostic 'input' 'passed' 'OK'
+        $report.runtime='windows-native';$report.transport=$d.transport
+        $homePath=if($AgentHome){$AgentHome}elseif($d.setup_options.agent_home){$d.setup_options.agent_home}elseif($d.agent -ceq 'codex'){if($env:CODEX_HOME){$env:CODEX_HOME}else{Join-Path $env:USERPROFILE '.codex'}}elseif($d.agent -ceq 'cursor'){Join-Path $env:USERPROFILE '.cursor'}else{if($env:CLAUDE_CONFIG_DIR){$env:CLAUDE_CONFIG_DIR}else{Join-Path $env:USERPROFILE '.claude'}}
+        Safe-DiagnosticPath $homePath
+        $token=if($d.ssh_port -ne 22 -or $d.ssh_host.Contains(':')){'['+$d.ssh_host+']:'+$d.ssh_port}else{$d.ssh_host}
+        $pin=$token+' '+(($d.server_public_key -split ' ')[0..1] -join ' ')
+        if($d.transport -ceq 'wsl'){
+            $distro=if($WslDistro){$WslDistro}else{$d.setup_options.wsl_distro}
+            if(-not $distro -or $distro -cnotmatch '^[A-Za-z0-9_.-]+$'){Stop-Diagnostic 'PROFILE_UNSUPPORTED' 'runtime'}
+            $wslExe=(Get-Command wsl.exe -ErrorAction Stop).Source
+            $body='set -eu; command -v ssh >/dev/null; test ! -L "$HOME"; test ! -L "$HOME/.ssh"; test ! -L "$HOME/.ssh/boxweave"; test ! -L "$HOME/.ssh/boxweave_known_hosts"; test -f "$HOME/.ssh/boxweave"; test -f "$HOME/.ssh/boxweave_known_hosts"; printf "%s\n" "$HOME"; cat "$HOME/.ssh/boxweave_known_hosts"'
+            $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
+            try{$observed=Read-WslDiagnostic @('-d',$distro,'-e','sh','-c',("printf %s "+$encoded+" | base64 -d | sh"))}
+            catch{Stop-Diagnostic 'WSL_PREFLIGHT_FAILED' 'trust'}
+            $parts=$observed -split ([string][char]10),2
+            if($parts.Count -ne 2 -or $parts[0] -cnotmatch '^/[^\r\n]+$'){Stop-Diagnostic 'INPUT_INVALID' 'runtime'}
+            $key=$parts[0]+'/.ssh/boxweave';$known=$parts[0]+'/.ssh/boxweave_known_hosts'
+            if($parts[1].Trim() -cne $pin){Stop-Diagnostic 'PIN_MISMATCH' 'trust' 'failed'}
+            $transportCommand=$wslExe;$prefix=@('-d',$distro,'-e','ssh');$nullConfig='/dev/null'
+        }else{
+            $transportCommand=(Get-Command ssh.exe -ErrorAction Stop).Source
+            $key=Join-Path $env:USERPROFILE '.ssh\boxweave';$known=Join-Path $env:USERPROFILE '.ssh\boxweave_known_hosts'
+            Safe-DiagnosticPath $key;Safe-DiagnosticPath $known
+            if(-not (Test-Path -LiteralPath $key -PathType Leaf)){Stop-Diagnostic 'IDENTITY_MISSING' 'trust'}
+            if(-not (Test-Path -LiteralPath $known -PathType Leaf)){Stop-Diagnostic 'PIN_MISSING' 'trust'}
+            if(([IO.File]::ReadAllText($known)).Trim() -cne $pin){Stop-Diagnostic 'PIN_MISMATCH' 'trust' 'failed'}
+            $prefix=@();$nullConfig='NUL'
+        }
+        Record-Diagnostic 'runtime' 'passed' 'OK';Record-Diagnostic 'trust' 'passed' 'OK'
+        $sshArguments=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-p',[string]$d.ssh_port,($d.linux_user+'@'+$d.ssh_host),$d.launcher)
+        $expectedArguments=@($prefix)+$sshArguments
+        if($d.agent -ceq 'claude-code'){
+            $report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'
+        }else{
+            $config=Join-Path $homePath $(if($d.agent -ceq 'codex'){'config.toml'}else{'mcp.json'})
+            Safe-DiagnosticPath $config
+            if(-not (Test-Path -LiteralPath $config -PathType Leaf)){
+                $report.registration='missing';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_MISSING'
+            }else{
+                try{
+                    $text=[IO.File]::ReadAllText($config)
+                    if($d.agent -ceq 'codex'){
+                        $match=[regex]::Matches($text,'(?ms)^\[mcp_servers\.boxweave\][ \t]*(?:#[^\r\n]*)?\r?\n(.*?)(?=^\[|\z)')
+                        if($match.Count -ne 1){throw 'unsupported'}
+                        $fields=@{}
+                        foreach($line in ($match[0].Groups[1].Value -split '\r?\n')){
+                            if($line -match '^\s*(#|$)'){continue}
+                            if($line -cnotmatch '^\s*(command|args|startup_timeout_sec)\s*=\s*(.*?)\s*$'){throw 'unsupported'}
+                            $name=$Matches[1];$value=$Matches[2]
+                            if($fields.ContainsKey($name)){throw 'duplicate'}
+                            $fields[$name]=ConvertFrom-Json -InputObject $value
+                        }
+                        $entry=[pscustomobject]$fields
+                    }else{
+                        $parsed=ConvertFrom-Json -InputObject $text;$entry=$parsed.mcpServers.boxweave
+                        if(-not ($entry -is [pscustomobject]) -or @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('command','args','enabled')}).Count){throw 'unsupported'}
+                    }
+                    $matched=($entry.command -ceq $transportCommand -and ($entry.args -is [array]) -and
+                        (ConvertTo-Json -InputObject @($entry.args) -Compress) -ceq (ConvertTo-Json -InputObject @($expectedArguments) -Compress))
+                    if($entry.PSObject.Properties['enabled'] -and $entry.enabled -ne $true){$matched=$false}
+                    $report.registration=if($matched){'matched'}else{'mismatch'}
+                    Record-Diagnostic 'registration' $(if($matched){'passed'}else{'failed'}) $(if($matched){'OK'}else{'REGISTRATION_MISMATCH'})
+                }catch{$report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'}
+            }
+        }
+        if($d.agent -ceq 'codex'){
+            $guidance=Join-Path $homePath 'AGENTS.override.md';Safe-DiagnosticPath $guidance
+            if(-not (Test-Path -LiteralPath $guidance) -or -not ([IO.File]::ReadAllText($guidance)).Trim()){$guidance=Join-Path $homePath 'AGENTS.md'}
+            Safe-DiagnosticPath $guidance
+            if((Test-Path -LiteralPath $guidance -PathType Leaf) -and ([IO.File]::ReadAllText($guidance)).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')){$report.guidance='present'}
+        }elseif($d.agent -ceq 'cursor'){$report.guidance='manual'}
+        Record-Diagnostic 'guidance' $(if($report.guidance -eq 'present'){'passed'}else{'unverified'}) $(if($report.guidance -eq 'present'){'FILE_PRESENT'}else{'MANUAL_VERIFICATION_REQUIRED'})
+        $evidence=@{}
+        try{
+            Test-BoxWeaveMcp -Command $transportCommand -Arguments (@($prefix)+@('-F',$nullConfig,'-o','IdentityAgent=none','-o',('GlobalKnownHostsFile='+$nullConfig),'-o','UpdateHostKeys=no')+$sshArguments) -Timeout $Timeout -Evidence $evidence
+            $report.connection='passed'
+        }catch{
+            $code='TRANSPORT_FAILED';if($_.Exception.Message -match '^([A-Z_]+):'){$code=$Matches[1]}
+            $report.connection='failed'
+            Record-Diagnostic $(if($evidence.stage){$evidence.stage}else{'transport'}) 'failed' $code
+        }finally{
+            foreach($stage in @('initialize','discovery','provider_call')){if($evidence[$stage] -eq 'passed'){Record-Diagnostic $stage 'passed' 'OK'}}
+            foreach($field in @('protocol_version','process_exit_code','cleanup','tool_pages')){if($evidence.ContainsKey($field)){$report[$field]=$evidence[$field]}}
+        }
+    }catch{
+        if(-not ($report.stages | Where-Object {$_.status -in @('failed','incomplete')})){Record-Diagnostic 'input' 'incomplete' 'INPUT_UNAVAILABLE'}
+    }
+    if($report.cleanup -eq 'incomplete'){Record-Diagnostic 'cleanup' 'failed' 'CLEANUP_INCOMPLETE'}
+    $statuses=@($report.stages | ForEach-Object {$_.status})
+    $report.overall=if('failed' -in $statuses){'failed'}elseif('incomplete' -in $statuses){'incomplete'}else{'passed'}
+    $code=if($report.overall -eq 'passed'){0}elseif($report.overall -eq 'failed'){1}else{2}
+    if($ReportPath){
+        $temporary=$null
+        try{
+            Safe-DiagnosticPath $ReportPath
+            if(Test-Path -LiteralPath $ReportPath){throw 'Report exists'}
+            $destination=[IO.Path]::GetFullPath($ReportPath)
+            $temporary=Join-Path (Split-Path -Parent $destination) ('.boxweave-report-'+[guid]::NewGuid())
+            $stream=[IO.File]::Open($temporary,[IO.FileMode]::CreateNew);$stream.Dispose()
+            $acl=New-Object Security.AccessControl.FileSecurity;$acl.SetAccessRuleProtection($true,$false)
+            $rule=New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User,'FullControl','Allow')
+            $acl.SetAccessRule($rule)
+            if($PSVersionTable.PSEdition -eq 'Desktop'){[IO.File]::SetAccessControl($temporary,$acl)}
+            else{[IO.FileSystemAclExtensions]::SetAccessControl((New-Object IO.FileInfo($temporary)),$acl)}
+            [IO.File]::WriteAllText($temporary,($report | ConvertTo-Json -Depth 10),(New-Object Text.UTF8Encoding($false)))
+            [IO.File]::Move($temporary,$destination)
+        }catch{Record-Diagnostic 'report' 'failed' 'REPORT_WRITE_FAILED';$report.overall='failed';$code=1}
+        finally{if($temporary -and (Test-Path -LiteralPath $temporary)){Remove-Item -LiteralPath $temporary -Force}}
+    }
+    $report | ConvertTo-Json -Depth 10
+    return $code
+}
+if ($Diagnose) {
+    $result=@(Invoke-BoxWeaveDiagnostic)
+    $diagnosticExit=[int]$result[-1]
+    if($result.Count -gt 1){$result[0..($result.Count-2)] | Write-Output}
+    exit $diagnosticExit
+}
+if ($ReportPath) { throw '-ReportPath requires -Diagnose' }
 
 if ($DataBase64) {
     $d = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))

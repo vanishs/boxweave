@@ -172,3 +172,81 @@ with disposable files, including new/existing files, repeat writes, backup
 preservation, BOM-free UTF-8 and temporary-file cleanup. Its optional `original`
 case reproduces the legacy null binding error under Windows PowerShell 5.1.
 No real client configuration or SSH credentials are used by these fixtures.
+
+## Independent client diagnostics
+
+After updating the server from a source ref containing this feature, generate a
+diagnostic command instead of running enrollment again:
+
+    boxweave client --diagnose --os windows --agent codex --runtime native --transport native
+    boxweave client --diagnose --os windows --agent codex --runtime native --transport wsl --wsl-distro Ubuntu
+    boxweave client --diagnose --os windows --agent codex --runtime wsl
+    boxweave client --diagnose --os macos --agent cursor
+
+The generator retains source-commit pinning and SHA256 validation. Exit 0 on the
+server still means command generation only. Paste the command in the indicated
+client runtime. It uses the already enrolled transport key and existing host pin;
+it never creates keys, enrolls a public key, repairs configuration, changes
+known_hosts, calls connect or creates workloads. Windows bridge diagnosis requires
+an explicitly selected WSL distribution. Replacement/bootstrap-identity and project-overlay options
+are rejected. The generated Windows command preserves the diagnostic script's
+exit in $LASTEXITCODE without closing the interactive shell.
+
+The downloaded client artifact is independently usable with a previously
+trusted public payload:
+
+    python3 setup.py --diagnose --data-base64 PAYLOAD --timeout 30
+    powershell.exe -NoProfile -File setup.ps1 -Diagnose -DataBase64 PAYLOAD -Timeout 30
+
+Use the payload from the trusted generator, not arbitrary network input. A minimal
+diagnostic payload needs profile, endpoint/user/launcher and the server public key;
+it does not need a container key or policy text. This uses the same Base64 JSON
+encoding as setup. A stale command downloads its pinned old artifact; regenerate
+after updating the server. Changing this checkout does not upgrade an installation.
+
+Diagnosis emits one JSON report. It separates connection, registration, guidance
+file presence and agent GUI verification. Exit 0 means required automated checks
+passed, 1 means an observed failure, and 2 means invalid input, a missing
+prerequisite or an unsupported/incomplete check. GUI recognition and actual
+instruction loading remain unverified. A successful connection with a missing or
+unsupported registration still exits 2; mismatched registration exits 1.
+
+Codex and Cursor registration checks compare the supported generated connection.
+Windows Codex inspection supports the generated TOML subset, not arbitrary TOML
+spellings. Custom environment/settings are reported unsupported rather than
+executed. Claude Code registry inspection is not implemented in this increment:
+connection testing is available, but registration is incomplete and exits 2.
+Project configuration overlays are not resolved. Cursor guidance remains manual.
+
+Connection testing executes a controlled OpenSSH profile with config hooks
+disabled, batch authentication, existing pinned trust and a single selected
+identity. It never executes a command obtained from an agent configuration.
+Custom SSH proxies/configuration hooks are outside this initial diagnostic
+contract. SSH uses the existing identity through its normal credential interface;
+the diagnostic never reads or exports private-key contents. SSH/network access
+can produce ordinary server access logs.
+
+The MCP probe supports the tested 2024-11-05 revision, bounded tool discovery
+pagination, response validation and a read-only list_containers call. It omits
+inventory, raw provider errors, SSH stderr, full commands and home paths from
+reports. Generic SSH exit failures remain transport failures when a more precise
+cause cannot be established.
+
+The --timeout / -Timeout option bounds protocol pipe reads and writes (default
+30 seconds, range 1-300). Cleanup can add up to four seconds; Windows WSL preflight
+has a separate ten-second read budget plus bounded cleanup. This is not a timeout
+for all local filesystem checks or downloads. Local subprocess cleanup does not
+prove termination of every remote descendant.
+
+Optional --report NEW_PATH / -ReportPath NEW_PATH exports JSON to a new file in
+an existing directory. Existing reports are never overwritten. POSIX publication
+uses a private temporary file and a no-overwrite hard link; Windows publication
+sets an owner-only ACL before writing and renames the temporary file. Unsupported
+filesystem/security semantics fail with REPORT_WRITE_FAILED. Report export is the
+only requested persistent client-side write; generated downloads use temporary
+directories that are removed afterward.
+
+Behavior tests cover pagination, malformed results, mismatched trust, output
+redaction, non-mutating preflight, missing registration, private report export,
+protocol failures and blocked pipes. Native PowerShell fixtures remain separate
+from real SSH/WSL/macOS client acceptance.

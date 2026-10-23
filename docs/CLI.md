@@ -72,3 +72,9 @@ physical devices, change security policies or require a special LXC image.
 `boxweave client` starts an interactive command generator for Windows/macOS and Codex/Cursor/Claude Code. It performs no enrollment on the server. Use `boxweave client --help` for explicit selection, client-path options and JSON output. See [client setup](CLIENTS.md).
 
 It reads public `/etc/boxweave/client.json`, not credentials. Non-terminal input requires complete choices. Exit 0 means command generation, 2 means invalid/missing input or descriptor, and 130 means cancellation. Existing management/selftest commands retain their behavior.
+
+The client --diagnose option generates an independent diagnostic command for an
+already enrolled client. It does not execute diagnosis on Ubuntu or repair a
+client. Use the same OS/agent/runtime/transport selection options; Windows bridge
+diagnosis also needs --wsl-distro. Replacement/bootstrap-identity options are
+incompatible. See [diagnostic stages, reports and limits](CLIENTS.md#independent-client-diagnostics).

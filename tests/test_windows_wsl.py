@@ -61,7 +61,7 @@ for raw in sys.stdin.buffer:
  d=json.loads(raw.decode('utf-8'));methods.append(d['method'])
  if d['method']=='initialize':
   assert len(methods)==1
-  result={'protocolVersion':'2024-11-05','serverInfo':{'name':'fixture'}}
+  result={'capabilities':{'tools':{}},'protocolVersion':'2024-11-05','serverInfo':{'name':'fixture'}}
  elif d['method']=='notifications/initialized':
   assert len(methods)==2
   continue

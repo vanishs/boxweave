@@ -226,7 +226,7 @@ class ProbeTests(unittest.TestCase):
                     if d['method']=='initialize':
                         assert phase==0
                         phase=1
-                        result={'protocolVersion':'2024-11-05'}
+                        result={'capabilities':{'tools':{}},'protocolVersion':'2024-11-05'}
                     elif d['method']=='notifications/initialized':
                         assert phase==1
                         phase=2
@@ -282,7 +282,7 @@ class SetupFlowTests(unittest.TestCase):
                 if d['method']=='initialize':
                     assert phase==0
                     phase=1
-                    result={'protocolVersion':'2024-11-05'}
+                    result={'capabilities':{'tools':{}},'protocolVersion':'2024-11-05'}
                 elif d['method']=='notifications/initialized':
                     assert phase==1
                     phase=2
