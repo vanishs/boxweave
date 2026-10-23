@@ -9,10 +9,14 @@ to `boxweave client`; it does not enroll a client or start a wizard.
     boxweave client --help
 
 The default command starts a numbered wizard. Choose destination OS, agent and
-Windows runtime/SSH mode; paste its output into the indicated client terminal.
+Windows runtime/SSH mode, then whether to replace an existing
+BoxWeave MCP entry. Choose No to retain conflict protection or Yes to replace
+the entry with backups. Paste the output into the indicated client terminal.
+Trailing guidance uses shell comments (`#`) so it can be copied with the command.
 Explicit arguments skip corresponding questions. EOF/Ctrl-C exits 130; invalid
 answers can be retried. With redirected stdin or JSON output, missing choices
-fail with exit 2. Exit 0 means command generation, not successful enrollment.
+fail with exit 2. Noninteractive replacement defaults to off unless
+`--replace` is supplied. JSON notes remain plain strings. Exit 0 means command generation, not successful enrollment.
 
     boxweave client --os windows --agent codex --runtime native --transport native
     boxweave client --os windows --agent cursor --runtime native --transport wsl
@@ -60,7 +64,7 @@ enroll the restricted public key; BoxWeave does not copy it into WSL.
 | `--wsl-distro NAME` | Preselect the distribution for a Windows to WSL bridge |
 | `--agent-home PATH` | Client Codex/Cursor configuration directory |
 | `--project-path PATH` | Cursor rule in an explicitly selected local workspace |
-| `--replace` | Replace a reviewed BoxWeave MCP entry |
+| `--replace` | Replace a reviewed BoxWeave MCP entry; skip the replacement question |
 | `--json` | Machine-readable profile, paste shell, command and notes |
 
 Honor `CODEX_HOME` or `CLAUDE_CONFIG_DIR` in the actual client runtime.

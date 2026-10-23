@@ -58,6 +58,45 @@ class CommandTests(unittest.TestCase):
     def test_json_never_prompts(self):
         with patch('sys.stdin',Terminal()),contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(clients.run(self.args('--json')),2)
+    def test_replace_wizard_and_flag_reach_generated_payload(self):
+        cases = [(True, '2\n', [], True), (True, '1\n', [], False),
+                 (True, '', ['--replace'], True), (False, '', [], False),
+                 (False, '', ['--replace'], True)]
+        for terminal, answer, flags, expected in cases:
+            with self.subTest(terminal=terminal, flags=flags, expected=expected), tempfile.TemporaryDirectory() as tmp:
+                config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+                args=self.args('--os','macos','--agent','codex','--config',str(config),*flags)
+                stdin=Terminal(answer) if terminal else io.StringIO(answer)
+                with patch('sys.stdin',stdin),contextlib.redirect_stdout(io.StringIO()) as out,contextlib.redirect_stderr(io.StringIO()) as err:
+                    self.assertEqual(clients.run(args),0)
+                command=next(line for line in out.getvalue().splitlines() if line.startswith('bash -c '))
+                payload=json.loads(base64.b64decode(shlex.split(shlex.split(command)[2])[-1]))
+                self.assertEqual(payload['setup_options']['replace'],expected)
+                self.assertEqual('registration?' in err.getvalue(),terminal and not flags)
+    def test_trailing_notes_are_shell_comments_for_every_profile(self):
+        profiles=[['--os','macos'], ['--os','windows','--runtime','wsl'],
+                  ['--os','windows','--runtime','native','--transport','native'],
+                  ['--os','windows','--runtime','native','--transport','wsl']]
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+            for profile in profiles:
+                with self.subTest(profile=profile),patch('sys.stdin',io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(clients.run(self.args(*profile,'--agent','codex','--config',str(config))),0)
+                tail=out.getvalue().split('\n\n',2)[-1].splitlines()[1:]
+                notes=[line for line in tail if line.strip()]
+                self.assertTrue(notes)
+                self.assertTrue(all(line.startswith('# ') for line in notes))
+    def test_replace_json_never_prompts_and_preserves_plain_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+            args=self.args('--os','macos','--agent','codex','--config',str(config),'--replace','--json')
+            with patch('sys.stdin',Terminal()),contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(args),0)
+            result=json.loads(out.getvalue())
+            self.assertTrue(all(not note.startswith('#') for note in result['notes']))
+            payload=json.loads(base64.b64decode(shlex.split(shlex.split(result['command'])[2])[-1]))
+            self.assertTrue(payload['setup_options']['replace'])
+
     def test_complete_matrix(self):
         profiles=[]
         for agent in clients.AGENTS:

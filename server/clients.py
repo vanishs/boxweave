@@ -184,6 +184,10 @@ def render(d, profile, options=None):
 def run(args):
     try:
         profile = selection(args)
+        if sys.stdin.isatty() and not getattr(args,'json',False) and not args.replace:
+            args.replace = choose('Replace an existing BoxWeave MCP registration?',
+                                  [('No: preserve conflicting entries', False),
+                                   ('Yes: replace the BoxWeave entry (backups retained)', True)])
         try:
             if args.config.stat().st_size > 65536: raise ValueError('Client descriptor too large')
             data = json.loads(args.config.read_text(encoding='utf-8'))
@@ -202,7 +206,8 @@ def run(args):
         if getattr(args,'json',False): print(json.dumps(result,indent=2))
         else:
             print('\nPaste into '+result['paste_into']+':\n\n'+result['command']+'\n')
-            for note in result['notes']: print(note)
+            for note in result['notes']:
+                for line in note.splitlines(): print('# '+line)
         return 0
     except (KeyboardInterrupt,EOFError):
         print('\nClient command generation cancelled.',file=sys.stderr); return 130
