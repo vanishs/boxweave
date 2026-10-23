@@ -36,7 +36,7 @@ function Write-Utf8NoBom([string]$Path, [string]$Content) {
     $tmp = Join-Path (Split-Path -Parent $Path) ('.boxweave-' + [guid]::NewGuid())
     try {
         [IO.File]::WriteAllText($tmp, $Content, (New-Object System.Text.UTF8Encoding($false)))
-        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp,$Path,$null) }
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp,$Path,[System.Management.Automation.Language.NullString]::Value) }
         else { [IO.File]::Move($tmp,$Path) }
     } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force } }
 }

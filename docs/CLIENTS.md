@@ -156,3 +156,15 @@ tools/list and a read-only provider call with exit 0. That diagnostic did not
 reenroll a client, publish agent configuration or verify GUI recognition.
 PowerShell regression fixtures additionally cover the probe's complete protocol
 sequence, switch quoting, empty arguments and sanitized early-exit reporting.
+
+When atomically replacing an existing Windows configuration file, the backup
+argument to `File.Replace` must be a genuine .NET null string. Windows PowerShell
+5.1 can coerce ordinary `$null` to an empty string for this API, producing an
+invalid-path exception. The writer uses `NullString.Value`; caller-created
+backups remain separate and replacement remains atomic.
+
+`tests/windows_config.ps1` exercises the actual writer and Codex/rules helpers
+with disposable files, including new/existing files, repeat writes, backup
+preservation, BOM-free UTF-8 and temporary-file cleanup. Its optional `original`
+case reproduces the legacy null binding error under Windows PowerShell 5.1.
+No real client configuration or SSH credentials are used by these fixtures.
