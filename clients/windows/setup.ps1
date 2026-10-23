@@ -111,6 +111,26 @@ function Set-PinnedHostNative([string]$Path, [string]$Line) {
 function Quote-ProcessArgument([string]$Value) {
     return '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
+function ConvertTo-WslScriptCommand([string]$Script, [string[]]$ScriptArguments = @()) {
+    # Do not pass quoted/multiline shell source through legacy native argv serialization.
+    $normalized = $Script.Replace("`r`n", "`n").Replace("`r", "`n")
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($normalized))
+    $command = "printf '%s' '$encoded' | base64 -d | sh -s --"
+    foreach ($value in $ScriptArguments) {
+        # Callers pass only validated key names and Base64 data, never arbitrary shell text.
+        if ($value -notmatch '^[A-Za-z0-9_./+=:-]+$') {
+            throw 'Invalid WSL script argument; expected a nonempty ASCII token'
+        }
+        $command += " '$value'"
+    }
+    return $command
+}
+function Invoke-WslScript([string]$Script, [string[]]$ScriptArguments = @(), [string]$What = 'WSL script') {
+    $command = ConvertTo-WslScriptCommand -Script $Script -ScriptArguments $ScriptArguments
+    & $wsl -d $WslDistro -e sh -c $command
+    Assert-Exit $What
+}
+
 function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments) {
     $start=New-Object Diagnostics.ProcessStartInfo
     $start.FileName=$Command
@@ -304,13 +324,11 @@ ssh-keygen -lf "$key.pub" -E sha256 >/dev/null
 cat "$key.pub"
 '@
     Write-Host "[boxweave] Generating/reusing key in WSL distro: $WslDistro"
-    $wslLines = & $wsl -d $WslDistro -e sh -c $wslScript sh $KeyName
-    Assert-Exit 'WSL key generation'
+    $wslLines = Invoke-WslScript -Script $wslScript -ScriptArguments @($KeyName) -What 'WSL key generation'
     $clientPubLine = ($wslLines | Where-Object { $_ -match '^ssh-ed25519\s+' } | Select-Object -Last 1).Trim()
     if (-not $clientPubLine) { throw 'WSL did not return a valid SSH public key.' }
 
-    $wslHomeLines = & $wsl -d $WslDistro -e sh -c 'printf "%s\n" "$HOME"'
-    Assert-Exit 'WSL home lookup'
+    $wslHomeLines = Invoke-WslScript -Script 'printf "%s\n" "$HOME"' -What 'WSL home lookup'
     $wslHome = ($wslHomeLines | Select-Object -Last 1).Trim()
     if ($wslHome -notmatch '^/[^\r\n]+$') { throw 'Invalid WSL home path' }
 
@@ -330,8 +348,7 @@ printf '%s\n' "$expected" > "$path"
 chmod 600 "$path"
 '@
     $pinB64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pinnedHostLine))
-    & $wsl -d $WslDistro -e sh -c $wslPinScript sh "${KeyName}_known_hosts" $pinB64
-    Assert-Exit 'WSL host pinning'
+    Invoke-WslScript -Script $wslPinScript -ScriptArguments @(("${KeyName}_known_hosts"), $pinB64) -What 'WSL host pinning'
     $linuxKey = "$wslHome/.ssh/$KeyName"
     $linuxKnown = "$wslHome/.ssh/${KeyName}_known_hosts"
     $transportCommand = $wsl

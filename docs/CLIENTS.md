@@ -119,3 +119,25 @@ Unit/installer sandbox tests cover command generation, merges, conflicts,
 idempotency and mock MCP negotiation. PowerShell parsing is a syntax check.
 These do not prove actual Windows/macOS enrollment, GUI recognition or guidance
 loading; record real per-profile client results separately.
+
+## PowerShell to WSL quoting regression
+
+The Windows bridge encodes each shell script as UTF-8 Base64 and normalizes its
+line endings before invoking WSL. The native command receives one single-line shell
+wrapper with validated ASCII arguments, avoiding embedded double quotes and
+multiline source in legacy PowerShell argument serialization. Key preparation,
+home lookup and host-key pinning use the same helper. Host-key mismatch checks
+remain enabled; no existing trust entry is removed to repair setup.
+
+`tests/test_windows_wsl.py` runs the actual PowerShell helper functions against
+an isolated Linux WSL shim. With PowerShell 7.3+ available as `pwsh` (or through
+`BOXWEAVE_TEST_PWSH`), it exercises Legacy and Standard native argument modes,
+reproduces the original Base64 error, and checks pin preservation, key reuse,
+CRLF, nested quotes and paths with spaces. It creates only temporary fixtures;
+it is not a real Windows/WSL enrollment result. This group is skipped when the
+required test runtime is absent.
+
+After updating the server with the revised installer, rerun `boxweave client`
+and use the newly generated command. An earlier command pins an earlier source
+commit and checksum, so it continues downloading the old script even after a
+fix is published. Do not bypass the checksum check or remove known_hosts entries.
