@@ -3,7 +3,11 @@ export type Card = {
   type: "text" | "resource";
   title: string;
   comment: string;
-  resource?: { type: string; id: string } | null;
+  resource?: {
+    type: string;
+    id: string;
+    tenant?: { id: string; key?: string; name?: string; source?: string };
+  } | null;
   metadata?: Record<string, string>;
   position: { x: number; y: number };
 };
@@ -51,9 +55,58 @@ export function createItems(
   names: string,
   shared: { cpu: string; memory: string; disk: string },
   image: string,
+  tenantId = "",
 ) {
   return names
     .split(/[\s,]+/)
     .filter(Boolean)
-    .map((username) => ({ username, resources: { ...shared }, image }));
+    .map((username) => ({
+      username,
+      resources: { ...shared },
+      image,
+      tenantId,
+    }));
+}
+
+// Expire verification in an open tab even when a Provider refresh fails.
+export function evidenceFresh(stamp: string, now = Date.now()) {
+  const age = (now - Date.parse(stamp)) / 1000;
+  return Number.isFinite(age) && age >= -30 && age <= 180;
+}
+export function expireBoxEvidence(row: any, now = Date.now()) {
+  if (
+    row.tenant?.guard?.status !== "verified" ||
+    evidenceFresh(row.tenant.guard.lastPass, now)
+  )
+    return row;
+  return {
+    ...row,
+    tenant: {
+      ...row.tenant,
+      confirmed: false,
+      guard: {
+        ...row.tenant.guard,
+        status: "unknown",
+        reason: "Guard evidence expired; refresh Provider state",
+      },
+    },
+  };
+}
+export function expireEvidence(snapshot: any, now = Date.now()) {
+  if (!snapshot) return snapshot;
+  const guard = { ...snapshot.guard };
+  for (const key of ["core", "tenant"]) {
+    if (guard[key]?.fresh && !evidenceFresh(guard[key].lastPass, now))
+      guard[key] = { ...guard[key], fresh: false, status: "unknown" };
+  }
+  return {
+    ...snapshot,
+    guard,
+    containers: snapshot.containers.map((r: any) => expireBoxEvidence(r, now)),
+    tenants: snapshot.tenants.map((t: any) =>
+      t.guardStatus === "verified" && !guard.tenant?.fresh
+        ? { ...t, guardStatus: "unknown", membershipStatus: "inferred" }
+        : t,
+    ),
+  };
 }

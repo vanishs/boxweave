@@ -136,3 +136,51 @@ creation safeguards remain intact.
 
 Fix validation: `python -m unittest discover -s tests -p "test_web*.py" -v`
 passed all 28 tests (exit 0). Python compilation and `git diff --check` also passed.
+
+## Tenant console validation (schema 2)
+
+Development and execution used the existing dedicated `boxweave-web-dev` LXC,
+checkout `/home/boxweave-web-dev/boxweave-tenant`, based on `f891585`. No additional
+Box, route, host configuration or Provider binary was created or changed.
+
+Read-only real Platform MCP inventory, get/connect and network_guard_status
+calls succeeded. At observation time the three existing web dev/test2/test3
+instances resolved to three different native Tenant subjects and ACL names;
+Tenant Guard reported ENFORCE/nftables with attached entries and no unresolved /
+unmanaged entries. This is a point-in-time observation, not an installed-Web
+integration test, shared-network test or bidirectional connectivity result.
+Pinned-source investigation used Containarium v0.114.2 commit
+`8107ea2724dd12786bbd73ff5371e8314f3d35d9`; see [upstream findings](TENANT-UPSTREAM.md).
+
+Validation as the non-root project user (all exit 0):
+
+- Full-regression checkpoint, `.venv/bin/python -m unittest discover -s tests -v`: 190 tests, 173 passed,
+  17 PowerShell-dependent tests skipped. Installer rerun/staging and APT-lock
+  regression protection passed in the unprivileged sandbox, not on the Host.
+- `test_tenants.py`: 21 focused tests passed, including atomic schema 1 -> 2,
+  byte-equivalent old table rows, retained sessions/admin/graphs/jobs/plans/audit,
+  idempotency, rollback on migration conflict, Provider precedence/fallback,
+  stale/unsupported/ambiguous/unattached ACL evidence, metadata revisions,
+  reference deletion blockers, authenticated server-side scope validation,
+  capability gates, non-replaying reconciliation and legacy/mixed graph export.
+  These focused tests were rerun after final Guard/parser changes.
+- `python -m unittest discover -s tests -p "test_web*.py" -v`: all 31 Web /
+  installation helper regressions passed again after final backend changes.
+- `npm --prefix web test`: 6 model tests passed, including per-row Tenant intent
+  and expiry of open-tab verification without a successful network refresh.
+- `npm --prefix web run build`: TypeScript and Vite production build passed.
+- `npm --prefix web run test:browser`: 11 Chromium scenarios passed against an
+  ephemeral authenticated Web server with a synthetic Provider. They exercise
+  prior resource/graph behavior plus metadata CRUD/rename/reload persistence,
+  empty metadata status, backend filtering, shared-creation gates, row selection
+  retention and Tenant/Box mixed Markdown context. Mobile screenshot inspection
+  is a layout check, not a production deployment test.
+- Python compilation, `bash -n install.sh` and `git diff --check` passed.
+
+No real shared-Tenant creation, birth-time ACL capture, A -> B / B -> A TCP test,
+cross-Tenant TCP restriction test or Host management regression was performed.
+No live Host Web upgrade, persistent service restart, LXC autostart, client LAN
+connectivity, public exposure restriction or clean Windows deployment is claimed.
+No upstream patch/fork was installed. The existing Web/Caddy/forced-command/token
+services remain untouched. The [upstream proposal](TENANT-UPSTREAM.md) and
+[upgrade/rollback instructions](TENANTS.md) describe the remaining release gates.

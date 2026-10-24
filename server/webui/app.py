@@ -13,9 +13,10 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.exceptions import HTTPException
-from .store import Store, Conflict
+from .store import Store, Conflict, SCHEMA
 from .graph import validate, markdown, text
 from .provider import Provider, ProviderError, name, limits, port
+from .tenants import TenantService, CAPABILITIES, CREATE_BLOCK, tenant_id, resolve_box
 
 HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
 DUMMY = HASHER.hash("unused authentication timing placeholder")
@@ -37,6 +38,7 @@ def create_app(cfg, provider=None):
     app.config.update(MAX_CONTENT_LENGTH=1024 * 1024)
     store = Store(cfg["database"])
     api = provider or Provider(cfg)
+    tenants = TenantService(store, api)
     origin = cfg["origin"].rstrip("/")
     secure = origin.startswith("https://")
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="web-batch")
@@ -133,7 +135,7 @@ def create_app(cfg, provider=None):
 
     @app.get("/healthz")
     def health():
-        return jsonify(status="ok", schema=1)
+        return jsonify(status="ok", schema=SCHEMA)
 
     @app.get("/api/status")
     def status():
@@ -214,23 +216,158 @@ def create_app(cfg, provider=None):
         r.delete_cookie("bw_session", secure=secure, httponly=True, samesite="Strict")
         return r
 
+    def selected_tenant():
+        if set(request.args) - {"tenant"}:
+            raise ValueError("Unsupported resource filter")
+        return request.args.get("tenant", "")
+
+    @app.get("/api/tenants")
+    @app.get("/api/overview")
+    def tenant_list():
+        snap = tenants.snapshot()
+        return jsonify(snap)
+
+    @app.post("/api/tenant-selection")
+    def tenant_selection():
+        d = body()
+        if set(d) != {"id"} or not isinstance(d["id"], str):
+            raise ValueError("Tenant ID required")
+        snap = tenants.snapshot()
+        if d["id"] and d["id"] != "unresolved":
+            tenants.record(snap, d["id"])
+        store.setting("current_tenant", d["id"])
+        return jsonify(current=d["id"])
+
+    @app.post("/api/tenants")
+    def create_tenant():
+        d = body()
+        if set(d) - {"name", "description"}:
+            raise ValueError("Only local Tenant metadata can be created")
+        display = text(d.get("name", ""), 120).strip()
+        if not display:
+            raise ValueError("Tenant name is required")
+        result = store.save_tenant(
+            "tenant_local_" + uuid.uuid4().hex,
+            display,
+            text(d.get("description", ""), 2000),
+            None,
+            0,
+        )
+        return jsonify(result), 201
+
+    @app.get("/api/tenants/<tid>")
+    def get_tenant(tid):
+        snap = tenants.snapshot()
+        t = tenants.record(snap, tid)
+        return jsonify(
+            {
+                **t,
+                "deletionBlockers": tenants.deletion_blockers(snap, t),
+                "capabilities": snap["capabilities"],
+            }
+        )
+
+    @app.patch("/api/tenants/<tid>")
+    def edit_tenant(tid):
+        d = body()
+        if set(d) - {"name", "description", "version"} or type(d.get("version")) != int:
+            raise ValueError("Tenant revision and editable metadata required")
+        current = tenants.record(tenants.snapshot(), tid)
+        if d["version"] != current["version"]:
+            raise Conflict()
+        display = text(d.get("name", current["name"]), 120).strip()
+        if not display:
+            raise ValueError("Tenant name is required")
+        return jsonify(
+            store.save_tenant(
+                tid,
+                display,
+                text(d.get("description", current["description"]), 2000),
+                current["providerKey"],
+                d["version"],
+            )
+        )
+
+    @app.delete("/api/tenants/<tid>")
+    def delete_tenant(tid):
+        d = body()
+        if (
+            set(d) != {"version", "confirm"}
+            or d["confirm"] is not True
+            or type(d["version"]) != int
+        ):
+            raise ValueError(
+                "Explicit Tenant deletion confirmation and revision required"
+            )
+        snap = tenants.snapshot()
+        current = tenants.record(snap, tid)
+        blockers = tenants.deletion_blockers(snap, current)
+        if blockers:
+            return jsonify(error="; ".join(blockers)), 409
+        if current["version"] == 0:
+            raise ValueError("No local metadata exists to delete")
+        store.delete_tenant(tid, d["version"])
+        return jsonify(ok=True)
+
+    @app.get("/api/tenants/<tid>/<view>")
+    def tenant_resources(tid, view):
+        if view not in ("boxes", "network", "monitoring"):
+            raise KeyError(view)
+        snap = tenants.snapshot()
+        current = tenants.record(snap, tid)
+        boxes = tenants.filtered(snap, tid)
+        result = {
+            "tenant": current,
+            "containers": boxes,
+            "guard": snap["guard"],
+            "unreachableBackends": snap["unreachableBackends"],
+            "capabilities": snap["capabilities"],
+        }
+        if view == "network":
+            result.update(
+                routes=tenants.routes(snap, "route", tid),
+                passthrough=tenants.routes(snap, "passthrough", tid),
+            )
+        return jsonify(result)
+
+    @app.get("/api/network/guard")
+    def network_guard():
+        snap = tenants.snapshot()
+        return jsonify(
+            guard=snap["guard"],
+            tenants=snap["tenants"],
+            capabilities=snap["capabilities"],
+        )
+
     @app.get("/api/boxes")
+    @app.get("/api/metrics")
     def boxes():
-        return jsonify(api.boxes())
+        snap = tenants.snapshot()
+        tid = selected_tenant()
+        return jsonify(
+            containers=tenants.filtered(snap, tid),
+            tenants=snap["tenants"],
+            guard=snap["guard"],
+            capabilities=snap["capabilities"],
+            unreachableBackends=snap["unreachableBackends"],
+        )
 
     @app.get("/api/boxes/<n>")
     def box(n):
-        return jsonify(api.box(n))
-
-    @app.get("/api/metrics")
-    def metrics():
-        return jsonify(api.boxes())
+        result = api.box(n)
+        snap = tenants.snapshot()
+        return jsonify(resolve_box(result, snap["guard"]["tenant"]))
 
     @app.get("/api/network/<kind>")
     def routes(kind):
         if kind not in ("route", "passthrough"):
             raise KeyError(kind)
-        return jsonify(api.routes(kind))
+        snap = tenants.snapshot()
+        return jsonify(
+            routes=tenants.routes(snap, kind, selected_tenant()),
+            guard=snap["guard"],
+            capabilities=snap["capabilities"],
+        )
 
     def validate_items(action, items):
         if (
@@ -243,7 +380,7 @@ def create_app(cfg, provider=None):
         identities = set()
         for i in items:
             allowed = (
-                {"username", "resources", "image"}
+                {"username", "resources", "image", "tenantId"}
                 if action in ("create", "resize")
                 else (
                     {"username"}
@@ -275,6 +412,12 @@ def create_app(cfg, provider=None):
                 name(i.get("username"))
             if action in ("create", "resize"):
                 limits(i.get("resources"), action == "create")
+            if "tenantId" in i:
+                if action != "create":
+                    raise ValueError("Existing Box Tenant reassignment is unavailable")
+                if i["tenantId"] not in (None, ""):
+                    raise ValueError(CREATE_BLOCK)
+                i = {k: v for k, v in i.items() if k != "tenantId"}
             if action == "create":
                 image = i.get("image", "images:ubuntu/24.04")
                 if not isinstance(image, str) or not __import__("re").fullmatch(
@@ -314,9 +457,27 @@ def create_app(cfg, provider=None):
         action = d["action"]
         items = validate_items(action, d["items"])
         if action == "create":
-            existing = {c["username"] for c in api.boxes()["containers"]}
+            snapshot = tenants.snapshot()
+            if snapshot["unreachableBackends"]:
+                raise ValueError(
+                    "Provider inventory is incomplete; name conflicts cannot be checked"
+                )
+            existing = {c["username"] for c in snapshot["containers"]}
             if any(i["username"] in existing for i in items):
                 raise ValueError("Box name already exists")
+        if action == "create":
+            items = [
+                {
+                    **i,
+                    "expectedTenant": {
+                        "id": tenant_id(i["username"]),
+                        "key": i["username"],
+                        "source": "expected_name_fallback",
+                        "guardStatus": "pending",
+                    },
+                }
+                for i in items
+            ]
         pid = str(uuid.uuid4())
         with store.db() as db:
             db.execute(
@@ -327,7 +488,14 @@ def create_app(cfg, provider=None):
                     time.time() + 300,
                 ),
             )
-        return jsonify(id=pid, action=action, items=items, expiresIn=300)
+        return jsonify(
+            id=pid,
+            action=action,
+            items=items,
+            expiresIn=300,
+            capabilities=CAPABILITIES,
+            guard=snapshot["guard"] if action == "create" else None,
+        )
 
     def run(jid):
         data = store.job(jid)
@@ -406,7 +574,15 @@ def create_app(cfg, provider=None):
                         if old["action"] == "create" and any(
                             x["target"]["username"] == i["username"]
                             and x["status"]
-                            in ("queued", "running", "unknown", "submitted")
+                            in (
+                                "queued",
+                                "running",
+                                "unknown",
+                                "submitted",
+                                "provisioning",
+                                "verification-pending",
+                                "degraded",
+                            )
                             for x in old["items"]
                             for i in d["items"]
                         ):
@@ -455,13 +631,43 @@ def create_app(cfg, provider=None):
             raise ValueError("Wait for batch completion")
         if d["action"] != "create":
             raise ValueError("Inspect the resource list to reconcile this operation")
+        snap = tenants.snapshot()
         for i in d["items"]:
-            if i["status"] in ("unknown", "submitted"):
+            if i["status"] in (
+                "unknown",
+                "submitted",
+                "provisioning",
+                "verification-pending",
+                "degraded",
+            ):
                 try:
-                    c = api.box(i["target"]["username"])
+                    c = resolve_box(
+                        api.box(i["target"]["username"]), snap["guard"]["tenant"]
+                    )
                     i["observedState"] = c.get("state", "unknown")
-                    if c.get("state") == "CONTAINER_STATE_RUNNING":
-                        i["status"] = "success"
+                    i["observedTenant"] = c["tenant"]
+                    expected = (
+                        i["target"]
+                        .get("expectedTenant", {})
+                        .get("id", tenant_id(i["target"]["username"]))
+                    )
+                    if c.get("state") in (
+                        "CONTAINER_STATE_CREATING",
+                        "CONTAINER_STATE_PROVISIONING",
+                    ):
+                        i["status"] = "provisioning"
+                    elif c.get("state") == "CONTAINER_STATE_RUNNING":
+                        i["status"] = (
+                            "success"
+                            if c["tenant"]["id"] == expected
+                            and c["tenant"]["guard"]["status"] == "verified"
+                            else "verification-pending"
+                        )
+                        if c["tenant"]["confirmed"] and c["tenant"]["id"] != expected:
+                            i["status"] = "degraded"
+                    else:
+                        i["status"] = "verification-pending"
+                    i["message"] = c["tenant"]["guard"]["reason"]
                 except ProviderError as e:
                     i["message"] = (
                         "Not currently found; absence does not authorize automatic retry"

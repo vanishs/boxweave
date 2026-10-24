@@ -86,3 +86,8 @@ local terminal and service-user/root access. Passwords are never arguments.
 `boxweave web status` reports the configured origin and local backend listener,
 without opening provider credentials. Use `status`/`doctor` for Web systemd
 observations. See [Web installation and security](WEB-UI.md).
+
+Web status reports supported SQLite schema and Tenant capability gates without
+opening Provider credentials. Doctor lists the same limits; live authenticated
+Guard evidence is available from the console API, not inferred from CLI exit 0.
+No new Provider Tenant-write CLI is added. See [Tenants](TENANTS.md).

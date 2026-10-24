@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ReactFlow,
@@ -18,10 +18,13 @@ import {
   blank,
   payload,
   createItems,
+  expireEvidence,
+  expireBoxEvidence,
   copyAndNext,
   type Graph,
   type Card,
 } from "./model";
+import { TenantPanel, GuardSummary, type Tenant } from "./tenants";
 let csrf = "";
 async function api(path: string, method = "GET", data?: unknown) {
   const r = await fetch("/api/" + path, {
@@ -35,12 +38,15 @@ async function api(path: string, method = "GET", data?: unknown) {
 }
 function PromptCard({
   data,
-}: NodeProps<Node<{ title: string; comment: string; kind: string }>>) {
+}: NodeProps<
+  Node<{ title: string; comment: string; kind: string; tenant?: string }>
+>) {
   return (
     <div className="prompt-card">
       <Handle type="target" position={Position.Left} />
       <small>{data.kind === "text" ? "NOTE" : "RESOURCE"}</small>
       <strong>{data.title || "Untitled card"}</strong>
+      {data.tenant && <small>Tenant: {data.tenant}</small>}
       <p>{data.comment || "Add a comment…"}</p>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -52,7 +58,21 @@ function App() {
   const [auth, setAuth] = useState<any>(null),
     [password, setPassword] = useState(""),
     [error, setError] = useState(""),
-    [page, setPage] = useState("Boxes");
+    [page, setPage] = useState("Overview");
+  const [tenantScope, setTenantScope] = useState("");
+  const [tenantDetail, setTenantDetail] = useState("");
+  const [snapshotRaw, setSnapshot] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
+  const snapshot = useMemo(
+    () => expireEvidence(snapshotRaw, now),
+    [snapshotRaw, now],
+  );
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, []);
+  const [createTenant, setCreateTenant] = useState("");
+  const [groupTenant, setGroupTenant] = useState(false);
   const [rows, setRows] = useState<Row[]>([]),
     [selected, setSelected] = useState<string[]>([]),
     [query, setQuery] = useState(""),
@@ -119,17 +139,31 @@ function App() {
       }
     }
   }
-  async function refresh() {
+  const refreshEpoch = useRef(0);
+  async function refresh(background = false) {
+    const ticket = ++refreshEpoch.current;
     setError("");
-    setSelected([]);
+    if (!background) setSelected([]);
     if (page === "Prompt Graph") return;
-    const d = await api(
+    const snap = await api("tenants");
+    if (ticket !== refreshEpoch.current) return;
+    setSnapshot(snap);
+    if (
+      !snapshot &&
+      snap.current &&
+      (snap.current === "unresolved" ||
+        snap.tenants.some((t: Tenant) => t.id === snap.current))
+    )
+      setTenantScope(snap.current);
+    if (page === "Overview" || page === "Tenants") return;
+    const path =
       page === "Boxes"
         ? "boxes"
         : page === "Monitoring"
           ? "metrics"
-          : "network/" + kind,
-    );
+          : "network/" + kind;
+    const d = await api(path + "?tenant=" + encodeURIComponent(tenantScope));
+    if (ticket !== refreshEpoch.current) return;
     setRows(d.containers || d.metrics || d.routes || []);
     if (d.unreachableBackends?.length)
       setError("Some backends are unreachable. Results are incomplete.");
@@ -144,7 +178,12 @@ function App() {
   }, [auth?.authenticated]);
   useEffect(() => {
     if (auth?.authenticated) refresh().catch(fail);
-  }, [page, kind, auth?.authenticated]);
+  }, [page, kind, tenantScope, auth?.authenticated]);
+  useEffect(() => {
+    if (!auth?.authenticated || page === "Prompt Graph") return;
+    const t = setInterval(() => refresh(true).catch(fail), 30000);
+    return () => clearInterval(t);
+  }, [page, kind, tenantScope, auth?.authenticated]);
   useEffect(() => {
     if (!jobs.some((j) => !j.finished)) return;
     const t = setInterval(
@@ -288,6 +327,7 @@ function App() {
   }
   function key(r: Row) {
     return (
+      r.resourceId ||
       r.username ||
       r.fullDomain ||
       r.domain ||
@@ -299,7 +339,9 @@ function App() {
     setCard({
       title: r.username || r.fullDomain || r.domain || r.name || key(r),
       comment: "",
-      type: page === "Boxes" ? "box" : page === "Monitoring" ? "metric" : kind,
+      type:
+        r.resourceType ||
+        (page === "Boxes" ? "box" : page === "Monitoring" ? "metric" : kind),
       id: key(r),
       target: graph.id,
     });
@@ -321,7 +363,20 @@ function App() {
           ? card.title
           : r.username || r.fullDomain || r.domain || r.name || key(r),
       comment: card.comment,
-      resource: { type: card.type, id: key(r) },
+      resource: {
+        type: r.resourceType || card.type,
+        id: key(r),
+        ...(r.tenant?.id
+          ? {
+              tenant: {
+                id: r.tenant.id,
+                ...(r.tenant.key ? { key: r.tenant.key } : {}),
+                name: r.tenant.name || r.name || r.tenant.key || "",
+                source: r.tenant.source || "resource-reference",
+              },
+            }
+          : {}),
+      },
       position: {
         x: 60 + ((target.nodes.length + index) % 3) * 260,
         y: 60 + Math.floor((target.nodes.length + index) / 3) * 220,
@@ -352,7 +407,7 @@ function App() {
     if (m === "individual") {
       const byName = new Map(individual.map((r) => [r.username, r]));
       setIndividual(
-        createItems(names, shared, image).map(
+        createItems(names, shared, image, createTenant).map(
           (i) => byName.get(i.username) || i,
         ),
       );
@@ -362,14 +417,21 @@ function App() {
     setMode(m);
   }
   const filtered = rows
+    .map((r) => expireBoxEvidence(r, now))
     .filter(
       (r) =>
         JSON.stringify(r).toLowerCase().includes(query.toLowerCase()) &&
         (!filter || String(r.state || r.protocol || "").includes(filter)),
     )
-    .sort((a, b) =>
-      String(a[sort] || key(a)).localeCompare(String(b[sort] || key(b))),
-    );
+    .sort((a, b) => {
+      if (groupTenant) {
+        const order = String(a.tenant?.id || "~").localeCompare(
+          String(b.tenant?.id || "~"),
+        );
+        if (order) return order;
+      }
+      return String(a[sort] || key(a)).localeCompare(String(b[sort] || key(b)));
+    });
   const chosen = rows.filter((r) => selected.includes(key(r)));
   const currentNode = graph.nodes.find((n) => n.id === editNode),
     currentEdge = graph.edges.find((e) => e.id === editEdge);
@@ -448,7 +510,14 @@ function App() {
         <div className="brand">▦ BoxWeave</div>
         <small className="eyebrow">PERSONAL INFRASTRUCTURE</small>
         <nav>
-          {["Boxes", "Network", "Monitoring", "Prompt Graph"].map((p, i) => (
+          {[
+            "Overview",
+            "Tenants",
+            "Boxes",
+            "Network",
+            "Monitoring",
+            "Prompt Graph",
+          ].map((p, i) => (
             <button
               className={page === p ? "active" : ""}
               key={p}
@@ -458,7 +527,7 @@ function App() {
                 setFilter("");
               }}
             >
-              <span>{["▣", "⇄", "◴", "⌘"][i]}</span>
+              <span>{["◈", "▥", "▣", "⇄", "◴", "⌘"][i]}</span>
               {p}
             </button>
           ))}
@@ -505,14 +574,17 @@ function App() {
             ) : (
               <>
                 <button onClick={() => refresh().catch(fail)}>↻ Refresh</button>
-                {page !== "Monitoring" && (
+                {["Boxes", "Network"].includes(page) && (
                   <button
                     className="primary"
-                    onClick={() =>
+                    onClick={() => {
+                      setCreateTenant(
+                        tenantScope === "unresolved" ? "" : tenantScope,
+                      );
                       setDialog(
                         page === "Boxes" ? "Create boxes" : "Create route",
-                      )
-                    }
+                      );
+                    }}
                   >
                     + {page === "Boxes" ? "Create boxes" : "Create route"}
                   </button>
@@ -532,8 +604,94 @@ function App() {
             HTTP mode · Transport encryption is disabled.
           </div>
         )}
-        {page !== "Prompt Graph" ? (
+        {["Overview", "Tenants"].includes(page) ? (
+          <TenantPanel
+            api={api}
+            snapshot={snapshot}
+            overview={page === "Overview"}
+            initial={tenantDetail}
+            refresh={() => refresh()}
+            fail={fail}
+            prompt={addPrompt}
+            batch={(a, rs) => makePlan(a, rs).catch(fail)}
+            navigate={(id, p) => {
+              setTenantScope(id);
+              api("tenant-selection", "POST", { id }).catch(fail);
+              setPage(p);
+            }}
+          />
+        ) : page !== "Prompt Graph" ? (
           <>
+            <div className="toolbar tenant-scope">
+              <label>
+                Tenant scope{" "}
+                <select
+                  aria-label="Tenant scope"
+                  value={tenantScope}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setTenantScope(id);
+                    api("tenant-selection", "POST", { id }).catch(fail);
+                  }}
+                >
+                  <option value="">All Tenants</option>
+                  <option value="unresolved">Unknown / Unresolved</option>
+                  {(snapshot?.tenants || []).map((t: Tenant) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={groupTenant}
+                  onChange={(e) => setGroupTenant(e.target.checked)}
+                />{" "}
+                Group by Tenant
+              </label>
+            </div>
+            {page === "Network" && (
+              <>
+                <GuardSummary snapshot={snapshot} />
+                <section className="panel tenant-panel">
+                  <h3>Tenant Box addresses</h3>
+                  {(snapshot?.containers || [])
+                    .filter(
+                      (b: Row) =>
+                        !tenantScope ||
+                        b.tenant?.id ===
+                          (tenantScope === "unresolved" ? null : tenantScope),
+                    )
+                    .map((b: Row) => (
+                      <p key={b.username}>
+                        {b.tenant?.name || "Unknown"} / {b.username}:{" "}
+                        {b.network?.ipAddress || "unavailable"} ·{" "}
+                        {b.tenant?.guard?.status}
+                      </p>
+                    ))}
+                </section>
+              </>
+            )}
+            {page === "Monitoring" && (
+              <section className="panel tenant-panel">
+                <h3>Tenant state summary</h3>
+                {(snapshot?.tenants || [])
+                  .filter((t: Tenant) => !tenantScope || t.id === tenantScope)
+                  .map((t: Tenant) => (
+                    <p key={t.id}>
+                      {t.name}: {t.boxCount} Boxes · {t.running} Running /{" "}
+                      {t.stopped} Stopped / {t.unknown} Unknown · Guard{" "}
+                      {t.guardStatus}
+                    </p>
+                  ))}
+                <p>
+                  Live resource utilization is unavailable in the current CLI
+                  contract.
+                </p>
+              </section>
+            )}
             <div className="stats">
               <section>
                 <small>
@@ -697,76 +855,124 @@ function App() {
                             ? "CPU / MEMORY / DISK"
                             : "TARGET"}
                       </th>
+                      <th>TENANT</th>
                       <th>CONTEXT</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((r) => (
-                      <tr key={key(r)}>
-                        <td>
-                          <input
-                            aria-label={"Select " + key(r)}
-                            type="checkbox"
-                            checked={selected.includes(key(r))}
-                            onChange={(e) =>
-                              setSelected((s) =>
-                                e.target.checked
-                                  ? [...s, key(r)]
-                                  : s.filter((x) => x !== key(r)),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <button
-                            className="text-button"
-                            onClick={() => {
-                              if (page === "Boxes")
-                                api("boxes/" + r.username)
-                                  .then((d) => {
-                                    setDetail(d);
-                                    setDialog("Resource details");
-                                  })
-                                  .catch(fail);
-                              else {
-                                setDetail(r);
-                                setDialog("Resource details");
+                    {filtered.map((r, index) => (
+                      <React.Fragment key={key(r)}>
+                        {groupTenant &&
+                          (index === 0 ||
+                            filtered[index - 1].tenant?.id !==
+                              r.tenant?.id) && (
+                            <tr className="tenant-group">
+                              <td colSpan={6}>
+                                Tenant:{" "}
+                                {r.tenant?.name ||
+                                  r.tenant?.key ||
+                                  "Unknown / Unresolved"}{" "}
+                                ·{" "}
+                                {
+                                  filtered.filter(
+                                    (x) => x.tenant?.id === r.tenant?.id,
+                                  ).length
+                                }{" "}
+                                resources
+                              </td>
+                            </tr>
+                          )}
+                        <tr>
+                          <td>
+                            <input
+                              aria-label={"Select " + key(r)}
+                              type="checkbox"
+                              checked={selected.includes(key(r))}
+                              onChange={(e) =>
+                                setSelected((s) =>
+                                  e.target.checked
+                                    ? [...s, key(r)]
+                                    : s.filter((x) => x !== key(r)),
+                                )
                               }
-                            }}
-                          >
-                            {key(r)}
-                          </button>
-                          {r.network?.ipAddress && (
-                            <small>{r.network.ipAddress}</small>
-                          )}
-                        </td>
-                        <td>
-                          {page === "Monitoring" ? (
-                            String(r.state || "unknown").replace(
-                              "CONTAINER_STATE_",
-                              "",
-                            )
-                          ) : (
-                            <span className="badge">
-                              {String(r.state || r.protocol || "unknown")
-                                .replace("CONTAINER_STATE_", "")
-                                .replace("ROUTE_PROTOCOL_", "")}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          {page === "Boxes"
-                            ? `${r.resources?.cpu || "—"} / ${r.resources?.memory || "—"} / ${r.resources?.disk || "—"}`
-                            : page === "Monitoring"
+                            />
+                          </td>
+                          <td>
+                            <button
+                              className="text-button"
+                              onClick={() => {
+                                if (page === "Boxes")
+                                  api("boxes/" + r.username)
+                                    .then((d) => {
+                                      setDetail(d);
+                                      setDialog("Resource details");
+                                    })
+                                    .catch(fail);
+                                else {
+                                  setDetail(r);
+                                  setDialog("Resource details");
+                                }
+                              }}
+                            >
+                              {key(r)}
+                            </button>
+                            {r.network?.ipAddress && (
+                              <small>{r.network.ipAddress}</small>
+                            )}
+                          </td>
+                          <td>
+                            {page === "Monitoring" ? (
+                              String(r.state || "unknown").replace(
+                                "CONTAINER_STATE_",
+                                "",
+                              )
+                            ) : (
+                              <span className="badge">
+                                {String(r.state || r.protocol || "unknown")
+                                  .replace("CONTAINER_STATE_", "")
+                                  .replace("ROUTE_PROTOCOL_", "")}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {page === "Boxes"
                               ? `${r.resources?.cpu || "—"} / ${r.resources?.memory || "—"} / ${r.resources?.disk || "—"}`
-                              : `${r.targetIp || r.containerIp || "—"}:${r.targetPort || r.port || "—"}`}
-                        </td>
-                        <td>
-                          <button onClick={() => addPrompt(r)}>
-                            + Prompt card
-                          </button>
-                        </td>
-                      </tr>
+                              : page === "Monitoring"
+                                ? `${r.resources?.cpu || "—"} / ${r.resources?.memory || "—"} / ${r.resources?.disk || "—"}`
+                                : `${r.targetIp || r.containerIp || "—"}:${r.targetPort || r.port || "—"}`}
+                          </td>
+                          <td>
+                            <button
+                              aria-label={
+                                "Open Tenant " +
+                                (r.tenant?.name || r.tenant?.key || "Unknown")
+                              }
+                              className="text-button"
+                              onClick={() => {
+                                setTenantDetail(r.tenant?.id || "");
+                                setPage("Tenants");
+                              }}
+                            >
+                              {r.tenant?.name ||
+                                r.tenant?.key ||
+                                "Unknown / Unresolved"}
+                            </button>
+                            <small>
+                              {r.tenant?.guard?.status || "unknown"} ·{" "}
+                              {r.tenant?.confirmed
+                                ? "Provider confirmed"
+                                : r.tenant?.id
+                                  ? "Inferred membership"
+                                  : "Unresolved"}
+                            </small>
+                          </td>
+                          <td>
+                            <button onClick={() => addPrompt(r)}>
+                              + Prompt card
+                            </button>
+                          </td>
+                        </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -967,7 +1173,13 @@ function App() {
                     id: n.id,
                     type: "card",
                     position: n.position,
-                    data: { title: n.title, comment: n.comment, kind: n.type },
+                    data: {
+                      title: n.title,
+                      comment: n.comment,
+                      kind: n.type,
+                      tenant:
+                        n.resource?.tenant?.key || n.resource?.tenant?.name,
+                    },
                   }))}
                   edges={graph.edges.map((e) => ({
                     ...e,
@@ -1212,6 +1424,29 @@ function App() {
                     Individual configuration
                   </button>
                 </div>
+                <p className="warning">
+                  {snapshot?.capabilities?.reason ||
+                    "Shared network Tenant creation is unavailable on this Provider."}
+                </p>
+                {mode === "shared" && (
+                  <label>
+                    Target Tenant
+                    <select
+                      aria-label="Create Tenant"
+                      value={createTenant}
+                      onChange={(e) => setCreateTenant(e.target.value)}
+                    >
+                      <option value="">
+                        Automatic — each Box has its own network Tenant
+                      </option>
+                      {(snapshot?.tenants || []).map((t: Tenant) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} — unavailable
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {mode === "shared" ? (
                   <>
                     <label>
@@ -1249,11 +1484,17 @@ function App() {
                       <table>
                         <thead>
                           <tr>
-                            {["Name", "CPU", "Memory", "Disk", "Image", ""].map(
-                              (x) => (
-                                <th key={x}>{x}</th>
-                              ),
-                            )}
+                            {[
+                              "Name",
+                              "CPU",
+                              "Memory",
+                              "Disk",
+                              "Image",
+                              "Tenant",
+                              "",
+                            ].map((x) => (
+                              <th key={x}>{x}</th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
@@ -1293,6 +1534,32 @@ function App() {
                                 </td>
                               ))}
                               <td>
+                                <select
+                                  aria-label={"Tenant row " + (i + 1)}
+                                  value={r.tenantId || ""}
+                                  onChange={(e) =>
+                                    setIndividual((rs) =>
+                                      rs.map((x, j) =>
+                                        i === j
+                                          ? { ...x, tenantId: e.target.value }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <option value="">
+                                    Automatic (independent Tenant)
+                                  </option>
+                                  {(snapshot?.tenants || []).map(
+                                    (t: Tenant) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.name} — unavailable
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </td>
+                              <td>
                                 <button
                                   onClick={() =>
                                     setIndividual((rs) =>
@@ -1312,7 +1579,12 @@ function App() {
                       onClick={() =>
                         setIndividual((rs) => [
                           ...rs,
-                          { username: "", resources: { ...shared }, image },
+                          {
+                            username: "",
+                            resources: { ...shared },
+                            image,
+                            tenantId: createTenant,
+                          },
                         ])
                       }
                     >
@@ -1327,11 +1599,16 @@ function App() {
                 </p>
                 <button
                   className="primary"
+                  disabled={
+                    mode === "shared"
+                      ? !!createTenant
+                      : individual.some((r) => !!r.tenantId)
+                  }
                   onClick={() =>
                     makePlan(
                       "create",
                       mode === "shared"
-                        ? createItems(names, shared, image)
+                        ? createItems(names, shared, image, createTenant)
                         : individual,
                     ).catch(fail)
                   }
@@ -1397,6 +1674,17 @@ function App() {
                     ? "Deletion is permanent."
                     : ""}
                 </p>
+                {plan.action === "create" && (
+                  <p className="warning">
+                    Automatic mode assigns an independent network Tenant per
+                    Box. Expected Tenant values below are a plan, not verified
+                    membership. After submission, query actual state and
+                    attached ACL evidence before treating a Box as ready.
+                  </p>
+                )}
+                {plan.action === "create" && plan.guard && (
+                  <GuardSummary snapshot={{ ...snapshot, guard: plan.guard }} />
+                )}
                 <pre>{JSON.stringify(plan.items, null, 2)}</pre>
                 {plan.action.includes("add") && (
                   <p className="warning">
@@ -1492,7 +1780,10 @@ function App() {
                   />
                 </label>
                 <small>
-                  {card.type} · {card.id}
+                  {card.type} · {card.id} · Tenant:{" "}
+                  {cardTargets[0]?.tenant?.key ||
+                    cardTargets[0]?.tenant?.name ||
+                    "Unknown / Unresolved"}
                 </small>
                 <label>
                   Comment

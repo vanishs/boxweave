@@ -33,7 +33,7 @@ sudo bash /tmp/boxweave-install.sh
 
 ## Independent web console
 
-The revised installer also installs the Web UI by default: Boxes, Network,
+The revised installer also installs the Web UI by default: Overview, Tenants, Boxes, Network,
 Monitoring (verified state/configuration) and a persistent Prompt Graph. It uses
 its own local administrator, provider credential, SQLite database, systemd
 services and Caddy Local CA. Existing MCP transport and credentials remain
@@ -308,3 +308,7 @@ publish.sh / publish.ps1          GitHub publication helpers
 ## Acknowledgment
 
 Containarium is developed independently by [FootprintAI](https://github.com/FootprintAI/Containarium) and is installed from [containarium.dev](https://containarium.dev). BoxWeave is an integration layer, not a fork of Containarium.
+
+Tenant display metadata, scoped resource views and Guard evidence are described in
+[Tenant operation](docs/TENANTS.md). Shared network Tenant creation remains gated
+on the pinned Provider; local grouping is never presented as network isolation.

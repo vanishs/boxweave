@@ -74,3 +74,22 @@ missing default-project Incus instance. Web recognizes only the exact observed
 gateway error for the requested instance and normalizes it to absence (404).
 Generic 500s and all write failures retain their error/unknown semantics. See
 [regression evidence](WEB-TESTING.md#missing-instance-compatibility-regression).
+
+## Tenant contract
+
+| Capability | CLI | Host MCP | REST | BoxWeave behavior |
+| --- | --- | --- | --- | --- |
+| Query network Tenant | generic labels + Guard | list/get + network_guard_status | containers + GET /v1/network/guard | Fresh Guard subject authoritative; official cloud/name fallback explicitly inferred |
+| Explicit shared Tenant at creation | generic --labels; not native guarantee | no labels/Tenant parameter | labels accepted under generic namespace | disabled: birth guard/native namespace mismatch |
+| Existing Box reassignment | no verified atomic contract | no verified atomic contract | no verified atomic contract | disabled |
+| Guard status | network-guard status | network_guard_status | GET /v1/network/guard | read-only Core/Tenant evidence and freshness |
+| Network policy | network-policy | no corresponding tool | policy endpoints | writes disabled; Guard evidence only |
+| Tenant display metadata | no Provider CRUD | no Provider CRUD | no Provider CRUD | local authenticated SQLite CRUD, not Provider entities |
+
+The native key is user.containarium.tenant; labels.tenant becomes
+user.containarium.label.tenant and is not interchangeable. OSS tenant_id is
+restricted encryption scope, not arbitrary network Tenant assignment. See
+[model/API/operation](TENANTS.md) and the [proposed upstream extension](TENANT-UPSTREAM.md).
+Create reconciliation now also requires matching fresh attached ACL evidence;
+Running alone does not imply Success. Provisioning/verification-pending/degraded
+receipts retain name reservations. Existing auth scopes remain unchanged.

@@ -1,6 +1,7 @@
 """Validated, unordered prompt cards and stable minimal Markdown."""
 
 import re
+import hashlib
 
 SECRET = re.compile(
     r"-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\b(?:password|token|secret)\s*[:=]\s*\S+",
@@ -62,11 +63,37 @@ def validate(data):
         if ref is not None:
             if (
                 not isinstance(ref, dict)
-                or set(ref) != {"type", "id"}
-                or ref["type"] not in ("box", "route", "passthrough", "metric")
+                or set(ref) - {"type", "id", "tenant"}
+                or not {"type", "id"} <= set(ref)
+                or ref["type"]
+                not in ("tenant", "box", "route", "passthrough", "metric")
             ):
                 raise ValueError("Invalid reference")
-            ref = {k: text(v, 200) for k, v in ref.items()}
+            ref = {**ref, "type": text(ref["type"], 200), "id": text(ref["id"], 200)}
+            tenant = ref.get("tenant")
+            if ref["type"] == "tenant" and tenant is None:
+                raise ValueError("Tenant resources require stable Tenant context")
+            if tenant is not None:
+                if (
+                    not isinstance(tenant, dict)
+                    or set(tenant) - {"id", "key", "name", "source"}
+                    or "id" not in tenant
+                ):
+                    raise ValueError("Invalid Tenant reference")
+                if not isinstance(tenant.get("id"), str) or not re.fullmatch(
+                    r"tenant_(?:[a-f0-9]{64}|local_[a-f0-9]{32})", tenant["id"]
+                ):
+                    raise ValueError("Invalid Tenant ID")
+                tenant = {k: text(v, 200) for k, v in tenant.items() if v is not None}
+                if (
+                    tenant.get("key")
+                    and tenant["id"]
+                    != "tenant_" + hashlib.sha256(tenant["key"].encode()).hexdigest()
+                ):
+                    raise ValueError("Tenant key and stable ID mismatch")
+                ref["tenant"] = tenant
+                if ref["type"] == "tenant" and ref["id"] != tenant["id"]:
+                    raise ValueError("Tenant reference mismatch")
         metadata = n.get("metadata", {})
         if not isinstance(metadata, dict) or len(metadata) > 20:
             raise ValueError("Invalid metadata")
@@ -132,7 +159,27 @@ def markdown(graph):
         )
         for i, n in enumerate(nodes)
     }
-    lines = ["# BoxWeave", "MCP: boxweave", ""]
+    resource_nodes = [n for n in nodes if n.get("resource")]
+    tenant_refs = [(n.get("resource") or {}).get("tenant") for n in resource_nodes]
+    known = {t["id"]: t for t in tenant_refs if t}
+
+    def tenant_label(t):
+        return escape(
+            t.get("key")
+            or ((t.get("name") or t["id"]) + " (local metadata only; " + t["id"] + ")")
+        )
+
+    single = bool(resource_nodes) and all(tenant_refs) and len(known) == 1
+    if known and not single:
+        for n in resource_nodes:
+            tenant = n["resource"].get("tenant")
+            labels[n["id"]] += (
+                " [Tenant: " + (tenant_label(tenant) if tenant else "Unknown") + "]"
+            )
+    lines = ["# BoxWeave", "MCP: boxweave"]
+    if single:
+        lines.append("Tenant: " + tenant_label(next(iter(known.values()))))
+    lines.append("")
     if g["prompt"]:
         lines += [g["prompt"], ""]
     for n in nodes:

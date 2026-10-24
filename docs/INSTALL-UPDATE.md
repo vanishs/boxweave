@@ -126,3 +126,14 @@ remote source behavior remains the default; this explicit override is recorded
 as `source.local_tree_staged=true` with component hashes and is not retained on
 rerun. The recorded upstream commit is only a reference in this mode. Publish a
 matching immutable ref before distributing modified client enrollment assets.
+
+## Tenant metadata migration
+
+Web schema 2 adds Tenant display metadata atomically, preserving administrator,
+sessions, graphs, plans, jobs, settings and audit records. Repeated migration is
+idempotent. The installer includes the new Python/TypeScript assets and records
+schema 2 in provenance. Existing pre-migration SQLite backup and service-user
+migration apply; a failure keeps old table data and the pending update marker.
+Rollback requires matching software plus a private pre-migration backup; preserve
+new writes before restoration. No Provider/Incus update or resource relabeling is
+required. See [detailed recovery and limitations](TENANTS.md).

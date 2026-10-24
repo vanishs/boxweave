@@ -42,3 +42,24 @@ Suggested future provider interface (design placeholder, **not yet implemented**
 - Windows Codex files stay at the Codex-defined paths; other agents get their own adapters and paths.
 
 No `host`, account name, WSL distribution, LXC subnet or client home path is embedded as an installer constant. The upstream repository default is configurable via `BOXWEAVE_REPO` / `BOXWEAVE_REF`.
+
+## Independent console and Tenant authority
+
+```text
+Browser -> independent Caddy -> Web session + CSRF -> Provider REST
+                                 |                    |
+                                 v                    v
+                       SQLite schema 2        Box inventory + Guard
+                       Tenant metadata        native membership + NIC ACL
+                       Prompt Graph           infrastructure mutations
+                       plans/jobs/audit
+```
+
+Tenant is the only infrastructure grouping concept. Stable identifiers separate
+editable display names from native Provider keys. Local metadata never overrides
+real membership or certifies network isolation. Empty Tenant metadata has no
+Provider network. Incus Project and encryption tenant_id remain separate provider
+concepts. Prompt Graph can reference multiple Tenants without execution semantics.
+Web does not alter the restricted MCP launcher, provider binary or token timer.
+See [Tenant design](TENANTS.md) for the authority/freshness contract and
+[upstream blocker](TENANT-UPSTREAM.md) for shared-Tenant creation.

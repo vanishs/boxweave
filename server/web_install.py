@@ -504,7 +504,7 @@ def publish(source):
         "mode": d["mode"],
         "origin": d["origin"],
         "units": list(units_data),
-        "database_schema": 1,
+        "database_schema": 2,
     }
     manifest["component_sha256"].update(
         {

@@ -5,6 +5,7 @@ test.beforeEach(async ({ page }) => {
     .getByLabel("Administrator password")
     .fill("browser test password only");
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: /Boxes$/, exact: false }).click();
   await expect(
     page.getByRole("heading", { name: "Boxes", exact: true }),
   ).toBeVisible();

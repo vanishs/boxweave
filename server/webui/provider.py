@@ -78,12 +78,25 @@ def limits(data, required=False):
 
 
 def public_box(c):
-    result = {k: c[k] for k in ("name", "username", "state", "image") if k in c}
+    result = {
+        k: c[k] for k in ("name", "username", "state", "image", "backendId") if k in c
+    }
     for field, allowed in [
         ("resources", ("cpu", "memory", "disk")),
         ("network", ("ipAddress", "ipv6Address", "gateway", "bridge", "sshPort")),
     ]:
         result[field] = {k: v for k, v in c.get(field, {}).items() if k in allowed}
+    # Only network attribution keys, never arbitrary labels (which may contain secrets).
+    labels = c.get("labels", {})
+    result["labels"] = (
+        {
+            k: v
+            for k, v in labels.items()
+            if k in ("cloud_org_id", "tenant") and isinstance(v, str) and len(v) <= 200
+        }
+        if isinstance(labels, dict)
+        else {}
+    )
     return result
 
 
@@ -165,6 +178,9 @@ class Provider:
                 "container"
             ]
         )
+
+    def network_guard(self):
+        return self.request("GET", "/v1/network/guard")
 
     def routes(self, kind):
         r = self.request(

@@ -94,6 +94,13 @@ are correctly omitted for HTTP. `BOXWEAVE_WEB_MODE`, `BOXWEAVE_WEB_HOST`,
 settings. Flags override environment, which overrides saved web settings, which
 override defaults. HTTPS remains the fresh-install default.
 
+## Tenant views
+
+Navigation includes Overview, Tenants, Boxes, Network, Monitoring and Prompt Graph.
+Tenant display metadata is editable; membership and isolation evidence come from
+the Provider. Empty metadata is explicitly identified. Read the [Tenant workflow,
+API and migration guide](TENANTS.md), including the shared-creation capability gate.
+
 ## Managing resources
 
 Boxes support list/search/filter/sort/details, batch create with shared or
@@ -141,7 +148,9 @@ deleted and confirmed. Current graph selection is stored on the server.
 
 Copy exports fixed `# BoxWeave` and `MCP: boxweave` context, the global prompt,
 all card comments and all undirected relation comments. It excludes live resource
-properties. Duplicate names receive card labels. Copy & new saves and copies
+properties except stored Tenant context. Single-Tenant graphs add a Tenant line;
+mixed graphs retain per-card Tenant labels and old graphs remain compatible.
+Duplicate names receive card labels. Copy & new saves and copies
 before switching; clipboard failure keeps the graph and opens selectable Markdown.
 In HTTP/restricted browsers, manually copy and explicitly choose **complete & new
 graph**. Existing graphs remain available. Never paste credentials into comments:

@@ -117,8 +117,34 @@ class FakeProvider:
                 "username": n,
                 "name": n + "-container",
                 "state": "CONTAINER_STATE_RUNNING",
+                "network": {"ipAddress": "10.0.0.2"},
             }
         return {}
+
+    def network_guard(self):
+        import hashlib
+        from datetime import datetime, timezone
+
+        return {
+            "core": {},
+            "tenant": {
+                "mode": "GUARD_MODE_ENFORCE",
+                "firewallDriver": "nftables",
+                "unsupported": False,
+                "lastPass": datetime.now(timezone.utc).isoformat(),
+                "entries": [
+                    {
+                        "container": c.get("name", n + "-container"),
+                        "subject": n,
+                        "ip": c.get("network", {}).get("ipAddress", "10.0.0.2"),
+                        "aclName": "containarium-tenant-"
+                        + hashlib.sha256(n.encode()).hexdigest()[:12],
+                        "attached": True,
+                    }
+                    for n, c in self.data.items()
+                ],
+            },
+        }
 
     def routes(self, k):
         return {"routes": []}

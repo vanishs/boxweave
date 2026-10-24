@@ -130,7 +130,7 @@ class InstallerRerunTests(unittest.TestCase):
         backend = b'#!/bin/sh\nexit 0\n'
         assets['mcp-server-linux-amd64'] = backend
         assets['SHA256SUMS.txt'] = (hashlib.sha256(backend).hexdigest()+'  mcp-server-linux-amd64\n').encode()
-        for path in ('server/web_install.py','server/web_token.py','server/web_entry.py', *[str(x.relative_to(ROOT)) for x in (ROOT/'server/webui').glob('*') if x.is_file()], 'web/package.json','web/package-lock.json','web/tsconfig.json','web/vite.config.ts','web/index.html','web/src/main.tsx','web/src/model.ts','web/src/style.css'):
+        for path in ('server/web_install.py','server/web_token.py','server/web_entry.py', *[str(x.relative_to(ROOT)) for x in (ROOT/'server/webui').glob('*') if x.is_file()], 'web/package.json','web/package-lock.json','web/tsconfig.json','web/vite.config.ts','web/index.html','web/src/main.tsx','web/src/tenants.tsx','web/src/model.ts','web/src/style.css'):
             assets[path]=(ROOT/path).read_bytes()
         # This harness covers MCP publication only; web setup has its own isolated tests.
         assets['server/web_install.py']=b'import os,sys\nprint("Web provisioner stub: no host mutation")\nif os.environ.get("FAIL_WEB_PHASE")==sys.argv[1]: sys.exit(23)\n'

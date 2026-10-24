@@ -7,7 +7,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA = 1
+SCHEMA = 2
 
 
 class Conflict(Exception):
@@ -19,25 +19,30 @@ class Store:
         self.path = str(path)
         Path(path).parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version > SCHEMA:
                 raise RuntimeError(
                     "Database schema is newer than this application; restore matching software"
                 )
             if version == 0:
-                db.executescript(
-                    """
-                CREATE TABLE admin (id INTEGER PRIMARY KEY CHECK(id=1), hash TEXT NOT NULL);
-                CREATE TABLE sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL);
-                CREATE TABLE attempts (address TEXT NOT NULL, at REAL NOT NULL);
-                CREATE TABLE graphs (id TEXT PRIMARY KEY, version INTEGER NOT NULL, data TEXT NOT NULL, updated REAL NOT NULL);
-                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
-                CREATE TABLE plans (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires REAL NOT NULL, used INTEGER NOT NULL DEFAULT 0);
-                CREATE TABLE jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-                CREATE TABLE audit (at REAL NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, result TEXT NOT NULL);
-                PRAGMA user_version=1;
-                """
+                statements = [
+                    "CREATE TABLE admin (id INTEGER PRIMARY KEY CHECK(id=1), hash TEXT NOT NULL)",
+                    "CREATE TABLE sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL)",
+                    "CREATE TABLE attempts (address TEXT NOT NULL, at REAL NOT NULL)",
+                    "CREATE TABLE graphs (id TEXT PRIMARY KEY, version INTEGER NOT NULL, data TEXT NOT NULL, updated REAL NOT NULL)",
+                    "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)",
+                    "CREATE TABLE plans (id TEXT PRIMARY KEY, data TEXT NOT NULL, expires REAL NOT NULL, used INTEGER NOT NULL DEFAULT 0)",
+                    "CREATE TABLE jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL)",
+                    "CREATE TABLE audit (at REAL NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, result TEXT NOT NULL)",
+                ]
+                for statement in statements:
+                    db.execute(statement)
+            if version < 2:
+                db.execute(
+                    "CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, provider_key TEXT, created REAL NOT NULL, updated REAL NOT NULL, version INTEGER NOT NULL)"
                 )
+                db.execute("PRAGMA user_version=2")
         Path(path).chmod(0o600)
 
     @contextmanager
@@ -111,3 +116,75 @@ class Store:
             if not r:
                 raise KeyError(jid)
             return json.loads(r[0])
+
+    def tenants(self):
+        with self.db() as db:
+            return [
+                dict(
+                    id=r["id"],
+                    name=r["name"],
+                    description=r["description"],
+                    providerKey=r["provider_key"],
+                    createdAt=r["created"],
+                    updatedAt=r["updated"],
+                    version=r["version"],
+                    origin="local" if r["provider_key"] is None else "discovered",
+                )
+                for r in db.execute("SELECT * FROM tenants ORDER BY name,id")
+            ]
+
+    def save_tenant(self, tid, name, description, provider_key, version):
+        now = time.time()
+        with self.db() as db:
+            if version == 0:
+                try:
+                    db.execute(
+                        "INSERT INTO tenants VALUES (?,?,?,?,?,?,1)",
+                        (tid, name, description, provider_key, now, now),
+                    )
+                except sqlite3.IntegrityError:
+                    raise Conflict()
+            else:
+                if (
+                    db.execute(
+                        "UPDATE tenants SET name=?,description=?,updated=?,version=version+1 WHERE id=? AND version=?",
+                        (name, description, now, tid, version),
+                    ).rowcount
+                    != 1
+                ):
+                    raise Conflict()
+            db.execute(
+                "INSERT INTO audit VALUES (?,?,?,?)",
+                (now, "tenant-metadata-save", tid, "success"),
+            )
+        return next(t for t in self.tenants() if t["id"] == tid)
+
+    def tenant_graph_references(self, tid):
+        count = 0
+        for g in self.graphs():
+            for n in g.get("nodes", []):
+                ref = n.get("resource") or {}
+                if (
+                    ref.get("type") == "tenant"
+                    and ref.get("id") == tid
+                    or (ref.get("tenant") or {}).get("id") == tid
+                ):
+                    count += 1
+        return count
+
+    def delete_tenant(self, tid, version):
+        with self.db() as db:
+            if (
+                db.execute(
+                    "DELETE FROM tenants WHERE id=? AND version=?", (tid, version)
+                ).rowcount
+                != 1
+            ):
+                raise Conflict()
+            db.execute(
+                "DELETE FROM settings WHERE key='current_tenant' AND value=?", (tid,)
+            )
+            db.execute(
+                "INSERT INTO audit VALUES (?,?,?,?)",
+                (time.time(), "tenant-metadata-delete", tid, "success"),
+            )

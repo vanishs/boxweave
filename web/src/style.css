@@ -646,3 +646,43 @@ code {
     flex-wrap: wrap;
   }
 }
+
+.tenant-panel,
+.tenant-guard {
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.tenant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.stable-id {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  max-width: 420px;
+}
+.tenant-scope {
+  margin: 16px 0;
+}
+.tenant-scope label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tenant-scope input[type="checkbox"] {
+  width: auto;
+}
+.tenant-panel pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.tenant-panel h2 {
+  margin-right: auto;
+}
+.tenant-group td {
+  background: #eef5ef;
+  font-weight: 600;
+  color: #235639;
+}
