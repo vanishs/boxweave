@@ -1,6 +1,12 @@
 """Independent web security, graph persistence and batch semantics (fake provider)."""
 
 import json
+import io
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
+from unittest.mock import patch
 import os
 from pathlib import Path
 import sys
@@ -16,6 +22,75 @@ try:
     from webui.store import Store, Conflict
 except ImportError:
     create_app = None
+
+
+def upstream_missing_box(username):
+    return {
+        "code": 500,
+        "error": (
+            "rpc error: code = Unknown desc = failed to get container: "
+            "failed to get container: Failed to fetch instance "
+            f'"{username}-container" in project "default": Instance not found'
+        ),
+    }
+
+
+@contextmanager
+def http_provider_fixture(directory):
+    """Real HTTP adapter round-trips; all resources and authorization are fake."""
+    calls = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def reply(self, status, data):
+            encoded = json.dumps(data).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+
+        def do_GET(self):
+            calls.append(("GET", self.path, None))
+            if self.path == "/v1/containers":
+                self.reply(200, {"containers": []})
+            else:
+                self.reply(500, upstream_missing_box(self.path.rsplit("/", 1)[-1]))
+
+        def do_POST(self):
+            data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            calls.append(("POST", self.path, data))
+            self.reply(
+                200,
+                {
+                    "container": {
+                        "username": data["username"],
+                        "state": "CONTAINER_STATE_CREATING",
+                    }
+                },
+            )
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    token = Path(directory) / "http-fixture.jwt"
+    token.write_text("synthetic-fixture-only")
+    token.chmod(0o600)
+    provider = Provider(
+        {
+            "api_url": f"http://127.0.0.1:{server.server_port}",
+            "token_file": str(token),
+            "public_key": "ssh-ed25519 AAAA fixture",
+        }
+    )
+    thread.start()
+    try:
+        yield provider, calls
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 class FakeProvider:
@@ -300,6 +375,41 @@ class WebTests(unittest.TestCase):
             400,
         )
 
+    def test_real_http_missing_instance_preflight_allows_one_create(self):
+        with http_provider_fixture(self.temp.name) as (provider, calls):
+            self.app = create_app(self.cfg, provider)
+            self.addCleanup(self.app.extensions["batch_pool"].shutdown, True)
+            self.c = self.app.test_client()
+            self.store = self.app.extensions["store"]
+            self.login()
+            item = {
+                "username": "boxweave-web-test",
+                "resources": {"cpu": "2", "memory": "2GB", "disk": "10GB"},
+                "image": "images:ubuntu/24.04",
+            }
+            job = self.batch("create", [item])
+            self.assertEqual(job["items"][0]["status"], "submitted")
+            writes = [c for c in calls if c[0] == "POST"]
+            self.assertEqual(len(writes), 1)
+            self.assertEqual(writes[0][1], "/v1/containers")
+            self.assertEqual(writes[0][2]["username"], item["username"])
+            self.assertEqual(writes[0][2]["sshKeys"], [provider.key])
+
+    def test_unrelated_lookup_failure_never_reaches_create(self):
+        self.login()
+        with patch.object(self.provider, "box", side_effect=ProviderError(502)):
+            job = self.batch(
+                "create",
+                [
+                    {
+                        "username": "alpha",
+                        "resources": {"cpu": "2", "memory": "2GB", "disk": "10GB"},
+                    }
+                ],
+            )
+        self.assertEqual(job["items"][0]["status"], "failed")
+        self.assertEqual(self.provider.calls, [])
+
     def test_conflicts_validation_and_explicit_fields(self):
         self.login()
         self.provider.data["taken"] = {"username": "taken"}
@@ -441,6 +551,76 @@ class ProviderContractTests(unittest.TestCase):
             ):
                 with self.assertRaises(ValueError):
                     Provider({**cfg, "api_url": origin})
+
+    def test_exact_missing_instance_response_is_normalized_only_for_lookup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with http_provider_fixture(temp) as (provider, calls):
+                with self.assertRaises(ProviderError) as caught:
+                    provider.box("boxweave-web-test")
+                self.assertEqual(caught.exception.status, 404)
+                self.assertFalse(caught.exception.unknown)
+                self.assertEqual([c[0] for c in calls], ["GET"])
+
+    def test_other_errors_cannot_be_mistaken_for_missing_boxes(self):
+        cfg = {
+            "api_url": "http://127.0.0.1:18000",
+            "token_file": "/unused",
+            "public_key": "ssh-ed25519 AAAA fixture",
+        }
+        provider = Provider(cfg)
+        cases = [
+            (
+                "GET",
+                "/v1/containers/alpha",
+                500,
+                {"code": 500, "error": "Permission denied; fixture-sensitive-error"},
+            ),
+            ("GET", "/v1/containers/alpha", 500, upstream_missing_box("beta")),
+            (
+                "GET",
+                "/v1/containers/alpha",
+                500,
+                {
+                    "code": 500,
+                    "error": upstream_missing_box("alpha")["error"].replace(
+                        'project "default"', 'project "other"'
+                    ),
+                },
+            ),
+            ("GET", "/v1/containers/alpha", 500, b"not JSON"),
+            ("GET", "/v1/containers/alpha", 500, b"x" * 8193),
+            ("GET", "/v1/containers", 500, upstream_missing_box("alpha")),
+            ("POST", "/v1/containers", 500, upstream_missing_box("alpha")),
+            ("DELETE", "/v1/containers/alpha", 500, upstream_missing_box("alpha")),
+            ("GET", "/v1/containers/alpha", 403, upstream_missing_box("alpha")),
+            ("GET", "/v1/containers/alpha", 404, {"error": "not found"}),
+        ]
+        for method, path, status, data in cases:
+            with self.subTest(method=method, path=path, status=status):
+                raw = data if isinstance(data, bytes) else json.dumps(data).encode()
+                error = HTTPError(
+                    provider.origin + path, status, "fixture", {}, io.BytesIO(raw)
+                )
+                with patch("webui.provider.Path.lstat") as stat_call:
+                    import stat
+
+                    stat_call.return_value.st_mode = stat.S_IFREG | 0o600
+                    with patch(
+                        "webui.provider.Path.read_text",
+                        return_value="synthetic-fixture-only",
+                    ), patch.object(provider.opener, "open", side_effect=error):
+                        with self.assertRaises(ProviderError) as caught:
+                            provider.request(
+                                method, path, {} if method == "POST" else None
+                            )
+                self.assertEqual(
+                    caught.exception.status, status if status in (403, 404) else 502
+                )
+                self.assertEqual(
+                    caught.exception.unknown, method != "GET" and status >= 500
+                )
+                self.assertNotIn("fixture-sensitive-error", str(caught.exception))
+                self.assertTrue(error.fp.closed)
 
     def test_explicit_keys_and_nested_response_field_allowlists(self):
         from unittest.mock import patch

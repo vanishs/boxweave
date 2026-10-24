@@ -16,6 +16,34 @@ class ProviderError(Exception):
         self.unknown = unknown
 
 
+def missing_box_response(method, path, error):
+    """Normalize only the exact v0.114.2 default-project missing-instance reply.
+
+    A generic 500 must never authorize creation or an automatic retry. Match the
+    requested logical name, read a bounded JSON body, and discard all raw text.
+    """
+    match = re.fullmatch(r"/v1/containers/([a-z][a-z0-9-]{0,31})", path)
+    if method != "GET" or error.code != 500 or match is None:
+        return False
+    try:
+        raw = error.read(8193)
+        if len(raw) > 8192:
+            return False
+        data = json.loads(raw)
+        expected = (
+            "rpc error: code = Unknown desc = failed to get container: "
+            "failed to get container: Failed to fetch instance "
+            f'"{match.group(1)}-container" in project "default": Instance not found'
+        )
+        return (
+            isinstance(data, dict)
+            and data.get("code") == 500
+            and data.get("error") == expected
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
@@ -108,6 +136,12 @@ class Provider:
                     raise ProviderError()
                 return json.loads(raw)
         except HTTPError as e:
+            try:
+                missing = missing_box_response(method, path, e)
+            finally:
+                e.close()
+            if missing:
+                raise ProviderError(404) from None
             raise ProviderError(
                 e.code if e.code in (400, 403, 404, 409) else 502,
                 method != "GET" and e.code >= 500,

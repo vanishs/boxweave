@@ -66,3 +66,11 @@ per-file rather than whole-host atomic update; filesystem/database backup needs;
 ambiguous infrastructure writes; browser clipboard restrictions; concurrent graph
 edits. Dedicated-box tests and fake-provider tests do not certify production
 host security, bare-metal installation or external LAN reachability.
+
+### Missing-instance response compatibility
+
+On the verified v0.114.2 host, GET /v1/containers/{username} returns HTTP 500 for a
+missing default-project Incus instance. Web recognizes only the exact observed
+gateway error for the requested instance and normalizes it to absence (404).
+Generic 500s and all write failures retain their error/unknown semantics. See
+[regression evidence](WEB-TESTING.md#missing-instance-compatibility-regression).

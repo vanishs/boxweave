@@ -110,3 +110,29 @@ Updates are atomic per file; a failed Web update can require rerun/manual
 recovery. Free-text secret detection recognizes common patterns, not every
 possible secret. IPv4 private-address deployment is supported; ambiguous LAN
 interfaces require explicit --web-host. See [usage/recovery](WEB-UI.md).
+
+## Missing-instance compatibility regression
+
+A subsequent read-only Platform MCP lookup of `boxweave-web-test` reproduced a
+v0.114.2 response mismatch: a missing default-project instance returns HTTP 500
+with the gateway JSON `code:500` and an exact nested `Instance not found` error,
+rather than HTTP 404. The original fake-provider tests returned 404 and therefore
+did not exercise this production behavior. The create-time duplicate check
+stopped before POST /v1/containers.
+
+The REST adapter now normalizes only this observed bounded JSON response for
+GET /v1/containers/{username}, matching the exact requested instance and default
+project. Other 500s, authorization errors, wrong names/projects, malformed or
+oversized bodies, inventory errors, and write errors are not treated as absence.
+Raw provider error bodies are never returned to the browser or logged.
+
+Four regression tests cover the exact response, negative/error cases, failure
+before mutation, and a complete authenticated Web plan/confirmation/batch through
+a local HTTP fake provider. The latter verifies a missing-instance 500 is
+followed by exactly one creation POST with explicit SSH public keys. This is a
+real HTTP transport test against a simulated provider, not real infrastructure
+creation. No existing failed receipt is replayed automatically, and ambiguous
+creation safeguards remain intact.
+
+Fix validation: `python -m unittest discover -s tests -p "test_web*.py" -v`
+passed all 28 tests (exit 0). Python compilation and `git diff --check` also passed.
