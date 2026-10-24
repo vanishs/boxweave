@@ -10,6 +10,7 @@ import pwd
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from urllib.request import urlopen, Request
@@ -20,6 +21,43 @@ RELEASES = Path("/opt/boxweave-web/releases")
 
 def run(args, **kw):
     subprocess.run(args, check=True, timeout=kw.pop("timeout", 120), **kw)
+
+
+def run_apt(args, *, timeout):
+    """Wait for unattended-upgrades without deleting or bypassing APT locks."""
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Timed out waiting for Ubuntu package manager")
+        result = subprocess.run(
+            ["apt-get", "-o", "DPkg::Lock::Timeout=300", *args],
+            capture_output=True,
+            text=True,
+            timeout=remaining,
+        )
+        if result.stdout:
+            print(result.stdout, end="", flush=True)
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr, flush=True)
+        if result.returncode == 0:
+            return
+        message = (result.stdout or "") + "\n" + (result.stderr or "")
+        lock_error = any(
+            marker in message.lower()
+            for marker in (
+                "could not get lock",
+                "unable to acquire the dpkg frontend lock",
+                "unable to lock directory",
+            )
+        )
+        if result.returncode != 100 or not lock_error:
+            raise subprocess.CalledProcessError(result.returncode, result.args)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Timed out waiting for Ubuntu package manager lock")
+        print("[boxweave] APT is busy; retrying after the lock is released...", flush=True)
+        time.sleep(min(5, remaining))
 
 
 def atomic(path, data, mode=0o644):
@@ -192,10 +230,10 @@ def prepare(source, d):
     if check.returncode:
         missing.append("python3-venv")
     if missing:
-        run(["apt-get", "update"], timeout=180)
-        run(
-            ["apt-get", "install", "-y", "--no-install-recommends", *missing],
-            timeout=300,
+        run_apt(["update"], timeout=180)
+        run_apt(
+            ["install", "-y", "--no-install-recommends", *missing],
+            timeout=660,
         )
     # Extract only a signature/hash-verified distro binary; never activate or edit distro Caddy.
     run(["apt-get", "download", "caddy"], cwd=source, timeout=180)

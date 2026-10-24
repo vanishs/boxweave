@@ -3,6 +3,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import socket
 import sys
 import tempfile
@@ -88,6 +89,47 @@ class WebInstallTests(unittest.TestCase):
         self.assertIn("TIMERS_PAUSED=0", s[start - 30 : start])
         self.assertNotIn("--skip-web", s)
 
+
+    def test_apt_retries_only_on_lock_contention(self):
+        blocked = subprocess.CompletedProcess(
+            ["apt-get"], 100, "", "E: Could not get lock /var/lib/apt/lists/lock"
+        )
+        success = subprocess.CompletedProcess(["apt-get"], 0, "ok\n", "")
+        with patch.object(web.subprocess, "run", side_effect=[blocked, success]) as runner:
+            with patch.object(web.time, "sleep") as sleeper:
+                web.run_apt(["update"], timeout=180)
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(
+            runner.call_args.args[0][:3],
+            ["apt-get", "-o", "DPkg::Lock::Timeout=300"],
+        )
+        sleeper.assert_called_once()
+
+    def test_apt_does_not_retry_other_package_errors(self):
+        failure = subprocess.CompletedProcess(
+            ["apt-get"], 100, "", "E: Unable to locate package missing"
+        )
+        with patch.object(web.subprocess, "run", return_value=failure) as runner:
+            with patch.object(web.time, "sleep") as sleeper:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    web.run_apt(["install", "missing"], timeout=60)
+        runner.assert_called_once()
+        sleeper.assert_not_called()
+
+    def test_prepare_uses_bounded_apt_wait_for_missing_prerequisites(self):
+        class StopAfterApt(Exception):
+            pass
+
+        with patch.object(web.shutil, "which", return_value=None), patch.object(
+            web.subprocess, "run", return_value=subprocess.CompletedProcess([], 1)
+        ), patch.object(web, "run_apt") as apt, patch.object(
+            web, "run", side_effect=StopAfterApt
+        ):
+            with self.assertRaises(StopAfterApt):
+                web.prepare(Path("/unused"), {})
+        self.assertEqual(apt.call_args_list[0].args, (["update"],))
+        self.assertEqual(apt.call_args_list[0].kwargs, {"timeout": 180})
+        self.assertEqual(apt.call_args_list[1].kwargs, {"timeout": 660})
 
 if __name__ == "__main__":
     unittest.main()
