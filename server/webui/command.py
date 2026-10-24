@@ -54,8 +54,8 @@ def main(argv=None):
             p.error("Administrator already initialized; use reset-password")
         if a.action == "reset-password" and not exists:
             p.error("Initialize administrator first")
-    password = getpass.getpass("New administrator password (at least 14 characters): ")
-    if len(password) < 14 or len(password) > 1024:
+    password = getpass.getpass("New administrator password (at least 8 characters): ")
+    if len(password) < 8 or len(password) > 1024:
         p.error("Use 14–1024 characters")
     if password != getpass.getpass("Repeat password: "):
         p.error("Passwords do not match")
