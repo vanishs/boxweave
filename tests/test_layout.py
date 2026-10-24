@@ -43,7 +43,7 @@ class LayoutTests(unittest.TestCase):
                 continue
             if path.suffix not in ('.py', '.ps1', '.sh', '.md', '.yml', '.json'):
                 continue
-            if '__pycache__' in path.parts:
+            if any(part in ('__pycache__', '.venv', 'web-venv', 'node_modules', 'dist', 'test-results', 'playwright-report') for part in path.parts):
                 continue
             with self.subTest(path=str(path.relative_to(ROOT))):
                 data = path.read_text(encoding='utf-8')

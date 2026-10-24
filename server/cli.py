@@ -240,6 +240,17 @@ def health(args):
               'configuration': {'status': 'available' if config is not None else error}, 'services': services,
               'oneshots': oneshots}
     if config is not None:
+        web_path = args.config.parent / 'web.json'
+        web_config, web_error = load_config(web_path)
+        web_units = {unit: service_state(unit) for unit in ('boxweave-web.service','boxweave-web-caddy.service','boxweave-web-token.timer')}
+        result['web'] = {'configuration': 'available' if web_config else web_error, 'services': web_units}
+        if web_config:
+            import socket
+            port = web_config.get('backend_port')
+            if type(port) is int and 1024 <= port <= 65535:
+                try:
+                    with socket.create_connection(('127.0.0.1', port), 1): result['web']['listener'] = 'reachable'
+                except OSError: result['web']['listener'] = 'unreachable'
         result['configuration']['provider'] = config.get('provider') if config.get('provider') == 'containarium' else 'unknown'
         result['configuration']['schema_version'] = config.get('schema_version') if type(config.get('schema_version')) is int else None
     if args.command == 'doctor':
@@ -263,6 +274,11 @@ def health(args):
         if api == 'unexpected_http_status': installation.update(state='failed')
         elif api in ('unreachable', 'skipped') and installation['state'] == 'ready': installation.update(state='incomplete')
         if api != 'reachable': installation['reasons'].append('requested_api_probe_' + api)
+    if config is not None and (args.config.parent / 'web.json').exists():
+        web = result.get('web', {})
+        if web.get('listener') != 'reachable' or any(r['status'] != 'active' for r in web.get('services', {}).values()):
+            installation['reasons'].append('web_not_ready')
+            if installation['state'] == 'ready': installation['state'] = 'incomplete'
     result['installation'] = installation
     result['installation_state'] = result['overall'] = installation['state']
     return result, 0 if installation['state'] == 'ready' else 1 if installation['state'] == 'failed' else 2
@@ -318,6 +334,8 @@ def parser():
     inspect.add_argument('--project', default='default', help='Explicit Incus project (default: default)')
     from clients import add_parser
     add_parser(commands)
+    web = commands.add_parser('web', help='Independent web administrator and health commands')
+    web.add_argument('arguments', nargs=argparse.REMAINDER)
     job = commands.add_parser('job', help='Explicit local command jobs with durable receipts')
     job.add_argument('arguments', nargs=argparse.REMAINDER)
     smoke = commands.add_parser('selftest', help='Plan or run an approved nested MCP smoke test')
@@ -327,6 +345,8 @@ def parser():
 
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.command == 'web':
+        os.execv('/usr/bin/python3', ['/usr/bin/python3', '/usr/local/libexec/boxweave/web_entry.py', *args.arguments])
     if args.command == 'client':
         from clients import run
         return run(args)

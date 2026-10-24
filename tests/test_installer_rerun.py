@@ -130,6 +130,10 @@ class InstallerRerunTests(unittest.TestCase):
         backend = b'#!/bin/sh\nexit 0\n'
         assets['mcp-server-linux-amd64'] = backend
         assets['SHA256SUMS.txt'] = (hashlib.sha256(backend).hexdigest()+'  mcp-server-linux-amd64\n').encode()
+        for path in ('server/web_install.py','server/web_token.py','server/web_entry.py', *[str(x.relative_to(ROOT)) for x in (ROOT/'server/webui').glob('*') if x.is_file()], 'web/package.json','web/package-lock.json','web/tsconfig.json','web/vite.config.ts','web/index.html','web/src/main.tsx','web/src/model.ts','web/src/style.css'):
+            assets[path]=(ROOT/path).read_bytes()
+        # This harness covers MCP publication only; web setup has its own isolated tests.
+        assets['server/web_install.py']=b'import os,sys\nprint("Web provisioner stub: no host mutation")\nif os.environ.get("FAIL_WEB_PHASE")==sys.argv[1]: sys.exit(23)\n'
         self.assets = assets
         self.write_assets()
 
@@ -151,6 +155,37 @@ class InstallerRerunTests(unittest.TestCase):
                               '--jwt-secret-file',str(self.secret),'--containariumd-binary',str(self.bin/'containariumd')),
                              CONTAINARIUM_VERSION='v0.110.0')
         self.assertEqual(r.returncode, 0, r.stdout+r.stderr)
+
+    def test_reviewed_local_sources_can_install_without_publishing(self):
+        self.initial_install()
+        local=self.root/'reviewed-source';local.mkdir()
+        for name,data in self.assets.items():
+            if name.startswith('mcp-server') or name=='SHA256SUMS.txt':continue
+            path=local/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+        result=self.run_install(('--source-dir',str(local)),FAIL_DOWNLOAD='server/cli.py')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        manifest=json.loads((self.config.parent/'install-manifest.json').read_text())
+        self.assertTrue(manifest['source']['local_tree_staged'])
+
+    def test_web_build_failure_preserves_existing_installation(self):
+        self.initial_install()
+        before=self.snapshot()
+        result=self.run_install(FAIL_WEB_PHASE='prepare')
+        self.assertEqual(result.returncode,23,result.stderr)
+        self.assertEqual(self.snapshot(),before)
+        self.assertFalse((self.config.parent/'update-in-progress').exists())
+
+    def test_web_publish_failure_keeps_mcp_timers_running_and_repair_marker(self):
+        self.initial_install()
+        result=self.run_install(FAIL_WEB_PHASE='publish')
+        self.assertEqual(result.returncode,23,result.stderr)
+        state=json.loads((self.root/'unit-state.json').read_text())
+        for unit in ('boxweave-token.timer','boxweave-hostkeys.timer'):
+            self.assertEqual(state[unit],'active')
+        self.assertTrue((self.config.parent/'update-in-progress').exists())
+        result=self.run_install()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertFalse((self.config.parent/'update-in-progress').exists())
 
     def test_public_client_generator_and_final_instructions(self):
         self.initial_install()

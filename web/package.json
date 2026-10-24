@@ -1,0 +1,23 @@
+{
+  "name": "boxweave-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "test": "tsc src/model.ts --target ES2022 --module ES2022 --moduleResolution bundler --skipLibCheck --outDir .test-build && node --test model.test.mjs",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@xyflow/react": "12.8.6",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/react": "19.1.16",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.3",
+    "vite": "6.4.5"
+  }
+}

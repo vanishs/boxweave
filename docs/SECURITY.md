@@ -19,3 +19,15 @@
 - **Scope:** the initial reconciler only supports private IPv4 addresses on trusted Incus managed networks and Containarium LXC metadata. It intentionally declines unknown hosts.
 
 For production deployments, add peer-reviewed signed releases, least-privilege provider credentials, automated rollback and network access controls before treating this as hardened infrastructure.
+
+## Independent Web boundary
+
+The console uses a distinct unprivileged service account, Argon2id password hash,
+server-side sessions, Origin/CSRF checks, conservative login throttling and a
+fixed Provider operation allowlist. It cannot read the existing MCP token or
+provider signing key. Only a root credential issuer reads the signing secret;
+it produces separate, scoped two-hour Web credentials, rotated hourly. Broad
+container/route scopes are not complete per-resource least privilege; prior
+tokens expire rather than being instantly revoked on rotation. Caddy Local CA
+requires verified client trust distribution. Explicit HTTP mode has no transport
+confidentiality. See [Web security and trust details](WEB-UI.md).

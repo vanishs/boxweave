@@ -78,3 +78,11 @@ already enrolled client. It does not execute diagnosis on Ubuntu or repair a
 client. Use the same OS/agent/runtime/transport selection options; Windows bridge
 diagnosis also needs --wsl-distro. Replacement/bootstrap-identity options are
 incompatible. See [diagnostic stages, reports and limits](CLIENTS.md#independent-client-diagnostics).
+
+## Independent web administrator
+
+`boxweave web init-admin` and `boxweave web reset-password` require an interactive
+local terminal and service-user/root access. Passwords are never arguments.
+`boxweave web status` reports the configured origin and local backend listener,
+without opening provider credentials. Use `status`/`doctor` for Web systemd
+observations. See [Web installation and security](WEB-UI.md).

@@ -31,6 +31,18 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh -o
 sudo bash /tmp/boxweave-install.sh
 ```
 
+## Independent web console
+
+The revised installer also installs the Web UI by default: Boxes, Network,
+Monitoring (verified state/configuration) and a persistent Prompt Graph. It uses
+its own local administrator, provider credential, SQLite database, systemd
+services and Caddy Local CA. Existing MCP transport and credentials remain
+independent. Default HTTPS port is 18443; initialize locally with
+`sudo boxweave web init-admin`. Never expose an unreviewed installation publicly.
+See [installation, CA trust, HTTP mode and recovery](docs/WEB-UI.md),
+[provider capability gate](docs/WEB-CAPABILITIES.md) and
+[test evidence and verification limits](docs/WEB-TESTING.md).
+
 ## Operating expectations: timeouts, startup and nesting
 
 These rules come from real installation and nested MCP tests. Recorded times

@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / 'install.sh').read_text(encoding='utf-8')
-BLOCK = SCRIPT[SCRIPT.index('healthy=0\nstart_time='):SCRIPT.index("\nINSTALL_PHASE='BoxWeave configuration staging'")]
+BLOCK = SCRIPT[SCRIPT.index('healthy=0\nstart_time='):SCRIPT.index("\nINSTALL_PHASE='mandatory web staging and production build'")]
 
 
 class ReadinessBehaviorTests(unittest.TestCase):

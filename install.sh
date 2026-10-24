@@ -28,6 +28,11 @@ STAGING_FILE=''
 BACKUP_DIR=''
 TIMERS_PAUSED=0
 SAVED_BOX_PUB=''
+LOCAL_SOURCE_DIR=''
+WEB_MODE="${BOXWEAVE_WEB_MODE:-}"
+WEB_HOST="${BOXWEAVE_WEB_HOST:-}"
+WEB_PORT="${BOXWEAVE_WEB_PORT:-}"
+WEB_BACKEND_PORT="${BOXWEAVE_WEB_BACKEND_PORT:-}"
 declare -A EXPLICIT=()
 for option in 'LINUX_USER:BOXWEAVE_LINUX_USER' 'SSH_HOST:BOXWEAVE_SSH_HOST' 'SSH_PORT:BOXWEAVE_SSH_PORT' \
               'ALLOWED_CIDRS:BOXWEAVE_ALLOWED_CIDRS' 'API_URL:BOXWEAVE_API_URL' 'SYNC_INTERVAL:BOXWEAVE_SYNC_INTERVAL' \
@@ -69,6 +74,9 @@ Usage: curl -fsSL ${RAW_BASE}/install.sh | sudo bash
        sudo bash install.sh [--user USER] [--ssh-host HOST] [--ssh-port PORT]
                             [--allow-cidr CIDR] [--api-url URL] [--sync-interval SECONDS]
                             [--api-ready-timeout SECONDS]
+                            [--web-mode https|http] [--web-host PRIVATE_IPV4]
+                            [--web-port 18443] [--web-backend-port 18444]
+                            [--source-dir REVIEWED_CHECKOUT]
                             [--repo OWNER/REPO] [--ref REF]
                             [--jwt-secret-file PATH] [--containariumd-binary PATH]
 Environment: BOXWEAVE_LINUX_USER, BOXWEAVE_SSH_HOST, BOXWEAVE_SSH_PORT,
@@ -93,6 +101,11 @@ while (($#)); do
     --api-ready-timeout) API_READY_TIMEOUT="${2:?}"; EXPLICIT[API_READY_TIMEOUT]=1; shift 2;;
     --repo) BOXWEAVE_REPO="${2:?}"; EXPLICIT[BOXWEAVE_REPO]=1; shift 2;;
     --ref) BOXWEAVE_REF="${2:?}"; EXPLICIT[BOXWEAVE_REF]=1; shift 2;;
+    --source-dir) LOCAL_SOURCE_DIR="${2:?}"; shift 2;;
+    --web-mode) WEB_MODE="${2:?}"; shift 2;;
+    --web-host) WEB_HOST="${2:?}"; shift 2;;
+    --web-port) WEB_PORT="${2:?}"; shift 2;;
+    --web-backend-port) WEB_BACKEND_PORT="${2:?}"; shift 2;;
     --help|-h) usage; exit 0;;
     *) die "Unknown argument: $1";;
   esac
@@ -271,9 +284,26 @@ fi
 [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]] || die 'Could not resolve a source commit'
 RAW_BASE="https://raw.githubusercontent.com/${BOXWEAVE_REPO}/${SOURCE_COMMIT}"
 curl -fsSL --retry 3 "$RAW_BASE/install.sh" -o "$TMPDIR_DL/reference-install.sh"
-for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION; do
+stage_source() {
+  local relative=$1
+  if [[ -n "$LOCAL_SOURCE_DIR" ]]; then
+    python3 - "$LOCAL_SOURCE_DIR" "$relative" "$TMPDIR_DL/$relative" <<'PY_LOCAL_SOURCE'
+from pathlib import Path
+import shutil, sys
+root=Path(sys.argv[1]).resolve(strict=True)
+p=root/sys.argv[2]
+if not root.is_dir() or p.is_symlink() or not p.resolve(strict=True).is_relative_to(root):
+    sys.exit('Invalid local source file')
+shutil.copyfile(p,sys.argv[3])
+PY_LOCAL_SOURCE
+  else
+    curl -fsSL --retry 3 "$RAW_BASE/$relative" -o "$TMPDIR_DL/$relative"
+  fi
+}
+export BOXWEAVE_LOCAL_SOURCE_STAGED="${LOCAL_SOURCE_DIR:+true}"
+for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION server/web_install.py server/web_token.py server/web_entry.py server/webui/__init__.py server/webui/store.py server/webui/graph.py server/webui/provider.py server/webui/app.py server/webui/command.py server/webui/requirements.txt server/webui/requirements.lock web/package.json web/package-lock.json web/tsconfig.json web/vite.config.ts web/index.html web/src/main.tsx web/src/model.ts web/src/style.css; do
   mkdir -p "$TMPDIR_DL/$(dirname "$source_file")"
-  curl -fsSL --retry 3 "$RAW_BASE/$source_file" -o "$TMPDIR_DL/$source_file"
+  stage_source "$source_file"
 done
 python3 - "$TMPDIR_DL" <<'PY_SOURCE'
 import ast, pathlib, re, sys
@@ -281,6 +311,7 @@ p = pathlib.Path(sys.argv[1])
 for name in ('cli.py', 'hostkeys.py', 'tokens.py', 'jobs.py', 'mcp_client.py', 'smoke.py', 'provenance.py', 'clients.py'):
     ast.parse((p / 'server' / name).read_text(encoding='utf-8'))
 ast.parse((p / 'clients/posix/setup.py').read_text(encoding='utf-8'))
+for source in (p / 'server').rglob('*.py'): ast.parse(source.read_text(encoding='utf-8'))
 if not re.fullmatch(r'[0-9A-Za-z.+-]{1,64}', (p / 'VERSION').read_text().strip()):
     sys.exit('Invalid BoxWeave version file')
 PY_SOURCE
@@ -413,6 +444,14 @@ while (( SECONDS - start_time < API_READY_TIMEOUT )); do
 done
 (( healthy == 1 )) || die "Containarium REST API did not become ready within ${API_READY_TIMEOUT}s. Check 'sudo incus list' and 'sudo journalctl -u containarium -n 80 --no-pager' before rerunning."
 log "Containarium REST API responded with HTTP $status"
+
+INSTALL_PHASE='mandatory web staging and production build'
+web_options=()
+[[ -z "$WEB_MODE" ]] || web_options+=(--mode "$WEB_MODE")
+[[ -z "$WEB_HOST" ]] || web_options+=(--host "$WEB_HOST")
+[[ -z "$WEB_PORT" ]] || web_options+=(--port "$WEB_PORT")
+[[ -z "$WEB_BACKEND_PORT" ]] || web_options+=(--backend-port "$WEB_BACKEND_PORT")
+python3 "$TMPDIR_DL/server/web_install.py" prepare "$TMPDIR_DL" "${web_options[@]}"
 
 INSTALL_PHASE='BoxWeave configuration staging'
 
@@ -620,6 +659,9 @@ systemctl start boxweave-hostkeys.service || die 'Host-key sync failed. Inspect 
 systemctl enable boxweave-token.timer boxweave-hostkeys.timer >/dev/null
 systemctl restart boxweave-token.timer boxweave-hostkeys.timer
 systemctl is-active --quiet boxweave-token.timer boxweave-hostkeys.timer || die 'Managed timers did not become active'
+TIMERS_PAUSED=0
+INSTALL_PHASE='mandatory independent web installation'
+python3 "$TMPDIR_DL/server/web_install.py" publish "$TMPDIR_DL"
 /usr/bin/python3 /usr/local/libexec/boxweave/provenance.py complete "$CONFIG_DIR/install-manifest.json"
 rm -f "$CONFIG_DIR/update-in-progress"
 TIMERS_PAUSED=0

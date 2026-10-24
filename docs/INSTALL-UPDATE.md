@@ -107,3 +107,22 @@ has not been executed against the live Ubuntu host's installed services.
 Server installation retains the workflow above. It additionally stages the client generator and source hashes, publishes `/etc/boxweave/client.json` atomically at 0644, and leaves privileged `config.json` at 0600. Client source hashes are included in provenance.
 
 After successful completion, the final message prompts the human or agent to run `boxweave client` or `boxweave client --help`. It no longer prints Windows/Codex-specific commands or starts a wizard in an installer pipeline. Setup downloads are pinned to the installed source commit and checked against recorded SHA256. That source ref must contain the new client files before this installer is deployed. See [client setup](CLIENTS.md).
+
+## Mandatory Web UI staging
+
+The Web UI is installed by default. All Web sources share the resolved source
+commit. Its locked npm production build, SHA256-locked Python environment and
+separate Caddy binary/config validation are staged before managed-file
+publication. Web settings use flags, then environment, then saved web.json, then
+defaults (HTTPS, port 18443); use --web-host when LAN detection is ambiguous.
+Web publication happens after MCP timers resume and never stops those timers on
+Web failure. The pending-update marker remains until the complete installation
+passes. SQLite and Caddy CA data live outside replaceable releases and survive
+reruns. Consistent database and managed-file backups support diagnosis, not an
+automatic whole-host rollback. See [Web update/recovery](WEB-UI.md).
+
+For a reviewed, unpublished local checkout, use `--source-dir "$PWD"`. The normal
+remote source behavior remains the default; this explicit override is recorded
+as `source.local_tree_staged=true` with component hashes and is not retained on
+rerun. The recorded upstream commit is only a reference in this mode. Publish a
+matching immutable ref before distributing modified client enrollment assets.
