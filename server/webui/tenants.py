@@ -1,6 +1,7 @@
 """Provider-authoritative network Tenant views and local display metadata."""
 
 import hashlib
+import re
 import time
 from datetime import datetime
 from .graph import text
@@ -11,6 +12,7 @@ CREATE_BLOCK = (
     "Host MCP has no network-Tenant parameter and the birth NIC guard does not "
     "consume an explicit tenant label. No local grouping or post-create relabeling is substituted."
 )
+CONTRACT = "boxweave.tenant-network/v1"
 CAPABILITIES = {
     "sharedTenantCreate": False,
     "reassignTenant": False,
@@ -121,11 +123,15 @@ def resolve_box(box, guard):
     labels = box.get("labels", {}) if isinstance(box.get("labels"), dict) else {}
     entries = [e for e in guard["entries"] if e.get("container") == name]
     entry = entries[0] if len(entries) == 1 else None
-    key = None
-    source = "unknown"
+    key = key_text(box.get("networkTenant"))
+    source = (
+        "provider_" + str(box.get("networkTenantSource", "native"))
+        if key
+        else "unknown"
+    )
     # Guard subjects include the native explicit key, which v0.114.2 Box REST
     # does not expose separately from its unrelated generic label namespace.
-    if entry and guard["fresh"]:
+    if not key and entry and guard["fresh"]:
         key = key_text(entry.get("subject"))
         source = "guard" if key else "unknown"
     if not key:
@@ -146,7 +152,9 @@ def resolve_box(box, guard):
         "id": tenant_id(key) if key else None,
         "key": key,
         "source": source,
-        "confirmed": bool(key and source == "guard"),
+        "confirmed": bool(
+            key and (source == "guard" or source.startswith("provider_"))
+        ),
         "declaredLabelIgnored": bool(labels.get("tenant")),
     }
     status = guard["status"]
@@ -203,6 +211,80 @@ class TenantService:
         self.store = store
         self.provider = provider
 
+    def capabilities(self):
+        result = dict(CAPABILITIES)
+        try:
+            raw = self.provider.tenant_capabilities()
+        except (ProviderError, AttributeError):
+            return result
+        if (
+            not isinstance(raw, dict)
+            or raw.get("contract") != CONTRACT
+            or raw.get("backendScope") != "local-lxc"
+            or raw.get("nativeMembershipRead") is not True
+        ):
+            result["reason"] = (
+                "Provider has no recognized authenticated local-LXC Tenant network contract"
+            )
+            return result
+        result.update(
+            contract=CONTRACT,
+            nativeMembershipRead=True,
+            sharedTenantCreate=raw.get("sharedTenantCreate") is True,
+            atomicTenantAccess=raw.get("atomicTenantAccess") is True,
+            networkPolicyWrite=raw.get("atomicTenantAccess") is True
+            and raw.get("networkPolicyWrite") is True,
+            reason=raw.get("reason") or "",
+        )
+        if result["atomicTenantAccess"] and not result["networkPolicyWrite"]:
+            result["policyReason"] = (
+                "Provider credential lacks network-policy:write; rotate the independent Web credential after approved Provider installation"
+            )
+        return result
+
+    @staticmethod
+    def annotate(box, guard, records):
+        resolved = resolve_box(box, guard)
+        for record in records:
+            if (
+                record.get("providerKey")
+                and record["providerKey"] == resolved["tenant"]["key"]
+            ):
+                resolved["tenant"]["id"] = record["id"]
+                resolved["tenant"]["name"] = record["name"]
+                break
+        return resolved
+
+    def creation_target(self, snapshot, tid, username):
+        if not tid:
+            return {
+                "id": tenant_id(username),
+                "key": username,
+                "source": "expected_name_fallback",
+                "guardStatus": "pending",
+            }
+        if not snapshot["capabilities"]["sharedTenantCreate"]:
+            raise ValueError(snapshot["capabilities"].get("reason") or CREATE_BLOCK)
+        tenant = self.record(snapshot, tid)
+        key = tenant.get("providerKey")
+        if not key:
+            key = "bw-" + tid.removeprefix("tenant_local_")
+            tenant = self.store.bind_tenant_key(tid, tenant["version"], key)
+            # Repeated rows sharing this Tenant reuse one immutable declaration.
+            self.record(snapshot, tid).update(tenant)
+        if not re.fullmatch(
+            r"[a-zA-Z0-9][a-zA-Z0-9:._-]{0,127}", key
+        ) or key.startswith(("account:", "core-", "containarium-core-")):
+            raise ValueError(
+                "Provider cannot safely create into this reserved or unsupported network Tenant"
+            )
+        return {
+            "id": tid,
+            "key": key,
+            "source": "explicit_network_tenant",
+            "guardStatus": "pending",
+        }
+
     def snapshot(self):
         inventory = self.provider.boxes()
         try:
@@ -212,10 +294,22 @@ class TenantService:
         if not isinstance(raw, dict):
             raw = {}
         guards = {k: guard_view(raw.get(k, {})) for k in ("core", "tenant")}
-        boxes = [
-            resolve_box(b, guards["tenant"]) for b in inventory.get("containers", [])
-        ]
         records = {t["id"]: t for t in self.store.tenants()}
+        boxes = [
+            self.annotate(b, guards["tenant"], records.values())
+            for b in inventory.get("containers", [])
+        ]
+        capabilities = self.capabilities()
+        if (
+            inventory.get("unreachableBackends")
+            or guards["tenant"]["status"] != "ready"
+        ):
+            capabilities["sharedTenantCreate"] = False
+            if capabilities.get("contract") == CONTRACT:
+                capabilities["reason"] = (
+                    "Fresh complete enforced Provider Guard evidence is required for shared creation"
+                )
+
         for b in boxes:
             membership = b["tenant"]
             tid = membership["id"]
@@ -273,6 +367,11 @@ class TenantService:
                     )
                 )
             )
+            t["providerKeyState"] = (
+                "confirmed"
+                if members and all(b["tenant"]["confirmed"] for b in members)
+                else "inferred" if members else "declared"
+            )
             t["connectivityTested"] = False
         for b in boxes:
             if b["tenant"]["id"] in records:
@@ -281,7 +380,7 @@ class TenantService:
             "tenants": sorted(records.values(), key=lambda t: (t["name"], t["id"])),
             "containers": boxes,
             "guard": guards,
-            "capabilities": dict(CAPABILITIES),
+            "capabilities": capabilities,
             "unreachableBackends": inventory.get("unreachableBackends", []),
             "current": self.store.setting("current_tenant") or "",
         }

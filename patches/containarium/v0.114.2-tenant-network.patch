@@ -1,0 +1,3219 @@
+diff --git a/api/swagger/containarium.swagger.json b/api/swagger/containarium.swagger.json
+index bd2c30b..84d04c8 100644
+--- a/api/swagger/containarium.swagger.json
++++ b/api/swagger/containarium.swagger.json
+@@ -5080,6 +5080,39 @@
+         ]
+       }
+     },
++    "/v1/network-policies/tenant-access": {
++      "post": {
++        "summary": "Atomic, revision-checked ingress-only mutation, preserving every other policy field.",
++        "operationId": "NetworkPolicyService_PatchTenantAccess",
++        "responses": {
++          "200": {
++            "description": "A successful response.",
++            "schema": {
++              "$ref": "#/definitions/PatchTenantAccessResponse"
++            }
++          },
++          "default": {
++            "description": "An unexpected error response.",
++            "schema": {
++              "$ref": "#/definitions/rpc.Status"
++            }
++          }
++        },
++        "parameters": [
++          {
++            "name": "body",
++            "in": "body",
++            "required": true,
++            "schema": {
++              "$ref": "#/definitions/PatchTenantAccessRequest"
++            }
++          }
++        ],
++        "tags": [
++          "NetworkPolicyService"
++        ]
++      }
++    },
+     "/v1/network-policies/{tenant}": {
+       "get": {
+         "summary": "Get network policy",
+@@ -5271,6 +5304,29 @@
+         ]
+       }
+     },
++    "/v1/network-tenants/capabilities": {
++      "get": {
++        "summary": "Authenticated protocol/permission handshake; never infer capabilities from a version string.",
++        "operationId": "NetworkPolicyService_GetNetworkTenantCapabilities",
++        "responses": {
++          "200": {
++            "description": "A successful response.",
++            "schema": {
++              "$ref": "#/definitions/GetNetworkTenantCapabilitiesResponse"
++            }
++          },
++          "default": {
++            "description": "An unexpected error response.",
++            "schema": {
++              "$ref": "#/definitions/rpc.Status"
++            }
++          }
++        },
++        "tags": [
++          "NetworkPolicyService"
++        ]
++      }
++    },
+     "/v1/network/acl-presets": {
+       "get": {
+         "summary": "List ACL presets",
+@@ -12197,6 +12253,13 @@
+         "isolation": {
+           "$ref": "#/definitions/IsolationType",
+           "description": "How the box is isolated from the host: CONTAINER (LXC) or VM\n(QEMU/KVM), read back from the instance itself. UNSPECIFIED when the\nbackend does not report it."
++        },
++        "networkTenant": {
++          "type": "string",
++          "description": "Resolved network ownership, independent of encryption tenant_id."
++        },
++        "networkTenantSource": {
++          "type": "string"
+         }
+       }
+     },
+@@ -12590,6 +12653,10 @@
+         "disableAutoSleep": {
+           "type": "boolean",
+           "description": "Opt out of auto-sleep at create (#2759). Meaningful only on a hosted\ncontrol plane that turns auto-sleep on by default for some orgs (for\nexample a seat-billed org defaulting to 30 minutes): true asks for a box\nwith NO idle-stop timer. A standalone daemon never enables auto-sleep\nunless idle_stop_minutes \u003e 0, so it ignores this field. Setting it\ntogether with idle_stop_minutes \u003e 0 is contradictory and rejected with\nInvalidArgument."
++        },
++        "networkTenant": {
++          "type": "string",
++          "description": "Explicit native network Tenant; administrator only. Requires enforced\nsupported NIC guarding before first Start. Omitted preserves admin defaults."
+         }
+       },
+       "title": "CreateContainerRequest is the request to create a new container"
+@@ -14675,11 +14742,40 @@
+     "GetNetworkPolicyResponse": {
+       "type": "object",
+       "properties": {
++        "revision": {
++          "type": "string"
++        },
+         "policy": {
+           "$ref": "#/definitions/containarium.v1.NetworkPolicy"
+         }
+       }
+     },
++    "GetNetworkTenantCapabilitiesResponse": {
++      "type": "object",
++      "properties": {
++        "contract": {
++          "type": "string"
++        },
++        "nativeMembershipRead": {
++          "type": "boolean"
++        },
++        "sharedTenantCreate": {
++          "type": "boolean"
++        },
++        "atomicTenantAccess": {
++          "type": "boolean"
++        },
++        "networkPolicyWrite": {
++          "type": "boolean"
++        },
++        "reason": {
++          "type": "string"
++        },
++        "backendScope": {
++          "type": "string"
++        }
++      }
++    },
+     "GetNetworkTopologyResponse": {
+       "type": "object",
+       "properties": {
+@@ -17079,6 +17175,37 @@
+       },
+       "description": "PatchNetworkPolicyDenyRulesRequest atomically mutates a tenant's virtual-patch\ndeny rules (#660): the server reads the current rules, removes any whose CIDR\nis in remove_cidrs, adds/replaces the `add` rules (deny rules are keyed by\nCIDR — an add for an existing CIDR replaces it), re-normalizes, and writes\nback under a lock, so concurrent edits don't lose updates. The allow-policy\n(egress, mode, intra, metadata) is untouched. The normalized stored policy is\nechoed back."
+     },
++    "PatchTenantAccessRequest": {
++      "type": "object",
++      "properties": {
++        "changes": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "$ref": "#/definitions/TenantAccessChange"
++          }
++        }
++      }
++    },
++    "PatchTenantAccessResponse": {
++      "type": "object",
++      "properties": {
++        "policies": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "$ref": "#/definitions/TenantAccessPolicy"
++          }
++        },
++        "applicationState": {
++          "type": "string",
++          "description": "A committed store write is separate from guard convergence and TCP testing."
++        },
++        "connectivityTested": {
++          "type": "boolean"
++        }
++      }
++    },
+     "PentestConfig": {
+       "type": "object",
+       "properties": {
+@@ -20509,6 +20636,42 @@
+       },
+       "description": "TaskNode is one subtask of a TaskGraph."
+     },
++    "TenantAccessChange": {
++      "type": "object",
++      "properties": {
++        "destination": {
++          "type": "string",
++          "description": "Destination policy: listed sources may initiate connections into it."
++        },
++        "addSources": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "removeSources": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "expectedRevision": {
++          "type": "string",
++          "description": "SHA256 of the entire observed policy, or \"absent\". Required to prevent lost previews."
++        }
++      }
++    },
++    "TenantAccessPolicy": {
++      "type": "object",
++      "properties": {
++        "policy": {
++          "$ref": "#/definitions/containarium.v1.NetworkPolicy"
++        },
++        "revision": {
++          "type": "string"
++        }
++      }
++    },
+     "TerminateUserSessionsBody": {
+       "type": "object",
+       "description": "TerminateUserSessionsRequest names the user whose sessions to end."
+diff --git a/internal/auth/scopes.go b/internal/auth/scopes.go
+index d2a66bf..cfbd9d4 100644
+--- a/internal/auth/scopes.go
++++ b/internal/auth/scopes.go
+@@ -156,9 +156,10 @@ const (
+ 
+ 	// read-only scopes for surfaces that were admin-only, so a least-privilege
+ 	// (e.g. compliance/evidence) token can read one without full admin (#621).
+-	ScopeAuditRead         = "audit:read"          // audit-log query
+-	ScopeNetworkPolicyRead = "network-policy:read" // NetworkPolicyService Get/List
+-	ScopeTokensRead        = "tokens:read"         // token listing
++	ScopeAuditRead          = "audit:read" // audit-log query
++	ScopeNetworkPolicyWrite = "network-policy:write"
++	ScopeNetworkPolicyRead  = "network-policy:read" // NetworkPolicyService Get/List
++	ScopeTokensRead         = "tokens:read"         // token listing
+ 
+ 	// audit:ingest (#2415) is the ONLY scope that may append externally
+ 	// sourced rows to the tamper-evident audit chain — today, the
+@@ -232,7 +233,7 @@ var AllScopes = []string{
+ 	ScopeAnonDoor, ScopeAnonAdmin,
+ 	ScopeSSHAuthorize,
+ 	ScopeClustersRead, ScopeClustersWrite, ScopeClustersScale,
+-	ScopeAuditRead, ScopeNetworkPolicyRead, ScopeTokensRead,
++	ScopeAuditRead, ScopeNetworkPolicyRead, ScopeNetworkPolicyWrite, ScopeTokensRead,
+ 	ScopeAuditIngest,
+ 	ScopeCodeEgressRead,
+ 	ScopeSandboxesRead, ScopeSandboxesWrite,
+diff --git a/internal/client/grpc.go b/internal/client/grpc.go
+index a473469..ec34d14 100644
+--- a/internal/client/grpc.go
++++ b/internal/client/grpc.go
+@@ -162,6 +162,8 @@ func (c *GRPCClient) ListContainers() ([]incus.ContainerInfo, error) {
+ 			Username:             container.Username,
+ 			SSHHost:              container.SshHost,
+ 			State:                container.State.String(),
++			Tenant:               container.NetworkTenant,
++			NetworkTenantSource:  container.NetworkTenantSource,
+ 			Labels:               container.Labels,
+ 			InstanceType:         ostype.InstanceTypeFromIsolation(container.Isolation),
+ 			MonitoringEnabled:    container.MonitoringEnabled,
+@@ -192,10 +194,13 @@ func (c *GRPCClient) ListContainers() ([]incus.ContainerInfo, error) {
+ }
+ 
+ // CreateContainer creates a container via gRPC
+-func (c *GRPCClient) CreateContainer(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string) (*incus.ContainerInfo, error) {
++func (c *GRPCClient) CreateContainer(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string, networkTenant ...string) (*incus.ContainerInfo, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute) // Container creation can take time (includes ultra-aggressive retry logic for google_guest_agent)
+ 	defer cancel()
+-	req := newCreateContainerRequest(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels)
++	req := newCreateContainerRequest(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels, networkTenant...)
++	if len(networkTenant) > 0 {
++		req.NetworkTenant = networkTenant[0]
++	}
+ 	resp, err := c.client.CreateContainer(ctx, req)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("failed to create container: %w", err)
+@@ -204,12 +209,14 @@ func (c *GRPCClient) CreateContainer(username, image, cpu, memory, disk string,
+ 	// Convert protobuf Container to incus.ContainerInfo
+ 	container := resp.Container
+ 	info := &incus.ContainerInfo{
+-		Name:         container.Name,
+-		Username:     container.Username,
+-		SSHHost:      container.SshHost,
+-		State:        container.State.String(),
+-		InstanceType: ostype.InstanceTypeFromIsolation(container.Isolation),
+-		Labels:       container.Labels, // what the daemon stored, incl. --labels (#2358)
++		Name:                container.Name,
++		Username:            container.Username,
++		SSHHost:             container.SshHost,
++		State:               container.State.String(),
++		InstanceType:        ostype.InstanceTypeFromIsolation(container.Isolation),
++		Tenant:              container.NetworkTenant,
++		NetworkTenantSource: container.NetworkTenantSource,
++		Labels:              container.Labels, // what the daemon stored, incl. --labels (#2358)
+ 	}
+ 
+ 	if container.Network != nil {
+@@ -234,7 +241,7 @@ func (c *GRPCClient) CreateContainer(username, image, cpu, memory, disk string,
+ // newCreateContainerRequest builds the wire request for CreateContainer;
+ // pure, so what the CLI flags turn into is unit-testable (#2358 — labels
+ // used to be dropped between the CLI and this request).
+-func newCreateContainerRequest(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string) *pb.CreateContainerRequest {
++func newCreateContainerRequest(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string, networkTenant ...string) *pb.CreateContainerRequest {
+ 	req := &pb.CreateContainerRequest{
+ 		Username: username,
+ 		Resources: &pb.ResourceLimits{
+@@ -271,6 +278,9 @@ func newCreateContainerRequest(username, image, cpu, memory, disk string, sshKey
+ 	if len(labels) > 0 {
+ 		req.Labels = labels
+ 	}
++	if len(networkTenant) > 0 {
++		req.NetworkTenant = networkTenant[0]
++	}
+ 	return req
+ }
+ 
+@@ -574,6 +584,8 @@ func (c *GRPCClient) GetContainer(username string) (*incus.ContainerInfo, error)
+ 		MonitoringEnabled:    container.MonitoringEnabled,
+ 		AutoSleepEnabled:     container.AutoSleepEnabled,
+ 		IdleThresholdMinutes: container.IdleThresholdMinutes,
++		Tenant:               container.NetworkTenant,
++		NetworkTenantSource:  container.NetworkTenantSource,
+ 		Labels:               container.Labels,
+ 	}
+ 
+diff --git a/internal/client/grpc_create_request_test.go b/internal/client/grpc_create_request_test.go
+index 5b72093..352e579 100644
+--- a/internal/client/grpc_create_request_test.go
++++ b/internal/client/grpc_create_request_test.go
+@@ -25,3 +25,10 @@ func TestNewCreateContainerRequest_DisableAutoSleep(t *testing.T) {
+ 		t.Error("the opt-out must default to off")
+ 	}
+ }
++
++func TestCreateNetworkTenantIsIndependentOfEncryptionScope(t *testing.T) {
++	req := newCreateContainerRequest("box1", "img", "1", "1GB", "10GB", nil, false, "", nil, 0, 0, false, "", "", GitSourceOpts{}, 0, 0, false, 0, "", EncryptionOpts{}, "", "", "", nil, "allinone")
++	if req.NetworkTenant != "allinone" || req.TenantId != "" || len(req.Labels) != 0 {
++		t.Fatalf("network assignment leaked into another identity: %v", req)
++	}
++}
+diff --git a/internal/client/http.go b/internal/client/http.go
+index 72e14ba..fc3bb96 100644
+--- a/internal/client/http.go
++++ b/internal/client/http.go
+@@ -188,6 +188,8 @@ func parseResponse[T any](resp *http.Response) (*T, error) {
+ 
+ // Container response types matching the protobuf JSON output
+ type containerResponse struct {
++	NetworkTenant        string            `json:"networkTenant"`
++	NetworkTenantSource  string            `json:"networkTenantSource"`
+ 	Name                 string            `json:"name"`
+ 	Username             string            `json:"username"`
+ 	SshHost              string            `json:"sshHost"`
+@@ -262,6 +264,8 @@ func containerToIncusInfo(c *containerResponse) incus.ContainerInfo {
+ 		Username:             c.Username,
+ 		SSHHost:              c.SshHost,
+ 		State:                c.State,
++		Tenant:               c.NetworkTenant,
++		NetworkTenantSource:  c.NetworkTenantSource,
+ 		Labels:               c.Labels,
+ 		InstanceType:         ostype.InstanceTypeFromIsolation(pb.IsolationType(pb.IsolationType_value[c.Isolation])),
+ 		MonitoringEnabled:    c.MonitoringEnabled,
+@@ -356,7 +360,7 @@ type GitSourceOpts struct {
+ 	WorkspacePath string // empty defaults to /workspace
+ }
+ 
+-func (c *HTTPClient) CreateContainer(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string) (*incus.ContainerInfo, error) {
++func (c *HTTPClient) CreateContainer(username, image, cpu, memory, disk string, sshKeys []string, enablePodman bool, stack string, gpus []string, osType pb.OSType, isolation pb.IsolationType, monitoring bool, pool, backendID string, git GitSourceOpts, ttlSeconds int64, idleStopMinutes int32, disableAutoSleep bool, deleteAfterStoppedSeconds int64, storageClass string, enc EncryptionOpts, memoryRequest, cpuRequest, region string, labels map[string]string, networkTenant ...string) (*incus.ContainerInfo, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+ 	defer cancel()
+ 
+@@ -384,6 +388,9 @@ func (c *HTTPClient) CreateContainer(username, image, cpu, memory, disk string,
+ 		TenantID:     enc.TenantID,
+ 		Region:       region,
+ 	}
++	if len(networkTenant) > 0 {
++		req.NetworkTenant = networkTenant[0]
++	}
+ 	if len(labels) > 0 {
+ 		req.Labels = labels
+ 	}
+diff --git a/internal/client/http_requests.go b/internal/client/http_requests.go
+index 631c906..3f1962d 100644
+--- a/internal/client/http_requests.go
++++ b/internal/client/http_requests.go
+@@ -50,13 +50,14 @@ type containerResources struct {
+ // for the other three — and omitted them entirely otherwise. Pointers
+ // reproduce that exactly; plain strings with omitempty would not.
+ type createContainerRequest struct {
+-	Username     string             `json:"username"`
+-	Resources    containerResources `json:"resources"`
+-	SSHKeys      []string           `json:"sshKeys"`
+-	Image        string             `json:"image"`
+-	EnablePodman bool               `json:"enablePodman"`
+-	Stack        string             `json:"stack"`
+-	GPUs         []string           `json:"gpus"`
++	NetworkTenant string             `json:"networkTenant,omitempty"`
++	Username      string             `json:"username"`
++	Resources     containerResources `json:"resources"`
++	SSHKeys       []string           `json:"sshKeys"`
++	Image         string             `json:"image"`
++	EnablePodman  bool               `json:"enablePodman"`
++	Stack         string             `json:"stack"`
++	GPUs          []string           `json:"gpus"`
+ 	// The generated enum, not a string: json.Marshal emits its numeric
+ 	// value, which is what the previous map sent and what protojson
+ 	// accepts on the server side.
+diff --git a/internal/client/http_test.go b/internal/client/http_test.go
+index 6ff3f27..974e240 100644
+--- a/internal/client/http_test.go
++++ b/internal/client/http_test.go
+@@ -413,3 +413,37 @@ func TestHTTPListAgentEngines_DecodesReadinessRows(t *testing.T) {
+ 		t.Errorf("codex row decoded wrong: %+v", codex)
+ 	}
+ }
++
++func TestHTTPCreateNetworkTenantNativeTransport(t *testing.T) {
++	var gotBody map[string]any
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		_ = json.NewDecoder(r.Body).Decode(&gotBody)
++		w.Header().Set("Content-Type", "application/json")
++		_, _ = w.Write([]byte(`{"container":{"name":"c","username":"alice"}}`))
++	}))
++	defer srv.Close()
++
++	c, err := NewHTTPClient(srv.URL, "tok")
++	if err != nil {
++		t.Fatalf("NewHTTPClient: %v", err)
++	}
++	labels := map[string]string{"team": "dev"}
++	if _, err := c.CreateContainer("alice", "img", "1", "1GB", "10GB", nil, false, "", nil, 0, 0, false, "", "", GitSourceOpts{}, 0, 0, false, 0, "", EncryptionOpts{}, "", "", "", labels, "allinone"); err != nil {
++		t.Fatalf("CreateContainer: %v", err)
++	}
++	if gotBody["networkTenant"] != "allinone" || gotBody["tenantId"] != nil {
++		t.Fatalf("wrong network/encryption wire fields: %v", gotBody)
++	}
++
++	// No labels → no field, so an older daemon sees the same body as before.
++	gotBody = nil
++	if _, err := c.CreateContainer("alice", "img", "1", "1GB", "10GB", nil, false, "", nil, 0, 0, false, "", "", GitSourceOpts{}, 0, 0, false, 0, "", EncryptionOpts{}, "", "", "", nil); err != nil {
++		t.Fatalf("CreateContainer: %v", err)
++	}
++	if _, present := gotBody["networkTenant"]; present {
++		t.Fatal("automatic mode sent networkTenant")
++	}
++	if _, present := gotBody["labels"]; present {
++		t.Errorf("labels present in body = %v, want absent when unset", gotBody["labels"])
++	}
++}
+diff --git a/internal/cmd/create.go b/internal/cmd/create.go
+index 3d24b3e..8e9cf25 100644
+--- a/internal/cmd/create.go
++++ b/internal/cmd/create.go
+@@ -33,6 +33,7 @@ var (
+ 	isolationStr             string
+ 	monitoring               bool
+ 	createEncrypted          bool
++	createNetworkTenant      string
+ 	createTenantID           string
+ 	createPool               string
+ 	createBackendID          string
+@@ -163,6 +164,7 @@ func init() {
+ 	createCmd.Flags().StringVar(&isolationStr, "isolation", "", "Isolation: container (LXC, shared kernel) or vm (QEMU/KVM, own kernel; needs a KVM-capable backend). Default: vm for Windows, container otherwise.")
+ 	createCmd.Flags().BoolVar(&monitoring, "monitoring", false, "Opt into application-emitted OpenTelemetry. When set, the daemon stamps the container with OTEL_EXPORTER_OTLP_ENDPOINT etc. pointing at the platform's OTel collector, so any OTel SDK inside the container ships telemetry without app-side config. Default off.")
+ 	createCmd.Flags().BoolVar(&createEncrypted, "encrypted", false, "Encrypt the container's ZFS dataset with a tenant-scoped key instead of the pool-wide key. Requires the daemon to have a KeyProvider configured; the request is refused rather than silently creating an unencrypted container. Default off.")
++	createCmd.Flags().StringVar(&createNetworkTenant, "network-tenant", "", "Native network Tenant (admin, guarded at birth); independent of encryption --tenant")
+ 	createCmd.Flags().StringVar(&createTenantID, "tenant", "", "Tenant that owns the container, scoping its encryption key. A single-tenant daemon accepts only an empty value or \"default\".")
+ 	createCmd.Flags().StringVar(&createPool, "pool", "", "Place the container on any healthy backend tagged with this pool (e.g., 'demo', 'lab'). Empty means the local/primary backend. Mutually exclusive with --backend-id unless the chosen backend is in the named pool.")
+ 	createCmd.Flags().StringVar(&createBackendID, "backend-id", "", "Place the container on a specific backend by ID (e.g., 'tunnel-node-a-gpu'). Use 'containarium backends' to list available backend IDs.")
+@@ -477,6 +479,9 @@ func runCreate(cmd *cobra.Command, args []string) error {
+ 		// unencrypted container while the caller believes otherwise
+ 		// (#1198) — the same fail-closed posture the daemon takes when
+ 		// no KeyProvider is configured.
++		if createNetworkTenant != "" {
++			return fmt.Errorf("--network-tenant requires a daemon (--server) with enforced NIC guarding")
++		}
+ 		if createEncrypted {
+ 			return fmt.Errorf("--encrypted requires a daemon (--server): local Incus creates cannot resolve a tenant key, " +
+ 				"and creating an unencrypted container here would silently ignore the flag")
+@@ -726,7 +731,7 @@ func createRemote(username, image, cpu, memory, disk string, sshKeys []string, e
+ 	}
+ 	defer func() { _ = grpcClient.Close() }()
+ 
+-	return grpcClient.CreateContainer(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels)
++	return grpcClient.CreateContainer(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels, createNetworkTenant)
+ }
+ 
+ // createRemoteHTTP creates a container using remote HTTP API
+@@ -737,5 +742,5 @@ func createRemoteHTTP(username, image, cpu, memory, disk string, sshKeys []strin
+ 	}
+ 	defer func() { _ = httpClient.Close() }()
+ 
+-	return httpClient.CreateContainer(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels)
++	return httpClient.CreateContainer(username, image, cpu, memory, disk, sshKeys, enablePodman, stack, gpus, osType, isolation, monitoring, pool, backendID, git, ttlSeconds, idleStopMinutes, disableAutoSleep, deleteAfterStoppedSeconds, storageClass, enc, memoryRequest, cpuRequest, region, labels, createNetworkTenant)
+ }
+diff --git a/internal/cmd/get.go b/internal/cmd/get.go
+index 0bc886a..97a8de4 100644
+--- a/internal/cmd/get.go
++++ b/internal/cmd/get.go
+@@ -62,6 +62,11 @@ func runGet(cmd *cobra.Command, args []string) error {
+ 	containers := []incus.ContainerInfo{*info}
+ 	switch containerGetFormat {
+ 	case "table":
++		key, source := info.Tenant, info.NetworkTenantSource
++		if source == "" {
++			key, source = incus.NetworkTenantIdentity(info.Tenant, info.Labels[incus.CloudOrgIDLabel], info.Name)
++		}
++		fmt.Printf("Network Tenant: %s (source: %s)\n", key, source)
+ 		printTableFormat(containers, boolToCount(info.State == "Running"), boolToCount(info.State != "Running"), false)
+ 	case "json":
+ 		return printJSONFormat(containers)
+diff --git a/internal/mcp/client.go b/internal/mcp/client.go
+index f5c1211..a5f8e52 100644
+--- a/internal/mcp/client.go
++++ b/internal/mcp/client.go
+@@ -2024,12 +2024,13 @@ func (c *Client) InstallClamav(containerName string) (*InstallClamavResponse, er
+ // API Request/Response types
+ 
+ type CreateContainerRequest struct {
+-	Username     string            `json:"username"`
+-	Resources    *ResourceLimits   `json:"resources,omitempty"`
+-	SSHKeys      []string          `json:"sshKeys,omitempty"`
+-	Labels       map[string]string `json:"labels,omitempty"`
+-	Image        string            `json:"image,omitempty"`
+-	EnablePodman bool              `json:"enablePodman,omitempty"`
++	NetworkTenant string            `json:"networkTenant,omitempty"`
++	Username      string            `json:"username"`
++	Resources     *ResourceLimits   `json:"resources,omitempty"`
++	SSHKeys       []string          `json:"sshKeys,omitempty"`
++	Labels        map[string]string `json:"labels,omitempty"`
++	Image         string            `json:"image,omitempty"`
++	EnablePodman  bool              `json:"enablePodman,omitempty"`
+ 
+ 	// DisableAutoSleep asks for a box with no auto-sleep timer (#2759). Only
+ 	// meaningful on a hosted platform that defaults some orgs to auto-sleep; a
+@@ -2360,12 +2361,14 @@ type ListPassthroughRoutesResponse struct {
+ }
+ 
+ type Container struct {
+-	Name      string          `json:"name"`
+-	Username  string          `json:"username"`
+-	State     string          `json:"state"`
+-	Resources *ResourceLimits `json:"resources,omitempty"`
+-	SSHKeys   []string        `json:"sshKeys,omitempty"`
+-	Network   *NetworkInfo    `json:"network,omitempty"`
++	NetworkTenant       string          `json:"networkTenant,omitempty"`
++	NetworkTenantSource string          `json:"networkTenantSource,omitempty"`
++	Name                string          `json:"name"`
++	Username            string          `json:"username"`
++	State               string          `json:"state"`
++	Resources           *ResourceLimits `json:"resources,omitempty"`
++	SSHKeys             []string        `json:"sshKeys,omitempty"`
++	Network             *NetworkInfo    `json:"network,omitempty"`
+ 	// CreatedAt / UpdatedAt come back as JSON strings from the platform's
+ 	// grpc-gateway HTTP layer — int64 protobuf scalars are emitted as
+ 	// strings to avoid JavaScript number-precision loss. The `,string`
+diff --git a/internal/mcp/recipe_guardrail_test.go b/internal/mcp/recipe_guardrail_test.go
+index d8fc9b8..3f0a1a4 100644
+--- a/internal/mcp/recipe_guardrail_test.go
++++ b/internal/mcp/recipe_guardrail_test.go
+@@ -126,7 +126,7 @@ func TestDeployRecipeTool_TransportAndTokenRotation(t *testing.T) {
+ func TestDeployRecipeTool_GuardrailSchemaAndScope(t *testing.T) {
+ 	srv := &Server{}
+ 	srv.registerTools()
+-	require.Len(t, srv.tools, 101)
++	require.Len(t, srv.tools, 105)
+ 	for _, tool := range srv.tools {
+ 		if tool.Name != "deploy_recipe" {
+ 			continue
+diff --git a/internal/mcp/server_test.go b/internal/mcp/server_test.go
+index aab6bcc..03a913a 100644
+--- a/internal/mcp/server_test.go
++++ b/internal/mcp/server_test.go
+@@ -23,7 +23,7 @@ func TestServerCreation(t *testing.T) {
+ 	assert.Equal(t, config, server.config)
+ 	assert.NotNil(t, server.client)
+ 	// 30 base (+check_for_updates +upgrade_backend +get_upgrade_status, #354) + 3 runner-provision + 4 compose-autostart (#325) + 2 recipes + 3 backups + connect (#453) + 2 agent-skills (#562) + call_agent (#570) + 2 crews (#584) + delete_route + install_zap (#960) + set_metrics_export + get_metrics_export (#1069) + verify_backup (#1159) + list_passthrough_routes + add_passthrough_route + delete_passthrough_route (#1550) + security_sentry_status (#1640) + list_bad_destinations + add_bad_destination + remove_bad_destination (#1641) + list_security_sentry_findings + resolve_security_sentry_finding (#1643) + 4 code run/attach/status/stop (#1698) + add_collaborator + list_collaborators + remove_collaborator (#1145) + 6 tracker_get_issue/list_issues/get_change/comment/claim/set_labels (#1922) + tracker_submit_change (#1923) + tracker_route_list (#2021) + tracker_create_issue (#2024) + crew_logs (#2096) + mint_gateway_token (#1726) + code_runs + code_logs (#2123) + bridge_dns_status (#2188) + list_agent_engines (#2223) + network_guard_status (#2353) + guardrail_policy_get (#2368) + code_egress_policy (#2378) + terminate_user_sessions (#2522) + 3 security_process_policy_get/set/release (#2666) + install_clamav (#2659).
+-	assert.Len(t, server.tools, 101, "Should have 101 tools registered")
++	assert.Len(t, server.tools, 105, "Should have 101 tools registered")
+ }
+ 
+ // TestServerTools tests tool registration
+@@ -128,7 +128,7 @@ func TestHandleToolsList(t *testing.T) {
+ 	tools, ok := result["tools"].([]map[string]interface{})
+ 	require.True(t, ok)
+ 	// See TestServerCreation's tally comment for the running count — 98.
+-	assert.Len(t, tools, 101)
++	assert.Len(t, tools, 105)
+ 
+ 	// Check first tool structure
+ 	firstTool := tools[0]
+diff --git a/internal/mcp/tools.go b/internal/mcp/tools.go
+index f2361ca..8a11dc2 100644
+--- a/internal/mcp/tools.go
++++ b/internal/mcp/tools.go
+@@ -156,6 +156,7 @@ func (s *Server) registerTools() {
+ 			InputSchema: map[string]interface{}{
+ 				"type": "object",
+ 				"properties": map[string]interface{}{
++					"network_tenant": map[string]interface{}{"type": "string", "description": "Administrator-only native network Tenant. Guarded before first Start; independent of encryption tenant_id."},
+ 					"username": map[string]interface{}{
+ 						"type":        "string",
+ 						"description": "Username for the container (required)",
+@@ -1821,6 +1822,7 @@ func (s *Server) registerTools() {
+ 	// route lifecycle; the actual Tool definitions live in
+ 	// runner_tools.go alongside their handlers.
+ 	s.tools = append(s.tools, runnerTools()...)
++	s.tools = append(s.tools, tenantNetworkTools()...)
+ 
+ 	// Database-backup tools (CLI-mirrored). Defined in backup_tools.go
+ 	// alongside their handlers; thin wrappers over the BackupService
+@@ -1946,9 +1948,13 @@ func toolScopeAssignments() map[string]string {
+ 		// routes / network exposure
+ 		"list_routes": auth.ScopeRoutesRead,
+ 		// network guards (#2353): read-only security posture.
+-		"network_guard_status": auth.ScopeSecurityRead,
+-		"expose_port":          auth.ScopeRoutesWrite,
+-		"delete_route":         auth.ScopeRoutesWrite,
++		"network_guard_status":        auth.ScopeSecurityRead,
++		"network_tenant_capabilities": auth.ScopeContainersRead,
++		"list_network_policies":       auth.ScopeNetworkPolicyRead,
++		"get_network_policy":          auth.ScopeNetworkPolicyRead,
++		"patch_tenant_access":         auth.ScopeNetworkPolicyWrite,
++		"expose_port":                 auth.ScopeRoutesWrite,
++		"delete_route":                auth.ScopeRoutesWrite,
+ 		// collaborators (#1145) — container access control, scoped like any
+ 		// other container write/read (the RPCs themselves gate on
+ 		// AuthorizeTenant, same as create/delete container).
+@@ -2093,6 +2099,7 @@ func handleCreateContainer(client API, args map[string]interface{}) (string, err
+ 		Monitoring:       getBoolArg(args, "monitoring", false),
+ 		Encrypted:        getBoolArg(args, "encrypted", false),
+ 		TenantID:         getStringArg(args, "tenant_id", ""),
++		NetworkTenant:    getStringArg(args, "network_tenant", ""),
+ 		Pool:             getStringArg(args, "pool", ""),
+ 		BackendID:        getStringArg(args, "backend_id", ""),
+ 		Region:           getStringArg(args, "region", ""),
+diff --git a/internal/server/container_server.go b/internal/server/container_server.go
+index 5c95dbd..f884e86 100644
+--- a/internal/server/container_server.go
++++ b/internal/server/container_server.go
+@@ -542,6 +542,9 @@ func (s *ContainerServer) createContainerAuthorized(ctx context.Context, req *pb
+ 	if err := validateCreateContainerBounds(req); err != nil {
+ 		return nil, err
+ 	}
++	if err := authorizeNetworkTenantCreate(ctx, req, s.GetManager() != nil); err != nil {
++		return nil, err
++	}
+ 	// Unknown stack (#2860): refuse before any allocation or placement.
+ 	if err := validateStackID(req.Stack); err != nil {
+ 		return nil, err
+@@ -698,6 +701,7 @@ func (s *ContainerServer) createContainerAuthorized(ctx context.Context, req *pb
+ 		Image:                  req.Image,
+ 		SSHKeys:                req.SshKeys,
+ 		Labels:                 req.Labels,
++		NetworkTenant:          req.NetworkTenant,
+ 		EnablePodman:           req.EnablePodman,
+ 		EnablePodmanPrivileged: enablePodmanPrivileged,
+ 		AutoStart:              true,
+@@ -4240,9 +4244,10 @@ func toProtoContainer(st *box.BoxStatus) *pb.Container {
+ 	}
+ 
+ 	pc := &pb.Container{
+-		Name:     st.Ref.Name,
+-		Username: st.Ref.Tenant,
+-		State:    st.State,
++		Name:          st.Ref.Name,
++		Username:      st.Ref.Tenant,
++		NetworkTenant: st.NetworkTenant, NetworkTenantSource: st.NetworkTenantSource,
++		State: st.State,
+ 		Resources: &pb.ResourceLimits{
+ 			Cpu:           st.Resources.CPU,
+ 			Memory:        st.Resources.Memory,
+diff --git a/internal/server/dual_server.go b/internal/server/dual_server.go
+index ecaed11..eec9adc 100644
+--- a/internal/server/dual_server.go
++++ b/internal/server/dual_server.go
+@@ -2216,6 +2216,11 @@ skipAppHosting:
+ 			mgr.SetNICGuard(tenantGuard)
+ 		}
+ 	}
++	if tenantGuard != nil {
++		npServer.tenantGuardRead = func() *pb.GuardStatus { return tenantGuardStatusToProto(tenantGuard.Status()) }
++		npServer.tenantGuardReconcile = tenantGuard.ReconcileOnce
++		npServer.tenantStoreDurable = func() bool { return policyStoreDurable.Load() }
++	}
+ 	if networkServer != nil {
+ 		networkServer.SetGuards(coreGuard, tenantGuard)
+ 	}
+diff --git a/internal/server/network_policy_server.go b/internal/server/network_policy_server.go
+index ff2b105..d19211c 100644
+--- a/internal/server/network_policy_server.go
++++ b/internal/server/network_policy_server.go
+@@ -30,6 +30,9 @@ var errDenyRuleNotFound = errors.New("deny rule not found")
+ // fleet-shaping config, not tenant-editable. The per-veth TC_INGRESS BPF loader
+ // (a later increment) consumes the stored policies.
+ type NetworkPolicyServer struct {
++	tenantGuardRead      func() *pb.GuardStatus
++	tenantGuardReconcile func(context.Context) error
++	tenantStoreDurable   func() bool
+ 	pb.UnimplementedNetworkPolicyServiceServer
+ 	store    NetworkPolicyStore
+ 	sigStore NetworkPolicySignatureStore // #661 PR-B: operator exploit signatures (global)
+@@ -88,6 +91,9 @@ func (s *NetworkPolicyServer) SetNetworkPolicy(ctx context.Context, req *pb.SetN
+ 	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
+ 		return nil, err
+ 	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
+ 	// Validate + normalize (parse/dedup CIDRs, normalize domains, resolve mode).
+ 	compiled, err := netpolicy.Compile(req.GetPolicy())
+ 	if err != nil {
+@@ -114,7 +120,7 @@ func (s *NetworkPolicyServer) GetNetworkPolicy(ctx context.Context, req *pb.GetN
+ 		}
+ 		return nil, status.Errorf(codes.Internal, "get network policy: %v", err)
+ 	}
+-	return &pb.GetNetworkPolicyResponse{Policy: p}, nil
++	return &pb.GetNetworkPolicyResponse{Policy: p, Revision: PolicyRevision(p)}, nil
+ }
+ 
+ func (s *NetworkPolicyServer) ListNetworkPolicies(ctx context.Context, _ *pb.ListNetworkPoliciesRequest) (*pb.ListNetworkPoliciesResponse, error) {
+@@ -137,6 +143,9 @@ func (s *NetworkPolicyServer) PatchNetworkPolicyDenyRules(ctx context.Context, r
+ 	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
+ 		return nil, err
+ 	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
+ 	tenant := strings.TrimSpace(req.GetTenant())
+ 	if tenant == "" {
+ 		return nil, status.Error(codes.InvalidArgument, "tenant is required")
+@@ -217,6 +226,9 @@ func (s *NetworkPolicyServer) DeleteNetworkPolicy(ctx context.Context, req *pb.D
+ 	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
+ 		return nil, err
+ 	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
+ 	if req.GetTenant() == "" {
+ 		return nil, status.Error(codes.InvalidArgument, "tenant is required")
+ 	}
+@@ -232,6 +244,9 @@ func (s *NetworkPolicyServer) SetNetworkPolicySignature(ctx context.Context, req
+ 	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
+ 		return nil, err
+ 	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
+ 	if s.sigStore == nil {
+ 		return nil, status.Error(codes.Unavailable, "network-policy signatures are not configured on this daemon")
+ 	}
+@@ -267,6 +282,9 @@ func (s *NetworkPolicyServer) DeleteNetworkPolicySignature(ctx context.Context,
+ 	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
+ 		return nil, err
+ 	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
+ 	if s.sigStore == nil {
+ 		return nil, status.Error(codes.Unavailable, "network-policy signatures are not configured on this daemon")
+ 	}
+diff --git a/internal/tenantguard/reconciler.go b/internal/tenantguard/reconciler.go
+index 62b7102..a7a0d11 100644
+--- a/internal/tenantguard/reconciler.go
++++ b/internal/tenantguard/reconciler.go
+@@ -167,7 +167,21 @@ func (r *Reconciler) Run(ctx context.Context, events <-chan struct{}) {
+ // returned so the caller can refuse the create rather than start a box
+ // that co-tenants can reach.
+ func (r *Reconciler) Prepare(ctx context.Context, containerName, tenant string) error {
++	return r.prepare(ctx, containerName, tenant, false)
++}
++
++// PrepareNetworkTenant fails closed, including disabled/unsupported guards.
++// Explicit membership must never be accepted under an isolation guarantee
++// while legacy best-effort Prepare would skip the NIC attachment.
++func (r *Reconciler) PrepareNetworkTenant(ctx context.Context, containerName, tenant string) error {
++	return r.prepare(ctx, containerName, tenant, true)
++}
++
++func (r *Reconciler) prepare(ctx context.Context, containerName, tenant string, required bool) error {
+ 	if r.cfg.Mode != nicguard.ModeEnforce {
++		if required {
++			return fmt.Errorf("network Tenant requires ENFORCE NIC guard")
++		}
+ 		return nil
+ 	}
+ 	if err := ctx.Err(); err != nil {
+@@ -180,6 +194,9 @@ func (r *Reconciler) Prepare(ctx context.Context, containerName, tenant string)
+ 	defer r.writeMu.Unlock()
+ 	if _, err := nicguard.CheckSupport(r.be); err != nil {
+ 		if nicguard.Unsupported(err) {
++			if required {
++				return fmt.Errorf("network Tenant requires supported NIC ACLs: %w", err)
++			}
+ 			// This host cannot carry bridge NIC ACLs at all (driver or
+ 			// Incus too old). Refusing every create here would turn a
+ 			// missing capability into an outage; the pass reports it and
+diff --git a/pkg/core/box/box.go b/pkg/core/box/box.go
+index ecd00cb..59d88d4 100644
+--- a/pkg/core/box/box.go
++++ b/pkg/core/box/box.go
+@@ -65,8 +65,9 @@ type ResourceLimits struct {
+ // the spec exist and returns a BoxStatus. Create must be idempotent on
+ // re-create (the agent-skills bring-up taught us this the hard way, #669).
+ type BoxSpec struct {
+-	Ref   BoxRef
+-	Image string
++	NetworkTenant string // native network boundary; not BoxRef identity
++	Ref           BoxRef
++	Image         string
+ 	// Mode selects the box's SSH session behavior on backends that support it
+ 	// (K8s → the agent-box image's AGENTBOX_MODE: "mcp" forced-command MCP, or
+ 	// "shell" interactive login shell). Empty uses the backend's configured
+@@ -160,15 +161,17 @@ type BoxEndpoint struct {
+ // The backend is responsible for translating its substrate's native form into
+ // this shape — the server depends on BoxStatus, not on any incus type.
+ type BoxStatus struct {
+-	Ref       BoxRef
+-	State     pb.ContainerState
+-	IPAddress string
+-	Resources ResourceLimits
+-	Labels    map[string]string
+-	GPU       string   // first GPU device, for display/back-compat
+-	GPUs      []string // all attached GPU devices
+-	BackendID string   // which backend/peer the box runs on
+-	CreatedAt time.Time
++	NetworkTenant       string
++	NetworkTenantSource string
++	Ref                 BoxRef
++	State               pb.ContainerState
++	IPAddress           string
++	Resources           ResourceLimits
++	Labels              map[string]string
++	GPU                 string   // first GPU device, for display/back-compat
++	GPUs                []string // all attached GPU devices
++	BackendID           string   // which backend/peer the box runs on
++	CreatedAt           time.Time
+ 	// Isolation is how the box is actually isolated, read back from the
+ 	// backend (LXC: the Incus instance type). UNSPECIFIED when unknown.
+ 	Isolation pb.IsolationType
+diff --git a/pkg/core/box/k8s/k8s.go b/pkg/core/box/k8s/k8s.go
+index fc66ee7..02b7be9 100644
+--- a/pkg/core/box/k8s/k8s.go
++++ b/pkg/core/box/k8s/k8s.go
+@@ -303,6 +303,9 @@ func (b *Backend) validateTenantName(tenant string) error {
+ // Sandbox. Each step is idempotent (AlreadyExists is success) so re-create
+ // reuses the box rather than erroring (#669).
+ func (b *Backend) Create(ctx context.Context, spec box.BoxSpec) (*box.BoxStatus, error) {
++	if spec.NetworkTenant != "" {
++		return nil, fmt.Errorf("native network Tenant contract requires LXC backend")
++	}
+ 	// A pod is a container. Refuse a VM request outright rather than hand
+ 	// back a shared-kernel box the caller believed was VM-isolated (#2196).
+ 	if spec.Isolation == pb.IsolationType_ISOLATION_TYPE_VM {
+diff --git a/pkg/core/box/lxc/lxc.go b/pkg/core/box/lxc/lxc.go
+index 81543b5..2cdb82d 100644
+--- a/pkg/core/box/lxc/lxc.go
++++ b/pkg/core/box/lxc/lxc.go
+@@ -180,6 +180,7 @@ func (b *Backend) Metrics(_ context.Context, ref box.BoxRef) (*box.BoxMetrics, e
+ func specToCreateOptions(spec box.BoxSpec) container.CreateOptions {
+ 	return container.CreateOptions{
+ 		Username:               spec.Ref.Tenant,
++		NetworkTenant:          spec.NetworkTenant,
+ 		Image:                  spec.Image,
+ 		CPU:                    spec.Resources.CPU,
+ 		Memory:                 spec.Resources.Memory,
+@@ -210,7 +211,9 @@ func specToCreateOptions(spec box.BoxSpec) container.CreateOptions {
+ 
+ // StatusFromInfo maps incus.ContainerInfo onto the runtime-neutral BoxStatus.
+ func StatusFromInfo(info *incus.ContainerInfo) box.BoxStatus {
++	key, source := incus.NetworkTenantIdentity(info.Tenant, info.Labels[incus.CloudOrgIDLabel], info.Name)
+ 	return box.BoxStatus{
++		NetworkTenant: key, NetworkTenantSource: source,
+ 		Ref:                       box.BoxRef{Tenant: tenantOf(info), Name: info.Name},
+ 		State:                     parseState(info.State),
+ 		IPAddress:                 info.IPAddress,
+diff --git a/pkg/core/container/manager.go b/pkg/core/container/manager.go
+index 2d072b8..483de9b 100644
+--- a/pkg/core/container/manager.go
++++ b/pkg/core/container/manager.go
+@@ -51,13 +51,14 @@ const defaultCloudInitWait = 5 * time.Second
+ 
+ // CreateOptions holds options for creating a container
+ type CreateOptions struct {
+-	Username string
+-	Image    string
+-	CPU      string
+-	Memory   string
+-	Disk     string   // Disk size (e.g., "20GB")
+-	GPUs     []string // GPU device IDs for passthrough — one per attached GPU ("0"/"1" or PCI address); empty = none
+-	StaticIP string   // Static IP address (e.g., "10.100.0.100") - empty for DHCP
++	NetworkTenant string // native network boundary, never encryption scope
++	Username      string
++	Image         string
++	CPU           string
++	Memory        string
++	Disk          string   // Disk size (e.g., "20GB")
++	GPUs          []string // GPU device IDs for passthrough — one per attached GPU ("0"/"1" or PCI address); empty = none
++	StaticIP      string   // Static IP address (e.g., "10.100.0.100") - empty for DHCP
+ 
+ 	// StoragePool overrides the daemon-wide storage pool for this create.
+ 	// Empty uses the configured pool (#1213). See box.BoxSpec.StoragePool for
+@@ -170,6 +171,11 @@ var (
+ 
+ // Create creates a new container with full setup
+ func (m *Manager) Create(opts CreateOptions) (*incus.ContainerInfo, error) {
++	if opts.NetworkTenant != "" {
++		if err := incus.ValidateNetworkTenant(opts.NetworkTenant); err != nil {
++			return nil, err
++		}
++	}
+ 	createStart := time.Now()
+ 	containerName := opts.Username + "-container"
+ 
+@@ -243,6 +249,12 @@ func (m *Manager) Create(opts CreateOptions) (*incus.ContainerInfo, error) {
+ 		fmt.Printf("  Setting %d label(s)...\n", len(opts.Labels))
+ 	}
+ 	labelConfig := make(map[string]string, len(opts.Labels))
++	if opts.NetworkTenant != "" {
++		if isVM {
++			return nil, fmt.Errorf("explicit network Tenant requires an LXC container")
++		}
++		labelConfig[incus.TenantLabelKey] = opts.NetworkTenant
++	}
+ 	for k, v := range opts.Labels {
+ 		labelConfig[incus.LabelPrefix+k] = v
+ 	}
+@@ -260,7 +272,7 @@ func (m *Manager) Create(opts CreateOptions) (*incus.ContainerInfo, error) {
+ 		Memory:                 opts.Memory,
+ 		EnableNesting:          opts.EnablePodman,
+ 		EnablePodmanPrivileged: opts.EnablePodmanPrivileged,
+-		AutoStart:              opts.AutoStart,
++		AutoStart:              opts.AutoStart && opts.NetworkTenant == "",
+ 		Env:                    otelEnvVars(opts, containerName),
+ 		ExtraConfig:            labelConfig,
+ 	}
+@@ -352,6 +364,12 @@ func (m *Manager) Create(opts CreateOptions) (*incus.ContainerInfo, error) {
+ 		_ = m.incus.DeleteContainer(containerName)
+ 		return nil, err
+ 	}
++	if opts.NetworkTenant != "" && opts.AutoStart {
++		if err := m.incus.SetConfig(containerName, "boot.autostart", "true"); err != nil {
++			_ = m.incus.DeleteContainer(containerName)
++			return nil, fmt.Errorf("guarded autostart: %w", err)
++		}
++	}
+ 
+ 	// Step 2: Start container
+ 	if opts.Verbose {
+diff --git a/pkg/core/container/nic_guard.go b/pkg/core/container/nic_guard.go
+index 0515d63..f9d7822 100644
+--- a/pkg/core/container/nic_guard.go
++++ b/pkg/core/container/nic_guard.go
+@@ -34,6 +34,18 @@ func (m *Manager) SetNICGuard(g NICGuard) { m.nicGuard = g }
+ // key is written by the pull-mode actuator after create; the reconciler
+ // picks it up on its next pass.)
+ func (m *Manager) guardNIC(containerName string, opts CreateOptions) error {
++	if opts.NetworkTenant != "" {
++		required, ok := m.nicGuard.(interface {
++			PrepareNetworkTenant(context.Context, string, string) error
++		})
++		if !ok {
++			return fmt.Errorf("%w: required network-Tenant guard is unavailable", ErrNICGuard)
++		}
++		if err := required.PrepareNetworkTenant(context.Background(), containerName, opts.NetworkTenant); err != nil {
++			return fmt.Errorf("%w: %v", ErrNICGuard, err)
++		}
++		return nil
++	}
+ 	if m.nicGuard == nil {
+ 		return nil
+ 	}
+diff --git a/pkg/core/incus/client.go b/pkg/core/incus/client.go
+index e6a247f..6ee61f4 100644
+--- a/pkg/core/incus/client.go
++++ b/pkg/core/incus/client.go
+@@ -522,7 +522,8 @@ func (r Role) IsCoreRole() bool {
+ 
+ // ContainerInfo holds information about a container
+ type ContainerInfo struct {
+-	Name string
++	NetworkTenantSource string // source of resolved identity returned by a daemon
++	Name                string
+ 	// Username is the SSH login the daemon assigned to this container. It
+ 	// may differ from the requested name (e.g. a control plane that mints a
+ 	// generated username at create time), and it's what the daemon's SSH
+diff --git a/pkg/pb/containarium/v1/config.pb.go b/pkg/pb/containarium/v1/config.pb.go
+index 95d7e08..e74ec5c 100644
+--- a/pkg/pb/containarium/v1/config.pb.go
++++ b/pkg/pb/containarium/v1/config.pb.go
+@@ -3210,6 +3210,7 @@ func (x *GetNetworkPolicyRequest) GetTenant() string {
+ 
+ type GetNetworkPolicyResponse struct {
+ 	state         protoimpl.MessageState `protogen:"open.v1"`
++	Revision      string                 `protobuf:"bytes,2,opt,name=revision,proto3" json:"revision,omitempty"`
+ 	Policy        *NetworkPolicy         `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
+ 	unknownFields protoimpl.UnknownFields
+ 	sizeCache     protoimpl.SizeCache
+@@ -3245,6 +3246,13 @@ func (*GetNetworkPolicyResponse) Descriptor() ([]byte, []int) {
+ 	return file_containarium_v1_config_proto_rawDescGZIP(), []int{30}
+ }
+ 
++func (x *GetNetworkPolicyResponse) GetRevision() string {
++	if x != nil {
++		return x.Revision
++	}
++	return ""
++}
++
+ func (x *GetNetworkPolicyResponse) GetPolicy() *NetworkPolicy {
+ 	if x != nil {
+ 		return x.Policy
+@@ -5803,8 +5811,9 @@ const file_containarium_v1_config_proto_rawDesc = "" +
+ 	"\x18SetNetworkPolicyResponse\x126\n" +
+ 	"\x06policy\x18\x01 \x01(\v2\x1e.containarium.v1.NetworkPolicyR\x06policy\"1\n" +
+ 	"\x17GetNetworkPolicyRequest\x12\x16\n" +
+-	"\x06tenant\x18\x01 \x01(\tR\x06tenant\"R\n" +
+-	"\x18GetNetworkPolicyResponse\x126\n" +
++	"\x06tenant\x18\x01 \x01(\tR\x06tenant\"n\n" +
++	"\x18GetNetworkPolicyResponse\x12\x1a\n" +
++	"\brevision\x18\x02 \x01(\tR\brevision\x126\n" +
+ 	"\x06policy\x18\x01 \x01(\v2\x1e.containarium.v1.NetworkPolicyR\x06policy\"\x1c\n" +
+ 	"\x1aListNetworkPoliciesRequest\"Y\n" +
+ 	"\x1bListNetworkPoliciesResponse\x12:\n" +
+diff --git a/pkg/pb/containarium/v1/container.pb.go b/pkg/pb/containarium/v1/container.pb.go
+index 23e38a8..13cd710 100644
+--- a/pkg/pb/containarium/v1/container.pb.go
++++ b/pkg/pb/containarium/v1/container.pb.go
+@@ -835,9 +835,12 @@ type Container struct {
+ 	// How the box is isolated from the host: CONTAINER (LXC) or VM
+ 	// (QEMU/KVM), read back from the instance itself. UNSPECIFIED when the
+ 	// backend does not report it.
+-	Isolation     IsolationType `protobuf:"varint,29,opt,name=isolation,proto3,enum=containarium.v1.IsolationType" json:"isolation,omitempty"`
+-	unknownFields protoimpl.UnknownFields
+-	sizeCache     protoimpl.SizeCache
++	Isolation IsolationType `protobuf:"varint,29,opt,name=isolation,proto3,enum=containarium.v1.IsolationType" json:"isolation,omitempty"`
++	// Resolved network ownership, independent of encryption tenant_id.
++	NetworkTenant       string `protobuf:"bytes,30,opt,name=network_tenant,json=networkTenant,proto3" json:"network_tenant,omitempty"`
++	NetworkTenantSource string `protobuf:"bytes,31,opt,name=network_tenant_source,json=networkTenantSource,proto3" json:"network_tenant_source,omitempty"`
++	unknownFields       protoimpl.UnknownFields
++	sizeCache           protoimpl.SizeCache
+ }
+ 
+ func (x *Container) Reset() {
+@@ -1073,6 +1076,20 @@ func (x *Container) GetIsolation() IsolationType {
+ 	return IsolationType_ISOLATION_TYPE_UNSPECIFIED
+ }
+ 
++func (x *Container) GetNetworkTenant() string {
++	if x != nil {
++		return x.NetworkTenant
++	}
++	return ""
++}
++
++func (x *Container) GetNetworkTenantSource() string {
++	if x != nil {
++		return x.NetworkTenantSource
++	}
++	return ""
++}
++
+ // ContainerMetrics contains runtime metrics for a container
+ type ContainerMetrics struct {
+ 	state protoimpl.MessageState `protogen:"open.v1"`
+@@ -1365,8 +1382,11 @@ type CreateContainerRequest struct {
+ 	// together with idle_stop_minutes > 0 is contradictory and rejected with
+ 	// InvalidArgument.
+ 	DisableAutoSleep bool `protobuf:"varint,28,opt,name=disable_auto_sleep,json=disableAutoSleep,proto3" json:"disable_auto_sleep,omitempty"`
+-	unknownFields    protoimpl.UnknownFields
+-	sizeCache        protoimpl.SizeCache
++	// Explicit native network Tenant; administrator only. Requires enforced
++	// supported NIC guarding before first Start. Omitted preserves admin defaults.
++	NetworkTenant string `protobuf:"bytes,29,opt,name=network_tenant,json=networkTenant,proto3" json:"network_tenant,omitempty"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
+ }
+ 
+ func (x *CreateContainerRequest) Reset() {
+@@ -1595,6 +1615,13 @@ func (x *CreateContainerRequest) GetDisableAutoSleep() bool {
+ 	return false
+ }
+ 
++func (x *CreateContainerRequest) GetNetworkTenant() string {
++	if x != nil {
++		return x.NetworkTenant
++	}
++	return ""
++}
++
+ // CreateContainerResponse is the response from creating a container
+ type CreateContainerResponse struct {
+ 	state protoimpl.MessageState `protogen:"open.v1"`
+@@ -6454,8 +6481,7 @@ const file_containarium_v1_container_proto_rawDesc = "" +
+ 	"\vmac_address\x18\x02 \x01(\tR\n" +
+ 	"macAddress\x12\x1c\n" +
+ 	"\tinterface\x18\x03 \x01(\tR\tinterface\x12\x16\n" +
+-	"\x06bridge\x18\x04 \x01(\tR\x06bridge\"\xcf\n" +
+-	"\n" +
++	"\x06bridge\x18\x04 \x01(\tR\x06bridge\"\xaa\v\n" +
+ 	"\tContainer\x12\x12\n" +
+ 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
+ 	"\busername\x18\x02 \x01(\tR\busername\x125\n" +
+@@ -6494,7 +6520,9 @@ const file_containarium_v1_container_proto_rawDesc = "" +
+ 	"\vgpu_devices\x18\x1b \x03(\tR\n" +
+ 	"gpuDevices\x12K\n" +
+ 	"\x10encryption_state\x18\x1c \x01(\x0e2 .containarium.v1.EncryptionStateR\x0fencryptionState\x12<\n" +
+-	"\tisolation\x18\x1d \x01(\x0e2\x1e.containarium.v1.IsolationTypeR\tisolation\x1a9\n" +
++	"\tisolation\x18\x1d \x01(\x0e2\x1e.containarium.v1.IsolationTypeR\tisolation\x12%\n" +
++	"\x0enetwork_tenant\x18\x1e \x01(\tR\rnetworkTenant\x122\n" +
++	"\x15network_tenant_source\x18\x1f \x01(\tR\x13networkTenantSource\x1a9\n" +
+ 	"\vLabelsEntry\x12\x10\n" +
+ 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+ 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x03\n" +
+@@ -6510,7 +6538,7 @@ const file_containarium_v1_container_proto_rawDesc = "" +
+ 	"\x0ecpu_nr_periods\x18\t \x01(\x03R\fcpuNrPeriods\x12(\n" +
+ 	"\x10cpu_nr_throttled\x18\n" +
+ 	" \x01(\x03R\x0ecpuNrThrottled\x12,\n" +
+-	"\x12cpu_throttled_usec\x18\v \x01(\x03R\x10cpuThrottledUsec\"\xc5\t\n" +
++	"\x12cpu_throttled_usec\x18\v \x01(\x03R\x10cpuThrottledUsec\"\xec\t\n" +
+ 	"\x16CreateContainerRequest\x12\x1a\n" +
+ 	"\busername\x18\x01 \x01(\tR\busername\x12=\n" +
+ 	"\tresources\x18\x02 \x01(\v2\x1f.containarium.v1.ResourceLimitsR\tresources\x12\x19\n" +
+@@ -6545,7 +6573,8 @@ const file_containarium_v1_container_proto_rawDesc = "" +
+ 	"\ttenant_id\x18\x19 \x01(\tR\btenantId\x12\x16\n" +
+ 	"\x06region\x18\x1a \x01(\tR\x06region\x12<\n" +
+ 	"\tisolation\x18\x1b \x01(\x0e2\x1e.containarium.v1.IsolationTypeR\tisolation\x12,\n" +
+-	"\x12disable_auto_sleep\x18\x1c \x01(\bR\x10disableAutoSleep\x1a9\n" +
++	"\x12disable_auto_sleep\x18\x1c \x01(\bR\x10disableAutoSleep\x12%\n" +
++	"\x0enetwork_tenant\x18\x1d \x01(\tR\rnetworkTenant\x1a9\n" +
+ 	"\vLabelsEntry\x12\x10\n" +
+ 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+ 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +
+diff --git a/pkg/pb/containarium/v1/network_policy.pb.go b/pkg/pb/containarium/v1/network_policy.pb.go
+index f0abc8d..2bc7381 100644
+--- a/pkg/pb/containarium/v1/network_policy.pb.go
++++ b/pkg/pb/containarium/v1/network_policy.pb.go
+@@ -266,6 +266,361 @@ func (x *PlanNetworkPolicyResponse) GetNotes() []string {
+ 	return nil
+ }
+ 
++type GetNetworkTenantCapabilitiesRequest struct {
++	state         protoimpl.MessageState `protogen:"open.v1"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
++}
++
++func (x *GetNetworkTenantCapabilitiesRequest) Reset() {
++	*x = GetNetworkTenantCapabilitiesRequest{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[3]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *GetNetworkTenantCapabilitiesRequest) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*GetNetworkTenantCapabilitiesRequest) ProtoMessage() {}
++
++func (x *GetNetworkTenantCapabilitiesRequest) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[3]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use GetNetworkTenantCapabilitiesRequest.ProtoReflect.Descriptor instead.
++func (*GetNetworkTenantCapabilitiesRequest) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{3}
++}
++
++type GetNetworkTenantCapabilitiesResponse struct {
++	state                protoimpl.MessageState `protogen:"open.v1"`
++	Contract             string                 `protobuf:"bytes,1,opt,name=contract,proto3" json:"contract,omitempty"`
++	NativeMembershipRead bool                   `protobuf:"varint,2,opt,name=native_membership_read,json=nativeMembershipRead,proto3" json:"native_membership_read,omitempty"`
++	SharedTenantCreate   bool                   `protobuf:"varint,3,opt,name=shared_tenant_create,json=sharedTenantCreate,proto3" json:"shared_tenant_create,omitempty"`
++	AtomicTenantAccess   bool                   `protobuf:"varint,4,opt,name=atomic_tenant_access,json=atomicTenantAccess,proto3" json:"atomic_tenant_access,omitempty"`
++	NetworkPolicyWrite   bool                   `protobuf:"varint,5,opt,name=network_policy_write,json=networkPolicyWrite,proto3" json:"network_policy_write,omitempty"`
++	Reason               string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
++	BackendScope         string                 `protobuf:"bytes,7,opt,name=backend_scope,json=backendScope,proto3" json:"backend_scope,omitempty"`
++	unknownFields        protoimpl.UnknownFields
++	sizeCache            protoimpl.SizeCache
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) Reset() {
++	*x = GetNetworkTenantCapabilitiesResponse{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[4]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*GetNetworkTenantCapabilitiesResponse) ProtoMessage() {}
++
++func (x *GetNetworkTenantCapabilitiesResponse) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[4]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use GetNetworkTenantCapabilitiesResponse.ProtoReflect.Descriptor instead.
++func (*GetNetworkTenantCapabilitiesResponse) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{4}
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetContract() string {
++	if x != nil {
++		return x.Contract
++	}
++	return ""
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetNativeMembershipRead() bool {
++	if x != nil {
++		return x.NativeMembershipRead
++	}
++	return false
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetSharedTenantCreate() bool {
++	if x != nil {
++		return x.SharedTenantCreate
++	}
++	return false
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetAtomicTenantAccess() bool {
++	if x != nil {
++		return x.AtomicTenantAccess
++	}
++	return false
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetNetworkPolicyWrite() bool {
++	if x != nil {
++		return x.NetworkPolicyWrite
++	}
++	return false
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetReason() string {
++	if x != nil {
++		return x.Reason
++	}
++	return ""
++}
++
++func (x *GetNetworkTenantCapabilitiesResponse) GetBackendScope() string {
++	if x != nil {
++		return x.BackendScope
++	}
++	return ""
++}
++
++type TenantAccessChange struct {
++	state protoimpl.MessageState `protogen:"open.v1"`
++	// Destination policy: listed sources may initiate connections into it.
++	Destination   string   `protobuf:"bytes,1,opt,name=destination,proto3" json:"destination,omitempty"`
++	AddSources    []string `protobuf:"bytes,2,rep,name=add_sources,json=addSources,proto3" json:"add_sources,omitempty"`
++	RemoveSources []string `protobuf:"bytes,3,rep,name=remove_sources,json=removeSources,proto3" json:"remove_sources,omitempty"`
++	// SHA256 of the entire observed policy, or "absent". Required to prevent lost previews.
++	ExpectedRevision string `protobuf:"bytes,4,opt,name=expected_revision,json=expectedRevision,proto3" json:"expected_revision,omitempty"`
++	unknownFields    protoimpl.UnknownFields
++	sizeCache        protoimpl.SizeCache
++}
++
++func (x *TenantAccessChange) Reset() {
++	*x = TenantAccessChange{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[5]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *TenantAccessChange) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*TenantAccessChange) ProtoMessage() {}
++
++func (x *TenantAccessChange) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[5]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use TenantAccessChange.ProtoReflect.Descriptor instead.
++func (*TenantAccessChange) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{5}
++}
++
++func (x *TenantAccessChange) GetDestination() string {
++	if x != nil {
++		return x.Destination
++	}
++	return ""
++}
++
++func (x *TenantAccessChange) GetAddSources() []string {
++	if x != nil {
++		return x.AddSources
++	}
++	return nil
++}
++
++func (x *TenantAccessChange) GetRemoveSources() []string {
++	if x != nil {
++		return x.RemoveSources
++	}
++	return nil
++}
++
++func (x *TenantAccessChange) GetExpectedRevision() string {
++	if x != nil {
++		return x.ExpectedRevision
++	}
++	return ""
++}
++
++type PatchTenantAccessRequest struct {
++	state         protoimpl.MessageState `protogen:"open.v1"`
++	Changes       []*TenantAccessChange  `protobuf:"bytes,1,rep,name=changes,proto3" json:"changes,omitempty"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
++}
++
++func (x *PatchTenantAccessRequest) Reset() {
++	*x = PatchTenantAccessRequest{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[6]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *PatchTenantAccessRequest) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*PatchTenantAccessRequest) ProtoMessage() {}
++
++func (x *PatchTenantAccessRequest) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[6]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use PatchTenantAccessRequest.ProtoReflect.Descriptor instead.
++func (*PatchTenantAccessRequest) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{6}
++}
++
++func (x *PatchTenantAccessRequest) GetChanges() []*TenantAccessChange {
++	if x != nil {
++		return x.Changes
++	}
++	return nil
++}
++
++type TenantAccessPolicy struct {
++	state         protoimpl.MessageState `protogen:"open.v1"`
++	Policy        *NetworkPolicy         `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
++	Revision      string                 `protobuf:"bytes,2,opt,name=revision,proto3" json:"revision,omitempty"`
++	unknownFields protoimpl.UnknownFields
++	sizeCache     protoimpl.SizeCache
++}
++
++func (x *TenantAccessPolicy) Reset() {
++	*x = TenantAccessPolicy{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[7]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *TenantAccessPolicy) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*TenantAccessPolicy) ProtoMessage() {}
++
++func (x *TenantAccessPolicy) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[7]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use TenantAccessPolicy.ProtoReflect.Descriptor instead.
++func (*TenantAccessPolicy) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{7}
++}
++
++func (x *TenantAccessPolicy) GetPolicy() *NetworkPolicy {
++	if x != nil {
++		return x.Policy
++	}
++	return nil
++}
++
++func (x *TenantAccessPolicy) GetRevision() string {
++	if x != nil {
++		return x.Revision
++	}
++	return ""
++}
++
++type PatchTenantAccessResponse struct {
++	state    protoimpl.MessageState `protogen:"open.v1"`
++	Policies []*TenantAccessPolicy  `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
++	// A committed store write is separate from guard convergence and TCP testing.
++	ApplicationState   string `protobuf:"bytes,2,opt,name=application_state,json=applicationState,proto3" json:"application_state,omitempty"`
++	ConnectivityTested bool   `protobuf:"varint,3,opt,name=connectivity_tested,json=connectivityTested,proto3" json:"connectivity_tested,omitempty"`
++	unknownFields      protoimpl.UnknownFields
++	sizeCache          protoimpl.SizeCache
++}
++
++func (x *PatchTenantAccessResponse) Reset() {
++	*x = PatchTenantAccessResponse{}
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[8]
++	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++	ms.StoreMessageInfo(mi)
++}
++
++func (x *PatchTenantAccessResponse) String() string {
++	return protoimpl.X.MessageStringOf(x)
++}
++
++func (*PatchTenantAccessResponse) ProtoMessage() {}
++
++func (x *PatchTenantAccessResponse) ProtoReflect() protoreflect.Message {
++	mi := &file_containarium_v1_network_policy_proto_msgTypes[8]
++	if x != nil {
++		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
++		if ms.LoadMessageInfo() == nil {
++			ms.StoreMessageInfo(mi)
++		}
++		return ms
++	}
++	return mi.MessageOf(x)
++}
++
++// Deprecated: Use PatchTenantAccessResponse.ProtoReflect.Descriptor instead.
++func (*PatchTenantAccessResponse) Descriptor() ([]byte, []int) {
++	return file_containarium_v1_network_policy_proto_rawDescGZIP(), []int{8}
++}
++
++func (x *PatchTenantAccessResponse) GetPolicies() []*TenantAccessPolicy {
++	if x != nil {
++		return x.Policies
++	}
++	return nil
++}
++
++func (x *PatchTenantAccessResponse) GetApplicationState() string {
++	if x != nil {
++		return x.ApplicationState
++	}
++	return ""
++}
++
++func (x *PatchTenantAccessResponse) GetConnectivityTested() bool {
++	if x != nil {
++		return x.ConnectivityTested
++	}
++	return false
++}
++
+ var File_containarium_v1_network_policy_proto protoreflect.FileDescriptor
+ 
+ const file_containarium_v1_network_policy_proto_rawDesc = "" +
+@@ -287,8 +642,34 @@ const file_containarium_v1_network_policy_proto_rawDesc = "" +
+ 	"\fdestinations\x18\x03 \x03(\v2 .containarium.v1.PlanDestinationR\fdestinations\x12!\n" +
+ 	"\frows_scanned\x18\x04 \x01(\rR\vrowsScanned\x12\x1c\n" +
+ 	"\ttruncated\x18\x05 \x01(\bR\ttruncated\x12\x14\n" +
+-	"\x05notes\x18\x06 \x03(\tR\x05notes2\xec\x14\n" +
+-	"\x14NetworkPolicyService\x12\x8d\x02\n" +
++	"\x05notes\x18\x06 \x03(\tR\x05notes\"%\n" +
++	"#GetNetworkTenantCapabilitiesRequest\"\xcb\x02\n" +
++	"$GetNetworkTenantCapabilitiesResponse\x12\x1a\n" +
++	"\bcontract\x18\x01 \x01(\tR\bcontract\x124\n" +
++	"\x16native_membership_read\x18\x02 \x01(\bR\x14nativeMembershipRead\x120\n" +
++	"\x14shared_tenant_create\x18\x03 \x01(\bR\x12sharedTenantCreate\x120\n" +
++	"\x14atomic_tenant_access\x18\x04 \x01(\bR\x12atomicTenantAccess\x120\n" +
++	"\x14network_policy_write\x18\x05 \x01(\bR\x12networkPolicyWrite\x12\x16\n" +
++	"\x06reason\x18\x06 \x01(\tR\x06reason\x12#\n" +
++	"\rbackend_scope\x18\a \x01(\tR\fbackendScope\"\xab\x01\n" +
++	"\x12TenantAccessChange\x12 \n" +
++	"\vdestination\x18\x01 \x01(\tR\vdestination\x12\x1f\n" +
++	"\vadd_sources\x18\x02 \x03(\tR\n" +
++	"addSources\x12%\n" +
++	"\x0eremove_sources\x18\x03 \x03(\tR\rremoveSources\x12+\n" +
++	"\x11expected_revision\x18\x04 \x01(\tR\x10expectedRevision\"Y\n" +
++	"\x18PatchTenantAccessRequest\x12=\n" +
++	"\achanges\x18\x01 \x03(\v2#.containarium.v1.TenantAccessChangeR\achanges\"h\n" +
++	"\x12TenantAccessPolicy\x126\n" +
++	"\x06policy\x18\x01 \x01(\v2\x1e.containarium.v1.NetworkPolicyR\x06policy\x12\x1a\n" +
++	"\brevision\x18\x02 \x01(\tR\brevision\"\xba\x01\n" +
++	"\x19PatchTenantAccessResponse\x12?\n" +
++	"\bpolicies\x18\x01 \x03(\v2#.containarium.v1.TenantAccessPolicyR\bpolicies\x12+\n" +
++	"\x11application_state\x18\x02 \x01(\tR\x10applicationState\x12/\n" +
++	"\x13connectivity_tested\x18\x03 \x01(\bR\x12connectivityTested2\xc0\x17\n" +
++	"\x14NetworkPolicyService\x12\xb5\x01\n" +
++	"\x1cGetNetworkTenantCapabilities\x124.containarium.v1.GetNetworkTenantCapabilitiesRequest\x1a5.containarium.v1.GetNetworkTenantCapabilitiesResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/network-tenants/capabilities\x12\x99\x01\n" +
++	"\x11PatchTenantAccess\x12).containarium.v1.PatchTenantAccessRequest\x1a*.containarium.v1.PatchTenantAccessResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/network-policies/tenant-access\x12\x8d\x02\n" +
+ 	"\x10SetNetworkPolicy\x12(.containarium.v1.SetNetworkPolicyRequest\x1a).containarium.v1.SetNetworkPolicyResponse\"\xa3\x01\x92A\x80\x01\n" +
+ 	"\rNetworkPolicy\x12\x12Set network policy\x1a[Create or replace a tenant's network-isolation policy (validated + normalized). Admin-only.\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/v1/network-policies\x12\xee\x01\n" +
+ 	"\x10GetNetworkPolicy\x12(.containarium.v1.GetNetworkPolicyRequest\x1a).containarium.v1.GetNetworkPolicyResponse\"\x84\x01\x92A\\\n" +
+@@ -320,54 +701,68 @@ func file_containarium_v1_network_policy_proto_rawDescGZIP() []byte {
+ 	return file_containarium_v1_network_policy_proto_rawDescData
+ }
+ 
+-var file_containarium_v1_network_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
++var file_containarium_v1_network_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+ var file_containarium_v1_network_policy_proto_goTypes = []any{
+ 	(*PlanNetworkPolicyRequest)(nil),             // 0: containarium.v1.PlanNetworkPolicyRequest
+ 	(*PlanDestination)(nil),                      // 1: containarium.v1.PlanDestination
+ 	(*PlanNetworkPolicyResponse)(nil),            // 2: containarium.v1.PlanNetworkPolicyResponse
+-	(*timestamppb.Timestamp)(nil),                // 3: google.protobuf.Timestamp
+-	(*SetNetworkPolicyRequest)(nil),              // 4: containarium.v1.SetNetworkPolicyRequest
+-	(*GetNetworkPolicyRequest)(nil),              // 5: containarium.v1.GetNetworkPolicyRequest
+-	(*ListNetworkPoliciesRequest)(nil),           // 6: containarium.v1.ListNetworkPoliciesRequest
+-	(*DeleteNetworkPolicyRequest)(nil),           // 7: containarium.v1.DeleteNetworkPolicyRequest
+-	(*PatchNetworkPolicyDenyRulesRequest)(nil),   // 8: containarium.v1.PatchNetworkPolicyDenyRulesRequest
+-	(*SetNetworkPolicySignatureRequest)(nil),     // 9: containarium.v1.SetNetworkPolicySignatureRequest
+-	(*ListNetworkPolicySignaturesRequest)(nil),   // 10: containarium.v1.ListNetworkPolicySignaturesRequest
+-	(*DeleteNetworkPolicySignatureRequest)(nil),  // 11: containarium.v1.DeleteNetworkPolicySignatureRequest
+-	(*SetNetworkPolicyResponse)(nil),             // 12: containarium.v1.SetNetworkPolicyResponse
+-	(*GetNetworkPolicyResponse)(nil),             // 13: containarium.v1.GetNetworkPolicyResponse
+-	(*ListNetworkPoliciesResponse)(nil),          // 14: containarium.v1.ListNetworkPoliciesResponse
+-	(*DeleteNetworkPolicyResponse)(nil),          // 15: containarium.v1.DeleteNetworkPolicyResponse
+-	(*SetNetworkPolicySignatureResponse)(nil),    // 16: containarium.v1.SetNetworkPolicySignatureResponse
+-	(*ListNetworkPolicySignaturesResponse)(nil),  // 17: containarium.v1.ListNetworkPolicySignaturesResponse
+-	(*DeleteNetworkPolicySignatureResponse)(nil), // 18: containarium.v1.DeleteNetworkPolicySignatureResponse
++	(*GetNetworkTenantCapabilitiesRequest)(nil),  // 3: containarium.v1.GetNetworkTenantCapabilitiesRequest
++	(*GetNetworkTenantCapabilitiesResponse)(nil), // 4: containarium.v1.GetNetworkTenantCapabilitiesResponse
++	(*TenantAccessChange)(nil),                   // 5: containarium.v1.TenantAccessChange
++	(*PatchTenantAccessRequest)(nil),             // 6: containarium.v1.PatchTenantAccessRequest
++	(*TenantAccessPolicy)(nil),                   // 7: containarium.v1.TenantAccessPolicy
++	(*PatchTenantAccessResponse)(nil),            // 8: containarium.v1.PatchTenantAccessResponse
++	(*timestamppb.Timestamp)(nil),                // 9: google.protobuf.Timestamp
++	(*NetworkPolicy)(nil),                        // 10: containarium.v1.NetworkPolicy
++	(*SetNetworkPolicyRequest)(nil),              // 11: containarium.v1.SetNetworkPolicyRequest
++	(*GetNetworkPolicyRequest)(nil),              // 12: containarium.v1.GetNetworkPolicyRequest
++	(*ListNetworkPoliciesRequest)(nil),           // 13: containarium.v1.ListNetworkPoliciesRequest
++	(*DeleteNetworkPolicyRequest)(nil),           // 14: containarium.v1.DeleteNetworkPolicyRequest
++	(*PatchNetworkPolicyDenyRulesRequest)(nil),   // 15: containarium.v1.PatchNetworkPolicyDenyRulesRequest
++	(*SetNetworkPolicySignatureRequest)(nil),     // 16: containarium.v1.SetNetworkPolicySignatureRequest
++	(*ListNetworkPolicySignaturesRequest)(nil),   // 17: containarium.v1.ListNetworkPolicySignaturesRequest
++	(*DeleteNetworkPolicySignatureRequest)(nil),  // 18: containarium.v1.DeleteNetworkPolicySignatureRequest
++	(*SetNetworkPolicyResponse)(nil),             // 19: containarium.v1.SetNetworkPolicyResponse
++	(*GetNetworkPolicyResponse)(nil),             // 20: containarium.v1.GetNetworkPolicyResponse
++	(*ListNetworkPoliciesResponse)(nil),          // 21: containarium.v1.ListNetworkPoliciesResponse
++	(*DeleteNetworkPolicyResponse)(nil),          // 22: containarium.v1.DeleteNetworkPolicyResponse
++	(*SetNetworkPolicySignatureResponse)(nil),    // 23: containarium.v1.SetNetworkPolicySignatureResponse
++	(*ListNetworkPolicySignaturesResponse)(nil),  // 24: containarium.v1.ListNetworkPolicySignaturesResponse
++	(*DeleteNetworkPolicySignatureResponse)(nil), // 25: containarium.v1.DeleteNetworkPolicySignatureResponse
+ }
+ var file_containarium_v1_network_policy_proto_depIdxs = []int32{
+-	3,  // 0: containarium.v1.PlanDestination.last_seen:type_name -> google.protobuf.Timestamp
++	9,  // 0: containarium.v1.PlanDestination.last_seen:type_name -> google.protobuf.Timestamp
+ 	1,  // 1: containarium.v1.PlanNetworkPolicyResponse.destinations:type_name -> containarium.v1.PlanDestination
+-	4,  // 2: containarium.v1.NetworkPolicyService.SetNetworkPolicy:input_type -> containarium.v1.SetNetworkPolicyRequest
+-	5,  // 3: containarium.v1.NetworkPolicyService.GetNetworkPolicy:input_type -> containarium.v1.GetNetworkPolicyRequest
+-	6,  // 4: containarium.v1.NetworkPolicyService.ListNetworkPolicies:input_type -> containarium.v1.ListNetworkPoliciesRequest
+-	7,  // 5: containarium.v1.NetworkPolicyService.DeleteNetworkPolicy:input_type -> containarium.v1.DeleteNetworkPolicyRequest
+-	8,  // 6: containarium.v1.NetworkPolicyService.PatchNetworkPolicyDenyRules:input_type -> containarium.v1.PatchNetworkPolicyDenyRulesRequest
+-	0,  // 7: containarium.v1.NetworkPolicyService.PlanNetworkPolicy:input_type -> containarium.v1.PlanNetworkPolicyRequest
+-	9,  // 8: containarium.v1.NetworkPolicyService.SetNetworkPolicySignature:input_type -> containarium.v1.SetNetworkPolicySignatureRequest
+-	10, // 9: containarium.v1.NetworkPolicyService.ListNetworkPolicySignatures:input_type -> containarium.v1.ListNetworkPolicySignaturesRequest
+-	11, // 10: containarium.v1.NetworkPolicyService.DeleteNetworkPolicySignature:input_type -> containarium.v1.DeleteNetworkPolicySignatureRequest
+-	12, // 11: containarium.v1.NetworkPolicyService.SetNetworkPolicy:output_type -> containarium.v1.SetNetworkPolicyResponse
+-	13, // 12: containarium.v1.NetworkPolicyService.GetNetworkPolicy:output_type -> containarium.v1.GetNetworkPolicyResponse
+-	14, // 13: containarium.v1.NetworkPolicyService.ListNetworkPolicies:output_type -> containarium.v1.ListNetworkPoliciesResponse
+-	15, // 14: containarium.v1.NetworkPolicyService.DeleteNetworkPolicy:output_type -> containarium.v1.DeleteNetworkPolicyResponse
+-	12, // 15: containarium.v1.NetworkPolicyService.PatchNetworkPolicyDenyRules:output_type -> containarium.v1.SetNetworkPolicyResponse
+-	2,  // 16: containarium.v1.NetworkPolicyService.PlanNetworkPolicy:output_type -> containarium.v1.PlanNetworkPolicyResponse
+-	16, // 17: containarium.v1.NetworkPolicyService.SetNetworkPolicySignature:output_type -> containarium.v1.SetNetworkPolicySignatureResponse
+-	17, // 18: containarium.v1.NetworkPolicyService.ListNetworkPolicySignatures:output_type -> containarium.v1.ListNetworkPolicySignaturesResponse
+-	18, // 19: containarium.v1.NetworkPolicyService.DeleteNetworkPolicySignature:output_type -> containarium.v1.DeleteNetworkPolicySignatureResponse
+-	11, // [11:20] is the sub-list for method output_type
+-	2,  // [2:11] is the sub-list for method input_type
+-	2,  // [2:2] is the sub-list for extension type_name
+-	2,  // [2:2] is the sub-list for extension extendee
+-	0,  // [0:2] is the sub-list for field type_name
++	5,  // 2: containarium.v1.PatchTenantAccessRequest.changes:type_name -> containarium.v1.TenantAccessChange
++	10, // 3: containarium.v1.TenantAccessPolicy.policy:type_name -> containarium.v1.NetworkPolicy
++	7,  // 4: containarium.v1.PatchTenantAccessResponse.policies:type_name -> containarium.v1.TenantAccessPolicy
++	3,  // 5: containarium.v1.NetworkPolicyService.GetNetworkTenantCapabilities:input_type -> containarium.v1.GetNetworkTenantCapabilitiesRequest
++	6,  // 6: containarium.v1.NetworkPolicyService.PatchTenantAccess:input_type -> containarium.v1.PatchTenantAccessRequest
++	11, // 7: containarium.v1.NetworkPolicyService.SetNetworkPolicy:input_type -> containarium.v1.SetNetworkPolicyRequest
++	12, // 8: containarium.v1.NetworkPolicyService.GetNetworkPolicy:input_type -> containarium.v1.GetNetworkPolicyRequest
++	13, // 9: containarium.v1.NetworkPolicyService.ListNetworkPolicies:input_type -> containarium.v1.ListNetworkPoliciesRequest
++	14, // 10: containarium.v1.NetworkPolicyService.DeleteNetworkPolicy:input_type -> containarium.v1.DeleteNetworkPolicyRequest
++	15, // 11: containarium.v1.NetworkPolicyService.PatchNetworkPolicyDenyRules:input_type -> containarium.v1.PatchNetworkPolicyDenyRulesRequest
++	0,  // 12: containarium.v1.NetworkPolicyService.PlanNetworkPolicy:input_type -> containarium.v1.PlanNetworkPolicyRequest
++	16, // 13: containarium.v1.NetworkPolicyService.SetNetworkPolicySignature:input_type -> containarium.v1.SetNetworkPolicySignatureRequest
++	17, // 14: containarium.v1.NetworkPolicyService.ListNetworkPolicySignatures:input_type -> containarium.v1.ListNetworkPolicySignaturesRequest
++	18, // 15: containarium.v1.NetworkPolicyService.DeleteNetworkPolicySignature:input_type -> containarium.v1.DeleteNetworkPolicySignatureRequest
++	4,  // 16: containarium.v1.NetworkPolicyService.GetNetworkTenantCapabilities:output_type -> containarium.v1.GetNetworkTenantCapabilitiesResponse
++	8,  // 17: containarium.v1.NetworkPolicyService.PatchTenantAccess:output_type -> containarium.v1.PatchTenantAccessResponse
++	19, // 18: containarium.v1.NetworkPolicyService.SetNetworkPolicy:output_type -> containarium.v1.SetNetworkPolicyResponse
++	20, // 19: containarium.v1.NetworkPolicyService.GetNetworkPolicy:output_type -> containarium.v1.GetNetworkPolicyResponse
++	21, // 20: containarium.v1.NetworkPolicyService.ListNetworkPolicies:output_type -> containarium.v1.ListNetworkPoliciesResponse
++	22, // 21: containarium.v1.NetworkPolicyService.DeleteNetworkPolicy:output_type -> containarium.v1.DeleteNetworkPolicyResponse
++	19, // 22: containarium.v1.NetworkPolicyService.PatchNetworkPolicyDenyRules:output_type -> containarium.v1.SetNetworkPolicyResponse
++	2,  // 23: containarium.v1.NetworkPolicyService.PlanNetworkPolicy:output_type -> containarium.v1.PlanNetworkPolicyResponse
++	23, // 24: containarium.v1.NetworkPolicyService.SetNetworkPolicySignature:output_type -> containarium.v1.SetNetworkPolicySignatureResponse
++	24, // 25: containarium.v1.NetworkPolicyService.ListNetworkPolicySignatures:output_type -> containarium.v1.ListNetworkPolicySignaturesResponse
++	25, // 26: containarium.v1.NetworkPolicyService.DeleteNetworkPolicySignature:output_type -> containarium.v1.DeleteNetworkPolicySignatureResponse
++	16, // [16:27] is the sub-list for method output_type
++	5,  // [5:16] is the sub-list for method input_type
++	5,  // [5:5] is the sub-list for extension type_name
++	5,  // [5:5] is the sub-list for extension extendee
++	0,  // [0:5] is the sub-list for field type_name
+ }
+ 
+ func init() { file_containarium_v1_network_policy_proto_init() }
+@@ -382,7 +777,7 @@ func file_containarium_v1_network_policy_proto_init() {
+ 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
+ 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_containarium_v1_network_policy_proto_rawDesc), len(file_containarium_v1_network_policy_proto_rawDesc)),
+ 			NumEnums:      0,
+-			NumMessages:   3,
++			NumMessages:   9,
+ 			NumExtensions: 0,
+ 			NumServices:   1,
+ 		},
+diff --git a/pkg/pb/containarium/v1/network_policy.pb.gw.go b/pkg/pb/containarium/v1/network_policy.pb.gw.go
+index 9f02e78..19415ea 100644
+--- a/pkg/pb/containarium/v1/network_policy.pb.gw.go
++++ b/pkg/pb/containarium/v1/network_policy.pb.gw.go
+@@ -35,6 +35,54 @@ var (
+ 	_ = metadata.Join
+ )
+ 
++func request_NetworkPolicyService_GetNetworkTenantCapabilities_0(ctx context.Context, marshaler runtime.Marshaler, client NetworkPolicyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
++	var (
++		protoReq GetNetworkTenantCapabilitiesRequest
++		metadata runtime.ServerMetadata
++	)
++	if req.Body != nil {
++		_, _ = io.Copy(io.Discard, req.Body)
++	}
++	msg, err := client.GetNetworkTenantCapabilities(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
++	return msg, metadata, err
++}
++
++func local_request_NetworkPolicyService_GetNetworkTenantCapabilities_0(ctx context.Context, marshaler runtime.Marshaler, server NetworkPolicyServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
++	var (
++		protoReq GetNetworkTenantCapabilitiesRequest
++		metadata runtime.ServerMetadata
++	)
++	msg, err := server.GetNetworkTenantCapabilities(ctx, &protoReq)
++	return msg, metadata, err
++}
++
++func request_NetworkPolicyService_PatchTenantAccess_0(ctx context.Context, marshaler runtime.Marshaler, client NetworkPolicyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
++	var (
++		protoReq PatchTenantAccessRequest
++		metadata runtime.ServerMetadata
++	)
++	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
++		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
++	}
++	if req.Body != nil {
++		_, _ = io.Copy(io.Discard, req.Body)
++	}
++	msg, err := client.PatchTenantAccess(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
++	return msg, metadata, err
++}
++
++func local_request_NetworkPolicyService_PatchTenantAccess_0(ctx context.Context, marshaler runtime.Marshaler, server NetworkPolicyServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
++	var (
++		protoReq PatchTenantAccessRequest
++		metadata runtime.ServerMetadata
++	)
++	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
++		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
++	}
++	msg, err := server.PatchTenantAccess(ctx, &protoReq)
++	return msg, metadata, err
++}
++
+ func request_NetworkPolicyService_SetNetworkPolicy_0(ctx context.Context, marshaler runtime.Marshaler, client NetworkPolicyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+ 	var (
+ 		protoReq SetNetworkPolicyRequest
+@@ -334,6 +382,46 @@ func local_request_NetworkPolicyService_DeleteNetworkPolicySignature_0(ctx conte
+ // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterNetworkPolicyServiceHandlerFromEndpoint instead.
+ // GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
+ func RegisterNetworkPolicyServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server NetworkPolicyServiceServer) error {
++	mux.Handle(http.MethodGet, pattern_NetworkPolicyService_GetNetworkTenantCapabilities_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
++		ctx, cancel := context.WithCancel(req.Context())
++		defer cancel()
++		var stream runtime.ServerTransportStream
++		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
++		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
++		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/containarium.v1.NetworkPolicyService/GetNetworkTenantCapabilities", runtime.WithHTTPPathPattern("/v1/network-tenants/capabilities"))
++		if err != nil {
++			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		resp, md, err := local_request_NetworkPolicyService_GetNetworkTenantCapabilities_0(annotatedContext, inboundMarshaler, server, req, pathParams)
++		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
++		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
++		if err != nil {
++			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		forward_NetworkPolicyService_GetNetworkTenantCapabilities_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
++	})
++	mux.Handle(http.MethodPost, pattern_NetworkPolicyService_PatchTenantAccess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
++		ctx, cancel := context.WithCancel(req.Context())
++		defer cancel()
++		var stream runtime.ServerTransportStream
++		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
++		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
++		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/containarium.v1.NetworkPolicyService/PatchTenantAccess", runtime.WithHTTPPathPattern("/v1/network-policies/tenant-access"))
++		if err != nil {
++			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		resp, md, err := local_request_NetworkPolicyService_PatchTenantAccess_0(annotatedContext, inboundMarshaler, server, req, pathParams)
++		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
++		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
++		if err != nil {
++			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		forward_NetworkPolicyService_PatchTenantAccess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
++	})
+ 	mux.Handle(http.MethodPost, pattern_NetworkPolicyService_SetNetworkPolicy_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+ 		ctx, cancel := context.WithCancel(req.Context())
+ 		defer cancel()
+@@ -554,6 +642,40 @@ func RegisterNetworkPolicyServiceHandler(ctx context.Context, mux *runtime.Serve
+ // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
+ // "NetworkPolicyServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
+ func RegisterNetworkPolicyServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client NetworkPolicyServiceClient) error {
++	mux.Handle(http.MethodGet, pattern_NetworkPolicyService_GetNetworkTenantCapabilities_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
++		ctx, cancel := context.WithCancel(req.Context())
++		defer cancel()
++		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
++		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/containarium.v1.NetworkPolicyService/GetNetworkTenantCapabilities", runtime.WithHTTPPathPattern("/v1/network-tenants/capabilities"))
++		if err != nil {
++			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		resp, md, err := request_NetworkPolicyService_GetNetworkTenantCapabilities_0(annotatedContext, inboundMarshaler, client, req, pathParams)
++		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
++		if err != nil {
++			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		forward_NetworkPolicyService_GetNetworkTenantCapabilities_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
++	})
++	mux.Handle(http.MethodPost, pattern_NetworkPolicyService_PatchTenantAccess_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
++		ctx, cancel := context.WithCancel(req.Context())
++		defer cancel()
++		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
++		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/containarium.v1.NetworkPolicyService/PatchTenantAccess", runtime.WithHTTPPathPattern("/v1/network-policies/tenant-access"))
++		if err != nil {
++			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		resp, md, err := request_NetworkPolicyService_PatchTenantAccess_0(annotatedContext, inboundMarshaler, client, req, pathParams)
++		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
++		if err != nil {
++			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
++			return
++		}
++		forward_NetworkPolicyService_PatchTenantAccess_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
++	})
+ 	mux.Handle(http.MethodPost, pattern_NetworkPolicyService_SetNetworkPolicy_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+ 		ctx, cancel := context.WithCancel(req.Context())
+ 		defer cancel()
+@@ -711,6 +833,8 @@ func RegisterNetworkPolicyServiceHandlerClient(ctx context.Context, mux *runtime
+ }
+ 
+ var (
++	pattern_NetworkPolicyService_GetNetworkTenantCapabilities_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "network-tenants", "capabilities"}, ""))
++	pattern_NetworkPolicyService_PatchTenantAccess_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "network-policies", "tenant-access"}, ""))
+ 	pattern_NetworkPolicyService_SetNetworkPolicy_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "network-policies"}, ""))
+ 	pattern_NetworkPolicyService_GetNetworkPolicy_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "network-policies", "tenant"}, ""))
+ 	pattern_NetworkPolicyService_ListNetworkPolicies_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "network-policies"}, ""))
+@@ -723,6 +847,8 @@ var (
+ )
+ 
+ var (
++	forward_NetworkPolicyService_GetNetworkTenantCapabilities_0 = runtime.ForwardResponseMessage
++	forward_NetworkPolicyService_PatchTenantAccess_0            = runtime.ForwardResponseMessage
+ 	forward_NetworkPolicyService_SetNetworkPolicy_0             = runtime.ForwardResponseMessage
+ 	forward_NetworkPolicyService_GetNetworkPolicy_0             = runtime.ForwardResponseMessage
+ 	forward_NetworkPolicyService_ListNetworkPolicies_0          = runtime.ForwardResponseMessage
+diff --git a/pkg/pb/containarium/v1/network_policy_grpc.pb.go b/pkg/pb/containarium/v1/network_policy_grpc.pb.go
+index 6d1fbac..5519916 100644
+--- a/pkg/pb/containarium/v1/network_policy_grpc.pb.go
++++ b/pkg/pb/containarium/v1/network_policy_grpc.pb.go
+@@ -19,6 +19,8 @@ import (
+ const _ = grpc.SupportPackageIsVersion9
+ 
+ const (
++	NetworkPolicyService_GetNetworkTenantCapabilities_FullMethodName = "/containarium.v1.NetworkPolicyService/GetNetworkTenantCapabilities"
++	NetworkPolicyService_PatchTenantAccess_FullMethodName            = "/containarium.v1.NetworkPolicyService/PatchTenantAccess"
+ 	NetworkPolicyService_SetNetworkPolicy_FullMethodName             = "/containarium.v1.NetworkPolicyService/SetNetworkPolicy"
+ 	NetworkPolicyService_GetNetworkPolicy_FullMethodName             = "/containarium.v1.NetworkPolicyService/GetNetworkPolicy"
+ 	NetworkPolicyService_ListNetworkPolicies_FullMethodName          = "/containarium.v1.NetworkPolicyService/ListNetworkPolicies"
+@@ -42,6 +44,10 @@ const (
+ // BPF loader (a later increment) consumes the stored policies and programs the
+ // kernel. Admin-only — policies are fleet-shaping config, not tenant-editable.
+ type NetworkPolicyServiceClient interface {
++	// Authenticated protocol/permission handshake; never infer capabilities from a version string.
++	GetNetworkTenantCapabilities(ctx context.Context, in *GetNetworkTenantCapabilitiesRequest, opts ...grpc.CallOption) (*GetNetworkTenantCapabilitiesResponse, error)
++	// Atomic, revision-checked ingress-only mutation, preserving every other policy field.
++	PatchTenantAccess(ctx context.Context, in *PatchTenantAccessRequest, opts ...grpc.CallOption) (*PatchTenantAccessResponse, error)
+ 	// SetNetworkPolicy creates or replaces a tenant's policy (upsert by tenant).
+ 	// The policy is validated + normalized; the stored form is echoed back.
+ 	SetNetworkPolicy(ctx context.Context, in *SetNetworkPolicyRequest, opts ...grpc.CallOption) (*SetNetworkPolicyResponse, error)
+@@ -83,6 +89,26 @@ func NewNetworkPolicyServiceClient(cc grpc.ClientConnInterface) NetworkPolicySer
+ 	return &networkPolicyServiceClient{cc}
+ }
+ 
++func (c *networkPolicyServiceClient) GetNetworkTenantCapabilities(ctx context.Context, in *GetNetworkTenantCapabilitiesRequest, opts ...grpc.CallOption) (*GetNetworkTenantCapabilitiesResponse, error) {
++	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
++	out := new(GetNetworkTenantCapabilitiesResponse)
++	err := c.cc.Invoke(ctx, NetworkPolicyService_GetNetworkTenantCapabilities_FullMethodName, in, out, cOpts...)
++	if err != nil {
++		return nil, err
++	}
++	return out, nil
++}
++
++func (c *networkPolicyServiceClient) PatchTenantAccess(ctx context.Context, in *PatchTenantAccessRequest, opts ...grpc.CallOption) (*PatchTenantAccessResponse, error) {
++	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
++	out := new(PatchTenantAccessResponse)
++	err := c.cc.Invoke(ctx, NetworkPolicyService_PatchTenantAccess_FullMethodName, in, out, cOpts...)
++	if err != nil {
++		return nil, err
++	}
++	return out, nil
++}
++
+ func (c *networkPolicyServiceClient) SetNetworkPolicy(ctx context.Context, in *SetNetworkPolicyRequest, opts ...grpc.CallOption) (*SetNetworkPolicyResponse, error) {
+ 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+ 	out := new(SetNetworkPolicyResponse)
+@@ -185,6 +211,10 @@ func (c *networkPolicyServiceClient) DeleteNetworkPolicySignature(ctx context.Co
+ // BPF loader (a later increment) consumes the stored policies and programs the
+ // kernel. Admin-only — policies are fleet-shaping config, not tenant-editable.
+ type NetworkPolicyServiceServer interface {
++	// Authenticated protocol/permission handshake; never infer capabilities from a version string.
++	GetNetworkTenantCapabilities(context.Context, *GetNetworkTenantCapabilitiesRequest) (*GetNetworkTenantCapabilitiesResponse, error)
++	// Atomic, revision-checked ingress-only mutation, preserving every other policy field.
++	PatchTenantAccess(context.Context, *PatchTenantAccessRequest) (*PatchTenantAccessResponse, error)
+ 	// SetNetworkPolicy creates or replaces a tenant's policy (upsert by tenant).
+ 	// The policy is validated + normalized; the stored form is echoed back.
+ 	SetNetworkPolicy(context.Context, *SetNetworkPolicyRequest) (*SetNetworkPolicyResponse, error)
+@@ -226,6 +256,12 @@ type NetworkPolicyServiceServer interface {
+ // pointer dereference when methods are called.
+ type UnimplementedNetworkPolicyServiceServer struct{}
+ 
++func (UnimplementedNetworkPolicyServiceServer) GetNetworkTenantCapabilities(context.Context, *GetNetworkTenantCapabilitiesRequest) (*GetNetworkTenantCapabilitiesResponse, error) {
++	return nil, status.Error(codes.Unimplemented, "method GetNetworkTenantCapabilities not implemented")
++}
++func (UnimplementedNetworkPolicyServiceServer) PatchTenantAccess(context.Context, *PatchTenantAccessRequest) (*PatchTenantAccessResponse, error) {
++	return nil, status.Error(codes.Unimplemented, "method PatchTenantAccess not implemented")
++}
+ func (UnimplementedNetworkPolicyServiceServer) SetNetworkPolicy(context.Context, *SetNetworkPolicyRequest) (*SetNetworkPolicyResponse, error) {
+ 	return nil, status.Error(codes.Unimplemented, "method SetNetworkPolicy not implemented")
+ }
+@@ -274,6 +310,42 @@ func RegisterNetworkPolicyServiceServer(s grpc.ServiceRegistrar, srv NetworkPoli
+ 	s.RegisterService(&NetworkPolicyService_ServiceDesc, srv)
+ }
+ 
++func _NetworkPolicyService_GetNetworkTenantCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
++	in := new(GetNetworkTenantCapabilitiesRequest)
++	if err := dec(in); err != nil {
++		return nil, err
++	}
++	if interceptor == nil {
++		return srv.(NetworkPolicyServiceServer).GetNetworkTenantCapabilities(ctx, in)
++	}
++	info := &grpc.UnaryServerInfo{
++		Server:     srv,
++		FullMethod: NetworkPolicyService_GetNetworkTenantCapabilities_FullMethodName,
++	}
++	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
++		return srv.(NetworkPolicyServiceServer).GetNetworkTenantCapabilities(ctx, req.(*GetNetworkTenantCapabilitiesRequest))
++	}
++	return interceptor(ctx, in, info, handler)
++}
++
++func _NetworkPolicyService_PatchTenantAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
++	in := new(PatchTenantAccessRequest)
++	if err := dec(in); err != nil {
++		return nil, err
++	}
++	if interceptor == nil {
++		return srv.(NetworkPolicyServiceServer).PatchTenantAccess(ctx, in)
++	}
++	info := &grpc.UnaryServerInfo{
++		Server:     srv,
++		FullMethod: NetworkPolicyService_PatchTenantAccess_FullMethodName,
++	}
++	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
++		return srv.(NetworkPolicyServiceServer).PatchTenantAccess(ctx, req.(*PatchTenantAccessRequest))
++	}
++	return interceptor(ctx, in, info, handler)
++}
++
+ func _NetworkPolicyService_SetNetworkPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+ 	in := new(SetNetworkPolicyRequest)
+ 	if err := dec(in); err != nil {
+@@ -443,6 +515,14 @@ var NetworkPolicyService_ServiceDesc = grpc.ServiceDesc{
+ 	ServiceName: "containarium.v1.NetworkPolicyService",
+ 	HandlerType: (*NetworkPolicyServiceServer)(nil),
+ 	Methods: []grpc.MethodDesc{
++		{
++			MethodName: "GetNetworkTenantCapabilities",
++			Handler:    _NetworkPolicyService_GetNetworkTenantCapabilities_Handler,
++		},
++		{
++			MethodName: "PatchTenantAccess",
++			Handler:    _NetworkPolicyService_PatchTenantAccess_Handler,
++		},
+ 		{
+ 			MethodName: "SetNetworkPolicy",
+ 			Handler:    _NetworkPolicyService_SetNetworkPolicy_Handler,
+diff --git a/proto/containarium/v1/config.proto b/proto/containarium/v1/config.proto
+index 4487dfc..3b20d40 100644
+--- a/proto/containarium/v1/config.proto
++++ b/proto/containarium/v1/config.proto
+@@ -811,6 +811,7 @@ message GetNetworkPolicyRequest {
+   string tenant = 1;
+ }
+ message GetNetworkPolicyResponse {
++  string revision = 2;
+   NetworkPolicy policy = 1;
+ }
+ 
+diff --git a/proto/containarium/v1/container.proto b/proto/containarium/v1/container.proto
+index 3ea05e1..3b663b1 100644
+--- a/proto/containarium/v1/container.proto
++++ b/proto/containarium/v1/container.proto
+@@ -329,6 +329,10 @@ message Container {
+   // (QEMU/KVM), read back from the instance itself. UNSPECIFIED when the
+   // backend does not report it.
+   IsolationType isolation = 29;
++
++  // Resolved network ownership, independent of encryption tenant_id.
++  string network_tenant = 30;
++  string network_tenant_source = 31;
+ }
+ 
+ // ContainerMetrics contains runtime metrics for a container
+@@ -564,6 +568,10 @@ message CreateContainerRequest {
+   // together with idle_stop_minutes > 0 is contradictory and rejected with
+   // InvalidArgument.
+   bool disable_auto_sleep = 28;
++
++  // Explicit native network Tenant; administrator only. Requires enforced
++  // supported NIC guarding before first Start. Omitted preserves admin defaults.
++  string network_tenant = 29;
+ }
+ 
+ // CreateContainerResponse is the response from creating a container
+diff --git a/proto/containarium/v1/network_policy.proto b/proto/containarium/v1/network_policy.proto
+index dd1ab40..398c36f 100644
+--- a/proto/containarium/v1/network_policy.proto
++++ b/proto/containarium/v1/network_policy.proto
+@@ -17,6 +17,15 @@ import "protoc-gen-openapiv2/options/annotations.proto";
+ // BPF loader (a later increment) consumes the stored policies and programs the
+ // kernel. Admin-only — policies are fleet-shaping config, not tenant-editable.
+ service NetworkPolicyService {
++  // Authenticated protocol/permission handshake; never infer capabilities from a version string.
++  rpc GetNetworkTenantCapabilities(GetNetworkTenantCapabilitiesRequest) returns (GetNetworkTenantCapabilitiesResponse) {
++    option (google.api.http) = {get: "/v1/network-tenants/capabilities"};
++  }
++  // Atomic, revision-checked ingress-only mutation, preserving every other policy field.
++  rpc PatchTenantAccess(PatchTenantAccessRequest) returns (PatchTenantAccessResponse) {
++    option (google.api.http) = {post: "/v1/network-policies/tenant-access" body:"*"};
++  }
++
+   // SetNetworkPolicy creates or replaces a tenant's policy (upsert by tenant).
+   // The policy is validated + normalized; the stored form is echoed back.
+   rpc SetNetworkPolicy(SetNetworkPolicyRequest) returns (SetNetworkPolicyResponse) {
+@@ -186,3 +195,35 @@ message PlanNetworkPolicyResponse {
+   // egress_domains are not subtracted.
+   repeated string notes = 6;
+ }
++
++message GetNetworkTenantCapabilitiesRequest {}
++message GetNetworkTenantCapabilitiesResponse {
++  string contract = 1;
++  bool native_membership_read = 2;
++  bool shared_tenant_create = 3;
++  bool atomic_tenant_access = 4;
++  bool network_policy_write = 5;
++  string reason = 6;
++  string backend_scope = 7;
++}
++message TenantAccessChange {
++  // Destination policy: listed sources may initiate connections into it.
++  string destination = 1;
++  repeated string add_sources = 2;
++  repeated string remove_sources = 3;
++  // SHA256 of the entire observed policy, or "absent". Required to prevent lost previews.
++  string expected_revision = 4;
++}
++message PatchTenantAccessRequest {
++  repeated TenantAccessChange changes = 1;
++}
++message TenantAccessPolicy {
++  NetworkPolicy policy = 1;
++  string revision = 2;
++}
++message PatchTenantAccessResponse {
++  repeated TenantAccessPolicy policies = 1;
++  // A committed store write is separate from guard convergence and TCP testing.
++  string application_state = 2;
++  bool connectivity_tested = 3;
++}
+diff --git a/internal/cmd/tenant_access.go b/internal/cmd/tenant_access.go
+new file mode 100644
+index 0000000..0fd8956
+--- /dev/null
++++ b/internal/cmd/tenant_access.go
+@@ -0,0 +1,134 @@
++package cmd
++
++import (
++	"bytes"
++	"encoding/json"
++	"fmt"
++	"github.com/spf13/cobra"
++	"io"
++	"net/http"
++	"net/url"
++	"os"
++	"strings"
++	"time"
++)
++
++var accessBoth, accessRevoke, accessConfirm bool
++
++type accessEdit struct {
++	Destination string   `json:"destination"`
++	Add         []string `json:"addSources,omitempty"`
++	Remove      []string `json:"removeSources,omitempty"`
++	Revision    string   `json:"expectedRevision"`
++}
++type accessPlan struct {
++	Changes []accessEdit `json:"changes"`
++}
++
++func init() {
++	parent := &cobra.Command{Use: "access", Short: "Preview/apply atomic cross-Tenant ingress changes (admin)"}
++	preview := &cobra.Command{Use: "preview <source> <destination>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
++		if serverAddr == "" {
++			return errServerRequired()
++		}
++		pairs := [][2]string{{args[0], args[1]}}
++		if accessBoth {
++			pairs = append(pairs, [2]string{args[1], args[0]})
++		}
++		plan := accessPlan{}
++		for _, pair := range pairs {
++			revision, err := readTenantAccessRevision(pair[1])
++			if err != nil {
++				return err
++			}
++			change := accessEdit{Destination: pair[1], Revision: revision}
++			if accessRevoke {
++				change.Remove = []string{pair[0]}
++			} else {
++				change.Add = []string{pair[0]}
++			}
++			plan.Changes = append(plan.Changes, change)
++		}
++		encoded, err := json.MarshalIndent(plan, "", "  ")
++		if err != nil {
++			return err
++		}
++		fmt.Fprintln(cmd.OutOrStdout(), string(encoded))
++		return nil
++	}}
++	preview.Flags().BoolVar(&accessBoth, "both", false, "Edit both destination ingress policies in one transaction")
++	preview.Flags().BoolVar(&accessRevoke, "revoke", false, "Remove only the specified ingress authorization")
++	apply := &cobra.Command{Use: "apply <reviewed-plan.json> --confirm", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
++		if serverAddr == "" {
++			return errServerRequired()
++		}
++		if !accessConfirm {
++			return fmt.Errorf("review the exact plan and pass --confirm")
++		}
++		f, err := os.Open(args[0])
++		if err != nil {
++			return err
++		}
++		defer f.Close()
++		dec := json.NewDecoder(io.LimitReader(f, 65537))
++		dec.DisallowUnknownFields()
++		var plan accessPlan
++		if err := dec.Decode(&plan); err != nil {
++			return err
++		}
++		var extra interface{}
++		if err := dec.Decode(&extra); err != io.EOF {
++			return fmt.Errorf("one bounded JSON plan required")
++		}
++		var out interface{}
++		if err := doJSON("POST", strings.TrimSuffix(serverAddr, "/")+"/v1/network-policies/tenant-access", plan, &out); err != nil {
++			return err
++		}
++		return printJSON(out)
++	}}
++	apply.Flags().BoolVar(&accessConfirm, "confirm", false, "Confirm only the reviewed ingress changes; conflicts abort the entire batch")
++	capabilities := &cobra.Command{Use: "capabilities", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
++		if serverAddr == "" {
++			return errServerRequired()
++		}
++		var out interface{}
++		if err := doJSON("GET", strings.TrimSuffix(serverAddr, "/")+"/v1/network-tenants/capabilities", nil, &out); err != nil {
++			return err
++		}
++		return printJSON(out)
++	}}
++	parent.AddCommand(preview, apply)
++	networkPolicyCmd.AddCommand(parent, capabilities)
++}
++func readTenantAccessRevision(tenant string) (string, error) {
++	req, err := http.NewRequest("GET", strings.TrimSuffix(serverAddr, "/")+"/v1/network-policies/"+url.PathEscape(tenant), nil)
++	if err != nil {
++		return "", err
++	}
++	req.Header.Set("Authorization", "Bearer "+authToken)
++	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
++	if err != nil {
++		return "", err
++	}
++	defer resp.Body.Close()
++	if resp.StatusCode == http.StatusNotFound {
++		return "absent", nil
++	}
++	if resp.StatusCode != http.StatusOK {
++		return "", fmt.Errorf("policy read status %d", resp.StatusCode)
++	}
++	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024+1))
++	if err != nil || len(raw) > 4*1024*1024 {
++		return "", fmt.Errorf("invalid policy response")
++	}
++	var out struct {
++		Revision string `json:"revision"`
++	}
++	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&out); err != nil {
++		return "", err
++	}
++	if len(out.Revision) != 64 {
++		return "", fmt.Errorf("Provider lacks safe revision-checked Tenant access contract")
++	}
++	return out.Revision, nil
++}
+diff --git a/internal/mcp/tenant_network_tools.go b/internal/mcp/tenant_network_tools.go
+new file mode 100644
+index 0000000..22810d6
+--- /dev/null
++++ b/internal/mcp/tenant_network_tools.go
+@@ -0,0 +1,101 @@
++package mcp
++
++import (
++	"encoding/json"
++	"fmt"
++	"github.com/footprintai/containarium/internal/auth"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"google.golang.org/protobuf/encoding/protojson"
++	"google.golang.org/protobuf/proto"
++	"net/url"
++)
++
++type tenantNetworkAPI interface {
++	NetworkTenantCapabilities() (*pb.GetNetworkTenantCapabilitiesResponse, error)
++	NetworkPolicies() (*pb.ListNetworkPoliciesResponse, error)
++	NetworkPolicy(string) (*pb.GetNetworkPolicyResponse, error)
++	PatchTenantAccess(*pb.PatchTenantAccessRequest) (*pb.PatchTenantAccessResponse, error)
++}
++
++func (c *Client) tenantRPC(method, path string, req proto.Message, out proto.Message) error {
++	var body interface{}
++	if req != nil {
++		b, err := protojson.Marshal(req)
++		if err != nil {
++			return err
++		}
++		body = b
++	}
++	b, err := c.doRequest(method, path, body)
++	if err != nil {
++		return err
++	}
++	return protojson.Unmarshal(b, out)
++}
++func (c *Client) NetworkTenantCapabilities() (*pb.GetNetworkTenantCapabilitiesResponse, error) {
++	out := &pb.GetNetworkTenantCapabilitiesResponse{}
++	err := c.tenantRPC("GET", "/v1/network-tenants/capabilities", nil, out)
++	return out, err
++}
++func (c *Client) NetworkPolicies() (*pb.ListNetworkPoliciesResponse, error) {
++	out := &pb.ListNetworkPoliciesResponse{}
++	err := c.tenantRPC("GET", "/v1/network-policies", nil, out)
++	return out, err
++}
++func (c *Client) NetworkPolicy(tenant string) (*pb.GetNetworkPolicyResponse, error) {
++	out := &pb.GetNetworkPolicyResponse{}
++	err := c.tenantRPC("GET", "/v1/network-policies/"+url.PathEscape(tenant), nil, out)
++	return out, err
++}
++func (c *Client) PatchTenantAccess(req *pb.PatchTenantAccessRequest) (*pb.PatchTenantAccessResponse, error) {
++	out := &pb.PatchTenantAccessResponse{}
++	err := c.tenantRPC("POST", "/v1/network-policies/tenant-access", req, out)
++	return out, err
++}
++func tenantNetworkHandler(operation string) ToolHandler {
++	return func(api API, args map[string]interface{}) (string, error) {
++		client, ok := api.(tenantNetworkAPI)
++		if !ok {
++			return "", fmt.Errorf("backend does not support the Tenant network contract")
++		}
++		var out proto.Message
++		var err error
++		switch operation {
++		case "capabilities":
++			out, err = client.NetworkTenantCapabilities()
++		case "list":
++			out, err = client.NetworkPolicies()
++		case "get":
++			out, err = client.NetworkPolicy(getStringArg(args, "tenant", ""))
++		case "patch":
++			raw, e := json.Marshal(args)
++			if e != nil {
++				return "", e
++			}
++			req := &pb.PatchTenantAccessRequest{}
++			if e = protojson.Unmarshal(raw, req); e != nil {
++				return "", e
++			}
++			out, err = client.PatchTenantAccess(req)
++		}
++		if err != nil {
++			return "", err
++		}
++		b, err := protojson.Marshal(out)
++		return string(b), err
++	}
++}
++func tenantNetworkTools() []Tool {
++	empty := map[string]interface{}{"type": "object", "properties": map[string]interface{}{}, "additionalProperties": false}
++	change := map[string]interface{}{"type": "object", "properties": map[string]interface{}{
++		"destination": map[string]interface{}{"type": "string", "description": "Destination policy whose ingress is edited"}, "expected_revision": map[string]interface{}{"type": "string", "description": "Observed whole-policy SHA256 or absent"},
++		"add_sources":    map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
++		"remove_sources": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
++	}, "required": []string{"destination", "expected_revision"}, "additionalProperties": false}
++	return []Tool{
++		{Name: "network_tenant_capabilities", Description: "Authenticated Tenant network contract, permissions and local Guard readiness; no version-string inference.", InputSchema: empty, RequiredScope: auth.ScopeContainersRead, Handler: tenantNetworkHandler("capabilities")},
++		{Name: "list_network_policies", Description: "Read Tenant network policies. Configured ingress permissions are not TCP test results.", InputSchema: empty, RequiredScope: auth.ScopeNetworkPolicyRead, Handler: tenantNetworkHandler("list")},
++		{Name: "get_network_policy", Description: "Read a destination Tenant policy and its full revision for a safe ingress-only edit.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"tenant": map[string]interface{}{"type": "string", "description": "Destination native network Tenant key"}}, "required": []string{"tenant"}, "additionalProperties": false}, RequiredScope: auth.ScopeNetworkPolicyRead, Handler: tenantNetworkHandler("get")},
++		{Name: "patch_tenant_access", Description: "Admin-only atomic ingress-source add/remove with full revision checks. Source A -> destination B changes B.allow_from_tenants. Two changes grant/revoke both directions atomically. Preserves all egress, mode, metadata, preset and deny rules. Tenant-wide access, not port/Box granularity. Does not test TCP.", InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"changes": map[string]interface{}{"description": "Revision-checked destination ingress edits; both directions use two changes in one transaction", "type": "array", "items": change, "minItems": 1, "maxItems": 32}}, "required": []string{"changes"}, "additionalProperties": false}, RequiredScope: auth.ScopeNetworkPolicyWrite, Handler: tenantNetworkHandler("patch")},
++	}
++}
+diff --git a/internal/server/network_tenant_create.go b/internal/server/network_tenant_create.go
+new file mode 100644
+index 0000000..b3c1256
+--- /dev/null
++++ b/internal/server/network_tenant_create.go
+@@ -0,0 +1,56 @@
++package server
++
++import (
++	"context"
++	"github.com/footprintai/containarium/internal/auth"
++	"github.com/footprintai/containarium/pkg/core/incus"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/status"
++	"strings"
++)
++
++// Network identities and login/encryption identities are independent. Explicit
++// shared boundaries are admin-only. Non-admin automatic boxes use a reserved
++// account namespace, so choosing a username cannot join an admin-created shared
++// domain. Existing resources are never relabeled by this change.
++func authorizeNetworkTenantCreate(ctx context.Context, req *pb.CreateContainerRequest, localLXC bool) error {
++	admin := auth.RequireRole(ctx, auth.RoleAdmin) == nil
++	for k := range req.Labels {
++		if k == "tenant" || k == incus.TenantLabelKey || strings.HasPrefix(k, "user.containarium.") {
++			return status.Error(codes.InvalidArgument, "protected network attribution is not a generic label")
++		}
++		if k == incus.CloudOrgIDLabel && !admin {
++			return status.Error(codes.PermissionDenied, "cloud attribution requires administrator authority")
++		}
++	}
++	if !admin && localLXC {
++		own := "account:" + req.Username
++		if req.NetworkTenant != "" && req.NetworkTenant != own {
++			return status.Error(codes.PermissionDenied, "shared network Tenant assignment requires administrator authority")
++		}
++		req.NetworkTenant = own
++	} else if !admin && req.NetworkTenant != "" {
++		return status.Error(codes.PermissionDenied, "shared network Tenant requires administrator authority")
++	} else if strings.HasPrefix(req.NetworkTenant, "account:") {
++		return status.Error(codes.InvalidArgument, "account network namespace is reserved")
++	}
++	if req.NetworkTenant != "" {
++		if !localLXC {
++			return status.Error(codes.FailedPrecondition, "native network Tenant requires local LXC backend")
++		}
++		if err := incus.ValidateNetworkTenant(req.NetworkTenant); err != nil {
++			return status.Error(codes.InvalidArgument, err.Error())
++		}
++		if req.Labels[incus.CloudOrgIDLabel] != "" && req.Labels[incus.CloudOrgIDLabel] != req.NetworkTenant {
++			return status.Error(codes.InvalidArgument, "conflicting cloud and network Tenant attribution")
++		}
++		if req.Isolation == pb.IsolationType_ISOLATION_TYPE_VM || req.OsType == pb.OSType_OS_TYPE_WINDOWS_2022 {
++			return status.Error(codes.InvalidArgument, "network Tenant contract supports Linux LXC only")
++		}
++		if req.BackendId != "" || req.Pool != "" || req.Region != "" {
++			return status.Error(codes.FailedPrecondition, "network Tenant contract requires the local LXC backend")
++		}
++	}
++	return nil
++}
+diff --git a/internal/server/tenant_access_postgres_test.go b/internal/server/tenant_access_postgres_test.go
+new file mode 100644
+index 0000000..eef4b04
+--- /dev/null
++++ b/internal/server/tenant_access_postgres_test.go
+@@ -0,0 +1,99 @@
++package server
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"github.com/jackc/pgx/v5"
++	"github.com/jackc/pgx/v5/pgxpool"
++	"google.golang.org/protobuf/proto"
++	"os"
++	"sync"
++	"testing"
++	"time"
++)
++
++func TestTenantAccessPostgresAtomicityPreservationAndConcurrency(t *testing.T) {
++	dsn := os.Getenv("TEST_TENANT_PG_DSN")
++	if dsn == "" {
++		t.Skip("set TEST_TENANT_PG_DSN for an isolated PostgreSQL fixture")
++	}
++	ctx := context.Background()
++	admin, err := pgxpool.New(ctx, dsn)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer admin.Close()
++	schema := fmt.Sprintf("tenant_access_test_%d", time.Now().UnixNano())
++	quoted := pgx.Identifier{schema}.Sanitize()
++	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+quoted); err != nil {
++		t.Fatal(err)
++	}
++	defer admin.Exec(ctx, "DROP SCHEMA "+quoted+" CASCADE")
++	cfg, err := pgxpool.ParseConfig(dsn)
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg.ConnConfig.RuntimeParams["search_path"] = schema
++	pool, err := pgxpool.NewWithConfig(ctx, cfg)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer pool.Close()
++	store, err := NewPostgresNetworkPolicyStore(ctx, pool)
++	if err != nil {
++		t.Fatal(err)
++	}
++	old := richAccessPolicy("testing")
++	if err := store.Set(ctx, old); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := store.MutateDenyRules(ctx, "testing", func([]*pb.NetworkPolicyDenyRule) ([]*pb.NetworkPolicyDenyRule, error) { return old.DenyRules, nil }); err != nil {
++		t.Fatal(err)
++	}
++	before, _ := store.Get(ctx, "testing")
++	changed, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "allinone", AddSources: []string{"testing"}, ExpectedRevision: "absent"}, {Destination: "testing", AddSources: []string{"allinone"}, ExpectedRevision: PolicyRevision(before)}})
++	if err != nil || len(changed) != 2 {
++		t.Fatalf("atomic two-way mutation: %v", err)
++	}
++	after, _ := store.Get(ctx, "testing")
++	without := proto.Clone(after).(*pb.NetworkPolicy)
++	without.AllowFromTenants = nil
++	if !proto.Equal(without, before) {
++		t.Fatal("Postgres ingress UPDATE lost other policy fields")
++	}
++	_, err = store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "new-empty", AddSources: []string{"testing"}, ExpectedRevision: "absent"}, {Destination: "testing", RemoveSources: []string{"allinone"}, ExpectedRevision: PolicyRevision(before)}})
++	if !errors.Is(err, ErrTenantAccessConflict) {
++		t.Fatal("stale preview did not conflict")
++	}
++	if _, err := store.Get(ctx, "new-empty"); !errors.Is(err, ErrNetworkPolicyNotFound) {
++		t.Fatal("failed batch left an inserted row")
++	}
++	rev := PolicyRevision(after)
++	errs := make(chan error, 2)
++	var wg sync.WaitGroup
++	for _, src := range []string{"first", "second"} {
++		wg.Add(1)
++		go func(src string) {
++			defer wg.Done()
++			_, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "testing", AddSources: []string{src}, ExpectedRevision: rev}})
++			errs <- err
++		}(src)
++	}
++	wg.Wait()
++	close(errs)
++	success, conflict := 0, 0
++	for err := range errs {
++		if err == nil {
++			success++
++		} else if errors.Is(err, ErrTenantAccessConflict) {
++			conflict++
++		} else {
++			t.Fatal(err)
++		}
++	}
++	if success != 1 || conflict != 1 {
++		t.Fatal("Postgres CAS lost a concurrent edit")
++	}
++}
+diff --git a/internal/server/tenant_access_server.go b/internal/server/tenant_access_server.go
+new file mode 100644
+index 0000000..c144e46
+--- /dev/null
++++ b/internal/server/tenant_access_server.go
+@@ -0,0 +1,104 @@
++package server
++
++import (
++	"context"
++	"errors"
++	"github.com/footprintai/containarium/internal/auth"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/status"
++	"log"
++	"time"
++)
++
++const TenantNetworkContract = "boxweave.tenant-network/v1"
++
++func (s *NetworkPolicyServer) guardReady() bool {
++	if s.tenantGuardRead == nil || s.tenantStoreDurable == nil || !s.tenantStoreDurable() {
++		return false
++	}
++	g := s.tenantGuardRead()
++	stamp, err := time.Parse(time.RFC3339, g.GetLastPass())
++	age := time.Since(stamp)
++	for _, entry := range g.Entries {
++		if !entry.Attached || entry.LastError != "" {
++			return false
++		}
++	}
++	return err == nil && age >= -30*time.Second && age <= 180*time.Second && g.Mode == pb.GuardMode_GUARD_MODE_ENFORCE && g.FirewallDriver == "nftables" && !g.Unsupported && g.LastError == "" && g.StaleSince == "" && len(g.Unresolved) == 0
++}
++
++func (s *NetworkPolicyServer) GetNetworkTenantCapabilities(ctx context.Context, _ *pb.GetNetworkTenantCapabilitiesRequest) (*pb.GetNetworkTenantCapabilitiesResponse, error) {
++	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
++		return nil, err
++	}
++	if err := auth.RequireScope(ctx, auth.ScopeContainersRead); err != nil {
++		return nil, err
++	}
++	_, atomic := s.store.(TenantAccessStore)
++	atomic = atomic && s.tenantGuardRead != nil && s.tenantStoreDurable != nil && s.tenantStoreDurable()
++	allowed := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite) == nil
++	ready := s.guardReady()
++	reason := ""
++	if !ready {
++		reason = "fresh enforced supported local LXC Guard and durable policy store required"
++	}
++	return &pb.GetNetworkTenantCapabilitiesResponse{Contract: TenantNetworkContract, NativeMembershipRead: true, SharedTenantCreate: ready, AtomicTenantAccess: atomic, NetworkPolicyWrite: atomic && allowed, Reason: reason, BackendScope: "local-lxc"}, nil
++}
++
++func (s *NetworkPolicyServer) PatchTenantAccess(ctx context.Context, req *pb.PatchTenantAccessRequest) (*pb.PatchTenantAccessResponse, error) {
++	if err := auth.RequireRole(ctx, auth.RoleAdmin); err != nil {
++		return nil, err
++	}
++	if err := auth.RequireScope(ctx, auth.ScopeNetworkPolicyWrite); err != nil {
++		return nil, err
++	}
++	if err := validateAccessChanges(req.GetChanges()); err != nil {
++		return nil, status.Error(codes.InvalidArgument, err.Error())
++	}
++	store, ok := s.store.(TenantAccessStore)
++	if !ok {
++		return nil, status.Error(codes.Unimplemented, "atomic Tenant access unavailable")
++	}
++	if s.tenantGuardRead == nil || s.tenantStoreDurable == nil {
++		return nil, status.Error(codes.FailedPrecondition, "local LXC Tenant Guard contract is not configured")
++	}
++	if !s.guardReady() {
++		for _, change := range req.Changes {
++			if len(change.AddSources) > 0 {
++				return nil, status.Error(codes.FailedPrecondition, "grant requires fresh ENFORCE supported Tenant Guard")
++			}
++		}
++	}
++	if s.tenantStoreDurable != nil && !s.tenantStoreDurable() {
++		return nil, status.Error(codes.FailedPrecondition, "durable policy store unavailable")
++	}
++	policies, err := store.PatchTenantAccess(ctx, req.Changes)
++	if errors.Is(err, ErrTenantAccessConflict) {
++		return nil, status.Error(codes.Aborted, err.Error())
++	}
++	if err != nil {
++		return nil, status.Error(codes.Internal, "atomic Tenant access store failed")
++	}
++	// Store success is not enforcement success. Never roll back unrelated policy
++	// writes or report a TCP result from an ACL reconciliation.
++	applied := "pending"
++	if s.tenantGuardReconcile != nil {
++		if err := s.tenantGuardReconcile(ctx); err != nil {
++			applied = "degraded"
++		} else if s.guardReady() {
++			applied = "guard_verified"
++			for _, p := range policies {
++				current, e := s.store.Get(ctx, p.Policy.Tenant)
++				if e != nil || PolicyRevision(current) != p.Revision {
++					applied = "pending"
++				}
++			}
++		}
++	}
++	actor, _, _ := auth.SubjectFromGRPCContext(ctx)
++	for _, c := range req.Changes {
++		log.Printf("[tenant-access] actor=%q destination=%q add=%q remove=%q state=%s", actor, c.Destination, c.AddSources, c.RemoveSources, applied)
++	}
++	return &pb.PatchTenantAccessResponse{Policies: policies, ApplicationState: applied, ConnectivityTested: false}, nil
++}
+diff --git a/internal/server/tenant_access_store.go b/internal/server/tenant_access_store.go
+new file mode 100644
+index 0000000..045188d
+--- /dev/null
++++ b/internal/server/tenant_access_store.go
+@@ -0,0 +1,179 @@
++package server
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"errors"
++	"fmt"
++	"github.com/footprintai/containarium/pkg/core/incus"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"google.golang.org/protobuf/proto"
++	"sort"
++)
++
++var ErrTenantAccessConflict = errors.New("network policy changed since preview")
++
++type TenantAccessStore interface {
++	PatchTenantAccess(context.Context, []*pb.TenantAccessChange) ([]*pb.TenantAccessPolicy, error)
++}
++
++// PolicyRevision covers the entire policy, including independently managed deny
++// rules. An ingress patch can never silently discard an intervening policy edit.
++func PolicyRevision(p *pb.NetworkPolicy) string {
++	if p == nil {
++		return "absent"
++	}
++	b, _ := proto.MarshalOptions{Deterministic: true}.Marshal(p)
++	sum := sha256.Sum256(b)
++	return hex.EncodeToString(sum[:])
++}
++
++func validateAccessChanges(changes []*pb.TenantAccessChange) error {
++	if len(changes) == 0 || len(changes) > 32 {
++		return fmt.Errorf("1-32 destination changes required")
++	}
++	seen := map[string]bool{}
++	for _, c := range changes {
++		if c == nil {
++			return fmt.Errorf("invalid destination change")
++		}
++		if err := incus.ValidateNetworkTenant(c.Destination); err != nil {
++			return err
++		}
++		if seen[c.Destination] {
++			return fmt.Errorf("duplicate destination")
++		}
++		seen[c.Destination] = true
++		if c.ExpectedRevision != "absent" {
++			b, err := hex.DecodeString(c.ExpectedRevision)
++			if err != nil || len(b) != 32 {
++				return fmt.Errorf("expected full policy revision is required")
++			}
++		}
++		if len(c.AddSources)+len(c.RemoveSources) == 0 || len(c.AddSources)+len(c.RemoveSources) > 100 {
++			return fmt.Errorf("1-100 ingress source edits required")
++		}
++		sources := map[string]bool{}
++		for _, src := range append(append([]string{}, c.AddSources...), c.RemoveSources...) {
++			if err := incus.ValidateNetworkTenant(src); err != nil {
++				return err
++			}
++			if src == c.Destination || sources[src] {
++				return fmt.Errorf("self, duplicate or contradictory ingress source")
++			}
++			sources[src] = true
++		}
++	}
++	return nil
++}
++
++func applyAccess(old *pb.NetworkPolicy, c *pb.TenantAccessChange) (*pb.NetworkPolicy, error) {
++	if PolicyRevision(old) != c.ExpectedRevision {
++		return nil, ErrTenantAccessConflict
++	}
++	var next *pb.NetworkPolicy
++	if old == nil {
++		// No pre-existing egress policy is reset. The new record remains log-only;
++		// its allow_from_tenants is consumed independently by the NIC guard.
++		next = &pb.NetworkPolicy{Tenant: c.Destination}
++	} else {
++		next = proto.Clone(old).(*pb.NetworkPolicy)
++	}
++	allowed := map[string]bool{}
++	for _, src := range next.AllowFromTenants {
++		allowed[src] = true
++	}
++	for _, src := range c.RemoveSources {
++		delete(allowed, src)
++	}
++	for _, src := range c.AddSources {
++		allowed[src] = true
++	}
++	next.AllowFromTenants = nil
++	for src := range allowed {
++		next.AllowFromTenants = append(next.AllowFromTenants, src)
++	}
++	sort.Strings(next.AllowFromTenants)
++	return next, nil
++}
++
++func (s *MemNetworkPolicyStore) PatchTenantAccess(_ context.Context, changes []*pb.TenantAccessChange) ([]*pb.TenantAccessPolicy, error) {
++	if err := validateAccessChanges(changes); err != nil {
++		return nil, err
++	}
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	next := map[string]*pb.NetworkPolicy{}
++	out := []*pb.TenantAccessPolicy{}
++	for _, c := range changes {
++		p, err := applyAccess(s.m[c.Destination], c)
++		if err != nil {
++			return nil, err
++		}
++		next[c.Destination] = p
++		out = append(out, &pb.TenantAccessPolicy{Policy: proto.Clone(p).(*pb.NetworkPolicy), Revision: PolicyRevision(p)})
++	}
++	for key, p := range next {
++		s.m[key] = p
++	}
++	return out, nil
++}
++
++func (s *PostgresNetworkPolicyStore) PatchTenantAccess(ctx context.Context, changes []*pb.TenantAccessChange) ([]*pb.TenantAccessPolicy, error) {
++	if err := validateAccessChanges(changes); err != nil {
++		return nil, err
++	}
++	// Consistent lock order avoids A/B vs B/A deadlocks. No caller input mutation.
++	changes = append([]*pb.TenantAccessChange(nil), changes...)
++	sort.Slice(changes, func(i, j int) bool { return changes[i].Destination < changes[j].Destination })
++	tx, err := s.pool.Begin(ctx)
++	if err != nil {
++		return nil, err
++	}
++	defer tx.Rollback(ctx)
++	out := []*pb.TenantAccessPolicy{}
++	for _, c := range changes {
++		tag, err := tx.Exec(ctx, `INSERT INTO network_policies (tenant) VALUES ($1) ON CONFLICT (tenant) DO NOTHING`, c.Destination)
++		if err != nil {
++			return nil, err
++		}
++		inserted := tag.RowsAffected() == 1
++		p := &pb.NetworkPolicy{Tenant: c.Destination}
++		var mode, preset int32
++		var deny []byte
++		err = tx.QueryRow(ctx, `SELECT allow_intra_tenant,egress_cidrs,egress_domains,mode,allow_metadata,source,deny_rules,allow_from_tenants,egress_preset FROM network_policies WHERE tenant=$1 FOR UPDATE`, c.Destination).Scan(&p.AllowIntraTenant, &p.EgressCidrs, &p.EgressDomains, &mode, &p.AllowMetadata, &p.Source, &deny, &p.AllowFromTenants, &preset)
++		if err != nil {
++			return nil, err
++		}
++		p.Mode = pb.NetworkPolicyMode(mode)
++		p.EgressPreset = pb.EgressPreset(preset)
++		p.DenyRules, err = decodeDenyRules(deny)
++		if err != nil {
++			return nil, err
++		}
++		if inserted {
++			p = nil
++		}
++		next, err := applyAccess(p, c)
++		if err != nil {
++			return nil, err
++		}
++		// Only ingress sources change. Default mode for an absent record is already
++		// unspecified/log-only; do not UPDATE any egress, mode, metadata or deny field.
++		if inserted {
++			next.Mode = pb.NetworkPolicyMode_NETWORK_POLICY_MODE_UNSPECIFIED
++		}
++		if _, err = tx.Exec(ctx, `UPDATE network_policies SET allow_from_tenants=$2,updated_at=NOW() WHERE tenant=$1`, c.Destination, nonNilStrings(next.AllowFromTenants)); err != nil {
++			return nil, err
++		}
++		out = append(out, &pb.TenantAccessPolicy{Policy: next, Revision: PolicyRevision(next)})
++	}
++	if err := tx.Commit(ctx); err != nil {
++		return nil, err
++	}
++	return out, nil
++}
++
++var _ TenantAccessStore = (*MemNetworkPolicyStore)(nil)
++var _ TenantAccessStore = (*PostgresNetworkPolicyStore)(nil)
+diff --git a/internal/server/tenant_access_test.go b/internal/server/tenant_access_test.go
+new file mode 100644
+index 0000000..ddf2c8e
+--- /dev/null
++++ b/internal/server/tenant_access_test.go
+@@ -0,0 +1,158 @@
++package server
++
++import (
++	"context"
++	"errors"
++	"github.com/footprintai/containarium/internal/auth"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/status"
++	"google.golang.org/protobuf/proto"
++	"sync"
++	"testing"
++	"time"
++)
++
++func richAccessPolicy(key string) *pb.NetworkPolicy {
++	return &pb.NetworkPolicy{Tenant: key, AllowIntraTenant: true, EgressCidrs: []string{"10.0.0.0/8"}, EgressDomains: []string{"example.com"}, Mode: pb.NetworkPolicyMode_NETWORK_POLICY_MODE_ENFORCE, AllowMetadata: true, Source: "cloud-managed", EgressPreset: pb.EgressPreset_EGRESS_PRESET_ALLOW_LIST_ONLY, DenyRules: []*pb.NetworkPolicyDenyRule{{Cidr: "10.2.3.4/32", Port: 443, Note: "keep"}}}
++}
++func TestTenantAccessDirectionPreservationAndRevocation(t *testing.T) {
++	store := NewMemNetworkPolicyStore()
++	ctx := context.Background()
++	old := richAccessPolicy("testing")
++	_ = store.Set(ctx, old)
++	// Set owns allow-policy, seed independently managed deny rules through its API.
++	_, _ = store.MutateDenyRules(ctx, "testing", func([]*pb.NetworkPolicyDenyRule) ([]*pb.NetworkPolicyDenyRule, error) { return old.DenyRules, nil })
++	before, _ := store.Get(ctx, "testing")
++	change := &pb.TenantAccessChange{Destination: "testing", AddSources: []string{"allinone"}, ExpectedRevision: PolicyRevision(before)}
++	out, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{change})
++	if err != nil {
++		t.Fatal(err)
++	}
++	after := out[0].Policy
++	if len(after.AllowFromTenants) != 1 || after.AllowFromTenants[0] != "allinone" {
++		t.Fatal("authorization applied to wrong destination")
++	}
++	actual := proto.Clone(after).(*pb.NetworkPolicy)
++	actual.AllowFromTenants = nil
++	if !proto.Equal(actual, before) {
++		t.Fatal("ingress patch clobbered another security field")
++	}
++	if _, err := store.Get(ctx, "allinone"); !errors.Is(err, ErrNetworkPolicyNotFound) {
++		t.Fatal("one direction implicitly granted reverse access")
++	}
++	_, err = store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "testing", RemoveSources: []string{"allinone"}, ExpectedRevision: PolicyRevision(after)}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	restored, _ := store.Get(ctx, "testing")
++	if !proto.Equal(restored, before) {
++		t.Fatal("revoke failed to restore policy exactly")
++	}
++}
++func TestTenantAccessBidirectionalAtomicConflict(t *testing.T) {
++	store := NewMemNetworkPolicyStore()
++	ctx := context.Background()
++	_ = store.Set(ctx, &pb.NetworkPolicy{Tenant: "testing"})
++	_, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "allinone", AddSources: []string{"testing"}, ExpectedRevision: "absent"}, {Destination: "testing", AddSources: []string{"allinone"}, ExpectedRevision: "absent"}})
++	if !errors.Is(err, ErrTenantAccessConflict) {
++		t.Fatalf("wanted revision conflict: %v", err)
++	}
++	if _, err = store.Get(ctx, "allinone"); !errors.Is(err, ErrNetworkPolicyNotFound) {
++		t.Fatal("partial bidirectional write committed")
++	}
++	existing, _ := store.Get(ctx, "testing")
++	out, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "allinone", AddSources: []string{"testing"}, ExpectedRevision: "absent"}, {Destination: "testing", AddSources: []string{"allinone"}, ExpectedRevision: PolicyRevision(existing)}})
++	if err != nil || len(out) != 2 {
++		t.Fatalf("bidirectional mutation: %v", err)
++	}
++}
++func TestTenantAccessConcurrentPreviewHasOneWinner(t *testing.T) {
++	store := NewMemNetworkPolicyStore()
++	ctx := context.Background()
++	_ = store.Set(ctx, &pb.NetworkPolicy{Tenant: "testing"})
++	old, _ := store.Get(ctx, "testing")
++	var wg sync.WaitGroup
++	errs := make(chan error, 2)
++	for _, src := range []string{"first", "second"} {
++		wg.Add(1)
++		go func(src string) {
++			defer wg.Done()
++			_, err := store.PatchTenantAccess(ctx, []*pb.TenantAccessChange{{Destination: "testing", AddSources: []string{src}, ExpectedRevision: PolicyRevision(old)}})
++			errs <- err
++		}(src)
++	}
++	wg.Wait()
++	close(errs)
++	success, conflict := 0, 0
++	for err := range errs {
++		if err == nil {
++			success++
++		} else if errors.Is(err, ErrTenantAccessConflict) {
++			conflict++
++		} else {
++			t.Fatal(err)
++		}
++	}
++	if success != 1 || conflict != 1 {
++		t.Fatal("concurrent preview lost an update")
++	}
++}
++func TestTenantAccessPermissionAndNoConnectivityClaim(t *testing.T) {
++	s := newNPServer()
++	s.tenantStoreDurable = func() bool { return true }
++	s.tenantGuardRead = func() *pb.GuardStatus {
++		return &pb.GuardStatus{Mode: pb.GuardMode_GUARD_MODE_ENFORCE, FirewallDriver: "nftables", LastPass: time.Now().UTC().Format(time.RFC3339)}
++	}
++	req := &pb.PatchTenantAccessRequest{Changes: []*pb.TenantAccessChange{{Destination: "testing", AddSources: []string{"allinone"}, ExpectedRevision: "absent"}}}
++	for _, ctx := range []context.Context{context.Background(), auth.ContextWithTestSubject(context.Background(), "user", "user"), auth.ContextWithTestSubjectScopes(context.Background(), "admin", []string{auth.RoleAdmin}, []string{auth.ScopeContainersWrite})} {
++		if _, err := s.PatchTenantAccess(ctx, req); err == nil {
++			t.Fatal("unauthorized policy mutation")
++		}
++	}
++	scoped := auth.ContextWithTestSubjectScopes(context.Background(), "admin", []string{auth.RoleAdmin}, []string{auth.ScopeContainersWrite})
++	if _, err := s.SetNetworkPolicy(scoped, &pb.SetNetworkPolicyRequest{Policy: &pb.NetworkPolicy{Tenant: "testing", AllowFromTenants: []string{"allinone"}}}); status.Code(err) != codes.PermissionDenied {
++		t.Fatal("full-policy API bypassed ingress write scope")
++	}
++	result, err := s.PatchTenantAccess(npAdminCtx(), req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if result.ConnectivityTested || result.ApplicationState != "pending" {
++		t.Fatal("store success claimed network success")
++	}
++	req.Changes[0].ExpectedRevision = "absent"
++	_, err = s.PatchTenantAccess(npAdminCtx(), req)
++	if status.Code(err) != codes.Aborted {
++		t.Fatalf("expected conflict: %v", err)
++	}
++}
++func TestNetworkTenantCreateAuthority(t *testing.T) {
++	admin := npAdminCtx()
++	user := auth.ContextWithTestSubject(context.Background(), "allinone", "user")
++	for _, labels := range []map[string]string{{"tenant": "other"}, {"cloud_org_id": "other"}, {"user.containarium.tenant": "other"}} {
++		if err := authorizeNetworkTenantCreate(user, &pb.CreateContainerRequest{Username: "allinone", Labels: labels}, true); err == nil {
++			t.Fatal("label spoof admitted")
++		}
++	}
++	req := &pb.CreateContainerRequest{Username: "allinone"}
++	if err := authorizeNetworkTenantCreate(user, req, true); err != nil {
++		t.Fatal(err)
++	}
++	if req.NetworkTenant != "account:allinone" {
++		t.Fatal("username could join explicit shared domain")
++	}
++	if err := authorizeNetworkTenantCreate(user, &pb.CreateContainerRequest{Username: "allinone", NetworkTenant: "shared"}, true); status.Code(err) != codes.PermissionDenied {
++		t.Fatal("non-admin assigned shared Tenant")
++	}
++	if err := authorizeNetworkTenantCreate(admin, &pb.CreateContainerRequest{Username: "box1", NetworkTenant: "allinone"}, true); err != nil {
++		t.Fatal(err)
++	}
++	if err := authorizeNetworkTenantCreate(admin, &pb.CreateContainerRequest{Username: "box1", NetworkTenant: "account:user"}, true); err == nil {
++		t.Fatal("reserved namespace accepted")
++	}
++	req = &pb.CreateContainerRequest{Username: "box1"}
++	if err := authorizeNetworkTenantCreate(admin, req, true); err != nil || req.NetworkTenant != "" {
++		t.Fatal("admin automatic compatibility changed")
++	}
++}
+diff --git a/internal/server/tenant_network_transport_test.go b/internal/server/tenant_network_transport_test.go
+new file mode 100644
+index 0000000..eda9189
+--- /dev/null
++++ b/internal/server/tenant_network_transport_test.go
+@@ -0,0 +1,159 @@
++package server
++
++import (
++	"bufio"
++	"bytes"
++	"context"
++	"encoding/json"
++	"github.com/footprintai/containarium/internal/auth"
++	"github.com/footprintai/containarium/internal/mcp"
++	pb "github.com/footprintai/containarium/pkg/pb/containarium/v1"
++	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/credentials/insecure"
++	"google.golang.org/grpc/metadata"
++	"google.golang.org/grpc/test/bufconn"
++	"google.golang.org/protobuf/encoding/protojson"
++	"io"
++	"net"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"os/exec"
++	"strings"
++	"testing"
++	"time"
++)
++
++func tenantTransportServer() *NetworkPolicyServer {
++	s := NewNetworkPolicyServer(NewMemNetworkPolicyStore())
++	s.tenantStoreDurable = func() bool { return true }
++	s.tenantGuardRead = func() *pb.GuardStatus {
++		return &pb.GuardStatus{Mode: pb.GuardMode_GUARD_MODE_ENFORCE, FirewallDriver: "nftables", LastPass: time.Now().UTC().Format(time.RFC3339)}
++	}
++	return s
++}
++func transportCtx(ctx context.Context) context.Context {
++	return auth.ContextWithTestSubjectScopes(ctx, "fixture-admin", []string{auth.RoleAdmin}, []string{auth.ScopeContainersRead, auth.ScopeNetworkPolicyRead, auth.ScopeNetworkPolicyWrite})
++}
++func TestTenantAccessRESTAndGRPCHaveSameContract(t *testing.T) {
++	listener := bufconn.Listen(1 << 20)
++	srv := grpc.NewServer(grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
++		return next(transportCtx(ctx), req)
++	}))
++	pb.RegisterNetworkPolicyServiceServer(srv, tenantTransportServer())
++	go srv.Serve(listener)
++	defer srv.Stop()
++	conn, err := grpc.NewClient("passthrough:///fixture", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer conn.Close()
++	gateway := runtime.NewServeMux()
++	if err := pb.RegisterNetworkPolicyServiceHandler(context.Background(), gateway, conn); err != nil {
++		t.Fatal(err)
++	}
++	request := httptest.NewRequest("POST", "/v1/network-policies/tenant-access", strings.NewReader(`{"changes":[{"destination":"testing","addSources":["allinone"],"expectedRevision":"absent"}]}`))
++	request.Header.Set("Content-Type", "application/json")
++	out := httptest.NewRecorder()
++	gateway.ServeHTTP(out, request)
++	if out.Code != 200 {
++		t.Fatalf("REST patch: %d %s", out.Code, out.Body.String())
++	}
++	observed, err := pb.NewNetworkPolicyServiceClient(conn).GetNetworkPolicy(context.Background(), &pb.GetNetworkPolicyRequest{Tenant: "testing"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(observed.Policy.AllowFromTenants) != 1 || observed.Policy.AllowFromTenants[0] != "allinone" || len(observed.Revision) != 64 {
++		t.Fatal("gRPC read did not observe REST patch")
++	}
++	_, err = pb.NewNetworkPolicyServiceClient(conn).PatchTenantAccess(context.Background(), &pb.PatchTenantAccessRequest{Changes: []*pb.TenantAccessChange{{Destination: "testing", RemoveSources: []string{"allinone"}, ExpectedRevision: observed.Revision}}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	got := httptest.NewRecorder()
++	gateway.ServeHTTP(got, httptest.NewRequest("GET", "/v1/network-policies/testing", nil))
++	var value pb.GetNetworkPolicyResponse
++	if err := protojson.Unmarshal(got.Body.Bytes(), &value); err != nil {
++		t.Fatal(err)
++	}
++	if len(value.Policy.AllowFromTenants) != 0 {
++		t.Fatal("REST did not observe gRPC revoke")
++	}
++}
++func TestTenantAccessMCPInitializeListAndActualCall(t *testing.T) {
++	s := tenantTransportServer()
++	mux := runtime.NewServeMux(runtime.WithMetadata(func(ctx context.Context, _ *http.Request) metadata.MD {
++		md, _ := metadata.FromIncomingContext(transportCtx(ctx))
++		return md
++	}))
++	if err := pb.RegisterNetworkPolicyServiceHandlerServer(context.Background(), mux, s); err != nil {
++		t.Fatal(err)
++	}
++	server := httptest.NewServer(mux)
++	defer server.Close()
++	requests := []map[string]any{
++		{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "isolated-tenant-test", "version": "1"}}},
++		{"jsonrpc": "2.0", "method": "notifications/initialized"},
++		{"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
++		{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": map[string]any{"name": "network_tenant_capabilities", "arguments": map[string]any{}}},
++		{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": map[string]any{"name": "patch_tenant_access", "arguments": map[string]any{"changes": []any{map[string]any{"destination": "testing", "add_sources": []string{"allinone"}, "expected_revision": "absent"}}}}},
++		{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": map[string]any{"name": "get_network_policy", "arguments": map[string]any{"tenant": "testing"}}},
++	}
++	var stdin bytes.Buffer
++	encoder := json.NewEncoder(&stdin)
++	for _, req := range requests {
++		if err := encoder.Encode(req); err != nil {
++			t.Fatal(err)
++		}
++	}
++	executable, _ := os.Executable()
++	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
++	defer cancel()
++	command := exec.CommandContext(ctx, executable, "-test.run=^TestTenantAccessMCPHelper$")
++	command.Env = append(os.Environ(), "CONTAINARIUM_TEST_TENANT_MCP="+server.URL, "CONTAINARIUM_MCP_ALLOW_INSECURE=true")
++	command.Stdin = &stdin
++	var stderr bytes.Buffer
++	command.Stderr = &stderr
++	stdout, err := command.Output()
++	if err != nil {
++		t.Fatalf("MCP helper: %v %s", err, stderr.String())
++	}
++	scanner := bufio.NewScanner(bytes.NewReader(stdout))
++	count := 0
++	for scanner.Scan() {
++		var response mcp.MCPResponse
++		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
++			t.Fatal(err)
++		}
++		if response.Error != nil {
++			t.Fatalf("MCP protocol error: %v", response.Error)
++		}
++		if bytes.Contains(scanner.Bytes(), []byte(`"isError":true`)) {
++			t.Fatalf("MCP tool error: %s", scanner.Bytes())
++		}
++		count++
++	}
++	if count != 5 {
++		t.Fatalf("expected initialize, tools/list and three actual call results; got %d", count)
++	}
++	current, err := s.store.Get(context.Background(), "testing")
++	if err != nil || len(current.AllowFromTenants) != 1 || current.AllowFromTenants[0] != "allinone" {
++		t.Fatalf("actual MCP tools/call did not mutate the isolated store: %v", err)
++	}
++}
++func TestTenantAccessMCPHelper(t *testing.T) {
++	target := os.Getenv("CONTAINARIUM_TEST_TENANT_MCP")
++	if target == "" {
++		return
++	}
++	s, err := mcp.NewServer(&mcp.Config{ServerURL: target, JWTToken: "synthetic-test-token", MCPTools: "network_tenant_capabilities,list_network_policies,get_network_policy,patch_tenant_access"})
++	if err == nil {
++		err = s.Start()
++	}
++	if err != nil {
++		io.WriteString(os.Stderr, err.Error())
++		os.Exit(1)
++	}
++	os.Exit(0)
++}
+diff --git a/internal/tenantguard/network_tenant_test.go b/internal/tenantguard/network_tenant_test.go
+new file mode 100644
+index 0000000..ad63641
+--- /dev/null
++++ b/internal/tenantguard/network_tenant_test.go
+@@ -0,0 +1,31 @@
++package tenantguard
++
++import (
++	"context"
++	"github.com/footprintai/containarium/internal/nicguard"
++	"testing"
++)
++
++func TestExplicitTenantRequiresEnforceAndSupportedNICs(t *testing.T) {
++	for _, kind := range []string{"off", "xtables", "old-incus"} {
++		t.Run(kind, func(t *testing.T) {
++			f := twoTenantHost()
++			cfg := enforceCfg()
++			switch kind {
++			case "off":
++				cfg.Mode = nicguard.ModeOff
++			case "xtables":
++				f.firewall = "xtables"
++			case "old-incus":
++				f.noBridgeACL = true
++			}
++			r := NewReconciler(f, cfg)
++			if err := r.PrepareNetworkTenant(context.Background(), "new-container", "allinone"); err == nil {
++				t.Fatal("explicit membership silently unguarded")
++			}
++			if f.writes() != 0 {
++				t.Fatal("unsupported guard wrote state")
++			}
++		})
++	}
++}
+diff --git a/pkg/core/container/network_tenant_test.go b/pkg/core/container/network_tenant_test.go
+new file mode 100644
+index 0000000..495397c
+--- /dev/null
++++ b/pkg/core/container/network_tenant_test.go
+@@ -0,0 +1,51 @@
++package container
++
++import (
++	"context"
++	"errors"
++	"github.com/footprintai/containarium/pkg/core/incus"
++	"testing"
++)
++
++type requiredGuard struct{ check func(string, string) error }
++
++func (g requiredGuard) Prepare(context.Context, string, string) error {
++	return errors.New("legacy hook must not handle explicit membership")
++}
++func (g requiredGuard) PrepareNetworkTenant(_ context.Context, name, key string) error {
++	return g.check(name, key)
++}
++func TestNetworkTenantNativeAtBirthAndGuardBeforeAutostart(t *testing.T) {
++	b := &guardBackend{stagesBackend: &stagesBackend{}}
++	m := NewWithBackend(b)
++	m.SetNICGuard(requiredGuard{check: func(name, key string) error {
++		if b.started || b.createdConfig.ExtraConfig[incus.TenantLabelKey] != "allinone" || key != "allinone" || b.createdConfig.AutoStart {
++			t.Fatal("membership/guard/autostart order violated")
++		}
++		return nil
++	}})
++	opts := stagesOpts()
++	opts.NetworkTenant = "allinone"
++	opts.AutoStart = true
++	if _, err := m.Create(opts); err != nil {
++		t.Fatal(err)
++	}
++	if !b.started || b.config["boot.autostart"] != "true" {
++		t.Fatal("guarded instance did not regain requested lifecycle")
++	}
++}
++func TestNetworkTenantFailsClosedWithoutRequiredHook(t *testing.T) {
++	for _, g := range []NICGuard{nil, &recordingGuard{}, requiredGuard{check: func(string, string) error { return errors.New("unsupported") }}} {
++		b := &guardBackend{stagesBackend: &stagesBackend{}}
++		m := NewWithBackend(b)
++		m.SetNICGuard(g)
++		opts := stagesOpts()
++		opts.NetworkTenant = "allinone"
++		if _, err := m.Create(opts); !errors.Is(err, ErrNICGuard) {
++			t.Fatalf("wanted closed failure, got %v", err)
++		}
++		if b.started || b.deleteCalls != 1 {
++			t.Fatal("failed guard left a runnable resource")
++		}
++	}
++}
+diff --git a/pkg/core/incus/network_tenant.go b/pkg/core/incus/network_tenant.go
+new file mode 100644
+index 0000000..7cf4664
+--- /dev/null
++++ b/pkg/core/incus/network_tenant.go
+@@ -0,0 +1,33 @@
++package incus
++
++import (
++	"fmt"
++	"regexp"
++	"strings"
++)
++
++var networkTenantPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,127}$`)
++
++// ValidateNetworkTenant validates a native identity, never an Incus config map.
++func ValidateNetworkTenant(key string) error {
++	if !networkTenantPattern.MatchString(key) || strings.TrimSpace(key) != key {
++		return fmt.Errorf("invalid network Tenant: use 1-128 letters, digits, colon, dot, underscore or hyphen")
++	}
++	if strings.HasPrefix(key, "containarium-core-") || strings.HasPrefix(key, "core-") {
++		return fmt.Errorf("reserved network Tenant")
++	}
++	return nil
++}
++
++func NetworkTenantIdentity(explicit, cloud, name string) (string, string) {
++	if strings.TrimSpace(explicit) != "" {
++		return strings.TrimSpace(explicit), "native"
++	}
++	if strings.TrimSpace(cloud) != "" {
++		return strings.TrimSpace(cloud), "cloud_org_id"
++	}
++	if strings.TrimSuffix(name, "-container") == "" {
++		return "", "unknown"
++	}
++	return ResolveTenant(explicit, cloud, name), "name"
++}

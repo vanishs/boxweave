@@ -75,21 +75,39 @@ gateway error for the requested instance and normalizes it to absence (404).
 Generic 500s and all write failures retain their error/unknown semantics. See
 [regression evidence](WEB-TESTING.md#missing-instance-compatibility-regression).
 
-## Tenant contract
+## Tenant compatibility profiles
 
-| Capability | CLI | Host MCP | REST | BoxWeave behavior |
-| --- | --- | --- | --- | --- |
-| Query network Tenant | generic labels + Guard | list/get + network_guard_status | containers + GET /v1/network/guard | Fresh Guard subject authoritative; official cloud/name fallback explicitly inferred |
-| Explicit shared Tenant at creation | generic --labels; not native guarantee | no labels/Tenant parameter | labels accepted under generic namespace | disabled: birth guard/native namespace mismatch |
-| Existing Box reassignment | no verified atomic contract | no verified atomic contract | no verified atomic contract | disabled |
-| Guard status | network-guard status | network_guard_status | GET /v1/network/guard | read-only Core/Tenant evidence and freshness |
-| Network policy | network-policy | no corresponding tool | policy endpoints | writes disabled; Guard evidence only |
-| Tenant display metadata | no Provider CRUD | no Provider CRUD | no Provider CRUD | local authenticated SQLite CRUD, not Provider entities |
+The baseline table above describes unchanged v0.114.2. The complete optional
+[source patch](../patches/containarium/README.md) extends all three surfaces:
 
-The native key is user.containarium.tenant; labels.tenant becomes
-user.containarium.label.tenant and is not interchangeable. OSS tenant_id is
-restricted encryption scope, not arbitrary network Tenant assignment. See
-[model/API/operation](TENANTS.md) and the [proposed upstream extension](TENANT-UPSTREAM.md).
-Create reconciliation now also requires matching fresh attached ACL evidence;
-Running alone does not imply Success. Provisioning/verification-pending/degraded
-receipts retain name reservations. Existing auth scopes remain unchanged.
+| Capability | Unchanged v0.114.2 | Patched contract boxweave.tenant-network/v1 |
+| --- | --- | --- |
+| Membership query | Guard authoritative; cloud/name inferred | Native networkTenant + source returned; independent fresh Guard evidence |
+| Shared creation A | blocked | CLI --network-tenant; MCP network_tenant; REST networkTenant; same pre-Start required Guard |
+| Cross-Tenant B | Web writes blocked; CLI/REST legacy policy support | CLI access preview/apply; MCP patch_tenant_access; REST atomic tenant-access |
+| Policy query | no Host MCP counterpart | CLI list/get; MCP list_network_policies/get_network_policy; REST existing endpoints with full revision |
+| Capability | no recognized contract | CLI capabilities; MCP network_tenant_capabilities; GET /v1/network-tenants/capabilities |
+| Existing Box reassignment | blocked | blocked |
+| Metadata | local SQLite only | local SQLite; one-time declared key binding is not membership proof |
+| Connectivity evidence | not tested | configured / Guard verified / TCP not tested remain separate |
+
+The handshake is authenticated, requires exact contract/backendScope local-lxc
+and nativeMembershipRead, and is reevaluated for writes. Shared creation requires
+fresh ENFORCE supported Guard. Atomic policy grants also require durable storage;
+admin plus network-policy:write is enforced on the Provider. Revoke can be stored
+while enforcement is degraded, but is never reported as applied without evidence.
+
+The independent Web token retains its original four container/route scopes on
+old Providers. Token rotation probes only the fixed loopback capability endpoint;
+recognized atomic-capable Providers receive network-policy:read and
+network-policy:write in a newly minted Web-subject token. Existing MCP tokens,
+launcher credentials and timers are not rewritten. A newly upgraded Provider may
+need the next normal Web token rotation before writes are available.
+
+Native network Tenant is independent of encryption tenant_id and generic labels.
+Explicit shared native keys are admin-only and local Linux LXC only. Non-admin
+local creation is hardened to reserved account:<username> membership; admin
+omitted-field behavior remains the existing resolver. See [operation](TENANTS.md),
+[upstream changes and deployment gate](TENANT-UPSTREAM.md), and
+[test evidence](WEB-TESTING.md). No version-string check, label injection or
+post-start relabeling workaround enables A/B.

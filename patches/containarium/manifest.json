@@ -1,0 +1,70 @@
+{
+  "baseTag": "v0.114.2",
+  "baseCommit": "8107ea2724dd12786bbd73ff5371e8314f3d35d9",
+  "candidateVersion": "0.114.2-boxweave.tenant.1",
+  "contract": "boxweave.tenant-network/v1",
+  "backendScope": "local-lxc",
+  "patch": "v0.114.2-tenant-network.patch",
+  "patchSHA256": "37204f3bf869a7856d4018a7516c1c56357e4ed838e1bc994bad34ff2dcd56e4",
+  "patchApplyCheck": "passed against exact base; all changed files byte-equal",
+  "changedFiles": [
+    "api/swagger/containarium.swagger.json",
+    "internal/auth/scopes.go",
+    "internal/client/grpc.go",
+    "internal/client/grpc_create_request_test.go",
+    "internal/client/http.go",
+    "internal/client/http_requests.go",
+    "internal/client/http_test.go",
+    "internal/cmd/create.go",
+    "internal/cmd/get.go",
+    "internal/cmd/tenant_access.go",
+    "internal/mcp/client.go",
+    "internal/mcp/recipe_guardrail_test.go",
+    "internal/mcp/server_test.go",
+    "internal/mcp/tenant_network_tools.go",
+    "internal/mcp/tools.go",
+    "internal/server/container_server.go",
+    "internal/server/dual_server.go",
+    "internal/server/network_policy_server.go",
+    "internal/server/network_tenant_create.go",
+    "internal/server/tenant_access_postgres_test.go",
+    "internal/server/tenant_access_server.go",
+    "internal/server/tenant_access_store.go",
+    "internal/server/tenant_access_test.go",
+    "internal/server/tenant_network_transport_test.go",
+    "internal/tenantguard/network_tenant_test.go",
+    "internal/tenantguard/reconciler.go",
+    "pkg/core/box/box.go",
+    "pkg/core/box/k8s/k8s.go",
+    "pkg/core/box/lxc/lxc.go",
+    "pkg/core/container/manager.go",
+    "pkg/core/container/network_tenant_test.go",
+    "pkg/core/container/nic_guard.go",
+    "pkg/core/incus/client.go",
+    "pkg/core/incus/network_tenant.go",
+    "pkg/pb/containarium/v1/config.pb.go",
+    "pkg/pb/containarium/v1/container.pb.go",
+    "pkg/pb/containarium/v1/network_policy.pb.go",
+    "pkg/pb/containarium/v1/network_policy.pb.gw.go",
+    "pkg/pb/containarium/v1/network_policy_grpc.pb.go",
+    "proto/containarium/v1/config.proto",
+    "proto/containarium/v1/container.proto",
+    "proto/containarium/v1/network_policy.proto"
+  ],
+  "candidateBinaries": {
+    "containariumd": {
+      "sha256": "4748635aa547f83bd0dbbffdb3ff0ab16e87569dbe54aa5e6a55fba3070e9cae",
+      "size": 147859184
+    },
+    "containarium": {
+      "sha256": "03acf9f3e09f46c796f500927c68f7f1c636dcd2ece9a19761296ae6d2327218",
+      "size": 38903005
+    },
+    "containarium-mcp": {
+      "sha256": "c235750b4ee2413918437a9a8f763aae771b6fe7c8040320ba2892ed99cc3484",
+      "size": 33971170
+    }
+  },
+  "deployment": "not installed; isolated development builds only",
+  "buildPlatform": "go version go1.26.10 linux/amd64 linux/amd64"
+}

@@ -301,7 +301,7 @@ PY_LOCAL_SOURCE
   fi
 }
 export BOXWEAVE_LOCAL_SOURCE_STAGED="${LOCAL_SOURCE_DIR:+true}"
-for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION server/web_install.py server/web_token.py server/web_entry.py server/webui/__init__.py server/webui/store.py server/webui/tenants.py server/webui/graph.py server/webui/provider.py server/webui/app.py server/webui/command.py server/webui/requirements.txt server/webui/requirements.lock web/package.json web/package-lock.json web/tsconfig.json web/vite.config.ts web/index.html web/src/main.tsx web/src/tenants.tsx web/src/model.ts web/src/style.css; do
+for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION server/web_install.py server/web_token.py server/web_entry.py server/webui/__init__.py server/webui/store.py server/webui/tenants.py server/webui/access.py server/webui/graph.py server/webui/provider.py server/webui/app.py server/webui/command.py server/webui/requirements.txt server/webui/requirements.lock web/package.json web/package-lock.json web/tsconfig.json web/vite.config.ts web/index.html web/src/main.tsx web/src/tenants.tsx web/src/access.tsx web/src/model.ts web/src/style.css; do
   mkdir -p "$TMPDIR_DL/$(dirname "$source_file")"
   stage_source "$source_file"
 done

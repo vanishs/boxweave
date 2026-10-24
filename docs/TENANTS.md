@@ -1,165 +1,142 @@
 # Tenant model and operation
 
-A Tenant is the infrastructure ownership and network boundary for a group of
-Boxes. It is the only resource grouping concept in BoxWeave. A Tenant is not a
-Web account, Incus Project, Unix username, encryption key scope, or Prompt Graph.
-The console retains its single local administrator and independent MCP transport.
+A Tenant is the infrastructure membership and network boundary for Boxes. It is
+separate from Web accounts, Incus Project, Unix users, encryption tenant_id and
+Prompt Graph. The console retains one local administrator.
 
-## Authority and identifiers
+## Authority, identifiers and compatibility
 
-Containarium owns existence, state, membership and NIC ACL attachment. SQLite
-schema 2 stores display metadata, current selection, graphs and existing durable
-plans, jobs and audit records. Editing a name never changes a network boundary.
+The Provider owns actual membership, policies and NIC ACLs. SQLite schema 2 owns
+display metadata, plans, jobs, audit and graphs. Display edits do not change
+network membership. Native Provider keys take precedence; labels.tenant is never
+interpreted as user.containarium.tenant.
 
-Discovered IDs are `tenant_` followed by the full SHA256 of the native Provider
-key. Local empty records use `tenant_local_` followed by a random UUID hex value.
-Neither uses an IP. `providerKey` is immutable through the metadata API; `name`
-and `description` are editable using optimistic revisions. Two Tenants can have
-the same display name without being merged. Local empty records have no Provider
-network, even when their display name matches an existing native key.
+Discovered IDs are tenant_ plus the full SHA256 of the native key. Empty local
+records use tenant_local_ plus UUID hex. At first shared creation preview, a local
+record is bound once, with optimistic revision control, to bw- plus its UUID.
+Its stable local ID survives discovery of created Boxes. A declared key is not
+proof of a Provider entity: empty records remain metadata only until membership
+is observed. Name changes, duplicate display names and IP reuse never merge
+networks. Existing Boxes are never moved, relabeled or recreated.
 
-At the pinned Containarium v0.114.2 source commit, the official resolver uses:
+On the patched Provider, networkTenant/networkTenantSource are authoritative
+membership observations. Fresh Guard must independently agree before ACL status
+is verified. Old v0.114.2 falls back to fresh Guard subjects or explicitly inferred
+cloud/name resolution. Inferred membership never establishes isolation. Unknown
+backends and unresolved resources remain visible.
 
-1. Native `user.containarium.tenant`, trimmed.
-2. Generic `user.containarium.label.cloud_org_id`, trimmed.
-3. Instance name with `-container` removed.
+A/B controls require authenticated contract boxweave.tenant-network/v1, native
+membership support and backendScope local-lxc. Old/unknown Providers retain
+read-only Tenant views and Automatic creation; shared creation/policy writes show
+a specific unavailable reason. No optimistic version or generic label workaround
+enables writes. See [the compatibility matrix](WEB-CAPABILITIES.md).
 
-The Box REST representation exposes generic labels, **not** the native Tenant
-key. Generic `labels.tenant` is a different namespace and is never treated as the
-native network Tenant. A fresh Tenant Guard entry's `subject` supplies the
-resolved native key, including its explicit-key precedence. Without this evidence,
-cloud attribution or the official name fallback is shown as inferred, with
-`confirmed:false`; missing identifiers, unresolved/unmanaged resources and
-unverified remote-backend attribution remain Unknown. Inferred membership never
-establishes isolation. Read-only discovery does not insert or mutate metadata.
-No existing Box is renamed, recreated, relabeled or moved during migration.
+## A: create Boxes with shared native membership
 
-## Guard evidence
+In Boxes, choose unified settings or individual rows. Select an existing Tenant,
+create new Tenant metadata in the dialog, or explicitly choose Automatic. New
+Tenant selection preserves other batch settings. The server computes the native
+key from the selected stable ID; raw networkTenant, native labels, encryption
+tenant_id and cloud spoofing are not browser input.
 
-`GET /v1/network/guard` is read through the existing server-side Web credential.
-No new credentials are delivered to browsers. Membership includes its source,
-confirmation flag, and sanitized Guard evidence. The console requires all of:
+Review each username, resources, image, expected membership and pending Guard
+state before confirming. The patched Provider persists native membership and
+requires the same NIC Guard attachment before the first Start. Capability/Guard
+readiness is checked again at confirmation. Automatic keeps the independent
+admin name-fallback workflow.
 
-- ENFORCE mode, supported `nftables` driver and no unsupported indication;
-- a timezone-bearing last pass no more than 180 seconds old (30 seconds of future
-  clock tolerance), no stale marker and no relevant reported error;
-- exactly one matching current instance entry, matching Tenant subject and ACL
-  `containarium-tenant-<first 12 SHA256 hex characters of native key>`;
-- `attached:true`, no entry error and the Box's current IP matching the entry;
-- complete inventory and no unresolved/unmanaged ambiguity for aggregate status.
+Receipts distinguish created, provisioning, membership verified, Guard verified
+and TCP not tested. Running alone is insufficient. Unknown, submitted and
+verification-pending receipts reserve names; reconciliation reads the original
+username and never repeats writes automatically. A mismatch is degraded. SSH,
+application readiness and TCP connectivity are separate observations.
 
-Other states are Unknown, Unsupported, Pending or Degraded. Empty metadata has
-state Empty. No route-to-Tenant association is inferred from IP reuse: routes
-must identify a current Box by exact instance name or username; orphans remain
-Unresolved. Remote-backend resources are conservatively unresolved until the
-adapter can bind Guard evidence to the correct backend. A local-host Guard must
-never certify a peer's similarly named Box.
+Shared membership normally permits internal access, subject to listeners and
+other controls. It does not share files or Unix rights, imply cross-host layer 2,
+or prove public/gateway/proxy paths are isolated.
 
-Verified ACL attachment is not a bidirectional TCP connectivity result. Same
-Tenant normally permits internal access, subject to services and other controls.
-Direct bridge traffic between different Tenants is guarded; gateway, proxy,
-published-port and internet-egress paths differ. Tenant membership shares neither
-files nor Unix users/admin rights, and does not promise cross-host layer-2 access.
+## B: reviewed cross-Tenant connectivity
 
-## Console workflow
+Open Network -> Tenant Connectivity. Choose source/destination and forward,
+reverse or both directions, then grant or revoke. A -> B changes only B's
+allow_from_tenants; both directions are one atomic Provider transaction. This
+grants Tenant-wide initiation, not one Box/port. Source egress and destination
+listeners/other controls still apply; established-flow replies do not mean a
+reverse initiation grant.
 
-1. Sign in and open Overview or Tenants. Existing native Tenants are discovered.
-2. Select a Tenant for its Overview, Boxes, Network, Monitoring and Prompt Context.
-3. Edit display metadata; the stable ID and Provider key stay unchanged.
-4. Use Open scoped Boxes or the Tenant scope selector. All Tenants and Unknown /
-   Unresolved remain available. Group by Tenant preserves search, sort and batch
-   selection. Scope changes only the view and saved selection.
-5. Tenant detail supports selected start/stop/delete using the same exact-target
-   confirmation plans. Open Boxes for selected-field resize and batch creation.
-6. Create empty Tenant metadata if desired; this does not create a Provider entity.
-7. Delete metadata only after fresh checks for Boxes, routes, graph references and
-   incomplete/uncertain inventory. No implicit cascade deletes any resource.
-8. Add Tenant or Box cards to any graph, including a mixed-Tenant graph.
+Preview shows exact destination policies, before/after ingress sources, full
+policy revisions and preserved fields. Confirmation consumes the short-lived
+plan once. Revision conflicts abort the whole batch and require a new preview.
+Egress CIDRs/domains, mode, metadata, preset and independent deny rules are not
+reset. After commit, readback verifies revisions and preserved policy fields.
+Unknown responses remain uncertain and must not be replayed automatically.
 
-### Batch creation limitation
+Policy configured, Guard verified/degraded/pending and TCP not tested are
+separate states. Revoking a stored edge while Guard is unavailable does not prove
+immediate enforcement. All current policies and recent receipts are visible.
+Tenant detail has Internal Network and External Access; Monitoring shows policy
+state without inventing traffic metrics.
 
-Containarium v0.114.2 cannot guarantee explicit shared network Tenant creation
-across CLI, MCP, REST and the pre-start NIC guard. Selecting a target Tenant in
-unified or individual mode retains the selection but disables review/submission
-with the reason visible. The server rejects the same request regardless of UI.
-No generic-label injection, `cloud_org_id` spoofing, arbitrary `tenant_id`, or
-post-start relabeling workaround exists in BoxWeave.
+Metadata deletion checks Boxes, routes, both ends of graph references and policy
+references. Incomplete inventories block deletion; there is no resource cascade.
 
-Choose **Automatic — each Box has its own network Tenant** explicitly to retain
-the existing independent-Box workflow. The confirmation preview shows each name,
-resources, image, expected native name fallback and pending Guard status. This is
-an expectation, not a successful membership assertion. Name conflicts and
-unresolved create receipts still block duplicate creation.
+## Evidence rules
 
-Accepted creates are Submitted; Query actual creation state observes existence,
-state, actual membership and ACL evidence. Creating/Provisioning and Verification
-pending are distinct from Success. A confirmed membership mismatch is Degraded.
-Success requires Running plus expected membership and verified ACL evidence;
-SSH readiness and application/TCP readiness remain separate. No reconciliation
-replays a write or retries an ambiguous create. Old receipts remain readable.
+Verified Guard requires ENFORCE, supported nftables, no relevant error, a
+timezone-bearing pass within 180 seconds (30 seconds future tolerance), exact
+instance/current IP/subject/expected ACL match, attached:true and complete
+inventory. Remote-backend evidence cannot be certified by the local Guard.
+Empty metadata, Unknown, Pending, Unsupported and Degraded remain distinct.
 
-The requested `dev -> frontend/backend/database` shared-network creation and
-same/different-Tenant TCP acceptance scenarios remain blocked pending the
-[upstream contract change](TENANT-UPSTREAM.md). The current binary stays intact.
+ACL attachment and policy storage are not real TCP tests. The current isolated
+test suite does not establish live A/B reachability. See [validation](WEB-TESTING.md)
+and [Provider source patch and live gate](TENANT-UPSTREAM.md).
 
-## API contract
+## Web API and authentication
 
-All endpoints require the existing administrator session. Writes require exact
-Origin, CSRF and bounded JSON bodies. No tenant account or RBAC system is added.
+Existing administrator session, strict Origin/CSRF, bounded JSON and exact input
+validation apply. There is no arbitrary Provider proxy or new account/RBAC model.
 
 | Endpoint | Behavior |
 | --- | --- |
-| GET /api/overview, /api/tenants | Metadata + discovered membership + Guard + capability flags |
-| POST /api/tenants | Create local metadata (`name`, optional `description`) |
-| GET /api/tenants/{id} | Detail, capability flags and fresh deletion blockers |
-| PATCH /api/tenants/{id} | Display fields and required integer `version` |
-| DELETE /api/tenants/{id} | Empty metadata only; `confirm:true`, `version` required |
-| GET /api/tenants/{id}/boxes | Provider-authoritative scoped inventory |
-| GET /api/tenants/{id}/network | Scoped Boxes and associated routes/passthrough |
-| GET /api/tenants/{id}/monitoring | Scoped state/configuration; no fabricated utilization |
-| POST /api/tenant-selection | Persist validated `{id}` (empty means All) |
-| GET /api/boxes, /api/metrics | Optional `?tenant=<stable ID>` or `unresolved`; old clients still receive containers |
-| GET /api/network/{route,passthrough} | Same validated Tenant filter |
-| GET /api/network/guard | Sanitized Core/Tenant Guard, capabilities |
+| GET /api/overview, /api/tenants | Discovery, metadata, Guard and live capability flags |
+| POST /api/tenants | Empty metadata: name, optional description |
+| GET/PATCH/DELETE /api/tenants/{id} | Detail; revision-protected display edits; confirmed empty-only deletion |
+| GET /api/tenants/{id}/boxes | Provider-authoritative inventory |
+| GET /api/tenants/{id}/network | Scoped Boxes/routes and Tenant access context |
+| GET /api/tenants/{id}/monitoring | State/configuration, no fabricated utilization |
+| POST /api/tenant-selection | Persist validated scope |
+| GET /api/boxes, /api/metrics | Optional tenant stable ID or unresolved filter |
+| GET /api/network/guard | Sanitized fresh Guard evidence |
+| GET /api/tenant-access | Policies, directional edges, receipts; optional validated tenant filter |
+| POST /api/tenant-access/plans | source/destination stable IDs, direction forward/reverse/both, operation grant/revoke |
+| POST /api/tenant-access/plans/{id}/confirm | confirm:true only; one-time reviewed operation |
 
-Metadata writes audit `tenant-metadata-save` / `tenant-metadata-delete` in the same
-transaction. Revision conflicts return 409. Unknown Tenant filters return 404;
-unsupported filter fields return 400. Tenant filters restrict server responses,
-not administrator authorization: this is still one privileged local administrator.
-Unknown or protected write fields are rejected. An optional create-item `tenantId`
-is accepted only when empty; nonempty intent is explicitly rejected until the
-Provider contract is supported. `expectedTenant` in a returned plan is server
-computed and never forwarded as a Provider label.
+Create items accept selected tenantId; expectedTenant/native key are computed by
+the server. Unknown/protected fields are rejected. Metadata revision conflicts
+return 409; Provider policy conflicts are explicit receipts. Scope filters affect
+views, not the administrator's underlying authority.
 
 ## Prompt context and persistence
 
-Resource references retain old `{type,id}` compatibility and optionally carry
-`tenant:{id,key?,name?,source?}`. `type:tenant` references use the same stable ID.
-Tenant metadata is a context snapshot, not live authorization or ACL proof.
-Graphs remain independent, many-to-many resource references with undirected
-commented relations. No execution or nested node system is introduced.
+Graphs remain independent with undirected commented relationships. Tenant/Box
+cards retain stable IDs and optional native key context. Empty metadata never
+claims a real network. Tenant-access cards include both ends, source-to-destination
+direction, configured/revoked/unknown policy state and TCP not tested. Adding,
+editing or exporting these cards never executes a network operation.
 
-A graph whose resource cards all identify the same Tenant exports one `Tenant:`
-line after the fixed BoxWeave/MCP header. Mixed or partly unresolved context uses
-per-card `[Tenant: ...]`. Native keys identify real networks even after display
-renames. Empty local metadata is explicitly marked `local metadata only` with its
-stable ID. Legacy graphs export normally, preserving comments, duplicates,
-relationships and global prompts. Secret-pattern rejection remains in force.
+Legacy graphs export normally. Single-Tenant context gets a Tenant line; mixed
+graphs keep per-card context. Duplicate cards, comments, autosave, manual copy
+fallback and secret-pattern rejection remain intact.
 
-Schema 1 -> 2 runs atomically, adding only `tenants` and updating user_version.
-The old eight tables and their records are untouched. Reopening is idempotent;
-failed migration rolls back. The existing installer stops only Web, creates a
-consistent private `graphs.pre-migration-*.sqlite3` backup and migrates as the
-Web identity. Releases, Caddy CA data and SQLite stay in their existing paths.
-APT lock handling, MCP services/forced commands, provider token rotation and
-Incus versions are unchanged.
+Schema stays 2. Binding uses the existing provider_key column and optimistic CAS;
+no destructive migration or administrator reset occurs. Schema 1 -> 2 remains
+atomic/idempotent and preserves the original tables. The installer stages all
+assets and a private consistent SQLite backup before migration. APT lock handling,
+MCP forced commands, HTTPS/CA storage and existing service lifecycle stay intact.
 
-Upgrade with the reviewed checkout using the existing install.sh --source-dir
-workflow. Do not delete Boxes or reinitialize the administrator. Check Web status,
-doctor, protected API discovery and retained graphs after upgrade. For rollback,
-stop Web, preserve a private copy of current data, and restore matching old
-software/configuration plus the pre-migration schema-1 backup. Schema-1 software
-must not open schema-2 data; new writes after the backup require reconciliation.
-There is no automatic whole-host rollback or destructive schema downgrade.
-
-See [validation evidence](WEB-TESTING.md) and [capability matrix](WEB-CAPABILITIES.md).
+Install the reviewed checkout through the existing --source-dir workflow.
+Provider upgrade is separate and requires operator approval. Keep matching
+software/configuration/private SQLite backups; never restore a stale database
+over new writes. Schema-1 software cannot open schema-2 data. Reverting ingress
+uses a fresh reviewed source-only revoke, not full-policy replacement.

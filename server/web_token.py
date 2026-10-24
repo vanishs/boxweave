@@ -8,6 +8,60 @@ import pwd
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.parse import urlsplit
+import ipaddress
+
+
+BASE_SCOPES = {"containers:read", "containers:write", "routes:read", "routes:write"}
+NETWORK_SCOPES = {"network-policy:read", "network-policy:write"}
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def network_contract_available(origin, token):
+    """Authenticate with a freshly minted baseline token; never read MCP keys."""
+    try:
+        url = urlsplit(origin)
+        if (
+            url.scheme not in ("http", "https")
+            or not (
+                url.hostname == "localhost"
+                or ipaddress.ip_address(url.hostname).is_loopback
+            )
+            or url.username
+            or url.password
+            or url.path not in ("", "/")
+        ):
+            return False
+        request = Request(
+            origin.rstrip("/") + "/v1/network-tenants/capabilities",
+            headers={"Authorization": "Bearer " + token},
+        )
+        with build_opener(NoRedirect()).open(request, timeout=5) as response:
+            data = json.loads(response.read(65537))
+        return (
+            isinstance(data, dict)
+            and data.get("contract") == "boxweave.tenant-network/v1"
+            and data.get("atomicTenantAccess") is True
+            and data.get("backendScope") == "local-lxc"
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def issue(args):
+    result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+    if (
+        result.returncode
+        or not result.stdout.strip().startswith("eyJ")
+        or len(result.stdout.strip().split(".")) != 3
+    ):
+        raise SystemExit("Web credential issuance failed (details suppressed)")
+    return result
 
 
 def main():
@@ -34,26 +88,20 @@ def main():
         cfg["jwt_secret_file"],
         "--raw",
     ]
-    result = subprocess.run(args, capture_output=True, text=True, timeout=30)
-    if (
-        result.returncode
-        or not result.stdout.strip().startswith("eyJ")
-        or len(result.stdout.strip().split(".")) != 3
-    ):
-        raise SystemExit("Web credential issuance failed (details suppressed)")
+    required = set(BASE_SCOPES)
+    result = issue(args)
+    if network_contract_available(cfg["api_url"], result.stdout.strip()):
+        required.update(NETWORK_SCOPES)
+        args[args.index("--scopes") + 1] = ",".join(sorted(required))
+        result = issue(args)
     try:
         payload = result.stdout.strip().split(".")[1]
         claims = json.loads(
             base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
         )
-        required = {
-            "containers:read",
-            "containers:write",
-            "routes:read",
-            "routes:write",
-        }
         if (
             claims.get("username") != "boxweave-web"
+            or "admin" not in claims.get("roles", [])
             or set(claims.get("scopes", [])) != required
             or claims.get("exp", 0) > time.time() + 7300
             or claims.get("exp", 0) < time.time() + 60

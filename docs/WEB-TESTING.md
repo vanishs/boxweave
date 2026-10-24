@@ -184,3 +184,47 @@ connectivity, public exposure restriction or clean Windows deployment is claimed
 No upstream patch/fork was installed. The existing Web/Caddy/forced-command/token
 services remain untouched. The [upstream proposal](TENANT-UPSTREAM.md) and
 [upgrade/rollback instructions](TENANTS.md) describe the remaining release gates.
+
+## Native Tenant networking A + B: isolated validation, 2026-10-24
+
+The following evidence supersedes earlier capability-blocked implementation
+notes for the optional patched profile; it does not change historical live-test
+results above. Dedicated box: boxweave-tenant-dev-container, logical username
+boxweave-tenant-dev, 4 CPU / 8 GB / 40 GB. Development roots:
+ /home/boxweave-tenant-dev/work/boxweave (base 7818668) and
+ /home/boxweave-tenant-dev/work/containarium (v0.114.2 base
+8107ea2724dd12786bbd73ff5371e8314f3d35d9).
+MCP list and connect identity checks succeeded with actual exit code 0.
+
+- Final non-root Python regression: 205 tests, OK, 17 Windows/PowerShell-dependent
+  skips, TEST_EXIT_CODE=0 (120.911 seconds). Includes 11 native A/B API tests
+  and 3 token tests, including absent-policy gateway default-field readback.
+- Provider regression: pkg/core/container, pkg/core/box/lxc, pkg/core/incus,
+  internal/tenantguard, internal/server, internal/mcp, internal/client,
+  internal/cmd and internal/auth all passed; TEST_EXIT_CODE=0.
+- Real PostgreSQL fixture used an extracted non-service PostgreSQL binary with
+  a temporary non-root database on loopback port 18599. Tests exercise ingress
+  field preservation, full revisions, atomic two-way rollback, competing writes
+  and absent-row conflicts. This is actual SQL transaction evidence.
+- Generated REST gateway plus in-process gRPC tests and an actual MCP stdio
+  initialize/initialized/tools/list/tools/call test passed. Their Provider store
+  and Guard evidence are controlled test fixtures, not the deployed host.
+- TypeScript/Vite production build passed. Chromium: 15 tests passed (11 legacy,
+  4 native A/B scenarios) against real Flask/Waitress with synthetic Provider.
+  Covers shared batch creation, new Tenant in both modes, grant/both/revoke
+  preservation and access-card context with no policy side effect.
+- Pre-Start native config/Guard ordering, autostart deferral and fail-closed
+  cleanup are tested with a fake Incus backend. No real A/B workloads were
+  provisioned by these tests.
+
+All three Linux amd64 candidate binaries built successfully without installation;
+patch apply-check and application to a clean exact-base archive passed, with all
+42 changed files byte-identical to the development source. Six frontend model
+tests, shell syntax, Python compilation, local documentation links and diff
+whitespace checks passed. The manifest records actual artifact checksums.
+
+No deployed Provider upgrade, real policy mutation, same/cross-Tenant TCP
+reachability, public/LAN route or production installation is claimed. The
+source candidate requires the separately approved live acceptance plan in
+[TENANT-UPSTREAM.md](TENANT-UPSTREAM.md). Stored grants and verified ACLs never
+substitute for a real bidirectional TCP test.

@@ -79,7 +79,17 @@ def limits(data, required=False):
 
 def public_box(c):
     result = {
-        k: c[k] for k in ("name", "username", "state", "image", "backendId") if k in c
+        k: c[k]
+        for k in (
+            "name",
+            "username",
+            "state",
+            "image",
+            "backendId",
+            "networkTenant",
+            "networkTenantSource",
+        )
+        if k in c
     }
     for field, allowed in [
         ("resources", ("cpu", "memory", "disk")),
@@ -182,6 +192,25 @@ class Provider:
     def network_guard(self):
         return self.request("GET", "/v1/network/guard")
 
+    def tenant_capabilities(self):
+        return self.request("GET", "/v1/network-tenants/capabilities")
+
+    def network_policies(self):
+        return self.request("GET", "/v1/network-policies")
+
+    def network_policy(self, key):
+        try:
+            return self.request("GET", "/v1/network-policies/" + quote(key, safe=""))
+        except ProviderError as error:
+            if error.status == 404:
+                return {"policy": None, "revision": "absent"}
+            raise
+
+    def patch_tenant_access(self, changes):
+        return self.request(
+            "POST", "/v1/network-policies/tenant-access", {"changes": changes}
+        )
+
     def routes(self, kind):
         r = self.request(
             "GET", "/v1/network/" + ("routes" if kind == "route" else "passthrough")
@@ -218,6 +247,11 @@ class Provider:
                     "sshKeys": [self.key],
                     "async": True,
                     "enablePodman": False,
+                    **(
+                        {"networkTenant": item["networkTenant"]}
+                        if item.get("networkTenant")
+                        else {}
+                    ),
                 },
             )
         if action in ("start", "stop", "resize", "delete"):

@@ -244,7 +244,7 @@ def health(args):
         web_config, web_error = load_config(web_path)
         web_units = {unit: service_state(unit) for unit in ('boxweave-web.service','boxweave-web-caddy.service','boxweave-web-token.timer')}
         result['web'] = {'configuration': 'available' if web_config else web_error, 'services': web_units,
-                         'tenant_support': {'metadata': True, 'shared_network_creation': False, 'reassignment': False,
+                         'tenant_support': {'metadata': True, 'shared_network_creation': 'authenticated capability handshake required', 'atomic_tenant_access': 'authenticated capability handshake required', 'reassignment': False,
                                             'live_guard': 'query authenticated /api/network/guard; not probed by CLI diagnostics'}}
         if web_config:
             import socket

@@ -17,6 +17,35 @@ def text(value, limit=20000):
     return value
 
 
+def tenant_context(value):
+    if (
+        not isinstance(value, dict)
+        or set(value) - {"id", "key", "name", "source"}
+        or "id" not in value
+    ):
+        raise ValueError("Invalid Tenant reference")
+    tid = value["id"]
+    if not isinstance(tid, str) or not re.fullmatch(
+        r"tenant_(?:[a-f0-9]{64}|local_[a-f0-9]{32})", tid
+    ):
+        raise ValueError("Invalid Tenant ID")
+    result = {k: text(v, 200) for k, v in value.items() if v is not None}
+    if result.get("key"):
+        expected = (
+            "bw-" + tid.removeprefix("tenant_local_")
+            if tid.startswith("tenant_local_")
+            else result["key"]
+        )
+        if (
+            tid.startswith("tenant_local_")
+            and result["key"] != expected
+            or not tid.startswith("tenant_local_")
+            and tid != "tenant_" + hashlib.sha256(result["key"].encode()).hexdigest()
+        ):
+            raise ValueError("Tenant key and stable ID mismatch")
+    return result
+
+
 def validate(data):
     if not isinstance(data, dict) or set(data) - {"name", "prompt", "nodes", "edges"}:
         raise ValueError("Invalid graph")
@@ -63,10 +92,17 @@ def validate(data):
         if ref is not None:
             if (
                 not isinstance(ref, dict)
-                or set(ref) - {"type", "id", "tenant"}
+                or set(ref) - {"type", "id", "tenant", "access"}
                 or not {"type", "id"} <= set(ref)
                 or ref["type"]
-                not in ("tenant", "box", "route", "passthrough", "metric")
+                not in (
+                    "tenant",
+                    "tenant-access",
+                    "box",
+                    "route",
+                    "passthrough",
+                    "metric",
+                )
             ):
                 raise ValueError("Invalid reference")
             ref = {**ref, "type": text(ref["type"], 200), "id": text(ref["id"], 200)}
@@ -74,26 +110,48 @@ def validate(data):
             if ref["type"] == "tenant" and tenant is None:
                 raise ValueError("Tenant resources require stable Tenant context")
             if tenant is not None:
-                if (
-                    not isinstance(tenant, dict)
-                    or set(tenant) - {"id", "key", "name", "source"}
-                    or "id" not in tenant
-                ):
-                    raise ValueError("Invalid Tenant reference")
-                if not isinstance(tenant.get("id"), str) or not re.fullmatch(
-                    r"tenant_(?:[a-f0-9]{64}|local_[a-f0-9]{32})", tenant["id"]
-                ):
-                    raise ValueError("Invalid Tenant ID")
-                tenant = {k: text(v, 200) for k, v in tenant.items() if v is not None}
-                if (
-                    tenant.get("key")
-                    and tenant["id"]
-                    != "tenant_" + hashlib.sha256(tenant["key"].encode()).hexdigest()
-                ):
-                    raise ValueError("Tenant key and stable ID mismatch")
-                ref["tenant"] = tenant
-                if ref["type"] == "tenant" and ref["id"] != tenant["id"]:
+                ref["tenant"] = tenant_context(tenant)
+                if ref["type"] == "tenant" and ref["id"] != ref["tenant"]["id"]:
                     raise ValueError("Tenant reference mismatch")
+            access = ref.get("access")
+            if ref["type"] == "tenant-access":
+                if (
+                    not isinstance(access, dict)
+                    or set(access)
+                    != {
+                        "source",
+                        "destination",
+                        "direction",
+                        "policyStatus",
+                        "verificationStatus",
+                    }
+                    or access["direction"] != "source-to-destination"
+                    or access["policyStatus"]
+                    not in ("configured", "revoked", "unknown")
+                    or access["verificationStatus"] != "not_tested"
+                ):
+                    raise ValueError(
+                        "Invalid access context; graph links cannot grant access or assert TCP verification"
+                    )
+                access = {
+                    **access,
+                    "source": tenant_context(access["source"]),
+                    "destination": tenant_context(access["destination"]),
+                }
+                if (
+                    access["source"]["id"] == access["destination"]["id"]
+                    or ref["id"]
+                    != "access:"
+                    + access["source"]["id"]
+                    + ":"
+                    + access["destination"]["id"]
+                    or not ref.get("tenant")
+                    or ref["tenant"]["id"] != access["destination"]["id"]
+                ):
+                    raise ValueError("Access reference mismatch")
+                ref["access"] = access
+            elif access is not None:
+                raise ValueError("Access context requires a Tenant access resource")
         metadata = n.get("metadata", {})
         if not isinstance(metadata, dict) or len(metadata) > 20:
             raise ValueError("Invalid metadata")
@@ -162,6 +220,11 @@ def markdown(graph):
     resource_nodes = [n for n in nodes if n.get("resource")]
     tenant_refs = [(n.get("resource") or {}).get("tenant") for n in resource_nodes]
     known = {t["id"]: t for t in tenant_refs if t}
+    for n in resource_nodes:
+        access = n["resource"].get("access")
+        if access:
+            for t in (access["source"], access["destination"]):
+                known[t["id"]] = t
 
     def tenant_label(t):
         return escape(
@@ -173,9 +236,21 @@ def markdown(graph):
     if known and not single:
         for n in resource_nodes:
             tenant = n["resource"].get("tenant")
-            labels[n["id"]] += (
-                " [Tenant: " + (tenant_label(tenant) if tenant else "Unknown") + "]"
-            )
+            access = n["resource"].get("access")
+            if access:
+                labels[n["id"]] += (
+                    " [Access: "
+                    + tenant_label(access["source"])
+                    + " -> "
+                    + tenant_label(access["destination"])
+                    + "; policy "
+                    + access["policyStatus"]
+                    + "; TCP not tested]"
+                )
+            else:
+                labels[n["id"]] += (
+                    " [Tenant: " + (tenant_label(tenant) if tenant else "Unknown") + "]"
+                )
     lines = ["# BoxWeave", "MCP: boxweave"]
     if single:
         lines.append("Tenant: " + tenant_label(next(iter(known.values()))))

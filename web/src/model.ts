@@ -6,6 +6,13 @@ export type Card = {
   resource?: {
     type: string;
     id: string;
+    access?: {
+      source: { id: string; key?: string; name?: string };
+      destination: { id: string; key?: string; name?: string };
+      direction: string;
+      policyStatus: string;
+      verificationStatus: string;
+    };
     tenant?: { id: string; key?: string; name?: string; source?: string };
   } | null;
   metadata?: Record<string, string>;

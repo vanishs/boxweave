@@ -33,11 +33,17 @@ def main(argv=None):
         # Read-only status never opens/migrates the database or provider token.
         import socket
 
-        from .tenants import CAPABILITIES
+        from .tenants import CONTRACT
         from .store import SCHEMA
 
         result = {k: cfg[k] for k in ("origin", "backend_port", "database")}
-        result["tenant_capabilities"] = CAPABILITIES
+        result["tenant_capabilities"] = {
+            "supported_contract": CONTRACT,
+            "shared_creation_adapter": True,
+            "atomic_tenant_access_adapter": True,
+            "provider_state": "unprobed; use authenticated /api/tenants and /api/tenant-access",
+            "reassignment": False,
+        }
         result["supported_database_schema"] = SCHEMA
         try:
             with socket.create_connection(("127.0.0.1", cfg["backend_port"]), 2):

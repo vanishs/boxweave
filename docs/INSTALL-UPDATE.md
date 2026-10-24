@@ -137,3 +137,20 @@ migration apply; a failure keeps old table data and the pending update marker.
 Rollback requires matching software plus a private pre-migration backup; preserve
 new writes before restoration. No Provider/Incus update or resource relabeling is
 required. See [detailed recovery and limitations](TENANTS.md).
+
+## Optional native Tenant networking Provider patch
+
+A/B Web adapters and assets are staged by the normal installer, but the baseline
+Provider pin and installed daemon are unchanged. Follow the explicit source
+[patch/build/deployment gate](TENANT-UPSTREAM.md) to evaluate the candidate.
+Never substitute a candidate binary without reviewing its exact base/patch hashes
+and separately authorizing Provider replacement. Update compatible daemon/CLI/MCP
+components together and reconnect MCP. Existing Providers retain the old feature
+gate and original Web-token scopes.
+
+The normal Web token rotation discovers the recognized capability contract and
+only then adds network-policy read/write scopes. Web never borrows MCP credentials.
+Tenant key binding reuses SQLite schema 2; it does not relabel existing Boxes.
+Policy rollback requires fresh revision-checked inverse ingress edits, preserving
+concurrent egress/deny changes. Software/data rollback still requires matching
+private backups and reconciliation of writes since backup.

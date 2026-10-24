@@ -391,7 +391,7 @@ class WebTests(unittest.TestCase):
         )
         self.assertIn("alpha", self.provider.data)
         r = self.req("jobs/" + j["id"] + "/reconcile", "POST", {})
-        self.assertEqual(r.json["items"][0]["status"], "success")
+        self.assertEqual(r.json["items"][0]["status"], "guard-verified")
         self.assertEqual(r.json["items"][2]["status"], "unknown")
         plan = self.req("plans", "POST", {"action": "create", "items": [items[2]]}).json
         self.assertEqual(

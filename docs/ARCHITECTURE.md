@@ -62,4 +62,9 @@ Provider network. Incus Project and encryption tenant_id remain separate provide
 concepts. Prompt Graph can reference multiple Tenants without execution semantics.
 Web does not alter the restricted MCP launcher, provider binary or token timer.
 See [Tenant design](TENANTS.md) for the authority/freshness contract and
-[upstream blocker](TENANT-UPSTREAM.md) for shared-Tenant creation.
+[implemented upstream patch](TENANT-UPSTREAM.md) for pre-start native membership
+and atomic ingress-only policy edits. The fixed REST adapter requires an
+authenticated capability handshake; existing Provider versions stay gated.
+Policy previews use full-policy revisions, with commit-time all-or-none checks
+and post-commit readback. Graph access cards store context only. The installer
+does not automatically deploy the Provider patch.

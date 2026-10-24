@@ -16,6 +16,7 @@ from werkzeug.exceptions import HTTPException
 from .store import Store, Conflict, SCHEMA
 from .graph import validate, markdown, text
 from .provider import Provider, ProviderError, name, limits, port
+from .access import AccessService
 from .tenants import TenantService, CAPABILITIES, CREATE_BLOCK, tenant_id, resolve_box
 
 HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
@@ -39,6 +40,7 @@ def create_app(cfg, provider=None):
     store = Store(cfg["database"])
     api = provider or Provider(cfg)
     tenants = TenantService(store, api)
+    access = AccessService(store, api, tenants)
     origin = cfg["origin"].rstrip("/")
     secure = origin.startswith("https://")
     pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="web-batch")
@@ -216,6 +218,18 @@ def create_app(cfg, provider=None):
         r.delete_cookie("bw_session", secure=secure, httponly=True, samesite="Strict")
         return r
 
+    @app.get("/api/tenant-access")
+    def tenant_access_list():
+        return jsonify(access.snapshot(tenants.snapshot(), selected_tenant()))
+
+    @app.post("/api/tenant-access/plans")
+    def tenant_access_plan():
+        return jsonify(access.plan(body())), 201
+
+    @app.post("/api/tenant-access/plans/<pid>/confirm")
+    def tenant_access_confirm(pid):
+        return jsonify(access.confirm(pid, body()))
+
     def selected_tenant():
         if set(request.args) - {"tenant"}:
             raise ValueError("Unsupported resource filter")
@@ -262,7 +276,8 @@ def create_app(cfg, provider=None):
         return jsonify(
             {
                 **t,
-                "deletionBlockers": tenants.deletion_blockers(snap, t),
+                "deletionBlockers": tenants.deletion_blockers(snap, t)
+                + access.deletion_blockers(snap, t),
                 "capabilities": snap["capabilities"],
             }
         )
@@ -301,7 +316,9 @@ def create_app(cfg, provider=None):
             )
         snap = tenants.snapshot()
         current = tenants.record(snap, tid)
-        blockers = tenants.deletion_blockers(snap, current)
+        blockers = tenants.deletion_blockers(snap, current) + access.deletion_blockers(
+            snap, current
+        )
         if blockers:
             return jsonify(error="; ".join(blockers)), 409
         if current["version"] == 0:
@@ -327,6 +344,7 @@ def create_app(cfg, provider=None):
             result.update(
                 routes=tenants.routes(snap, "route", tid),
                 passthrough=tenants.routes(snap, "passthrough", tid),
+                tenantAccess=access.snapshot(snap, tid),
             )
         return jsonify(result)
 
@@ -356,7 +374,9 @@ def create_app(cfg, provider=None):
     def box(n):
         result = api.box(n)
         snap = tenants.snapshot()
-        return jsonify(resolve_box(result, snap["guard"]["tenant"]))
+        return jsonify(
+            tenants.annotate(result, snap["guard"]["tenant"], snap["tenants"])
+        )
 
     @app.get("/api/network/<kind>")
     def routes(kind):
@@ -415,9 +435,8 @@ def create_app(cfg, provider=None):
             if "tenantId" in i:
                 if action != "create":
                     raise ValueError("Existing Box Tenant reassignment is unavailable")
-                if i["tenantId"] not in (None, ""):
-                    raise ValueError(CREATE_BLOCK)
-                i = {k: v for k, v in i.items() if k != "tenantId"}
+                if i["tenantId"] is not None and not isinstance(i["tenantId"], str):
+                    raise ValueError("Invalid Tenant selection")
             if action == "create":
                 image = i.get("image", "images:ubuntu/24.04")
                 if not isinstance(image, str) or not __import__("re").fullmatch(
@@ -466,18 +485,16 @@ def create_app(cfg, provider=None):
             if any(i["username"] in existing for i in items):
                 raise ValueError("Box name already exists")
         if action == "create":
-            items = [
-                {
-                    **i,
-                    "expectedTenant": {
-                        "id": tenant_id(i["username"]),
-                        "key": i["username"],
-                        "source": "expected_name_fallback",
-                        "guardStatus": "pending",
-                    },
-                }
-                for i in items
-            ]
+            resolved = []
+            for item in items:
+                expected = tenants.creation_target(
+                    snapshot, item.get("tenantId"), item["username"]
+                )
+                normalized = {k: v for k, v in item.items() if k != "tenantId"}
+                if item.get("tenantId"):
+                    normalized["networkTenant"] = expected["key"]
+                resolved.append({**normalized, "expectedTenant": expected})
+            items = resolved
         pid = str(uuid.uuid4())
         with store.db() as db:
             db.execute(
@@ -493,7 +510,11 @@ def create_app(cfg, provider=None):
             action=action,
             items=items,
             expiresIn=300,
-            capabilities=CAPABILITIES,
+            capabilities=(
+                snapshot["capabilities"]
+                if action == "create"
+                else tenants.capabilities()
+            ),
             guard=snapshot["guard"] if action == "create" else None,
         )
 
@@ -568,7 +589,19 @@ def create_app(cfg, provider=None):
                 if not row:
                     raise Conflict()
                 d = json.loads(row["data"])
+                if d["action"] == "tenant-access":
+                    raise ValueError(
+                        "Use the dedicated Tenant policy confirmation endpoint"
+                    )
                 if d["action"] == "create":
+                    if any(
+                        i.get("networkTenant") for i in d["items"]
+                    ) and not tenants.snapshot()["capabilities"].get(
+                        "sharedTenantCreate"
+                    ):
+                        raise ValueError(
+                            "Provider no longer supports safe shared creation"
+                        )
                     for r in db.execute("SELECT data FROM jobs"):
                         old = json.loads(r[0])
                         if old["action"] == "create" and any(
@@ -641,8 +674,10 @@ def create_app(cfg, provider=None):
                 "degraded",
             ):
                 try:
-                    c = resolve_box(
-                        api.box(i["target"]["username"]), snap["guard"]["tenant"]
+                    c = tenants.annotate(
+                        api.box(i["target"]["username"]),
+                        snap["guard"]["tenant"],
+                        snap["tenants"],
                     )
                     i["observedState"] = c.get("state", "unknown")
                     i["observedTenant"] = c["tenant"]
@@ -667,6 +702,17 @@ def create_app(cfg, provider=None):
                             i["status"] = "degraded"
                     else:
                         i["status"] = "verification-pending"
+                    i["verification"] = {
+                        "created": True,
+                        "provisioning": c.get("state")
+                        in ("CONTAINER_STATE_CREATING", "CONTAINER_STATE_PROVISIONING"),
+                        "tenantVerified": c["tenant"]["confirmed"]
+                        and c["tenant"]["id"] == expected,
+                        "guardVerified": c["tenant"]["guard"]["status"] == "verified",
+                        "networkConnectivity": "not_tested",
+                    }
+                    if i["status"] == "success":
+                        i["status"] = "guard-verified"
                     i["message"] = c["tenant"]["guard"]["reason"]
                 except ProviderError as e:
                     i["message"] = (

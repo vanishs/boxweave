@@ -2,3 +2,6 @@
 *.sh text eol=lf
 *.py text eol=lf
 VERSION text eol=lf
+
+# Preserve exact checksum and git-apply bytes on Windows checkouts.
+patches/containarium/*.patch -text

@@ -1,87 +1,92 @@
-# Proposed upstream network Tenant contract (not implemented)
+# Implemented upstream Tenant networking patch
 
 Baseline: Containarium v0.114.2, commit
-`8107ea2724dd12786bbd73ff5371e8314f3d35d9`. This document is a design proposal,
-not a Provider patch, deployed fork or verification of shared-network creation.
+`8107ea2724dd12786bbd73ff5371e8314f3d35d9`.
+The complete source patch, generated protobuf/REST bindings and regression tests
+are in [patches/containarium](../patches/containarium/README.md).
+This is a reviewable source candidate, not an installed or published release.
 
-## Source findings
+## A: native shared membership before first Start
 
-- `proto/containarium/v1/container.proto`: CreateContainerRequest.labels exists;
-  the existing OSS tenant_id is an encryption scope restricted to default/empty.
-- `internal/cmd/create.go`: --labels accepted; `internal/mcp/tools.go` creation
-  schema has no general labels input. Network-policy has CLI/REST but no Host
-  MCP counterpart. Network-guard status has all three read surfaces.
-- `pkg/core/incus/client.go`: LabelPrefix is `user.containarium.label.`;
-  TenantLabelKey is **separately** `user.containarium.tenant`. ResolveTenant uses
-  native key -> cloud_org_id -> name fallback.
-- `pkg/core/container/manager.go`: opts.Labels are copied under LabelPrefix;
-  a generic tenant label is not the native Tenant key. The initial NIC guard is
-  invoked before first Start.
-- `pkg/core/container/nic_guard.go`: guardNIC calls ResolveTenant with an empty
-  explicit key and cloud_org_id/name inputs. Merely adding a label to an HTTP
-  request does not establish a consistent birth-time ACL.
-- `internal/tenantguard/` later reconciliation resolves native Tenant identity,
-  creating an unacceptable split if creation uses another rule.
-- `internal/server/container_server.go`: returned Box labels are generic labels;
-  the explicit native field is not separately exposed. Guard entries contain the
-  resolved subject and attachment evidence.
-- `internal/server/network_server.go`: Guard status requires admin authorization;
-  MCP additionally checks security:read. The present REST method does not invoke
-  an extra RequireScope. BoxWeave retains its existing independent Web token.
+The dedicated `network_tenant` protobuf/MCP field, REST `networkTenant` and CLI
+`--network-tenant` reach the same authorized server and core creation options.
+Encryption `tenant_id` remains independent. Generic tenant/native labels cannot
+override membership; conflicting cloud attribution is rejected. Explicit sharing
+requires administrator authority. Non-admin local LXC creation uses the reserved
+`account:<username>` namespace to prevent joining administrator-owned shared
+Tenants through username selection. Admin callers cannot allocate this namespace.
 
-## Minimal compatible extension
+The native `user.containarium.tenant` config is written during instance creation.
+The required NIC Guard consumes that identical key before the first Start;
+unsupported/off/failing Guard blocks Start. Requested boot autostart is deferred
+until attachment succeeds. Failures attempt cleanup; callers must still inspect
+ambiguous outcomes by original logical name before retrying. Native membership
+and its source are returned through list/get across REST, MCP and CLI.
 
-1. Add a dedicated optional `network_tenant` / JSON `networkTenant` field to
-   CreateContainerRequest and the core creation options. Add a matching CLI flag
-   and an explicitly validated Host MCP parameter. Do not repurpose encryption
-   tenant_id or expose unconstrained native Incus config maps.
-2. Validate once at the shared server boundary and again for direct core callers:
-   bounded canonical key, reject empty-as-explicit ambiguity, controls, reserved
-   core identities/ACL namespace, and unsupported cross-backend destinations.
-   Only an appropriately authorized administrator may assign a non-default
-   network Tenant. Never let generic labels override protected native fields.
-   Define precedence/conflict behavior with cloud_org_id: reject conflicting
-   explicit inputs or use one documented shared resolver; do not silently spoof
-   cloud identity. Preserve omitted-field behavior exactly.
-3. Persist the native `user.containarium.tenant` key during instance creation,
-   before first Start. Feed the **same resolved key** into birth NIC guard and
-   periodic reconciliation. Fail closed on required Guard attachment failures;
-   never start first and relabel later. Return an explicit provisioning failure
-   or retained stopped resource receipt, preserving ambiguous-outcome semantics.
-4. Expose native resolved membership and its source in list/detail on CLI, REST
-   and MCP, scoped to backend identity. Return the birth ACL evidence separately
-   from later reconciliation, with timestamps/errors and no secrets.
-5. Keep existing-Box reassignment disabled. A future move needs a separately
-   reviewed quiesce/rollback/authorization contract. Keep network-policy writes
-   disabled until their CLI/MCP/REST contracts and security checks agree.
+The contract covers local Linux LXC only. Explicit VM, Windows, K8s and remote
+placement are rejected. Existing Box reassignment remains unsupported. Admin
+omitted-field creation preserves the legacy resolver; non-admin namespace
+hardening is an intentional compatibility change.
 
-An alternative dedicated validated `tenant` label parameter in MCP is possible,
-but only if it maps explicitly to the native key and **all** CLI/REST/core paths
-apply the same rule before first start. Silently reinterpreting an existing
-arbitrary generic label is a backward-compatibility risk; a dedicated field is
-preferable. A fingerprint, local Tenant UUID or display name must never substitute
-for the requested native Provider key.
+## B: atomic directional ingress authorization
 
-## Tests and release gate
+A -> B means B.allow_from_tenants contains A. Both directions update two
+destination policies in one transaction; revoke removes only the chosen sources.
+The new endpoint never replaces full policies or independently managed deny rules.
+Egress CIDRs/domains, mode, metadata permission, source and preset are preserved.
 
-Required upstream tests: omitted-field backward compatibility; reserved/native
-label spoofing rejection; authorization failures on all transports; identical
-resolver precedence; native key and correct NIC ACL present **before first
-Start**; failure blocks Start; reconciliation preserves membership; native key
-visible consistently through list/get. Test async timeout without duplicate
-creation, conflicts, stopped resources, peers, clock freshness and IP reuse.
+Each destination requires a SHA256 revision of its entire protobuf policy, or
+`absent`. Any conflict aborts all destinations. PostgreSQL locks rows in sorted
+order, detects competing inserts, and updates only allow_from_tenants/updated_at.
+The in-memory store has the same all-or-none contract under a mutex. A missing
+policy gets the Provider's unspecified/log-only defaults; the ingress list is
+consumed separately by the NIC Guard. It does not silently enable an egress mode.
 
-After an approved reviewed Provider release, add an explicit version/capability
-handshake to BoxWeave rather than enabling writes from an optimistic version
-string. Test CLI/MCP/REST end to end in dedicated resources. The live plan needs
-separate user approval: create two same-Tenant Boxes and one different-Tenant
-Box with the verified managed public key, 600-second readiness deadlines, then
-serve a temporary TCP service and verify both A -> B and B -> A, separate-Tenant
-restriction, Host management access and unchanged original Guard state. Record
-birth-time evidence; later Guard convergence alone does not prove it. Agree
-cleanup in that plan; do not mutate existing resources or infer isolation from
-ping failure. No route/public exposure is necessary.
+Admin plus `network-policy:write` is required for ingress edits and existing
+policy write methods. Nil legacy scopes retain the Provider's existing convention.
+Grants require fresh supported ENFORCE Guard and a durable store. Revokes may be
+recorded while Guard is degraded; their enforcement remains pending/degraded until
+verified. Store success, Guard reconciliation and TCP connectivity are separate.
+The response always reports connectivityTested:false.
 
-Independent upstream edits, publishing a Provider version, installing a fork,
-or live resource/network tests require authorization. None is part of the
-current BoxWeave-only implementation.
+| Surface | Capability/read | Reviewed write |
+| --- | --- | --- |
+| CLI | network-policy capabilities; existing list/get | network-policy access preview SOURCE DEST [--both] [--revoke]; access apply FILE --confirm |
+| Host MCP | network_tenant_capabilities; list_network_policies; get_network_policy | patch_tenant_access with exact revisions |
+| REST | GET /v1/network-tenants/capabilities; GET /v1/network-policies[/TENANT] | POST /v1/network-policies/tenant-access |
+| gRPC | GetNetworkTenantCapabilities; existing list/get | PatchTenantAccess |
+
+The authenticated capability contract is `boxweave.tenant-network/v1` with
+backendScope `local-lxc`. A version string alone never enables Web writes.
+
+## Release, compatibility and live acceptance gate
+
+The normal installer pin stays unchanged and does not replace Provider binaries.
+Apply and build the supplied patch in an isolated checkout first; verify its exact
+base/patch hashes and review the source. Candidate binaries and checksums are
+development outputs, not signed upstream releases. Updating the daemon, CLI and
+MCP backend is a separate operator-controlled deployment. Reconnect MCP afterward.
+Web token rotation probes the exact loopback capability endpoint: only recognized
+atomic-capable backends receive the additional network-policy read/write scopes.
+Old Providers retain the original container/route scope set and disabled A/B UI.
+
+Isolated validation includes pre-Start ordering/fail-closed unit tests, policy
+preservation/conflicts, real PostgreSQL transactions, generated REST/gRPC, actual
+MCP stdio initialize/initialized/tools/list/tools/call and browser tests.
+See [actual evidence](WEB-TESTING.md). No live Provider was upgraded.
+
+Live acceptance still needs an explicitly approved plan: deploy the reviewed
+candidate in a dedicated test environment, create same-Tenant and different-Tenant
+workloads using that host's verified full public key, verify pre-start evidence,
+and test real TCP in both directions before/after forward/bidirectional grants and
+revocation. Use 600-second readiness deadlines and temporary listeners; inspect
+original names after timeout. Check management access and unchanged unrelated
+policies. No public port route is needed. Agree cleanup before creation.
+
+Rollback is not a full-policy snapshot overwrite. Review current revisions and
+revoke only the introduced ingress edges. Preserve newly created native membership
+and metadata; older Providers lack this new contract and must not be assumed safe
+for new shared creates. Back up software/configuration/SQLite before deployment,
+preserve subsequent writes, and restore compatible components together. No
+automatic host rollback, relabeling, credential change or destructive downgrade
+is implemented.

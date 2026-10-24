@@ -1,3 +1,4 @@
+import { TenantAccessPanel } from "./access";
 import { useEffect, useState } from "react";
 export type TenantRef = {
   id: string;
@@ -136,9 +137,9 @@ export function TenantPanel(p: Props) {
       name: t.name,
       tenant: {
         id: t.id,
-        ...(t.providerKey ? { key: t.providerKey } : {}),
+        ...(t.providerKey && t.boxCount > 0 ? { key: t.providerKey } : {}),
         name: t.name,
-        source: t.origin === "local" ? "local" : "resource-reference",
+        source: !t.boxCount ? "local" : "resource-reference",
       },
     });
   }
@@ -377,13 +378,24 @@ export function TenantPanel(p: Props) {
           {tab === "Network" && (
             <>
               <GuardSummary snapshot={{ ...p.snapshot, containers: boxes }} />
-              <h3>Box addresses</h3>
+              <h3>Internal Network — Box addresses</h3>
               {boxes.map((b: any) => (
                 <p key={b.username}>
                   {b.username}: {b.network?.ipAddress || "unavailable"} ·{" "}
                   {b.tenant.guard.status}
                 </p>
               ))}
+              <TenantAccessPanel
+                api={p.api}
+                snapshot={p.snapshot}
+                scope={tenant.id}
+                readOnly
+                prompt={p.prompt}
+                fail={p.fail}
+              />
+              <button onClick={() => p.navigate(tenant.id, "Network")}>
+                Manage Tenant access in Network
+              </button>
               <h3>Associated routes (exact resource identity)</h3>
               <pre>
                 {JSON.stringify(

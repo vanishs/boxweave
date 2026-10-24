@@ -310,5 +310,8 @@ publish.sh / publish.ps1          GitHub publication helpers
 Containarium is developed independently by [FootprintAI](https://github.com/FootprintAI/Containarium) and is installed from [containarium.dev](https://containarium.dev). BoxWeave is an integration layer, not a fork of Containarium.
 
 Tenant display metadata, scoped resource views and Guard evidence are described in
-[Tenant operation](docs/TENANTS.md). Shared network Tenant creation remains gated
-on the pinned Provider; local grouping is never presented as network isolation.
+[Tenant operation](docs/TENANTS.md). Shared native creation (A) and reviewed atomic
+cross-Tenant ingress grants/revokes (B) are implemented for the authenticated
+[Provider patch contract](docs/TENANT-UPSTREAM.md); unchanged v0.114.2 retains its
+capability gate. The patch is not installed automatically. Local grouping and
+Guard attachment are never presented as a successful TCP connectivity test.

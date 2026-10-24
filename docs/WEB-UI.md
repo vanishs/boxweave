@@ -99,7 +99,12 @@ override defaults. HTTPS remains the fresh-install default.
 Navigation includes Overview, Tenants, Boxes, Network, Monitoring and Prompt Graph.
 Tenant display metadata is editable; membership and isolation evidence come from
 the Provider. Empty metadata is explicitly identified. Read the [Tenant workflow,
-API and migration guide](TENANTS.md), including the shared-creation capability gate.
+API and migration guide](TENANTS.md), including the authenticated Provider capability gate. On the patched contract,
+both batch modes support shared/new/existing Tenants and Automatic creation.
+Network -> Tenant Connectivity previews source/destination, forward/reverse/both
+directions and exact ingress-only grants/revokes before confirmation. Tenant
+detail and Monitoring show policy/Guard state; TCP remains not tested. Access
+Prompt Graph cards store both ends and direction without executing policy writes.
 
 ## Managing resources
 
@@ -197,7 +202,9 @@ sudo boxweave doctor
 
 The web identity cannot read MCP credential directories or the provider signing
 secret. A separate root service mints a web-subject token with container/route
-read/write scopes, two-hour expiry and hourly rotation; files are atomically
+read/write scopes, two-hour expiry and hourly rotation. Only a recognized
+atomic-capable Provider also receives network-policy read/write scopes through
+the fixed loopback capability handshake; files are atomically
 replaced at 0600 in a root-controlled directory. Old tokens expire within two
 hours (rotation is not immediate revocation). Use provider token revocation via
 an authorized host operator if immediate compromise response is required.

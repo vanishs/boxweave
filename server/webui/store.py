@@ -159,6 +159,23 @@ class Store:
             )
         return next(t for t in self.tenants() if t["id"] == tid)
 
+    def bind_tenant_key(self, tid, version, key):
+        """Declare an immutable future native key; this creates no Provider resource."""
+        with self.db() as db:
+            if (
+                db.execute(
+                    "UPDATE tenants SET provider_key=?,version=version+1,updated=? WHERE id=? AND version=? AND provider_key IS NULL",
+                    (key, time.time(), tid, version),
+                ).rowcount
+                != 1
+            ):
+                raise Conflict()
+            db.execute(
+                "INSERT INTO audit VALUES (?,?,?,?)",
+                (time.time(), "tenant-key-declared", tid, "success"),
+            )
+        return next(t for t in self.tenants() if t["id"] == tid)
+
     def tenant_graph_references(self, tid):
         count = 0
         for g in self.graphs():
@@ -168,6 +185,10 @@ class Store:
                     ref.get("type") == "tenant"
                     and ref.get("id") == tid
                     or (ref.get("tenant") or {}).get("id") == tid
+                    or any(
+                        (ref.get("access") or {}).get(side, {}).get("id") == tid
+                        for side in ("source", "destination")
+                    )
                 ):
                     count += 1
         return count

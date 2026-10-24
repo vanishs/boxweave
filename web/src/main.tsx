@@ -25,6 +25,7 @@ import {
   type Card,
 } from "./model";
 import { TenantPanel, GuardSummary, type Tenant } from "./tenants";
+import { TenantAccessPanel } from "./access";
 let csrf = "";
 async function api(path: string, method = "GET", data?: unknown) {
   const r = await fetch("/api/" + path, {
@@ -72,6 +73,8 @@ function App() {
     return () => clearInterval(timer);
   }, []);
   const [createTenant, setCreateTenant] = useState("");
+  const [newTenantName, setNewTenantName] = useState("");
+  const [newTenantRow, setNewTenantRow] = useState<number | null>(null);
   const [groupTenant, setGroupTenant] = useState(false);
   const [rows, setRows] = useState<Row[]>([]),
     [selected, setSelected] = useState<string[]>([]),
@@ -364,6 +367,7 @@ function App() {
           : r.username || r.fullDomain || r.domain || r.name || key(r),
       comment: card.comment,
       resource: {
+        ...(r.access ? { access: r.access } : {}),
         type: r.resourceType || card.type,
         id: key(r),
         ...(r.tenant?.id
@@ -654,6 +658,17 @@ function App() {
             </div>
             {page === "Network" && (
               <>
+                <TenantAccessPanel
+                  api={api}
+                  snapshot={snapshot}
+                  scope={tenantScope}
+                  prompt={addPrompt}
+                  fail={fail}
+                  changed={async () => {
+                    await refresh();
+                    setJobs((await api("jobs")).jobs);
+                  }}
+                />
                 <GuardSummary snapshot={snapshot} />
                 <section className="panel tenant-panel">
                   <h3>Tenant Box addresses</h3>
@@ -673,6 +688,16 @@ function App() {
                     ))}
                 </section>
               </>
+            )}
+            {page === "Monitoring" && (
+              <TenantAccessPanel
+                api={api}
+                snapshot={snapshot}
+                scope={tenantScope}
+                readOnly
+                prompt={addPrompt}
+                fail={fail}
+              />
             )}
             {page === "Monitoring" && (
               <section className="panel tenant-panel">
@@ -1012,6 +1037,17 @@ function App() {
                         <strong>{i.status}</strong>
                         <span>
                           {i.observedState} {i.message}
+                          {i.verification && (
+                            <span>
+                              Created: {String(i.verification.created)} ·
+                              Provisioning:{" "}
+                              {String(i.verification.provisioning)} · Tenant
+                              verified: {String(i.verification.tenantVerified)}{" "}
+                              · Guard verified:{" "}
+                              {String(i.verification.guardVerified)} · Network
+                              connectivity: not tested
+                            </span>
+                          )}
                         </span>
                       </div>
                     ))}
@@ -1408,6 +1444,47 @@ function App() {
                 ×
               </button>
             </div>
+            {dialog === "New Tenant" && (
+              <>
+                <label>
+                  Tenant name
+                  <input
+                    aria-label="New Tenant name"
+                    value={newTenantName}
+                    onChange={(e) => setNewTenantName(e.target.value)}
+                  />
+                </label>
+                <p>
+                  This creates local display metadata. A native network key is
+                  declared only in an authorized shared creation plan; no
+                  Provider network is fabricated.
+                </p>
+                <button
+                  className="primary"
+                  onClick={async () => {
+                    try {
+                      const t = await api("tenants", "POST", {
+                        name: newTenantName,
+                      });
+                      await refresh();
+                      if (newTenantRow === null) setCreateTenant(t.id);
+                      else
+                        setIndividual((rs) =>
+                          rs.map((r, i) =>
+                            i === newTenantRow ? { ...r, tenantId: t.id } : r,
+                          ),
+                        );
+                      setNewTenantName("");
+                      setDialog("Create boxes");
+                    } catch (e) {
+                      fail(e);
+                    }
+                  }}
+                >
+                  Create Tenant and select
+                </button>
+              </>
+            )}
             {dialog === "Create boxes" && (
               <>
                 <div className="tabs">
@@ -1424,9 +1501,17 @@ function App() {
                     Individual configuration
                   </button>
                 </div>
-                <p className="warning">
-                  {snapshot?.capabilities?.reason ||
-                    "Shared network Tenant creation is unavailable on this Provider."}
+                <p
+                  className={
+                    snapshot?.capabilities?.sharedTenantCreate
+                      ? "muted"
+                      : "warning"
+                  }
+                >
+                  {snapshot?.capabilities?.sharedTenantCreate
+                    ? "Provider supports native shared Tenant assignment and required ACL attachment before first Start. Post-create membership and Guard verification remain separate from TCP connectivity."
+                    : snapshot?.capabilities?.reason ||
+                      "Shared network Tenant creation is unavailable on this Provider."}
                 </p>
                 {mode === "shared" && (
                   <label>
@@ -1434,16 +1519,25 @@ function App() {
                     <select
                       aria-label="Create Tenant"
                       value={createTenant}
-                      onChange={(e) => setCreateTenant(e.target.value)}
+                      onChange={(e) => {
+                        if (e.target.value === "__new__") {
+                          setNewTenantRow(null);
+                          setDialog("New Tenant");
+                        } else setCreateTenant(e.target.value);
+                      }}
                     >
                       <option value="">
                         Automatic — each Box has its own network Tenant
                       </option>
                       {(snapshot?.tenants || []).map((t: Tenant) => (
                         <option key={t.id} value={t.id}>
-                          {t.name} — unavailable
+                          {t.name}
+                          {snapshot?.capabilities?.sharedTenantCreate
+                            ? ""
+                            : " — unavailable"}
                         </option>
                       ))}
+                      <option value="__new__">+ New Tenant</option>
                     </select>
                   </label>
                 )}
@@ -1537,15 +1631,19 @@ function App() {
                                 <select
                                   aria-label={"Tenant row " + (i + 1)}
                                   value={r.tenantId || ""}
-                                  onChange={(e) =>
-                                    setIndividual((rs) =>
-                                      rs.map((x, j) =>
-                                        i === j
-                                          ? { ...x, tenantId: e.target.value }
-                                          : x,
-                                      ),
-                                    )
-                                  }
+                                  onChange={(e) => {
+                                    if (e.target.value === "__new__") {
+                                      setNewTenantRow(i);
+                                      setDialog("New Tenant");
+                                    } else
+                                      setIndividual((rs) =>
+                                        rs.map((x, j) =>
+                                          i === j
+                                            ? { ...x, tenantId: e.target.value }
+                                            : x,
+                                        ),
+                                      );
+                                  }}
                                 >
                                   <option value="">
                                     Automatic (independent Tenant)
@@ -1553,10 +1651,15 @@ function App() {
                                   {(snapshot?.tenants || []).map(
                                     (t: Tenant) => (
                                       <option key={t.id} value={t.id}>
-                                        {t.name} — unavailable
+                                        {t.name}
+                                        {snapshot?.capabilities
+                                          ?.sharedTenantCreate
+                                          ? ""
+                                          : " — unavailable"}
                                       </option>
                                     ),
                                   )}
+                                  <option value="__new__">+ New Tenant</option>
                                 </select>
                               </td>
                               <td>
@@ -1600,9 +1703,10 @@ function App() {
                 <button
                   className="primary"
                   disabled={
-                    mode === "shared"
+                    !snapshot?.capabilities?.sharedTenantCreate &&
+                    (mode === "shared"
                       ? !!createTenant
-                      : individual.some((r) => !!r.tenantId)
+                      : individual.some((r) => !!r.tenantId))
                   }
                   onClick={() =>
                     makePlan(
