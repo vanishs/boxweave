@@ -78,7 +78,7 @@ Generic 500s and all write failures retain their error/unknown semantics. See
 ## Tenant compatibility profiles
 
 The baseline table above describes unchanged v0.114.2. The complete optional
-[source patch](../patches/containarium/README.md) extends all three surfaces:
+[reviewed source branch](../patches/containarium/README.md) extends all three surfaces:
 
 | Capability | Unchanged v0.114.2 | Patched contract boxweave.tenant-network/v1 |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ The baseline table above describes unchanged v0.114.2. The complete optional
 | Shared creation A | blocked | CLI --network-tenant; MCP network_tenant; REST networkTenant; same pre-Start required Guard |
 | Cross-Tenant B | Web writes blocked; CLI/REST legacy policy support | CLI access preview/apply; MCP patch_tenant_access; REST atomic tenant-access |
 | Policy query | no Host MCP counterpart | CLI list/get; MCP list_network_policies/get_network_policy; REST existing endpoints with full revision |
-| Capability | no recognized contract | CLI capabilities; MCP network_tenant_capabilities; GET /v1/network-tenants/capabilities |
+| Capability | no recognized contract | CLI network-tenant capabilities; MCP network_tenant_capabilities; GET /v1/network-tenants/capabilities |
 | Existing Box reassignment | blocked | blocked |
 | Metadata | local SQLite only | local SQLite; one-time declared key binding is not membership proof |
 | Connectivity evidence | not tested | configured / Guard verified / TCP not tested remain separate |
@@ -111,3 +111,5 @@ omitted-field behavior remains the existing resolver. See [operation](TENANTS.md
 [upstream changes and deployment gate](TENANT-UPSTREAM.md), and
 [test evidence](WEB-TESTING.md). No version-string check, label injection or
 post-start relabeling workaround enables A/B.
+
+The current native Tenant candidate is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to newer forks. Candidate binaries require separate reviewed deployment; the normal installer selects official MCP releases.

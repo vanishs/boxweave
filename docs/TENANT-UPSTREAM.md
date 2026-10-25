@@ -1,8 +1,8 @@
 # Implemented upstream Tenant networking patch
 
-Baseline: Containarium v0.114.2, commit
-`8107ea2724dd12786bbd73ff5371e8314f3d35d9`.
-The complete source patch, generated protobuf/REST bindings and regression tests
+Baseline: the current fork branch `feat/native-network-tenant-core`, pinned to
+`c13582b5016e7471d83d50d1e09a49a2fe661395`.
+The reviewed source profile and build instructions
 are in [patches/containarium](../patches/containarium/README.md).
 This is a reviewable source candidate, not an installed or published release.
 
@@ -33,7 +33,7 @@ hardening is an intentional compatibility change.
 A -> B means B.allow_from_tenants contains A. Both directions update two
 destination policies in one transaction; revoke removes only the chosen sources.
 The new endpoint never replaces full policies or independently managed deny rules.
-Egress CIDRs/domains, mode, metadata permission, source and preset are preserved.
+Egress CIDRs/domains, mode, egressMode, metadata permission, source and preset are preserved.
 
 Each destination requires a SHA256 revision of its entire protobuf policy, or
 `absent`. Any conflict aborts all destinations. PostgreSQL locks rows in sorted
@@ -51,7 +51,7 @@ The response always reports connectivityTested:false.
 
 | Surface | Capability/read | Reviewed write |
 | --- | --- | --- |
-| CLI | network-policy capabilities; existing list/get | network-policy access preview SOURCE DEST [--both] [--revoke]; access apply FILE --confirm |
+| CLI | network-tenant capabilities; existing list/get | network-policy access preview SOURCE DEST [--both] [--revoke]; access apply FILE --confirm |
 | Host MCP | network_tenant_capabilities; list_network_policies; get_network_policy | patch_tenant_access with exact revisions |
 | REST | GET /v1/network-tenants/capabilities; GET /v1/network-policies[/TENANT] | POST /v1/network-policies/tenant-access |
 | gRPC | GetNetworkTenantCapabilities; existing list/get | PatchTenantAccess |
@@ -61,9 +61,9 @@ backendScope `local-lxc`. A version string alone never enables Web writes.
 
 ## Release, compatibility and live acceptance gate
 
-The normal installer pin stays unchanged and does not replace Provider binaries.
-Apply and build the supplied patch in an isolated checkout first; verify its exact
-base/patch hashes and review the source. Candidate binaries and checksums are
+The normal installer selects official MCP releases and does not upgrade the
+Provider daemon. Build the pinned fork commit in an isolated checkout first;
+verify the source profile and review the changes. Candidate binaries and checksums are
 development outputs, not signed upstream releases. Updating the daemon, CLI and
 MCP backend is a separate operator-controlled deployment. Reconnect MCP afterward.
 Web token rotation probes the exact loopback capability endpoint: only recognized
@@ -90,3 +90,55 @@ for new shared creates. Back up software/configuration/SQLite before deployment,
 preserve subsequent writes, and restore compatible components together. No
 automatic host rollback, relabeling, credential change or destructive downgrade
 is implemented.
+
+
+## Current consumer compatibility
+
+The Web adapter accepts only the typed Provider application-state enum listed
+in the source profile. Unknown states produce an unknown receipt with no automatic
+replay. Policy readback compares egressMode as well as the other preserved fields.
+An authenticated unique backend record of type local may establish a nonempty
+local backend ID; tunnel, unknown, duplicate or unavailable metadata cannot.
+
+Revoking an absent destination is skipped and an entirely absent revocation is a
+no-write validation error. Grants require fresh enforced Guard evidence; revokes
+can be recorded while degraded. ACL attachment is still not a TCP test.
+
+The normal BoxWeave installer downloads an official MCP release. It does not
+install this source candidate or upgrade the Provider daemon. Rerunning it after
+a separately approved candidate installation can replace the candidate MCP;
+coordinate daemon, CLI and MCP versions explicitly. This development task did
+not install binaries, rotate real credentials or restart services.
+
+
+## Suggested upstream PR descriptions
+
+A �� **feat(network): expose native Tenant selection across creation interfaces**
+
+Allow an administrator to select a real local Linux LXC network Tenant through
+CLI, REST, gRPC and Host MCP. Write the native Incus identity at creation and
+attach its required ACL before first Start; fail closed and report cleanup
+failures. Return Provider-derived membership and source through list/get.
+Keep encryption tenant_id separate, reject unsupported placements, and use the
+reserved account namespace for non-admin new local workloads. Existing Boxes
+are unchanged.
+
+Validation: generated protocol compatibility, permission/label/cloud bypass
+regressions, composed first-Start and cleanup failure tests, CLI/REST/gRPC/MCP,
+and authenticated independent capability reporting. Real deployment and TCP
+acceptance remain separate.
+
+B �� **feat(network): add scoped atomic Tenant ingress updates**
+
+Add one narrow PatchTenantAccess operation over the existing
+NetworkPolicy.allow_from_tenants field. Require admin and network-policy:write,
+whole-policy revisions and all-or-none destination updates. Preserve independent
+egressMode, deny rules and other policy fields. Keep grant readiness, persisted
+revocation, Guard reconciliation and actual connectivity distinct. Expose this
+operation via CLI reviewed preview/apply, REST/gRPC and Host MCP; report B
+independently from shared creation A.
+
+Validation: in-memory and actual PostgreSQL transaction/conflict tests,
+authenticated REST scope enforcement, generated REST/gRPC, MCP protocol calls,
+CLI and lint/protocol checks. No new Tenant CRUD, schema migration, SaaS system
+or replacement network stack.

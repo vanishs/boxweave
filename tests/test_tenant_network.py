@@ -109,7 +109,9 @@ class NativeProvider(web.FakeProvider):
             self.policies = pending
         return {
             "policies": [self.network_policy(c["destination"]) for c in changes],
-            "applicationState": "pending",
+            "applicationState": getattr(
+                self, "application_state", "TENANT_ACCESS_APPLICATION_STATE_PENDING"
+            ),
             "connectivityTested": False,
         }
 
@@ -316,6 +318,7 @@ class NetworkAPITests(unittest.TestCase):
             "allowMetadata": True,
             "source": "managed",
             "egressPreset": "EGRESS_PRESET_ALLOW_LIST_ONLY",
+            "egressMode": "NETWORK_POLICY_MODE_LOG_ONLY",
             "denyRules": [{"cidr": "10.2.0.0/16", "note": "keep"}],
             "allowFromTenants": ["existing"],
         }
@@ -468,6 +471,110 @@ class NetworkAPITests(unittest.TestCase):
         g["nodes"][0]["resource"]["access"]["verificationStatus"] = "verified"
         with self.assertRaises(ValueError):
             validate(g)
+
+    def test_typed_application_states_and_unknown_fail_closed(self):
+        for state, expected in [
+            ("TENANT_ACCESS_APPLICATION_STATE_PENDING", "configured"),
+            ("TENANT_ACCESS_APPLICATION_STATE_GUARD_VERIFIED", "guard-verified"),
+            ("TENANT_ACCESS_APPLICATION_STATE_DEGRADED", "degraded"),
+            ("TENANT_ACCESS_APPLICATION_STATE_UNSPECIFIED", "unknown"),
+            ("future-value", "unknown"),
+        ]:
+            with self.subTest(state=state):
+                self.provider.application_state = state
+                result = self.confirm_access(self.access_plan()).json
+                self.assertEqual(result["items"][0]["status"], expected)
+                self.assertFalse(result["connectivityTested"])
+
+    def test_revoke_absent_destination_does_not_create_policy(self):
+        self.confirm_access(self.access_plan())
+        plan = self.access_plan("both", "revoke")
+        self.assertEqual(len(plan["changes"]), 1)
+        self.assertEqual(plan["changes"][0]["destination"], "testing")
+        self.assertEqual(
+            self.confirm_access(plan).json["items"][0]["status"], "configured"
+        )
+        self.assertNotIn("allinone", self.provider.policies)
+        self.provider.policies.clear()
+        src, dst = self.tenants()
+        result = self.req(
+            "tenant-access/plans",
+            "POST",
+            {
+                "source": src,
+                "destination": dst,
+                "direction": "both",
+                "operation": "revoke",
+            },
+        )
+        self.assertEqual(result.status_code, 400)
+        self.assertEqual(self.provider.policies, {})
+
+    def test_grant_requires_fresh_guard_but_revoke_can_remain_pending(self):
+        plan = self.access_plan()
+        self.confirm_access(plan)
+        src, dst = self.tenants()
+        self.provider.guard_enabled = False
+        request = {
+            "source": src,
+            "destination": dst,
+            "direction": "forward",
+            "operation": "grant",
+        }
+        self.assertEqual(
+            self.req("tenant-access/plans", "POST", request).status_code, 400
+        )
+        request["operation"] = "revoke"
+        preview = self.req("tenant-access/plans", "POST", request)
+        self.assertEqual(preview.status_code, 201, preview.json)
+        self.assertEqual(
+            self.confirm_access(preview.json).json["items"][0]["status"], "configured"
+        )
+
+    def test_verified_local_backend_keeps_native_membership(self):
+        self.tenants()
+        for b in self.provider.data.values():
+            b["backendId"] = "local-dev"
+        original = self.provider.boxes
+        self.provider.boxes = lambda: {**original(), "localBackendIds": ["local-dev"]}
+        plan = self.access_plan()
+        self.assertEqual(
+            self.confirm_access(plan).json["items"][0]["status"], "configured"
+        )
+        self.provider.boxes = original
+        src, dst = self.tenants()
+        for b in self.provider.data.values():
+            b["backendId"] = "remote"
+        result = self.req(
+            "tenant-access/plans",
+            "POST",
+            {
+                "source": src,
+                "destination": dst,
+                "direction": "forward",
+                "operation": "grant",
+            },
+        )
+        self.assertNotEqual(result.status_code, 201)
+
+    def test_independent_egress_mode_change_is_unknown(self):
+        plan = self.access_plan()
+        patch = self.provider.patch_tenant_access
+
+        def concurrent_change(changes):
+            result = patch(changes)
+            self.provider.policies["testing"][
+                "egressMode"
+            ] = "NETWORK_POLICY_MODE_ENFORCE"
+            result["policies"] = [
+                self.provider.network_policy(c["destination"]) for c in changes
+            ]
+            return result
+
+        self.provider.patch_tenant_access = concurrent_change
+        result = self.confirm_access(plan).json
+        self.assertEqual(result["items"][0]["status"], "unknown")
+        self.assertFalse(result["connectivityTested"])
 
 
 if __name__ == "__main__":

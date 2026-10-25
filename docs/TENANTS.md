@@ -140,3 +140,5 @@ Provider upgrade is separate and requires operator approval. Keep matching
 software/configuration/private SQLite backups; never restore a stale database
 over new writes. Schema-1 software cannot open schema-2 data. Reverting ingress
 uses a fresh reviewed source-only revoke, not full-policy replacement.
+
+The current native Tenant candidate is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to newer forks. Candidate binaries require separate reviewed deployment; the normal installer selects official MCP releases.

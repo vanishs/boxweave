@@ -154,3 +154,5 @@ Tenant key binding reuses SQLite schema 2; it does not relabel existing Boxes.
 Policy rollback requires fresh revision-checked inverse ingress edits, preserving
 concurrent egress/deny changes. Software/data rollback still requires matching
 private backups and reconciliation of writes since backup.
+
+The current native Tenant candidate is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to newer forks. Candidate binaries require separate reviewed deployment; the normal installer selects official MCP releases.

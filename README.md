@@ -312,6 +312,6 @@ Containarium is developed independently by [FootprintAI](https://github.com/Foot
 Tenant display metadata, scoped resource views and Guard evidence are described in
 [Tenant operation](docs/TENANTS.md). Shared native creation (A) and reviewed atomic
 cross-Tenant ingress grants/revokes (B) are implemented for the authenticated
-[Provider patch contract](docs/TENANT-UPSTREAM.md); unchanged v0.114.2 retains its
-capability gate. The patch is not installed automatically. Local grouping and
+[pinned Provider branch contract](docs/TENANT-UPSTREAM.md); unchanged v0.114.2 retains its
+capability gate. The candidate is not installed automatically. Local grouping and
 Guard attachment are never presented as a successful TCP connectivity test.

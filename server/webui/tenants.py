@@ -118,7 +118,7 @@ def guard_view(raw, now=None):
     }
 
 
-def resolve_box(box, guard):
+def resolve_box(box, guard, local_backend_ids=()):
     name = box.get("name", "")
     labels = box.get("labels", {}) if isinstance(box.get("labels"), dict) else {}
     entries = [e for e in guard["entries"] if e.get("container") == name]
@@ -142,7 +142,7 @@ def resolve_box(box, guard):
             key = key_text(name[: -len("-container")])
             source = "name" if key else "unknown"
     if (
-        box.get("backendId")
+        (box.get("backendId") and box["backendId"] not in local_backend_ids)
         or name in guard["unresolved"]
         or name in guard["unmanaged"]
     ):
@@ -243,8 +243,8 @@ class TenantService:
         return result
 
     @staticmethod
-    def annotate(box, guard, records):
-        resolved = resolve_box(box, guard)
+    def annotate(box, guard, records, local_backend_ids=()):
+        resolved = resolve_box(box, guard, local_backend_ids)
         for record in records:
             if (
                 record.get("providerKey")
@@ -296,7 +296,12 @@ class TenantService:
         guards = {k: guard_view(raw.get(k, {})) for k in ("core", "tenant")}
         records = {t["id"]: t for t in self.store.tenants()}
         boxes = [
-            self.annotate(b, guards["tenant"], records.values())
+            self.annotate(
+                b,
+                guards["tenant"],
+                records.values(),
+                inventory.get("localBackendIds", []),
+            )
             for b in inventory.get("containers", [])
         ]
         capabilities = self.capabilities()
@@ -382,6 +387,7 @@ class TenantService:
             "guard": guards,
             "capabilities": capabilities,
             "unreachableBackends": inventory.get("unreachableBackends", []),
+            "localBackendIds": inventory.get("localBackendIds", []),
             "current": self.store.setting("current_tenant") or "",
         }
 

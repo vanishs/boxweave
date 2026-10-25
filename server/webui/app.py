@@ -375,7 +375,12 @@ def create_app(cfg, provider=None):
         result = api.box(n)
         snap = tenants.snapshot()
         return jsonify(
-            tenants.annotate(result, snap["guard"]["tenant"], snap["tenants"])
+            tenants.annotate(
+                result,
+                snap["guard"]["tenant"],
+                snap["tenants"],
+                snap.get("localBackendIds", []),
+            )
         )
 
     @app.get("/api/network/<kind>")
@@ -678,6 +683,7 @@ def create_app(cfg, provider=None):
                         api.box(i["target"]["username"]),
                         snap["guard"]["tenant"],
                         snap["tenants"],
+                        snap.get("localBackendIds", []),
                     )
                     i["observedState"] = c.get("state", "unknown")
                     i["observedTenant"] = c["tenant"]

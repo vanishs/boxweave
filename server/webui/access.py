@@ -19,6 +19,7 @@ POLICY_FIELDS = {
     "denyRules",
     "allowFromTenants",
     "egressPreset",
+    "egressMode",
 }
 
 
@@ -49,6 +50,7 @@ def policy_state(policy):
         "source": "",
         "denyRules": [],
         "egressPreset": "EGRESS_PRESET_UNSPECIFIED",
+        "egressMode": "NETWORK_POLICY_MODE_UNSPECIFIED",
     }
     return {
         **defaults,
@@ -171,6 +173,11 @@ class AccessService:
             )
         if snap["unreachableBackends"]:
             raise ValueError("Provider inventory is incomplete")
+        if (
+            data["operation"] == "grant"
+            and snap["guard"]["tenant"]["status"] != "ready"
+        ):
+            raise ValueError("Grants require fresh enforced Provider Guard evidence")
         source, destination = [
             self.tenants.record(snap, data[k]) for k in ("source", "destination")
         ]
@@ -200,6 +207,8 @@ class AccessService:
                 isinstance(revision, str) and re.fullmatch("[a-f0-9]{64}", revision)
             ):
                 raise ValueError("Provider did not supply a safe full-policy revision")
+            if data["operation"] == "revoke" and revision == "absent":
+                continue
             field = "addSources" if data["operation"] == "grant" else "removeSources"
             changes.append(
                 {
@@ -225,6 +234,10 @@ class AccessService:
                     "preservedPolicy": public_policy(policy),
                     "expectedRevision": revision,
                 }
+            )
+        if not changes:
+            raise ValueError(
+                "No existing destination policy to revoke; nothing was written"
             )
         pid = str(uuid.uuid4())
         record = {
@@ -311,7 +324,13 @@ class AccessService:
                     src not in allowed for src in change.get("addSources", [])
                 ) or any(src in allowed for src in change.get("removeSources", [])):
                     raise ProviderError(502, True)
-            state = result.get("applicationState", "pending")
+            state = {
+                "TENANT_ACCESS_APPLICATION_STATE_PENDING": "pending",
+                "TENANT_ACCESS_APPLICATION_STATE_GUARD_VERIFIED": "guard_verified",
+                "TENANT_ACCESS_APPLICATION_STATE_DEGRADED": "degraded",
+            }.get(result.get("applicationState"))
+            if state is None:
+                raise ProviderError(502, True)
             receipt["items"][0]["status"] = (
                 "guard-verified"
                 if state == "guard_verified"

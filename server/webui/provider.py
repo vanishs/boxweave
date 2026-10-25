@@ -174,7 +174,31 @@ class Provider:
 
     def boxes(self):
         r = self.request("GET", "/v1/containers")
+        # Only authenticated Provider backend metadata may identify local placement.
+        # An unavailable/ambiguous inventory leaves nonempty backend IDs unresolved.
+        local_ids = []
+        try:
+            backends = self.request("GET", "/v1/backends").get("backends", [])
+            if not isinstance(backends, list) or any(
+                not isinstance(b, dict) for b in backends
+            ):
+                backends = []
+            counts = {}
+            for backend in backends:
+                bid = backend.get("id")
+                if isinstance(bid, str) and bid:
+                    counts[bid] = counts.get(bid, 0) + 1
+            local_ids = [
+                b["id"]
+                for b in backends
+                if b.get("type") == "local"
+                and isinstance(b.get("id"), str)
+                and counts.get(b["id"]) == 1
+            ]
+        except ProviderError:
+            pass
         return {
+            "localBackendIds": local_ids,
             "containers": [public_box(c) for c in r.get("containers", [])],
             "unreachableBackends": [
                 {"backendId": x.get("backendId", "unknown")}

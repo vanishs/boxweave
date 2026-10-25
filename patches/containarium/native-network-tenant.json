@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/vanishs/Containarium.git",
+  "branch": "feat/native-network-tenant-core",
+  "commit": "c13582b5016e7471d83d50d1e09a49a2fe661395",
+  "contract": "boxweave.tenant-network/v1",
+  "backendScope": "local-lxc",
+  "policyFields": [
+    "allowFromTenants",
+    "allowIntraTenant",
+    "allowMetadata",
+    "denyRules",
+    "egressCidrs",
+    "egressDomains",
+    "egressMode",
+    "egressPreset",
+    "mode",
+    "source",
+    "tenant"
+  ],
+  "applicationStates": [
+    "TENANT_ACCESS_APPLICATION_STATE_PENDING",
+    "TENANT_ACCESS_APPLICATION_STATE_GUARD_VERIFIED",
+    "TENANT_ACCESS_APPLICATION_STATE_DEGRADED"
+  ],
+  "deployment": "not installed; source candidate only"
+}

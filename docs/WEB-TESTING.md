@@ -228,3 +228,57 @@ reachability, public/LAN route or production installation is claimed. The
 source candidate requires the separately approved live acceptance plan in
 [TENANT-UPSTREAM.md](TENANT-UPSTREAM.md). Stored grants and verified ACLs never
 substitute for a real bidirectional TCP test.
+
+
+## Current fork contract validation (2026-10-25 UTC)
+
+Dedicated development LXC: `boxweave-tenant-dev`.
+BoxWeave checkout: `/home/boxweave-tenant-dev/work/boxweave-native`.
+Provider checkout: `/home/boxweave-tenant-dev/work/containarium-boxweave`,
+exact `c13582b5016e7471d83d50d1e09a49a2fe661395`.
+The historical v0.114.2 patch/build records above remain historical.
+
+Actual commands and final results:
+
+- Provider: `go test -p 2 ./internal/server ./internal/mcp ./internal/cmd ./internal/client ./internal/auth`
+  passed all five groups; server 57.015s. An isolated loopback PostgreSQL fixture
+  was supplied through TEST_TENANT_PG_DSN, so transaction tests ran rather than skipped.
+  `golangci-lint run` reported `0 issues.`; final log ends EXIT_CODE=0.
+- Provider: project `make proto` regenerated bindings successfully; protobuf lint
+  and breaking compatibility checks against the A-stage commit passed.
+- BoxWeave: `.venv/bin/python -m unittest discover -s tests -v`:
+  `Ran 212 tests in 136.940s; OK (skipped=18)`, EXIT_CODE=0.
+  Seventeen skips require PowerShell; the optional source-contract test is the
+  remaining skip and was run separately below.
+- `BOXWEAVE_PROVIDER_SOURCE=/home/boxweave-tenant-dev/work/containarium-boxweave .venv/bin/python -m unittest discover -s tests -p test_provider_branch.py -v`:
+  `Ran 1 test in 43.513s; OK`, EXIT_CODE=0.
+  This compiles the BoxWeave-owned Go fixture temporarily inside the exact clean
+  Provider source, removes that helper, and invokes real generated REST handlers
+  and actual policy service/store code through the real Python HTTP adapter and
+  authenticated Web preview/confirm flow. It verifies typed pending state,
+  nonempty local Backend identity, egressMode preservation, bidirectional update,
+  stale revision rejection and precise revocation. Infrastructure/Guard/durability
+  and the HTTP bearer identity are synthetic; this is not live Incus, production
+  authentication, durable PostgreSQL or physical TCP acceptance.
+- `cd web && npm run build && npm test && npm run test:browser`:
+  production build passed, 6 model tests passed, `15 passed (46.0s)`,
+  EXIT_CODE=0. Browser tests use synthetic legacy/native Providers.
+- `bash patches/containarium/build-candidate.sh /home/boxweave-tenant-dev/work/containarium-boxweave /home/boxweave-tenant-dev/work/artifacts/native-c13582b`:
+  all three binaries built; EXIT_CODE=0. Nothing installed.
+- `bash -n patches/containarium/build-candidate.sh` and `git diff --check` passed.
+
+Candidate SHA256 values from that build (not signed release hashes):
+
+```text
+9bf31ed5d07e0dff0b8eab227b531984dd2d0af25eeb91d39a5c9ee2e97a6ad8  containariumd
+25f09fb035efaf9987cf01b77ee63289bebcf4695a914bca099808371214f8ea  containarium
+390f4a718724b0183c253dd1c6cd3822595a6a851d92c7dd36d63f01a8af9de3  containarium-mcp
+```
+
+Raw logs remain under the dedicated LXC's `/home/boxweave-tenant-dev/work/logs/`:
+`access-final-validation.log`, `access-proto-final.log`,
+`box-native-all.log`, `box-source-contract.log`, `box-native-web.log` and
+`box-candidate-build.log`. PostgreSQL and contract/browser fixture processes were
+stopped after testing. No real Host deployment, existing instance change,
+provider service upgrade, ACL edit, public route or TCP connectivity claim was made.
+See [remaining deployment/live acceptance steps and suggested upstream PR descriptions](TENANT-UPSTREAM.md).
