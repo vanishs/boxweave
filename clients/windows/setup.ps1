@@ -124,12 +124,29 @@ function Update-Agents([string]$Path, [string]$Content, [switch]$Preview) {
     Write-Utf8NoBom $Path $updated
 }
 function Set-PinnedHostNative([string]$Path, [string]$Line) {
+    $expected=$Line.Trim() -split '\s+'
+    if ($expected.Count -ne 3 -or $expected[1] -cne 'ssh-ed25519') { throw 'Invalid expected host pin' }
     if (Test-Path -LiteralPath $Path) {
-        if ([System.IO.File]::ReadAllText($Path).Trim() -ne $Line) {
-            throw "Host public key changed! Verify the new Ubuntu fingerprint out-of-band before replacing $Path"
+        # OpenSSH resolves exact, comma-separated and hashed host names.
+        $records=@(& ssh-keygen -F $expected[0] -f $Path 2>$null)
+        $lookupExit=$LASTEXITCODE
+        if ($lookupExit -notin @(0,1)) { throw 'Could not inspect pinned host file' }
+        $found=$false
+        foreach ($record in $records) {
+            $text=([string]$record).Trim()
+            if (-not $text -or $text.StartsWith('#')) { continue }
+            $parts=$text -split '\s+'
+            if ($parts.Count -lt 3 -or $parts[1] -cne $expected[1] -or $parts[2] -cne $expected[2]) {
+                throw "Host public key changed! Verify the new Ubuntu fingerprint out-of-band before replacing $Path"
+            }
+            $found=$true
         }
+        if ($found) { return }
+        $original=[IO.File]::ReadAllText($Path)
+        Backup-File $Path
+        Write-Utf8NoBom $Path ($original.TrimEnd()+[Environment]::NewLine+$Line+[Environment]::NewLine)
     } else {
-        Write-Utf8NoBom $Path ($Line + "`n")
+        Write-Utf8NoBom $Path ($Line + [Environment]::NewLine)
     }
 }
 
