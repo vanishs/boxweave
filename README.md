@@ -2,7 +2,7 @@
 
 **Your agents. Your machines. Connected.**
 
-BoxWeave connects AI coding agents to self-hosted, isolated development environments through an infrastructure provider and an MCP-compatible interface. The first implementation uses **Containarium + Incus/LXC** on Ubuntu, with **Windows and macOS** client setup for **Codex, Cursor and Claude Code** over restricted SSH.
+BoxWeave connects AI coding agents to self-hosted, isolated development environments through an infrastructure provider and an MCP-compatible interface. The first implementation uses **Containarium + Incus/LXC** on Ubuntu, with **Windows and macOS** client setup for **Codex, Cursor, Claude Code and ZCode** over restricted SSH.
 
 > **Project status: preview.** Ubuntu 24.04 LXC installation and a nested MCP create/connect/Python workflow have been tested, including a first-install fix discovered during that test. A clean bare-metal Ubuntu installation and fresh Windows client enrollment have not been validated together end to end. See the [actual test results and limitations](docs/TEST-BOXWEAVE-LXC.md); review privileged scripts before use.
 
@@ -30,6 +30,10 @@ For more reliable error detection over SSH, download the installer and run it ex
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh -o /tmp/boxweave-install.sh
 sudo bash /tmp/boxweave-install.sh
 ```
+
+GLM Coding Plan is available through the Claude Code adapter using
+`boxweave client --agent claude-code --claude-provider zai` (or `zhipu`)
+with the appropriate OS/runtime flags. See [GLM client setup](docs/CLIENTS.md#glm-through-claude-code-030).
 
 ## Independent web console
 

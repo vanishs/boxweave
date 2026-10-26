@@ -1,4 +1,4 @@
-# Client setup (BoxWeave 0.2.0)
+# Client setup (BoxWeave 0.3.0)
 
 The Ubuntu installer retains its existing workflow. Its final message now points
 to `boxweave client`; it does not enroll a client or start a wizard.
@@ -30,7 +30,7 @@ fail with exit 2. Noninteractive replacement defaults to off unless
 | Windows native | Windows user profile | Windows OpenSSH | PowerShell |
 | Windows bridge | Windows user profile | Selected WSL distribution | PowerShell |
 | WSL CLI | WSL user home; Codex or Claude Code CLI | WSL OpenSSH | WSL shell |
-| macOS native | Mac user home; any of the three agents | Native OpenSSH | Terminal |
+| macOS native | Mac user home; any supported agent | Native OpenSSH | Terminal |
 
 macOS defaults to native runtime/SSH. WSL CLI defaults to WSL SSH; native Windows
 requires an explicit transport outside the wizard. Cursor Remote WSL workspaces
@@ -62,7 +62,7 @@ enroll the restricted public key; BoxWeave does not copy it into WSL.
 | `--ssh-host`, `--ssh-port` | Render endpoint overrides without saving them |
 | `--bootstrap-identity PATH` | Existing authorized client SSH identity |
 | `--wsl-distro NAME` | Preselect the distribution for a Windows to WSL bridge |
-| `--agent-home PATH` | Client Codex/Cursor configuration directory |
+| `--agent-home PATH` | Client Codex/Cursor/ZCode configuration directory |
 | `--project-path PATH` | Cursor rule in an explicitly selected local workspace |
 | `--replace` | Replace a reviewed BoxWeave MCP entry; skip the replacement question |
 | `--json` | Machine-readable profile, paste shell, command and notes |
@@ -94,6 +94,7 @@ agent and confirm MCP recognition and guidance loading in a new session.
 | Codex | Codex home config.toml; mcp_servers.boxweave | Managed block in effective AGENTS.md or existing nonempty AGENTS.override.md |
 | Cursor | Cursor home mcp.json; mcpServers.boxweave | Generated boxweave-user-rules.md or optional project rule |
 | Claude Code | Official CLI with explicit user scope | Dedicated user configuration home rules/boxweave.md |
+| ZCode | ZCode home cli/config.json; mcp.servers.boxweave | Managed block in ZCode home AGENTS.md |
 
 **Cursor global rules require a manual step:** paste the generated guidance into
 Settings > Rules > User Rules. BoxWeave does not edit Cursor's private database
@@ -250,3 +251,94 @@ Behavior tests cover pagination, malformed results, mismatched trust, output
 redaction, non-mutating preflight, missing registration, private report export,
 protocol failures and blocked pipes. Native PowerShell fixtures remain separate
 from real SSH/WSL/macOS client acceptance.
+
+## GLM through Claude Code (0.3.0)
+
+Use the existing Claude Code adapter with an explicit model provider:
+
+```bash
+boxweave client --os macos --agent claude-code --claude-provider zhipu
+boxweave client --os windows --agent claude-code --runtime native --transport native --claude-provider zai
+boxweave client --os windows --agent claude-code --runtime wsl --claude-provider zai
+```
+
+Use `zhipu` for `https://open.bigmodel.cn/api/anthropic`, or `zai`
+for `https://api.z.ai/api/anthropic`. Use a Coding Plan key for the
+selected platform. The command generator never accepts or embeds the key.
+
+Before running the generated setup command, set `GLM_API_KEY` in the
+**client runtime** environment (PowerShell for native Windows, or the
+Mac/WSL terminal for POSIX setup). For example, read it without terminal echo:
+
+```powershell
+$secret = Read-Host 'GLM API key' -AsSecureString
+$env:GLM_API_KEY = [System.Net.NetworkCredential]::new('', $secret).Password
+# Paste the generated BoxWeave setup command here.
+Remove-Item Env:GLM_API_KEY
+```
+
+```bash
+read -r -s -p 'GLM API key: ' GLM_API_KEY; printf '\n'
+export GLM_API_KEY
+# Paste the generated BoxWeave setup command here.
+unset GLM_API_KEY
+```
+
+Setup merges `env` into Claude's `settings.json` under
+`CLAUDE_CONFIG_DIR` or `~/.claude`, preserving other settings and backing
+up existing files. It writes the endpoint, token and API timeout, and removes
+a conflicting `ANTHROPIC_API_KEY` from that settings file.
+The settings and backups contain the API key; keep them private.
+Existing process-level authentication/model overrides should be cleared before
+launching Claude. No model identifier is forced by default: provider defaults
+or existing mappings apply. Pass `--glm-model MODEL` to set
+`ANTHROPIC_MODEL` and all three Opus/Sonnet/Haiku mappings explicitly.
+
+Restart Claude Code and inspect `/status` and `/mcp`, then request a
+short model response and a read-only BoxWeave container listing.
+MCP enrollment checks do not establish GLM authentication, quota or model
+availability. GLM settings are opt-in and are rejected for diagnostics and
+other agents. To revert, restore the settings backup (or remove the GLM env
+entries); the BoxWeave MCP registration remains independently managed.
+
+Configuration references:
+[Z.ai Claude Code guide](https://docs.z.ai/devpack/tool/claude),
+[Zhipu Claude Code guide](https://docs.bigmodel.cn/cn/coding-plan/tool/claude).
+
+## ZCode (0.3.0)
+
+Select ZCode in the client wizard or pass `--agent zcode`:
+
+    boxweave client --os windows --agent zcode --runtime native --transport native
+    boxweave client --os windows --agent zcode --runtime native --transport wsl
+    boxweave client --os macos --agent zcode
+    boxweave client --os macos --agent zcode --diagnose
+
+The adapter targets the native ZCode desktop application. WSL is supported as an
+SSH bridge for Windows; a ZCode runtime inside WSL is not supported by this
+adapter. Install ZCode and complete its model sign-in in ZCode itself.
+Claude Code's `--claude-provider` and `--glm-model` options do not apply.
+
+Setup merges the BoxWeave stdio server into `~/.zcode/cli/config.json` under
+`mcp.servers` and adds the managed remote-development policy to
+`~/.zcode/AGENTS.md`. `--agent-home PATH` overrides the `.zcode` root
+(not its `cli` subdirectory). Other settings, MCP servers and user instructions
+are retained. Existing files are backed up. Conflicting, disabled or customized
+BoxWeave entries require explicit `--replace`; globally disabled MCP must be
+enabled in ZCode before setup.
+
+ZCode prefers native `.zcode` MCP configuration over `.agents/mcp.json` within
+each scope. Adding this native configuration can therefore stop loading
+fallback `.agents` servers. Review and import those servers in ZCode's MCP
+settings if you rely on them; BoxWeave does not migrate unrelated registrations.
+
+Reopen ZCode, check Settings > MCP Servers for an enabled BoxWeave entry, then
+start a new task and request a read-only container listing. Check that the task
+loads the global remote-development policy. The independent diagnostic checks
+the native registration, guidance file and authenticated MCP protocol separately;
+it does not prove that the desktop UI loaded the configuration or that model
+authentication works. Adapter tests use isolated fixture commands, not a live
+ZCode application.
+
+Official contracts: [MCP configuration](https://zcode.z.ai/en/docs/mcp-services)
+and [global instructions](https://zcode.z.ai/en/docs/agents).

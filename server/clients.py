@@ -9,7 +9,7 @@ import shlex
 import sys
 
 DEFAULT_CONFIG = Path('/etc/boxweave/client.json')
-AGENTS = ('codex', 'cursor', 'claude-code')
+AGENTS = ('codex', 'cursor', 'claude-code', 'zcode')
 POLICY = """## BoxWeave remote development (Containarium)
 - Use MCP server boxweave to list/provision containers and its dynamic connect tool to work inside a box.
 - Develop, install dependencies, test and deploy INSIDE the assigned project LXC. Inspect existing files/Git state and preserve uncommitted work.
@@ -85,6 +85,8 @@ def add_parser(commands):
     p.add_argument('--diagnose', action='store_true', help='Generate a read-only diagnostic command for an enrolled client')
     p.add_argument('--os', choices=('windows','macos'))
     p.add_argument('--agent', choices=AGENTS)
+    p.add_argument('--claude-provider', choices=('zai','zhipu'), help='Configure GLM on the client; key is read from client GLM_API_KEY')
+    p.add_argument('--glm-model', help='Optional GLM model identifier for all Claude model tiers')
     p.add_argument('--runtime', choices=('native','wsl'))
     p.add_argument('--transport', choices=('native','wsl'))
     p.add_argument('--config', type=Path, default=DEFAULT_CONFIG, help='Public client descriptor')
@@ -125,7 +127,7 @@ def selection(args):
         if not runtime:
             runtime = need(runtime,'Where does the agent run?',
                            [('Windows native app / CLI','native')]+
-                           ([('CLI inside WSL','wsl')] if agent != 'cursor' else []),'--runtime')
+                           ([('CLI inside WSL','wsl')] if agent not in ('cursor','zcode') else []),'--runtime')
         if runtime == 'wsl':
             transport = transport or 'wsl'
         else:
@@ -134,7 +136,7 @@ def selection(args):
                               ('OpenSSH inside WSL (PowerShell setup)','wsl')],'--transport')
     if os_name == 'macos' and (runtime != 'native' or transport != 'native'):
         raise ValueError('macOS supports native runtime and SSH only')
-    if runtime == 'wsl' and (agent == 'cursor' or transport != 'wsl'):
+    if runtime == 'wsl' and (agent in ('cursor','zcode') or transport != 'wsl'):
         raise ValueError('WSL runtime supports Codex/Claude Code CLI with WSL SSH only')
     return {'os':os_name,'agent':agent,'runtime':runtime,'transport':transport}
 
@@ -199,6 +201,12 @@ def run(args):
         if diagnostic and (args.replace or args.bootstrap_identity or args.project_path):
             raise ValueError('--diagnose does not support enrollment, replacement or project overlays')
         profile = selection(args)
+        provider = getattr(args, 'claude_provider', None)
+        model = getattr(args, 'glm_model', None)
+        if (provider or model) and (profile['agent'] != 'claude-code' or diagnostic):
+            raise ValueError('GLM options require Claude Code setup')
+        if model and (not provider or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,127}', model)):
+            raise ValueError('--glm-model requires --claude-provider and a valid model identifier')
         if sys.stdin.isatty() and not getattr(args,'json',False) and not args.replace and not diagnostic:
             args.replace = choose('Replace an existing BoxWeave MCP registration?',
                                   [('No: preserve conflicting entries', False),
@@ -211,6 +219,8 @@ def run(args):
         if args.ssh_host: data['ssh_host'] = args.ssh_host
         if args.ssh_port is not None: data['ssh_port'] = args.ssh_port
         options = {key:getattr(args,key,None) for key in ('bootstrap_identity','agent_home','project_path','wsl_distro','replace')}
+        if provider: options['claude_provider'] = provider
+        if model: options['glm_model'] = model
         if diagnostic: options['diagnose']=True
         if options['wsl_distro'] and not (profile['os']=='windows' and profile['runtime']=='native' and profile['transport']=='wsl'):
             raise ValueError('--wsl-distro requires a native Windows agent with WSL SSH')

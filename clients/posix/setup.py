@@ -37,6 +37,47 @@ def atomic_write(path, text, mode=0o600):
     finally:
         if os.path.exists(temporary): os.unlink(temporary)
 
+def glm_settings(original, provider, model=None, token=None):
+    """Merge only GLM environment settings; credentials never enter server payloads."""
+    endpoints = {'zai': 'https://api.z.ai/api/anthropic',
+                 'zhipu': 'https://open.bigmodel.cn/api/anthropic'}
+    if provider not in endpoints: raise ValueError('Invalid Claude provider')
+    if model is not None and (not isinstance(model, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,127}', model)):
+        raise ValueError('Invalid GLM model')
+    if not isinstance(token, str) or not token.strip() or any(c in token for c in '\r\n'):
+        raise ValueError('Set GLM_API_KEY in the client environment before setup')
+    data = json.loads(original) if original.strip() else {}
+    if not isinstance(data, dict) or not isinstance(data.get('env', {}), dict):
+        raise ValueError('Invalid Claude settings object')
+    env = data.setdefault('env', {})
+    env.update(ANTHROPIC_BASE_URL=endpoints[provider], ANTHROPIC_AUTH_TOKEN=token,
+               API_TIMEOUT_MS='3000000')
+    env.pop('ANTHROPIC_API_KEY', None)
+    if model:
+        for key in ('ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL',
+                    'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'):
+            env[key] = model
+    return json.dumps(data, indent=2)+'\n'
+
+def zcode_update(original, command, args, replace=False):
+    """Preserve native user config and reject unreviewed server conflicts."""
+    data = json.loads(original) if original.strip() else {}
+    if not isinstance(data, dict): raise ValueError('Invalid ZCode JSON object')
+    mcp = data.setdefault('mcp', {})
+    if not isinstance(mcp, dict): raise ValueError('Invalid ZCode MCP object')
+    servers = mcp.setdefault('servers', {})
+    if not isinstance(servers, dict): raise ValueError('Invalid ZCode MCP servers')
+    expected = {'type': 'stdio', 'command': command, 'args': args}
+    old = servers.get('boxweave')
+    if old is not None and not replace:
+        if not isinstance(old, dict) or any(old.get(k) != v for k,v in expected.items()) or set(old)-set(expected):
+            raise ValueError('Existing ZCode boxweave entry differs; rerun with --replace after review')
+    features = data.get('features', {})
+    if not isinstance(features, dict) or features.get('mcp', True) is not True:
+        raise ValueError('Enable MCP in ZCode before setup')
+    servers['boxweave'] = expected
+    return json.dumps(data, indent=2)+'\n'
+
 def managed(original, policy):
     if original.count(BEGIN) != original.count(END) or original.count(BEGIN)>1:
         raise ValueError('Malformed BoxWeave instruction markers')
@@ -233,10 +274,10 @@ def diagnostic_profile(data):
                         'launcher':r'/[A-Za-z0-9_./-]+'}.items():
         if not isinstance(data.get(key),str) or not re.fullmatch(pattern,data[key]): raise ValueError()
     if type(data.get('ssh_port')) is not int or not 1<=data['ssh_port']<=65535: raise ValueError()
-    if data.get('agent') not in ('codex','cursor','claude-code'): raise ValueError()
+    if data.get('agent') not in ('codex','cursor','claude-code','zcode'): raise ValueError()
     if (data.get('os'),data.get('runtime'),data.get('transport')) not in (
         ('macos','native','native'),('windows','wsl','wsl')): raise ValueError()
-    if data['agent']=='cursor' and data['runtime']=='wsl': raise ValueError()
+    if data['agent'] in ('cursor','zcode') and data['runtime']=='wsl': raise ValueError()
     key=data.get('server_public_key','')
     if not isinstance(key,str) or not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?',key): raise ValueError()
     blob=base64.b64decode(key.split()[1],validate=True)
@@ -295,24 +336,28 @@ def diagnose(args):
         home=Path(args.agent_home or options.get('agent_home') or
                   os.environ.get('CODEX_HOME') or Path.home()/'.codex').expanduser()
         if d['agent']=='cursor': home=Path(args.agent_home or options.get('agent_home') or Path.home()/'.cursor').expanduser()
+        if d['agent']=='zcode': home=Path(args.agent_home or options.get('agent_home') or Path.home()/'.zcode').expanduser()
         if d['agent']=='claude-code':
             report['registration']='unsupported'
             record('registration','incomplete','REGISTRATION_UNSUPPORTED')
             home=Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude')
         else:
-            config=home/('config.toml' if d['agent']=='codex' else 'mcp.json');safe_file(config)
+            config=home/('config.toml' if d['agent']=='codex' else 'cli/config.json' if d['agent']=='zcode' else 'mcp.json');safe_file(config)
             try:
                 parsed=(tomllib.loads(config.read_text()) if d['agent']=='codex' else json.loads(config.read_text()))
-                entry=parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave')
-                if not isinstance(entry,dict) or set(entry)-{'command','args','startup_timeout_sec','enabled'}: raise ValueError()
-                matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True
+                entry=(parsed.get('mcp',{}).get('servers',{}).get('boxweave') if d['agent']=='zcode'
+                       else parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave'))
+                allowed={'command','args','type','enable','enabled'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','enabled'}
+                if not isinstance(entry,dict) or set(entry)-allowed: raise ValueError()
+                matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True and entry.get('enable',True) is True
+                if d['agent']=='zcode': matched=matched and entry.get('type','stdio')=='stdio' and parsed.get('features',{}).get('mcp',True) is True
                 report['registration']='matched' if matched else 'mismatch'
                 record('registration','passed' if matched else 'failed','OK' if matched else 'REGISTRATION_MISMATCH')
             except FileNotFoundError:
                 report['registration']='missing';record('registration','incomplete','REGISTRATION_MISSING')
             except (ValueError,AttributeError,TypeError):
                 report['registration']='unsupported';record('registration','incomplete','REGISTRATION_UNSUPPORTED')
-        guidance=(home/'AGENTS.override.md' if d['agent']=='codex' else home/'boxweave-user-rules.md' if d['agent']=='cursor' else home/'rules/boxweave.md')
+        guidance=(home/'AGENTS.override.md' if d['agent']=='codex' else home/'boxweave-user-rules.md' if d['agent']=='cursor' else home/'AGENTS.md' if d['agent']=='zcode' else home/'rules/boxweave.md')
         if d['agent']=='codex':
             safe_file(guidance)
             if not guidance.exists() or not guidance.read_text().strip(): guidance=home/'AGENTS.md'
@@ -369,11 +414,11 @@ def validate_data(d):
                       'launcher':r'/[A-Za-z0-9_./-]+'}.items():
         if not isinstance(d.get(k),str) or not re.fullmatch(pattern,d[k]): raise ValueError('Invalid '+k)
     if type(d.get('ssh_port')) is not int or not 1<=d['ssh_port']<=65535: raise ValueError('Invalid port')
-    if d.get('agent') not in ('codex','cursor','claude-code'): raise ValueError('Unsupported agent')
+    if d.get('agent') not in ('codex','cursor','claude-code','zcode'): raise ValueError('Unsupported agent')
     if d.get('os')=='macos':
         if d.get('runtime')!='native' or d.get('transport')!='native': raise ValueError('Invalid macOS profile')
     elif d.get('os')=='windows':
-        if d.get('runtime')!='wsl' or d.get('transport')!='wsl' or d['agent']=='cursor': raise ValueError('Invalid WSL CLI profile')
+        if d.get('runtime')!='wsl' or d.get('transport')!='wsl' or d['agent'] in ('cursor','zcode'): raise ValueError('Invalid WSL CLI profile')
     else: raise ValueError('Unsupported OS')
     if not isinstance(d.get('policy'),str) or len(d['policy'])>20000: raise ValueError('Invalid guidance')
     for key in ('server_public_key','container_public_key'):
@@ -392,6 +437,16 @@ def setup(args):
             if name!='replace' and not isinstance(options[name],str): raise ValueError('Invalid setup option')
             if name=='replace' and type(options[name]) is not bool: raise ValueError('Invalid replacement flag')
             setattr(args,name,options[name])
+    provider=options.get('claude_provider')
+    if (provider or options.get('glm_model')) and d['agent']!='claude-code':
+        raise ValueError('GLM options require Claude Code')
+    if options.get('glm_model') and not provider: raise ValueError('GLM model requires provider')
+    glm_text=None
+    if provider:
+        directory=Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude').expanduser()
+        settings=directory/'settings.json'
+        glm_text=glm_settings(settings.read_text() if settings.exists() else '', provider,
+                              options.get('glm_model'), os.environ.get('GLM_API_KEY'))
     if d['os']=='macos' and sys.platform!='darwin': raise ValueError('Run this macOS command on the Mac')
     if d['runtime']=='wsl' and 'microsoft' not in Path('/proc/sys/kernel/osrelease').read_text().lower():
         raise ValueError('Run this WSL command inside the intended WSL distribution')
@@ -422,6 +477,12 @@ def setup(args):
         rule=directory/'AGENTS.override.md'
         if not rule.exists() or not rule.read_text().strip(): rule=directory/'AGENTS.md'
         pending.append((rule,managed(rule.read_text() if rule.exists() else '',d['policy'])))
+    elif d['agent']=='zcode':
+        directory=Path(args.agent_home or home/'.zcode').expanduser()
+        config=directory/'cli/config.json'
+        pending.append((config,zcode_update(config.read_text() if config.exists() else '',ssh,transport,args.replace)))
+        rule=directory/'AGENTS.md'
+        pending.append((rule,managed(rule.read_text() if rule.exists() else '',d['policy'])))
     elif d['agent']=='cursor':
         directory=Path(args.agent_home or home/'.cursor').expanduser()
         config=directory/'mcp.json'
@@ -440,6 +501,7 @@ def setup(args):
         if args.agent_home:
             raise ValueError('For Claude Code set CLAUDE_CONFIG_DIR instead of --agent-home')
         pending.append((directory/'rules/boxweave.md',d['policy']))
+        if glm_text is not None: pending.append((directory/'settings.json',glm_text))
     for path,_ in pending:
         if path.is_symlink() or any(p.is_symlink() for p in path.parents if p!=home.parent):
             raise ValueError('Refusing symlinked configuration path')

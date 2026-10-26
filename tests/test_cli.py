@@ -31,7 +31,7 @@ class CLITests(unittest.TestCase):
     def test_version_does_not_contact_provider(self):
         with patch.object(cli, 'command', side_effect=AssertionError('No command expected')), contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(cli.main(['version', '--json']), 0)
-        self.assertEqual(json.loads(out.getvalue())['boxweave'], '0.2.0')
+        self.assertEqual(json.loads(out.getvalue())['boxweave'], '0.3.0')
 
     def test_exact_name_explicit_project_force_local(self):
         data, code, command = self.inspect(self.instance())

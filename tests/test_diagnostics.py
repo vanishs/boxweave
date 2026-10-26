@@ -96,6 +96,26 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(before,{p:p.read_bytes() for p in before})
         text=json.dumps(report)
         self.assertNotIn(str(self.home),text);self.assertNotIn('OPAQUE',text)
+
+    def test_zcode_registration_and_guidance_are_readonly(self):
+        import tomllib
+        entry=tomllib.loads(self.config.read_text())['mcp_servers']['boxweave']
+        directory=self.home/'.zcode';(directory/'cli').mkdir(parents=True)
+        config=directory/'cli/config.json'
+        config.write_text(setup.zcode_update('{}',entry['command'],entry['args']))
+        (directory/'AGENTS.md').write_text(setup.managed('User text','Fixture'))
+        self.data['agent']='zcode'
+        before=config.read_bytes()
+        code,report=self.invoke(agent_home=str(directory))
+        self.assertEqual(code,0,report)
+        self.assertEqual(report['registration'],'matched')
+        self.assertEqual(report['guidance'],'present')
+        self.assertEqual(config.read_bytes(),before)
+        parsed=json.loads(config.read_text());parsed['mcp']['servers']['boxweave']['enable']=False
+        config.write_text(json.dumps(parsed))
+        code,report=self.invoke(agent_home=str(directory))
+        self.assertEqual(code,1)
+        self.assertEqual(report['registration'],'mismatch')
     def test_missing_registration_does_not_hide_connection(self):
         self.config.unlink()
         code,report=self.invoke()

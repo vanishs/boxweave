@@ -105,7 +105,7 @@ class CommandTests(unittest.TestCase):
                 profiles.append(clients.selection(self.args('--os','windows','--agent',agent,'--runtime','native','--transport',transport)))
         for agent in ('codex','claude-code'):
             profiles.append(clients.selection(self.args('--os','windows','--agent',agent,'--runtime','wsl')))
-        self.assertEqual(len(profiles),11)
+        self.assertEqual(len(profiles),14)
         for p in profiles:
             result=clients.render(clients.validate(descriptor()),p)
             self.assertIn('a'*40,result['command'])
@@ -121,6 +121,7 @@ class CommandTests(unittest.TestCase):
         for options in (
             ['--os','macos','--agent','codex','--transport','wsl'],
             ['--os','windows','--agent','cursor','--runtime','wsl'],
+            ['--os','windows','--agent','zcode','--runtime','wsl'],
             ['--os','windows','--agent','codex','--runtime','wsl','--transport','native']):
             with self.subTest(options=options),self.assertRaises(ValueError): clients.selection(self.args(*options))
     def test_descriptor_field_injection(self):
@@ -312,6 +313,30 @@ class SetupFlowTests(unittest.TestCase):
     def calls(self):
         p=self.home/'calls.jsonl'
         return [json.loads(line) for line in p.read_text().splitlines()] if p.exists() else []
+
+    def test_zcode_native_config_repeat_and_conflict(self):
+        directory=self.home/'.zcode';(directory/'cli').mkdir(parents=True)
+        config=directory/'cli/config.json'
+        config.write_text(json.dumps({'theme':'dark','mcp':{'servers':{'other':{'command':'other'}}}}))
+        (directory/'AGENTS.md').write_text('User preferences\n')
+        self.run_setup('zcode')
+        first=json.loads(config.read_text())
+        self.assertEqual(first['theme'],'dark')
+        self.assertEqual(first['mcp']['servers']['other'],{'command':'other'})
+        self.assertEqual(first['mcp']['servers']['boxweave']['type'],'stdio')
+        self.assertTrue((directory/'AGENTS.md').read_text().startswith('User preferences'))
+        self.run_setup('zcode')
+        self.assertEqual(json.loads(config.read_text()),first)
+        self.assertTrue(list(config.parent.glob('config.json.backup-*')))
+        first['mcp']['servers']['boxweave']['enable']=False
+        config.write_text(json.dumps(first))
+        before=len(self.calls())
+        with self.assertRaisesRegex(ValueError,'Existing ZCode'): self.run_setup('zcode')
+        self.assertEqual(len(self.calls()),before)
+        self.run_setup('zcode',replace=True)
+        self.assertNotIn('enable',json.loads(config.read_text())['mcp']['servers']['boxweave'])
+        self.assertFalse(any(c[0]=='claude' for c in self.calls()))
+
     def test_codex_complete_repeat_and_override(self):
         directory=self.home/'.codex';directory.mkdir()
         override=directory/'AGENTS.override.md';override.write_text('User override\n')
@@ -353,3 +378,60 @@ class SetupFlowTests(unittest.TestCase):
         self.assertEqual(self.calls(),[])
 
 if __name__=='__main__': unittest.main()
+
+
+class GLMTests(unittest.TestCase):
+    def test_merge_preserves_settings_and_maps_models(self):
+        original=json.dumps({'permissions': {'allow': ['Read']}, 'env': {
+            'CUSTOM': 'keep', 'ANTHROPIC_API_KEY': 'old'}})
+        for provider, url in [('zai','https://api.z.ai/api/anthropic'),
+                              ('zhipu','https://open.bigmodel.cn/api/anthropic')]:
+            result=json.loads(setup.glm_settings(original,provider,'glm-test','fixture-token'))
+            self.assertEqual(result['permissions'], {'allow': ['Read']})
+            self.assertEqual(result['env']['CUSTOM'],'keep')
+            self.assertEqual(result['env']['ANTHROPIC_BASE_URL'],url)
+            self.assertEqual(result['env']['ANTHROPIC_AUTH_TOKEN'],'fixture-token')
+            self.assertNotIn('ANTHROPIC_API_KEY',result['env'])
+            for tier in ('OPUS','SONNET','HAIKU'):
+                self.assertEqual(result['env']['ANTHROPIC_DEFAULT_'+tier+'_MODEL'],'glm-test')
+
+    def test_invalid_settings_and_missing_key_fail_closed(self):
+        for original,provider,model,token in [
+            ('[]','zai',None,'key'), ('{"env":[]}','zai',None,'key'),
+            ('{}','other',None,'key'), ('{}','zai',None,''),
+            ('{}','zai','bad model','key'), ('{}','zai',None,'key\n')]:
+            with self.assertRaises(ValueError):
+                setup.glm_settings(original,provider,model,token)
+
+    def test_cli_payload_contains_options_without_client_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+            args=cli.parser().parse_args(['client','--os','macos','--agent','claude-code',
+                '--claude-provider','zhipu','--glm-model','glm-test','--json','--config',str(config)])
+            with patch.dict('os.environ',{'GLM_API_KEY':'do-not-export'}), contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(args),0)
+            result=json.loads(out.getvalue())
+            payload=json.loads(base64.b64decode(shlex.split(shlex.split(result['command'])[2])[-1]))
+            self.assertEqual(payload['setup_options']['claude_provider'],'zhipu')
+            self.assertEqual(payload['setup_options']['glm_model'],'glm-test')
+            self.assertNotIn('do-not-export',json.dumps(payload))
+            args.agent='codex'
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(clients.run(args),2)
+            args.agent='claude-code';args.diagnose=True
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(clients.run(args),2)
+
+class ZCodeConfigTests(unittest.TestCase):
+    def test_invalid_shapes_disabled_mcp_and_custom_entry(self):
+        for original in ('[]','null','{"mcp":[]}','{"mcp":{"servers":null}}',
+                         '{"features":{"mcp":false}}',
+                         '{"mcp":{"servers":{"boxweave":{"command":"other"}}}}'):
+            with self.subTest(original=original),self.assertRaises(ValueError):
+                setup.zcode_update(original,'ssh',[])
+    def test_only_zcode_has_native_config_shape(self):
+        result=json.loads(setup.zcode_update('{}','ssh',['-T']))
+        self.assertNotIn('mcpServers',result)
+        self.assertEqual(result['mcp']['servers']['boxweave']['args'],['-T'])
+        self.assertEqual(setup.zcode_update(json.dumps(result),'ssh',['-T']),
+                         json.dumps(result,indent=2)+'\n')

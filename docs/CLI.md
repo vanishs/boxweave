@@ -22,7 +22,7 @@ the CLI and VERSION files to be available at the selected repository ref.
 
 | Command | Evidence returned |
 | --- | --- |
-| `version` | BoxWeave's own VERSION file, 0.2.0 |
+| `version` | BoxWeave's own VERSION file, 0.3.0 |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
 | `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
 | `status` | Configuration availability and selected systemd service/timer states |

@@ -23,7 +23,7 @@ param(
     [string]$McpRemoteCommand = '/usr/local/bin/boxweave-mcp',
     [ValidateSet('Native','WSL')][string]$Mode = 'Native',
     [string]$WslDistro = '',
-    [ValidateSet('Codex','Cursor','Claude-Code')][string]$Agent = 'Codex',
+    [ValidateSet('Codex','Cursor','Claude-Code','ZCode')][string]$Agent = 'Codex',
     [ValidateSet('Containarium')][string]$Provider = 'Containarium',
     [string]$AgentHome = '',
     [string]$McpName = 'boxweave',
@@ -31,6 +31,28 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+function Update-ZCodeJson([string]$Original, [string]$Command, [string[]]$Arguments, [bool]$AllowReplace) {
+    $obj=if ($Original.Trim()) { ConvertFrom-Json -InputObject $Original } else { [pscustomobject]@{} }
+    if ($obj -isnot [pscustomobject]) { throw 'Invalid ZCode JSON object' }
+    if (-not $obj.PSObject.Properties['mcp']) { $obj | Add-Member NoteProperty mcp ([pscustomobject]@{}) }
+    if ($obj.mcp -isnot [pscustomobject]) { throw 'Invalid ZCode MCP object' }
+    if (-not $obj.mcp.PSObject.Properties['servers']) { $obj.mcp | Add-Member NoteProperty servers ([pscustomobject]@{}) }
+    if ($obj.mcp.servers -isnot [pscustomobject]) { throw 'Invalid ZCode MCP servers' }
+    if ($obj.PSObject.Properties['features'] -and ($obj.features -isnot [pscustomobject] -or
+        ($obj.features.PSObject.Properties['mcp'] -and $obj.features.mcp -cne $true))) { throw 'Enable MCP in ZCode before setup' }
+    $old=$obj.mcp.servers.PSObject.Properties['boxweave']
+    if ($old -and -not $AllowReplace) {
+        $entry=$old.Value
+        if ($entry -isnot [pscustomobject] -or $entry.type -cne 'stdio' -or $entry.command -cne $Command -or
+            ($entry.args -isnot [array]) -or
+            (ConvertTo-Json -InputObject @($entry.args) -Compress) -cne (ConvertTo-Json -InputObject @($Arguments) -Compress) -or
+            @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('type','command','args')}).Count) {
+            throw 'Existing ZCode boxweave entry differs; rerun with -Replace after review'
+        }
+    }
+    $obj.mcp.servers | Add-Member -Force NoteProperty boxweave ([pscustomobject]@{type='stdio';command=$Command;args=@($Arguments)})
+    return ConvertTo-Json -InputObject $obj -Depth 100
+}
 function Assert-Exit([string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)" }
 }
@@ -302,7 +324,7 @@ function Invoke-BoxWeaveDiagnostic {
         if($Replace -or $BootstrapIdentityFile -or $ProjectPath -or -not $DataBase64 -or $DataBase64.Length -gt 65536){Stop-Diagnostic 'INPUT_INVALID' 'input'}
         try{
             $d=ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
-            if($d.os -cne 'windows' -or $d.runtime -cne 'native' -or $d.transport -cnotin @('native','wsl') -or $d.agent -cnotin @('codex','cursor','claude-code')){throw 'profile'}
+            if($d.os -cne 'windows' -or $d.runtime -cne 'native' -or $d.transport -cnotin @('native','wsl') -or $d.agent -cnotin @('codex','cursor','claude-code','zcode')){throw 'profile'}
             if($d.ssh_host -cnotmatch '^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$' -or $d.linux_user -cnotmatch '^[a-z_][a-z0-9_-]{0,63}$' -or $d.launcher -cnotmatch '^/[A-Za-z0-9_./-]+$'){throw 'endpoint'}
             if($d.ssh_port -is [string] -or $d.ssh_port -is [bool] -or $d.ssh_port -lt 1 -or $d.ssh_port -gt 65535){throw 'port'}
             if($d.server_public_key -cnotmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$'){throw 'key'}
@@ -312,7 +334,7 @@ function Invoke-BoxWeaveDiagnostic {
         } catch {Stop-Diagnostic 'INPUT_INVALID' 'input'}
         Record-Diagnostic 'input' 'passed' 'OK'
         $report.runtime='windows-native';$report.transport=$d.transport
-        $homePath=if($AgentHome){$AgentHome}elseif($d.setup_options.agent_home){$d.setup_options.agent_home}elseif($d.agent -ceq 'codex'){if($env:CODEX_HOME){$env:CODEX_HOME}else{Join-Path $env:USERPROFILE '.codex'}}elseif($d.agent -ceq 'cursor'){Join-Path $env:USERPROFILE '.cursor'}else{if($env:CLAUDE_CONFIG_DIR){$env:CLAUDE_CONFIG_DIR}else{Join-Path $env:USERPROFILE '.claude'}}
+        $homePath=if($AgentHome){$AgentHome}elseif($d.setup_options.agent_home){$d.setup_options.agent_home}elseif($d.agent -ceq 'codex'){if($env:CODEX_HOME){$env:CODEX_HOME}else{Join-Path $env:USERPROFILE '.codex'}}elseif($d.agent -ceq 'cursor'){Join-Path $env:USERPROFILE '.cursor'}elseif($d.agent -ceq 'zcode'){Join-Path $env:USERPROFILE '.zcode'}else{if($env:CLAUDE_CONFIG_DIR){$env:CLAUDE_CONFIG_DIR}else{Join-Path $env:USERPROFILE '.claude'}}
         Safe-DiagnosticPath $homePath
         $token=if($d.ssh_port -ne 22 -or $d.ssh_host.Contains(':')){'['+$d.ssh_host+']:'+$d.ssh_port}else{$d.ssh_host}
         $pin=$token+' '+(($d.server_public_key -split ' ')[0..1] -join ' ')
@@ -344,7 +366,7 @@ function Invoke-BoxWeaveDiagnostic {
         if($d.agent -ceq 'claude-code'){
             $report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'
         }else{
-            $config=Join-Path $homePath $(if($d.agent -ceq 'codex'){'config.toml'}else{'mcp.json'})
+            $config=Join-Path $homePath $(if($d.agent -ceq 'codex'){'config.toml'}elseif($d.agent -ceq 'zcode'){'cli/config.json'}else{'mcp.json'})
             Safe-DiagnosticPath $config
             if(-not (Test-Path -LiteralPath $config -PathType Leaf)){
                 $report.registration='missing';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_MISSING'
@@ -364,8 +386,14 @@ function Invoke-BoxWeaveDiagnostic {
                         }
                         $entry=[pscustomobject]$fields
                     }else{
-                        $parsed=ConvertFrom-Json -InputObject $text;$entry=$parsed.mcpServers.boxweave
-                        if(-not ($entry -is [pscustomobject]) -or @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('command','args','enabled')}).Count){throw 'unsupported'}
+                        $parsed=ConvertFrom-Json -InputObject $text
+                        if($d.agent -ceq 'zcode'){
+                            $entry=$parsed.mcp.servers.boxweave
+                            if($parsed.PSObject.Properties['features'] -and $parsed.features.PSObject.Properties['mcp'] -and $parsed.features.mcp -ne $true){throw 'disabled'}
+                            if($entry.type -and $entry.type -cne 'stdio'){throw 'unsupported'}
+                            if($entry.PSObject.Properties['enable'] -and $entry.enable -ne $true){throw 'disabled'}
+                        }else{$entry=$parsed.mcpServers.boxweave}
+                        if(-not ($entry -is [pscustomobject]) -or @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('command','args','enabled','enable','type')}).Count){throw 'unsupported'}
                     }
                     $matched=($entry.command -ceq $transportCommand -and ($entry.args -is [array]) -and
                         (ConvertTo-Json -InputObject @($entry.args) -Compress) -ceq (ConvertTo-Json -InputObject @($expectedArguments) -Compress))
@@ -379,6 +407,9 @@ function Invoke-BoxWeaveDiagnostic {
             $guidance=Join-Path $homePath 'AGENTS.override.md';Safe-DiagnosticPath $guidance
             if(-not (Test-Path -LiteralPath $guidance) -or -not ([IO.File]::ReadAllText($guidance)).Trim()){$guidance=Join-Path $homePath 'AGENTS.md'}
             Safe-DiagnosticPath $guidance
+            if((Test-Path -LiteralPath $guidance -PathType Leaf) -and ([IO.File]::ReadAllText($guidance)).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')){$report.guidance='present'}
+        }elseif($d.agent -ceq 'zcode'){
+            $guidance=Join-Path $homePath 'AGENTS.md';Safe-DiagnosticPath $guidance
             if((Test-Path -LiteralPath $guidance -PathType Leaf) -and ([IO.File]::ReadAllText($guidance)).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')){$report.guidance='present'}
         }elseif($d.agent -ceq 'cursor'){$report.guidance='manual'}
         Record-Diagnostic 'guidance' $(if($report.guidance -eq 'present'){'passed'}else{'unverified'}) $(if($report.guidance -eq 'present'){'FILE_PRESENT'}else{'MANUAL_VERIFICATION_REQUIRED'})
@@ -432,7 +463,7 @@ if ($ReportPath) { throw '-ReportPath requires -Diagnose' }
 
 if ($DataBase64) {
     $d = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
-    if ($d.os -ne 'windows' -or $d.runtime -ne 'native' -or $d.transport -notin @('native','wsl') -or $d.agent -notin @('codex','cursor','claude-code')) { throw 'Invalid Windows client profile' }
+    if ($d.os -ne 'windows' -or $d.runtime -ne 'native' -or $d.transport -notin @('native','wsl') -or $d.agent -notin @('codex','cursor','claude-code','zcode')) { throw 'Invalid Windows client profile' }
     if ($d.ssh_port -lt 1 -or $d.ssh_port -gt 65535) { throw 'Invalid SSH port' }
     if ($d.setup_options) {
         $opts=$d.setup_options
@@ -482,7 +513,7 @@ $sshKeygen = (Get-Command ssh-keygen.exe -ErrorAction Stop).Source
 $wsl = if ($Mode -eq 'WSL') { (Get-Command wsl.exe -ErrorAction Stop).Source } else { $null }
 
 $sshDir = Join-Path $env:USERPROFILE '.ssh'
-$codexDir = if ($AgentHome) { $AgentHome } elseif ($Agent -eq 'Cursor') { Join-Path $env:USERPROFILE '.cursor' } elseif ($Agent -eq 'Claude-Code') { if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' } } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$codexDir = if ($AgentHome) { $AgentHome } elseif ($Agent -eq 'Cursor') { Join-Path $env:USERPROFILE '.cursor' } elseif ($Agent -eq 'ZCode') { Join-Path $env:USERPROFILE '.zcode' } elseif ($Agent -eq 'Claude-Code') { if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' } } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 foreach ($candidate in @($sshDir,$codexDir)) {
     $ancestor=$candidate
     while ($ancestor) {
@@ -492,6 +523,33 @@ foreach ($candidate in @($sshDir,$codexDir)) {
 }
 if ($BootstrapIdentityFile -and -not (Test-Path -LiteralPath $BootstrapIdentityFile -PathType Leaf)) { throw 'Bootstrap identity file not found' }
 New-Item -ItemType Directory -Force $sshDir, $codexDir | Out-Null
+# GLM credentials are read only on this client, never from the generated profile.
+$glmText=$null
+$glmProvider=if ($d -and $d.setup_options) { $d.setup_options.claude_provider } else { $null }
+$glmModel=if ($d -and $d.setup_options) { $d.setup_options.glm_model } else { $null }
+if (($glmProvider -or $glmModel) -and $Agent -ne 'Claude-Code') { throw 'GLM options require Claude Code' }
+if ($glmModel -and -not $glmProvider) { throw 'GLM model requires provider' }
+if ($glmProvider) {
+    if ($glmProvider -cnotin @('zai','zhipu')) { throw 'Invalid Claude provider' }
+    if ($glmModel -and ($glmModel -isnot [string] -or $glmModel -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,127}$')) { throw 'Invalid GLM model' }
+    if (-not $env:GLM_API_KEY -or -not $env:GLM_API_KEY.Trim() -or $env:GLM_API_KEY -match '[\r\n]') { throw 'Set GLM_API_KEY in the client environment before setup' }
+    $glmPath=Join-Path $codexDir 'settings.json'
+    if (Test-Path -LiteralPath $glmPath) {
+        if ((Get-Item -LiteralPath $glmPath).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing settings reparse point' }
+        $glmObj=ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($glmPath))
+    } else { $glmObj=[pscustomobject]@{} }
+    if ($glmObj -isnot [pscustomobject]) { throw 'Invalid Claude settings object' }
+    if (-not $glmObj.PSObject.Properties['env']) { $glmObj | Add-Member NoteProperty env ([pscustomobject]@{}) }
+    if ($glmObj.env -isnot [pscustomobject]) { throw 'Invalid Claude settings env' }
+    $glmUrl=if ($glmProvider -ceq 'zai') { 'https://api.z.ai/api/anthropic' } else { 'https://open.bigmodel.cn/api/anthropic' }
+    $glmValues=@{ANTHROPIC_BASE_URL=$glmUrl; ANTHROPIC_AUTH_TOKEN=$env:GLM_API_KEY; API_TIMEOUT_MS='3000000'}
+    if ($glmModel) {
+        foreach ($field in @('ANTHROPIC_MODEL','ANTHROPIC_DEFAULT_OPUS_MODEL','ANTHROPIC_DEFAULT_SONNET_MODEL','ANTHROPIC_DEFAULT_HAIKU_MODEL')) { $glmValues[$field]=$glmModel }
+    }
+    $glmObj.env.PSObject.Properties.Remove('ANTHROPIC_API_KEY')
+    foreach ($field in $glmValues.Keys) { $glmObj.env | Add-Member -Force NoteProperty $field $glmValues[$field] }
+    $glmText=ConvertTo-Json -InputObject $glmObj -Depth 100
+}
 $nativePrivate = Join-Path $sshDir $KeyName
 $nativePublic = "$nativePrivate.pub"
 $nativeKnown = Join-Path $sshDir "${KeyName}_known_hosts"
@@ -499,6 +557,12 @@ $configPath = Join-Path $codexDir 'config.toml'
 $agentsPath = Join-Path $codexDir 'AGENTS.override.md'
 if (-not (Test-Path -LiteralPath $agentsPath) -or -not ([IO.File]::ReadAllText($agentsPath)).Trim()) { $agentsPath = Join-Path $codexDir 'AGENTS.md' }
 
+if ($Agent -eq 'ZCode') {
+    $configPath=Join-Path $codexDir 'cli/config.json'
+    $agentsPath=Join-Path $codexDir 'AGENTS.md'
+    $cliDir=Join-Path $codexDir 'cli'
+    if ((Test-Path -LiteralPath $cliDir) -and ((Get-Item -LiteralPath $cliDir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing ZCode CLI reparse point' }
+}
 foreach ($candidate in @($nativePrivate,$nativePublic,$nativeKnown,$configPath,$agentsPath)) {
     if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing identity/configuration reparse point' }
 }
@@ -602,6 +666,10 @@ $pendingConfig = ''
 if ($Agent -eq 'Codex') {
     $pendingConfig = Update-CodexToml -Path $configPath -Command $transportCommand -Arguments $transportArgs
     if ($DataBase64) { $null=Update-Agents -Path $agentsPath -Content $d.policy -Preview }
+} elseif ($Agent -eq 'ZCode') {
+    $original=if (Test-Path -LiteralPath $configPath) { [IO.File]::ReadAllText($configPath) } else { '' }
+    $pendingConfig=Update-ZCodeJson -Original $original -Command $transportCommand -Arguments $transportArgs -AllowReplace ([bool]$Replace)
+    $null=Update-Agents -Path $agentsPath -Content $d.policy -Preview
 } elseif ($Agent -eq 'Cursor') {
     $configPath=Join-Path $codexDir 'mcp.json'
     $obj=if (Test-Path -LiteralPath $configPath) { ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($configPath)) } else { New-Object PSObject }
@@ -707,6 +775,7 @@ if ($Agent -eq 'Claude-Code') {
     Backup-File $agentsPath
     Write-Utf8NoBom $agentsPath $agents
 } else {
+    if ($Agent -eq 'ZCode') { $null=New-Item -ItemType Directory -Force -Path (Split-Path -Parent $configPath) }
     Backup-File $configPath
     Write-Utf8NoBom $configPath $pendingConfig
     if ($Agent -eq 'Cursor') {
@@ -721,6 +790,10 @@ if ($Agent -eq 'Claude-Code') {
             Write-Utf8NoBom $projectRule ("---`nalwaysApply: true`n---`n`n"+$agents)
         }
     } else { Update-Agents -Path $agentsPath -Content $agents }
+}
+if ($null -ne $glmText) {
+    Backup-File $glmPath
+    Write-Utf8NoBom $glmPath $glmText
 }
 Write-Host 'MCP initialize/tools/list/read-only provider call: passed.'
 Write-Host "Agent registration: written for $Agent. Reopen the agent and verify BoxWeave in its MCP UI."
