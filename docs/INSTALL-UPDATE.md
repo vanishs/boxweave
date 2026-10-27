@@ -99,7 +99,10 @@ Ubuntu installation/update integration test.
 On 2026-10-22 the complete Linux regression suite passed all 50 tests in WSL
 Ubuntu (exit 0). After moving the installer lock into a root-only runtime
 directory, all 10 installer sandbox tests were rerun and passed (exit 0).
-`bash -n install.sh` and `git diff --check` also passed. The revised installer
+`bash -n install.sh` and `git diff --check` also passed. (Those counts are the
+2026-10-22 snapshot; as of 0.3.0 the sandbox suite in
+`tests/test_installer_rerun.py` has 15 tests and the repository suite has 219
+test functions.) The revised installer
 has not been executed against the live Ubuntu host's installed services.
 
 ## Client handoff in 0.2.0

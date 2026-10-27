@@ -219,7 +219,7 @@ def probe(command, args, timeout=30, evidence=None):
         os.set_blocking(p.stdout.fileno(), False)
         stage = 'initialize'
         result = call('initialize', {'protocolVersion':'2024-11-05','capabilities':{},
-                                    'clientInfo':{'name':'boxweave-client','version':'0.2.0'}})
+                                    'clientInfo':{'name':'boxweave-client','version':'0.3.0'}})
         if result.get('protocolVersion') != '2024-11-05':
             raise DiagnosticError('PROTOCOL_UNSUPPORTED', stage, 'Unsupported negotiated MCP protocol')
         if not isinstance(result.get('capabilities'),dict) or not isinstance(result['capabilities'].get('tools'),dict): invalid()

@@ -23,7 +23,8 @@ sudo boxweave doctor
 Run administrator commands in an interactive terminal **on the installed host**.
 Passwords are entered via getpass, never command arguments. There is one local
 administrator, no registration form, and no default password. Use a unique
-14-character-or-longer password. Resetting it invalidates every web session:
+password of at least 8 characters (up to 1024). Resetting it invalidates every
+web session:
 
 ```bash
 sudo boxweave web reset-password
@@ -116,7 +117,8 @@ five minutes; the exact target list must be confirmed. Deletion has a second
 confirmation and never uses force implicitly. A running box may require stopping
 before deletion. Disk may grow, not shrink.
 
-Two batch workers process at most eight queued batches (up to 50 targets each).
+Two batch workers process at most eight unfinished batches (queued or running;
+up to 50 targets each).
 Each item has a durable receipt. Partial success does not roll back resources.
 `submitted` means create accepted, **not** provisioned or SSH-ready. Use **Query
 actual creation state** for submitted/unknown creates. Timeout means outcome

@@ -32,7 +32,7 @@ class LayoutTests(unittest.TestCase):
         content = (ROOT / 'clients/windows/setup.ps1').read_text(encoding='utf-8')
         self.assertIn("[string]$McpName = 'boxweave'", content)
         self.assertIn("[string]$KeyName = 'boxweave'", content)
-        self.assertIn("[ValidateSet('Codex','Cursor','Claude-Code')]", content)
+        self.assertIn("[ValidateSet('Codex','Cursor','Claude-Code','ZCode')]", content)
         self.assertIn("[ValidateSet('Containarium')]", content)
         self.assertIn("[ValidateSet('Native','WSL')]", content)
         self.assertNotIn('codex_containarium', content)

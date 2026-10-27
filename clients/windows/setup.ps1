@@ -244,7 +244,7 @@ function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments,[double]$Timeout
     }
     try {
         $stage='initialize'; $Evidence.stage=$stage
-        $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.2.0'}}
+        $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.3.0'}}
         if ($hello.protocolVersion -cne '2024-11-05') { throw 'PROTOCOL_UNSUPPORTED: Unsupported MCP protocol' }
         if(-not ($hello.capabilities -is [pscustomobject]) -or -not ($hello.capabilities.tools -is [pscustomobject])){throw 'PROTOCOL_INVALID: Tools capability missing'}
         $Evidence.protocol_version=$hello.protocolVersion; $Evidence.initialize='passed'

@@ -2,7 +2,13 @@
 
 Research date: 2026-10-22 (America/Los_Angeles).
 Source baseline: `b2c38cd08ce08b5adb7c89ed18955b586fca2df9`, BoxWeave 0.2.0.
-Status: researched proposal; product implementation has not started.
+Status: **implemented in 0.3.0.** `boxweave client --diagnose` generates the
+diagnostic command; `--diagnose` / `-Diagnose` run it in the shipped
+`clients/posix/setup.py` and `clients/windows/setup.ps1`, covered by
+`tests/test_diagnostics.py` and `tests/test_windows_diagnostics.py`. The
+2026-10-22 research text below is kept as design background; where shipped
+behavior differs from the proposal, the shipped behavior wins and is noted
+inline.
 
 ## Recommended first increment
 
@@ -10,7 +16,7 @@ Provide a diagnostic entry point independent of enrollment. Reuse the existing
 Windows PowerShell and POSIX client artifacts, with an early `--diagnose` /
 `-Diagnose` branch that cannot reach setup mutations. Add `boxweave client
 --diagnose` as a server-side command generator, preserving existing setup CLI
-behavior. These command names are proposed, not currently available.
+behavior. (Both command names shipped in 0.3.0.)
 
 The generated command runs on the client, using its already enrolled transport
 identity and pinned host key. It checks the connection and separately observes
@@ -126,6 +132,12 @@ parsed through an explicitly verified interface; where unavailable, report that
 stage incomplete while allowing a separate connection result. Never treat a raw
 CLI dump as safe diagnostic output.
 
+Shipped registration coverage (0.3.0): Codex and ZCode entries are compared
+field-by-field against the generated subset (ZCode also checks the stdio type
+and the `features.mcp` flag); Cursor observes `mcp.json`; Claude Code's
+CLI-owned registration reports `REGISTRATION_UNSUPPORTED` while still allowing
+an independent connection result.
+
 Preflight may stat the existing private-key path for presence/type/permissions;
 the diagnostic must never open/hash/export its contents. OpenSSH uses that file
 through its normal credential interface. Missing/unusable keys yield incomplete
@@ -143,7 +155,7 @@ or authentication failure; no keygen, enrollment or known_hosts rewriting.
 | initialize | MCP response negotiated a supported version | protocol and bounded server identity |
 | discovery | Required read-only tool discovered | page count and tool presence |
 | provider_call | list_containers returns valid successful CallToolResult | passed/denied/failed, no inventory |
-| guidance | Expected instruction file/block observed | present/manual/unknown, not file contents |
+| guidance | Expected instruction file/block observed | present/manual/unverified, not file contents |
 | agent_ui | GUI recognized MCP and loaded instructions | unverified in automated MVP |
 
 Transport authentication is proven by subsequent protocol/tool success, not by
@@ -181,6 +193,7 @@ Proposed JSON example (illustrative, not an actual test receipt):
   "runtime": "windows-native",
   "transport": "wsl",
   "protocol_version": "2024-11-05",
+  "tool_pages": 1,
   "stages": [
     {"id": "provider_call", "status": "passed", "code": "OK", "elapsed_ms": 18}
   ],
@@ -189,7 +202,8 @@ Proposed JSON example (illustrative, not an actual test receipt):
 }
 ```
 
-Stage statuses: passed, failed, incomplete, skipped, unverified. Overall passed
+Stage statuses: passed, failed, incomplete. (The shipped diagnostic emits only
+these three; skipped/unverified remain reserved and unused.) Overall passed
 means every required automated stage passed; it never includes GUI verification.
 Optional GUI/manual guidance observations must be clearly labeled. Registration
 failure cannot be hidden by a separate connection success.
@@ -198,7 +212,10 @@ Exit 0: required automated checks passed. Exit 1: observed failure (invalid
 response, mismatch, timeout, denied tool call or failed transport). Exit 2: invalid
 input, missing prerequisite or unsupported/incomplete inspection. Unknown state
 is not success. Invalid JSON input belongs to input/exit 2; invalid peer JSON
-belongs to protocol/exit 1. Exit 130: operator interruption. Define precedence
+belongs to protocol/exit 1. Exit 130: operator interruption — POSIX `setup.py`
+only; the Windows script has no dedicated interruption exit. On Windows,
+argument-binding failures such as an out-of-range `-Timeout` are rejected by
+PowerShell parameter validation and exit 1 rather than 2. Define precedence
 as failed before incomplete before passed. Keep existing server status/doctor
 exit semantics unchanged.
 
@@ -206,8 +223,10 @@ Use stable codes: INPUT_INVALID, RUNTIME_MISSING, PROFILE_UNSUPPORTED,
 REGISTRATION_MISSING, REGISTRATION_MISMATCH, REGISTRATION_UNSUPPORTED,
 PIN_MISSING, PIN_MISMATCH, TRANSPORT_FAILED, PROTOCOL_UNSUPPORTED,
 PROTOCOL_INVALID, TOOL_UNAVAILABLE, PROVIDER_CALL_FAILED, RESPONSE_LIMIT,
-DEADLINE_EXCEEDED and CLEANUP_INCOMPLETE. Remediation text maps from codes;
-never interpolate arbitrary peer messages into advice or output.
+DEADLINE_EXCEEDED and CLEANUP_INCOMPLETE, plus the shipped IDENTITY_MISSING,
+WSL_PREFLIGHT_FAILED, INPUT_UNAVAILABLE, INTERRUPTED, FILE_PRESENT,
+MANUAL_VERIFICATION_REQUIRED and REPORT_WRITE_FAILED. Remediation text maps from
+codes;
 
 Export only an explicit report path when requested, using a private atomic write
 and a symlink/reparse-point check. JSON stdout contains exactly one object;
@@ -233,6 +252,8 @@ container inventory and raw policy/configuration contents by default.
   15-second SSH connection limit, 2 MiB per protocol line, 8 MiB total response
   bytes, 16 discovery pages, bounded notification count and 4 KiB output strings.
   These are proposed defaults requiring fixtures, not measured requirements.
+  Shipped: `--timeout` (default 30, range 1–300) bounds protocol I/O only;
+  cleanup adds at most a few seconds and there is no fixed total process budget.
 - Use a monotonic deadline; include writes, reads and cleanup. Guard the complete
   child process externally so a blocked pipe cannot defeat the deadline.
   Reserve a cleanup window within that total; do not reset it per request.

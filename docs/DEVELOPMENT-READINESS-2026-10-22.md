@@ -3,6 +3,13 @@
 Research date: 2026-10-22 (America/Los_Angeles).
 Repository baseline: `b2c38cd08ce08b5adb7c89ed18955b586fca2df9`, VERSION `0.2.0`.
 
+> **0.3.0 update:** the ranked-1 MVP below (independent client diagnostics) is
+> implemented — `boxweave client --diagnose` plus `--diagnose` / `-Diagnose`,
+> covered by `tests/test_diagnostics.py` and `tests/test_windows_diagnostics.py`
+> — and tools/list cursor pagination is implemented in both client scripts. The
+> remaining ranked items stand as written. The README no longer claims a
+> `.github/workflows/ci.yml`; that workflow still does not exist.
+
 ## Decision
 
 Prioritize an independently runnable client diagnostic, followed by binding an

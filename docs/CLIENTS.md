@@ -91,7 +91,7 @@ agent and confirm MCP recognition and guidance loading in a new session.
 
 | Agent | MCP registration | Guidance |
 | --- | --- | --- |
-| Codex | Codex home config.toml; mcp_servers.boxweave | Managed block in effective AGENTS.md or existing nonempty AGENTS.override.md |
+| Codex | Codex home config.toml; mcp_servers.boxweave (generated entry pins startup_timeout_sec = 30 and tool_timeout_sec = 180) | Managed block in effective AGENTS.md or existing nonempty AGENTS.override.md |
 | Cursor | Cursor home mcp.json; mcpServers.boxweave | Generated boxweave-user-rules.md or optional project rule |
 | Claude Code | Official CLI with explicit user scope | Dedicated user configuration home rules/boxweave.md |
 | ZCode | ZCode home cli/config.json; mcp.servers.boxweave | Managed block in ZCode home AGENTS.md |
@@ -116,7 +116,8 @@ retrying. Never disable host-key verification to repair a failure.
 Installation stages the generator and client source hashes before publishing
 the root-owned public `/etc/boxweave/client.json` descriptor (0644).
 Privileged `config.json` remains 0600. Public fields are whitelisted:
-endpoint/user, full public keys, launcher, source commit and asset hashes. The
+endpoint/user, full public keys, launcher, source repository and commit, asset
+hashes and the descriptor schema version. The
 selected source ref must contain the new files before deploying this installer.
 Editing a checkout does not update an installed server.
 
@@ -146,6 +147,17 @@ After updating the server with the revised installer, rerun `boxweave client`
 and use the newly generated command. An earlier command pins an earlier source
 commit and checksum, so it continues downloading the old script even after a
 fix is published. Do not bypass the checksum check or remove known_hosts entries.
+
+## Legacy Windows parameter calls
+
+The generated setup command passes one Base64 payload, but
+`clients/windows/setup.ps1` also accepts explicit parameters for hand-run or
+repaired enrollments: `-SshHost`, `-SshPort`, `-SshUser`, `-ServerHostKey`,
+`-BoxPublicKeyBase64`, `-Mode`, `-Agent`, `-Provider`, `-AgentHome`, `-McpName`,
+`-KeyName`, `-BootstrapIdentityFile` and `-McpRemoteCommand`, plus the
+diagnostic `-Diagnose` / `-Timeout` / `-ReportPath` set. This legacy interface
+retains the script's inline policy text and follows its own validation; the
+Base64 payload remains the supported primary interface.
 
 The MCP probe also builds a native process command line. Do not quote every
 argument: WSL can treat quoted switch tokens such as `"-d"` and `"-e"` as shell
@@ -212,11 +224,12 @@ prerequisite or an unsupported/incomplete check. GUI recognition and actual
 instruction loading remain unverified. A successful connection with a missing or
 unsupported registration still exits 2; mismatched registration exits 1.
 
-Codex and Cursor registration checks compare the supported generated connection.
+Codex and Cursor registration checks compare the supported generated connection;
+ZCode additionally checks the stdio type and the `features.mcp` flag.
 Windows Codex inspection supports the generated TOML subset, not arbitrary TOML
 spellings. Custom environment/settings are reported unsupported rather than
 executed. Claude Code registry inspection is not implemented in this increment:
-connection testing is available, but registration is incomplete and exits 2.
+connection testing is available, but registration reports unsupported and exits 2.
 Project configuration overlays are not resolved. Cursor guidance remains manual.
 
 Connection testing executes a controlled OpenSSH profile with config hooks

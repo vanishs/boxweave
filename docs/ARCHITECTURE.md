@@ -1,10 +1,10 @@
 # Architecture and extension points
 
-BoxWeave is a vendor-neutral product interface around provider-specific execution services. The initial integration remains intentionally small: Containarium as the infrastructure provider and Windows/macOS setup for Codex, Cursor and Claude Code.
+BoxWeave is a vendor-neutral product interface around provider-specific execution services. The initial integration remains intentionally small: Containarium as the infrastructure provider and Windows/macOS setup for Codex, Cursor, Claude Code and ZCode.
 
 ```text
 Human request
-  -> Agent adapter (Codex / Cursor / Claude Code)
+  -> Agent adapter (Codex / Cursor / Claude Code / ZCode)
   -> Client transport (Windows Native / WSL SSH, macOS SSH)
   -> BoxWeave restricted SSH launcher (Ubuntu)
   -> Provider MCP server (Containarium now)

@@ -677,7 +677,7 @@ cat <<EOF
  For non-interactive usage and client options:
    boxweave client --help
 
- Choose Windows or macOS, then Codex, Cursor or Claude Code.
+ Choose Windows or macOS, then Codex, Cursor, Claude Code or ZCode.
  Run the generated setup command on the client computer.
  Existing clients normally need no reenrollment for an unchanged endpoint.
  Reconnect the agent's MCP session after a server update.

@@ -22,15 +22,17 @@ the CLI and VERSION files to be available at the selected repository ref.
 
 | Command | Evidence returned |
 | --- | --- |
-| `version` | BoxWeave's own VERSION file, 0.3.0 |
+| `version` | BoxWeave's own VERSION file (0.3.0 at this writing) |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
 | `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
+| `version --manifest PATH` | Same as `version --verbose`, reading the manifest from PATH instead of `/etc/boxweave/install-manifest.json` |
 | `status` | Configuration availability and selected systemd service/timer states |
 | `doctor` | Status, component versions, container detection and current AppArmor namespace observations |
 | `doctor --api` | Adds a three-second unauthenticated loopback API reachability probe |
 | `box inspect NAME --project PROJECT` | Exact local Incus instance, selected security/device metadata and configuration fingerprint |
 
-`--json` is accepted before the command or after the leaf command. Status and
+`--json` is accepted before the command or after the leaf command. The
+top-level `--version` flag prints the same VERSION value and exits. Status and
 doctor also accept `--config PATH`. The default configuration is
 `/etc/boxweave/config.json`; its root-only permissions may require sudo. Incus
 inspection requires access to the local Incus daemon. The CLI does not elevate
@@ -69,7 +71,7 @@ physical devices, change security policies or require a special LXC image.
 
 ## Client configuration
 
-`boxweave client` starts an interactive command generator for Windows/macOS and Codex/Cursor/Claude Code. It performs no enrollment on the server. Use `boxweave client --help` for explicit selection, client-path options and JSON output. See [client setup](CLIENTS.md).
+`boxweave client` starts an interactive command generator for Windows/macOS and Codex/Cursor/Claude Code/ZCode. It performs no enrollment on the server. Use `boxweave client --help` for explicit selection, client-path options and JSON output. See [client setup](CLIENTS.md).
 
 It reads public `/etc/boxweave/client.json`, not credentials. Non-terminal input requires complete choices. Exit 0 means command generation, 2 means invalid/missing input or descriptor, and 130 means cancellation. Existing management/selftest commands retain their behavior.
 
@@ -83,8 +85,11 @@ incompatible. See [diagnostic stages, reports and limits](CLIENTS.md#independent
 
 `boxweave web init-admin` and `boxweave web reset-password` require an interactive
 local terminal and service-user/root access. Passwords are never arguments.
-`boxweave web status` reports the configured origin and local backend listener,
-without opening provider credentials. Use `status`/`doctor` for Web systemd
+`boxweave web serve` runs the backend directly (it is the systemd service's
+ExecStart and is not normally invoked by hand). `boxweave web status` reports the
+configured origin and local backend listener, without opening provider
+credentials; it exits 2 when the backend listener is unreachable. Use
+`status`/`doctor` for Web systemd
 observations. See [Web installation and security](WEB-UI.md).
 
 Web status reports supported SQLite schema and Tenant capability gates without

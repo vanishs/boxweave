@@ -407,10 +407,13 @@ export function TenantPanel(p: Props) {
                   2,
                 )}
               </pre>
-              <p>
-                Policy writes and Tenant reassignment are unavailable in this
-                Provider contract.
-              </p>
+              {!p.snapshot?.capabilities?.networkPolicyWrite && (
+                <p>
+                  {p.snapshot?.capabilities?.policyReason ||
+                    "Policy writes are unavailable in this Provider contract."}{" "}
+                  Tenant reassignment is unavailable in every contract.
+                </p>
+              )}
             </>
           )}
           {tab === "Monitoring" && (

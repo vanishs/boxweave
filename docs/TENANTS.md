@@ -42,12 +42,18 @@ tenant_id and cloud spoofing are not browser input.
 Review each username, resources, image, expected membership and pending Guard
 state before confirming. The patched Provider persists native membership and
 requires the same NIC Guard attachment before the first Start. Capability/Guard
-readiness is checked again at confirmation. Automatic keeps the independent
+readiness is checked again at confirmation, which also re-validates the
+shared-creation capability and treats a name with an unresolved prior receipt
+(queued, running, unknown, submitted, provisioning, verification-pending or
+degraded) as occupied. Automatic keeps the independent
 admin name-fallback workflow.
 
-Receipts distinguish created, provisioning, membership verified, Guard verified
-and TCP not tested. Running alone is insufficient. Unknown, submitted and
-verification-pending receipts reserve names; reconciliation reads the original
+Receipt states are provisioning, verification-pending, guard-verified, degraded
+and unknown; each carries a verification detail (created, provisioning,
+tenantVerified, guardVerified) with networkConnectivity always reported as
+not_tested. Running alone is insufficient. Unknown, submitted,
+provisioning and verification-pending receipts reserve names; reconciliation
+reads the original
 username and never repeats writes automatically. A mismatch is degraded. SSH,
 application readiness and TCP connectivity are separate observations.
 
@@ -79,6 +85,8 @@ state without inventing traffic metrics.
 
 Metadata deletion checks Boxes, routes, both ends of graph references and policy
 references. Incomplete inventories block deletion; there is no resource cascade.
+Creation planning is likewise refused while any backend inventory is unreachable,
+because name conflicts could not be checked.
 
 ## Evidence rules
 

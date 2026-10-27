@@ -67,7 +67,7 @@ def main(argv=None):
             p.error("Initialize administrator first")
     password = getpass.getpass("New administrator password (at least 8 characters): ")
     if len(password) < 8 or len(password) > 1024:
-        p.error("Use 14–1024 characters")
+        p.error("Use 8–1024 characters")
     if password != getpass.getpass("Repeat password: "):
         p.error("Passwords do not match")
     with store.db() as db:
