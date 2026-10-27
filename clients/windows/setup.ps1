@@ -46,11 +46,12 @@ function Update-ZCodeJson([string]$Original, [string]$Command, [string[]]$Argume
         if ($entry -isnot [pscustomobject] -or $entry.type -cne 'stdio' -or $entry.command -cne $Command -or
             ($entry.args -isnot [array]) -or
             (ConvertTo-Json -InputObject @($entry.args) -Compress) -cne (ConvertTo-Json -InputObject @($Arguments) -Compress) -or
-            @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('type','command','args')}).Count) {
+            $entry.timeoutMs -cne 180000 -or
+            @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('type','command','args','timeoutMs')}).Count) {
             throw 'Existing ZCode boxweave entry differs; rerun with -Replace after review'
         }
     }
-    $obj.mcp.servers | Add-Member -Force NoteProperty boxweave ([pscustomobject]@{type='stdio';command=$Command;args=@($Arguments)})
+    $obj.mcp.servers | Add-Member -Force NoteProperty boxweave ([pscustomobject]@{type='stdio';command=$Command;args=@($Arguments);timeoutMs=180000})
     return ConvertTo-Json -InputObject $obj -Depth 100
 }
 function Assert-Exit([string]$What) {
@@ -378,7 +379,7 @@ function Invoke-BoxWeaveDiagnostic {
             $prefix=@();$nullConfig='NUL'
         }
         Record-Diagnostic 'runtime' 'passed' 'OK';Record-Diagnostic 'trust' 'passed' 'OK'
-        $sshArguments=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-p',[string]$d.ssh_port,($d.linux_user+'@'+$d.ssh_host),$d.launcher)
+        $sshArguments=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-p',[string]$d.ssh_port,($d.linux_user+'@'+$d.ssh_host),$d.launcher)
         $expectedArguments=@($prefix)+$sshArguments
         if($d.agent -ceq 'claude-code'){
             $report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'
@@ -410,7 +411,7 @@ function Invoke-BoxWeaveDiagnostic {
                             if($entry.type -and $entry.type -cne 'stdio'){throw 'unsupported'}
                             if($entry.PSObject.Properties['enable'] -and $entry.enable -ne $true){throw 'disabled'}
                         }else{$entry=$parsed.mcpServers.boxweave}
-                        if(-not ($entry -is [pscustomobject]) -or @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('command','args','enabled','enable','type')}).Count){throw 'unsupported'}
+                        if(-not ($entry -is [pscustomobject]) -or @($entry.PSObject.Properties.Name | Where-Object {$_ -notin @('command','args','enabled','enable','type','timeoutMs')}).Count){throw 'unsupported'}
                     }
                     $matched=($entry.command -ceq $transportCommand -and ($entry.args -is [array]) -and
                         (ConvertTo-Json -InputObject @($entry.args) -Compress) -ceq (ConvertTo-Json -InputObject @($expectedArguments) -Compress))
@@ -669,14 +670,16 @@ chmod 600 "$path"
     $transportArgs = @('-d', $WslDistro, '-e', 'ssh', '-T', '-i', $linuxKey,
                        '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                        '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$linuxKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort",
-                       "$SshUser@$SshHost", $McpRemoteCommand)
+                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15',
+                       '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4',
+                       '-p', "$SshPort", "$SshUser@$SshHost", $McpRemoteCommand)
 } else {
     $transportArgs = @('-T', '-i', $nativePrivate,
                        '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                        '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort",
-                       "$SshUser@$SshHost", $McpRemoteCommand)
+                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15',
+                       '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4',
+                       '-p', "$SshPort", "$SshUser@$SshHost", $McpRemoteCommand)
 }
 
 $pendingConfig = ''

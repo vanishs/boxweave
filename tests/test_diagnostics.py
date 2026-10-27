@@ -69,6 +69,7 @@ class DiagnosticTests(unittest.TestCase):
         args=['-T','-i',str(self.key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
               '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(self.known),
               '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+              '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
               '-p','22','fixture@fixture.invalid','/usr/local/bin/boxweave-mcp']
         self.config=self.home/'.codex/config.toml';self.config.parent.mkdir()
         self.config.write_text(setup.toml_update('',str(self.peer),args))

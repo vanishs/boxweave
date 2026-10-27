@@ -17,7 +17,7 @@ try{
  [IO.File]::WriteAllText($key,'OPAQUE FIXTURE NEVER OPEN')
  [IO.File]::WriteAllText($known,'fixture.invalid '+(($public -split ' ')[0..1] -join ' '))
  $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
- $argsExpected=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-p','22','fixture@fixture.invalid','/usr/local/bin/boxweave-mcp')
+ $argsExpected=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-p','22','fixture@fixture.invalid','/usr/local/bin/boxweave-mcp')
  $Replace=$false;$BootstrapIdentityFile='';$ProjectPath='';$McpName='boxweave';$ReportPath='';$Timeout=1;$WslDistro=''
  $config=Join-Path $AgentHome 'config.toml'
  [IO.File]::WriteAllText($config,(Update-CodexToml -Path $config -Command $ssh -Arguments $argsExpected))

@@ -20,6 +20,11 @@ import tomllib
 
 BEGIN = '<!-- BEGIN BOXWEAVE MANAGED -->'
 END = '<!-- END BOXWEAVE MANAGED -->'
+# The stdio MCP channel is long-lived: without traffic-based keepalive a silently
+# dropped connection (idle NAT/conntrack eviction) hangs every later call. ZCode
+# also kills tool calls at its 30s default; create-class calls need more.
+SSH_KEEPALIVE_ARGS = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
+ZCODE_TIMEOUT_MS = 180000
 
 def atomic_write(path, text, mode=0o600):
     path = Path(path)
@@ -67,7 +72,7 @@ def zcode_update(original, command, args, replace=False):
     if not isinstance(mcp, dict): raise ValueError('Invalid ZCode MCP object')
     servers = mcp.setdefault('servers', {})
     if not isinstance(servers, dict): raise ValueError('Invalid ZCode MCP servers')
-    expected = {'type': 'stdio', 'command': command, 'args': args}
+    expected = {'type': 'stdio', 'command': command, 'args': args, 'timeoutMs': ZCODE_TIMEOUT_MS}
     old = servers.get('boxweave')
     if old is not None and not replace:
         if not isinstance(old, dict) or any(old.get(k) != v for k,v in expected.items()) or set(old)-set(expected):
@@ -332,6 +337,7 @@ def diagnose(args):
         transport=['-T','-i',str(key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
                    '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
                    '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+                   *SSH_KEEPALIVE_ARGS,
                    '-p',str(d['ssh_port']),d['linux_user']+'@'+host,d['launcher']]
         home=Path(args.agent_home or options.get('agent_home') or
                   os.environ.get('CODEX_HOME') or Path.home()/'.codex').expanduser()
@@ -347,7 +353,7 @@ def diagnose(args):
                 parsed=(tomllib.loads(config.read_text()) if d['agent']=='codex' else json.loads(config.read_text()))
                 entry=(parsed.get('mcp',{}).get('servers',{}).get('boxweave') if d['agent']=='zcode'
                        else parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave'))
-                allowed={'command','args','type','enable','enabled'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','enabled'}
+                allowed={'command','args','type','enable','enabled','timeoutMs'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','enabled'}
                 if not isinstance(entry,dict) or set(entry)-allowed: raise ValueError()
                 matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True and entry.get('enable',True) is True
                 if d['agent']=='zcode': matched=matched and entry.get('type','stdio')=='stdio' and parsed.get('features',{}).get('mcp',True) is True
@@ -467,6 +473,7 @@ def setup(args):
     transport=['-T','-i',str(key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
                '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
                '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+               *SSH_KEEPALIVE_ARGS,
                '-p',str(d['ssh_port']),d['linux_user']+'@'+host,d['launcher']]
     # Stage adapters before enrolling so malformed user configuration is not a partial enrollment.
     pending=[]
