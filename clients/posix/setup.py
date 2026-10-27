@@ -25,6 +25,7 @@ END = '<!-- END BOXWEAVE MANAGED -->'
 # also kills tool calls at its 30s default; create-class calls need more.
 SSH_KEEPALIVE_ARGS = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
 ZCODE_TIMEOUT_MS = 180000
+CODEX_TOOL_TIMEOUT_SEC = 180
 
 def atomic_write(path, text, mode=0o600):
     path = Path(path)
@@ -97,7 +98,7 @@ def toml_update(original, command, args, replace=False):
     servers = parsed.get('mcp_servers',{})
     if not isinstance(servers,dict): raise ValueError('Invalid MCP TOML table')
     existing = servers.get('boxweave')
-    if isinstance(existing,dict) and not replace and set(existing)-{'command','args','startup_timeout_sec'}:
+    if isinstance(existing,dict) and not replace and set(existing)-{'command','args','startup_timeout_sec','tool_timeout_sec'}:
         raise ValueError('Existing BoxWeave MCP entry has extra settings; use --replace after review')
     expected = {'command':command,'args':args}
     if existing is not None and not isinstance(existing,dict): raise ValueError('Invalid BoxWeave MCP entry')
@@ -109,7 +110,7 @@ def toml_update(original, command, args, replace=False):
         raise ValueError('Unsupported existing BoxWeave TOML spelling; edit it explicitly')
     if re.search(r'(?m)^\[mcp_servers\.boxweave\.',original):
         raise ValueError('Nested BoxWeave MCP settings require explicit migration')
-    block = header+'\ncommand = '+json.dumps(command,ensure_ascii=False)+'\nargs = '+json.dumps(args,ensure_ascii=False)+'\nstartup_timeout_sec = 30\n'
+    block = header+'\ncommand = '+json.dumps(command,ensure_ascii=False)+'\nargs = '+json.dumps(args,ensure_ascii=False)+'\nstartup_timeout_sec = 30\ntool_timeout_sec = '+str(CODEX_TOOL_TIMEOUT_SEC)+'\n'
     updated = re.sub(pattern,lambda _:block,original,count=1) if existing is not None else original.rstrip()+'\n\n'+block
     check = tomllib.loads(updated)
     if check.get('mcp_servers',{}).get('boxweave',{}).get('command') != command:
@@ -353,7 +354,7 @@ def diagnose(args):
                 parsed=(tomllib.loads(config.read_text()) if d['agent']=='codex' else json.loads(config.read_text()))
                 entry=(parsed.get('mcp',{}).get('servers',{}).get('boxweave') if d['agent']=='zcode'
                        else parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave'))
-                allowed={'command','args','type','enable','enabled','timeoutMs'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','enabled'}
+                allowed={'command','args','type','enable','enabled','timeoutMs'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','tool_timeout_sec','enabled'}
                 if not isinstance(entry,dict) or set(entry)-allowed: raise ValueError()
                 matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True and entry.get('enable',True) is True
                 if d['agent']=='zcode': matched=matched and entry.get('type','stdio')=='stdio' and parsed.get('features',{}).get('mcp',True) is True

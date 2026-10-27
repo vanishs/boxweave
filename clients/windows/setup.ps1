@@ -93,7 +93,7 @@ function Update-CodexToml([string]$Path, [string]$Command, [string[]]$Arguments)
     if ($text -match [regex]::Escape($McpName) -and $old.Count -eq 0) { throw 'Unsupported existing BoxWeave TOML spelling' }
     if ($old.Count -eq 1 -and -not $Replace) {
         try {
-            $extra=@($old[0].Value -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#|$|\[|command\s*=|args\s*=|startup_timeout_sec\s*=)' })
+            $extra=@($old[0].Value -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#|$|\[|command\s*=|args\s*=|startup_timeout_sec\s*=|tool_timeout_sec\s*=)' })
             if ($extra.Count) { throw 'Additional settings need explicit replacement' }
             $c = [regex]::Match($old[0].Value,'(?m)^command\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json
             $a = @([regex]::Match($old[0].Value,'(?m)^args\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json)
@@ -101,7 +101,7 @@ function Update-CodexToml([string]$Path, [string]$Command, [string[]]$Arguments)
         } catch { throw 'Existing boxweave entry differs; rerun with -Replace after review' }
     }
     $encoded = ($Arguments | ForEach-Object { Quote-Toml $_ }) -join ', '
-    $block = '[mcp_servers.' + $McpName + "]`r`ncommand = " + (Quote-Toml $Command) + "`r`nargs = [$encoded]`r`nstartup_timeout_sec = 30`r`n"
+    $block = '[mcp_servers.' + $McpName + "]`r`ncommand = " + (Quote-Toml $Command) + "`r`nargs = [$encoded]`r`nstartup_timeout_sec = 30`r`ntool_timeout_sec = 180`r`n"
     $text = Set-TomlSection -Source $text -Header "mcp_servers.$McpName" -Replacement $block
     return $text
 }
@@ -397,7 +397,7 @@ function Invoke-BoxWeaveDiagnostic {
                         $fields=@{}
                         foreach($line in ($match[0].Groups[1].Value -split '\r?\n')){
                             if($line -match '^\s*(#|$)'){continue}
-                            if($line -cnotmatch '^\s*(command|args|startup_timeout_sec)\s*=\s*(.*?)\s*$'){throw 'unsupported'}
+                            if($line -cnotmatch '^\s*(command|args|startup_timeout_sec|tool_timeout_sec)\s*=\s*(.*?)\s*$'){throw 'unsupported'}
                             $name=$Matches[1];$value=$Matches[2]
                             if($fields.ContainsKey($name)){throw 'duplicate'}
                             $fields[$name]=ConvertFrom-Json -InputObject $value
