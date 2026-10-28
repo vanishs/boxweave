@@ -1,0 +1,17 @@
+{
+  "version": "0.4.0",
+  "sha256": {
+    "clients/windows/prepare-identity.ps1": "77c9dc08c978ed92c3d446d5ec783bdf85a540df66961129f9839350d448687f",
+    "clients/windows/diagnose-native.ps1": "e0553c7f482827b4c5044fc9555c4b41693bf80b01bced22e6cd7e14901e6242",
+    "scripts/authorize_native_key.py": "bf9c4fcaf640084222fe3994131b9915bc7d97fb6d80bb0dcbb1068358dd5813",
+    "tests/windows_native_enrollment.ps1": "9b0170f0d66f83531fe94411d6add550f903e6c2bc7d5ebc3d900aba6cd4ef1d",
+    "tests/test_enrollment.py": "cc66b76e79b56517595cc24707c05587b866a34aa67318c389beff51f832cfe8",
+    "VERSION": "40b8eb4000a913a7791090535f291d3d369874162a89ef3c9e3d4e887a1b9e79",
+    "pyproject.toml": "52550b145ca0e85948425179b9baf0901c2f67faa3905bb5788ae8f228e0c689",
+    "web/package.json": "bdc93bc18cd75dae70ae497b44316a42e4df58dd280a6c75be1703d5a6a107cc",
+    "clients/windows/bootstrap-native.ps1": "3946f360332669839498dcccf5a58387b60b5a747019616f6508c828253797af",
+    "clients/windows/register-native.ps1": "956a50bcae2bfe51881fe2422f04de9c03e0a673d0a53a7f34d55243a5b20948",
+    "clients/windows/diagnose-connection.ps1": "061d49ded378628973792c4d09405b38204d980489691e74bbcbe76d17d54795",
+    "web/package-lock.json": "78f416ae60a658b3eb7b770fa636af12c05c22b56f92e9e39b450788cb68afd9"
+  }
+}

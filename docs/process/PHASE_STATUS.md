@@ -1,8 +1,8 @@
 # Phase status — authority
 
-## Current authority: continuous TASK-002/003 run — TASK-002 complete, TASK-003 next
+## Current authority: continuous TASK-002/003 run complete
 
-SRC-063 authorizes completing both tasks consecutively. TASK-002 fixed-command storage/worker scope is complete0.3.0 with actual58 tests/build/browser and nested read-only observation evidence (SRC-064); unknown execution remains unknown. TASK-006 infrastructure writes remain separate. TASK-003 is next and not yet marked complete. See TASK_002_COMPLETION and latest handoff; no other feature/release gate is waived.
+SRC-063 authorizes both tasks consecutively. TASK-002 approved fixed-command storage/worker scope complete0.3.0 (SRC-064), checkpoint9fb8786. TASK-003 selected minimal native Codex scope complete0.4.0 (SRC-065): real fresh-key public-only authorized enrollment, trusted registration and independent diagnosis;64 Linux tests and actual Windows positive/negative runs passed. Prior TUI evidence remains distinct. Unknown does not imply retry/cancellation; other profiles, current whole-system TASK-005 release evidence, lifecycle writes and packaging/release remain separate. See both completion reports and latest HANDOFF. Stop after the requested two tasks; no push.
 
 SRC-061 authorizes the next phase5 slice after READY (SRC-059/060); SRC-051 architecture acceptance remains recorded. TASK-002a receipt-history discovery is complete in0.2.3: actor-scoped bounded cursor service/API/CLI, Web history/detail selection, unknown preserved, no replay. Actual46 Linux tests, TypeScript/Vite and history/original/graph Chromium checks passed; SRC-062 and [report](../verification/TASK_002A_RECEIPT_HISTORY.md). Parent recovery/full release obligations remain partial, not silently waived. Earlier native/bootstrap/WSL/ZCode and infrastructure feature tasks remain in the phase5 backlog. Stop this one iteration after its code/test/docs commit, no push/deployment. Historical entries below do not override this authority.
 

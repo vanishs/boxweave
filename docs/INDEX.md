@@ -30,3 +30,5 @@ Current authority SRC-059/060: [phase5 entry audit — READY](verification/PHASE
 Iteration4 SRC-061/062: [TASK-002a receipt history](verification/TASK_002A_RECEIPT_HISTORY.md), [exact source hashes](verification/receipt-history-source-hashes.json). Version0.2.3 adds bounded actor-scoped local history/API/CLI/Web without execution;46 tests and actual Chromium history/original/graph regressions passed. Phase5 remains incomplete.
 
 TASK-002 completed0.3.0: [recovery/observation evidence](verification/TASK_002_COMPLETION.md); user explicitly requested TASK-002 and TASK-003 consecutively. TASK-003 continues after this separate commit.
+
+Requested TASK-002/003 run complete (SRC-063..065): [TASK-002 recovery/observation](verification/TASK_002_COMPLETION.md), [TASK-003 native identity/diagnosis](verification/TASK_003_COMPLETION.md), [native source hashes](verification/task003-source-hashes.json). Source0.4.0,64 Linux tests and actual isolated native Windows enrollment/diagnosis/regression passed. Full profile/release work remains pending; no push/deployment.

@@ -145,3 +145,7 @@ For the same paged view use python -m bwmini history --config /private/reviewed.
 ## Recovery observations (0.3.0)
 
 Unknown receipts offer Check current target; matching identity is not proof that the old command completed and does not authorize retry. CLI reconcile --config <private-config> --operation <id> has the same boundary. Actual nonzero fixed-command exits are preserved; unexpected output is withheld. Schema3 adds observations; take a consistent private backup before updating, older binaries reject3. See [recovery tests and limits](docs/verification/TASK_002_COMPLETION.md).
+
+## Native identity preparation and independent diagnosis (0.4.0)
+
+The selected Windows-native Codex path now supports preparing a fresh local Ed25519 identity with private ACLs, installing only its public half through an existing authorized bootstrap channel, trusted registration, and independent diagnosis of actual connection versus registration. Existing identities still work; old keys/config/trust are not silently replaced. No private key/sign-in data is copied and no host SSH configuration is repaired. Follow the [reviewed entry points, commands, recovery and actual native evidence](docs/verification/TASK_003_COMPLETION.md). WSL/ZCode and release installers remain separate work.

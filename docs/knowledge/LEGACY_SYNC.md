@@ -42,3 +42,5 @@
 | Phase5 TASK-002a SRC-061/062 | d8a09dd180139159e035963502e7793a37e92bae -> same | Fresh legacy HEAD/status unchanged; only unrelated archive, not inspected. No knowledge delta or old-code migration. New receipt-history source authored in assigned LXC and synchronized with hashes; legacy checkout untouched |
 
 | TASK-002/003 continuous run SRC-063 | d8a09dd -> same | Legacy ref/status unchanged at startup, only unrelated untracked archive. No legacy implementation migration or private/archive inspection. Assigned dev box identity verified; new source tested there |
+
+| TASK-003 completion SRC-065 | d8a09dd -> same | No legacy implementation migration, archive/private-data read or old-project edit. Existing client observations used as versioned evidence only. New keys generated locally, public-only bootstrap via existing MCP to dedicated box; normal transport identity never used as host shell |
