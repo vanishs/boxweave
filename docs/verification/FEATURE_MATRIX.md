@@ -64,3 +64,7 @@ The dedicated test key/18447 route were separately approved in SRC-055/056, and 
 | REQ-003 / AC-003 | Runtime failures distinct from MCP success; CLI vs human TUI evidence separate | Complete independent profile diagnosis |
 | REQ-016 / AC-016 | Explicit executable forwarded only to verified payload; tamper blocks execution | Installer/release distribution |
 | REQ-017 / AC-017 | Native Codex 0.165.0-alpha.1.2 / upstream MCP 0.114.2, actual and human-reported evidence distinguished | WSL, ZCode, instruction/model/full release |
+
+## Entry versus feature acceptance (SRC-059/060)
+
+[Phase5 startup is READY](PHASE_05_READINESS.md): real selected minimum Web/MCP chain, native registration/TUI read evidence, recorded SRC-051 developer acceptance, isolated worktree and legacy sync checks. Feature/AC rows above remain scoped partial outcomes. Automatic identity provisioning, other profiles and release features are neither completed nor mandatory prerequisites to start phase5 itself. No fixture is promoted to a live pass; no task dependency is waived.

@@ -97,3 +97,7 @@ The native bootstrap/registration accepts an operator-selected absolute -CodexEx
 The dedicated test key/18447 route were separately approved in SRC-055/056, and retained; no new route/resource/policy/model operation is part of this implementation iteration. Existing public Web demo remains fixture. No automatic key provisioning or whole-phase completion claim. Next task is TASK-003b2; stop this one slice after its code/test/docs commit, no push.
 
 RISK-005 narrowed: native Codex TUI loading and one real read-only tool call now have user-observed evidence SRC-057. Desktop GUI/instruction loading and the other three selected transport/agent profiles remain unverified. Manual dedicated lab key authorization is not reproducible product bootstrap. RISK-020 remains unresolved. The test-only source mapping is not LAN-only filtering; no public credential, key contents or login data belong in evidence.
+
+## Gate interpretation correction (SRC-059/060)
+
+The phase5 startup checklist is satisfied; see [audit](../verification/PHASE_05_READINESS.md). Earlier prose conflated planned automatic identity provisioning and full release/profile coverage with entry permission. Existing-authorized-identity enrollment is permitted by REQ-001/AC-001; the correction adds no requirement and removes no feature obligation. Keep RISK-005/020 and incomplete product tasks open within phase5. No fresh user acceptance or infrastructure setup is needed solely to re-open the already accepted gate.

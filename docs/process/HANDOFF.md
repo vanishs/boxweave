@@ -1,4 +1,14 @@
-# Current handoff — phase 5 iteration 3, TASK-003b1
+# Current handoff — phase 5 entry audit, READY (SRC-059/060)
+
+User requested completion of prerequisites until the supplied phase5 prompt can begin, preferring remote/nested/same-Tenant tests and up to30-minute preparation. All four actual startup conditions are satisfied; see [PHASE_05_READINESS](../verification/PHASE_05_READINESS.md). SRC-051 already records explicit developer architecture/slice acceptance; actual real execution and user-observed native TUI/read evidence remain valid. No further user action or new box/port is required for entry.
+
+This audit corrects an overbroad gate interpretation: unfinished automatic product identity provisioning and four-profile/release work are not extra phase5 startup conditions. They remain incomplete, not waived or marked passed. No task dependency is silently removed. Version remains0.2.2; no product source change/new feature iteration/phase6 work. Code reference10f0a8e65b446306fe20c862d9bdb4b006ea6ab3; this handoff's containing commit records the documentation-only disposition.
+
+Fresh checks: isolated rewrite/v2 clean at audit start; orphan root4d352859f5c7e659d243634196b3b85265a14a9c has no parent; legacy maind8a09dd unchanged, unrelated archive untouched. Management MCP verifies assigned dev box; native verifier exit0 against dedicated upstream0.114.2/protocol2024-11-05/list101/get exact inner workload created1793213048. No new resource, mapping, key, install, workload command, model request or deployment. Existing approved lab retained. Prior41 Linux/native regression evidence is retained, not falsely called a fresh rerun; documentation links/whitespace checked now.
+
+Outcome: phase5 may proceed with one selected task under its prompt; full phase5/release acceptance is incomplete. TASK-003b2 remains a sensible next scoped task; evaluate specific dependencies before TASK-006. Stop at the requested readiness boundary; no need to ask the developer to repeat SRC-051 acceptance.
+
+## Historical handoff — phase 5 iteration 3, TASK-003b1
 
 Version 0.2.2, branch rewrite/v2, parent 2a0fcd97c24fbf47c5c5c1129044da4a64305c47. Developer requested remaining work; SRC-055..058 distinguish earlier authorized operational setup, human TUI evidence and this bounded source fix. REQ-001/002/003/016/017 and matching AC subsets only. See [TASK-003b1](../verification/TASK_003B1_NATIVE_CLIENT.md) for reproducible commands, exact environments and limits.
 

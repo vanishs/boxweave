@@ -1,8 +1,8 @@
 # Phase status — authority
 
-## Current authority: phase 5, iteration 3 complete
+## Current authority: phase 5 entry READY; iterations 1–3 retained
 
-SRC-051 accepts the minimum architecture/slice. TASK-011 is complete in 0.2.0; TASK-003a in 0.2.1; TASK-003b1 explicit native executable selection and recorded cooperative TUI/read-only evidence in 0.2.2 (SRC-055..058). TASK-003b2 product identity bootstrap remains incomplete; parent TASK-003/005 and full client/release acceptance stay partial. No TASK-006 prerequisite waiver. See [iteration 3 evidence](../verification/TASK_003B1_NATIVE_CLIENT.md). Earlier entries below are history, not current gate authority. Stop this slice after its commit; next suggested task TASK-003b2.
+SRC-059/060 audit all four supplied phase5 startup checks as satisfied; see [entry audit](../verification/PHASE_05_READINESS.md). SRC-051 already records developer architecture/slice acceptance; real Web/MCP execution and native TUI/read-only evidence are retained. Earlier handoffs incorrectly mixed later automatic identity-provisioning/release work with phase5 entry. That work remains incomplete in the phase5 backlog, not a new startup condition. Product scope, actual evidence and task-level dependencies are unchanged; no TASK-006 prerequisite waiver or full release acceptance. This readiness-only continuation starts no new feature. TASK-011 (0.2.0), TASK-003a (0.2.1), TASK-003b1 (0.2.2) remain delivered. Historical entries below do not override this authority.
 
 ## Earlier status history
 
