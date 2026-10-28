@@ -78,7 +78,7 @@ class MCP:
 
     def discover(self):
         r = self.call("initialize", {"protocolVersion":"2024-11-05", "capabilities":{},
-                      "clientInfo":{"name":"boxweave-mini", "version":"0.2.0"}})
+                      "clientInfo":{"name":"boxweave-mini", "version":"0.2.1"}})
         if r.get("protocolVersion") != "2024-11-05":
             raise Fault("PROTOCOL_UNSUPPORTED")
         if not isinstance(r.get("capabilities", {}).get("tools"), dict):

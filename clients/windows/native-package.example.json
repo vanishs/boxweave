@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "profile": "codex/windows/native",
+  "source_id": "sha256:OPERATOR_VERIFIED_REGISTER_DIGEST",
+  "codex_version": "REVIEWED_INSTALLED_CODEX_VERSION",
+  "payloads": {
+    "register-native.ps1": "OPERATOR_VERIFIED_SHA256",
+    "diagnose-connection.ps1": "OPERATOR_VERIFIED_SHA256"
+  },
+  "connection": {
+    "host": "REVIEWED_HOST",
+    "port": 56522,
+    "user": "REVIEWED_USER",
+    "identity_file": "C:/Users/REVIEWED_USER/.ssh/boxweave",
+    "known_hosts": "C:/Users/REVIEWED_USER/.ssh/boxweave_known_hosts",
+    "server_key": "ssh-ed25519 REVIEWED_SERVER_PUBLIC_KEY"
+  }
+}

@@ -125,3 +125,7 @@ PYTHONPATH=. .venv/bin/python scripts/graph_browser_check.py
 ```
 
 The graph browser check uses owned loopback port 18643, real Chromium/HTTP/SQLite and fixture infrastructure, asserts zero execution operations, and stops its temporary server. Browser/system dependencies must already be installed as described above.
+
+## Reviewed existing-identity native Codex registration (0.2.1)
+
+The Windows-native client package now has an operator-trusted bootstrap that verifies payload bytes before executing them, probes strict authenticated MCP, and registers in an explicitly selected Codex home. Existing conflicting registration needs explicit -Replace; unrelated configuration/tool approval tables are preserved, unsupported forms stop. It does not provision SSH identities, copy sign-in data or claim GUI loading. Use the [scope, descriptor, recovery and actual native tests](docs/verification/TASK_003A_NATIVE_REGISTRATION.md); the example is intentionally non-operational until reviewed. Never trust a digest delivered only with an untrusted download.

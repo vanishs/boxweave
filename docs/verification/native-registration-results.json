@@ -1,0 +1,39 @@
+{
+  "result": "passed",
+  "evidence_source": "Actual Windows PowerShell5.1 run-05 stdout, exec session73841 exit0",
+  "scope": "isolated existing-identity registration",
+  "profile": "codex/windows/native",
+  "codex": "codex-cli 0.165.0-alpha.1.2",
+  "mcp_server": "containarium-mcp-server 0.120.1",
+  "protocol": "2024-11-05",
+  "checks": [
+    "PowerShell5.1 parse",
+    "trusted payload verification",
+    "actual native MCP read",
+    "Codex CLI recognition",
+    "Unicode and space AgentHome",
+    "idempotence",
+    "declined conflict preserved",
+    "replacement preserves approvals/settings",
+    "backup",
+    "inline form rejected",
+    "tamper blocks execution",
+    "malformed read-only results rejected",
+    "case-sensitive server pin",
+    "boolean schema rejected",
+    "personal config unchanged"
+  ],
+  "agent_ui": "unverified",
+  "new_key_enrollment": "not_implemented",
+  "personal_config_changed": false,
+  "new_port_mapping": false,
+  "linux_suite": {
+    "tests": 41,
+    "seconds": 11.755,
+    "exit": 0
+  },
+  "prior_native_preflight": {
+    "exit": 0,
+    "cases": 3
+  }
+}

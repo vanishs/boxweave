@@ -1,0 +1,12 @@
+{
+  "clients/windows/bootstrap-native.ps1": "fadcd5779490efd2d4c56aa6e9b88b170449b12d98f45d35270cb861c86842f0",
+  "clients/windows/register-native.ps1": "3e2cb77cb4c93b162a80c6bc946a61f305e45a75ca2f94f08f24d73a5d4e4b36",
+  "clients/windows/diagnose-connection.ps1": "061d49ded378628973792c4d09405b38204d980489691e74bbcbe76d17d54795",
+  "tests/windows_native_registration.ps1": "a45f62fd241b7f022d554bcb37051cde686f441013abbf700f6888c13cbbe949",
+  "VERSION": "71015c979ccb0fc8a0be7ca0ae83046ab045cdc2c8faa09fb2f0f7e440f9b4a6",
+  "pyproject.toml": "595dc3e10e9036c9b829faf14c3a522232db39850539e312f765cddb7d1affa8",
+  "bwmini/mcp.py": "4a107c6e083e5acae218217e7619ea07d791a48835c7ed46777542af420bc71f",
+  "web/package.json": "949029d15a944942667f1627bf5925b04afb0fc68fb6f46984a5ad740b97bb16",
+  "web/package-lock.json": "944326bae07d0bd42b0938af417afd68fa21f5333417663f62b25557b11e46c2",
+  "clients/windows/native-package.example.json": "99e60972679fd5d4ca25a3f0eeb0533f1ec3fd2dff5eb61e5f0c64499cb72725"
+}

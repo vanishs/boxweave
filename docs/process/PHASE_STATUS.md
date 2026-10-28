@@ -1,8 +1,8 @@
 # Phase status — authority
 
-## Current authority: phase 5, iteration 1 complete
+## Current authority: phase 5, iteration 2 complete
 
-SRC-051 accepts the verified minimum architecture/slice; TASK-011 is complete in 0.2.0 (SRC-052). Full phase5/client/release acceptance remains incomplete. Earlier status entries below are history and do not override this gate. See the final iteration record and PHASE_05_TASK_011.md.
+SRC-051 accepts the verified minimum architecture/slice; TASK-011 is complete in 0.2.0 (SRC-052); TASK-003a existing-identity native registration is complete in 0.2.1 (SRC-053/054). Full phase5/client/release acceptance remains incomplete. Earlier status entries below are history and do not override this gate. See the final iteration record and PHASE_05_TASK_011.md.
 
 ## Earlier status history
 
@@ -89,3 +89,15 @@ Developer acceptance of the minimum architecture/slice is explicitly recorded in
 Actual non-root project-LXC checks: 41 tests OK (11.173s), TypeScript/Vite build, final Chromium graph workflow including mobile fit and clipboard failure, original project hello/restart fixture regression; all exit0. Graph API forbids provider access in tests; browser has zero queued/executed operations. Thirteen changed source/lock files match remote SHA256. See PHASE_05_TASK_011.md for commands and precise evidence. No new box, infrastructure mutation, deployment, persistent listener, public route or push. Stop this iteration.
 
 Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/recognition evidence, then dependent TASK-006. Developer gate acceptance does not fabricate those missing client checks or waive per-task prerequisites. Phase 5 overall is not complete.
+
+## Iteration 2 scope — TASK-003a (SRC-053)
+
+Developer requested continuation and box-based or mapped cooperative testing. Current built-in MCP handles return Transport closed, but a fresh Windows native SSH session using the existing registered restricted launcher passed initialize/initialized, tools-list109 and actual read-only list_containers against MCP0.120.1. No key content/configuration was read/exported/changed. Ephemeral ignored native-client management helper now performs MCP tools/call connect; assigned LXC identity verified exit0. This is the same authorized MCP, not a host shell or new server registration.
+
+Split the remaining TASK-003: TASK-003a delivers local operator-trusted payload verification and Windows-native Codex registration using an already authorized SSH identity; test in an isolated Agent home with actual installed Codex CLI and native MCP probe. Preserve unrelated configuration, explicit conflict/replacement intent, strict trust and idempotence; tampering must prevent execution. No new key enrollment, global Codex/SSH changes, model invocation, public mapping or GUI-loading claim. Full bootstrap identity provisioning and GUI/remaining profiles stay incomplete. This one bounded slice covers REQ-001/002/003/016/017 and matching AC subsets; it does not complete TASK-003/005 wholesale.
+
+## Iteration 2 complete — TASK-003a, version 0.2.1 (SRC-053/054)
+
+Scoped existing-identity Windows-native Codex registration now has trusted pre-execution payload verification, strict live connection gating, targeted config preservation, explicit replacement, byte-idempotence and backups. Actual isolated Windows/CLI/native MCP and failure-path tests passed; 41 project Linux tests and the three prior native preflight checks passed. No global/personal registration, new key, model request, mapping, box or deployment changed.
+
+TASK-003a is complete in its stated existing-identity scope; parent TASK-003/005 remain partial. Actual GUI/TUI loading, bootstrap identity provisioning and other client/runtime profiles are unverified. Named-mutex/hash/backup recovery does not replace quiescing non-cooperating editors. See TASK_003A_NATIVE_REGISTRATION for commands, limitations and cooperative next steps. Stop this iteration; suggest TASK-003b, do not waive dependencies for TASK-006.

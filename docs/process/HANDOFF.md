@@ -1,3 +1,23 @@
+# Current handoff — phase 5 iteration 2, TASK-003a
+
+Date: 2026-10-28 America/Los_Angeles. Branch rewrite/v2; parent 8a0d8761b1e13d895cb6f8f7f56033aa62b28b1b. Version 0.2.1. Developer continuation SRC-053 selected a bounded child of TASK-003: trusted local payload verification and existing-identity Windows-native Codex registration. Actual evidence SRC-054. Parent TASK-003/005 and release/client GUI acceptance are not complete.
+
+Delivered clients/windows/bootstrap-native.ps1, register-native.ps1 and public non-operational package example. Operator-trusted descriptor pins two payload digests and CLI version. Verified payload bytes execute from a task cache; registration probes strict real MCP before writing an explicit selected home, validates candidates using actual Codex CLI, preserves other settings/tool approvals, refuses unsupported forms, requires explicit replacement and creates original-byte backups. Probe fixes: case-sensitive base64 pin, nonempty valid read-only result, explicit UTF-8 for redirected Windows5.1 processes. Existing identity only; no key/bootstrap identity provisioning or GUI claim. Choose private AgentHome/TEMP, keep other config writers idle; no custom ACL attestation or arbitrary-writer atomic CAS promise.
+
+Built-in boxweave tools returned Transport closed. Fresh native Windows SSH to the already configured restricted /usr/local/bin/boxweave-mcp launcher succeeded (MCP0.120.1, initialize/initialized/tools-list109/actual list_containers). Ignored .runtime/native-reconnect/call.ps1 uses that same MCP tools/call connect for assigned-box work; identity boxweave-tenant-dev / boxweave-tenant-dev-container exit0. Never use the transport key for a host shell, copy key/JWT contents, or register a fixed server per workload.
+
+Actual tests:
+
+- Windows PowerShell5.1 tests/windows_native_registration.ps1 with reviewed public connection descriptor and fresh .runtime/native-registration/run-05: exit0; actual native authenticated MCP and codex-cli0.165.0-alpha.1.2 recognition, Unicode/space home, idempotence, conflict/replacement/settings/approval/backup preservation, inline/tamper/schema/pin/empty-result failures; default personal config digest unchanged.
+- Existing tests/windows_connection.ps1: exit0, AST + three no-network preflight cases.
+- Project LXC .venv/bin/python -m unittest discover -s tests -v: 41 tests OK, exit0, 11.755 seconds.
+
+See ../verification/TASK_003A_NATIVE_REGISTRATION.md, native-registration-results.json and ten-file source hash manifest. Code/test/docs belong to this handoff's containing commit; actual commit identity is reported by Git/final response. No push/deployment/new route/listener/box/model invocation. Test profiles and synthetic backups retained privately under ignored .runtime; no actual personal registration changed. No inference/sign-in file copied. The application demo remains untouched, not newly mapped by this task.
+
+Stop this iteration. Next suggested TASK-003b: reviewed bootstrap identity provisioning and actual client UI/loading evidence (can be split further), with user-assisted client sign-in/inspection where necessary. Do not mark all TASK-003/005 or four profiles complete or waive TASK-006 prerequisites. GUI loading is still unverified even though CLI recognition and native protocol passed.
+
+## Historical handoff entries
+
 # Current handoff — phase 5 iteration 1, TASK-011
 
 Date: 2026-10-28 America/Los_Angeles. Branch rewrite/v2; parent 85fdd7c7e7c7846f651fc1ba933c1d8ae5b988af. Developer gate accepted SRC-051 after real-chain verification. This one iteration completes basic Prompt Graph, version 0.2.0, REQ-011/014/016 and AC-011/014/016 graph scope. No other task, phase6 or deployment is started.
@@ -128,3 +148,11 @@ Developer explicitly accepted the demonstrated minimum architecture and slice af
 Before implementation: verify real SQLite additive migration and revision conflicts; authenticated/Origin/CSRF graph API; bounded cards/comments/undirected links/context; reject orphan/self/duplicate links; escaped and recognized-secret-redacted Markdown; record copy only after clipboard success (client report, not server proof); graph deletion preserves environments; browser save/reload/concurrent edit/clipboard failure/layout; assert graph services make zero provider calls. Explicit saves preserve local unsaved edits on conflict. Use architecture-selected XYFlow with an exact lock. Schema-1 data must survive migration; older binaries must refuse schema 2.
 
 Final TASK-011 validation: 13 source/lock hashes match the tested LXC bytes, 41 Markdown documents have valid local links, phase5 prompt archive is byte-identical, and the legacy HEAD/status/client hash remain unchanged. Whitespace and staged private-payload checks complete before commit. No owned graph/regression listeners remain.
+
+## Iteration 2 scope — TASK-003a (SRC-053)
+
+Developer requested continuation and box-based or mapped cooperative testing. Current built-in MCP handles return Transport closed, but a fresh Windows native SSH session using the existing registered restricted launcher passed initialize/initialized, tools-list109 and actual read-only list_containers against MCP0.120.1. No key content/configuration was read/exported/changed. Ephemeral ignored native-client management helper now performs MCP tools/call connect; assigned LXC identity verified exit0. This is the same authorized MCP, not a host shell or new server registration.
+
+Split the remaining TASK-003: TASK-003a delivers local operator-trusted payload verification and Windows-native Codex registration using an already authorized SSH identity; test in an isolated Agent home with actual installed Codex CLI and native MCP probe. Preserve unrelated configuration, explicit conflict/replacement intent, strict trust and idempotence; tampering must prevent execution. No new key enrollment, global Codex/SSH changes, model invocation, public mapping or GUI-loading claim. Full bootstrap identity provisioning and GUI/remaining profiles stay incomplete. This one bounded slice covers REQ-001/002/003/016/017 and matching AC subsets; it does not complete TASK-003/005 wholesale.
+
+Final TASK-003a checks: ten remote-authored source/metadata/example files match exact SHA256; 42 Markdown documents' local links pass; tracked/staged whitespace and narrow private-payload checks pass. Legacy main d8a09dd, archive status and clients.py digest unchanged. Ignored management helper and isolated native test profiles remain outside Git; no deployment/push.

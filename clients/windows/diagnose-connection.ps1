@@ -4,6 +4,7 @@ Observation-only connection probe. Uses an operator-reviewed public descriptor.
 No enrollment, registration repair, key generation or trust-file modification.
 #>
 param([Parameter(Mandatory=$true)][string]$Descriptor, [ValidateRange(1,120)][int]$Timeout=30)
+[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false)
 $ErrorActionPreference='Stop'
 $code='INPUT_INVALID'
 $process=$null
@@ -24,6 +25,12 @@ function SendMessage($Value) {
 }
 $nextId=0
 $totalChars=0
+function ValidateReadOnlyResult($Result) {
+  if($Result.isError -or -not ($Result.content -is [array]) -or $Result.content.Count -eq 0){throw 'tool failed'}
+  foreach($block in $Result.content){
+    if($block.type -ne 'text' -or -not ($block.text -is [string]) -or [string]::IsNullOrWhiteSpace($block.text)){throw 'unsupported tool result'}
+  }
+}
 function CallMcp([string]$Method,$Params) {
   $script:nextId++
   $id=$nextId
@@ -76,7 +83,7 @@ try {
   })
   if($pins.Count -eq 0){throw 'pin absent'}
   $code='PIN_MISMATCH'
-  $matched=@($pins|Where-Object { $p=$_ -split '\s+'; ($p[1]+' '+$p[2]) -eq $d.server_key })
+  $matched=@($pins|Where-Object { $p=$_ -split '\s+'; ($p[1]+' '+$p[2]) -ceq $d.server_key })
   if($matched.Count -eq 0){throw 'pin mismatch'}
   $code='RUNTIME_MISSING'
   $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
@@ -91,13 +98,14 @@ try {
   $start.RedirectStandardInput=$true
   $start.RedirectStandardOutput=$true
   $start.RedirectStandardError=$true
+  $start.StandardOutputEncoding=New-Object Text.UTF8Encoding($false,$true)
   $process=New-Object Diagnostics.Process
   $process.StartInfo=$start
   $code='TRANSPORT_FAILED'
   [void]$process.Start()
   # Discard diagnostic bytes without retaining or printing potentially sensitive stderr.
   $drain=$process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
-  $r=CallMcp 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-native-connection';version='0.1.0'}}
+  $r=CallMcp 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-native-connection';version='0.2.1'}}
   $code='PROTOCOL_UNSUPPORTED'
   if($r.protocolVersion -ne '2024-11-05'){throw 'unsupported protocol'}
   $code='PROTOCOL_INVALID'
@@ -117,10 +125,7 @@ try {
   if(-not $found){throw 'tool absent'}
   $r=CallMcp 'tools/call' @{name='list_containers';arguments=@{}}
   $code='PROVIDER_CALL_FAILED'
-  if($r.isError -or -not ($r.content -is [array])){throw 'tool failed'}
-  foreach($block in $r.content){
-    if($block.type -ne 'text' -or -not ($block.text -is [string])){throw 'unsupported tool result'}
-  }
+  ValidateReadOnlyResult $r
   $code='OK'
   @{connection='passed';overall='incomplete';registration='unverified';agent_ui='unverified';code=$code;protocol='2024-11-05';remote_cleanup='unverified'}|ConvertTo-Json -Compress
   $exitCode=0
