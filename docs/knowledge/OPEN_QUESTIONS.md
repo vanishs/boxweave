@@ -18,4 +18,10 @@ No item below is silently resolved by the phase 1 document commit. Sources: [reg
 | RISK-012 | P1 / open | Job/protocol timeout does not prove remote cancellation or no delayed side effects | SRC-009/014 | Specify cancellation/unknown receipts and resource reconciliation acceptance; bounded fixtures and approved live tests |
 | RISK-013 | P2 / open | Additional provider interface and standalone Linux client are proposals, not proven old behavior | SRC-001/003 | Phase 2 decide actual need; no speculative abstraction inherited |
 
-Phase 1 gaps do not block knowledge handoff: no code/test execution was required for documentation-only work; unknowns are explicit. Product scope and the exact next authorized phase still require user direction. Any later live experiment must have target resources, changes, deadline, success criteria and cleanup agreed first.
+## Phase 2 disposition, 2026-10-28
+
+No RISK is closed by drafting a proposal. RISK-001/002 now have concrete alternatives DEC-001/003/004 in [scope](../product/SCOPE.md). RISK-003 maps to proposed REQ-016/AC-016; RISK-004 to REQ-001/AC-001; RISK-005 to DEC-002 and REQ-017/AC-017; RISK-006/007 to DEC-004/005 and REQ-012/018; RISK-008 to deferred recursive/confinement claims under DEC-004; RISK-009 to REQ-008/AC-008; RISK-010 to REQ-009/017; RISK-011 remains an evidence-preservation issue; RISK-012 to REQ-005/006/007; RISK-013 remains proposed out of initial scope. These references add decision/acceptance paths, not implementation evidence.
+
+The actual client launch matrix, personal-versus-team audience, console timing, advanced features and demand for project binding remain unknown. DEC-001..005 are the authority for the five developer choices; do not duplicate their changing answers here. No market/user-demand claim is invented from source code. Product requirements remain proposed until the developer accepts/revises the scope and key behaviors.
+
+Knowledge gaps do not prevent document handoff. They prevent unsupported runtime/support claims and automatic phase advancement. Any later live experiment must have target resources, changes, deadline, success criteria and cleanup agreed first.

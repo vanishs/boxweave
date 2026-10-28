@@ -2,12 +2,14 @@
 
 Date: 2026-10-28 America/Los_Angeles.
 
-Current authorized phase: **1 — understand and seed knowledge**. Work is documentation/governance only. No architecture, product implementation, application scaffold, resource creation or deployment is authorized by this phase.
+Current authorized phase: **2 — rethink product and requirements** (SRC-023). Document analysis only. No implementation, architecture/stack selection, resource creation, deployment or phase 3 work is authorized.
 
-Phase 1 result: **complete, gate satisfied**. Root `4d352859f5c7e659d243634196b3b85265a14a9c` was verified parentless, with exactly 13 Markdown files and a clean new worktree. Legacy branch/WIP were unchanged. Actual documentation/Git results and the verbatim master-plan whitespace exception are recorded in [HANDOFF](HANDOFF.md). Do not infer runtime acceptance from this status.
+Phase 1: complete; parentless documentation root `4d352859f5c7e659d243634196b3b85265a14a9c`; phase-1 receipt at `58640ce939028ae37cfd6535bbf0702a84d4969a`. Historical checks and verbatim-source whitespace exception are preserved in [phase 1 handoff](PHASE_01_HANDOFF.md).
 
-Phase 1 gate: core features and uncertainties have source IDs; history/Agent contradictions are explicit; intended root contains documents only. Completion requires verified parentless commit, documentation checks, unchanged legacy ref/WIP and clean new worktree, as recorded in HANDOFF.
+Phase 2 document result: **ready for developer review**. Four product documents define 18 proposed requirements, 18 proposed acceptance criteria, all 15 legacy feature dispositions and five pending product decisions. Authority: [requirements](../product/REQUIREMENTS.md) + [acceptance](../product/ACCEPTANCE.md); scope decisions: [SCOPE](../product/SCOPE.md). Current verification and review summary: [HANDOFF](HANDOFF.md).
 
-Phase 2 readiness: knowledge inputs available; **not started and not authorized automatically**. Next request should authorize product redefinition, identify desired users/outcomes and adjudicate RISK-001/002. No product scope is chosen here. Phase 2 ends with explicit developer acceptance before architecture. Phase 4 ends with explicit developer acceptance before broader implementation. All later phases remain pending.
+Phase 2 exit gate: **NOT SATISFIED — awaiting explicit developer approval of direction, feature scope, launch profiles and key behavior**. DEC-001..005 are all pending. No product requirement is approved, implemented or tested. Approval of analysis is not approval of its recommendations.
 
-The Chinese [master plan](MASTER_PLAN.md) is the supplied verbatim governance original; curated project knowledge is English. No VERSION or application file is carried into this root because phase 1 does not introduce product functionality.
+Phase 3: not started. After receiving responses, record a new source for the developer decisions, reconcile REQ/AC/SCOPE/risks and this status in the same task, and verify consistency. Do not automatically start architecture because the proposal is complete. Phase 4 also requires explicit developer acceptance of the minimum system before broader implementation.
+
+Legacy knowledge baseline: main at `4318da6ea4e4e45c55cf43b64acbdd2ede65fc43`; no delta at phase 2 entry. Legacy WIP is preserved; see LEGACY_SYNC and the handoff. No old code/data is migrated. No VERSION bump is made for documentation-only product analysis.

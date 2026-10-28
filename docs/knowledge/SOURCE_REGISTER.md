@@ -28,6 +28,8 @@ Confidence: A = direct source/static observation; B = historical report with env
 | SRC-020 | Uncommitted server/clients.py diff: 17 additions/5 deletions | A/C: reviewed current WIP, not H; potential replacement answer propagation defect; preserve unchanged |
 | SRC-021 | BoxWeave MCP list_containers({}), 2026-10-28 | Fresh read-only observation: successful tool result, four Running resources. Proves inventory call only; no connect, installed versions or readiness claim |
 | SRC-022 | User-supplied 00_MASTER_PLAN.md and 01_UNDERSTAND_AND_SEED_KNOWLEDGE.md | Authoritative for this phase because user explicitly requested execution. Master copied verbatim to process/MASTER_PLAN.md; phase prompt to process/PHASE_01_INSTRUCTIONS.md |
+| SRC-023 | User request to execute phase 2; supplied 02_RETHINK_PRODUCT_AND_REQUIREMENTS.md, 2026-10-28 | Current process authority: documentation-only product analysis and explicit developer gate. Copied verbatim to process/PHASE_02_INSTRUCTIONS.md; SHA256 71ad3782f41892881060ab6abcea8779f325839686b042526e74fe149cec0857. Does not approve proposed product choices |
+| SRC-024 | Phase 2 entry: local Git ref/status/worktree/hash checks and fresh BoxWeave MCP list_containers({}), 2026-10-28 | Fresh read-only evidence: rewrite/v2 clean at 58640ce939028ae37cfd6535bbf0702a84d4969a; main still H; same two legacy dirty entries and SRC-020 hash; inventory succeeded with four Running boxes. No execution/readiness/capability verification. Selected mutable research source hashes rechecked unchanged; no wholesale ignored-tree audit |
 
 ## Hashes for selected mutable local sources
 

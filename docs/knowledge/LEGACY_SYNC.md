@@ -25,3 +25,4 @@
 | Date | From -> to | Scope / disposition |
 | --- | --- | --- |
 | 2026-10-28 | none -> 4318da6ea4e4e45c55cf43b64acbdd2ede65fc43 | Initial SRC-001..022; curated legacy knowledge only. Implementation, private material, archive and raw outputs excluded. Final ref/status/hash checks recorded in HANDOFF |
+| 2026-10-28 phase 2 | 4318da6ea4e4e45c55cf43b64acbdd2ede65fc43 -> same | Main unchanged; no committed delta/ancestry comparison needed. Same client WIP hash and untracked archive; selected ignored narrative hashes unchanged, not a whole ignored-tree snapshot. SRC-023 authorizes analysis; SRC-024 records fresh discovery only. No legacy code/notes migrated or modified; no new upstream/live acceptance claims |
