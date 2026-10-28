@@ -1,8 +1,8 @@
 # Phase status — authority
 
-## Current authority: phase 5 entry READY; iterations 1–3 retained
+## Current authority: phase 5 iteration 4 complete — TASK-002a
 
-SRC-059/060 audit all four supplied phase5 startup checks as satisfied; see [entry audit](../verification/PHASE_05_READINESS.md). SRC-051 already records developer architecture/slice acceptance; real Web/MCP execution and native TUI/read-only evidence are retained. Earlier handoffs incorrectly mixed later automatic identity-provisioning/release work with phase5 entry. That work remains incomplete in the phase5 backlog, not a new startup condition. Product scope, actual evidence and task-level dependencies are unchanged; no TASK-006 prerequisite waiver or full release acceptance. This readiness-only continuation starts no new feature. TASK-011 (0.2.0), TASK-003a (0.2.1), TASK-003b1 (0.2.2) remain delivered. Historical entries below do not override this authority.
+SRC-061 authorizes the next phase5 slice after READY (SRC-059/060); SRC-051 architecture acceptance remains recorded. TASK-002a receipt-history discovery is complete in0.2.3: actor-scoped bounded cursor service/API/CLI, Web history/detail selection, unknown preserved, no replay. Actual46 Linux tests, TypeScript/Vite and history/original/graph Chromium checks passed; SRC-062 and [report](../verification/TASK_002A_RECEIPT_HISTORY.md). Parent recovery/full release obligations remain partial, not silently waived. Earlier native/bootstrap/WSL/ZCode and infrastructure feature tasks remain in the phase5 backlog. Stop this one iteration after its code/test/docs commit, no push/deployment. Historical entries below do not override this authority.
 
 ## Earlier status history
 

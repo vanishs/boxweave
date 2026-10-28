@@ -1,0 +1,16 @@
+{
+  "version": "0.2.3",
+  "origin": "Assigned project LXC; exact byte synchronized source",
+  "sha256": {
+    "bwmini/service.py": "c04848ca4b729819ab7ab395f8f1ecbb45e83d041285f359a3760958c5818b39",
+    "bwmini/web.py": "289225744ec60a6df4404895c5239ba290706235003526488734703f9634b91d",
+    "bwmini/__main__.py": "3614f195fca004f4ba04ab3afe5440c2579af8b6826a1925041d8083f10ebc02",
+    "web/src/main.tsx": "88f2b5fb0d9f893807715c04d99412923f4c14dd4653b4b225909a0ef5417490",
+    "tests/test_history.py": "057f676dc8692871a008fffd240b512783d071c6c3a377dd630fa3ec8ea0675d",
+    "scripts/history_browser_check.py": "f1f970d26148b83fd06d28f71c7f70b6f074f8a553e867545eca21a293d08b08",
+    "VERSION": "3ab94c04d24986f3af288ba1cda2c0bbddbc5a89dff097182805f54578e1ea75",
+    "pyproject.toml": "22ffe957e42128428e215fb66bcef547162be8871852a845900e72e9298c8aaf",
+    "web/package.json": "e50e7bb8f463037d11936def9ed79f99b9318151bc7bac39c152097ba3fb1863",
+    "web/package-lock.json": "89da75f9e98826a8266d2ffd28307846aa7df47c532801f7c895143d730c1978"
+  }
+}

@@ -121,6 +121,14 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     @app.get("/api/operations")
     def receipts():
         return jsonify(operations=service.list_receipts())
+    @app.get("/api/operation-history")
+    def receipt_history():
+        if set(request.args) - {"limit", "cursor"} or any(len(request.args.getlist(key)) != 1 for key in request.args):
+            raise Fault("INVALID_QUERY", 400)
+        raw_limit = request.args.get("limit", "20")
+        if not raw_limit.isascii() or not raw_limit.isdigit() or len(raw_limit) > 3:
+            raise Fault("INVALID_LIMIT", 400)
+        return jsonify(service.receipt_history(limit=int(raw_limit), cursor=request.args.get("cursor")))
     @app.get("/api/operations/<oid>")
     def receipt(oid):
         r=store.receipt(oid)

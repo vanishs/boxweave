@@ -10,7 +10,7 @@ All rows describe partial minimum-system progress, not first-release completion.
 | REQ-004 | AC-004 | TASK-001, TASK-002, TASK-005 | Typed scope/creation identity + zero-dispatch-on-change tests; direct Platform identity separate from application live path |
 | REQ-005 | AC-005 | TASK-002, TASK-006 | Intent/one-use/no-replay groundwork; real create not in slice |
 | REQ-006 | AC-006 | TASK-002, TASK-005 | Persisted deadline and unknown states, fixed result validation; live overall bound/cleanup not proven |
-| REQ-007 | AC-007 | TASK-002, TASK-004 | SQLite receipt query/restart and synthetic loss recovery passed |
+| REQ-007 | AC-007 | TASK-002, TASK-002a, TASK-004 | TASK-002a0.2.3 actor-scoped history beyond100/ties/restart/unknown/no-replay, actual Web/CLI/SQLite tests passed SRC-062; full provider reconciliation/recovery remains partial |
 | REQ-008 | AC-008 | TASK-012 | Unstarted installer/recovery release work |
 | REQ-009 | AC-009 | TASK-012, TASK-013 | Explicit fixture/live prerequisite failure only; full installed-health contract unstarted |
 | REQ-010 | AC-010 | TASK-002, TASK-004 | Binding create/update/revisions/persistence verified; unbind/live binding continuation pending |

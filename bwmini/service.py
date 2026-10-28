@@ -1,6 +1,10 @@
 """The same application operations serve HTTP and CLI adapters."""
+import base64
+import binascii
 import fcntl
 import json
+import math
+import re
 import time
 import uuid
 from pathlib import Path
@@ -73,6 +77,40 @@ class Service:
     def list_receipts(self, actor="operator"):
         with self.store.db() as db:
             return [dict(r) for r in db.execute("SELECT * FROM operations WHERE actor=? ORDER BY created DESC LIMIT 100",(actor,))]
+
+    def receipt_history(self, actor="operator", limit=20, cursor=None):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise Fault("INVALID_LIMIT", 400)
+        after = None
+        if cursor is not None:
+            try:
+                if not isinstance(cursor, str) or not 1 <= len(cursor) <= 256:
+                    raise ValueError()
+                raw = base64.b64decode(cursor, altchars=b"-_", validate=True)
+                after = json.loads(raw)
+                if (not isinstance(after, dict) or set(after) != {"created", "id"}
+                        or type(after["created"]) not in (int, float)
+                        or not math.isfinite(after["created"])
+                        or not isinstance(after["id"], str)
+                        or re.fullmatch(r"[0-9a-f]{32}", after["id"]) is None):
+                    raise ValueError()
+            except (ValueError, TypeError, OverflowError, UnicodeError, binascii.Error):
+                raise Fault("INVALID_CURSOR", 400) from None
+        query = "SELECT id,project,state,code,created FROM operations WHERE actor=?"
+        args = [actor]
+        if after is not None:
+            query += " AND (created<? OR (created=? AND id<?))"
+            args.extend([after["created"], after["created"], after["id"]])
+        query += " ORDER BY created DESC,id DESC LIMIT ?"
+        args.append(limit + 1)
+        with self.store.db() as db:
+            rows = [dict(row) for row in db.execute(query, args)]
+        more, rows = len(rows) > limit, rows[:limit]
+        next_cursor = None
+        if more:
+            boundary = {"created": rows[-1]["created"], "id": rows[-1]["id"]}
+            next_cursor = base64.urlsafe_b64encode(json.dumps(boundary, separators=(",", ":")).encode()).decode()
+        return {"operations": rows, "next_cursor": next_cursor}
 
     def recover(self):
         # Caller holds the process-scoped worker lock. Another live worker cannot be recovered.

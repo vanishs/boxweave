@@ -54,7 +54,7 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | Task | Status | Actual evidence and remaining condition |
 | --- | --- | --- |
 | TASK-001 | Implemented minimum contracts/package | Typed target/error boundary, explicit fixture/live modes, source/runtime locks; real integration still belongs to TASK-005 |
-| TASK-002 | Partial | Binding/CAS/intent/receipt/worker-lock/deadline and no-replay tests pass; arbitrary-command recovery, DB-full fault and provider observation/reconciliation interface not complete |
+| TASK-002 | Partial; TASK-002a complete0.2.3 | Binding/CAS/intent/receipt/worker-lock/deadline/no-replay and bounded history-discovery tests pass; other state-write-fault/provider reconciliation/recovery work remains |
 | TASK-003 | Partial; TASK-003a and TASK-003b1 complete | Trusted native registration, explicit executable, real MCP/CLI plus cooperative TUI read evidence; TASK-003b2 product identity bootstrap and other selected profiles remain incomplete |
 | TASK-004 | Implemented minimum fixture UI/service slice | Actual Chromium login/binding/plan/receipt/restart; production HTTPS/independent service identity and real-provider integration not claimed |
 | TASK-005 | Real Web/MCP and native TUI read evidence; full enrollment still partial | SRC-049/050 live path; SRC-051 developer gate accepted; SRC-055..058 native registration/TUI/read-only result. Automatic product identity bootstrap not yet delivered; no whole-release acceptance. See LIVE_MCP_CHAIN and TASK_003B1_NATIVE_CLIENT |
@@ -113,3 +113,7 @@ The dedicated test key/18447 route were separately approved in SRC-055/056, and 
 ## Phase5 entry disposition (SRC-059/060)
 
 All four original startup checks are satisfied; see [entry audit](../verification/PHASE_05_READINESS.md). TASK-003b2 and full client/release obligations stay incomplete but are phase5 implementation work, not new phase5 entry conditions. The prior parent-task partial statuses and per-task dependencies remain; this audit does not authorize TASK-006 automatically or mark automatic enrollment implemented. Select the next bounded task after the readiness-only handoff.
+
+## Phase5 iteration4 — TASK-002a (SRC-061/062)
+
+Split TASK-002's remaining scope: TASK-002a receipt discovery (complete0.2.3, REQ-007/011 and AC-007/011 read subset), TASK-002b state-write failure/crash-window coverage (planned), other provider reconciliation remains pending. TASK-002a needs existing storage/HTTP foundations; it adds no provider write and does not waive TASK-006 dependencies. [Actual evidence](../verification/TASK_002A_RECEIPT_HISTORY.md):46 tests, TypeScript/Vite, Chromium history plus original hello/Graph regressions passed. Stop this slice; suggest the bounded TASK-002b before expanding mutations.

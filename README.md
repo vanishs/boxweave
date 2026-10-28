@@ -135,3 +135,9 @@ The Windows-native client package now has an operator-trusted bootstrap that ver
 When a regular Windows shell cannot find codex.exe, pass -CodexExecutable with the reviewed absolute .exe path to clients/windows/bootstrap-native.ps1. It forwards the selected binary to the hash-verified registration payload, which still checks the descriptor's exact Codex version. Omitting the parameter uses PATH. No global PATH changes or app-directory discovery are performed. An App-bundled binary is version-specific and can move after an update; select and validate the new path explicitly. No extra installation is required merely to repair PATH when a reviewed binary already exists.
 
 See [native client acceptance and reproducible checks](docs/verification/TASK_003B1_NATIVE_CLIENT.md). The dedicated native TUI/read-only test passed with user cooperation; automatic SSH identity bootstrap and WSL/ZCode/full-release acceptance remain incomplete. Historical unverified statements above describe their original test scope.
+
+## Receipt history (0.2.3)
+
+In the receipt section choose Refresh receipt history, Older receipts, then Open receipt to inspect an earlier result. A query never repeats work. Unknown means completion is still unknown; refreshing does not retry or certify cancellation. A failed refresh keeps the previous page and selected receipt. History is local stored evidence and does not need a live provider connection.
+
+For the same paged view use python -m bwmini history --config /private/reviewed.json --limit 20, optionally --cursor with the returned next_cursor. Existing CLI receipts and Web Load latest receipt stay available. [Verification and API limits](docs/verification/TASK_002A_RECEIPT_HISTORY.md). This source iteration has not updated the previously published demo.

@@ -1,4 +1,16 @@
-# Current handoff — phase 5 entry audit, READY (SRC-059/060)
+# Current handoff — phase5 iteration4, TASK-002a receipt history
+
+Version0.2.3; rewrite/v2; code parent9c5b52e53ba359bc75ecf307845704a0f4eb1af0. SRC-061 requests phase5; gate SRC-051/059/060 already satisfied. Selected the highest-priority ready storage-discovery child TASK-002a, REQ-007/011 and AC-007/011 subset. TASK-002a depends on implemented storage/HTTP foundations and not on TASK-006 writes or new identity provisioning.
+
+Delivered local actor-scoped keyset history (creation time + ID, limit1..100, validated cursor <=256 chars), authenticated endpoint, new CLI history action and Web refresh/older/select controls using existing receipt detail. Lists omit result/target digest; unknown status is preserved. No worker/provider call from history; old API/latest and CLI receipts contract retained. No schema migration or dependency added. Query never retries remote work. Failed refresh preserves selected evidence.
+
+Actual non-root assigned project-LXC commands and limits are in [TASK_002A_RECEIPT_HISTORY](../verification/TASK_002A_RECEIPT_HISTORY.md). Five new tests passed; full46 tests OK12.686s; TypeScript/Vite build passed. Final Chromium history20+6 paging/unknown/refresh failure/restart/no replay/mobile passed (26 fixture receipts, exactly1 fixture hello/audit). Original hello browser and Graph browser regressions passed. Infrastructure remains explicitly fixture in these checks. Test-only port rebind probe fixed after one TIME_WAIT failure; final visual/build/history check passed. No new live-provider mutation is claimed. Ten source/metadata files match the remote source hash manifest.
+
+Legacy main remainsd8a09dd with only unrelated archive, untouched. New source authored in /home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a and exact-byte synchronized. No existing demo deployment, box, port route, policy, credential, inference or provider upgrade changed. Owned loopback test processes stopped, state/screenshots retained ignored. No push. This handoff's containing commit is the single source/test/docs commit; obtain its SHA from Git/final report.
+
+TASK-002a complete, parent TASK-002 still partial for DB-fault/provider-reconciliation/recovery obligations. Other native bootstrap/WSL/ZCode/Tenant/ports/models/install/release tasks and RISK-020 remain. Suggested next ready slice: TASK-002b, local state-write failure/crash-window evidence before widening infrastructure mutations; preserve all original task dependencies and scope the child before implementation. Stop this iteration under the one-slice rule; phase5 overall is incomplete.
+
+## Historical handoff — phase5 entry audit, READY (SRC-059/060)
 
 User requested completion of prerequisites until the supplied phase5 prompt can begin, preferring remote/nested/same-Tenant tests and up to30-minute preparation. All four actual startup conditions are satisfied; see [PHASE_05_READINESS](../verification/PHASE_05_READINESS.md). SRC-051 already records explicit developer architecture/slice acceptance; actual real execution and user-observed native TUI/read evidence remain valid. No further user action or new box/port is required for entry.
 

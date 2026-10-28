@@ -38,3 +38,5 @@
 | 2026-10-28 phase5 TASK-003b1 | d8a09dd180139159e035963502e7793a37e92bae -> same | Fresh main/status remains unchanged, only unrelated untracked archive. No legacy implementation/ignored-note/archive migration. Dedicated native TUI evidence and PATH mismatch are new operational observations, not legacy behavior imports. Product source authored in assigned LXC; native tests in isolated Windows home; legacy checkout untouched |
 
 | Phase5 entry audit SRC-059/060 | d8a09dd180139159e035963502e7793a37e92bae -> same | Fresh legacy HEAD/status unchanged, only unrelated untracked archive. No committed knowledge delta, archive/private-data review, code migration or old-project edit. Existing governance was re-read to distinguish phase5 entry from later feature/release obligations |
+
+| Phase5 TASK-002a SRC-061/062 | d8a09dd180139159e035963502e7793a37e92bae -> same | Fresh legacy HEAD/status unchanged; only unrelated archive, not inspected. No knowledge delta or old-code migration. New receipt-history source authored in assigned LXC and synchronized with hashes; legacy checkout untouched |

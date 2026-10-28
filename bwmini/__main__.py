@@ -27,10 +27,14 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","diagnose"])
+    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","diagnose"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--cursor")
     a=p.parse_args()
+    if a.action != "history" and (a.cursor is not None or a.limit != 20):
+        p.error("--limit and --cursor are supported only for history")
     try:
         c,s=load(a.config)
         if a.action=="init-admin":
@@ -58,6 +62,8 @@ def main():
             print(json.dumps(s.projects(),indent=2))
         elif a.action=="receipts":
             print(json.dumps(s.list_receipts(),indent=2))
+        elif a.action=="history":
+            print(json.dumps(s.receipt_history(limit=a.limit, cursor=a.cursor),indent=2))
         elif a.action=="diagnose":
             if s.provider.mode!="mcp":
                 raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)
