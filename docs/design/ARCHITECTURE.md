@@ -104,3 +104,9 @@ Real Windows config merge/UI loading; WSL process-tree cancellation/quoting; ZCo
 ## Phase 4 implemented subset
 
 See [ADR-005](ADR/0005-phase-four-boundary.md) and [actual evidence](../verification/VERTICAL_SLICE.md). The minimum application implements real HTTP/React/SQLite/worker behavior with explicit fixture infrastructure, a bounded MCP adapter, and a partial native connection probe. Missing independent application launcher/credential and real native enrollment/registration prevent the real slice gate from passing. Loopback fixture HTTP and project/binding row consolidation are documented implementation limits; no production HTTPS/service identity or broad feature completion is implied.
+
+## Current result — real chain verified (SRC-049/050)
+
+Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
+
+The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.

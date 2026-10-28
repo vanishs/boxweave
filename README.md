@@ -1,6 +1,6 @@
 # BoxWeave minimum system
 
-**Phase 4 implementation; live application-to-provider acceptance is incomplete.**
+**Phase 4 minimum system: real Web-to-MCP hello/receipt verified in an approved nested lab; developer/client acceptance remains incomplete.**
 This is a new implementation on rewrite/v2, not a port of the legacy tree.
 
 The current slice provides operator login, reviewed project/environment binding,
@@ -67,10 +67,13 @@ CLI observation uses the same services and DB:
 examples/live.json is a placeholder, not an operational or credential-bearing
 configuration. A separately reviewed independent application MCP launcher,
 protected runtime credential and exact target identity are required. The
-approved project container has no verified installed launcher at the checked
-managed paths, so the live Web->worker->provider chain was not run. Loading
-the placeholder fails before creating its state tree. No existing SSH MCP
-token was read/borrowed and no new identity was minted.
+original project container had no verified launcher at the first check. A later
+approved independent nesting-enabled lab now verifies real MCP, HTTP and
+Chromium hello/receipt/restart behavior with version 0.1.1; see
+[actual live-chain evidence](docs/verification/LIVE_MCP_CHAIN.md). The bundled
+example remains a placeholder and fails before creating state. No existing
+Agent token/private key was borrowed or exported. The original public demo
+remains fixture; this live result comes from isolated loopback test instances.
 
 Live mode allows only explicitly listed targets, compares scoped creation/name
 identity on observation, initializes/discovers/calls MCP, verifies exact

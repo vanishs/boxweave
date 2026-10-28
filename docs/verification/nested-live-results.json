@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-28 America/Los_Angeles",
+  "evidence_class": "real nested MCP, HTTP and Chromium; not whole-stage acceptance",
+  "protocol-result": {
+    "initialize_initialized": "passed",
+    "server": {
+      "name": "containarium-mcp-server",
+      "version": "0.114.2"
+    },
+    "tools_list_count": 101,
+    "readonly_tools_call": "passed",
+    "launcher_user": "bw-v2-mcp-nested"
+  },
+  "http-result": {
+    "result": "passed",
+    "transport": "strict SSH to independent managed launcher",
+    "mode": "mcp",
+    "evidence": "live_mcp",
+    "operation": "6e918550adb84d80b138364c43f01227",
+    "stdout": "hello world\n",
+    "exit_code": 0,
+    "identity": {
+      "hostname": "v2-live-hello-container",
+      "user": "v2-live-hello"
+    },
+    "checks": [
+      "HTTP login",
+      "live resource observation",
+      "project binding",
+      "plan",
+      "confirm",
+      "worker",
+      "real MCP identity and hello",
+      "persisted receipt",
+      "restart without replay"
+    ]
+  },
+  "browser-result": {
+    "result": "passed",
+    "browser": "chromium",
+    "browser_version": "141.0.7390.37",
+    "evidence": "live_mcp",
+    "operation": "19de4b38666e4772a3e5ba863e8c9008",
+    "stdout": "hello world\n",
+    "exit_code": 0,
+    "checks": [
+      "login",
+      "live mode",
+      "binding",
+      "preview",
+      "confirmation",
+      "real MCP identity and Python hello",
+      "receipt",
+      "API and worker restart",
+      "same receipt without replay",
+      "mobile layout"
+    ],
+    "audit_count": 1
+  },
+  "failure-gates": {
+    "result": "passed",
+    "infrastructure": "real MCP and SSH",
+    "trust_mismatch": {
+      "ssh_exit": 255,
+      "normal_pin_unchanged": true,
+      "protocol_not_started": true
+    },
+    "identity_mismatch": {
+      "code": "IDENTITY_MISMATCH",
+      "actual_tool_calls": [
+        {
+          "name": "connect",
+          "exec": "whoami && hostname"
+        }
+      ],
+      "hello_dispatch_count": 0
+    }
+  },
+  "versions-source": {
+    "application_version": "0.1.1",
+    "python": "3.12.3",
+    "flask": "3.1.2",
+    "waitress": "3.0.2",
+    "playwright": "1.56.0",
+    "chromium": "141.0.7390.37",
+    "source_sha256": {
+      "bwmini/service.py": "f6829005168542a0be4fec5446ea0a0f99c94e548fe47c9d5a467b6cd2f12887",
+      "tests/test_slice.py": "08bf27c268586544b71e816a091822fe29ed0c648d118e811ac5d80a8c891a00",
+      "VERSION": "80447316529fc62014fbaa047fb67c51ac30e32830cda370405349d8d66d196c",
+      "pyproject.toml": "4c87060d1b72e616ea8985d4c0d776f3785d286d12fba1909ee69f3b9d2f4e44"
+    }
+  }
+}

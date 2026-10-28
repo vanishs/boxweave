@@ -22,3 +22,15 @@ All rows describe partial minimum-system progress, not first-release completion.
 | REQ-016 | AC-016 | TASK-003, TASK-012 | Exact Linux wheel locks/source hashes; enrollment payload trust distribution incomplete |
 | REQ-017 | AC-017 | TASK-005, TASK-013 | Linux/browser fixture + Windows preflight evidence; no real selected-profile acceptance |
 | REQ-018 | AC-018 | TASK-004, TASK-005 | Target/action allowlist, auth/CSRF, actor-bound receipts; upstream broad privileges/production boundary unverified |
+
+Latest SRC-041 disposition: shared-Tenant/nested/live application MCP verification is deferred and temporarily untested, not passed. Existing component/fixture evidence stands. Phase 5 is not running; TASK-011 is only a technical readiness candidate pending the remaining developer gate/explicit execution request.
+
+SRC-045: native same-Tenant new-box creation, matching Guard attachment and app-to-backend TCP22 connectivity passed. Independent backend installation exit 124; managed launcher absent; live MCP and HTTP worker receipt remain NOT EXECUTED. Existing fixture demo remains active. Phase 5 not started.
+
+SRC-047: supporting backend install exit0, managed timers/oneshots/marker checks, and actual application-hosted strict SSH MCP initialize/initialized/tools-list101/read-only tools-call passed. One inner create rejected and target reconciled absent; core PostgreSQL nested startup proc-mount permission failure observed. No real command receipt/HTTP live pass or whole phase4 acceptance.
+
+## Current result — real chain verified (SRC-049/050)
+
+Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
+
+The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.

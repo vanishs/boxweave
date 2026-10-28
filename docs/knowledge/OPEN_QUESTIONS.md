@@ -50,3 +50,26 @@ RISK-016 has component evidence for real SQLite intent/receipt persistence, stat
 | RISK-017 | P0 for phase 4 / unavailable | No reviewed independent application MCP launcher/credential path in the assigned LXC; managed launcher/backend paths absent and user confirms no path available | Preserve current results (SRC-032); later establish an independent protected runtime identity through separately approved provisioning. Do not request secret text, borrow Agent tokens or modify host security. Then run real application/native-client acceptance |
 
 Fixture browser success and direct Platform MCP hello are independent and cannot be combined into a live Web->worker->MCP pass. Phase 4 gate is unmet; phase 5 must not start. Runtime code and examples remain a reviewable minimum implementation with explicit fixture labeling, not a production deployment.
+
+| ID | Priority/status | Live lab provisioning issue | Next safe action |
+| --- | --- | --- | --- |
+| RISK-018 | Deferred by developer / observed prerequisite rejection | Capability advertises old boxweave.tenant-network/v1 and true shared-create flag, but create rejects native Tenant readiness. No lab resource exists in subsequent observations | SRC-039/040; attest actual MCP/CLI/daemon pair read-only, then separately approve compatible host repair. No gate bypass/duplicate/old-box reassignment; see SHARED_TENANT_LAB |
+
+
+SRC-041 defers the shared-Tenant/live MCP test and further repair attempts for now. RISK-017/018 remain unresolved; no test passes or version compatibility claims are inferred. This deferral permits a readiness assessment only, not phase 5 execution or an automatic whole-stage acceptance.
+
+## Latest same-Tenant resource result (SRC-045)
+
+New bw-v2-mcp-test-container (logical bw-v2-mcp-test, createdAt 1793202811, 10.206.30.7, dev, 2 CPU / 4 GB / 25 GB) was created once in networkTenant boxweave-v2-test, alongside the existing v2 application. Exact metadata, identity exit 0, same attached Guard ACL and app-to-new-box TCP22 connectivity verified. Earlier shared-create contract rejection no longer reproduces in this fresh native-network-tenant/v1 observation; no host repair was performed by this task.
+
+Supporting backend bootstrap reached its 600-second total deadline, install.exit=124, while mandatory Web dependencies were still preparing. APT/dpkg children remained; do not rerun until original state is reconciled. Managed MCP launcher absent; live MCP and prepared loopback HTTP integration harness not executed. Existing demo services active, homepage 200. RISK-017 remains open; RISK-018 has current successful shared-create evidence but no full compatibility certification. New box and dedicated lab artifacts retained, no new public route, no phase 5 implementation. Details in SHARED_TENANT_LAB.
+
+RISK-019 — Live nested execution blocked: supporting backend installed and authenticated read-only MCP passed, but inner core PostgreSQL fails to start (BPF load denied; fatal proc mount Operation not permitted). Policy store unavailable; one MCP workload create rejected, name reconciled absent. Full parent policy not attested. Requires a supported nested runtime/host-management resolution within separately reviewed scope; no core/host/security bypass performed. RISK-017 launcher absence is resolved for this dedicated lab only; live application receipt remains open.
+
+## Current live-chain evidence (SRC-049/050)
+
+RISK-017: independent launcher/authentication/execution now established in the explicitly approved new lab; original project/client registration and full release boundary still incomplete. RISK-018: current native shared creation and matching Guard attachment succeeded; historical old-contract failures remain observations, not a current universal failure. RISK-019: mitigated for this lab by a separately approved new Podman/nesting-enabled box; old non-nesting box is unchanged. Do not claim full effective host confinement from this successful test.
+
+RISK-020 — Observed provider flag mismatch: inner MCP create supplied enable_podman=false, but metadata readback reports podmanEnabled=true. Exact cause not attested. Preserve requested versus observed values, constrain test to approved harmless commands, and resolve before promising exact workload isolation/feature flag behavior. No relabeling, provider upgrade or silent flag repair occurred.
+
+The real HTTP run also exposed a worker time-sampling race (false deadline/clock rollback for newly queued work). Fixed in 0.1.1 with a failing-before/passing-after regression; actual HTTP and browser receipt paths now passed. Missing real Windows-native enrollment/registration/UI and developer architecture acceptance remain explicit. See LIVE_MCP_CHAIN; no phase5 feature has started.

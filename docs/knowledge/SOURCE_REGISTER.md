@@ -38,6 +38,15 @@ Confidence: A = direct source/static observation; B = historical report with env
 | SRC-030 | User request for phase 4, supplied 04_BUILD_MINIMAL_VERTICAL_SLICE.md, and explicit approval of PHASE_04_EXECUTION_PLAN | Authorizes isolated development/tests in boxweave-tenant-dev, temporary owned processes and fixed identity/hello within stated limits; no new credentials, provider changes or phase 5 |
 | SRC-031 | Phase 4 actual remote/local verification, 2026-10-28; see VERTICAL_SLICE and phase4-source-hashes.json | Non-root Ubuntu LXC implementation, 29 tests and clean locked reproduction, frontend build/Chromium fixture, actual Windows preflight and direct Platform MCP identity/hello. Distinct evidence classes; no app-to-live MCP acceptance. Remote legacy checkout stayed at 7818668 with its preexisting dirty state |
 | SRC-032 | User reply: no independent application launcher currently available; preserve results | Confirmed external prerequisite remains unavailable. Preserve tested subset, do not mint/borrow credentials or declare the phase-4 gate satisfied |
+| SRC-033 | User request to create a dedicated test container, deploy new BoxWeave and/or make it accessible for testing | Authorizes dedicated test deployment/persistent application services; exact unfiltered host-port mapping remains pending explicit scope confirmation. Does not authorize host SSH/firewall repairs or claiming fixture as real MCP |
+| SRC-034 | Fresh create/get/connect/dependency logs/service states/TLS and application smoke tests; see TEST_DEPLOYMENT | New boxweave-v2-test at 10.206.30.6, verified identity, aa0857c source archive, actual installation exit files, three active/enabled services, verified TLS and fixture binding/receipt restart. Client endpoint not exposed/verified; app live MCP remains incomplete |
+| SRC-035 | Official Caddy TLS/automatic HTTPS/global default_sni documentation read 2026-10-28 | Explains local CA trust and IP/SNI configuration. No global/client trust was installed; no production security claim |
+| SRC-036 | User explicit approval of host TCP 18446 -> 10.206.30.6:18446 passthrough | Authorizes the reviewed unfiltered HTTPS test exposure, not firewall/SSH changes or a claim of LAN-only filtering |
+| SRC-037 | Fresh container identity/service/conflict checks, route add/list, Windows native CA-verified HTTPS/login/resources/receipt test | Active exact route; actual client check exit 0, homepage 200, unauthenticated API 401, login/Secure cookie/demo resource/fixture receipt passed. No TLS bypass/global trust installation, no real application MCP acceptance |
+| SRC-038 | User request and confirmation of isolated shared-Tenant application/MCP/nested hello lab | Authorizes new dedicated lab resources and isolated service setup, preserving existing demo/old resources; no host-wide upgrade/credential extraction or new public exposure |
+| SRC-039 | Authenticated capability/Guard/inventory, one explicit shared create rejection and original-name reconciliation | Legacy boxweave.tenant-network/v1 advertised true flags, but bw-v2-lab-app creation rejected. No lab box observed; known exact missing-instance 500. No duplicate/fallback create. Live contract differs from approved source profile; exact running MCP binary unverified |
+| SRC-040 | Read-only pinned official upstream client/network_tenant.go and pkg/core/incus/network_tenant.go, plus local historical downstream client source | Confirms exact upstream native-network-tenant/v1 requirement and matching error text versus old downstream contract. Supports likely mismatch diagnosis, not actual installed-binary attestation |
+| SRC-041 | User asks to mark the current shared-Tenant/live MCP test temporarily untested, skip it, assess phase 5 readiness and not execute phase 5 | Explicit test deferral and stop instruction; preserve observed create failure, do not claim pass/whole-stage acceptance or start feature work |
 
 ## Hashes for selected mutable local sources
 
@@ -54,3 +63,23 @@ SHA256 is a snapshot identity, not runtime validation. Ignored material remains 
 | SRC-019 tenant-network-recovery.md | 98df0a354d3281df814daeb004e4470d7a001b9913202a9fc4b0e595d2f6fbcc |
 
 Excluded: untracked containarium-candidate.zip content; credentials/private keys/JWTs; raw experimental logs, data stores, copied upstream trees and nested source bundles. Their contents were not bulk-read or migrated. Filename-only discovery of ignored Markdown is not a full audit or privacy approval for other files.
+
+SRC-042 — 2026-10-28: User explicitly requested another shared-Tenant attempt. Fresh authenticated discovery, one original-name create retry and post-failure reconciliation reproduced the capability rejection; no lab resource observed. No phase 5 execution or host repair authorized by this retry.
+
+SRC-043 — User authorized existing/new boxes. Existing box1/box2 native shared membership and actual identities checked through MCP; supporting backend install submitted once in box2 under timeout. Subsequent MCP transport timeouts leave installation result unknown; not a live integration pass.
+
+SRC-044 — Requested three existing boxes in one Tenant then box1 testing. Fresh authenticated inventory/capability and connect checks recovered; exact existing membership unchanged; reassignment unsupported by exposed tools and source. Original box2 install exit reconciled to 124 with staging-directory error; incomplete.
+
+SRC-045 — Explicit new-box/same-Tenant request; actual creation of bw-v2-mcp-test with boxweave-v2-test membership, identity exit 0, matching attached Guard ACL and app-to-new-box TCP22 banner verified. Supporting backend installation pending; real MCP acceptance pending.
+
+SRC-045 outcome: installer total timeout recorded exit 124; APT/dpkg children still active at selected observation, launcher absent. Original demo three services active and loopback HTTP200. No live MCP/application pass or inner workload creation.
+
+SRC-046 — Read-only follow-up confirms installer stopped: exit124, no installer/package processes in snapshot, launcher absent, missing staging directory error. Containarium daemon still running; no repair performed.
+
+SRC-047 — Developer requested retry without installation timeout. Actual retry exit0 and managed runtime health observed; strict SSH MCP handshake/discovery101/read-only tools-call passed from v2 app. One inner create rejected, original name absent. Inner core PostgreSQL fatal proc-mount permission failure observed read-only. No core/host fix or phase5 work.
+
+SRC-048 — Phase5 request with boxes/30-minute prep allowance; explicit follow-up chooses real-chain completion before phase5, no live-test waiver. Read-only provider source associates Podman with nesting and policy-dependent privileged/unconfined settings; specific new-box approval pending, no create submitted.
+
+SRC-049 — Explicit approval for new bw-v2-mcp-nested (2 CPU / 4 GB / 30 GB, same network Tenant), Podman/nesting with possible privileged/unconfined effects disclosed; prepare up to 30 minutes, no existing-box/host setting changes or new public port. Original-name reconciliation after create timeout confirmed one new instance, identity exit0.
+
+SRC-050 — Actual new-backend install exit0, managed timers/oneshots/marker checks; real independent MCP 0.114.2 initialize/initialized/tools-list101/read-only call, one inner create and identity/Python exit0. Initial HTTP run exposed queue-time sampling race; regression failed before remote-authored 0.1.1 fix then all30 tests passed. Isolated fixed-candidate HTTP and Chromium live_mcp receipt/restart/no-replay and trust/identity failure gates passed. No phase5 feature/whole-stage acceptance, original demo unchanged. Sanitized evidence and exact hashes: verification/LIVE_MCP_CHAIN.md and nested-live-results.json.

@@ -80,13 +80,15 @@ class Service:
             db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST' WHERE state='dispatching'")
 
     def work_one(self):
-        now = self.clock()
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM operations WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
             if row is None:
                 return False
             op = dict(row)
+            # Sample after claiming the queue snapshot: a new enqueue may have
+            # committed while this worker waited for the SQLite writer lock.
+            now = self.clock()
             if now < op["created"] or now >= op["deadline"]:
                 db.execute("UPDATE operations SET state='failed',code='DEADLINE_EXCEEDED' WHERE id=?",(op["id"],))
                 return True

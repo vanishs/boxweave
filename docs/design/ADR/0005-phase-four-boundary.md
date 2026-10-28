@@ -11,3 +11,9 @@ Minimal schema stores the project binding in the project row and uses typed name
 Native Windows work provides an observation-only connection probe with an explicit public descriptor and no config/trust repair. It is not the full enrollment/registration diagnostic promised for release. POSIX MCP parser and Windows successful protocol path still need real-provider/client evidence.
 
 Validation: 29 Linux tests, clean hash-locked reproduction, frontend build, actual Chromium application/DB/restart tests with fixture infrastructure, and actual Windows PowerShell AST/three no-network rejection cases. Direct Platform MCP identity/hello succeeded but is separate evidence. No combined real Web->worker->MCP pass is claimed. Phase 4 remains partial; developer acceptance and phase 5 remain blocked on the actual minimum-system gate.
+
+## Current result — real chain verified (SRC-049/050)
+
+Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
+
+The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.

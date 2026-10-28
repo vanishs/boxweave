@@ -57,7 +57,18 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | TASK-002 | Partial | Binding/CAS/intent/receipt/worker-lock/deadline and no-replay tests pass; arbitrary-command recovery, DB-full fault and provider observation/reconciliation interface not complete |
 | TASK-003 | Partial | POSIX MCP synthetic peer tests and native connection probe with AST/three no-network rejects; full enrollment/payload trust distribution/real native registration not complete |
 | TASK-004 | Implemented minimum fixture UI/service slice | Actual Chromium login/binding/plan/receipt/restart; production HTTPS/independent service identity and real-provider integration not claimed |
-| TASK-005 | Not satisfied; prerequisite unavailable | Direct Platform MCP hello passed separately, but no independent app launcher/credential or real selected-client/application E2E. User requested preservation (SRC-032) |
+| TASK-005 | Real Web/MCP minimum path passed; client/developer gate incomplete | SRC-049/050: independent strict SSH MCP, actual inner create/identity/hello, HTTP and Chromium receipt/restart/no-replay passed with 0.1.1. Actual Windows-native enrollment/registration/UI and explicit developer architecture/slice acceptance remain unverified. See LIVE_MCP_CHAIN |
 | TASK-006 through TASK-014 | Not started | Phase-4 developer gate has not passed; do not start full feature work |
 
 The [feature matrix](../verification/FEATURE_MATRIX.md) and [vertical-slice report](../verification/VERTICAL_SLICE.md) map evidence to REQ/AC and distinguish fixtures from actual target execution. No status above is a first-release acceptance claim.
+
+
+## Readiness-only assessment after SRC-041
+
+No phase 5 task was started. Technically, TASK-011 (basic Prompt Graph) can be selected as a first credential-independent iteration because its sole technical dependency TASK-004 has an implemented, fixture-tested minimum interface. TASK-006 and other live-MCP/provider-dependent work remain unsuitable until their prerequisites are satisfied. The phase 4 developer architecture/slice acceptance is not recorded as fully passed; a future phase 5 execution request must explicitly accept the demonstrated minimum architecture/slice with the deferred live test as an exception. A deferred test is not completed acceptance or blanket permission to ignore dependencies.
+
+## Current result — real chain verified (SRC-049/050)
+
+Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
+
+The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.

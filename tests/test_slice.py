@@ -1,4 +1,5 @@
 import fcntl
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -62,6 +63,29 @@ class ApplicationTests(Base):
         restarted.worker(once=True)
         self.assertEqual(self.fixture.calls,["identity","hello"])
         self.assertEqual(restarted.list_receipts()[0]["id"],op["id"])
+
+    def test_enqueue_while_worker_waits_for_claim_is_not_clock_rollback(self):
+        project=self.bind()
+        plan=self.s.plan(project["id"],project["revision"])
+        submitter=Service(Store(self.store.path),self.fixture,clock=lambda:self.now[0])
+        original_db=self.store.db
+        queued=[]
+        @contextmanager
+        def concurrent_submission_before_claim():
+            # Another HTTP request commits after the worker begins, before its DB claim.
+            if not queued:
+                self.now[0]+=1
+                queued.append(submitter.confirm(plan["id"]))
+            with original_db() as db:
+                yield db
+        self.store.db=concurrent_submission_before_claim
+        try:
+            self.assertTrue(self.s.work_one())
+        finally:
+            self.store.db=original_db
+        receipt=self.store.receipt(queued[0]["id"])
+        self.assertEqual((receipt["state"],receipt["code"]),("succeeded","OK"))
+        self.assertEqual(self.fixture.calls,["identity","hello"])
 
     def test_plan_cannot_be_confirmed_twice(self):
         p=self.bind(); plan=self.s.plan(p["id"],1)
