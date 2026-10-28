@@ -2,13 +2,13 @@
 
 Phase: 1 — understand legacy and seed knowledge. Date: 2026-10-28 America/Los_Angeles.
 
-Result: phase 1 knowledge work complete. Git completion requires the parentless-root and clean-worktree checks described below; exact post-commit results are supplied with the final handoff.
+Result: **complete**. Parentless-root, document-only tree, clean new worktree and preserved legacy state were verified after the root commit. This follow-up receipt records those actual results.
 
 Legacy: `refs/heads/main@4318da6ea4e4e45c55cf43b64acbdd2ede65fc43`. Last knowledge synchronization: same SHA.
 
 New branch: `rewrite/v2`. Worktree: `C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2`.
 
-Root commit locator: `git rev-list --max-parents=0 rewrite/v2`. Exact commit SHA is reported after commit in the user-facing handoff; a commit cannot contain its own final SHA without changing it. Use the locator to recover the immutable document root later.
+Verified root commit: `4d352859f5c7e659d243634196b3b85265a14a9c`. Root locator: `git rev-list --max-parents=0 rewrite/v2`. A documentation-only follow-up commit records this receipt; its HEAD is reported in the final user-facing handoff.
 
 ## Findings
 
@@ -43,3 +43,12 @@ Stop after phase 1. Phase 2 needs a new authorization and developer product deci
 - Worktree creation first failed because the sandbox could not write `.git/worktrees`; read-only inspection confirmed no partial target or branch. Approved escalation then completed direct `git worktree add --orphan -b rewrite/v2 <target>`, exit 0. No fallback checkout or destructive switch was used.
 - Sandbox Git initially rejected the elevated-owned worktree. Subsequent read-only checks use a command-scoped exact `safe.directory` entry; no global Git trust configuration was changed.
 - Before committing, inspect staged filenames and run `git diff --cached --check`. After committing, verify `git rev-list --parents -n 1 HEAD` contains only the new SHA, `git ls-tree -r --name-only HEAD` contains only the 13 Markdown files, new status is clean, and legacy status/ref/hash remain unchanged. The final user-facing SHA is the evidence locator; no self-referential commit hash is embedded in its own root.
+
+### Actual root verification and whitespace exception
+
+- `git rev-list --parents -n 1 HEAD` returned only `4d352859f5c7e659d243634196b3b85265a14a9c`, exit 0: no parents.
+- `git ls-tree -r --name-only HEAD` returned exactly the 13 Markdown files listed above, exit 0. `git status --porcelain=v1` in the new worktree returned no entries, exit 0.
+- Legacy branch remained main at H; status still contained only the two initial entries; client source hash unchanged. Commands exited 0. Worktree metadata and the new ref are the intentional shared-repository additions.
+- Default staged whitespace check exited 2 for one existing double-space Markdown hard break at supplied MASTER_PLAN.md line 3. The root was committed despite that check failure; this was an execution-order mistake, not a passed check. The source copy is intentionally preserved byte-for-byte.
+- `git show --format= --check HEAD -- . ':(exclude)docs/process/MASTER_PLAN.md'` passed, exit 0. Manual inspection confirmed the excluded source line ends in its original two spaces. No other whitespace finding was suppressed. An additional broad whitespace-option check was run, but the narrower exclusion/manual inspection is the relevant evidence.
+- Phase 1 gate: **satisfied** with the documented verbatim-source formatting exception. No runtime correctness or phase 2 scope approval is implied.
