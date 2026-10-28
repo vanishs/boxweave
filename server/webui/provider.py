@@ -1,4 +1,4 @@
-"""Pinned Containarium v0.114.2 REST operations. No general proxy."""
+"""Containarium REST operations with authenticated native Tenant capabilities."""
 
 import ipaddress
 import json

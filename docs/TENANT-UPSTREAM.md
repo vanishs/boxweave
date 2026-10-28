@@ -4,9 +4,11 @@ Native Tenant support is merged in official Containarium main at
 `d4aad1a8a8cd748ab6211c67a3417f173316f9e1`
 ([PR #3165](https://github.com/FootprintAI/Containarium/pull/3165)).
 The [source profile](../patches/containarium/README.md) pins that immutable
-upstream commit for compatibility checks. A future official release must still
-be published and deployed separately; BoxWeave does not infer support from the
-release version or automatically replace the daemon.
+upstream commit for compatibility checks. Official
+[v0.120.1](https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1)
+contains this commit. Deploy compatible Provider components separately; BoxWeave
+still requires authenticated capabilities and does not automatically replace
+the daemon.
 
 ## A: native shared membership before first Start
 
@@ -67,8 +69,9 @@ backendScope `local-lxc`. A version string alone never enables Web writes.
 ## Release, compatibility and live acceptance gate
 
 The normal installer selects official MCP releases and does not upgrade the
-Provider daemon. Build the pinned upstream commit in an isolated checkout first;
-verify the source profile and review the changes. Source-built binaries and
+Provider daemon. An official release containing the contract can be selected
+without applying the historical downstream patch. Optional source builds use
+the pinned upstream commit in an isolated checkout. Source-built binaries and
 checksums are development outputs, not signed upstream releases. Updating the daemon, CLI and
 MCP backend is a separate operator-controlled deployment. Reconnect MCP afterward.
 Web token rotation probes the exact loopback capability endpoint: only recognized

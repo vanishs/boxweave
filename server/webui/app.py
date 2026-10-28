@@ -687,10 +687,17 @@ def create_app(cfg, provider=None):
                     )
                     i["observedState"] = c.get("state", "unknown")
                     i["observedTenant"] = c["tenant"]
-                    expected = (
-                        i["target"]
-                        .get("expectedTenant", {})
-                        .get("id", tenant_id(i["target"]["username"]))
+                    expected = i["target"].get("expectedTenant", {})
+                    expected_key = expected.get("key") or i["target"].get(
+                        "networkTenant"
+                    )
+                    # Compare the immutable Provider identity, independent of
+                    # display metadata binding or local/discovered record IDs.
+                    membership_matches = (
+                        c["tenant"]["key"] == expected_key
+                        if expected_key
+                        else c["tenant"]["id"]
+                        == expected.get("id", tenant_id(i["target"]["username"]))
                     )
                     if c.get("state") in (
                         "CONTAINER_STATE_CREATING",
@@ -700,11 +707,11 @@ def create_app(cfg, provider=None):
                     elif c.get("state") == "CONTAINER_STATE_RUNNING":
                         i["status"] = (
                             "success"
-                            if c["tenant"]["id"] == expected
+                            if membership_matches
                             and c["tenant"]["guard"]["status"] == "verified"
                             else "verification-pending"
                         )
-                        if c["tenant"]["confirmed"] and c["tenant"]["id"] != expected:
+                        if c["tenant"]["confirmed"] and not membership_matches:
                             i["status"] = "degraded"
                     else:
                         i["status"] = "verification-pending"
@@ -713,7 +720,7 @@ def create_app(cfg, provider=None):
                         "provisioning": c.get("state")
                         in ("CONTAINER_STATE_CREATING", "CONTAINER_STATE_PROVISIONING"),
                         "tenantVerified": c["tenant"]["confirmed"]
-                        and c["tenant"]["id"] == expected,
+                        and membership_matches,
                         "guardVerified": c["tenant"]["guard"]["status"] == "verified",
                         "networkConnectivity": "not_tested",
                     }

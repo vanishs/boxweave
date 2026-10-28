@@ -14,6 +14,12 @@ CREATE_BLOCK = (
     "local grouping or post-create relabeling is not a substitute."
 )
 CONTRACT = "native-network-tenant/v1"
+# Only these enum values establish membership under the merged upstream contract.
+MEMBERSHIP_SOURCES = {
+    "NETWORK_TENANT_SOURCE_NATIVE",
+    "NETWORK_TENANT_SOURCE_CLOUD_ORG_ID",
+    "NETWORK_TENANT_SOURCE_NAME",
+}
 CAPABILITIES = {
     "sharedTenantCreate": False,
     "reassignTenant": False,
@@ -138,17 +144,22 @@ def resolve_box(box, guard, local_backend_ids=()):
     entries = [e for e in guard["entries"] if e.get("container") == name]
     entry = entries[0] if len(entries) == 1 else None
     key = key_text(box.get("networkTenant"))
-    source = (
-        "provider_" + str(box.get("networkTenantSource", "native"))
-        if key
-        else "unknown"
+    provider_source = box.get("networkTenantSource")
+    provider_confirmed = bool(
+        key
+        and isinstance(provider_source, str)
+        and provider_source in MEMBERSHIP_SOURCES
     )
-    # Guard subjects include the native explicit key, which v0.114.2 Box REST
-    # does not expose separately from its unrelated generic label namespace.
-    if not key and entry and guard["fresh"]:
+    source = "provider_" + provider_source if provider_confirmed else "unknown"
+    # Legacy Providers omit the native fields. An unknown native source must
+    # remain unconfirmed rather than acquiring authority through legacy fallback.
+    legacy_membership = (
+        "networkTenant" not in box and "networkTenantSource" not in box
+    )
+    if legacy_membership and not key and entry and guard["fresh"]:
         key = key_text(entry.get("subject"))
         source = "guard" if key else "unknown"
-    if not key:
+    if legacy_membership and not key:
         key = key_text(labels.get("cloud_org_id"))
         if key:
             source = "cloud_org_id"
@@ -167,7 +178,7 @@ def resolve_box(box, guard, local_backend_ids=()):
         "key": key,
         "source": source,
         "confirmed": bool(
-            key and (source == "guard" or source.startswith("provider_"))
+            key and (source == "guard" or provider_confirmed)
         ),
         "declaredLabelIgnored": bool(labels.get("tenant")),
     }
@@ -176,6 +187,9 @@ def resolve_box(box, guard, local_backend_ids=()):
     if key is None:
         status = "unknown"
         reason = "Provider network Tenant is unresolved"
+    elif not membership["confirmed"] and not legacy_membership:
+        status = "unknown"
+        reason = "Provider network Tenant source is missing or unrecognized"
     elif guard["status"] == "unsupported":
         status = "unsupported"
         reason = "Provider cannot support the required NIC ACLs"

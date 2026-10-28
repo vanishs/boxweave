@@ -22,5 +22,15 @@
     "TENANT_ACCESS_APPLICATION_STATE_GUARD_VERIFIED",
     "TENANT_ACCESS_APPLICATION_STATE_DEGRADED"
   ],
-  "deployment": "merged upstream; source verification only; no released version assumed"
+  "deployment": "official release available; capability handshake required; Provider upgrade remains separate",
+  "officialRelease": {
+    "tag": "v0.120.1",
+    "url": "https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1",
+    "containsCommit": "d4aad1a8a8cd748ab6211c67a3417f173316f9e1"
+  },
+  "membershipSources": [
+    "NETWORK_TENANT_SOURCE_CLOUD_ORG_ID",
+    "NETWORK_TENANT_SOURCE_NAME",
+    "NETWORK_TENANT_SOURCE_NATIVE"
+  ]
 }

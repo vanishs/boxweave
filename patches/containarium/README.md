@@ -7,11 +7,12 @@ profile now selects the official repository's main commit
 [native-network-tenant.json](native-network-tenant.json).
 The authenticated wire contract is `native-network-tenant/v1`.
 
-This is a source compatibility baseline, not an assertion that an official
-release containing it is already published. The normal installer continues to
+The official [v0.120.1 release](https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1)
+contains this commit (GitHub comparison reports it as an ancestor). The immutable
+merge pin remains the source compatibility baseline. The normal installer continues to
 select official MCP releases and does not replace an installed Provider daemon.
 Old or unknown Providers remain capability-gated. Upgrade daemon, CLI and MCP
-compatibly when the corresponding official release is available, reconnect MCP,
+compatibly using an official release containing this contract, reconnect MCP,
 and let independent Web token rotation rediscover policy scopes.
 
 ## Build inside the assigned Linux development LXC

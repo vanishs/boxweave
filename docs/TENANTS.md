@@ -20,8 +20,11 @@ is observed. Name changes, duplicate display names and IP reuse never merge
 networks. Existing Boxes are never moved, relabeled or recreated.
 
 On compatible upstream Providers, networkTenant/networkTenantSource are authoritative
-membership observations. Fresh Guard must independently agree before ACL status
-is verified. Old v0.114.2 falls back to fresh Guard subjects or explicitly inferred
+membership observations only when the source is one of the upstream enum values
+NATIVE, CLOUD_ORG_ID or NAME (with the NETWORK_TENANT_SOURCE_ prefix).
+Missing, unspecified or unknown sources remain unconfirmed; native fields never
+acquire authority through legacy cloud/name fallback. Fresh Guard must
+independently agree before ACL status is verified. Old v0.114.2 falls back to fresh Guard subjects or explicitly inferred
 cloud/name resolution. Inferred membership never establishes isolation. Unknown
 backends and unresolved resources remain visible.
 
@@ -60,7 +63,9 @@ tenantVerified, guardVerified) with networkConnectivity always reported as
 not_tested. Running alone is insufficient. Unknown, submitted,
 provisioning and verification-pending receipts reserve names; reconciliation
 reads the original
-username and never repeats writes automatically. A mismatch is degraded. SSH,
+username and never repeats writes automatically. A mismatch is degraded. Reconciliation compares the exact Provider Tenant key,
+so metadata binding and local/discovered display IDs cannot change the expected
+network identity. SSH,
 application readiness and TCP connectivity are separate observations.
 
 Shared membership normally permits internal access, subject to listeners and

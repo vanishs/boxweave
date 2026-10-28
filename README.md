@@ -133,8 +133,8 @@ and a persistent **Prompt Graph**.
 - Shared native Tenant creation (A) and reviewed atomic cross-Tenant ingress
   grants/revokes (B) are implemented for the authenticated
   [merged upstream Provider contract](docs/TENANT-UPSTREAM.md); an unchanged
-  provider stays capability-gated (read-only) and the candidate is not installed
-  automatically.
+  provider stays capability-gated (read-only). Official Containarium v0.120.1
+  contains the contract; the installed Provider daemon is not upgraded automatically.
 - See [installation, CA trust, HTTP mode and recovery](docs/WEB-UI.md),
   [provider capability gate](docs/WEB-CAPABILITIES.md) and
   [test evidence and verification limits](docs/WEB-TESTING.md).

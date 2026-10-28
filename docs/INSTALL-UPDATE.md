@@ -148,11 +148,12 @@ required. See [detailed recovery and limitations](TENANTS.md).
 A/B Web adapters recognize the authenticated `native-network-tenant/v1` contract
 merged in official Containarium main by PR #3165. The reviewed upstream source
 pin and build instructions are in [the source profile](../patches/containarium/README.md).
-The official release containing it is not assumed published. The installer still
+The official [v0.120.1 release](https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1)
+contains the reviewed merge commit. The installer still
 selects official MCP releases, retains existing Provider/Incus installations and
 does not automatically replace the daemon with a source build. Update compatible
 daemon/CLI/MCP components together through a separately approved Provider upgrade
-when available, then reconnect MCP.
+from a containing official release, then reconnect MCP.
 
 The independent Web token rotation recognizes the authenticated atomic capability
 before adding network-policy read/write scopes. Web never borrows MCP credentials.

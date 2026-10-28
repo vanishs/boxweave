@@ -113,4 +113,4 @@ distinct enforcement identities. See [operation](TENANTS.md),
 [test evidence](WEB-TESTING.md). No version-string check, label injection or
 post-start relabeling workaround enables A/B.
 
-The merged upstream source baseline is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to current upstream. Source builds require separate reviewed deployment; the normal installer selects official MCP releases, and does not assume the containing release is published.
+The merged upstream source baseline is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to current upstream. Source builds require separate reviewed deployment; the normal installer selects official MCP releases. Official [v0.120.1](https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1) contains the reviewed merge commit; installing its MCP alone does not upgrade the daemon or establish capability readiness.
