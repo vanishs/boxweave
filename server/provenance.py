@@ -70,7 +70,8 @@ def bounded_output(args, limit=4096):
 
 
 def version(binary):
-    text=bounded_output([binary,'--version'])
+    # Containarium exposes a version subcommand, not a --version flag.
+    text=bounded_output([binary,'version'])
     match=re.search(r'(?<!\w)v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)',text or '')
     return match.group(1) if match else None
 

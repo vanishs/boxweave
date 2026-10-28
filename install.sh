@@ -353,8 +353,11 @@ PY_PROVIDER_RELEASE
 import sys
 sys.path.insert(0,sys.argv[1])
 from provenance import version
-if version(sys.argv[2]) != sys.argv[3].removeprefix('v'):
-    sys.exit('Staged Provider version does not match selected release')
+expected = sys.argv[3].removeprefix('v')
+observed = version(sys.argv[2])
+if observed != expected:
+    detail = observed or 'unavailable (version command failed or output was unrecognized)'
+    sys.exit(f'Staged Provider version mismatch: expected {expected}, observed {detail}')
 PY_PROVIDER_VERSION
   done
 fi

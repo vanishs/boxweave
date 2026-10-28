@@ -244,3 +244,26 @@ connections in both directions. Same-key Boxes should communicate; different-key
 Boxes should be denied unless an explicit ingress grant permits them. Gateway,
 proxy/public routes, egress controls and established connections are separate
 paths. Live acceptance requires its own agreed resource/cleanup plan.
+
+### Confirming the installed and running Provider versions
+
+Containarium uses `containariumd version`, not `containariumd --version`.
+BoxWeave 0.5.1 fixes the staged-release check and daemon provenance reader to use
+that subcommand. The 0.5.0 staging failure occurs before Provider publication;
+fetch the corrected installer and rerun the same explicit upgrade command.
+
+```bash
+containariumd version --verbose
+sudo systemctl show containarium.service -p ExecStart -p MainPID
+pid=$(systemctl show containarium.service -p MainPID --value)
+if [ "$pid" -gt 0 ]; then
+  sudo "/proc/$pid/exe" version --verbose
+fi
+```
+
+The first command inspects the executable on PATH. The `/proc` command inspects
+the binary inode used by the active daemon, including when a replaced executable
+is still running. Compare its version with the current official release, and
+inspect ExecStart if the versions differ. `containariumd version --check` can
+also query GitHub for release drift. Version equality alone does not establish
+native Tenant readiness; the authenticated capability/Guard checks still apply.
