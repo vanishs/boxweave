@@ -148,6 +148,19 @@ class CommandTests(unittest.TestCase):
             with self.subTest(field=field),self.assertRaises(ValueError):clients.validate(data)
     def test_public_key_rejects_cross_type_blob(self):
         with self.assertRaises(ValueError):clients.public_key(KEY.replace('ssh-ed25519 ','ssh-rsa ',1))
+    def test_replacement_question_bakes_answer_into_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+            args=self.args('--os','macos','--agent','codex','--config',str(config))
+            with patch('sys.stdin',Terminal('2\n')),contextlib.redirect_stderr(io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(args),0)
+            self.assertIn('setup.py" --replace "$@"',out.getvalue())
+            with patch('sys.stdin',Terminal('1\n')),contextlib.redirect_stderr(io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(args),0)
+            self.assertIn('setup.py" "$@"',out.getvalue())
+            with patch('sys.stdin',Terminal()),contextlib.redirect_stderr(io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(self.args('--os','macos','--agent','codex','--config',str(config),'--replace')),0)
+            self.assertIn('setup.py" --replace "$@"',out.getvalue())
     def test_removed_legacy_flags_are_gone(self):
         for flag in ('--ssh-host','--ssh-port','--replace','--diagnose','--bootstrap-identity'):
             with self.subTest(flag=flag),contextlib.redirect_stderr(io.StringIO()):

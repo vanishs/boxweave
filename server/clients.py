@@ -78,6 +78,7 @@ def add_parser(commands):
     p.add_argument('--transport', choices=('native', 'wsl'))
     p.add_argument('--config', type=Path, default=DEFAULT_CONFIG, help='Public client descriptor')
     p.add_argument('--output', type=Path, help='Write the enrollment script to this file instead of stdout')
+    p.add_argument('--replace', action='store_true', help='Bake replacement of an existing BoxWeave MCP registration into the script')
     p.add_argument('--json', action='store_true', default=argparse.SUPPRESS)
 
 
@@ -143,8 +144,10 @@ POSIX_TEMPLATE = '''#!/usr/bin/env bash
 #      After enrollment, the same address can be changed later by editing the
 #      "Host boxweave" block in ~/.ssh/config and rerunning this script.
 #   2. Run: bash @@FILENAME@@
-#      Flags pass through to the enrollment logic: --replace --diagnose
+#      Flags pass through to the enrollment logic: --diagnose
 #      --report PATH --bootstrap-identity PATH --agent-home PATH --project-path PATH
+#      Replacement mode chosen at generation time is already baked into the
+#      invocation below (the --replace flag still works at run time).
 set -eu
 
 # ===== EDIT ME: BoxWeave server connection =====
@@ -177,7 +180,7 @@ command -v curl >/dev/null || { echo 'curl is required to fetch the enrollment l
 bw_dir=$(mktemp -d) || exit 1
 trap 'rm -rf "$bw_dir"' EXIT
 curl -fsSL --retry 3 @@BASE@@/clients/posix/setup.py -o "$bw_dir/setup.py" || exit 1
-python3 "$bw_dir/setup.py" "$@"
+python3 "$bw_dir/setup.py"@@EXTRA_ARGS@@ "$@"
 '''
 
 WINDOWS_TEMPLATE = '''#requires -version 5.1
@@ -191,8 +194,10 @@ WINDOWS_TEMPLATE = '''#requires -version 5.1
 #      After enrollment, the same address can be changed later by editing the
 #      "Host boxweave" block in the SSH config and rerunning this script.
 #   2. Run: powershell -NoProfile -ExecutionPolicy Bypass -File @@FILENAME@@
-#      Switches pass through to the enrollment logic: -Replace -Diagnose
+#      Switches pass through to the enrollment logic: -Diagnose
 #      -ReportPath PATH -BootstrapIdentityFile PATH -AgentHome PATH -ProjectPath PATH
+#      Replacement mode chosen at generation time is already baked into the
+#      invocation below (the -Replace switch still works at run time).
 $ErrorActionPreference = 'Stop'
 
 # ===== EDIT ME: BoxWeave server connection =====
@@ -220,7 +225,7 @@ $null = New-Item -ItemType Directory -Path $bwDir
 try {
   $bwFile = Join-Path $bwDir 'setup.ps1'
   Invoke-WebRequest -UseBasicParsing @@BASE@@/clients/windows/setup.ps1 -OutFile $bwFile -ErrorAction Stop
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bwFile @args
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bwFile@@EXTRA_ARGS@@ @args
   if ($LASTEXITCODE -ne 0) { throw 'BoxWeave client setup failed' }
 } finally { Remove-Item -LiteralPath $bwDir -Recurse -Force }
 '''
@@ -231,6 +236,7 @@ def render(d, profile, options=None):
     base = 'https://raw.githubusercontent.com/{}/{}'.format(d['source_repo'], d['source_commit'])
     windows_native = profile['os'] == 'windows' and profile['runtime'] == 'native'
     quote = ps_quote if windows_native else bash_quote
+    replace_args = ' -Replace' if windows_native else ' --replace'
     values = {'@@BASE@@': base,
               '@@FILENAME@@': 'boxweave-setup.ps1' if windows_native else 'boxweave-setup.sh',
               '@@SSH_HOST@@': quote(d['ssh_host']),
@@ -243,7 +249,8 @@ def render(d, profile, options=None):
               '@@TRANSPORT@@': quote('WSL' if profile['transport'] == 'wsl' else 'Native') if windows_native else quote(profile['transport']),
               '@@WSL_DISTRO@@': ps_quote(''),
               '@@PROVIDER@@': quote(options.get('claude_provider') or ''),
-              '@@MODEL@@': quote(options.get('glm_model') or '')}
+              '@@MODEL@@': quote(options.get('glm_model') or ''),
+              '@@EXTRA_ARGS@@': replace_args if options.get('replace') else ''}
     if windows_native:
         script = WINDOWS_TEMPLATE
         shell = 'Windows PowerShell'
@@ -278,6 +285,15 @@ def run(args):
         options = {}
         if provider: options['claude_provider'] = provider
         if model: options['glm_model'] = model
+        # The replacement question is the last interactive step; the answer is
+        # baked into the generated script so rerunning it just works.
+        if getattr(args, 'replace', False):
+            options['replace'] = True
+        elif sys.stdin.isatty() and not getattr(args, 'json', False):
+            if choose('Replace an existing BoxWeave MCP registration?',
+                      [('No: preserve conflicting entries', False),
+                       ('Yes: replace the BoxWeave entry (backups retained)', True)]):
+                options['replace'] = True
         result = render(validate(data), profile, options)
         if getattr(args, 'json', False):
             print(json.dumps(result, indent=2))

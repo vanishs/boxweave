@@ -18,6 +18,9 @@ for macOS/WSL terminals, `boxweave-setup.ps1` for Windows PowerShell). Copy it
 to the client machine by any trusted channel. Exit 0 means script generation,
 2 means invalid/missing input or descriptor, and 130 means cancellation.
 With `--json` the generator returns the script text as JSON instead.
+Interactive sessions end with a replacement question; the answer is baked
+into the generated script (the `--replace` / `-Replace` run-time switch
+still works, and `--replace` at generation time preselects it).
 
 Explicit selection examples (same profiles as 0.3.0):
 
