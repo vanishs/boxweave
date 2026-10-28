@@ -122,7 +122,7 @@ and a persistent **Prompt Graph**.
 - **Never expose an unreviewed installation publicly.**
 - Shared native Tenant creation (A) and reviewed atomic cross-Tenant ingress
   grants/revokes (B) are implemented for the authenticated
-  [pinned Provider branch contract](docs/TENANT-UPSTREAM.md); an unchanged
+  [merged upstream Provider contract](docs/TENANT-UPSTREAM.md); an unchanged
   provider stays capability-gated (read-only) and the candidate is not installed
   automatically.
 - See [installation, CA trust, HTTP mode and recovery](docs/WEB-UI.md),

@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$SetupPath,
     [Parameter(Mandatory=$true)][string]$FixtureRoot,
-    [ValidateSet('atomic','adapters','original')][string]$Case = 'atomic'
+    [ValidateSet('atomic','adapters','original','nested')][string]$Case = 'atomic'
 )
 $ErrorActionPreference='Stop'
 $tokens=$null;$errors=$null
@@ -45,6 +45,31 @@ if($Case -eq 'atomic'){
  Assert-Fixture (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Unexpected UTF8 BOM';$checks++
  $leftovers=@(Get-ChildItem -LiteralPath $fixtureDir | Where-Object {$_.Name -like '.boxweave-*'})
  Assert-Fixture ($leftovers.Count -eq 0) 'Staged files were left behind';$checks++
+}elseif($Case -eq 'nested'){
+ $McpName='boxweave';$Replace=$true
+ $config=Join-Path $fixtureDir 'config.toml'
+ $nested="[mcp_servers.boxweave.tools.list_containers]`n# Keep approval policy`napproval_mode = 'approve'`n[mcp_servers.boxweave.tools.connect]`napproval_mode = 'approve'`n"
+ $other="[mcp_servers.other]`ncommand = 'other'`n"
+ $original="[mcp_servers.boxweave]`ncommand = 'old'`nargs = []`n"+$nested+$other
+ [IO.File]::WriteAllText($config,$original,$encoding)
+ $updated=Update-CodexToml -Path $config -Command 'wsl.exe' -Arguments @('-d','Ubuntu')
+ Assert-Fixture ($updated.Contains($nested+$other)) 'Approval tables or other server changed';$checks++
+ Backup-File $config
+ Write-Utf8NoBom -Path $config -Content $updated
+ $backup=@(Get-ChildItem -LiteralPath $fixtureDir | Where-Object {$_.Name -like '*.backup-*'})
+ Assert-Fixture ($backup.Count -eq 1 -and [IO.File]::ReadAllText($backup[0].FullName) -eq $original) 'Original backup missing';$checks++
+ $Replace=$false
+ $repeated=Update-CodexToml -Path $config -Command 'wsl.exe' -Arguments @('-d','Ubuntu')
+ Assert-Fixture ($repeated -eq $updated) 'Repeat with approval tables changed configuration';$checks++
+ $rejected=$false
+ try{Update-CodexToml -Path $config -Command 'different' -Arguments @() | Out-Null}catch{$rejected=$true}
+ Assert-Fixture $rejected 'Conflicting transport did not require replacement';$checks++
+ $Replace=$true
+ [IO.File]::WriteAllText($config,$original+"[mcp_servers.boxweave.env]`nX = 'y'`n",$encoding)
+ $rejected=$false
+ try{Update-CodexToml -Path $config -Command 'wsl.exe' -Arguments @() | Out-Null}catch{$rejected=$true}
+ Assert-Fixture $rejected 'Unsupported nested configuration was accepted';$checks++
+ Assert-Fixture ([IO.File]::ReadAllText($config).Contains("X = 'y'")) 'Rejected configuration was changed';$checks++
 }else{
  $McpName='boxweave';$Replace=$true
  $config=Join-Path $fixtureDir 'config.toml'

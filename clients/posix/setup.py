@@ -98,7 +98,7 @@ def toml_update(original, command, args, replace=False):
     servers = parsed.get('mcp_servers',{})
     if not isinstance(servers,dict): raise ValueError('Invalid MCP TOML table')
     existing = servers.get('boxweave')
-    if isinstance(existing,dict) and not replace and set(existing)-{'command','args','startup_timeout_sec','tool_timeout_sec'}:
+    if isinstance(existing,dict) and not replace and set(existing)-{'command','args','startup_timeout_sec','tool_timeout_sec','tools'}:
         raise ValueError('Existing BoxWeave MCP entry has extra settings; use --replace after review')
     expected = {'command':command,'args':args}
     if existing is not None and not isinstance(existing,dict): raise ValueError('Invalid BoxWeave MCP entry')
@@ -108,11 +108,14 @@ def toml_update(original, command, args, replace=False):
     pattern = r'(?ms)^\[mcp_servers\.boxweave\][ \t]*(?:#[^\n]*)?\n.*?(?=^\[|\Z)'
     if existing is not None and not re.search(pattern,original):
         raise ValueError('Unsupported existing BoxWeave TOML spelling; edit it explicitly')
-    if re.search(r'(?m)^\[mcp_servers\.boxweave\.',original):
-        raise ValueError('Nested BoxWeave MCP settings require explicit migration')
+    for nested in re.findall(r'(?m)^\[mcp_servers\.boxweave\.([^\]\n]+)\]', original):
+        if not re.fullmatch(r'tools(?:\.[A-Za-z0-9_-]+)*', nested):
+            raise ValueError('Nested BoxWeave MCP settings require explicit migration')
     block = header+'\ncommand = '+json.dumps(command,ensure_ascii=False)+'\nargs = '+json.dumps(args,ensure_ascii=False)+'\nstartup_timeout_sec = 30\ntool_timeout_sec = '+str(CODEX_TOOL_TIMEOUT_SEC)+'\n'
     updated = re.sub(pattern,lambda _:block,original,count=1) if existing is not None else original.rstrip()+'\n\n'+block
     check = tomllib.loads(updated)
+    if existing is not None and 'tools' in existing and check['mcp_servers']['boxweave'].get('tools') != existing['tools']:
+        raise ValueError('Inline tool settings require explicit migration')
     if check.get('mcp_servers',{}).get('boxweave',{}).get('command') != command:
         raise ValueError('MCP table is inline or otherwise cannot be safely extended')
     return updated

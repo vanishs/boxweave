@@ -45,7 +45,7 @@ def network_contract_available(origin, token):
             data = json.loads(response.read(65537))
         return (
             isinstance(data, dict)
-            and data.get("contract") == "boxweave.tenant-network/v1"
+            and data.get("contract") == "native-network-tenant/v1"
             and data.get("atomicTenantAccess") is True
             and data.get("backendScope") == "local-lxc"
         )

@@ -8,17 +8,18 @@ from .graph import text
 from .provider import ProviderError
 
 CREATE_BLOCK = (
-    "Shared network Tenant creation is unavailable on Containarium v0.114.2: "
-    "Host MCP has no network-Tenant parameter and the birth NIC guard does not "
-    "consume an explicit tenant label. No local grouping or post-create relabeling is substituted."
+    "Shared network Tenant creation is unavailable: "
+    "Provider has no ready native network Tenant contract. "
+    "A compatible daemon with supported enforced NIC ACLs is required; "
+    "local grouping or post-create relabeling is not a substitute."
 )
-CONTRACT = "boxweave.tenant-network/v1"
+CONTRACT = "native-network-tenant/v1"
 CAPABILITIES = {
     "sharedTenantCreate": False,
     "reassignTenant": False,
     "networkPolicyWrite": False,
     "reason": CREATE_BLOCK,
-    "contract": "Containarium v0.114.2",
+    "contract": "unavailable",
 }
 
 
@@ -116,6 +117,19 @@ def guard_view(raw, now=None):
         "unmanaged": names("unmanaged"),
         "connectivityTested": False,
     }
+
+
+def creation_guard_capable(guard):
+    """Match upstream creation capability, independently of other NIC entries.
+
+    Full convergence is still required for verified ACL/policy evidence.
+    """
+    return (
+        guard["fresh"]
+        and guard["mode"] == "GUARD_MODE_ENFORCE"
+        and guard["firewallDriver"] == "nftables"
+        and not guard["unsupported"]
+    )
 
 
 def resolve_box(box, guard, local_backend_ids=()):
@@ -307,12 +321,12 @@ class TenantService:
         capabilities = self.capabilities()
         if (
             inventory.get("unreachableBackends")
-            or guards["tenant"]["status"] != "ready"
+            or not creation_guard_capable(guards["tenant"])
         ):
             capabilities["sharedTenantCreate"] = False
             if capabilities.get("contract") == CONTRACT:
                 capabilities["reason"] = (
-                    "Fresh complete enforced Provider Guard evidence is required for shared creation"
+                    "Fresh supported enforced Provider Guard capability is required for shared creation"
                 )
 
         for b in boxes:

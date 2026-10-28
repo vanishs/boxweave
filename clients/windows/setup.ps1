@@ -86,7 +86,13 @@ function Set-TomlSection([string]$Source, [string]$Header, [string]$Replacement)
 }
 function Update-CodexToml([string]$Path, [string]$Command, [string[]]$Arguments) {
     $text = if (Test-Path -LiteralPath $Path) { [System.IO.File]::ReadAllText($Path) } else { '' }
-    if ($text -match '(?m)^\s*mcp_servers\s*=' -or $text -match ('(?m)^\[mcp_servers\.' + [regex]::Escape($McpName) + '\.')) { throw 'Inline/nested MCP TOML requires explicit migration' }
+    if ($text -match '(?m)^\s*mcp_servers\s*=') { throw 'Inline MCP TOML requires explicit migration' }
+    # Codex may add per-tool approval settings. Updating the transport must
+    # preserve those tables byte-for-byte, rather than rejecting or removing them.
+    $nested = [regex]::Matches($text, ('(?m)^\[mcp_servers\.' + [regex]::Escape($McpName) + '\.([^\]\r\n]+)\]'))
+    foreach ($table in $nested) {
+        if ($table.Groups[1].Value -notmatch '^tools(?:\.[A-Za-z0-9_-]+)*$') { throw 'Nested BoxWeave MCP settings require explicit migration' }
+    }
     $header = '(?ms)^\[mcp_servers\.' + [regex]::Escape($McpName) + '\][^\r\n]*\r?\n.*?(?=^\[|\z)'
     $old = [regex]::Matches($text,$header)
     if ($old.Count -gt 1) { throw 'Duplicate BoxWeave MCP table' }

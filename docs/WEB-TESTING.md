@@ -230,7 +230,7 @@ source candidate requires the separately approved live acceptance plan in
 substitute for a real bidirectional TCP test.
 
 
-## Current fork contract validation (2026-10-25 UTC)
+## Historical fork contract validation (2026-10-25 UTC)
 
 Dedicated development LXC: `boxweave-tenant-dev`.
 BoxWeave checkout: `/home/boxweave-tenant-dev/work/boxweave-native`.
@@ -282,3 +282,36 @@ Raw logs remain under the dedicated LXC's `/home/boxweave-tenant-dev/work/logs/`
 stopped after testing. No real Host deployment, existing instance change,
 provider service upgrade, ACL edit, public route or TCP connectivity claim was made.
 See [remaining deployment/live acceptance steps and suggested upstream PR descriptions](TENANT-UPSTREAM.md).
+
+## Merged upstream compatibility and client configuration (2026-10-27)
+
+Validated as non-root `containarium-build` in the dedicated `containarium-build`
+LXC, against clean official Containarium source commit
+`d4aad1a8a8cd748ab6211c67a3417f173316f9e1` and its
+`native-network-tenant/v1` contract:
+
+- Python unittest discovery: 224 tests, successful, with two native Windows
+  OpenSSH diagnostic fixtures skipped. PowerShell 7.4.6 was extracted under the
+  ignored project outputs directory; configuration and Linux WSL-shim fixtures
+  ran, including initialize/initialized, tools/list and a read-only tools/call.
+- The cross-repository fixture exercised upstream generated REST handlers and
+  atomic policy service with synthetic infrastructure/authentication, including
+  the Web token capability probe. It was executed, not skipped.
+- Client configuration regression: replacing transport preserves per-tool
+  approval tables and unrelated servers, keeps a backup, is repeatable, and
+  rejects conflicting transport changes without explicit replacement. POSIX
+  configuration tests also verify tool-table preservation and reject inline
+  tool settings that would otherwise be lost.
+- Frontend model tests: 6 passed; production asset build succeeded; Playwright
+  browser suite: 15 passed. Browser libraries were extracted in user-owned
+  outputs paths without changing host packages.
+- The pinned-source build helper built daemon, client-tag CLI and Host MCP with
+  source version `0.0.0-source.d4aad1a8a8cd` and checksums. A different source
+  checkout was rejected with exit 2. Shell syntax, Python compilation and Git
+  whitespace checks passed.
+
+Logs and development binaries remain in ignored `outputs/upstream-3165/`.
+These results cover source compatibility and isolated fixtures, not a real
+Windows installation, live NIC ACL/eBPF enforcement or bidirectional TCP
+isolation. No running Provider was replaced, no services were restarted and no
+real network-policy or credential changes were made.

@@ -96,6 +96,6 @@ Web status reports supported SQLite schema and Tenant capability gates without
 opening Provider credentials. Doctor lists the same limits; live authenticated
 Guard evidence is available from the console API, not inferred from CLI exit 0.
 BoxWeave diagnostics report compiled adapter support and leave the current
-Provider unprobed. The separate patched Provider CLI adds --network-tenant and
+Provider unprobed. The separate upstream Provider CLI adds --network-tenant and
 network-policy access preview/apply; see [the upstream contract](TENANT-UPSTREAM.md)
 and [Tenant operation](TENANTS.md). CLI exit 0 is not a live capability probe.

@@ -83,6 +83,7 @@ class ProviderBranchContractTests(unittest.TestCase):
             selector.close()
         if not origin.startswith("http://127.0.0.1:"):
             raise RuntimeError("Unexpected fixture listener: " + origin)
+        self.origin = origin
         token = Path(self.temp.name) / "contract-token"
         token.write_text("synthetic-contract-only")
         token.chmod(0o600)
@@ -131,6 +132,9 @@ class ProviderBranchContractTests(unittest.TestCase):
         return response.json
 
     def test_actual_generated_rest_revisions_states_and_policy_preservation(self):
+        from web_token import network_contract_available
+
+        self.assertTrue(network_contract_available(self.origin, "synthetic-contract-only"))
         snapshot = self.req("tenants").json
         self.assertTrue(snapshot["capabilities"]["sharedTenantCreate"], snapshot)
         self.assertTrue(snapshot["capabilities"]["networkPolicyWrite"], snapshot)

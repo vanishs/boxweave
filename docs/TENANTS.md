@@ -19,13 +19,13 @@ proof of a Provider entity: empty records remain metadata only until membership
 is observed. Name changes, duplicate display names and IP reuse never merge
 networks. Existing Boxes are never moved, relabeled or recreated.
 
-On the patched Provider, networkTenant/networkTenantSource are authoritative
+On compatible upstream Providers, networkTenant/networkTenantSource are authoritative
 membership observations. Fresh Guard must independently agree before ACL status
 is verified. Old v0.114.2 falls back to fresh Guard subjects or explicitly inferred
 cloud/name resolution. Inferred membership never establishes isolation. Unknown
 backends and unresolved resources remain visible.
 
-A/B controls require authenticated contract boxweave.tenant-network/v1, native
+A/B controls require authenticated contract native-network-tenant/v1, native
 membership support and backendScope local-lxc. Old/unknown Providers retain
 read-only Tenant views and Automatic creation; shared creation/policy writes show
 a specific unavailable reason. No optimistic version or generic label workaround
@@ -40,13 +40,19 @@ key from the selected stable ID; raw networkTenant, native labels, encryption
 tenant_id and cloud spoofing are not browser input.
 
 Review each username, resources, image, expected membership and pending Guard
-state before confirming. The patched Provider persists native membership and
-requires the same NIC Guard attachment before the first Start. Capability/Guard
-readiness is checked again at confirmation, which also re-validates the
+state before confirming. The upstream Provider persists native membership and
+requires the same NIC Guard attachment before the first Start. Capability and fresh supported Guard
+readiness are checked again at confirmation, which also re-validates the
 shared-creation capability and treats a name with an unresolved prior receipt
 (queued, running, unknown, submitted, provisioning, verification-pending or
 degraded) as occupied. Automatic keeps the independent
 admin name-fallback workflow.
+
+Creation capability is independent of unrelated existing NIC attachment errors.
+A fresh supported ENFORCE pass and the authenticated upstream capability are
+required; complete Guard convergence is still required before reporting verified
+isolation. Account keys retain their `account:` prefix and never merge with
+same-named administrator shared domains.
 
 Receipt states are provisioning, verification-pending, guard-verified, degraded
 and unknown; each carries a verification detail (created, provisioning,

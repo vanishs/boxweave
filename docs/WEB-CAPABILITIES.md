@@ -77,10 +77,10 @@ Generic 500s and all write failures retain their error/unknown semantics. See
 
 ## Tenant compatibility profiles
 
-The baseline table above describes unchanged v0.114.2. The complete optional
-[reviewed source branch](../patches/containarium/README.md) extends all three surfaces:
+The baseline table above describes unchanged v0.114.2. The merged upstream
+[reviewed source profile](../patches/containarium/README.md) extends all three surfaces:
 
-| Capability | Unchanged v0.114.2 | Patched contract boxweave.tenant-network/v1 |
+| Capability | Unchanged v0.114.2 | Upstream contract native-network-tenant/v1 |
 | --- | --- | --- |
 | Membership query | Guard authoritative; cloud/name inferred | Native networkTenant + source returned; independent fresh Guard evidence |
 | Shared creation A | blocked | CLI --network-tenant; MCP network_tenant; REST networkTenant; same pre-Start required Guard |
@@ -105,11 +105,12 @@ launcher credentials and timers are not rewritten. A newly upgraded Provider may
 need the next normal Web token rotation before writes are available.
 
 Native network Tenant is independent of encryption tenant_id and generic labels.
-Explicit shared native keys are admin-only and local Linux LXC only. Non-admin
-local creation is hardened to reserved account:<username> membership; admin
-omitted-field behavior remains the existing resolver. See [operation](TENANTS.md),
+Explicit shared native keys are admin-only and local Linux LXC only. When the operator enables CONTAINARIUM_NATIVE_ACCOUNT_TENANCY (default off),
+non-admin local creation uses reserved account:<username> membership. Otherwise
+omitted-field creation retains its legacy behavior. Account/shared keys remain
+distinct enforcement identities. See [operation](TENANTS.md),
 [upstream changes and deployment gate](TENANT-UPSTREAM.md), and
 [test evidence](WEB-TESTING.md). No version-string check, label injection or
 post-start relabeling workaround enables A/B.
 
-The current native Tenant candidate is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to newer forks. Candidate binaries require separate reviewed deployment; the normal installer selects official MCP releases.
+The merged upstream source baseline is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to current upstream. Source builds require separate reviewed deployment; the normal installer selects official MCP releases, and does not assume the containing release is published.

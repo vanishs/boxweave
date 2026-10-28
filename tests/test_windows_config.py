@@ -23,6 +23,8 @@ class WindowsConfigTests(unittest.TestCase):
             self.assertEqual(data['checks'],6)
     def test_create_replace_backup_and_cleanup(self):
         self.run_case('atomic')
+    def test_codex_preserves_tool_approvals_on_transport_update(self):
+        self.run_case('nested')
     def test_codex_and_managed_rules_publication(self):
         self.run_case('adapters')
 

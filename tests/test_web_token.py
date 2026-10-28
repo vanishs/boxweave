@@ -118,7 +118,7 @@ class WebTokenTests(unittest.TestCase):
         response = SimpleNamespace(
             read=lambda n: json.dumps(
                 {
-                    "contract": "boxweave.tenant-network/v1",
+                    "contract": "native-network-tenant/v1",
                     "atomicTenantAccess": True,
                     "backendScope": "local-lxc",
                 }
@@ -163,6 +163,11 @@ class WebTokenTests(unittest.TestCase):
         for data in (
             [],
             {},
+            {
+                "contract": "boxweave.tenant-network/v1",
+                "atomicTenantAccess": True,
+                "backendScope": "local-lxc",
+            },
             {
                 "contract": "unrecognized",
                 "atomicTenantAccess": True,

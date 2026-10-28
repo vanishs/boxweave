@@ -168,6 +168,17 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(result.startswith(original))
         self.assertEqual(setup.tomllib.loads(result)['mcp_servers']['other']['command'],'other')
         self.assertEqual(setup.toml_update(result,'/usr/bin/ssh',['user@host','a b']),result)
+    def test_toml_preserves_tool_approval_tables(self):
+        parent='[mcp_servers.boxweave]\ncommand="old"\nargs=[]\n'
+        nested='[mcp_servers.boxweave.tools.list_containers]\napproval_mode="approve"\n[mcp_servers.boxweave.tools.connect]\napproval_mode="approve"\n'
+        other='[mcp_servers.other]\ncommand="other"\n'
+        result=setup.toml_update(parent+nested+other,'wsl.exe',['-d','Ubuntu'],True)
+        self.assertIn(nested+other,result)
+        parsed=setup.tomllib.loads(result)['mcp_servers']
+        self.assertEqual(parsed['boxweave']['tools']['connect']['approval_mode'],'approve')
+        self.assertEqual(parsed['boxweave']['command'],'wsl.exe')
+        self.assertEqual(setup.toml_update(result,'wsl.exe',['-d','Ubuntu']),result)
+        with self.assertRaises(ValueError):setup.toml_update(result,'different',[])
     def test_toml_non_ascii_paths(self):
         value=setup.toml_update('', 'ssh', ['/home/user/emoji-\U0001f600'])
         self.assertEqual(setup.tomllib.loads(value)['mcp_servers']['boxweave']['args'],['/home/user/emoji-\U0001f600'])
@@ -180,6 +191,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(setup.tomllib.loads(setup.toml_update(original,'ssh',[],True))['mcp_servers']['boxweave']['command'],'ssh')
     def test_toml_rejects_unusual_tables_and_malformed_input(self):
         for original in ('not valid !','mcp_servers={boxweave={command="other"}}\n',
+                         '[mcp_servers.boxweave]\ncommand="ssh"\nargs=[]\ntools={connect={approval_mode="approve"}}\n',
                          '[mcp_servers.boxweave]\ncommand="ssh"\nargs=[]\n[mcp_servers.boxweave.env]\nX="y"\n'):
             with self.subTest(original=original),self.assertRaises(ValueError):setup.toml_update(original,'ssh',[],True)
     def test_cursor_preserves_unrelated_data_and_repeat(self):

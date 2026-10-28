@@ -236,6 +236,42 @@ class NetworkAPITests(unittest.TestCase):
         )
         self.assertEqual(p["items"][2]["expectedTenant"]["key"], "independent")
 
+    def test_other_box_attachment_failure_does_not_disable_creation_capability(self):
+        self.tenants()
+        original = self.provider.network_guard
+
+        def degraded():
+            raw = original()
+            raw["tenant"]["entries"][0]["attached"] = False
+            raw["tenant"]["entries"][0]["lastError"] = "fixture attachment failure"
+            raw["tenant"]["lastError"] = "fixture attachment failure"
+            return raw
+
+        self.provider.network_guard = degraded
+        snapshot = self.req("tenants").json
+        self.assertEqual(snapshot["guard"]["tenant"]["status"], "degraded")
+        self.assertTrue(snapshot["capabilities"]["sharedTenantCreate"])
+        self.assertFalse(snapshot["guard"]["tenant"]["connectivityTested"])
+
+    def test_account_and_shared_membership_keys_remain_distinct(self):
+        self.tenants()
+        self.provider.data["box1"]["networkTenant"] = "account:testing"
+        self.provider.data["box1"]["networkTenantSource"] = "NETWORK_TENANT_SOURCE_NATIVE"
+        snapshot = self.req("tenants").json
+        by_name = {box["username"]: box["tenant"] for box in snapshot["containers"]}
+        self.assertEqual(by_name["box1"]["key"], "account:testing")
+        self.assertEqual(by_name["test1"]["key"], "testing")
+        self.assertNotEqual(by_name["box1"]["id"], by_name["test1"]["id"])
+
+    def test_legacy_downstream_contract_remains_gated(self):
+        original = self.provider.tenant_capabilities
+        def legacy():
+            return {**original(), "contract": "boxweave.tenant-network/v1"}
+        self.provider.tenant_capabilities = legacy
+        snapshot = self.req("tenants").json
+        self.assertFalse(snapshot["capabilities"]["sharedTenantCreate"])
+        self.assertFalse(snapshot["capabilities"]["networkPolicyWrite"])
+
     def test_capability_auth_and_guard_are_independently_required(self):
         src, dst = self.tenants()
         item = {
