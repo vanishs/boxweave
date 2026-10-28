@@ -777,6 +777,11 @@ mv -f "$tmp" "$config"
 '@
     $blockB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($wslBlock))
     Invoke-WslScript -Script $wslConfigScript -ScriptArguments @($blockB64) -What 'WSL ssh_config managed block'
+    # The "Host boxweave" alias lives in the WSL distro's ssh config, so the
+    # registration must invoke ssh through wsl.exe; the Windows ssh.exe would
+    # not resolve the alias.
+    $transportCommand = $wsl
+    $transportArgs = @('-d', $WslDistro, '-e', 'ssh', 'boxweave', $Script:McpRemoteCommand)
 } else {
     Update-SshConfigManaged -Path $nativeConfig -Block (New-SshConfigBlock -HostName $SshHost -Port $SshPort -User $SshUser -IdentityFile $nativePrivate -KnownHostsFile $nativeKnown)
 }
