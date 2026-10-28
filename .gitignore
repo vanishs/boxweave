@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+web/dist/
+.runtime/
+*.sqlite3*
+*.log
+*.exit

@@ -1,6 +1,6 @@
 # Architecture — phase 3 design baseline
 
-Status: selected design for implementation planning, not implemented or runtime-validated. Product approval: SRC-026. Requirements/criteria are authoritative under docs/product; this document defines how to satisfy their selected basic scope. Provider contract in SRC-010 is a historical source profile, not proof of current deployment. No provider upgrade is authorized.
+Status: phase 3 design with a partial phase 4 implementation. The real application-to-MCP acceptance gate remains unverified; see ADR-005 and VERTICAL_SLICE. Product approval: SRC-026. Requirements/criteria are authoritative under docs/product; this document defines how to satisfy their selected basic scope. Provider contract in SRC-010 is a historical source profile, not proof of current deployment. No provider upgrade is authorized.
 
 ## Boundaries and topology
 
@@ -99,3 +99,8 @@ Failure demonstrations: pin/identity mismatch prevents command dispatch; receipt
 ## Phase 4 unanswered assumptions
 
 Real Windows config merge/UI loading; WSL process-tree cancellation/quoting; ZCode GLM supported setup path; provider connect receipt parser and exact resource identity; current Tenant atomic capability; proxy address/client reachability; crash-window recovery; package-integrity bootstrap. [Test strategy](../verification/TEST_STRATEGY.md) defines low-cost experiments. None ran in phase 3. [Implementation plan](../process/IMPLEMENTATION_PLAN.md) maps every requirement to tasks.
+
+
+## Phase 4 implemented subset
+
+See [ADR-005](ADR/0005-phase-four-boundary.md) and [actual evidence](../verification/VERTICAL_SLICE.md). The minimum application implements real HTTP/React/SQLite/worker behavior with explicit fixture infrastructure, a bounded MCP adapter, and a partial native connection probe. Missing independent application launcher/credential and real native enrollment/registration prevent the real slice gate from passing. Loopback fixture HTTP and project/binding row consolidation are documented implementation limits; no production HTTPS/service identity or broad feature completion is implied.

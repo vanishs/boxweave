@@ -1,6 +1,6 @@
 # Approved product direction
 
-Approved by the developer on 2026-10-28 (SRC-026), following the phase 2 proposal. [Requirements](REQUIREMENTS.md) and [acceptance](ACCEPTANCE.md) own behavior; [scope](SCOPE.md) owns selected features. No implementation or runtime acceptance is claimed.
+Approved by the developer on 2026-10-28 (SRC-026), following the phase 2 proposal. [Requirements](REQUIREMENTS.md) and [acceptance](ACCEPTANCE.md) own behavior; [scope](SCOPE.md) owns selected features. Phase 4 now has a partial minimum-system implementation; release/live acceptance is not claimed. See ../verification/VERTICAL_SLICE.md.
 
 BoxWeave serves one trusted operator using coding Agents for remote development, including explicit project/environment binding. It must make the selected environment, trust checks, actual execution result and uncertain outcomes understandable and recoverable.
 

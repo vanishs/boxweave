@@ -1,6 +1,6 @@
 # Test strategy and experiment plan
 
-Status: planned, not executed. Authority: approved REQ/AC (SRC-026). Legacy B/F observations inform regression selection but do not override new acceptance. Test/task names below describe future obligations; there is no implementation test suite in this document-only branch yet.
+Status: original phase 3 strategy with an executed phase 4 subset; see VERTICAL_SLICE for actual results. Authority: approved REQ/AC (SRC-026). Legacy B/F observations inform regression selection but do not override new acceptance. Test/task names below describe future obligations; the current implementation suite covers only the minimum slice; planned release coverage is not implied.
 
 ## Layers and evidence
 
@@ -57,3 +57,8 @@ EXP-001 and EXP-006 inform phase 4. EXP-002/003/004/005 inform later feature tas
 Phase 4 passes only when TASK-005 demonstrates the selected real minimum slice and failure cases, with storage/restart evidence and explicit developer acceptance. Other profiles/basic features remain release obligations, not phase-4 completion claims. Phase 5 release candidate requires TASK-013 evidence for every selected AC; phase 6 compares approved behavior, not whole legacy parity.
 
 Each evidence record: requirement/AC/task, exact revision/build hash, target identity (sanitized), runtime/provider versions, command or named action, start/end/deadline, actual stdout and exit (null if unknown), pass/fail/unverified, fixture vs live, cleanup outcome and remaining limits. Never paste full secret-bearing raw logs. Reboot/autostart, TCP isolation and effective confinement need distinct real evidence if claimed. Documents themselves get link/ID/coverage/DAG/whitespace checks; no product tests run until code exists.
+
+
+## Actual phase 4 commands/evidence
+
+29 tests run under both the development and a clean hash-locked Ubuntu/Python 3.12 environment; frontend TypeScript/Vite build; real Chromium with explicit infrastructure fixtures; Windows PowerShell AST and three no-network preflight cases. Commands and actual exits are in [VERTICAL_SLICE](VERTICAL_SLICE.md), with [FEATURE_MATRIX](FEATURE_MATRIX.md). No real independent application MCP session, native enrollment/UI acceptance, create/policy/route/model action or production deployment test ran. The direct Platform MCP identity/hello result is a separate observation, not completion of EXP-001 through the application. EXP-006 restart/no-replay is verified with fixture infrastructure; arbitrary remote cancellation remains unverified.

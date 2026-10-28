@@ -1,0 +1,22 @@
+{
+  "mode": "mcp",
+  "database": "/home/REVIEWED_USER/boxweave-state/state.sqlite3",
+  "provider": "containarium",
+  "backend": "dev",
+  "project": "default",
+  "launcher": ["/absolute/path/to/independent-application-mcp-launcher"],
+  "targets": {
+    "reviewed-target": {
+      "provider": "containarium", "backend": "dev", "project": "default",
+      "logical": "reviewed-target", "instance": "reviewed-target-container",
+      "created": "REVIEWED_CREATION_ID", "user": "reviewed-target",
+      "hostname": "reviewed-target-container"
+    }
+  },
+  "host": "127.0.0.1",
+  "port": 18640,
+  "origin": "https://REVIEWED_ORIGIN",
+  "secure_cookie": true,
+  "dist": "/absolute/path/to/web/dist",
+  "operation_timeout": 60
+}

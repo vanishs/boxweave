@@ -1,6 +1,6 @@
 # Implementation plan — authorized design, future work only
 
-All TASK statuses: **not started**. Phase 3 produces no scaffold, dependencies, product code or live experiments. Phase 4 needs a new execution request plus a reviewed target/experiment scope. After TASK-005 the developer must accept the minimum system before phase 5. Included release features are not dropped because the first slice is small.
+Phase 3 originally defined the tasks below. Phase 4 was authorized with its concrete scope (SRC-030); current progress is in the table at the end, not an assertion that all original completion conditions passed. After TASK-005 the developer must accept the minimum system before phase 5. Included release features are not dropped because the first slice is small.
 
 ## Ordered tasks
 
@@ -47,3 +47,17 @@ Each task must update its named documents, current PHASE_STATUS and HANDOFF in t
 | REQ-018 | Target/plan/credential boundary | TASK-003, TASK-004, TASK-006, TASK-009, TASK-010, TASK-012 | AC-018 |
 
 First five tasks build and prove a deliberately small path; later tasks cover all basic features the developer selected. No task can bypass the phase-4 developer gate or substitute fake results for required real evidence. Missing ZCode/native automation or provider capability must be reported as specific risk/blocker, not silently removed from scope.
+
+
+## Current phase 4 task progress
+
+| Task | Status | Actual evidence and remaining condition |
+| --- | --- | --- |
+| TASK-001 | Implemented minimum contracts/package | Typed target/error boundary, explicit fixture/live modes, source/runtime locks; real integration still belongs to TASK-005 |
+| TASK-002 | Partial | Binding/CAS/intent/receipt/worker-lock/deadline and no-replay tests pass; arbitrary-command recovery, DB-full fault and provider observation/reconciliation interface not complete |
+| TASK-003 | Partial | POSIX MCP synthetic peer tests and native connection probe with AST/three no-network rejects; full enrollment/payload trust distribution/real native registration not complete |
+| TASK-004 | Implemented minimum fixture UI/service slice | Actual Chromium login/binding/plan/receipt/restart; production HTTPS/independent service identity and real-provider integration not claimed |
+| TASK-005 | Not satisfied; prerequisite unavailable | Direct Platform MCP hello passed separately, but no independent app launcher/credential or real selected-client/application E2E. User requested preservation (SRC-032) |
+| TASK-006 through TASK-014 | Not started | Phase-4 developer gate has not passed; do not start full feature work |
+
+The [feature matrix](../verification/FEATURE_MATRIX.md) and [vertical-slice report](../verification/VERTICAL_SLICE.md) map evidence to REQ/AC and distinguish fixtures from actual target execution. No status above is a first-release acceptance claim.

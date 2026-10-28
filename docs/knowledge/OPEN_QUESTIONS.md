@@ -40,3 +40,13 @@ RISK-003: ADR-003 selects trusted descriptor + payload digests; bootstrap/tamper
 | RISK-016 | P1 / unverified | Single SQLite/worker intent lease cannot make a remote write exactly-once; crash before/after send remains ambiguous | ADR-002; TASK-002/006 fault injection and no replay; provider policy atomicity must be native |
 
 All experiments in TEST_STRATEGY are plans, not executed results or automatic resource authorization. Architecture is complete only as design; release and phase-4 feasibility remain unverified.
+
+## Phase 4 current result — partial, preservation requested
+
+RISK-016 has component evidence for real SQLite intent/receipt persistence, state-boundary loss and no replay; real provider exactly-once/cancellation remains unverified. RISK-005 now includes actual Windows PowerShell preflight only; real native SSH/registration/UI acceptance and WSL remain unverified. RISK-003 has dependency/source hashes but no completed setup-payload distribution; no trust claim is closed. Other release risks remain open; no Tenant/port/model/production installation work ran.
+
+| ID | Priority/status | New concrete blocker | Next safe action |
+| --- | --- | --- | --- |
+| RISK-017 | P0 for phase 4 / unavailable | No reviewed independent application MCP launcher/credential path in the assigned LXC; managed launcher/backend paths absent and user confirms no path available | Preserve current results (SRC-032); later establish an independent protected runtime identity through separately approved provisioning. Do not request secret text, borrow Agent tokens or modify host security. Then run real application/native-client acceptance |
+
+Fixture browser success and direct Platform MCP hello are independent and cannot be combined into a live Web->worker->MCP pass. Phase 4 gate is unmet; phase 5 must not start. Runtime code and examples remain a reviewable minimum implementation with explicit fixture labeling, not a production deployment.

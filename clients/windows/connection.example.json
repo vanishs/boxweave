@@ -1,0 +1,8 @@
+{
+  "host": "reviewed-server.example",
+  "port": 22,
+  "user": "reviewed_user",
+  "server_key": "ssh-ed25519 REVIEWED_BASE64_PUBLIC_KEY",
+  "identity_file": "C:\\Users\\REVIEWED_USER\\.ssh\\boxweave",
+  "known_hosts": "C:\\Users\\REVIEWED_USER\\.ssh\\boxweave_known_hosts"
+}

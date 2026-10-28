@@ -1,0 +1,20 @@
+{
+  "mode": "fixture",
+  "database": ".runtime/manual/state.sqlite3",
+  "target": {
+    "provider": "containarium",
+    "backend": "dev",
+    "project": "default",
+    "logical": "fixture-box",
+    "instance": "fixture-box-container",
+    "created": "fixture-only",
+    "user": "fixture-box",
+    "hostname": "fixture-box-container"
+  },
+  "host": "127.0.0.1",
+  "port": 18640,
+  "origin": "http://127.0.0.1:18640",
+  "secure_cookie": false,
+  "dist": "web/dist",
+  "operation_timeout": 60
+}

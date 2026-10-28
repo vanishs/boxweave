@@ -1,53 +1,37 @@
-# Phase 3 handoff
+# Phase 4 handoff — retained partial minimum system
 
-Date: 2026-10-28 America/Los_Angeles. Result: **design and plan complete; implementation not started**.
+Date: 2026-10-28 America/Los_Angeles. **Result: partial implementation; real minimum-system gate not passed.** User SRC-030 approved the exact execution scope; after the missing independent application launcher was reported, SRC-032 confirmed no path is available and requested preservation. No new credential was minted or borrowed.
 
-Process authority: SRC-025 (phase 3 request/prompt); product approval: SRC-026 (developer five choices). Phase 2 gate is now satisfied. Earlier draft recommendations deferring the requested features are superseded, not treated as approval. 'WSL SSL' is interpreted as WSL SSH from context.
+Legacy: refs/heads/main@4318da6ea4e4e45c55cf43b64acbdd2ede65fc43; last knowledge sync same SHA. Branch/worktree: rewrite/v2 at C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2. Phase 4 parent: 40a600a56a7fd3a08a0c71b6763bbd7d79f7f621. Exact implementation commit is reported after committing; locate with `git log --format=oneline --grep='feat: retain phase four project binding and receipt slice' rewrite/v2`. Historical phase 3 handoff is archived separately.
 
-Legacy: refs/heads/main@4318da6ea4e4e45c55cf43b64acbdd2ede65fc43; last knowledge sync same SHA, no new legacy commit. Worktree: C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2, branch rewrite/v2. Phase 3 parent: 130e88429b3aed3e4a8dc8f37d5cd34ef5cae236. Exact new commit is reported after committing; locate via `git log --format=oneline --grep='docs: design approved remote development architecture and plan' rewrite/v2`. Prior phase 2 draft handoff is archived separately.
+## Delivered implementation
 
-## Approved scope and design
+- New Python 0.1.0 minimum package with typed target/binding contracts, private SQLite state, revisions, one-use action plans, separate worker lock/intent/receipt and unknown/no-replay recovery.
+- Real authenticated Flask/Waitress API and React/TypeScript interface for project binding, exact hello confirmation and receipt observation. No arbitrary Web command. Fixtures are explicitly labeled and cannot silently replace missing live configuration.
+- Bounded POSIX MCP stdio adapter with lifecycle, pagination, read-only observation, exact identity verification and fixed hello parsing. Real independent application credential/installed-provider compatibility is unverified.
+- Native Windows connection-only PowerShell probe and three no-network rejection tests; no enrollment or registration modification. It never calls overall acceptance passed from connection success.
+- Python runtime/test wheel hash locks, npm lock, runnable fixture/live-placeholder examples, README, reproducible commands and desktop/mobile fixture screenshots.
 
-Single trusted operator, personal Agent remote work plus project binding; Windows-hosted Codex and ZCode(GLM) over native SSH or explicit WSL SSH. Basic Web, Tenant network writes, TCP/UDP port publication, Prompt Graph and client model wizard are included. Recursive deployment, shared-team/public service, automatic graph execution and other platforms/Agents are deferred. Basic boundaries are documented in SCOPE; all 18 REQ/AC selected for first-release design, none implemented/tested.
+All product implementation was authored inside `/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a` in the approved non-root Ubuntu LXC, then synchronized with 28 matching source SHA256 values. Old remote worktree at 7818668 and its existing 32 dirty/untracked entries were not modified. Local main/client WIP/archive remain unchanged.
 
-Architecture: Python modular application, Flask/Waitress API, local SQLite, one operation worker, CLI/Web shared services, React/TypeScript/XYFlow canvas; upstream restricted SSH/MCP retained, fixed Containarium REST adapter, independent credential planes and HTTPS frontend. This is a new design, not old implementation reuse. Alternatives Go/Node and distributed queue/database were compared; no single-operator need justified their additional scope. SQLite rollback journal/FULL synchronous initially; provider I/O outside transactions. Dependency versions will be locked/tested during implementation.
+## Actual validation
 
-ADR-001: application/adapters/stack. ADR-002: persisted intent, unknown outcomes and no replay after crash. ADR-003: upstream transport, separate trust and operator-delivered payload digest manifest. ADR-004: narrow basic feature adapters and native ZCode model credential ownership. Official documentation references SRC-027/028 inform design only; real compatibility still unknown.
+29 Linux tests passed (exit 0); same 29 passed in a clean offline/hash-locked virtual environment (exit 0). TypeScript/Vite production build and Python compilation passed. Real Chromium passed login/binding/preview/confirm/receipt/API+worker restart/no-replay/mobile-no-overflow with synthetic infrastructure; exactly one hello fixture call. Windows PowerShell 5.1.26100.5651 AST and three no-network preflight cases passed, exit 0. Dependencies checked without inconsistency.
 
-## First vertical slice and first five tasks
+Direct Platform MCP identity/hello returned the approved username, hostname and `hello world`, exit 0. This is **separate** from the fixture Web result and does not establish real Web->worker->MCP E2E. The live prerequisite fails explicitly as MCP_LAUNCHER_UNAVAILABLE. Full commands, stdout, exits, REQ/AC/TASK mappings and limits are in [VERTICAL_SLICE](../verification/VERTICAL_SLICE.md) and [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md).
 
-One actual Windows Codex/native client, one reviewed preexisting dedicated workload, one project: Web login -> select target -> real SQLite binding -> trusted MCP identity + fixed hello -> durable receipt -> restart/reload observation without replay. No create/policy/port/model call is needed for this slice. Later selected features remain mandatory release obligations.
+## Design adjustments and incomplete work
 
-1. TASK-001: contracts/minimal package and isolated fake boundary.
-2. TASK-002: real SQLite revisions/intent/worker/receipt and crash/deadline cases.
-3. TASK-003: minimal native client trust/enrollment/diagnosis and real provider identity parser.
-4. TASK-004: minimal authenticated Web/CLI binding/receipt interface.
-5. TASK-005: real end-to-end slice and failure evidence, followed by explicit developer gate.
+[ADR-005](../design/ADR/0005-phase-four-boundary.md) records the approved loopback fixture HTTP boundary, consolidated minimal binding record and preservation after missing credentials. The architecture's required production identity/HTTPS and real-client/live acceptance are unchanged obligations, not silently waived.
 
-Full plan: 14 tasks with dependencies, outputs, REQ/AC coverage, tests and same-task document updates. Six experiments are planned only. TASK-006 onward implements the other selected profiles/basic features after the phase-4 acceptance gate; TASK-014 requires phase 6 authorization.
+TASK-001 minimum contracts/package and TASK-004 minimum fixture UI are implemented. TASK-002 and TASK-003 remain partial (full reconciliation/DB-full coverage/enrollment/payload trust/real client still absent). TASK-005 is not satisfied. Current fixed operation budget is 60 seconds bounded at 600; no provisioning/create workflow is implemented. No full first-release AC is claimed passed merely from component tests.
 
-## Highest risks and future validation
+The remaining prerequisite is a separately reviewed independent protected application MCP launcher/identity; provide/configure its supported path later without sharing secret text. Then complete the real application/native-client chain and ask the developer to accept architecture and experience. No phase 5 feature work can start before that gate. Tenant/ports/Graph/model wizard and four-profile acceptance remain selected future scope, not completed functionality.
 
-- RISK-006: current native Tenant capability/atomic policy contract unproven; gated writes must not be simulated with multiple non-atomic calls or enabled by an unapproved provider upgrade.
-- RISK-014: actual ZCode GLM automation contract/model access unproven. Wizard uses client-owned settings/sign-in and explicitly pending completion, never a Claude fallback or MCP-only ready claim.
-- RISK-015: WSL distro/argv/cleanup across Windows boundary; actual four-profile matrix is required, not shim tests.
-- RISK-016: local transactions cannot make remote writes exactly-once; intent-before-send crash windows remain unknown, never auto-resubmitted.
-- RISK-003/005/009/012 remain live concerns for bootstrap trust, real clients, update repair and remote cancellation. Security/confinement/autostart are not certified.
+## Cleanup and preservation
 
-No live experiment ran: Platform MCP inventory only succeeded with four Running resources; no connect/provider mutation/route exposure/GLM request. Legacy ref/status/client hash were preserved at entry (SRC-029). Current source discovery is not evidence of workload readiness.
+Owned temporary API/worker/browser processes were stopped; `ss` showed no listener on 18640. No private-address/public listener, route, policy, container lifecycle, persistent service, provider/Incus upgrade, model request, global trust or real client registration change occurred. Source, dependency artifacts, sanitized test logs and private synthetic state remain in the isolated remote directory for review. No secrets/database/raw old logs entered the commit.
 
-## Deliverables and gate
+Final source/link/ID/whitespace and repository preservation checks are performed before commit; their actual results are reported below. Stage 4 remains partial regardless of documentation-check success. No phase 5 work was started.
 
-New architecture, four ADRs, IMPLEMENTATION_PLAN, TEST_STRATEGY, verbatim PHASE_03_INSTRUCTIONS and archived PHASE_02_HANDOFF. Updated all product authority documents, index, source register, risks, legacy sync, phase status and this handoff. No application code/scaffold, dependencies or VERSION bump.
-
-Phase 4 entry: a new execution request and a concrete reviewed environment/experiment plan with exact identities, intended changes, deadlines, success and cleanup. Phase 4 must provide real slice evidence; developer acceptance of that minimum system is required before phase 5. This phase stops at design.
-
-Documentation validation results are recorded below after checks. No product tests were executed; every task/experiment and AC runtime outcome remains not started/unverified.
-
-## Documentation verification receipt
-
-The read-only document validator completed with exit 0: 28 Markdown documents, 48 valid local links, 18 reciprocal REQ/AC pairs, all 18 requirements mapped to design/components/tasks, 14 tasks with ordered acyclic dependencies and REQ/AC links, and all 15 legacy feature dispositions. Referenced SRC/TASK/RISK/ADR/EXP IDs resolve. The phase 3 prompt matches the supplied file byte-for-byte; archived phase 2 handoff normalizes to the exact prior Git blob. Narrow private-key/JWT-pattern scan plus content review found no credential payload; this is not universal secret detection. `git diff --check` passed for tracked changes. Staged new files are checked separately before committing.
-
-The phase 3 source review also inspected the legacy installer's upstream MCP token-file launch pattern, read-only. This is static evidence only; dedicated application-worker credentials/launch must be proven in TASK-003, without reading or reusing the existing SSH MCP token. No live provider capability, Agent configuration, model sign-in or workload execution was tested.
-
-Final commit scope/clean-worktree and legacy state checks are performed around commit; exact commit SHA and any remaining validation failures are reported to the developer. Original main/WIP/archive are preserved. Phase 3 is complete as documentation, not runtime acceptance.
+Final document/source validation passed: 35 Markdown files, 71 valid local links, source/risk/ADR references defined, supplied phase 4 prompt byte-identical and archived phase 3 handoff equal to the prior Git blob. All 28 synchronized source files match the remote SHA256 manifest. Tracked whitespace check passed. Private-key/JWT payload pattern scan found none; this narrow scan is not a universal secret detector. Final staging/commit checks cover newly added files as well. These checks do not change the partial/live-gate status above.

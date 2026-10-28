@@ -2,14 +2,14 @@
 
 Date: 2026-10-28 America/Los_Angeles.
 
-Phase 1: complete; parentless root 4d352859f5c7e659d243634196b3b85265a14a9c; historical receipt in PHASE_01_HANDOFF.
+Phase 1 knowledge root and phase 2 product approval remain recorded; phase 3 design parent is 40a600a56a7fd3a08a0c71b6763bbd7d79f7f621. Developer scope SRC-026 remains unchanged: four Windows-hosted Codex/ZCode native/WSL SSH profiles and the selected basic Web/Tenant/ports/Graph/model features, one trusted operator.
 
-Phase 2: **gate satisfied by developer SRC-026**. DEC-001..005 resolved: personal remote Agent work with binding; Windows native SSH and WSL SSH with Codex and ZCode(GLM); basic Web/Tenant network writes/ports/Prompt Graph/model wizard included; recursive deployment deferred; one trusted operator. 'WSL SSL' interpreted as SSH in context. Product REQUIREMENTS/ACCEPTANCE/SCOPE are updated; none is implemented or runtime-tested. Historical phase 2 draft is archived, not current authority.
+Current phase: **4 — partially implemented, live acceptance not satisfied**. Execution scope was approved in SRC-030. New code was developed/tested only inside the assigned project LXC and synchronized to rewrite/v2 with exact source hashes. Existing local/remote legacy work was preserved.
 
-Current authorized phase: **3 — architecture and implementation planning** (SRC-025 following SRC-026). Document deliverables complete for handoff: architecture, four ADRs, 14 dependency-ordered tasks, test/experiment strategy, full 18-requirement coverage. Only documents are changed in the new worktree; legacy code/WIP remain untouched.
+Verified subset: real React/Flask/Waitress/SQLite API/worker browser slice using explicitly labeled fixture infrastructure; 29 Linux tests reproduced in a clean hash-locked environment; frontend build; actual Chromium restart/no-replay/mobile checks; Windows PowerShell AST and three no-network rejection cases. Direct Platform MCP identity/hello succeeded separately. See VERTICAL_SLICE and FEATURE_MATRIX for mapping and actual exits.
 
-Phase 3 gate: design inputs/decisions/task coverage present; real feasibility explicitly pending. See HANDOFF for documentation validation and commit locator. No phase 4 code, package installation, container connect, policy/route mutation or model call occurred.
+Gate: **NOT SATISFIED**. Independent application MCP launcher/credential is unavailable (RISK-017); native enrollment/registration/UI and real Web->worker->MCP E2E remain unverified. User SRC-032 requested preservation of current results, not credential provisioning. Do not fabricate a live pass or mark all TASK-001..005 complete.
 
-Phase 4: **not started; awaits a new execution request** and concrete reviewed environment/experiment scope. Its minimum slice is Web login -> existing dedicated resource -> persisted binding -> verified MCP identity/hello -> durable receipt/restart. Phase 4 is not a full-feature release. Developer acceptance of the real slice is mandatory before phase 5; all selected basic features/four profiles remain later release obligations.
+No phase 5 work is authorized or started. Next continuation must establish the protected independent launcher through separately approved setup, finish real selected-client/application evidence, then obtain developer confirmation that the minimum chain, architecture and experience are acceptable. Other selected basic features remain release obligations.
 
-Legacy main remains 4318da6ea4e4e45c55cf43b64acbdd2ede65fc43. No old application implementation, VERSION or framework scaffold is inherited. No runtime pass follows from these document checks.
+No public/private-address listener or provider route remains, no persistent systemd/Compose service was created, and no model or policy write ran. Exact code/document checks and commit locator are in HANDOFF. This is a retained partial delivery, not a release or production-security claim.
