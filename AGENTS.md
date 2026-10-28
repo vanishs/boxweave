@@ -105,6 +105,13 @@ parent policy; effective device filtering remains unverified without separate
 evidence. Use older research as optional troubleshooting material, not mandatory
 product gates.
 
+## Versioning
+
+VERSION follows A.B.C. Increment B when the change adds a significant feature
+(for example the 0.4.0 client enrollment redesign); increment C for small
+features and fixes. Reserve A for fundamental redesigns that break the product
+contract. Bump VERSION in the same commit that introduces the change.
+
 ## Change validation
 
 Keep installer reruns usable for update/repair: retain settings unless explicitly
