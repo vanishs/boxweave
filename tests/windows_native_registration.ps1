@@ -1,5 +1,5 @@
 #requires -version 5.1
-param([Parameter(Mandatory=$true)][string]$ConnectionDescriptor,[Parameter(Mandatory=$true)][string]$TestRoot)
+param([Parameter(Mandatory=$true)][string]$ConnectionDescriptor,[Parameter(Mandatory=$true)][string]$TestRoot,[string]$CodexExecutable)
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $payload=Join-Path $root 'clients/windows'
@@ -15,11 +15,13 @@ foreach($name in @('bootstrap-native.ps1','register-native.ps1','diagnose-connec
 $connection=[IO.File]::ReadAllText((Get-Item -LiteralPath $ConnectionDescriptor).FullName)|ConvertFrom-Json
 $descriptor=Join-Path $taskRoot 'trusted.json'
 $hashes=@{};foreach($name in @('register-native.ps1','diagnose-connection.ps1')){$hashes[$name]=(Get-FileHash -LiteralPath (Join-Path $payload $name) -Algorithm SHA256).Hash.ToLowerInvariant()}
-$version=(& codex.exe --version).Trim()
+$codexPath=if($CodexExecutable){$CodexExecutable}else{(Get-Command codex.exe -CommandType Application -ErrorAction Stop).Source}
+$version=(& $codexPath --version).Trim()
 $d=@{schema=1;profile='codex/windows/native';source_id=('sha256:'+$hashes['register-native.ps1']);codex_version=$version;payloads=$hashes;connection=$connection}
 [IO.File]::WriteAllText($descriptor,($d|ConvertTo-Json -Depth 12),[Text.UTF8Encoding]::new($false))
-function Run([string]$ProfileDirectory,[switch]$Replace,[string]$Package=$payload,[string]$Manifest=$descriptor){
+function Run([string]$ProfileDirectory,[switch]$Replace,[string]$Package=$payload,[string]$Manifest=$descriptor,[string]$Executable=$codexPath){
   $args=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$bootstrap,'-Descriptor',$Manifest,'-PayloadDirectory',$Package,'-AgentHome',$ProfileDirectory)
+  if($Executable){$args+=@('-CodexExecutable',$Executable)}
   if($Replace){$args+='-Replace'}
   $raw=& powershell.exe @args;$code=$LASTEXITCODE
   try{$result=($raw -join "`n")|ConvertFrom-Json}catch{throw ('No structured receipt, exit '+$code)}
@@ -29,7 +31,20 @@ function Run([string]$ProfileDirectory,[switch]$Replace,[string]$Package=$payloa
 $personal=Join-Path $env:USERPROFILE '.codex/config.toml'
 $personalHash=if(Test-Path -LiteralPath $personal){(Get-FileHash -LiteralPath $personal).Hash}else{$null}
 $nativeHome=Join-Path $taskRoot ('native '+[char]0x6d4b+[char]0x8bd5+' home')
-$first=Run $nativeHome;Assert ($first.exit -eq 0 -and $first.receipt.registration -eq 'verified_cli' -and $first.receipt.connection -eq 'passed') ('First registration failed: '+$first.receipt.code)
+# Model double-click's ordinary shell: Codex is absent from PATH, Windows tools remain.
+$savedPath=$env:PATH
+try {
+  $env:PATH="$env:WINDIR\System32;$env:WINDIR\System32\WindowsPowerShell\v1.0;$env:WINDIR\System32\OpenSSH"
+  Assert (-not(Get-Command codex.exe -CommandType Application -ErrorAction SilentlyContinue)) 'Test PATH still contains Codex'
+  $noRuntime=Run (Join-Path $taskRoot 'missing-runtime') -Executable ''
+  Assert ($noRuntime.exit -eq 2 -and $noRuntime.receipt.code -eq 'RUNTIME_UNSUPPORTED') 'Missing PATH runtime did not fail safely'
+  Assert (-not(Test-Path -LiteralPath (Join-Path $taskRoot 'missing-runtime'))) 'Missing runtime created Agent home'
+  $relative=Run (Join-Path $taskRoot 'relative-runtime') -Executable 'codex.exe'
+  Assert ($relative.exit -eq 2 -and $relative.receipt.code -eq 'RUNTIME_UNSUPPORTED') 'Relative executable accepted'
+  Assert (-not(Test-Path -LiteralPath (Join-Path $taskRoot 'relative-runtime'))) 'Invalid runtime created Agent home'
+  $first=Run $nativeHome
+} finally {$env:PATH=$savedPath}
+Assert ($first.exit -eq 0 -and $first.receipt.registration -eq 'verified_cli' -and $first.receipt.connection -eq 'passed') ('First registration failed: '+$first.receipt.code)
 $config=Join-Path $nativeHome 'config.toml';$firstHash=(Get-FileHash -LiteralPath $config).Hash
 $again=Run $nativeHome;Assert ($again.exit -eq 0 -and -not $again.receipt.changed) ('Idempotence failed: '+$again.receipt.code)
 Assert ((Get-FileHash -LiteralPath $config).Hash -eq $firstHash) 'Repeat changed config'

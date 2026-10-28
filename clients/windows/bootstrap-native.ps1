@@ -1,6 +1,6 @@
 #requires -version 5.1
 <# Trusted entry point: the descriptor must arrive through an operator-authorized channel. #>
-param([Parameter(Mandatory=$true)][string]$Descriptor,[Parameter(Mandatory=$true)][string]$PayloadDirectory,[Parameter(Mandatory=$true)][string]$AgentHome,[switch]$Replace)
+param([Parameter(Mandatory=$true)][string]$Descriptor,[Parameter(Mandatory=$true)][string]$PayloadDirectory,[Parameter(Mandatory=$true)][string]$AgentHome,[string]$CodexExecutable,[switch]$Replace)
 [Console]::OutputEncoding=New-Object Text.UTF8Encoding($false)
 $ErrorActionPreference='Stop';$cache=$null;$code='PACKAGE_INVALID';$exitCode=2
 function Digest([byte[]]$Bytes){$h=[Security.Cryptography.SHA256]::Create();try{return ([BitConverter]::ToString($h.ComputeHash($Bytes))).Replace('-','').ToLowerInvariant()}finally{$h.Dispose()}}
@@ -26,6 +26,7 @@ try{
   foreach($name in $names){[IO.File]::WriteAllBytes((Join-Path $cache $name),$verified[$name])}
   $copy=Join-Path $cache 'descriptor.json';[IO.File]::WriteAllBytes($copy,$descriptorBytes)
   $arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $cache 'register-native.ps1'),'-Descriptor',$copy,'-AgentHome',$AgentHome)
+  if($CodexExecutable){$arguments+=@('-CodexExecutable',$CodexExecutable)}
   if($Replace){$arguments+='-Replace'}
   & powershell.exe @arguments
   $exitCode=$LASTEXITCODE

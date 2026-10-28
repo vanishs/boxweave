@@ -1,0 +1,13 @@
+{
+  "version": "0.2.2",
+  "origin": "Assigned project LXC; exact byte comparison to synchronized Windows worktree",
+  "sha256": {
+    "clients/windows/bootstrap-native.ps1": "3946f360332669839498dcccf5a58387b60b5a747019616f6508c828253797af",
+    "clients/windows/register-native.ps1": "956a50bcae2bfe51881fe2422f04de9c03e0a673d0a53a7f34d55243a5b20948",
+    "tests/windows_native_registration.ps1": "e7c7973301cbcb00dcbc7581ac3f731f1563738aa4b881297d15640ac60fbba2",
+    "VERSION": "998f6b887ed7a6ef44e84210d0237b715bed42ea7254f48dc418afec0a484103",
+    "pyproject.toml": "0ea2e9c1524da3504af0115f6354e148f4405b3c58ce56cde096848dd8241eaa",
+    "web/package.json": "33ebb94d26ac7a863bfda5649feeefd703b02ca183fd3af0946de8251018722a",
+    "web/package-lock.json": "96bb889ed345adb62987ec0d2bd952f4abd46d1d7c9ed91d859be4db60c9636e"
+  }
+}

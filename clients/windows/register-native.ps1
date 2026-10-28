@@ -1,5 +1,5 @@
 #requires -version 5.1
-param([Parameter(Mandatory=$true)][string]$Descriptor,[Parameter(Mandatory=$true)][string]$AgentHome,[switch]$Replace)
+param([Parameter(Mandatory=$true)][string]$Descriptor,[Parameter(Mandatory=$true)][string]$AgentHome,[string]$CodexExecutable,[switch]$Replace)
 [Console]::OutputEncoding=New-Object Text.UTF8Encoding($false)
 $ErrorActionPreference='Stop'
 $probeCode='unverified';$code='INPUT_INVALID';$stage=$null;$mutex=$null;$locked=$false;$exitCode=2
@@ -39,7 +39,18 @@ try {
   if($AgentHome -notmatch '^[A-Za-z]:[\\/]'){throw 'explicit local AgentHome required'}
   $homePath=[IO.Path]::GetFullPath($AgentHome).TrimEnd([char]'\',[char]'/')
   if($homePath.Length -le 3){throw 'root AgentHome refused'};CheckPath $homePath
-  $code='RUNTIME_UNSUPPORTED';$codex=(Get-Command codex.exe -ErrorAction Stop).Source
+  $code='RUNTIME_UNSUPPORTED'
+  # Resolve in the caller's actual environment; app-integrated PATH is not a desktop PATH.
+  # An explicit executable is operator-selected, never silently discovered in app internals.
+  if($CodexExecutable){
+    if($CodexExecutable -notmatch '^[A-Za-z]:[\\/]'){throw 'absolute local CodexExecutable required'}
+    CheckPath $CodexExecutable
+    $item=Get-Item -LiteralPath $CodexExecutable -ErrorAction Stop
+    if($item.PSIsContainer -or $item.Extension -ine '.exe'){throw 'CodexExecutable must be an executable file'}
+    $codex=$item.FullName
+  }else{
+    $codex=(Get-Command codex.exe -CommandType Application -ErrorAction Stop).Source
+  }
   $v=Program $codex @('--version') ''
   if($v.exit -ne 0 -or $v.output.Trim() -ne $d.codex_version){throw 'unreviewed CLI version'}
   $connection=$d.connection

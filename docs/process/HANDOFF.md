@@ -1,4 +1,18 @@
-# Current handoff — phase 5 iteration 2, TASK-003a
+# Current handoff — phase 5 iteration 3, TASK-003b1
+
+Version 0.2.2, branch rewrite/v2, parent 2a0fcd97c24fbf47c5c5c1129044da4a64305c47. Developer requested remaining work; SRC-055..058 distinguish earlier authorized operational setup, human TUI evidence and this bounded source fix. REQ-001/002/003/016/017 and matching AC subsets only. See [TASK-003b1](../verification/TASK_003B1_NATIVE_CLIENT.md) for reproducible commands, exact environments and limits.
+
+Delivered optional -CodexExecutable in native bootstrap/registration: absolute/reparse-safe .exe, exact reviewed CLI version, forwarded only after payload verification. Retain PATH Application fallback; no global PATH or app-folder scanning. New real Windows assertions reproduce ordinary double-click environment: missing PATH runtime and relative path fail without home mutation; explicit executable succeeds with Codex absent from PATH. Existing integrity/backup/settings/idempotence regressions remain passing.
+
+Actual tests: Windows PowerShell5.1 run-06, codex-cli0.165.0-alpha.1.2 against dedicated upstream MCP0.114.2, exit0; 15 existing reported checks plus new missing/relative/explicit-without-PATH assertions. Existing native AST/3 no-network preflights exit0. Non-root project-LXC unittest discovery:41 OK,11.586s,exit0. Seven source/metadata files match remote SHA256. No frontend behavior change. Personal default config digest unchanged by tests.
+
+Human-reported /mcp connected(2 tools) and actual list_containers returned the sole v2-live-hello-container. The prior separately approved 18447 mapping and test-only restricted public key are retained, not recreated. Native TUI/read-only acceptance is now recorded; desktop GUI, instruction/model completion and other profiles are not implied. The test-only launcher's effective-registration fingerprint avoids first-run UI settings invalidation; this ignored helper is not the product installer and has not been packaged as one.
+
+Legacy main d8a09dd180139159e035963502e7793a37e92bae unchanged, unrelated archive untouched; no legacy merge. No new box, exposure, key enrollment, model request, deployment or push during this source iteration. No active user's test home/config/auth file is modified. Test-only key/route/workload retained, cleanup not inferred. This handoff's containing commit is the code/test/docs commit, report its SHA from Git.
+
+TASK-003b1 complete. TASK-003b2 automatic reviewed identity bootstrap remains next; parent TASK-003 and full TASK-005 partial. Do not start dependent TASK-006 by silently treating lab manual-key setup as product enrollment. WSL/ZCode/Tenant/ports/models/install/release remain separate tasks; RISK-020 remains open. Stop this iteration as required by phase5's one-slice rule.
+
+## Historical handoff — phase 5 iteration 2, TASK-003a
 
 Date: 2026-10-28 America/Los_Angeles. Branch rewrite/v2; parent 8a0d8761b1e13d895cb6f8f7f56033aa62b28b1b. Version 0.2.1. Developer continuation SRC-053 selected a bounded child of TASK-003: trusted local payload verification and existing-identity Windows-native Codex registration. Actual evidence SRC-054. Parent TASK-003/005 and release/client GUI acceptance are not complete.
 

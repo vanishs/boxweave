@@ -48,3 +48,19 @@ Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/re
 Scoped existing-identity Windows-native Codex registration now has trusted pre-execution payload verification, strict live connection gating, targeted config preservation, explicit replacement, byte-idempotence and backups. Actual isolated Windows/CLI/native MCP and failure-path tests passed; 41 project Linux tests and the three prior native preflight checks passed. No global/personal registration, new key, model request, mapping, box or deployment changed.
 
 TASK-003a is complete in its stated existing-identity scope; parent TASK-003/005 remain partial. Actual GUI/TUI loading, bootstrap identity provisioning and other client/runtime profiles are unverified. Named-mutex/hash/backup recovery does not replace quiescing non-cooperating editors. See TASK_003A_NATIVE_REGISTRATION for commands, limitations and cooperative next steps. Stop this iteration; suggest TASK-003b, do not waive dependencies for TASK-006.
+
+## Current iteration 3 — TASK-003b1, version 0.2.2 (SRC-055..058)
+
+TASK-003b is split into TASK-003b1 (explicit Windows-native executable selection plus recorded cooperative TUI/read-only acceptance, complete) and TASK-003b2 (product bootstrap identity provisioning, incomplete). Parent TASK-003 and full TASK-005 remain partial; do not waive TASK-006 dependencies. Developer architecture gate SRC-051 remains accepted.
+
+The native bootstrap/registration accepts an operator-selected absolute -CodexExecutable and retains exact-version/payload/trust checks. Real Windows run-06 passes with Codex absent from PATH, plus missing/relative runtime rejection and existing preservation/integrity regressions; personal config digest unchanged. Project-LXC 41 tests pass (11.586s); native AST/3 rejection checks pass. SRC-057 records the user's actual TUI connected(2 tools) and list_containers result v2-live-hello-container against the dedicated backend. This is separate from desktop GUI, instruction/model readiness, WSL/ZCode and release evidence. See [TASK-003b1 evidence](TASK_003B1_NATIVE_CLIENT.md).
+
+The dedicated test key/18447 route were separately approved in SRC-055/056, and retained; no new route/resource/policy/model operation is part of this implementation iteration. Existing public Web demo remains fixture. No automatic key provisioning or whole-phase completion claim. Next task is TASK-003b2; stop this one slice after its code/test/docs commit, no push.
+
+| Requirement / acceptance | TASK-003b1 evidence | Remaining |
+| --- | --- | --- |
+| REQ-001 / AC-001 | Explicit executable, real isolated registration, conflict/preservation/idempotence, native TUI report | Automatic identity bootstrap and remaining profiles |
+| REQ-002 / AC-002 | Strict host pin and authenticated dedicated-backend reads, pin rejection regression | Universal/server-workload trust acceptance |
+| REQ-003 / AC-003 | Runtime failures distinct from MCP success; CLI vs human TUI evidence separate | Complete independent profile diagnosis |
+| REQ-016 / AC-016 | Explicit executable forwarded only to verified payload; tamper blocks execution | Installer/release distribution |
+| REQ-017 / AC-017 | Native Codex 0.165.0-alpha.1.2 / upstream MCP 0.114.2, actual and human-reported evidence distinguished | WSL, ZCode, instruction/model/full release |

@@ -55,9 +55,9 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | --- | --- | --- |
 | TASK-001 | Implemented minimum contracts/package | Typed target/error boundary, explicit fixture/live modes, source/runtime locks; real integration still belongs to TASK-005 |
 | TASK-002 | Partial | Binding/CAS/intent/receipt/worker-lock/deadline and no-replay tests pass; arbitrary-command recovery, DB-full fault and provider observation/reconciliation interface not complete |
-| TASK-003 | Partial | POSIX MCP synthetic peer tests and native connection probe with AST/three no-network rejects; full enrollment/payload trust distribution/real native registration not complete |
+| TASK-003 | Partial; TASK-003a and TASK-003b1 complete | Trusted native registration, explicit executable, real MCP/CLI plus cooperative TUI read evidence; TASK-003b2 product identity bootstrap and other selected profiles remain incomplete |
 | TASK-004 | Implemented minimum fixture UI/service slice | Actual Chromium login/binding/plan/receipt/restart; production HTTPS/independent service identity and real-provider integration not claimed |
-| TASK-005 | Real Web/MCP minimum path passed; client/developer gate incomplete | SRC-049/050: independent strict SSH MCP, actual inner create/identity/hello, HTTP and Chromium receipt/restart/no-replay passed with 0.1.1. Actual Windows-native enrollment/registration/UI and explicit developer architecture/slice acceptance remain unverified. See LIVE_MCP_CHAIN |
+| TASK-005 | Real Web/MCP and native TUI read evidence; full enrollment still partial | SRC-049/050 live path; SRC-051 developer gate accepted; SRC-055..058 native registration/TUI/read-only result. Automatic product identity bootstrap not yet delivered; no whole-release acceptance. See LIVE_MCP_CHAIN and TASK_003B1_NATIVE_CLIENT |
 | TASK-011 | Implemented basic scope, 0.2.0 | SRC-051 developer gate accepted; SRC-052 graph/service/browser evidence; see PHASE_05_TASK_011 |
 | TASK-006..010, TASK-012..014 | Not started | Keep per-task prerequisites and real-client/release evidence obligations |
 
@@ -101,3 +101,11 @@ Scoped existing-identity Windows-native Codex registration now has trusted pre-e
 TASK-003a is complete in its stated existing-identity scope; parent TASK-003/005 remain partial. Actual GUI/TUI loading, bootstrap identity provisioning and other client/runtime profiles are unverified. Named-mutex/hash/backup recovery does not replace quiescing non-cooperating editors. See TASK_003A_NATIVE_REGISTRATION for commands, limitations and cooperative next steps. Stop this iteration; suggest TASK-003b, do not waive dependencies for TASK-006.
 
 TASK-003 split: TASK-003a = existing-identity native Codex trusted registration/verifier (implemented0.2.1); TASK-003b = remaining reviewed bootstrap identity provisioning and actual selected-client loading/recognition evidence (not started). Preserve parent TASK-003 requirements/dependencies and TASK-005 full acceptance; child completion is not a release claim.
+
+## Current iteration 3 — TASK-003b1, version 0.2.2 (SRC-055..058)
+
+TASK-003b is split into TASK-003b1 (explicit Windows-native executable selection plus recorded cooperative TUI/read-only acceptance, complete) and TASK-003b2 (product bootstrap identity provisioning, incomplete). Parent TASK-003 and full TASK-005 remain partial; do not waive TASK-006 dependencies. Developer architecture gate SRC-051 remains accepted.
+
+The native bootstrap/registration accepts an operator-selected absolute -CodexExecutable and retains exact-version/payload/trust checks. Real Windows run-06 passes with Codex absent from PATH, plus missing/relative runtime rejection and existing preservation/integrity regressions; personal config digest unchanged. Project-LXC 41 tests pass (11.586s); native AST/3 rejection checks pass. SRC-057 records the user's actual TUI connected(2 tools) and list_containers result v2-live-hello-container against the dedicated backend. This is separate from desktop GUI, instruction/model readiness, WSL/ZCode and release evidence. See [TASK-003b1 evidence](../verification/TASK_003B1_NATIVE_CLIENT.md).
+
+The dedicated test key/18447 route were separately approved in SRC-055/056, and retained; no new route/resource/policy/model operation is part of this implementation iteration. Existing public Web demo remains fixture. No automatic key provisioning or whole-phase completion claim. Next task is TASK-003b2; stop this one slice after its code/test/docs commit, no push.

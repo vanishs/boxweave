@@ -129,3 +129,9 @@ The graph browser check uses owned loopback port 18643, real Chromium/HTTP/SQLit
 ## Reviewed existing-identity native Codex registration (0.2.1)
 
 The Windows-native client package now has an operator-trusted bootstrap that verifies payload bytes before executing them, probes strict authenticated MCP, and registers in an explicitly selected Codex home. Existing conflicting registration needs explicit -Replace; unrelated configuration/tool approval tables are preserved, unsupported forms stop. It does not provision SSH identities, copy sign-in data or claim GUI loading. Use the [scope, descriptor, recovery and actual native tests](docs/verification/TASK_003A_NATIVE_REGISTRATION.md); the example is intentionally non-operational until reviewed. Never trust a digest delivered only with an untrusted download.
+
+## Explicit native Codex executable (0.2.2)
+
+When a regular Windows shell cannot find codex.exe, pass -CodexExecutable with the reviewed absolute .exe path to clients/windows/bootstrap-native.ps1. It forwards the selected binary to the hash-verified registration payload, which still checks the descriptor's exact Codex version. Omitting the parameter uses PATH. No global PATH changes or app-directory discovery are performed. An App-bundled binary is version-specific and can move after an update; select and validate the new path explicitly. No extra installation is required merely to repair PATH when a reviewed binary already exists.
+
+See [native client acceptance and reproducible checks](docs/verification/TASK_003B1_NATIVE_CLIENT.md). The dedicated native TUI/read-only test passed with user cooperation; automatic SSH identity bootstrap and WSL/ZCode/full-release acceptance remain incomplete. Historical unverified statements above describe their original test scope.
