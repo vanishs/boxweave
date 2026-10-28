@@ -858,7 +858,10 @@ Assert-Exit 'Restricted SSH key enrollment'
 
 # Explicit probe options mirror the managed Host block; the probe must not
 # depend on the user's SSH config being parsed exactly as we wrote it.
-$probeExtra = @('-F','NUL','-o','IdentityAgent=none','-o','GlobalKnownHostsFile=NUL','-o','UpdateHostKeys=no')
+# The null device differs per transport: NUL for Windows OpenSSH,
+# /dev/null for the ssh running inside the WSL distribution.
+$nullConfig = if ($Mode -eq 'WSL') { '/dev/null' } else { 'NUL' }
+$probeExtra = @('-F',$nullConfig,'-o','IdentityAgent=none','-o',('GlobalKnownHostsFile='+$nullConfig),'-o','UpdateHostKeys=no')
 if ($Mode -eq 'WSL') {
     $probeArgs = @('-d',$WslDistro,'-e','ssh') + $probeExtra + @('-T','-i',"$wslHome/.ssh/$KeyName",
                    '-o','IdentitiesOnly=yes','-o','BatchMode=yes',
