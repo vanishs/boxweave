@@ -82,8 +82,10 @@ checks services again. Existing corruption that cannot be inferred safely
 is reported with an error rather than guessed away.
 
 Reenrollment is normally unnecessary for an unchanged endpoint/account. Changing
-them can require rerunning the generated client setup. Reconnect the coding
-agent's MCP session after a backend update.
+them means editing the generated script's EDIT ME variables (or the managed
+`Host boxweave` block in the client's SSH config) and rerunning it; agent
+registrations use `ssh boxweave` and keep working. Reconnect the coding agent's
+MCP session after a backend update.
 
 ## Verification
 
@@ -107,9 +109,9 @@ has not been executed against the live Ubuntu host's installed services.
 
 ## Client handoff in 0.2.0
 
-Server installation retains the workflow above. It additionally stages the client generator and source hashes, publishes `/etc/boxweave/client.json` atomically at 0644, and leaves privileged `config.json` at 0600. Client source hashes are included in provenance.
+Server installation retains the workflow above. It additionally stages the client generator, publishes `/etc/boxweave/client.json` atomically at 0644 (descriptor schema 2), and leaves privileged `config.json` at 0600. Client assets are not checksummed: generated scripts fetch enrollment logic from the pinned source commit at run time.
 
-After successful completion, the final message prompts the human or agent to run `boxweave client` or `boxweave client --help`. It no longer prints Windows/Codex-specific commands or starts a wizard in an installer pipeline. Setup downloads are pinned to the installed source commit and checked against recorded SHA256. That source ref must contain the new client files before this installer is deployed. See [client setup](CLIENTS.md).
+After successful completion, the final message prompts the human or agent to run `boxweave client` or `boxweave client --help`. It does not print client commands or start a wizard in an installer pipeline. Generated scripts fetch enrollment logic from the installed source commit at run time. That source ref must contain the new client files before this installer is deployed. See [client setup](CLIENTS.md).
 
 ## Mandatory Web UI staging
 

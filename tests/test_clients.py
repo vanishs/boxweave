@@ -1,6 +1,5 @@
-"""Behavior tests for client command generation and isolated client configuration."""
+"""Behavior tests for client script generation and isolated client configuration."""
 import argparse
-import base64
 import contextlib
 import importlib.util
 import io
@@ -24,10 +23,16 @@ setup=importlib.util.module_from_spec(spec);spec.loader.exec_module(setup)
 KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIoY7yK5+VYtbzXBFgHguKKWJFTx98DSeDtmDTfS1zA public-fixture'
 
 def descriptor():
-    return {'schema_version':1,'ssh_host':'lab.example','ssh_port':2222,'linux_user':'developer',
+    return {'schema_version':2,'ssh_host':'lab.example','ssh_port':2222,'linux_user':'developer',
             'launcher':'/usr/local/bin/boxweave-mcp','server_public_key':KEY,'container_public_key':KEY,
-            'source_repo':'example/boxweave','source_commit':'a'*40,
-            'client_sha256':{'clients/windows/setup.ps1':'b'*64,'clients/posix/setup.py':'c'*64}}
+            'source_repo':'example/boxweave','source_commit':'a'*40}
+
+def env_for(d,profile):
+    return {'BOXWEAVE_SSH_HOST':d['ssh_host'],'BOXWEAVE_SSH_PORT':str(d['ssh_port']),
+            'BOXWEAVE_SSH_USER':d['linux_user'],'BOXWEAVE_SERVER_HOST_KEY':d['server_public_key'],
+            'BOXWEAVE_CONTAINER_PUBLIC_KEY':d['container_public_key'],
+            'BOXWEAVE_AGENT':profile['agent'],'BOXWEAVE_RUNTIME':profile['runtime'],
+            'BOXWEAVE_TRANSPORT':profile['transport']}
 
 class Terminal(io.StringIO):
     def isatty(self): return True
@@ -40,6 +45,7 @@ class CommandTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as e: self.args('--help')
         self.assertEqual(e.exception.code,0)
         self.assertIn('--transport',out.getvalue())
+        self.assertNotIn('--ssh-host',out.getvalue())
     def test_nonterminal_requires_explicit_os_and_agent(self):
         with patch('sys.stdin',io.StringIO()):
             with self.assertRaisesRegex(ValueError,'Missing --os'): clients.selection(self.args())
@@ -58,45 +64,57 @@ class CommandTests(unittest.TestCase):
     def test_json_never_prompts(self):
         with patch('sys.stdin',Terminal()),contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(clients.run(self.args('--json')),2)
-    def test_replace_wizard_and_flag_reach_generated_payload(self):
-        cases = [(True, '2\n', [], True), (True, '1\n', [], False),
-                 (True, '', ['--replace'], True), (False, '', [], False),
-                 (False, '', ['--replace'], True)]
-        for terminal, answer, flags, expected in cases:
-            with self.subTest(terminal=terminal, flags=flags, expected=expected), tempfile.TemporaryDirectory() as tmp:
-                config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
-                args=self.args('--os','macos','--agent','codex','--config',str(config),*flags)
-                stdin=Terminal(answer) if terminal else io.StringIO(answer)
-                with patch('sys.stdin',stdin),contextlib.redirect_stdout(io.StringIO()) as out,contextlib.redirect_stderr(io.StringIO()) as err:
-                    self.assertEqual(clients.run(args),0)
-                command=next(line for line in out.getvalue().splitlines() if line.startswith('bash -c '))
-                payload=json.loads(base64.b64decode(shlex.split(shlex.split(command)[2])[-1]))
-                self.assertEqual(payload['setup_options']['replace'],expected)
-                self.assertEqual('registration?' in err.getvalue(),terminal and not flags)
-    def test_trailing_notes_are_shell_comments_for_every_profile(self):
+    def test_generated_script_has_editable_header_for_every_profile(self):
         profiles=[['--os','macos'], ['--os','windows','--runtime','wsl'],
                   ['--os','windows','--runtime','native','--transport','native'],
                   ['--os','windows','--runtime','native','--transport','wsl']]
+        for profile in profiles:
+            with self.subTest(profile=profile),tempfile.TemporaryDirectory() as tmp:
+                config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+                args=self.args(*profile,'--agent','codex','--config',str(config),'--json')
+                with patch('sys.stdin',io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(clients.run(args),0)
+                result=json.loads(out.getvalue())
+                script=result['script']
+                self.assertIn('EDIT ME',script)
+                self.assertIn('lab.example',script)
+                self.assertIn('2222',script)
+                self.assertIn(KEY,script)
+                self.assertIn('a'*40,script)
+                self.assertNotIn('client_sha256',script)
+                if profile[1]=='windows' and 'native' in profile:
+                    self.assertEqual(result['paste_into'],'Windows PowerShell')
+                    self.assertIn('$env:BOXWEAVE_SSH_HOST',script)
+                    self.assertIn('ExecutionPolicy Bypass',script)
+                else:
+                    self.assertIn('BOXWEAVE_SSH_HOST=',script)
+                    process=subprocess.run(['bash','-n','-c',script],capture_output=True)
+                    self.assertEqual(process.returncode,0,process.stderr)
+    def test_output_writes_script_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
-            for profile in profiles:
-                with self.subTest(profile=profile),patch('sys.stdin',io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
-                    self.assertEqual(clients.run(self.args(*profile,'--agent','codex','--config',str(config))),0)
-                tail=out.getvalue().split('\n\n',2)[-1].splitlines()[1:]
-                notes=[line for line in tail if line.strip()]
-                self.assertTrue(notes)
-                self.assertTrue(all(line.startswith('# ') for line in notes))
-    def test_replace_json_never_prompts_and_preserves_plain_notes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
-            args=self.args('--os','macos','--agent','codex','--config',str(config),'--replace','--json')
-            with patch('sys.stdin',Terminal()),contextlib.redirect_stdout(io.StringIO()) as out:
+            target=Path(tmp)/'out.sh'
+            args=self.args('--os','macos','--agent','codex','--config',str(config),'--output',str(target))
+            with patch('sys.stdin',io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(clients.run(args),0)
-            result=json.loads(out.getvalue())
-            self.assertTrue(all(not note.startswith('#') for note in result['notes']))
-            payload=json.loads(base64.b64decode(shlex.split(shlex.split(result['command'])[2])[-1]))
-            self.assertTrue(payload['setup_options']['replace'])
-
+            script=target.read_text()
+            self.assertIn('BOXWEAVE_SSH_HOST=lab.example',script)
+            self.assertIn('clients/posix/setup.py',script)
+    def test_glm_options_land_in_script_without_the_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
+            args=self.args('--os','macos','--agent','claude-code','--claude-provider','zhipu',
+                           '--glm-model','glm-test','--config',str(config),'--json')
+            with patch.dict('os.environ',{'GLM_API_KEY':'do-not-export'}), \
+                 patch('sys.stdin',io.StringIO()),contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(clients.run(args),0)
+            script=json.loads(out.getvalue())['script']
+            self.assertIn('BOXWEAVE_CLAUDE_PROVIDER=zhipu',script)
+            self.assertIn('BOXWEAVE_GLM_MODEL=glm-test',script)
+            self.assertNotIn('do-not-export',script)
+            args.agent='codex'
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(clients.run(args),2)
     def test_complete_matrix(self):
         profiles=[]
         for agent in clients.AGENTS:
@@ -108,14 +126,10 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(len(profiles),14)
         for p in profiles:
             result=clients.render(clients.validate(descriptor()),p)
-            self.assertIn('a'*40,result['command'])
             if p['os']=='windows' and p['runtime']=='native':
                 self.assertEqual(result['paste_into'],'Windows PowerShell')
-                self.assertIn('Get-FileHash',result['command'])
-                self.assertIn('ExecutionPolicy Bypass',result['command'])
-                self.assertIn('LASTEXITCODE',result['command'])
             else:
-                process=subprocess.run(['bash','-n','-c',shlex.split(result['command'])[2]],capture_output=True)
+                process=subprocess.run(['bash','-n','-c',result['script']],capture_output=True)
                 self.assertEqual(process.returncode,0,process.stderr)
     def test_invalid_combinations(self):
         for options in (
@@ -127,61 +141,54 @@ class CommandTests(unittest.TestCase):
     def test_descriptor_field_injection(self):
         for field,value in [('ssh_host','x;touch /tmp/NO'),('linux_user','-oBad'),
                             ('source_commit','main'),('launcher','/bin/sh; true'),('ssh_port',True),
-                            ('server_public_key','ssh-ed25519 TEST')]:
+                            ('server_public_key','ssh-ed25519 TEST'),('schema_version',1)]:
             data=descriptor();data[field]=value
             with self.subTest(field=field),self.assertRaises(ValueError):clients.validate(data)
     def test_public_key_rejects_cross_type_blob(self):
         with self.assertRaises(ValueError):clients.public_key(KEY.replace('ssh-ed25519 ','ssh-rsa ',1))
-    def test_override_only_changes_rendered_payload(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            p=Path(tmp)/'client.json';original=json.dumps(descriptor());p.write_text(original)
-            args=self.args('--os','macos','--agent','codex','--config',str(p),'--ssh-host','new.example','--json')
-            with contextlib.redirect_stdout(io.StringIO()) as out: self.assertEqual(clients.run(args),0)
-            result=json.loads(out.getvalue())
-            command=shlex.split(shlex.split(result['command'])[2])
-            encoded=command[-1]
-            self.assertEqual(json.loads(base64.b64decode(encoded))['ssh_host'],'new.example')
-            self.assertEqual(p.read_text(),original)
+    def test_removed_legacy_flags_are_gone(self):
+        for flag in ('--ssh-host','--ssh-port','--replace','--diagnose','--bootstrap-identity'):
+            with self.subTest(flag=flag),contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit): self.args(flag,'x')
     def test_missing_descriptor_error_is_actionable(self):
         with contextlib.redirect_stderr(io.StringIO()) as out:
             self.assertEqual(clients.run(self.args('--os','macos','--agent','cursor','--config','/nonexistent/boxweave.json')),2)
         self.assertIn('update the server installer',out.getvalue())
     def test_ps_literal_quote(self):
-        self.assertEqual(clients.psquote("space ' dollar $"),"'space '' dollar $'")
-    def test_publisher_whitelists_and_hashes(self):
+        self.assertEqual(clients.ps_quote("space ' dollar $"),"'space '' dollar $'")
+    def test_publisher_whitelists_descriptor_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);config=root/'config.json';host=root/'host.pub';box=root/'box.pub';dest=root/'public.json'
             host.write_text(KEY);box.write_text(KEY)
             d=descriptor();d.update(container_public_key_file=str(box),jwt_secret_file='/must/not/open',extra='NEVER_COPY')
             config.write_text(json.dumps(d))
-            for name in d['client_sha256']:
-                asset=root/name;asset.parent.mkdir(parents=True,exist_ok=True);asset.write_text('fixture')
-            clients.publish(config,dest,root,'a'*40,host)
+            clients.publish(config,dest,'a'*40,host)
             data=clients.validate(json.loads(dest.read_text()))
             self.assertNotIn('jwt_secret_file',data);self.assertNotIn('NEVER_COPY',dest.read_text())
-            self.assertEqual(len(data['client_sha256']['clients/posix/setup.py']),64)
+            self.assertEqual(data['launcher'],'/usr/local/bin/boxweave-mcp')
+            self.assertEqual(data['schema_version'],2)
 
 class ConfigTests(unittest.TestCase):
     def test_toml_preserves_runtime_comments_and_other_servers(self):
         original='# Keep this\n[desktop]\nrunCodexInWindowsSubsystemForLinux = true\n[mcp_servers.other]\ncommand="other"\n'
-        result=setup.toml_update(original,'/usr/bin/ssh',['user@host','a b'])
+        result=setup.toml_update(original,'/usr/bin/ssh',['boxweave','/usr/local/bin/boxweave-mcp'])
         self.assertTrue(result.startswith(original))
         self.assertEqual(setup.tomllib.loads(result)['mcp_servers']['other']['command'],'other')
-        self.assertEqual(setup.toml_update(result,'/usr/bin/ssh',['user@host','a b']),result)
+        self.assertEqual(setup.toml_update(result,'/usr/bin/ssh',['boxweave','/usr/local/bin/boxweave-mcp']),result)
     def test_toml_preserves_tool_approval_tables(self):
         parent='[mcp_servers.boxweave]\ncommand="old"\nargs=[]\n'
         nested='[mcp_servers.boxweave.tools.list_containers]\napproval_mode="approve"\n[mcp_servers.boxweave.tools.connect]\napproval_mode="approve"\n'
         other='[mcp_servers.other]\ncommand="other"\n'
-        result=setup.toml_update(parent+nested+other,'wsl.exe',['-d','Ubuntu'],True)
+        result=setup.toml_update(parent+nested+other,'wsl.exe',['boxweave','/usr/local/bin/boxweave-mcp'],True)
         self.assertIn(nested+other,result)
         parsed=setup.tomllib.loads(result)['mcp_servers']
         self.assertEqual(parsed['boxweave']['tools']['connect']['approval_mode'],'approve')
         self.assertEqual(parsed['boxweave']['command'],'wsl.exe')
-        self.assertEqual(setup.toml_update(result,'wsl.exe',['-d','Ubuntu']),result)
+        self.assertEqual(setup.toml_update(result,'wsl.exe',['boxweave','/usr/local/bin/boxweave-mcp']),result)
         with self.assertRaises(ValueError):setup.toml_update(result,'different',[])
     def test_toml_non_ascii_paths(self):
-        value=setup.toml_update('', 'ssh', ['/home/user/emoji-\U0001f600'])
-        self.assertEqual(setup.tomllib.loads(value)['mcp_servers']['boxweave']['args'],['/home/user/emoji-\U0001f600'])
+        value=setup.toml_update('', 'ssh', ['boxweave','/home/user/emoji-\U0001f600'])
+        self.assertEqual(setup.tomllib.loads(value)['mcp_servers']['boxweave']['args'],['boxweave','/home/user/emoji-\U0001f600'])
     def test_disabled_entry_is_not_silently_enabled(self):
         original='[mcp_servers.boxweave]\ncommand="ssh"\nargs=[]\nenabled=false\n'
         with self.assertRaisesRegex(ValueError,'extra settings'):setup.toml_update(original,'ssh',[])
@@ -196,10 +203,10 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(original=original),self.assertRaises(ValueError):setup.toml_update(original,'ssh',[],True)
     def test_cursor_preserves_unrelated_data_and_repeat(self):
         original=json.dumps({'mcpServers':{'other':{'url':'https://example.invalid'}},'custom':True})
-        result=setup.json_update(original,'ssh',['arg'])
+        result=setup.json_update(original,'ssh',['boxweave','/usr/local/bin/boxweave-mcp'])
         self.assertTrue(json.loads(result)['custom'])
         self.assertIn('other',json.loads(result)['mcpServers'])
-        self.assertEqual(setup.json_update(result,'ssh',['arg']),result)
+        self.assertEqual(setup.json_update(result,'ssh',['boxweave','/usr/local/bin/boxweave-mcp']),result)
         with self.assertRaises(ValueError):setup.json_update(result,'different',[])
     def test_cursor_bad_shapes(self):
         for original in ('[]','null','{"mcpServers":null}','{"mcpServers":[]}'):
@@ -223,9 +230,32 @@ class ConfigTests(unittest.TestCase):
             link=Path(tmp)/'link';link.symlink_to(target)
             with self.assertRaises(ValueError):setup.atomic_write(link,'bad')
             self.assertEqual(target.read_text(),'new')
-    def test_native_windows_rejected_by_posix_setup(self):
-        d=descriptor();d.update(os='windows',runtime='native',transport='native',agent='codex',policy='text')
-        with self.assertRaises(ValueError):setup.validate_data(d)
+    def test_ssh_config_block_roundtrip_and_readdress(self):
+        block=setup.ssh_transport_block('lab.example',2222,'developer','/h/.ssh/boxweave','/h/.ssh/boxweave_known_hosts')
+        out=setup.ssh_config_managed('',block)
+        self.assertEqual(out.count(setup.SSH_BEGIN),1)
+        parsed=setup.parse_ssh_transport_block(out)
+        self.assertEqual(parsed['HostName'],'lab.example')
+        self.assertEqual(parsed['Port'],'2222')
+        self.assertEqual(parsed['IdentityFile'],'/h/.ssh/boxweave')
+        # Idempotent rewrite of the same block.
+        self.assertEqual(setup.ssh_config_managed(out,block),out)
+        # Readdressing replaces the block and preserves unrelated content.
+        other=setup.ssh_transport_block('new.example',22,'developer','/h/.ssh/boxweave','/h/.ssh/boxweave_known_hosts')
+        updated=setup.ssh_config_managed('Host other\n  User x\n\n'+out,other)
+        self.assertTrue(updated.startswith('Host other'))
+        self.assertNotIn('lab.example',updated)
+        self.assertEqual(setup.parse_ssh_transport_block(updated)['HostName'],'new.example')
+        self.assertEqual(setup.parse_ssh_transport_block(updated)['Port'],'22')
+    def test_ssh_config_malformed_markers(self):
+        block=setup.ssh_transport_block('h',22,'u','/k','/kn')
+        for text in (setup.SSH_BEGIN+'\nx\n',setup.SSH_END+'\n'+setup.SSH_BEGIN,
+                     setup.SSH_BEGIN+'\n'+setup.SSH_BEGIN+'\n'+setup.SSH_END):
+            with self.subTest(text=text),self.assertRaises(ValueError):setup.ssh_config_managed(text,block)
+    def test_host_pin_token_forms(self):
+        self.assertEqual(setup.host_token('h.example',22),'h.example')
+        self.assertEqual(setup.host_token('h.example',2222),'[h.example]:2222')
+        self.assertEqual(setup.host_token('::1',22),'[::1]:22')
 
 class ProbeTests(unittest.TestCase):
     def test_protocol_sequence_and_readonly_call(self):
@@ -260,8 +290,6 @@ class ProbeTests(unittest.TestCase):
     def test_closed_stream(self):
         with self.assertRaisesRegex(RuntimeError,'stream closed'):
             setup.probe(sys.executable,['-c','pass'],timeout=2)
-
-
 
 class SetupFlowTests(unittest.TestCase):
     def setUp(self):
@@ -315,11 +343,14 @@ class SetupFlowTests(unittest.TestCase):
         self.env={'PATH':str(bindir)+':/usr/bin:/bin','BOXWEAVE_TEST_ROOT':str(self.home),
                   'BOXWEAVE_PUBLIC_FIXTURE':KEY,'CODEX_HOME':str(self.home/'.codex'),
                   'CLAUDE_CONFIG_DIR':str(self.home/'.claude')}
-    def run_setup(self,agent='codex',replace=False,project=None):
-        d=descriptor();d.update(os='macos',runtime='native',transport='native',agent=agent,policy='Fixture remote policy')
-        args=argparse.Namespace(data_base64=base64.b64encode(json.dumps(d).encode()).decode(),
+    def run_setup(self,agent='codex',replace=False,project=None,env_overrides=None):
+        d=descriptor()
+        profile={'agent':agent,'runtime':'native','transport':'native'}
+        env=dict(self.env);env.update(env_for(d,profile))
+        if env_overrides: env.update(env_overrides)
+        args=argparse.Namespace(diagnose=False,timeout=30,report=None,
                                 bootstrap_identity=None,agent_home=None,project_path=project,replace=replace)
-        with patch.dict('os.environ',self.env),patch.object(Path,'home',return_value=self.home),patch.object(sys,'platform','darwin'),contextlib.redirect_stdout(io.StringIO()) as out:
+        with patch.dict('os.environ',env),patch.object(Path,'home',return_value=self.home),patch.object(sys,'platform','darwin'),contextlib.redirect_stdout(io.StringIO()) as out:
             setup.setup(args)
         return out.getvalue()
     def calls(self):
@@ -336,7 +367,9 @@ class SetupFlowTests(unittest.TestCase):
         self.assertEqual(first['theme'],'dark')
         self.assertEqual(first['mcp']['servers']['other'],{'command':'other'})
         self.assertEqual(first['mcp']['servers']['boxweave']['type'],'stdio')
+        self.assertEqual(first['mcp']['servers']['boxweave']['args'],['boxweave','/usr/local/bin/boxweave-mcp'])
         self.assertTrue((directory/'AGENTS.md').read_text().startswith('User preferences'))
+        self.assertIn(KEY,(directory/'AGENTS.md').read_text())
         self.run_setup('zcode')
         self.assertEqual(json.loads(config.read_text()),first)
         self.assertTrue(list(config.parent.glob('config.json.backup-*')))
@@ -357,10 +390,20 @@ class SetupFlowTests(unittest.TestCase):
         self.assertIn('passed',out)
         self.assertIn('User override',override.read_text())
         self.assertFalse((directory/'AGENTS.md').exists())
+        self.assertIn("args = [\"boxweave\"",config)
         self.run_setup()
         self.assertEqual((directory/'config.toml').read_text(),config)
         generates=[a for a in self.calls() if a[0]=='ssh-keygen' and '-f' in a]
         self.assertEqual(len(generates),1)
+    def test_ssh_config_block_written_and_stable_across_reruns(self):
+        self.run_setup()
+        config=self.home/'.ssh/config'
+        first=config.read_text()
+        self.assertIn('Host boxweave',first)
+        self.assertIn('HostName lab.example',first)
+        self.assertEqual(setup.parse_ssh_transport_block(first)['Port'],'2222')
+        self.run_setup()
+        self.assertEqual(config.read_text(),first)
     def test_cursor_manual_guidance_and_project_rule(self):
         out=self.run_setup('cursor')
         self.assertIn('manual step required',out)
@@ -374,6 +417,7 @@ class SetupFlowTests(unittest.TestCase):
         self.assertTrue((self.home/'.claude/rules/boxweave.md').is_file())
         additions=[a for a in self.calls() if a[:3]==['claude','mcp','add']]
         self.assertEqual(additions[0][3:5],['--scope','user'])
+        self.assertEqual(additions[0][-2:],['boxweave','/usr/local/bin/boxweave-mcp'])
         with self.assertRaisesRegex(ValueError,'Existing Claude'):self.run_setup('claude-code')
         self.run_setup('claude-code',replace=True)
     def test_bad_configuration_fails_before_keygen_or_enrollment(self):
@@ -381,16 +425,32 @@ class SetupFlowTests(unittest.TestCase):
         (directory/'config.toml').write_text('invalid !')
         with self.assertRaises(ValueError):self.run_setup()
         self.assertEqual(self.calls(),[])
-    def test_changed_pin_and_incomplete_identity_fail_before_enrollment(self):
+    def test_changed_pin_same_host_fails_before_enrollment(self):
         sshdir=self.home/'.ssh';sshdir.mkdir()
-        pin=sshdir/'boxweave_known_hosts';pin.write_text('changed')
-        with self.assertRaisesRegex(ValueError,'identity changed'):self.run_setup()
-        pin.unlink();(sshdir/'boxweave').write_text('OPAQUE FIXTURE')
+        (sshdir/'boxweave_known_hosts').write_text('[lab.example]:2222 ssh-ed25519 DIFFERENTKEY')
+        with self.assertRaisesRegex(ValueError,'Pinned server identity changed'):self.run_setup()
+        self.assertEqual(self.calls(),[])
+    def test_readdress_repins_and_continues(self):
+        sshdir=self.home/'.ssh';sshdir.mkdir()
+        (sshdir/'boxweave_known_hosts').write_text('[old.example]:2222 ssh-ed25519 OLDPIN')
+        out=self.run_setup()
+        self.assertIn('SSH address changed',out)
+        pin=(sshdir/'boxweave_known_hosts').read_text()
+        self.assertTrue(pin.startswith('[lab.example]:2222 '))
+        self.assertIn(KEY.split()[1],pin)
+    def test_incomplete_identity_fails_before_enrollment(self):
+        sshdir=self.home/'.ssh';sshdir.mkdir()
+        (sshdir/'boxweave').write_text('OPAQUE FIXTURE')
         with self.assertRaisesRegex(ValueError,'Incomplete'):self.run_setup()
         self.assertEqual(self.calls(),[])
-
-if __name__=='__main__': unittest.main()
-
+    def test_invalid_env_input_fails_closed(self):
+        for override in ({'BOXWEAVE_SSH_HOST':'bad host; rm'},{'BOXWEAVE_SSH_PORT':'99999'},
+                         {'BOXWEAVE_SSH_PORT':''},{'BOXWEAVE_SSH_USER':'Bad'},
+                         {'BOXWEAVE_SERVER_HOST_KEY':'ssh-rsa AAAA'},
+                         {'BOXWEAVE_CONTAINER_PUBLIC_KEY':'not a key'}):
+            with self.subTest(override=override),self.assertRaises(ValueError):
+                self.run_setup(env_overrides=override)
+        self.assertEqual(self.calls(),[])
 
 class GLMTests(unittest.TestCase):
     def test_merge_preserves_settings_and_maps_models(self):
@@ -415,35 +475,18 @@ class GLMTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 setup.glm_settings(original,provider,model,token)
 
-    def test_cli_payload_contains_options_without_client_key(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            config=Path(tmp)/'client.json';config.write_text(json.dumps(descriptor()))
-            args=cli.parser().parse_args(['client','--os','macos','--agent','claude-code',
-                '--claude-provider','zhipu','--glm-model','glm-test','--json','--config',str(config)])
-            with patch.dict('os.environ',{'GLM_API_KEY':'do-not-export'}), contextlib.redirect_stdout(io.StringIO()) as out:
-                self.assertEqual(clients.run(args),0)
-            result=json.loads(out.getvalue())
-            payload=json.loads(base64.b64decode(shlex.split(shlex.split(result['command'])[2])[-1]))
-            self.assertEqual(payload['setup_options']['claude_provider'],'zhipu')
-            self.assertEqual(payload['setup_options']['glm_model'],'glm-test')
-            self.assertNotIn('do-not-export',json.dumps(payload))
-            args.agent='codex'
-            with contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(clients.run(args),2)
-            args.agent='claude-code';args.diagnose=True
-            with contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(clients.run(args),2)
-
 class ZCodeConfigTests(unittest.TestCase):
     def test_invalid_shapes_disabled_mcp_and_custom_entry(self):
         for original in ('[]','null','{"mcp":[]}','{"mcp":{"servers":null}}',
                          '{"features":{"mcp":false}}',
                          '{"mcp":{"servers":{"boxweave":{"command":"other"}}}}'):
             with self.subTest(original=original),self.assertRaises(ValueError):
-                setup.zcode_update(original,'ssh',[])
+                setup.zcode_update(original,'ssh',['boxweave','/usr/local/bin/boxweave-mcp'])
     def test_only_zcode_has_native_config_shape(self):
-        result=json.loads(setup.zcode_update('{}','ssh',['-T']))
+        result=json.loads(setup.zcode_update('{}','ssh',['boxweave','/usr/local/bin/boxweave-mcp']))
         self.assertNotIn('mcpServers',result)
-        self.assertEqual(result['mcp']['servers']['boxweave']['args'],['-T'])
-        self.assertEqual(setup.zcode_update(json.dumps(result),'ssh',['-T']),
+        self.assertEqual(result['mcp']['servers']['boxweave']['args'],['boxweave','/usr/local/bin/boxweave-mcp'])
+        self.assertEqual(setup.zcode_update(json.dumps(result),'ssh',['boxweave','/usr/local/bin/boxweave-mcp']),
                          json.dumps(result,indent=2)+'\n')
+
+if __name__=='__main__': unittest.main()

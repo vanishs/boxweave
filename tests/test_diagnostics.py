@@ -1,6 +1,5 @@
 """Behavioral diagnostics tests; no real credentials, enrollment or network."""
 import argparse
-import base64
 import contextlib
 import importlib.util
 import io
@@ -63,32 +62,30 @@ class DiagnosticTests(unittest.TestCase):
         self.peer=self.home/'ssh';self.peer.write_text(PEER);self.peer.chmod(0o755)
         self.key=self.home/'.ssh/boxweave';self.key.write_text('OPAQUE FIXTURE: NEVER OPEN')
         self.known=self.home/'.ssh/boxweave_known_hosts';self.known.write_text('fixture.invalid '+KEY.rsplit(' ',1)[0]+'\n')
-        self.data={'os':'macos','runtime':'native','transport':'native','agent':'codex',
-                   'ssh_host':'fixture.invalid','ssh_port':22,'linux_user':'fixture',
-                   'launcher':'/usr/local/bin/boxweave-mcp','server_public_key':KEY}
-        args=['-T','-i',str(self.key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
-              '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(self.known),
-              '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
-              '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
-              '-p','22','fixture@fixture.invalid','/usr/local/bin/boxweave-mcp']
+        self.sshconfig=self.home/'.ssh/config'
+        self.sshconfig.write_text(setup.ssh_config_managed('',
+            setup.ssh_transport_block('fixture.invalid',22,'fixture',self.key,self.known)))
+        self.env={'BOXWEAVE_SSH_HOST':'fixture.invalid','BOXWEAVE_SSH_PORT':'22','BOXWEAVE_SSH_USER':'fixture',
+                  'BOXWEAVE_SERVER_HOST_KEY':KEY,'BOXWEAVE_AGENT':'codex',
+                  'BOXWEAVE_RUNTIME':'native','BOXWEAVE_TRANSPORT':'native'}
+        args=['boxweave','/usr/local/bin/boxweave-mcp']
         self.config=self.home/'.codex/config.toml';self.config.parent.mkdir()
         self.config.write_text(setup.toml_update('',str(self.peer),args))
     def invoke(self,**changes):
-        values=dict(data_base64=base64.b64encode(json.dumps(self.data).encode()).decode(),
-                    replace=False,bootstrap_identity=None,agent_home=str(self.config.parent),
+        values=dict(replace=False,bootstrap_identity=None,agent_home=str(self.config.parent),
                     project_path=None,timeout=1,report=None)
         values.update(changes)
         old=Path.read_text
         def read(path,*a,**kw):
             if path==self.key:raise AssertionError('Private identity content opened')
             return old(path,*a,**kw)
-        with patch.object(Path,'home',return_value=self.home),patch.object(sys,'platform','darwin'),\
-             patch.object(setup.shutil,'which',return_value=str(self.peer)),\
+        with patch.dict('os.environ',self.env),patch.object(Path,'home',return_value=self.home),\
+             patch.object(sys,'platform','darwin'),patch.object(setup.shutil,'which',return_value=str(self.peer)),\
              patch.object(Path,'read_text',read),contextlib.redirect_stdout(io.StringIO()) as output:
             code=setup.diagnose(argparse.Namespace(**values))
         return code,json.loads(output.getvalue())
     def test_diagnostic_is_readonly_and_passes_without_inventory(self):
-        before={p:p.read_bytes() for p in (self.key,self.known,self.config)}
+        before={p:p.read_bytes() for p in (self.key,self.known,self.config,self.sshconfig)}
         code,report=self.invoke()
         self.assertEqual(code,0,report)
         self.assertEqual(report['connection'],'passed')
@@ -99,13 +96,12 @@ class DiagnosticTests(unittest.TestCase):
         self.assertNotIn(str(self.home),text);self.assertNotIn('OPAQUE',text)
 
     def test_zcode_registration_and_guidance_are_readonly(self):
-        import tomllib
-        entry=tomllib.loads(self.config.read_text())['mcp_servers']['boxweave']
+        entry=setup.tomllib.loads(self.config.read_text())['mcp_servers']['boxweave']
         directory=self.home/'.zcode';(directory/'cli').mkdir(parents=True)
         config=directory/'cli/config.json'
         config.write_text(setup.zcode_update('{}',entry['command'],entry['args']))
         (directory/'AGENTS.md').write_text(setup.managed('User text','Fixture'))
-        self.data['agent']='zcode'
+        self.env['BOXWEAVE_AGENT']='zcode'
         before=config.read_bytes()
         code,report=self.invoke(agent_home=str(directory))
         self.assertEqual(code,0,report)
@@ -130,6 +126,19 @@ class DiagnosticTests(unittest.TestCase):
         with patch.object(setup,'probe',side_effect=AssertionError('Probe must not run')):
             code,report=self.invoke()
         self.assertEqual(code,1);self.assertEqual(report['connection'],'unverified')
+    def test_transport_block_mismatch_stops_before_protocol(self):
+        self.sshconfig.write_text(setup.ssh_config_managed('',
+            setup.ssh_transport_block('other.invalid',22,'fixture',self.key,self.known)))
+        with patch.object(setup,'probe',side_effect=AssertionError('Probe must not run')):
+            code,report=self.invoke()
+        self.assertEqual(code,1)
+        self.assertEqual(report['connection'],'unverified')
+        self.assertEqual(report['stages'][-1]['code'],'TRANSPORT_MISMATCH')
+    def test_missing_transport_block_reports_incomplete(self):
+        self.sshconfig.unlink()
+        code,report=self.invoke()
+        self.assertEqual(code,2)
+        self.assertEqual(report['connection'],'unverified')
     def test_export_refuses_existing_file_and_writes_private_new_file(self):
         target=self.home/'report.json'
         code,report=self.invoke(report=str(target))
@@ -139,12 +148,18 @@ class DiagnosticTests(unittest.TestCase):
         code,report=self.invoke(report=str(target))
         self.assertEqual(code,1);self.assertEqual(original,target.read_bytes())
     def test_invalid_input_and_mutation_flags_are_structured(self):
-        for fields in ({'data_base64':'bad'},{'replace':True},{'bootstrap_identity':'unused'}):
-            code,report=self.invoke(**fields)
+        for fields,env_changes in (({},{'BOXWEAVE_SSH_HOST':'bad host'}),
+                                   ({},{'BOXWEAVE_SSH_PORT':'0'}),
+                                   ({'replace':True},{}),({'bootstrap_identity':'unused'},{})):
+            saved=dict(self.env);self.env.update(env_changes)
+            try:
+                code,report=self.invoke(**fields)
+            finally:
+                self.env=saved
             self.assertEqual(code,2);self.assertEqual(report['stages'][0]['code'],'INPUT_INVALID')
     def test_cli_diagnostic_branch_never_enrolls(self):
         with patch.object(setup,'diagnose',return_value=2) as diagnostic,patch.object(setup,'setup',side_effect=AssertionError()):
-            with patch.object(sys,'argv',['setup.py','--diagnose','--data-base64','e30=']):
+            with patch.object(sys,'argv',['setup.py','--diagnose']):
                 self.assertEqual(setup.main(),2)
             diagnostic.assert_called_once()
     def test_protocol_fixtures(self):
@@ -164,18 +179,21 @@ class DiagnosticTests(unittest.TestCase):
 
 class GeneratorTests(unittest.TestCase):
     def descriptor(self):
-        return dict(ssh_host='fixture.invalid',ssh_port=22,linux_user='fixture',
+        return dict(schema_version=2,ssh_host='fixture.invalid',ssh_port=22,linux_user='fixture',
                     launcher='/usr/local/bin/boxweave-mcp',server_public_key=KEY,container_public_key=KEY,
-                    source_repo='example/boxweave',source_commit='a'*40,
-                    client_sha256={'clients/windows/setup.ps1':'b'*64,'clients/posix/setup.py':'c'*64})
-    def test_generated_diagnostics_pin_assets_and_select_early_entry(self):
+                    source_repo='example/boxweave',source_commit='a'*40)
+    def test_generated_script_documents_passthrough_flags_and_pins_source(self):
         for os_name,runtime,transport in [('windows','native','native'),('windows','native','wsl'),('windows','wsl','wsl'),('macos','native','native')]:
-            result=clients.render(self.descriptor(),dict(os=os_name,runtime=runtime,transport=transport,agent='codex'),{'diagnose':True})
-            self.assertEqual(result['operation'],'client_diagnose')
-            self.assertIn('-Diagnose' if runtime=='native' and os_name=='windows' else '--diagnose',result['command'])
-            self.assertIn('a'*40,result['command'])
-    def test_generator_rejects_mutating_diagnostic_options(self):
+            result=clients.render(self.descriptor(),dict(os=os_name,runtime=runtime,transport=transport,agent='codex'))
+            script=result['script']
+            self.assertIn('a'*40,script)
+            self.assertIn('EDIT ME',script)
+            self.assertIn('--diagnose' if not (runtime=='native' and os_name=='windows') else '-Diagnose',script)
+            if runtime=='wsl':
+                process=subprocess.run(['bash','-n','-c',script],capture_output=True)
+                self.assertEqual(process.returncode,0,process.stderr)
+    def test_generator_has_no_diagnose_flag(self):
         with contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(cli.main(['client','--diagnose','--replace']),2)
+            with self.assertRaises(SystemExit): cli.main(['client','--diagnose'])
 
 if __name__=='__main__':unittest.main()

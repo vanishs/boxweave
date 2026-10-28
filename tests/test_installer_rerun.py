@@ -195,12 +195,16 @@ class InstallerRerunTests(unittest.TestCase):
         data=json.loads(public.read_text())
         self.assertNotIn('jwt_secret_file',data)
         self.assertEqual(data['source_commit'],'a'*40)
-        self.assertEqual(data['client_sha256']['clients/windows/setup.ps1'],hashlib.sha256(self.assets['clients/windows/setup.ps1']).hexdigest())
+        self.assertEqual(data['schema_version'],2)
+        self.assertNotIn('client_sha256',data)
         result=subprocess.run(['python3',str(self.root/'usr/local/libexec/boxweave/cli.py'),'client',
                                '--os','macos','--agent','cursor','--config',str(public),'--json'],
                               capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(json.loads(result.stdout)['paste_into'],'macOS Terminal')
+        generated=json.loads(result.stdout)
+        self.assertEqual(generated['paste_into'],'macOS Terminal')
+        self.assertIn('EDIT ME',generated['script'])
+        self.assertIn('lab.example',generated['script'])
         result=self.run_install()
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('boxweave client --help',result.stdout)

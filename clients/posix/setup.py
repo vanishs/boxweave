@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""BoxWeave macOS / WSL CLI enrollment. Requires Python 3.11+, standard library."""
+"""BoxWeave client enrollment for macOS / WSL CLI agents. Requires Python 3.11+, standard library.
+
+All connection parameters arrive through BOXWEAVE_* environment variables set
+by the generated enrollment script; nothing is embedded or base64-packed.
+The SSH transport is addressed through a managed "Host boxweave" block in the
+user's ~/.ssh/config, so agent registrations stay stable when the server
+address changes: edit the block (or the generated script's EDIT ME header and
+rerun) instead of re-registering anything.
+"""
 import argparse
 import base64
 import datetime
@@ -20,12 +28,33 @@ import tomllib
 
 BEGIN = '<!-- BEGIN BOXWEAVE MANAGED -->'
 END = '<!-- END BOXWEAVE MANAGED -->'
+SSH_BEGIN = '# BEGIN BOXWEAVE MANAGED'
+SSH_END = '# END BOXWEAVE MANAGED'
+LAUNCHER = '/usr/local/bin/boxweave-mcp'
+AGENTS = ('codex', 'cursor', 'claude-code', 'zcode')
 # The stdio MCP channel is long-lived: without traffic-based keepalive a silently
 # dropped connection (idle NAT/conntrack eviction) hangs every later call. ZCode
 # also kills tool calls at its 30s default; create-class calls need more.
 SSH_KEEPALIVE_ARGS = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
 ZCODE_TIMEOUT_MS = 180000
 CODEX_TOOL_TIMEOUT_SEC = 180
+POLICY = """## BoxWeave remote development (Containarium)
+- Use MCP server boxweave to list/provision containers and its dynamic connect tool to work inside a box.
+- Develop, install dependencies, test and deploy INSIDE the assigned project LXC. Inspect existing files/Git state and preserve uncommitted work.
+- Inspect existing resources first; reuse a suitable project box. Never modify unrelated or containarium-core-* boxes.
+- The Ubuntu MCP endpoint is {ssh_host}:{ssh_port}, user {linux_user}. The transport key is restricted to the MCP launcher, not a general host shell credential.
+- For create_container.ssh_keys, explicitly supply this FULL managed Ubuntu-to-container public key:
+  {container_public_key}
+- Never substitute a client transport key, a fingerprint, or another nesting layer's key. Never read/export private keys or JWTs.
+- A create timeout is ambiguous: inspect the original logical name before retrying; never duplicate or force-recreate to bypass a timeout.
+- Running does not prove SSH readiness. Use one deadline per phase (normally 600 seconds), poll every 15-30 seconds, and verify connect with whoami && hostname before project work. Report actual stdout and exit codes.
+- After IP reuse, allow bounded trusted host-key reconciliation. Never disable host verification or edit known_hosts to bypass a mismatch. Diagnose persistent failures read-only.
+- Service activity, HTTP 200/401/403 and CLI exit 0 do not prove authenticated MCP execution. Test initialize/initialized, tools/list and an actual read-only tools/call.
+- Keep identities separate at each nested MCP host; direct Incus execution is not evidence of nested authenticated MCP execution.
+- Use systemd/Compose only for requested persistent workloads; verify health and application autostart. LXC boot.autostart requires separate evidence.
+- Publish ports only when requested. Inspect routes/conflicts and verify actual client connectivity. Passthrough does not provide LAN-only source filtering or TLS.
+- Obtain explicit approval for destructive/host-wide changes or public exposure. Never change host SSH/firewall/provider credentials to make a test pass.
+"""
 
 def atomic_write(path, text, mode=0o600):
     path = Path(path)
@@ -92,6 +121,48 @@ def managed(original, policy):
         if original.index(END)<original.index(BEGIN): raise ValueError('Reversed instruction markers')
         return original[:original.index(BEGIN)]+block+original[original.index(END)+len(END):]
     return original.rstrip()+'\n\n'+block+'\n'
+
+def ssh_config_managed(original, block):
+    """Idempotently place the Host boxweave transport block between markers."""
+    if original.count(SSH_BEGIN) != original.count(SSH_END) or original.count(SSH_BEGIN) > 1:
+        raise ValueError('Malformed BoxWeave ssh_config markers')
+    text = SSH_BEGIN+'\n'+block.strip('\n')+'\n'+SSH_END
+    if SSH_BEGIN in original:
+        if original.index(SSH_END) < original.index(SSH_BEGIN): raise ValueError('Reversed BoxWeave ssh_config markers')
+        return original[:original.index(SSH_BEGIN)]+text+original[original.index(SSH_END)+len(SSH_END):]
+    return original.rstrip()+'\n\n'+text+'\n'
+
+def ssh_transport_block(host, port, user, key, known):
+    return (
+        'Host boxweave\n'
+        '    HostName '+host+'\n'
+        '    Port '+str(port)+'\n'
+        '    User '+user+'\n'
+        '    IdentityFile '+str(key)+'\n'
+        '    IdentitiesOnly yes\n'
+        '    IdentityAgent none\n'
+        '    BatchMode yes\n'
+        '    UserKnownHostsFile '+str(known)+'\n'
+        '    StrictHostKeyChecking yes\n'
+        '    HostKeyAlgorithms ssh-ed25519\n'
+        '    ConnectTimeout 15\n'
+        '    ServerAliveInterval 15\n'
+        '    ServerAliveCountMax 4\n')
+
+def parse_ssh_transport_block(text):
+    """Read the managed block back; returns dict or None when absent."""
+    if SSH_BEGIN not in text: return None
+    segment = text[text.index(SSH_BEGIN)+len(SSH_BEGIN):]
+    if SSH_END not in segment: raise ValueError('Malformed BoxWeave ssh_config markers')
+    segment = segment[:segment.index(SSH_END)]
+    values = {}
+    for line in segment.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' in line: continue
+        parts = line.split(None, 1)
+        if len(parts) == 2 and parts[0] not in values:
+            values[parts[0]] = parts[1].strip('"')
+    return values
 
 def toml_update(original, command, args, replace=False):
     parsed = tomllib.loads(original)
@@ -222,7 +293,7 @@ def probe(command, args, timeout=30, evidence=None):
         os.set_blocking(p.stdout.fileno(), False)
         stage = 'initialize'
         result = call('initialize', {'protocolVersion':'2024-11-05','capabilities':{},
-                                    'clientInfo':{'name':'boxweave-client','version':'0.3.0'}})
+                                    'clientInfo':{'name':'boxweave-client','version':'0.4.0'}})
         if result.get('protocolVersion') != '2024-11-05':
             raise DiagnosticError('PROTOCOL_UNSUPPORTED', stage, 'Unsupported negotiated MCP protocol')
         if not isinstance(result.get('capabilities'),dict) or not isinstance(result['capabilities'].get('tools'),dict): invalid()
@@ -256,7 +327,7 @@ def probe(command, args, timeout=30, evidence=None):
             if block['type']=='text' and not isinstance(block.get('text'),str): invalid()
             if block['type'] in ('image','audio') and (not isinstance(block.get('data'),str) or not isinstance(block.get('mimeType'),str)): invalid()
             if block['type']=='resource' and not isinstance(block.get('resource'),dict): invalid()
-            if block['type']=='resource_link' and not isinstance(block.get('uri'),str): invalid()
+            if block['type']=='resource_link' and (not isinstance(block.get('uri'),str)): invalid()
         evidence['provider_call'] = 'passed'
         return True
     except TimeoutError:
@@ -276,22 +347,49 @@ def probe(command, args, timeout=30, evidence=None):
         evidence['elapsed_ms'] = round((time.monotonic()-started)*1000)
 
 
-def diagnostic_profile(data):
-    if not isinstance(data,dict): raise ValueError()
-    for key,pattern in {'ssh_host':r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}',
-                        'linux_user':r'[a-z_][a-z0-9_-]{0,63}',
-                        'launcher':r'/[A-Za-z0-9_./-]+'}.items():
-        if not isinstance(data.get(key),str) or not re.fullmatch(pattern,data[key]): raise ValueError()
-    if type(data.get('ssh_port')) is not int or not 1<=data['ssh_port']<=65535: raise ValueError()
-    if data.get('agent') not in ('codex','cursor','claude-code','zcode'): raise ValueError()
-    if (data.get('os'),data.get('runtime'),data.get('transport')) not in (
-        ('macos','native','native'),('windows','wsl','wsl')): raise ValueError()
-    if data['agent'] in ('cursor','zcode') and data['runtime']=='wsl': raise ValueError()
-    key=data.get('server_public_key','')
-    if not isinstance(key,str) or not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?',key): raise ValueError()
-    blob=base64.b64decode(key.split()[1],validate=True)
-    if len(blob)!=51 or blob[:15]!=b'\x00\x00\x00\x0bssh-ed25519': raise ValueError()
-    return data
+def host_token(host, port):
+    return '['+host+']:'+str(port) if port != 22 or ':' in host else host
+
+
+def validate_server_host_key(value):
+    if not isinstance(value, str) or not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?', value):
+        raise ValueError('Invalid BOXWEAVE_SERVER_HOST_KEY')
+    blob = base64.b64decode(value.split()[1], validate=True)
+    if len(blob) != 51 or blob[:15] != b'\x00\x00\x00\x0bssh-ed25519':
+        raise ValueError('Invalid BOXWEAVE_SERVER_HOST_KEY')
+    return value
+
+
+def connection_from_env():
+    """Read and validate the connection parameters exported by the generated script."""
+    d = {'ssh_host': os.environ.get('BOXWEAVE_SSH_HOST', ''),
+         'ssh_port': os.environ.get('BOXWEAVE_SSH_PORT', ''),
+         'linux_user': os.environ.get('BOXWEAVE_SSH_USER', ''),
+         'launcher': LAUNCHER,
+         'agent': os.environ.get('BOXWEAVE_AGENT', ''),
+         'runtime': os.environ.get('BOXWEAVE_RUNTIME', ''),
+         'transport': os.environ.get('BOXWEAVE_TRANSPORT', '')}
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}', d['ssh_host']):
+        raise ValueError('Invalid or missing BOXWEAVE_SSH_HOST')
+    if not re.fullmatch(r'[0-9]+', d['ssh_port']) or not 1 <= int(d['ssh_port']) <= 65535:
+        raise ValueError('Invalid or missing BOXWEAVE_SSH_PORT')
+    d['ssh_port'] = int(d['ssh_port'])
+    if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,63}', d['linux_user']):
+        raise ValueError('Invalid or missing BOXWEAVE_SSH_USER')
+    if d['agent'] not in AGENTS:
+        raise ValueError('Invalid or missing BOXWEAVE_AGENT')
+    if d['runtime'] not in ('native', 'wsl') or d['transport'] not in ('native', 'wsl'):
+        raise ValueError('Invalid or missing BOXWEAVE_RUNTIME/BOXWEAVE_TRANSPORT')
+    d['os'] = 'macos' if sys.platform == 'darwin' else 'windows'
+    if d['os'] == 'macos':
+        if d['runtime'] != 'native' or d['transport'] != 'native':
+            raise ValueError('macOS supports native runtime and SSH only')
+    else:
+        if d['runtime'] != 'wsl' or d['transport'] != 'wsl':
+            raise ValueError('This setup.py covers macOS native and the Windows WSL CLI profile only; use setup.ps1 for native Windows')
+        if d['agent'] in ('cursor', 'zcode'):
+            raise ValueError('WSL runtime supports Codex/Claude Code CLI only')
+    return d
 
 
 def diagnose(args):
@@ -312,13 +410,11 @@ def diagnose(args):
     try:
         if args.replace or args.bootstrap_identity or args.project_path: fail('INPUT_INVALID','input')
         try:
-            if len(args.data_base64)>65536: raise ValueError()
-            d=diagnostic_profile(json.loads(base64.b64decode(args.data_base64,validate=True)))
-            options=d.get('setup_options',{})
-            if not isinstance(options,dict): raise ValueError()
-            if any(options.get(k) for k in ('replace','bootstrap_identity','project_path')): raise ValueError()
             if not 1<=args.timeout<=300: raise ValueError()
-        except (ValueError,TypeError,KeyError): fail('INPUT_INVALID','input')
+            d=connection_from_env()
+            env_key=os.environ.get('BOXWEAVE_SERVER_HOST_KEY')
+            if env_key: validate_server_host_key(env_key)
+        except (ValueError,TypeError,KeyError,OSError): fail('INPUT_INVALID','input')
         record('input','passed','OK')
         if d['os']=='macos' and sys.platform!='darwin': fail('PROFILE_UNSUPPORTED','runtime')
         if d['runtime']=='wsl':
@@ -330,36 +426,46 @@ def diagnose(args):
         report.update(runtime=d['os']+'-'+d['runtime'],transport=d['transport'])
         record('runtime','passed','OK')
         key=Path.home()/'.ssh/boxweave';known=Path.home()/'.ssh/boxweave_known_hosts'
-        for path in (key,known): safe_file(path)
+        config=Path.home()/'.ssh/config'
+        for path in (key,known,config): safe_file(path)
         if not key.is_file(): fail('IDENTITY_MISSING','trust')
         if not known.is_file(): fail('PIN_MISSING','trust')
-        host=d['ssh_host']
-        token='['+host+']:'+str(d['ssh_port']) if d['ssh_port']!=22 or ':' in host else host
-        expected=token+' '+' '.join(d['server_public_key'].split()[:2])
-        if known.read_text().strip()!=expected: fail('PIN_MISMATCH','trust','failed')
+        block=parse_ssh_transport_block(config.read_text(encoding='utf-8') if config.exists() else '')
+        if not block: fail('TRANSPORT_MISSING','trust')
+        expected_fields={'HostName':d['ssh_host'],'Port':str(d['ssh_port']),'User':d['linux_user'],
+                         'IdentityFile':str(key),'UserKnownHostsFile':str(known)}
+        if any(block.get(name)!=value for name,value in expected_fields.items()):
+            fail('TRANSPORT_MISMATCH','trust','failed')
+        token=host_token(d['ssh_host'],d['ssh_port'])
+        observed_pin=known.read_text().strip()
+        if env_key:
+            expected_pin=token+' '+' '.join(env_key.split()[:2])
+            if observed_pin!=expected_pin: fail('PIN_MISMATCH','trust','failed')
+        elif observed_pin.split()[0:1]!=[token]:
+            fail('PIN_MISMATCH','trust','failed')
         record('trust','passed','OK')
         transport=['-T','-i',str(key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
                    '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
                    '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
                    *SSH_KEEPALIVE_ARGS,
-                   '-p',str(d['ssh_port']),d['linux_user']+'@'+host,d['launcher']]
-        home=Path(args.agent_home or options.get('agent_home') or
-                  os.environ.get('CODEX_HOME') or Path.home()/'.codex').expanduser()
-        if d['agent']=='cursor': home=Path(args.agent_home or options.get('agent_home') or Path.home()/'.cursor').expanduser()
-        if d['agent']=='zcode': home=Path(args.agent_home or options.get('agent_home') or Path.home()/'.zcode').expanduser()
+                   '-p',str(d['ssh_port']),d['linux_user']+'@'+d['ssh_host'],d['launcher']]
+        expected_transport=['boxweave',d['launcher']]
+        home=Path(args.agent_home or os.environ.get('CODEX_HOME') or Path.home()/'.codex').expanduser()
+        if d['agent']=='cursor': home=Path(args.agent_home or Path.home()/'.cursor').expanduser()
+        if d['agent']=='zcode': home=Path(args.agent_home or Path.home()/'.zcode').expanduser()
         if d['agent']=='claude-code':
             report['registration']='unsupported'
             record('registration','incomplete','REGISTRATION_UNSUPPORTED')
             home=Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude')
         else:
-            config=home/('config.toml' if d['agent']=='codex' else 'cli/config.json' if d['agent']=='zcode' else 'mcp.json');safe_file(config)
+            config_file=home/('config.toml' if d['agent']=='codex' else 'cli/config.json' if d['agent']=='zcode' else 'mcp.json');safe_file(config_file)
             try:
-                parsed=(tomllib.loads(config.read_text()) if d['agent']=='codex' else json.loads(config.read_text()))
+                parsed=(tomllib.loads(config_file.read_text()) if d['agent']=='codex' else json.loads(config_file.read_text()))
                 entry=(parsed.get('mcp',{}).get('servers',{}).get('boxweave') if d['agent']=='zcode'
                        else parsed.get('mcp_servers' if d['agent']=='codex' else 'mcpServers',{}).get('boxweave'))
                 allowed={'command','args','type','enable','enabled','timeoutMs'} if d['agent']=='zcode' else {'command','args','startup_timeout_sec','tool_timeout_sec','enabled'}
                 if not isinstance(entry,dict) or set(entry)-allowed: raise ValueError()
-                matched=entry.get('command')==ssh and entry.get('args')==transport and entry.get('enabled',True) is True and entry.get('enable',True) is True
+                matched=entry.get('command')==ssh and entry.get('args')==expected_transport and entry.get('enabled',True) is True and entry.get('enable',True) is True
                 if d['agent']=='zcode': matched=matched and entry.get('type','stdio')=='stdio' and parsed.get('features',{}).get('mcp',True) is True
                 report['registration']='matched' if matched else 'mismatch'
                 record('registration','passed' if matched else 'failed','OK' if matched else 'REGISTRATION_MISMATCH')
@@ -379,8 +485,8 @@ def diagnose(args):
         evidence={}
         try:
             # Controlled profile: never execute commands from an agent registration.
-            probe(ssh,['-F','/dev/null',*transport[:1],'-o','IdentityAgent=none',
-                       '-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no',*transport[1:]],
+            probe(ssh,['-F','/dev/null','-o','IdentityAgent=none',
+                       '-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no',*transport],
                   timeout=args.timeout,evidence=evidence)
             report['connection']='passed'
         except DiagnosticError as error:
@@ -417,46 +523,29 @@ def diagnose(args):
     return code
 
 
-def validate_data(d):
-    if not isinstance(d,dict): raise ValueError('Invalid client data')
-    for k,pattern in {'ssh_host':r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}',
-                      'linux_user':r'[a-z_][a-z0-9_-]{0,63}',
-                      'launcher':r'/[A-Za-z0-9_./-]+'}.items():
-        if not isinstance(d.get(k),str) or not re.fullmatch(pattern,d[k]): raise ValueError('Invalid '+k)
-    if type(d.get('ssh_port')) is not int or not 1<=d['ssh_port']<=65535: raise ValueError('Invalid port')
-    if d.get('agent') not in ('codex','cursor','claude-code','zcode'): raise ValueError('Unsupported agent')
-    if d.get('os')=='macos':
-        if d.get('runtime')!='native' or d.get('transport')!='native': raise ValueError('Invalid macOS profile')
-    elif d.get('os')=='windows':
-        if d.get('runtime')!='wsl' or d.get('transport')!='wsl' or d['agent'] in ('cursor','zcode'): raise ValueError('Invalid WSL CLI profile')
-    else: raise ValueError('Unsupported OS')
-    if not isinstance(d.get('policy'),str) or len(d['policy'])>20000: raise ValueError('Invalid guidance')
-    for key in ('server_public_key','container_public_key'):
-        value=d.get(key,'')
-        if not isinstance(value,str) or '\n' in value or '\r' in value or not re.fullmatch(r'(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+(?: [^\r\n]+)?',value):
-            raise ValueError('Invalid '+key)
-    if not d['server_public_key'].startswith('ssh-ed25519 '): raise ValueError('Invalid host key')
-    return d
+def container_public_key_from_env():
+    value = os.environ.get('BOXWEAVE_CONTAINER_PUBLIC_KEY', '')
+    if not isinstance(value, str) or '\n' in value or '\r' in value or not re.fullmatch(
+            r'(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+(?: [^\r\n]+)?', value):
+        raise ValueError('Invalid or missing BOXWEAVE_CONTAINER_PUBLIC_KEY')
+    return value
+
 
 def setup(args):
-    d=validate_data(json.loads(base64.b64decode(args.data_base64,validate=True)))
-    options=d.get('setup_options',{})
-    if not isinstance(options,dict): raise ValueError('Invalid setup options')
-    for name in ('bootstrap_identity','agent_home','project_path','replace'):
-        if not getattr(args,name,None) and options.get(name) is not None:
-            if name!='replace' and not isinstance(options[name],str): raise ValueError('Invalid setup option')
-            if name=='replace' and type(options[name]) is not bool: raise ValueError('Invalid replacement flag')
-            setattr(args,name,options[name])
-    provider=options.get('claude_provider')
-    if (provider or options.get('glm_model')) and d['agent']!='claude-code':
+    d=connection_from_env()
+    host_key=validate_server_host_key(os.environ.get('BOXWEAVE_SERVER_HOST_KEY'))
+    container_key=container_public_key_from_env()
+    provider=os.environ.get('BOXWEAVE_CLAUDE_PROVIDER') or None
+    model=os.environ.get('BOXWEAVE_GLM_MODEL') or None
+    if (provider or model) and d['agent']!='claude-code':
         raise ValueError('GLM options require Claude Code')
-    if options.get('glm_model') and not provider: raise ValueError('GLM model requires provider')
+    if model and not provider: raise ValueError('GLM model requires provider')
     glm_text=None
     if provider:
         directory=Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude').expanduser()
         settings=directory/'settings.json'
         glm_text=glm_settings(settings.read_text() if settings.exists() else '', provider,
-                              options.get('glm_model'), os.environ.get('GLM_API_KEY'))
+                              model, os.environ.get('GLM_API_KEY'))
     if d['os']=='macos' and sys.platform!='darwin': raise ValueError('Run this macOS command on the Mac')
     if d['runtime']=='wsl' and 'microsoft' not in Path('/proc/sys/kernel/osrelease').read_text().lower():
         raise ValueError('Run this WSL command inside the intended WSL distribution')
@@ -468,41 +557,51 @@ def setup(args):
     sshdir=home/'.ssh'
     key=sshdir/'boxweave'
     known=sshdir/'boxweave_known_hosts'
+    config=sshdir/'config'
     pub=key.with_suffix('.pub')
-    host=d['ssh_host']
-    token='['+host+']:'+str(d['ssh_port']) if d['ssh_port']!=22 or ':' in host else host
-    pin=token+' '+' '.join(d['server_public_key'].split()[:2])+'\n'
-    if known.exists() and known.read_text().strip()!=pin.strip(): raise ValueError('Pinned server identity changed; verify out-of-band')
+    pin=host_token(d['ssh_host'],d['ssh_port'])+' '+' '.join(host_key.split()[:2])+'\n'
+    if known.exists():
+        observed=known.read_text().strip()
+        if observed and observed!=pin.strip():
+            if observed.split()[0:1]!=[pin.split()[0]]:
+                print('[boxweave] SSH address changed ({} -> {}); repinning the server host key.'.format(
+                    observed.split()[0], pin.split()[0]), flush=True)
+            else:
+                raise ValueError('Pinned server identity changed; verify out-of-band')
     if key.exists()!=pub.exists(): raise ValueError('Incomplete SSH keypair; refusing overwrite')
-    transport=['-T','-i',str(key),'-o','IdentitiesOnly=yes','-o','BatchMode=yes',
-               '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
-               '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
-               *SSH_KEEPALIVE_ARGS,
-               '-p',str(d['ssh_port']),d['linux_user']+'@'+host,d['launcher']]
     # Stage adapters before enrolling so malformed user configuration is not a partial enrollment.
-    pending=[]
+    # The transport is addressed through the managed "Host boxweave" block, so every
+    # registration is just: ssh boxweave <launcher>. Changing the server address later
+    # only touches ~/.ssh/config, never the agent registrations.
+    pending=[(config, ssh_config_managed(config.read_text(encoding='utf-8') if config.exists() else '',
+                                         ssh_transport_block(d['ssh_host'],d['ssh_port'],d['linux_user'],key,known)))]
     if d['agent']=='codex':
         directory=Path(args.agent_home or os.environ.get('CODEX_HOME') or home/'.codex').expanduser()
-        config=directory/'config.toml'
-        pending.append((config,toml_update(config.read_text() if config.exists() else '',ssh,transport,args.replace)))
+        agent_config=directory/'config.toml'
+        pending.append((agent_config,toml_update(agent_config.read_text() if agent_config.exists() else '',ssh,['boxweave',d['launcher']],args.replace)))
         rule=directory/'AGENTS.override.md'
         if not rule.exists() or not rule.read_text().strip(): rule=directory/'AGENTS.md'
-        pending.append((rule,managed(rule.read_text() if rule.exists() else '',d['policy'])))
+        policy=POLICY.format(ssh_host=d['ssh_host'],ssh_port=d['ssh_port'],linux_user=d['linux_user'],
+                             container_public_key=container_key)
+        pending.append((rule,managed(rule.read_text() if rule.exists() else '',policy)))
     elif d['agent']=='zcode':
         directory=Path(args.agent_home or home/'.zcode').expanduser()
-        config=directory/'cli/config.json'
-        pending.append((config,zcode_update(config.read_text() if config.exists() else '',ssh,transport,args.replace)))
-        rule=directory/'AGENTS.md'
-        pending.append((rule,managed(rule.read_text() if rule.exists() else '',d['policy'])))
+        agent_config=directory/'cli/config.json'
+        pending.append((agent_config,zcode_update(agent_config.read_text() if agent_config.exists() else '',ssh,['boxweave',d['launcher']],args.replace)))
+        policy=POLICY.format(ssh_host=d['ssh_host'],ssh_port=d['ssh_port'],linux_user=d['linux_user'],
+                             container_public_key=container_key)
+        pending.append((directory/'AGENTS.md',managed(directory.joinpath('AGENTS.md').read_text() if directory.joinpath('AGENTS.md').exists() else '',policy)))
     elif d['agent']=='cursor':
         directory=Path(args.agent_home or home/'.cursor').expanduser()
-        config=directory/'mcp.json'
-        pending.append((config,json_update(config.read_text() if config.exists() else '',ssh,transport,args.replace)))
-        pending.append((directory/'boxweave-user-rules.md',d['policy']))
+        agent_config=directory/'mcp.json'
+        pending.append((agent_config,json_update(agent_config.read_text() if agent_config.exists() else '',ssh,[d['launcher']],args.replace)))
+        policy=POLICY.format(ssh_host=d['ssh_host'],ssh_port=d['ssh_port'],linux_user=d['linux_user'],
+                             container_public_key=container_key)
+        pending.append((directory/'boxweave-user-rules.md',policy))
         if args.project_path:
             project=Path(args.project_path).expanduser().resolve(strict=True)
             if not project.is_dir(): raise ValueError('Project path is not a directory')
-            pending.append((project/'.cursor/rules/boxweave.mdc','---\nalwaysApply: true\n---\n\n'+d['policy']))
+            pending.append((project/'.cursor/rules/boxweave.mdc','---\nalwaysApply: true\n---\n\n'+policy))
     else:
         # The official CLI owns its user registry, including custom configuration-home semantics.
         existing=subprocess.run([claude,'mcp','get','boxweave'],capture_output=True,timeout=20)
@@ -511,7 +610,9 @@ def setup(args):
         directory=Path(args.agent_home or os.environ.get('CLAUDE_CONFIG_DIR') or home/'.claude').expanduser()
         if args.agent_home:
             raise ValueError('For Claude Code set CLAUDE_CONFIG_DIR instead of --agent-home')
-        pending.append((directory/'rules/boxweave.md',d['policy']))
+        policy=POLICY.format(ssh_host=d['ssh_host'],ssh_port=d['ssh_port'],linux_user=d['linux_user'],
+                             container_public_key=container_key)
+        pending.append((directory/'rules/boxweave.md',policy))
         if glm_text is not None: pending.append((directory/'settings.json',glm_text))
     for path,_ in pending:
         if path.is_symlink() or any(p.is_symlink() for p in path.parents if p!=home.parent):
@@ -527,6 +628,7 @@ def setup(args):
     line=pub.read_text().strip()
     if not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?',line): raise ValueError('Invalid transport public key')
     atomic_write(known,pin)
+    atomic_write(config,pending[0][1])
     enrollment='restrict,command="'+d['launcher']+'" '+line
     encoded=base64.b64encode(enrollment.encode()).decode()
     material=line.split()[1]
@@ -546,24 +648,31 @@ def setup(args):
         auth=['-o','PubkeyAuthentication=no','-o','PreferredAuthentications=keyboard-interactive,password']
     print('[boxweave] Enrolling public key using your EXISTING SSH login.',flush=True)
     remote="printf '%s' "+shlex.quote(base64.b64encode(script.encode()).decode())+" | base64 -d | sh"
-    checked([ssh,*common,*auth,d['linux_user']+'@'+host,remote],timeout=300)
+    checked([ssh,*common,*auth,d['linux_user']+'@'+d['ssh_host'],remote],timeout=300)
     print('[boxweave] Enrollment complete; verifying authenticated MCP.',flush=True)
-    probe(ssh,transport)
+    # The same options as the managed Host block, but explicit: this probe must
+    # not depend on the user's ~/.ssh/config being parsed as we wrote it.
+    verify=['-F','/dev/null','-o','IdentityAgent=none','-T','-i',str(key),
+            '-o','IdentitiesOnly=yes','-o','BatchMode=yes',
+            '-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(known),
+            '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+            *SSH_KEEPALIVE_ARGS,
+            '-p',str(d['ssh_port']),d['linux_user']+'@'+d['ssh_host'],d['launcher']]
+    probe(ssh,verify)
     if claude:
         if args.replace and existing.returncode==0:
             checked([claude,'mcp','remove','--scope','user','boxweave'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=20)
-        checked([claude,'mcp','add','--scope','user','--transport','stdio','boxweave','--',ssh,*transport],
+        checked([claude,'mcp','add','--scope','user','--transport','stdio','boxweave','--',ssh,'boxweave',d['launcher']],
                 stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=20)
-    for path,text in pending: atomic_write(path,text)
+    for path,text in pending[1:]: atomic_write(path,text)
     print('MCP initialize/tools/list/read-only provider call: passed.')
-    print('Agent registration: written. Reopen the agent and verify BoxWeave in its MCP UI.')
+    print('Agent registration: written (ssh boxweave). Reopen the agent and verify BoxWeave in its MCP UI.')
     if d['agent']=='cursor' and not args.project_path:
         print('Guidance: manual step required. Paste '+str(directory/'boxweave-user-rules.md')+' into Cursor Settings > Rules > User Rules.')
     else: print('Guidance: written; confirm loading in a new agent session.')
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data-base64',required=True,help='Public connection descriptor emitted by boxweave client')
     parser.add_argument('--diagnose',action='store_true',help='Observe existing client connection; never enroll or repair')
     parser.add_argument('--timeout',type=float,default=30,help='Protocol budget in seconds (1-300); cleanup adds at most four seconds')
     parser.add_argument('--report',help='Create a new private diagnostic report file')

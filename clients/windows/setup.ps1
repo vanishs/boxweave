@@ -1,35 +1,39 @@
 #requires -version 5.1
 <#
-Configure BoxWeave with the Containarium provider for a supported Windows coding agent.
-Mode Native: ssh.exe runs on Windows.
-Mode WSL:    wsl.exe launches OpenSSH inside the selected WSL distribution.
-Both modes preserve the native Windows agent runtime; WSL is only the SSH transport.
+BoxWeave client enrollment for native Windows and Windows-native agents with a
+WSL SSH transport. All connection parameters arrive through BOXWEAVE_* env
+vars set by the generated enrollment script; nothing is base64-packed.
+
+The SSH transport is addressed through a managed "Host boxweave" block in the
+user's SSH config (native: %USERPROFILE%\.ssh\config, WSL: the distro's
+~/.ssh/config), so agent registrations stay "ssh boxweave /usr/local/bin/boxweave-mcp"
+and keep working when the server address changes: edit the block (or the
+generated script's EDIT ME header) and rerun.
+
+Switches:
+  -Replace                replace a reviewed boxweave MCP registration
+  -Diagnose               read-only connection/registration diagnostic
+  -ReportPath PATH        write the diagnostic JSON report (with -Diagnose)
+  -Timeout SECONDS        diagnostic protocol budget (1-300, default 30)
+  -BootstrapIdentityFile  existing authorized SSH identity for enrollment
+  -AgentHome PATH         agent configuration directory override
+  -ProjectPath PATH       local Cursor workspace for a project rule
 #>
 [CmdletBinding()]
 param(
-    [string]$DataBase64 = '',
     [switch]$Diagnose,
     [ValidateRange(1,300)][double]$Timeout = 30,
     [string]$ReportPath = '',
     [string]$ProjectPath = '',
     [switch]$Replace,
-    [string]$SshHost = '',
-    [ValidateRange(1,65535)][int]$SshPort = 22,
-    [string]$SshUser = '',
-    # Existing SSH login identity for key-only hosts; omit to use password login.
     [string]$BootstrapIdentityFile = '',
-    [string]$ServerHostKey = '',
-    [string]$BoxPublicKeyBase64 = '',
-    [string]$McpRemoteCommand = '/usr/local/bin/boxweave-mcp',
-    [ValidateSet('Native','WSL')][string]$Mode = 'Native',
-    [string]$WslDistro = '',
-    [ValidateSet('Codex','Cursor','Claude-Code','ZCode')][string]$Agent = 'Codex',
-    [ValidateSet('Containarium')][string]$Provider = 'Containarium',
     [string]$AgentHome = '',
     [string]$McpName = 'boxweave',
     [string]$KeyName = 'boxweave'
 )
 $ErrorActionPreference = 'Stop'
+
+$Script:McpRemoteCommand = '/usr/local/bin/boxweave-mcp'
 
 function Update-ZCodeJson([string]$Original, [string]$Command, [string[]]$Arguments, [bool]$AllowReplace) {
     $obj=if ($Original.Trim()) { ConvertFrom-Json -InputObject $Original } else { [pscustomobject]@{} }
@@ -102,7 +106,14 @@ function Update-CodexToml([string]$Path, [string]$Command, [string[]]$Arguments)
             $extra=@($old[0].Value -split '\r?\n' | Where-Object { $_ -notmatch '^\s*(#|$|\[|command\s*=|args\s*=|startup_timeout_sec\s*=|tool_timeout_sec\s*=)' })
             if ($extra.Count) { throw 'Additional settings need explicit replacement' }
             $c = [regex]::Match($old[0].Value,'(?m)^command\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json
-            $a = @([regex]::Match($old[0].Value,'(?m)^args\s*=\s*(.+?)\s*$').Groups[1].Value | ConvertFrom-Json)
+            # Windows PowerShell 5.1 wraps a top-level JSON array in a PSObject
+            # with value/Count properties; unwrap it before comparing.
+            $aRaw = ConvertFrom-Json -InputObject ([regex]::Match($old[0].Value,'(?m)^args\s*=\s*(.+?)\s*$').Groups[1].Value)
+            if ($null -ne $aRaw.PSObject.Properties['value'] -and $null -ne $aRaw.PSObject.Properties['Count'] -and $aRaw -isnot [array]) {
+                $a = @($aRaw.value)
+            } else {
+                $a = @($aRaw)
+            }
             if ($c -ne $Command -or (ConvertTo-Json -InputObject $a -Compress) -cne (ConvertTo-Json -InputObject @($Arguments) -Compress)) { throw 'Different entry' }
         } catch { throw 'Existing boxweave entry differs; rerun with -Replace after review' }
     }
@@ -129,6 +140,41 @@ function Update-Agents([string]$Path, [string]$Content, [switch]$Preview) {
     if ($Preview) { return $updated }
     Backup-File $Path
     Write-Utf8NoBom $Path $updated
+}
+function Update-SshConfigManaged([string]$Path, [string]$Block) {
+    # Idempotently place the Host boxweave transport block between markers.
+    $begin = '# BEGIN BOXWEAVE MANAGED'
+    $end = '# END BOXWEAVE MANAGED'
+    $managed = $begin + "`r`n" + $Block.Trim() + "`r`n" + $end
+    $original = if (Test-Path -LiteralPath $Path) { [System.IO.File]::ReadAllText($Path) } else { '' }
+    $a = [regex]::Matches($original,[regex]::Escape($begin)).Count
+    $b = [regex]::Matches($original,[regex]::Escape($end)).Count
+    if ($a -ne $b -or $a -gt 1 -or ($a -eq 1 -and $original.IndexOf($end) -lt $original.IndexOf($begin))) { throw 'Malformed BoxWeave ssh_config markers' }
+    $pattern = '(?s)' + [regex]::Escape($begin) + '.*?' + [regex]::Escape($end)
+    $match = [regex]::Match($original, $pattern)
+    if ($match.Success) {
+        $updated = $original.Substring(0, $match.Index) + $managed + $original.Substring($match.Index + $match.Length)
+    } else {
+        $updated = $original.TrimEnd() + "`r`n`r`n" + $managed + "`r`n"
+    }
+    Backup-File $Path
+    Write-Utf8NoBom $Path $updated
+}
+function New-SshConfigBlock([string]$HostName, [int]$Port, [string]$User, [string]$IdentityFile, [string]$KnownHostsFile) {
+    return ('Host ' + $McpName + "`r`n" +
+        '    HostName ' + $HostName + "`r`n" +
+        '    Port ' + $Port + "`r`n" +
+        '    User ' + $User + "`r`n" +
+        '    IdentityFile ' + $IdentityFile + "`r`n" +
+        '    IdentitiesOnly yes' + "`r`n" +
+        '    IdentityAgent none' + "`r`n" +
+        '    BatchMode yes' + "`r`n" +
+        '    UserKnownHostsFile ' + $KnownHostsFile + "`r`n" +
+        '    StrictHostKeyChecking yes' + "`r`n" +
+        '    HostKeyAlgorithms ssh-ed25519' + "`r`n" +
+        '    ConnectTimeout 15' + "`r`n" +
+        '    ServerAliveInterval 15' + "`r`n" +
+        '    ServerAliveCountMax 4')
 }
 function Set-PinnedHostNative([string]$Path, [string]$Line) {
     $expected=$Line.Trim() -split '\s+'
@@ -250,7 +296,7 @@ function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments,[double]$Timeout
     }
     try {
         $stage='initialize'; $Evidence.stage=$stage
-        $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.3.0'}}
+        $hello=Call-Mcp 1 'initialize' @{protocolVersion='2024-11-05';capabilities=@{};clientInfo=@{name='boxweave-client';version='0.4.0'}}
         if ($hello.protocolVersion -cne '2024-11-05') { throw 'PROTOCOL_UNSUPPORTED: Unsupported MCP protocol' }
         if(-not ($hello.capabilities -is [pscustomobject]) -or -not ($hello.capabilities.tools -is [pscustomobject])){throw 'PROTOCOL_INVALID: Tools capability missing'}
         $Evidence.protocol_version=$hello.protocolVersion; $Evidence.initialize='passed'
@@ -300,6 +346,49 @@ function Test-BoxWeaveMcp([string]$Command,[string[]]$Arguments,[double]$Timeout
     }
 }
 
+$policyTemplate = @'
+## BoxWeave remote development (Containarium)
+- Use MCP server boxweave to list/provision containers and its dynamic connect tool to work inside a box.
+- Develop, install dependencies, test and deploy INSIDE the assigned project LXC. Inspect existing files/Git state and preserve uncommitted work.
+- Inspect existing resources first; reuse a suitable project box. Never modify unrelated or containarium-core-* boxes.
+- The Ubuntu MCP endpoint is {ssh_host}:{ssh_port}, user {linux_user}. The transport key is restricted to the MCP launcher, not a general host shell credential.
+- For create_container.ssh_keys, explicitly supply this FULL managed Ubuntu-to-container public key:
+  {container_public_key}
+- Never substitute a client transport key, a fingerprint, or another nesting layer's key. Never read/export private keys or JWTs.
+- A create timeout is ambiguous: inspect the original logical name before retrying; never duplicate or force-recreate to bypass a timeout.
+- Running does not prove SSH readiness. Use one deadline per phase (normally 600 seconds), poll every 15-30 seconds, and verify connect with whoami && hostname before project work. Report actual stdout and exit codes.
+- After IP reuse, allow bounded trusted host-key reconciliation. Never disable host verification or edit known_hosts to bypass a mismatch. Diagnose persistent failures read-only.
+- Service activity, HTTP 200/401/403 and CLI exit 0 do not prove authenticated MCP execution. Test initialize/initialized, tools/list and an actual read-only tools/call.
+- Keep identities separate at each nested MCP host; direct Incus execution is not evidence of nested authenticated MCP execution.
+- Use systemd/Compose only for requested persistent workloads; verify health and application autostart. LXC boot.autostart requires separate evidence.
+- Publish ports only when requested. Inspect routes/conflicts and verify actual client connectivity. Passthrough does not provide LAN-only source filtering or TLS.
+- Obtain explicit approval for destructive/host-wide changes or public exposure. Never change host SSH/firewall/provider credentials to make a test pass.
+'@
+
+function Get-ConnectionFromEnv {
+    $hostName=$env:BOXWEAVE_SSH_HOST; $portText=$env:BOXWEAVE_SSH_PORT; $user=$env:BOXWEAVE_SSH_USER
+    $hostKey=$env:BOXWEAVE_SERVER_HOST_KEY; $containerKey=$env:BOXWEAVE_CONTAINER_PUBLIC_KEY
+    $agent=$env:BOXWEAVE_AGENT; $transport=$env:BOXWEAVE_TRANSPORT; $distro=$env:BOXWEAVE_WSL_DISTRO
+    if (-not $hostName -or $hostName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$') { throw 'Invalid or missing BOXWEAVE_SSH_HOST' }
+    if (-not $portText -or $portText -cnotmatch '^[0-9]+$' -or [int]$portText -lt 1 -or [int]$portText -gt 65535) { throw 'Invalid or missing BOXWEAVE_SSH_PORT' }
+    if (-not $user -or $user -cnotmatch '^[a-z_][a-z0-9_-]{0,63}$') { throw 'Invalid or missing BOXWEAVE_SSH_USER' }
+    if (-not $hostKey -or $hostKey -cnotmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$') { throw 'Invalid or missing BOXWEAVE_SERVER_HOST_KEY' }
+    $keyBlob=[Convert]::FromBase64String($Matches[1])
+    if ($keyBlob.Length -ne 51 -or [Text.Encoding]::ASCII.GetString($keyBlob,4,11) -cne 'ssh-ed25519') { throw 'Invalid BOXWEAVE_SERVER_HOST_KEY' }
+    # The container key is required for enrollment but not for diagnostics;
+    # validate it only when present.
+    if ($containerKey -and $containerKey -cnotmatch '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+(?: [^\r\n]+)?$') { throw 'Invalid BOXWEAVE_CONTAINER_PUBLIC_KEY' }
+    if ($agent -cnotin @('codex','cursor','claude-code','zcode')) { throw 'Invalid or missing BOXWEAVE_AGENT' }
+    if ($transport -cnotin @('Native','WSL')) { throw 'Invalid or missing BOXWEAVE_TRANSPORT (Native or WSL)' }
+    if ($transport -ceq 'WSL' -and $distro -and $distro -cnotmatch '^[A-Za-z0-9_.-]+$') { throw 'Invalid BOXWEAVE_WSL_DISTRO' }
+    return @{Host=$hostName;Port=[int]$portText;User=$user;HostKey=$hostKey;ContainerKey=$containerKey;
+             Agent=$agent;Transport=$transport;Distro=$distro}
+}
+
+function Get-PolicyText($conn) {
+    return $policyTemplate.Replace('{ssh_host}',$conn.Host).Replace('{ssh_port}',[string]$conn.Port).Replace('{linux_user}',$conn.User).Replace('{container_public_key}',$conn.ContainerKey)
+}
+
 function Invoke-BoxWeaveDiagnostic {
     $report=[ordered]@{schema_version=1;operation='client_diagnose';overall='incomplete';connection='unverified';registration='unverified';guidance='unverified';agent_ui='unverified';stages=@();process_exit_code=$null;cleanup='not_started'}
     $clock=[Diagnostics.Stopwatch]::StartNew()
@@ -345,26 +434,20 @@ function Invoke-BoxWeaveDiagnostic {
         }
     }
     try{
-        if($Replace -or $BootstrapIdentityFile -or $ProjectPath -or -not $DataBase64 -or $DataBase64.Length -gt 65536){Stop-Diagnostic 'INPUT_INVALID' 'input'}
+        if($Replace -or $BootstrapIdentityFile -or $ProjectPath){Stop-Diagnostic 'INPUT_INVALID' 'input'}
         try{
-            $d=ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
-            if($d.os -cne 'windows' -or $d.runtime -cne 'native' -or $d.transport -cnotin @('native','wsl') -or $d.agent -cnotin @('codex','cursor','claude-code','zcode')){throw 'profile'}
-            if($d.ssh_host -cnotmatch '^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$' -or $d.linux_user -cnotmatch '^[a-z_][a-z0-9_-]{0,63}$' -or $d.launcher -cnotmatch '^/[A-Za-z0-9_./-]+$'){throw 'endpoint'}
-            if($d.ssh_port -is [string] -or $d.ssh_port -is [bool] -or $d.ssh_port -lt 1 -or $d.ssh_port -gt 65535){throw 'port'}
-            if($d.server_public_key -cnotmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$'){throw 'key'}
-            $keyBlob=[Convert]::FromBase64String($Matches[1])
-            if($keyBlob.Length -ne 51 -or [Text.Encoding]::ASCII.GetString($keyBlob,4,11) -cne 'ssh-ed25519'){throw 'key'}
-            if($d.setup_options.replace -or $d.setup_options.bootstrap_identity -or $d.setup_options.project_path){throw 'mutation'}
+            if($Timeout -lt 1 -or $Timeout -gt 300){throw 'timeout'}
+            $d=Get-ConnectionFromEnv
         } catch {Stop-Diagnostic 'INPUT_INVALID' 'input'}
         Record-Diagnostic 'input' 'passed' 'OK'
-        $report.runtime='windows-native';$report.transport=$d.transport
-        $homePath=if($AgentHome){$AgentHome}elseif($d.setup_options.agent_home){$d.setup_options.agent_home}elseif($d.agent -ceq 'codex'){if($env:CODEX_HOME){$env:CODEX_HOME}else{Join-Path $env:USERPROFILE '.codex'}}elseif($d.agent -ceq 'cursor'){Join-Path $env:USERPROFILE '.cursor'}elseif($d.agent -ceq 'zcode'){Join-Path $env:USERPROFILE '.zcode'}else{if($env:CLAUDE_CONFIG_DIR){$env:CLAUDE_CONFIG_DIR}else{Join-Path $env:USERPROFILE '.claude'}}
+        $report.runtime='windows-native';$report.transport=$d.Transport
+        $homePath=if($AgentHome){$AgentHome}elseif($d.Agent -ceq 'codex'){if($env:CODEX_HOME){$env:CODEX_HOME}else{Join-Path $env:USERPROFILE '.codex'}}elseif($d.Agent -ceq 'cursor'){Join-Path $env:USERPROFILE '.cursor'}elseif($d.Agent -ceq 'zcode'){Join-Path $env:USERPROFILE '.zcode'}else{if($env:CLAUDE_CONFIG_DIR){$env:CLAUDE_CONFIG_DIR}else{Join-Path $env:USERPROFILE '.claude'}}
         Safe-DiagnosticPath $homePath
-        $token=if($d.ssh_port -ne 22 -or $d.ssh_host.Contains(':')){'['+$d.ssh_host+']:'+$d.ssh_port}else{$d.ssh_host}
-        $pin=$token+' '+(($d.server_public_key -split ' ')[0..1] -join ' ')
-        if($d.transport -ceq 'wsl'){
-            $distro=if($WslDistro){$WslDistro}else{$d.setup_options.wsl_distro}
-            if(-not $distro -or $distro -cnotmatch '^[A-Za-z0-9_.-]+$'){Stop-Diagnostic 'PROFILE_UNSUPPORTED' 'runtime'}
+        $token=if($d.Port -ne 22 -or $d.Host.Contains(':')){'['+$d.Host+']:'+$d.Port}else{$d.Host}
+        $pin=$token+' '+(($d.HostKey -split ' ')[0..1] -join ' ')
+        if($d.Transport -ceq 'WSL'){
+            $distro=$d.Distro
+            if(-not $distro){Stop-Diagnostic 'PROFILE_UNSUPPORTED' 'runtime'}
             $wslExe=(Get-Command wsl.exe -ErrorAction Stop).Source
             $body='set -eu; command -v ssh >/dev/null; test ! -L "$HOME"; test ! -L "$HOME/.ssh"; test ! -L "$HOME/.ssh/boxweave"; test ! -L "$HOME/.ssh/boxweave_known_hosts"; test -f "$HOME/.ssh/boxweave"; test -f "$HOME/.ssh/boxweave_known_hosts"; printf "%s\n" "$HOME"; cat "$HOME/.ssh/boxweave_known_hosts"'
             $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
@@ -385,19 +468,19 @@ function Invoke-BoxWeaveDiagnostic {
             $prefix=@();$nullConfig='NUL'
         }
         Record-Diagnostic 'runtime' 'passed' 'OK';Record-Diagnostic 'trust' 'passed' 'OK'
-        $sshArguments=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-p',[string]$d.ssh_port,($d.linux_user+'@'+$d.ssh_host),$d.launcher)
-        $expectedArguments=@($prefix)+$sshArguments
-        if($d.agent -ceq 'claude-code'){
+        $sshArguments=@('-T','-i',$key,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',('UserKnownHostsFile='+$known),'-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-p',[string]$d.Port,($d.User+'@'+$d.Host),$Script:McpRemoteCommand)
+        $expectedArguments=@($prefix)+'boxweave'+$Script:McpRemoteCommand
+        if($d.Agent -ceq 'claude-code'){
             $report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'
         }else{
-            $config=Join-Path $homePath $(if($d.agent -ceq 'codex'){'config.toml'}elseif($d.agent -ceq 'zcode'){'cli/config.json'}else{'mcp.json'})
+            $config=Join-Path $homePath $(if($d.Agent -ceq 'codex'){'config.toml'}elseif($d.Agent -ceq 'zcode'){'cli/config.json'}else{'mcp.json'})
             Safe-DiagnosticPath $config
             if(-not (Test-Path -LiteralPath $config -PathType Leaf)){
                 $report.registration='missing';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_MISSING'
             }else{
                 try{
                     $text=[IO.File]::ReadAllText($config)
-                    if($d.agent -ceq 'codex'){
+                    if($d.Agent -ceq 'codex'){
                         $match=[regex]::Matches($text,'(?ms)^\[mcp_servers\.boxweave\][ \t]*(?:#[^\r\n]*)?\r?\n(.*?)(?=^\[|\z)')
                         if($match.Count -ne 1){throw 'unsupported'}
                         $fields=@{}
@@ -411,7 +494,7 @@ function Invoke-BoxWeaveDiagnostic {
                         $entry=[pscustomobject]$fields
                     }else{
                         $parsed=ConvertFrom-Json -InputObject $text
-                        if($d.agent -ceq 'zcode'){
+                        if($d.Agent -ceq 'zcode'){
                             $entry=$parsed.mcp.servers.boxweave
                             if($parsed.PSObject.Properties['features'] -and $parsed.features.PSObject.Properties['mcp'] -and $parsed.features.mcp -ne $true){throw 'disabled'}
                             if($entry.type -and $entry.type -cne 'stdio'){throw 'unsupported'}
@@ -427,15 +510,15 @@ function Invoke-BoxWeaveDiagnostic {
                 }catch{$report.registration='unsupported';Record-Diagnostic 'registration' 'incomplete' 'REGISTRATION_UNSUPPORTED'}
             }
         }
-        if($d.agent -ceq 'codex'){
+        if($d.Agent -ceq 'codex'){
             $guidance=Join-Path $homePath 'AGENTS.override.md';Safe-DiagnosticPath $guidance
             if(-not (Test-Path -LiteralPath $guidance) -or -not ([IO.File]::ReadAllText($guidance)).Trim()){$guidance=Join-Path $homePath 'AGENTS.md'}
             Safe-DiagnosticPath $guidance
             if((Test-Path -LiteralPath $guidance -PathType Leaf) -and ([IO.File]::ReadAllText($guidance)).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')){$report.guidance='present'}
-        }elseif($d.agent -ceq 'zcode'){
+        }elseif($d.Agent -ceq 'zcode'){
             $guidance=Join-Path $homePath 'AGENTS.md';Safe-DiagnosticPath $guidance
             if((Test-Path -LiteralPath $guidance -PathType Leaf) -and ([IO.File]::ReadAllText($guidance)).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')){$report.guidance='present'}
-        }elseif($d.agent -ceq 'cursor'){$report.guidance='manual'}
+        }elseif($d.Agent -ceq 'cursor'){$report.guidance='manual'}
         Record-Diagnostic 'guidance' $(if($report.guidance -eq 'present'){'passed'}else{'unverified'}) $(if($report.guidance -eq 'present'){'FILE_PRESENT'}else{'MANUAL_VERIFICATION_REQUIRED'})
         $evidence=@{}
         try{
@@ -485,25 +568,17 @@ if ($Diagnose) {
 }
 if ($ReportPath) { throw '-ReportPath requires -Diagnose' }
 
-if ($DataBase64) {
-    $d = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DataBase64)))
-    if ($d.os -ne 'windows' -or $d.runtime -ne 'native' -or $d.transport -notin @('native','wsl') -or $d.agent -notin @('codex','cursor','claude-code','zcode')) { throw 'Invalid Windows client profile' }
-    if ($d.ssh_port -lt 1 -or $d.ssh_port -gt 65535) { throw 'Invalid SSH port' }
-    if ($d.setup_options) {
-        $opts=$d.setup_options
-        if (-not $BootstrapIdentityFile -and $opts.bootstrap_identity) { $BootstrapIdentityFile=$opts.bootstrap_identity }
-        if (-not $AgentHome -and $opts.agent_home) { $AgentHome=$opts.agent_home }
-        if (-not $ProjectPath -and $opts.project_path) { $ProjectPath=$opts.project_path }
-        if (-not $WslDistro -and $opts.wsl_distro) { $WslDistro=$opts.wsl_distro }
-        if ($opts.replace -eq $true) { $Replace=$true }
-    }
-    if (-not $d.policy -or $d.policy.Length -gt 20000) { throw 'Invalid guidance text' }
-    $SshHost=$d.ssh_host; $SshPort=$d.ssh_port; $SshUser=$d.linux_user
-    $Mode=$d.transport; $Agent=$d.agent; $McpRemoteCommand=$d.launcher
-    if ($d.server_public_key -notmatch '^ssh-ed25519 ([A-Za-z0-9+/=]+)(?: [^\r\n]+)?$') { throw 'Invalid server key' }
-    $ServerHostKey=$Matches[1]
-    $BoxPublicKeyBase64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($d.container_public_key))
-}
+$conn = Get-ConnectionFromEnv
+if (-not $conn.ContainerKey) { throw 'Missing BOXWEAVE_CONTAINER_PUBLIC_KEY; rerun the generated script with its EDIT ME block intact' }
+$SshHost=$conn.Host; $SshPort=$conn.Port; $SshUser=$conn.User
+$Mode=$conn.Transport; $Agent=$conn.Agent
+$WslDistro=$conn.Distro
+$ServerHostKey=($conn.HostKey -split ' ')[1]
+$glmProvider=$env:BOXWEAVE_CLAUDE_PROVIDER
+$glmModel=$env:BOXWEAVE_GLM_MODEL
+if (($glmProvider -or $glmModel) -and $Agent -cne 'claude-code') { throw 'GLM options require Claude Code' }
+if ($glmModel -and -not $glmProvider) { throw 'GLM model requires provider' }
+
 if ($Mode -eq 'WSL' -and -not $WslDistro) {
     $distros=@(wsl.exe -l -q | ForEach-Object { ($_ -replace [char]0,'').Trim() } | Where-Object { $_ })
     Assert-Exit 'WSL distribution discovery'
@@ -511,33 +586,24 @@ if ($Mode -eq 'WSL' -and -not $WslDistro) {
     elseif ($distros.Count -gt 1) {
         for ($i=0;$i -lt $distros.Count;$i++) { Write-Host ("{0}) {1}" -f ($i+1),$distros[$i]) }
         $answer=Read-Host 'Select WSL distribution number'
-        if ($answer -notmatch '^[0-9]+$' -or [int]$answer -lt 1 -or [int]$answer -gt $distros.Count) { throw 'Invalid selection; rerun with -WslDistro NAME' }
+        if ($answer -notmatch '^[0-9]+$' -or [int]$answer -lt 1 -or [int]$answer -gt $distros.Count) { throw 'Invalid selection; rerun with BOXWEAVE_WSL_DISTRO set' }
         $WslDistro=$distros[[int]$answer-1]
     } else { throw 'No installed WSL distribution' }
 }
-$claude = if ($Agent -eq 'Claude-Code') { (Get-Command claude -ErrorAction Stop).Source } else { $null }
+$claude = if ($Agent -eq 'claude-code') { (Get-Command claude -ErrorAction Stop).Source } else { $null }
 if ($claude -and $AgentHome) { throw 'Set CLAUDE_CONFIG_DIR instead of -AgentHome for Claude Code' }
-if ($SshHost -notmatch '^[A-Za-z0-9.:-]+$' -or $SshUser -notmatch '^[a-z_][a-z0-9_-]*$') {
-    throw 'Invalid SSH host or Unix user.'
-}
 if ($McpName -notmatch '^[a-zA-Z0-9_-]+$' -or $KeyName -notmatch '^[a-zA-Z0-9_-]+$') {
     throw 'Invalid MCP name or SSH key filename.'
 }
-if ($McpRemoteCommand -notmatch '^/[a-zA-Z0-9_./-]+$') { throw 'Invalid remote MCP command path.' }
-if ($ServerHostKey -notmatch '^[a-zA-Z0-9+/]+={0,2}$') { throw 'Invalid server SSH public key.' }
-if ($Mode -eq 'WSL' -and $WslDistro -notmatch '^[a-zA-Z0-9_.-]+$') {
-    throw 'WSL mode requires -WslDistro NAME (wsl.exe -l -q lists installed distributions).'
-}
-$boxPub = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($BoxPublicKeyBase64)).Trim()
-if ($boxPub -notmatch '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-[a-z0-9]+)\s+[a-zA-Z0-9+/=]+(?:\s+[^\r\n]*)?$') {
-    throw 'Invalid Ubuntu-to-container SSH public key.'
+if ($Mode -eq 'WSL' -and $WslDistro -cnotmatch '^[a-zA-Z0-9_.-]+$') {
+    throw 'WSL mode requires a WSL distribution name (wsl.exe -l -q lists installed distributions).'
 }
 $ssh = (Get-Command ssh.exe -ErrorAction Stop).Source
 $sshKeygen = (Get-Command ssh-keygen.exe -ErrorAction Stop).Source
 $wsl = if ($Mode -eq 'WSL') { (Get-Command wsl.exe -ErrorAction Stop).Source } else { $null }
 
 $sshDir = Join-Path $env:USERPROFILE '.ssh'
-$codexDir = if ($AgentHome) { $AgentHome } elseif ($Agent -eq 'Cursor') { Join-Path $env:USERPROFILE '.cursor' } elseif ($Agent -eq 'ZCode') { Join-Path $env:USERPROFILE '.zcode' } elseif ($Agent -eq 'Claude-Code') { if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' } } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$codexDir = if ($AgentHome) { $AgentHome } elseif ($Agent -eq 'cursor') { Join-Path $env:USERPROFILE '.cursor' } elseif ($Agent -eq 'zcode') { Join-Path $env:USERPROFILE '.zcode' } elseif ($Agent -eq 'claude-code') { if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' } } elseif ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 foreach ($candidate in @($sshDir,$codexDir)) {
     $ancestor=$candidate
     while ($ancestor) {
@@ -547,12 +613,8 @@ foreach ($candidate in @($sshDir,$codexDir)) {
 }
 if ($BootstrapIdentityFile -and -not (Test-Path -LiteralPath $BootstrapIdentityFile -PathType Leaf)) { throw 'Bootstrap identity file not found' }
 New-Item -ItemType Directory -Force $sshDir, $codexDir | Out-Null
-# GLM credentials are read only on this client, never from the generated profile.
+# GLM credentials are read only on this client, never from a generated profile.
 $glmText=$null
-$glmProvider=if ($d -and $d.setup_options) { $d.setup_options.claude_provider } else { $null }
-$glmModel=if ($d -and $d.setup_options) { $d.setup_options.glm_model } else { $null }
-if (($glmProvider -or $glmModel) -and $Agent -ne 'Claude-Code') { throw 'GLM options require Claude Code' }
-if ($glmModel -and -not $glmProvider) { throw 'GLM model requires provider' }
 if ($glmProvider) {
     if ($glmProvider -cnotin @('zai','zhipu')) { throw 'Invalid Claude provider' }
     if ($glmModel -and ($glmModel -isnot [string] -or $glmModel -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,127}$')) { throw 'Invalid GLM model' }
@@ -577,17 +639,18 @@ if ($glmProvider) {
 $nativePrivate = Join-Path $sshDir $KeyName
 $nativePublic = "$nativePrivate.pub"
 $nativeKnown = Join-Path $sshDir "${KeyName}_known_hosts"
+$nativeConfig = Join-Path $sshDir 'config'
 $configPath = Join-Path $codexDir 'config.toml'
 $agentsPath = Join-Path $codexDir 'AGENTS.override.md'
 if (-not (Test-Path -LiteralPath $agentsPath) -or -not ([IO.File]::ReadAllText($agentsPath)).Trim()) { $agentsPath = Join-Path $codexDir 'AGENTS.md' }
 
-if ($Agent -eq 'ZCode') {
+if ($Agent -eq 'zcode') {
     $configPath=Join-Path $codexDir 'cli/config.json'
     $agentsPath=Join-Path $codexDir 'AGENTS.md'
     $cliDir=Join-Path $codexDir 'cli'
     if ((Test-Path -LiteralPath $cliDir) -and ((Get-Item -LiteralPath $cliDir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing ZCode CLI reparse point' }
 }
-foreach ($candidate in @($nativePrivate,$nativePublic,$nativeKnown,$configPath,$agentsPath)) {
+foreach ($candidate in @($nativePrivate,$nativePublic,$nativeKnown,$nativeConfig,$configPath,$agentsPath)) {
     if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing identity/configuration reparse point' }
 }
 $nativePubLine = ''
@@ -614,15 +677,17 @@ $nativePubLine = [System.IO.File]::ReadAllText($nativePublic).Trim()
 if ($nativePubLine -notmatch '^ssh-ed25519\s+[a-zA-Z0-9+/=]+') { throw 'Invalid Windows SSH public key.' }
 
 }
-# Pin SSH server identity using the key delivered by the Ubuntu console,
+# Pin SSH server identity using the key from the EDIT ME header,
 # never using untrusted ssh-keyscan or StrictHostKeyChecking=no.
+# The Windows-side pin is unconditional: the enrollment ssh below runs from
+# Windows in both modes; WSL additionally gets its own pin for its transport.
 $hostToken = if ($SshPort -eq 22 -and -not $SshHost.Contains(':')) { $SshHost } else { '[{0}]:{1}' -f $SshHost, $SshPort }
 $pinnedHostLine = "$hostToken ssh-ed25519 $ServerHostKey"
 Set-PinnedHostNative -Path $nativeKnown -Line $pinnedHostLine
 
 $clientPubLine = $nativePubLine
 $transportCommand = $ssh
-$transportArgs = @()
+$transportArgs = @('boxweave', $Script:McpRemoteCommand)
 if ($Mode -eq 'WSL') {
     $wslScript = @'
 set -eu
@@ -670,33 +735,58 @@ chmod 600 "$path"
 '@
     $pinB64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pinnedHostLine))
     Invoke-WslScript -Script $wslPinScript -ScriptArguments @(("${KeyName}_known_hosts"), $pinB64) -What 'WSL host pinning'
-    $linuxKey = "$wslHome/.ssh/$KeyName"
-    $linuxKnown = "$wslHome/.ssh/${KeyName}_known_hosts"
-    $transportCommand = $wsl
-    $transportArgs = @('-d', $WslDistro, '-e', 'ssh', '-T', '-i', $linuxKey,
-                       '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
-                       '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$linuxKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15',
-                       '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4',
-                       '-p', "$SshPort", "$SshUser@$SshHost", $McpRemoteCommand)
+
+    # Managed "Host boxweave" block inside the WSL distro's ~/.ssh/config.
+    # The block text is built here (values already validated) and passed to the
+    # WSL side base64-encoded; awk drops any previous managed region first.
+    $wslBlock = ('# BEGIN BOXWEAVE MANAGED' + "`n" +
+        'Host ' + $McpName + "`n" +
+        '    HostName ' + $SshHost + "`n" +
+        '    Port ' + $SshPort + "`n" +
+        '    User ' + $SshUser + "`n" +
+        '    IdentityFile ' + $wslHome + '/.ssh/' + $KeyName + "`n" +
+        '    IdentitiesOnly yes' + "`n" +
+        '    IdentityAgent none' + "`n" +
+        '    BatchMode yes' + "`n" +
+        '    UserKnownHostsFile ' + $wslHome + '/.ssh/' + $KeyName + '_known_hosts' + "`n" +
+        '    StrictHostKeyChecking yes' + "`n" +
+        '    HostKeyAlgorithms ssh-ed25519' + "`n" +
+        '    ConnectTimeout 15' + "`n" +
+        '    ServerAliveInterval 15' + "`n" +
+        '    ServerAliveCountMax 4' + "`n" +
+        '# END BOXWEAVE MANAGED')
+    $wslConfigScript = @'
+set -eu
+umask 077
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+config="$HOME/.ssh/config"
+test ! -L "$config"
+touch "$config"
+chmod 600 "$config"
+block=$(printf '%s' "$1" | base64 -d)
+tmp="$config.boxweave-tmp"
+trap 'rm -f "$tmp"' EXIT
+awk 'BEGIN{inb=0} $0=="# BEGIN BOXWEAVE MANAGED"{inb=1;next} $0=="# END BOXWEAVE MANAGED"{inb=0;next} !inb{print}' "$config" > "$tmp"
+printf '%s\n' "$block" >> "$tmp"
+chmod 600 "$tmp"
+mv -f "$tmp" "$config"
+'@
+    $blockB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($wslBlock))
+    Invoke-WslScript -Script $wslConfigScript -ScriptArguments @($blockB64) -What 'WSL ssh_config managed block'
 } else {
-    $transportArgs = @('-T', '-i', $nativePrivate,
-                       '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
-                       '-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
-                       '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15',
-                       '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4',
-                       '-p', "$SshPort", "$SshUser@$SshHost", $McpRemoteCommand)
+    Update-SshConfigManaged -Path $nativeConfig -Block (New-SshConfigBlock -HostName $SshHost -Port $SshPort -User $SshUser -IdentityFile $nativePrivate -KnownHostsFile $nativeKnown)
 }
 
 $pendingConfig = ''
-if ($Agent -eq 'Codex') {
+if ($Agent -eq 'codex') {
     $pendingConfig = Update-CodexToml -Path $configPath -Command $transportCommand -Arguments $transportArgs
-    if ($DataBase64) { $null=Update-Agents -Path $agentsPath -Content $d.policy -Preview }
-} elseif ($Agent -eq 'ZCode') {
+    $null=Update-Agents -Path $agentsPath -Content (Get-PolicyText $conn) -Preview
+} elseif ($Agent -eq 'zcode') {
     $original=if (Test-Path -LiteralPath $configPath) { [IO.File]::ReadAllText($configPath) } else { '' }
     $pendingConfig=Update-ZCodeJson -Original $original -Command $transportCommand -Arguments $transportArgs -AllowReplace ([bool]$Replace)
-    $null=Update-Agents -Path $agentsPath -Content $d.policy -Preview
-} elseif ($Agent -eq 'Cursor') {
+    $null=Update-Agents -Path $agentsPath -Content (Get-PolicyText $conn) -Preview
+} elseif ($Agent -eq 'cursor') {
     $configPath=Join-Path $codexDir 'mcp.json'
     $obj=if (Test-Path -LiteralPath $configPath) { ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($configPath)) } else { New-Object PSObject }
     if ($null -eq $obj -or $obj -is [array] -or $obj -is [string] -or $obj -is [ValueType]) { throw 'Invalid Cursor JSON object' }
@@ -714,7 +804,7 @@ if ($Agent -eq 'Codex') {
     if ($existingClaude -and -not $Replace) { throw 'Existing Claude boxweave entry; rerun with -Replace after review' }
 }
 # Register ONLY the active transport's public key under a restricted sshd key option.
-$restricted = 'restrict,command="' + $McpRemoteCommand + '" ' + $clientPubLine
+$restricted = 'restrict,command="' + $Script:McpRemoteCommand + '" ' + $clientPubLine
 $keyData = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($restricted))
 $keyMaterial = ($clientPubLine -split '\s+')[1]
 $enrollmentScript = @'
@@ -759,36 +849,29 @@ $remoteEnrollmentCommand = "printf '%s' '$scriptB64' | base64 -d | sh"
 & $ssh @sshAuthArgs -T "$SshUser@$SshHost" $remoteEnrollmentCommand
 Assert-Exit 'Restricted SSH key enrollment'
 
-$agents = @"
-## BoxWeave remote development environment (Containarium provider)
-
-- Use MCP server **$McpName** (BoxWeave with the Containarium provider) for provisioning and managing LXC containers. Use its dynamic ``connect`` tool inside an existing box, not a separate per-box MCP registration.
-- Ubuntu SSH endpoint: **${SshHost}:${SshPort}**, Unix user: **${SshUser}**. SSH transport mode: **$Mode**. The dedicated transport key is restricted by OpenSSH ``restrict,command=``; it is NOT a general Ubuntu shell credential.
-- The managed Ubuntu-to-container public SSH key is exactly:
-
-  $boxPub
-
-- When creating a container that requires ``connect``, pass that COMPLETE public-key line via ``create_container.ssh_keys``. Never substitute the Windows/WSL transport key. Do not assume a public-key fingerprint is enough.
-- Reuse a suitable existing project container; otherwise provision an isolated box. Query box state before connecting and verify actual results afterward.
-- A timed-out create request can still succeed. Query ``list_containers``/``get_container`` with the original logical name before any new create. Do NOT duplicate, rename, force-delete or overwrite a partially provisioned resource.
-- Running does not prove SSH provisioning is complete. Allow package/key setup to finish, retry ``connect`` within the deadline, and verify ``whoami && hostname`` before work. Diagnose persistent failures with read-only tools, including ``debug_container`` when supported.
-- Unless the user specifies another limit, use one 600-second deadline per provisioning, installation or readiness phase, polling about every 15-30 seconds. Do not reset the allowance on each retry. Preserve background job logs and actual exit codes; transport timeouts or disconnects do not establish completion. The installer's ``--api-ready-timeout`` bounds only API waiting, not total installation time.
-- An active Containarium daemon may still be waiting for core containers/PostgreSQL before the API listens. Inspect progress and wait rather than restarting or deleting infrastructure. HTTP 200/401/403 proves reachability only; authenticated operation requires real MCP calls.
-- Use ``sudo boxweave status`` / ``sudo boxweave doctor --api`` when configuration permissions require it. Exit 0 is an observation: inspect service states, required timers, installer exit code and ``/etc/boxweave/update-in-progress``. A successful oneshot can be inactive/dead; check Result=success and ExecMainStatus=0, with its timer active/waiting and enabled. Only reset failed state for actually failed units.
-- After recreation, ``knownhosts: key mismatch`` can indicate IP reuse; wait for the host-side trusted Incus synchronization and retry within a bounded window. Never disable SSH verification or edit Ubuntu ``known_hosts`` from Codex.
-- For a requested nested smoke test, use ordinary Ubuntu LXC -> inner BoxWeave MCP -> disposable workload LXC -> Python hello world. Do not make special images, Incus upgrades, cold backups or security audits prerequisites. Reuse compatible Incus; report security capabilities separately when unverified.
-- Each nested MCP host has its own managed Ubuntu-to-container public identity; discover and verify that layer's FULL public key instead of assuming the outer key above applies. Never read/export private keys or JWT contents. Start the inner managed launcher as its configured non-root user and use an MCP client with initialize/initialized, tool discovery and tools/call. Direct Incus execution is not proof of inner MCP operation; verify identity and stdout/exit code through inner ``connect``.
-- Develop, test and deploy applications INSIDE each project's LXC. Prefer non-root container user and use systemd/Compose for persistence if appropriate. Verify health, reboot persistence and requested LAN access.
-- Use Containarium port passthrough only when explicitly required. Never assume it provides LAN-only source-IP enforcement; protect sensitive services with authentication/network restrictions.
-- Never modify ``containarium-core-*`` infrastructure boxes, unrelated projects, host SSH settings, root access, or platform credentials. Obtain permission for destructive operations.
-- The MCP token may have admin privileges; use only requested tools and scopes, never print secrets or private keys.
-"@
-if ($DataBase64) {
-    if (-not $d.policy -or $d.policy.Length -gt 20000) { throw 'Invalid guidance text' }
-    $agents=$d.policy
+# Explicit probe options mirror the managed Host block; the probe must not
+# depend on the user's SSH config being parsed exactly as we wrote it.
+$probeExtra = @('-F','NUL','-o','IdentityAgent=none','-o','GlobalKnownHostsFile=NUL','-o','UpdateHostKeys=no')
+if ($Mode -eq 'WSL') {
+    $probeArgs = @('-d',$WslDistro,'-e','ssh') + $probeExtra + @('-T','-i',"$wslHome/.ssh/$KeyName",
+                   '-o','IdentitiesOnly=yes','-o','BatchMode=yes',
+                   '-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$wslHome/.ssh/${KeyName}_known_hosts",
+                   '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+                   '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
+                   '-p',"$SshPort","$SshUser@$SshHost",$Script:McpRemoteCommand)
+    $probeCommand = $wsl
+} else {
+    $probeArgs = $probeExtra + @('-T','-i',$nativePrivate,
+                   '-o','IdentitiesOnly=yes','-o','BatchMode=yes',
+                   '-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$nativeKnown",
+                   '-o','HostKeyAlgorithms=ssh-ed25519','-o','ConnectTimeout=15',
+                   '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
+                   '-p',"$SshPort","$SshUser@$SshHost",$Script:McpRemoteCommand)
+    $probeCommand = $ssh
 }
-Test-BoxWeaveMcp -Command $transportCommand -Arguments $transportArgs
-if ($Agent -eq 'Claude-Code') {
+Test-BoxWeaveMcp -Command $probeCommand -Arguments $probeArgs
+$agents = Get-PolicyText $conn
+if ($Agent -eq 'claude-code') {
     if ($existingClaude -and $Replace) {
         & $claude mcp remove --scope user $McpName 1>$null 2>$null
         Assert-Exit 'Claude MCP replacement'
@@ -801,10 +884,10 @@ if ($Agent -eq 'Claude-Code') {
     Backup-File $agentsPath
     Write-Utf8NoBom $agentsPath $agents
 } else {
-    if ($Agent -eq 'ZCode') { $null=New-Item -ItemType Directory -Force -Path (Split-Path -Parent $configPath) }
+    if ($Agent -eq 'zcode') { $null=New-Item -ItemType Directory -Force -Path (Split-Path -Parent $configPath) }
     Backup-File $configPath
     Write-Utf8NoBom $configPath $pendingConfig
-    if ($Agent -eq 'Cursor') {
+    if ($Agent -eq 'cursor') {
         $agentsPath=Join-Path $codexDir 'boxweave-user-rules.md'
         Backup-File $agentsPath
         Write-Utf8NoBom $agentsPath $agents
@@ -822,7 +905,8 @@ if ($null -ne $glmText) {
     Write-Utf8NoBom $glmPath $glmText
 }
 Write-Host 'MCP initialize/tools/list/read-only provider call: passed.'
-Write-Host "Agent registration: written for $Agent. Reopen the agent and verify BoxWeave in its MCP UI."
-if ($Agent -eq 'Cursor' -and -not $ProjectPath) {
+Write-Host "Agent registration: written (ssh $McpName). Reopen the agent and verify BoxWeave in its MCP UI."
+Write-Host "Change the server address later by editing the '$McpName' block in the SSH config; registrations keep working."
+if ($Agent -eq 'cursor' -and -not $ProjectPath) {
     Write-Host "Guidance: manual step required. Paste $agentsPath into Cursor Settings > Rules > User Rules."
 } else { Write-Host 'Guidance: written; verify loading in a new session.' }

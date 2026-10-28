@@ -487,7 +487,7 @@ out.write_text(json.dumps(data, indent=2) + '\n')
 out.chmod(0o600)
 PY
 
-python3 "$TMPDIR_DL/server/clients.py" publish "$TMPDIR_DL/config.json" "$TMPDIR_DL/client.json" "$TMPDIR_DL" "$SOURCE_COMMIT" /etc/ssh/ssh_host_ed25519_key.pub
+python3 "$TMPDIR_DL/server/clients.py" publish "$TMPDIR_DL/config.json" "$TMPDIR_DL/client.json" "$SOURCE_COMMIT" /etc/ssh/ssh_host_ed25519_key.pub
 
 python3 "$TMPDIR_DL/server/provenance.py" build --directory "$TMPDIR_DL" \
   --installer "${BASH_SOURCE[0]:-/dev/stdin}" --repo "$BOXWEAVE_REPO" --ref "$BOXWEAVE_REF" \
@@ -671,15 +671,15 @@ cat <<EOF
 ====================================================================
  BoxWeave server installation complete.
 
- To configure your coding agent, run:
-   boxweave client
+ To configure a coding agent, generate an enrollment script:
+   boxweave client                      (interactive)
+   boxweave client --help               (explicit options, --output FILE)
 
- For non-interactive usage and client options:
-   boxweave client --help
-
- Choose Windows or macOS, then Codex, Cursor, Claude Code or ZCode.
- Run the generated setup command on the client computer.
- Existing clients normally need no reenrollment for an unchanged endpoint.
+ Copy the generated script to the client machine, review and edit its
+ "EDIT ME" connection block (the SSH host/port must be the address
+ reachable FROM THE CLIENT; the detected values may be internal),
+ then run it there. Agent registrations use "ssh boxweave", so a later
+ address change only edits the managed block in the client's SSH config.
  Reconnect the agent's MCP session after a server update.
 ====================================================================
 EOF

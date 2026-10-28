@@ -2,9 +2,11 @@
 
 Research date: 2026-10-22 (America/Los_Angeles).
 Source baseline: `b2c38cd08ce08b5adb7c89ed18955b586fca2df9`, BoxWeave 0.2.0.
-Status: **implemented in 0.3.0.** `boxweave client --diagnose` generates the
-diagnostic command; `--diagnose` / `-Diagnose` run it in the shipped
-`clients/posix/setup.py` and `clients/windows/setup.ps1`, covered by
+Status: **implemented in 0.3.0; reworked in 0.4.0.** Since 0.4.0 the generated
+enrollment script itself is the diagnostic entry point: run it with
+`--diagnose` / `-Diagnose`; there is no separate server-side `--diagnose`
+generator any more. The shipped `clients/posix/setup.py` and
+`clients/windows/setup.ps1` are covered by
 `tests/test_diagnostics.py` and `tests/test_windows_diagnostics.py`. The
 2026-10-22 research text below is kept as design background; where shipped
 behavior differs from the proposal, the shipped behavior wins and is noted

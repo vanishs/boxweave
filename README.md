@@ -86,11 +86,19 @@ sudo bash /tmp/boxweave-install.sh
 
 At completion, run **`boxweave client`** on the server. Its interactive wizard
 selects Windows/macOS, an agent (Codex / Cursor / Claude Code / ZCode) and the
-Windows native/WSL execution mode, then prints a command for the client computer.
-Use `boxweave client --help` for parameter-based generation.
+Windows native/WSL execution mode, then generates a **plain, editable script**
+for the client computer (`boxweave-setup.ps1` / `boxweave-setup.sh`). Use
+`boxweave client --output FILE` to write the script to a file.
 
-Setup pins the server identity, enrolls a public transport key using an existing
-SSH login, verifies authenticated MCP operation, and configures the agent.
+The script header exposes the connection variables (SSH host, port, user,
+pinned server key) as plain `EDIT ME` values: **edit the host/port to the
+address reachable from the client machine** before running — the detected
+values may be internal-only. Enrollment logic is fetched from the pinned source
+commit at run time. Setup pins the server identity, enrolls a public transport
+key using an existing SSH login, verifies authenticated MCP operation, and
+configures the agent. Registrations use `ssh boxweave`, so a later address
+change only edits the managed `Host boxweave` block in the client's SSH
+config (then rerun the script to repin).
 
 - **No private key is printed or transferred**: neither by the Ubuntu installer
   nor from Ubuntu to Windows. Server installation does not require any
@@ -99,11 +107,13 @@ SSH login, verifies authenticated MCP operation, and configures the agent.
 - Cursor global User Rules require the displayed manual Settings step.
 - **GLM (Z.ai) access** is enabled through the Claude Code adapter:
   `boxweave client --agent claude-code --claude-provider zai` (or `zhipu`),
-  with `--glm-model` to select a model. See
-  [GLM client setup](docs/CLIENTS.md#glm-through-claude-code-030).
-- After enrollment, `boxweave client --diagnose` produces a structured
-  diagnostic report (MCP handshake, registration checks, configuration
-  guidance). See [client diagnostics](docs/CLIENT-DIAGNOSTICS-READINESS.md) and
+  with `--glm-model` to select a model; the API key is read from the client's
+  `GLM_API_KEY` at run time. See
+  [GLM client setup](docs/CLIENTS.md#glm-through-claude-code).
+- After enrollment, run the generated script with `--diagnose` (POSIX) or
+  `-Diagnose` (Windows) for a structured diagnostic report (MCP handshake,
+  registration checks, configuration guidance). See
+  [client diagnostics](docs/CLIENT-DIAGNOSTICS-READINESS.md) and
   [CLIENTS](docs/CLIENTS.md).
 
 ## Independent web console
@@ -179,7 +189,7 @@ Full flag semantics are in `install.sh --help`; the common set:
 | Flag / environment variable | Default | Purpose |
 | --- | --- | --- |
 | `--user` / `BOXWEAVE_LINUX_USER` | Invoking sudo user | Unprivileged user running the remote MCP process |
-| `--ssh-host` / `BOXWEAVE_SSH_HOST` | Server's detected primary address | Reachable address for client SSH |
+| `--ssh-host` / `BOXWEAVE_SSH_HOST` | Server's detected primary address | Address rendered into generated client scripts (edit the script's EDIT ME block when the client needs a different reachable address) |
 | `--ssh-port` / `BOXWEAVE_SSH_PORT` | Detected OpenSSH port, then `22` | Remote SSH port |
 | `--allow-cidr` / `BOXWEAVE_ALLOWED_CIDRS` | Discovered private Incus managed bridge subnets | Restrict container IPs eligible for host-key synchronization |
 | `--api-url` / `BOXWEAVE_API_URL` | `http://127.0.0.1:8080` | Local Containarium REST API; plaintext HTTP only on loopback |

@@ -22,7 +22,7 @@ the CLI and VERSION files to be available at the selected repository ref.
 
 | Command | Evidence returned |
 | --- | --- |
-| `version` | BoxWeave's own VERSION file (0.3.0 at this writing) |
+| `version` | BoxWeave's own VERSION file (0.4.0 at this writing) |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
 | `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
 | `version --manifest PATH` | Same as `version --verbose`, reading the manifest from PATH instead of `/etc/boxweave/install-manifest.json` |
@@ -71,15 +71,11 @@ physical devices, change security policies or require a special LXC image.
 
 ## Client configuration
 
-`boxweave client` starts an interactive command generator for Windows/macOS and Codex/Cursor/Claude Code/ZCode. It performs no enrollment on the server. Use `boxweave client --help` for explicit selection, client-path options and JSON output. See [client setup](CLIENTS.md).
+`boxweave client` generates a plain, editable enrollment script (`boxweave-setup.sh` or `boxweave-setup.ps1`) for Windows/macOS and Codex/Cursor/Claude Code/ZCode. It performs no enrollment on the server. The script header carries the connection variables (SSH host, port, user, pinned server key) in clear text for the user to review and edit; the enrollment logic is fetched from the pinned source commit at run time. Use `boxweave client --output FILE` to write the script instead of printing it. See [client setup](CLIENTS.md).
 
-It reads public `/etc/boxweave/client.json`, not credentials. Non-terminal input requires complete choices. Exit 0 means command generation, 2 means invalid/missing input or descriptor, and 130 means cancellation. Existing management/selftest commands retain their behavior.
+It reads public `/etc/boxweave/client.json` (schema 2), not credentials. Non-terminal input requires complete choices. Exit 0 means script generation, 2 means invalid/missing input or descriptor, and 130 means cancellation. Existing management/selftest commands retain their behavior.
 
-The client --diagnose option generates an independent diagnostic command for an
-already enrolled client. It does not execute diagnosis on Ubuntu or repair a
-client. Use the same OS/agent/runtime/transport selection options; Windows bridge
-diagnosis also needs --wsl-distro. Replacement/bootstrap-identity options are
-incompatible. See [diagnostic stages, reports and limits](CLIENTS.md#independent-client-diagnostics).
+Running the generated script with `--diagnose` (POSIX) or `-Diagnose` (Windows) performs a read-only diagnostic of an already enrolled client; it never enrolls or repairs. See [diagnostic stages, reports and limits](CLIENTS.md#independent-client-diagnostics).
 
 ## Independent web administrator
 

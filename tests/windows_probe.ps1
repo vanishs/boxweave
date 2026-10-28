@@ -7,6 +7,6 @@ foreach($definition in $ast.FindAll({param($node) $node -is [Management.Automati
  . ([scriptblock]::Create($definition.Extent.Text))
 }
 $evidence=@{};$accepted=$false;$code=$null
-try{Test-BoxWeaveMcp -Command $Python -Arguments @($Peer) -Timeout 1 -Evidence $evidence;$accepted=$true}
+try{Test-BoxWeaveMcp -Command $Python -Arguments @($Peer) -Timeout 3 -Evidence $evidence;$accepted=$true}
 catch{if($_.Exception.Message -match '^([A-Z_]+):'){$code=$Matches[1]}else{$code='UNCLASSIFIED'}}
 [pscustomobject]@{accepted=$accepted;code=$code;cleanup=$evidence.cleanup;tool_pages=$evidence.tool_pages} | ConvertTo-Json -Compress
