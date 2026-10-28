@@ -827,6 +827,10 @@ chmod 600 "$tmp"
 mv -f "$tmp" "$HOME/.ssh/authorized_keys"
 '@
 $enrollmentScript = $enrollmentScript.Replace('__KEYDATA__', $keyData).Replace('__KEYMATERIAL__', $keyMaterial)
+# The script runs under /bin/sh on Ubuntu. Here-strings inherit the fetched
+# file's line endings; a CRLF checkout makes dash fail on "set -eu\r" with
+# "Illegal option -", so strip every CR before encoding.
+$enrollmentScript = $enrollmentScript.Replace("`r", '')
 $sshAuthArgs = @('-o', 'StrictHostKeyChecking=yes', '-o', "UserKnownHostsFile=$nativeKnown",
                  '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'ConnectTimeout=15', '-p', "$SshPort")
 # Do not let ssh-agent offer unrelated identities during first-time enrollment:
