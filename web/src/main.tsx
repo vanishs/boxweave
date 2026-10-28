@@ -6,7 +6,7 @@ import {PromptGraph} from './PromptGraph';
 type Resource={logical:string,user:string,hostname:string};
 type Project={id:string,name:string,revision:number};
 type HistoryItem={id:string,project:string,state:string,code:string|null,created:number};
-type Receipt={id:string,state:string,code:string|null,result:{stdout:string,exit_code:number,evidence:string}|null};
+type Receipt={id:string,state:string,code:string|null,result:{stdout:string,exit_code:number,evidence:string,output_withheld?:boolean}|null};
 
 function App(){
   const [view,setView]=useState('projects'),[graphDirty,setGraphDirty]=useState(false);
@@ -15,6 +15,7 @@ function App(){
   const [logical,setLogical]=useState(''), [workspace,setWorkspace]=useState(''), [label,setLabel]=useState('');
   const [error,setError]=useState(''), [plan,setPlan]=useState<{id:string,target:Resource,workspace:string}|null>(null);
   const [history,setHistory]=useState<HistoryItem[]|null>(null),[nextCursor,setNextCursor]=useState<string|null>(null);
+  const [observation,setObservation]=useState<string>('');
   const [receipt,setReceipt]=useState<Receipt|null>(null), [busy,setBusy]=useState(false);
   async function api(path:string,method='GET',data?:unknown,token=csrf){
     const r=await fetch('/api/'+path,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':token},
@@ -50,7 +51,7 @@ function App(){
       <aside className={mode==='fixture'?'fixture':'live'}>{mode==='fixture'?'Fixture mode — no live infrastructure is connected.':'Live MCP mode — target identity is checked before execution.'}</aside>
       <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>setView('projects')}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button></nav>
       {view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:<>
-      <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setCsrf('');setReceipt(null);setHistory(null);setNextCursor(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
+      <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setCsrf('');setReceipt(null);setObservation('');setHistory(null);setNextCursor(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
         <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api('projects','POST',{name:label,logical,workspace});setLabel('');await refresh();});}}>
           <label>Project name<input value={label} required maxLength={80} onChange={e=>setLabel(e.target.value)}/></label>
           <label>Reviewed environment<select value={logical} onChange={e=>{setLogical(e.target.value);const r=resources.find(x=>x.logical===e.target.value);if(r)setWorkspace('/home/'+r.user);}}>
@@ -75,8 +76,8 @@ function App(){
           {nextCursor&&<button disabled={busy} onClick={()=>void run(()=>historyPage(nextCursor))}>Older receipts</button>}
         </div>}
         {receipt&&<div className="receipt"><strong data-testid="operation-state">{receipt.state}</strong><p>{receipt.code}</p><small>{receipt.id}</small>
-          {receipt.result&&<><pre>{receipt.result.stdout}</pre><p>Command exit: {receipt.result.exit_code} · evidence: {receipt.result.evidence}</p></>}
-          {receipt.state==='unknown'&&<p>Completion is unknown. Inspect the resource before authorizing another operation.</p>}</div>}
+          {receipt.result&&<><pre>{receipt.result.stdout}</pre><p>{receipt.result.output_withheld?'Unexpected output withheld. ':''}Command exit: {receipt.result.exit_code} · evidence: {receipt.result.evidence}</p></>}
+          {receipt.state==='unknown'&&<><p>Completion is unknown. Inspect the resource before authorizing another operation.</p><button disabled={busy} onClick={()=>void run(async()=>{const result=await api('operations/'+receipt.id+'/reconcile','POST',{});setObservation(receipt.id+': '+result.code);})}>Check current target</button><p>Checking the target does not prove command completion or authorize a retry.</p>{observation.startsWith(receipt.id+': ')&&<p role="status">{observation}</p>}</>}</div>}
       </section>
       </>}
     </>}

@@ -1,4 +1,8 @@
-# Current handoff — phase5 iteration4, TASK-002a receipt history
+# Current handoff — continuous TASK-002/003, checkpoint TASK-002
+
+SRC-063 explicitly authorizes both tasks in one run. TASK-002 complete in approved fixed-command storage/worker scope0.3.0; TASK-003 continues after this checkpoint commit. Code parent7f822ffaf4e009dbf514a18573f640a050c69870. [TASK-002 completion](../verification/TASK_002_COMPLETION.md) records commands/58 tests19.511s, build, three real browser checks and actual nested-MCP read-only observations. Schema3 requires compatible backup for downgrade; unknown cannot be resolved by resource existence, no automatic replay/cancellation. Unexpected command output withheld, real exit preserved. Arbitrary shell/create/lifecycle remains excluded/TASK-006. No push/new exposure/deployment. Legacy remainsd8a09dd/unrelated archive untouched. Source/test/docs belong to this checkpoint's containing commit; next action implement TASK-003 preparation/authorized public-key bootstrap and independent native diagnosis, then test without reading/copying private keys or sign-in data.
+
+## Historical handoff — phase5 iteration4, TASK-002a receipt history
 
 Version0.2.3; rewrite/v2; code parent9c5b52e53ba359bc75ecf307845704a0f4eb1af0. SRC-061 requests phase5; gate SRC-051/059/060 already satisfied. Selected the highest-priority ready storage-discovery child TASK-002a, REQ-007/011 and AC-007/011 subset. TASK-002a depends on implemented storage/HTTP foundations and not on TASK-006 writes or new identity provisioning.
 

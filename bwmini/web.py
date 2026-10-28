@@ -134,6 +134,13 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         r=store.receipt(oid)
         r["result"]=json.loads(r["result"]) if r["result"] else None
         return jsonify(r)
+    @app.get("/api/operations/<oid>/observations")
+    def observations(oid):
+        return jsonify(observations=service.observations(oid))
+    @app.post("/api/operations/<oid>/reconcile")
+    def reconcile(oid):
+        body([])
+        return jsonify(service.reconcile(oid))
     @app.get("/api/graphs")
     def graph_list():return jsonify(graphs=graphs.list())
     @app.post("/api/graphs")

@@ -27,6 +27,11 @@ CREATE TABLE graph_copies (id TEXT PRIMARY KEY, graph TEXT NOT NULL REFERENCES g
  revision INTEGER NOT NULL, at REAL NOT NULL, status TEXT NOT NULL CHECK(status='reported_success'));
 """
 
+OBSERVATION_SCHEMA = """
+CREATE TABLE operation_observations (id TEXT PRIMARY KEY, operation TEXT NOT NULL REFERENCES operations(id),
+ actor TEXT NOT NULL, at REAL NOT NULL, target_status TEXT NOT NULL, code TEXT NOT NULL);
+"""
+
 class Store:
     def __init__(self, path):
         self.path = Path(path).absolute()
@@ -41,7 +46,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -51,19 +56,24 @@ class Store:
             if version < 2:
                 for statement in GRAPH_SCHEMA.split(";"):
                     if statement.strip():db.execute(statement)
-                db.execute("PRAGMA user_version=2")
+            if version < 3:
+                db.execute(OBSERVATION_SCHEMA)
+                db.execute("PRAGMA user_version=3")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager
     def db(self):
-        db = sqlite3.connect(self.path, timeout=2)
+        try:
+            db = sqlite3.connect(self.path, timeout=2)
+        except sqlite3.Error as error:
+            raise Fault("STATE_UNAVAILABLE", 503) from error
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         db.execute("PRAGMA synchronous=FULL")
         try:
             yield db
             db.commit()
-        except sqlite3.OperationalError as error:
+        except sqlite3.Error as error:
             db.rollback()
             raise Fault("STATE_UNAVAILABLE", 503) from error
         except BaseException:

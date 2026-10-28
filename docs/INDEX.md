@@ -28,3 +28,5 @@ Current iteration3 SRC-055..058: [TASK-003b1 native executable and TUI evidence]
 Current authority SRC-059/060: [phase5 entry audit — READY](verification/PHASE_05_READINESS.md). All four supplied startup checks are satisfied; SRC-051 acceptance remains recorded. Incomplete automatic identity provisioning and release/client features remain phase5 work, not additional entry conditions. This audit starts no new feature and does not waive task-level dependencies.
 
 Iteration4 SRC-061/062: [TASK-002a receipt history](verification/TASK_002A_RECEIPT_HISTORY.md), [exact source hashes](verification/receipt-history-source-hashes.json). Version0.2.3 adds bounded actor-scoped local history/API/CLI/Web without execution;46 tests and actual Chromium history/original/graph regressions passed. Phase5 remains incomplete.
+
+TASK-002 completed0.3.0: [recovery/observation evidence](verification/TASK_002_COMPLETION.md); user explicitly requested TASK-002 and TASK-003 consecutively. TASK-003 continues after this separate commit.

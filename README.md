@@ -141,3 +141,7 @@ See [native client acceptance and reproducible checks](docs/verification/TASK_00
 In the receipt section choose Refresh receipt history, Older receipts, then Open receipt to inspect an earlier result. A query never repeats work. Unknown means completion is still unknown; refreshing does not retry or certify cancellation. A failed refresh keeps the previous page and selected receipt. History is local stored evidence and does not need a live provider connection.
 
 For the same paged view use python -m bwmini history --config /private/reviewed.json --limit 20, optionally --cursor with the returned next_cursor. Existing CLI receipts and Web Load latest receipt stay available. [Verification and API limits](docs/verification/TASK_002A_RECEIPT_HISTORY.md). This source iteration has not updated the previously published demo.
+
+## Recovery observations (0.3.0)
+
+Unknown receipts offer Check current target; matching identity is not proof that the old command completed and does not authorize retry. CLI reconcile --config <private-config> --operation <id> has the same boundary. Actual nonzero fixed-command exits are preserved; unexpected output is withheld. Schema3 adds observations; take a consistent private backup before updating, older binaries reject3. See [recovery tests and limits](docs/verification/TASK_002_COMPLETION.md).

@@ -88,8 +88,6 @@ class Provider:
             # No caller-supplied shell command; only the approved workspace and fixed action.
             cmd = "cd -- " + shlex.quote(path) + " && python3 -c " + shlex.quote("print('hello world')")
             code, out = execution(m.tool("connect", {key:target.logical, "exec":cmd}))
-            if out != "hello world\n" or code != 0:
-                raise Fault("COMMAND_RESULT_UNEXPECTED")
             return {"stdout":out, "exit_code":code, "identity":{"user":target.user,
                     "hostname":target.hostname}, "evidence":"live_mcp",
                     "remote_cleanup":"not_verified", "protocol":"2024-11-05"}

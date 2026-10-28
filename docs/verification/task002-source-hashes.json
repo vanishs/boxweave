@@ -1,0 +1,18 @@
+{
+  "version": "0.3.0",
+  "sha256": {
+    "bwmini/store.py": "7e65dd297ba5d5552a20d0a29e530309b112d9460ac089811932cbb715509ed0",
+    "bwmini/service.py": "77d23da8baa9a02478cb68b054631d22746282f80efd5aad09754ba81a9243e2",
+    "bwmini/provider.py": "f4f8d05eef9e692cfb5ebbce86c857715cbc65d2dc4ebce581131d25e1cbcec3",
+    "bwmini/web.py": "c0b92c9fcc7ab0e1e56b98b5ef3fb08c68aa860a8aead47f2edbc7f86e20014c",
+    "bwmini/__main__.py": "affce22eabdb87695bec964c3701339426b1361dec5915130b721ddfe7c17a93",
+    "tests/test_slice.py": "bb0396087d6062c22836978ad4734c6097bb659d6f84e6d862c22691bbc991fd",
+    "tests/test_graphs.py": "6e48bccfd969ce9e653d18d8422dbb797377159ad99cb1d8ca1f1b50b8034c00",
+    "tests/test_recovery.py": "11d7a53146c40c0dd5083e67649868f0c703e4aaf1ed8032582d4c8f3080035f",
+    "scripts/history_browser_check.py": "175b67c5237bc2c3df911e92037dce639195c19ac40df1ae2e5385164ab9e413",
+    "web/src/main.tsx": "4b4259ed3b5ba88265179141b57660a1b2058e5c9fa6eea0999c151c4b459f6c",
+    "VERSION": "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0",
+    "pyproject.toml": "785e0501343dfce074f831e63355850894134e35f9fe9ef97e40deab3204b91b",
+    "web/package.json": "1ae7f39557ba64b65662437bf35a3b5cb9a5b9c65f9afa856544f76b030f9809"
+  }
+}

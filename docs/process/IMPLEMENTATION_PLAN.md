@@ -54,7 +54,7 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | Task | Status | Actual evidence and remaining condition |
 | --- | --- | --- |
 | TASK-001 | Implemented minimum contracts/package | Typed target/error boundary, explicit fixture/live modes, source/runtime locks; real integration still belongs to TASK-005 |
-| TASK-002 | Partial; TASK-002a complete0.2.3 | Binding/CAS/intent/receipt/worker-lock/deadline/no-replay and bounded history-discovery tests pass; other state-write-fault/provider reconciliation/recovery work remains |
+| TASK-002 | Complete approved fixed-command storage/worker scope0.3.0 | TASK-002a history plus actual SQLite FULL/claim/result failure, process crash/concurrency/deadline/exit tests and explicit read-only target observations. Unknown never auto-resolves/replays; lifecycle/create writes remain TASK-006 |
 | TASK-003 | Partial; TASK-003a and TASK-003b1 complete | Trusted native registration, explicit executable, real MCP/CLI plus cooperative TUI read evidence; TASK-003b2 product identity bootstrap and other selected profiles remain incomplete |
 | TASK-004 | Implemented minimum fixture UI/service slice | Actual Chromium login/binding/plan/receipt/restart; production HTTPS/independent service identity and real-provider integration not claimed |
 | TASK-005 | Real Web/MCP and native TUI read evidence; full enrollment still partial | SRC-049/050 live path; SRC-051 developer gate accepted; SRC-055..058 native registration/TUI/read-only result. Automatic product identity bootstrap not yet delivered; no whole-release acceptance. See LIVE_MCP_CHAIN and TASK_003B1_NATIVE_CLIENT |

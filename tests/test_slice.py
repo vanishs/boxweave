@@ -166,7 +166,8 @@ class ApplicationTests(Base):
         self.fixture.hello=lambda *_: {"stdout":"synthetic-secret-value","exit_code":0}
         self.s.work_one()
         row=self.store.receipt(op["id"])
-        self.assertIsNone(row["result"])
+        self.assertTrue(json.loads(row["result"])["output_withheld"])
+        self.assertEqual(json.loads(row["result"])["exit_code"],0)
         self.assertNotIn("synthetic-secret-value",json.dumps(row))
 
     def test_unsafe_ancestor_state_symlink_is_rejected(self):

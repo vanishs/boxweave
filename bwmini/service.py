@@ -112,10 +112,50 @@ class Service:
             next_cursor = base64.urlsafe_b64encode(json.dumps(boundary, separators=(",", ":")).encode()).decode()
         return {"operations": rows, "next_cursor": next_cursor}
 
+    def observations(self, operation, actor="operator"):
+        self.store.receipt(operation, actor)
+        with self.store.db() as db:
+            return [dict(row) for row in db.execute(
+                "SELECT id,at,target_status,code FROM operation_observations WHERE operation=? AND actor=? ORDER BY rowid DESC LIMIT 20",
+                (operation, actor))]
+
+    def reconcile(self, operation, actor="operator"):
+        op = self.store.receipt(operation, actor)
+        if op["state"] != "unknown":
+            raise Fault("RECONCILIATION_NOT_REQUIRED")
+        project = self.store.project(op["project"])
+        status, code = "unavailable", "OBSERVATION_UNAVAILABLE"
+        if project["revision"] != op["revision"] or project["digest"] != op["digest"]:
+            status, code = "changed", "REVISION_CONFLICT"
+        else:
+            try:
+                expected = Target(**json.loads(project["target"]))
+                observed = self.provider.observe(expected.logical)
+                status, code = ("matching", "TARGET_MATCHES") if observed == expected else ("changed", "TARGET_CHANGED")
+            except Fault as error:
+                if error.code == "TARGET_CHANGED":
+                    status, code = "changed", "TARGET_CHANGED"
+            except Exception:
+                pass  # No remote exception or command output is published.
+        at = self.clock()
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = db.execute("SELECT * FROM operations WHERE id=? AND actor=?", (operation, actor)).fetchone()
+            latest = db.execute("SELECT revision,digest FROM projects WHERE id=?", (op["project"],)).fetchone()
+            if current is None or current["state"] != "unknown":
+                raise Fault("RECONCILIATION_NOT_REQUIRED")
+            if latest["revision"] != op["revision"] or latest["digest"] != op["digest"]:
+                status, code = "changed", "REVISION_CONFLICT"
+            observation = ident()
+            db.execute("INSERT INTO operation_observations VALUES(?,?,?,?,?,?)",
+                       (observation, operation, actor, at, status, code))
+        return {"id":observation, "operation":operation, "at":at, "target_status":status,
+                "code":code, "state":"unknown", "completion":"unverified", "retry":"not_authorized"}
+
     def recover(self):
         # Caller holds the process-scoped worker lock. Another live worker cannot be recovered.
         with self.store.db() as db:
-            db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST' WHERE state='dispatching'")
+            db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST',result=NULL WHERE state='dispatching'")
 
     def work_one(self):
         with self.store.db() as db:
@@ -144,13 +184,17 @@ class Service:
             if left <= 0:
                 raise Fault("DEADLINE_EXCEEDED")
             candidate = self.provider.hello(expected, p["workspace"], left)
-            if candidate.get("stdout") != "hello world\n" or type(candidate.get("exit_code")) is not int or candidate["exit_code"] != 0:
+            if (not isinstance(candidate, dict) or not isinstance(candidate.get("stdout"), str)
+                    or len(candidate["stdout"]) > 4096 or type(candidate.get("exit_code")) is not int):
                 raise Fault("COMMAND_RESULT_UNEXPECTED")
-            result = {"stdout":"hello world\n", "exit_code":0,
+            valid = candidate["stdout"] == "hello world\n" and candidate["exit_code"] == 0
+            result = {"stdout": "hello world\n" if valid else "", "exit_code":candidate["exit_code"],
+                      "output_withheld":not valid,
                       "identity":{"user":expected.user,"hostname":expected.hostname},
                       "evidence":"fixture" if self.provider.mode=="fixture" else "live_mcp",
                       "remote_cleanup":"not_applicable" if self.provider.mode=="fixture" else "not_verified"}
-            state, code = "succeeded", "OK"
+            state = "succeeded" if valid else "failed"
+            code = "OK" if valid else ("COMMAND_FAILED" if candidate["exit_code"] != 0 else "COMMAND_RESULT_UNEXPECTED")
         except Fault as error:
             code = error.code
             # These fail before the hello side effect, not a claim all remote requests were cancelled.

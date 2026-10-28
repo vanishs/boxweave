@@ -88,6 +88,9 @@ try:
         page.get_by_text("Completion is unknown.",exact=False).wait_for()
         page.locator(".receipt small").filter(has_text="0"*32).wait_for()
         assert page.locator(".receipt pre").count()==0
+        page.get_by_role("button",name="Check current target",exact=True).click()
+        page.get_by_role("status").filter(has_text="TARGET_MATCHES").wait_for()
+        assert page.get_by_test_id("operation-state").inner_text()=="unknown"
         # A failed history refresh must retain selected evidence and the older page.
         page.route("**/api/operation-history?*", lambda route: route.fulfill(
             status=503, content_type="application/json", body='{"code":"STATE_UNAVAILABLE"}'))
@@ -117,7 +120,7 @@ try:
         assert not errors, errors
         browser.close()
     result={"result":"passed","browser":"Chromium","infrastructure":"fixture",
-            "operations":26,"executions":1,"checks":["20+6 pagination","unknown detail","failed refresh retains evidence",
+            "operations":26,"executions":1,"checks":["20+6 pagination","unknown detail","read-only target reconciliation stays unknown","failed refresh retains evidence",
             "receipt rediscovery after API/worker restart","no replay","mobile no overflow"],
             "evidence_dir":str(state)}
     (state/"result.json").write_text(json.dumps(result,indent=2))
