@@ -126,7 +126,7 @@ class InstallerRerunTests(unittest.TestCase):
         text = text.replace('-o root -g root', '-o %s -g %s' % (os.getuid(), os.getgid()))
         self.script = self.root/'install.sh'; self.script.write_text(text)
         assets = {name: (ROOT/name).read_bytes() for name in ('install.sh','server/cli.py','server/hostkeys.py','server/tokens.py',
-                  'server/clients.py','clients/windows/setup.ps1','clients/posix/setup.py','server/jobs.py','server/mcp_client.py','server/smoke.py','server/provenance.py','VERSION')}
+                  'server/clients.py','clients/windows/setup.ps1','clients/posix/setup.py','server/jobs.py','server/mcp_client.py','server/smoke.py','server/provenance.py','server/provider_upgrade.py','VERSION')}
         backend = b'#!/bin/sh\nexit 0\n'
         assets['mcp-server-linux-amd64'] = backend
         assets['SHA256SUMS.txt'] = (hashlib.sha256(backend).hexdigest()+'  mcp-server-linux-amd64\n').encode()

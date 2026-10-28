@@ -82,6 +82,14 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh -o
 sudo bash /tmp/boxweave-install.sh
 ```
 
+To also upgrade an existing Provider to the latest official Tenant implementation,
+run the downloaded installer with `--upgrade-provider`. This explicitly replaces
+local daemon/CLI binaries, aligns MCP to the same release, enables Tenant Guard
+and restarts the Provider. A normal rerun preserves the Provider. See
+[upgrade scope, checks and recovery](docs/INSTALL-UPDATE.md#explicit-official-provider-upgrade-050).
+With enforced Guard, Boxes in one native Tenant can communicate; different
+Tenants are isolated unless an explicit cross-Tenant ingress grant allows access.
+
 ## Connect a coding agent
 
 At completion, run **`boxweave client`** on the server. Its interactive wizard

@@ -22,7 +22,7 @@ the CLI and VERSION files to be available at the selected repository ref.
 
 | Command | Evidence returned |
 | --- | --- |
-| `version` | BoxWeave's own VERSION file (0.4.0 at this writing) |
+| `version` | BoxWeave's own VERSION file |
 | `version --components` | Installed Incus client and Containarium CLI version strings; no MCP backend launch or server version claim |
 | `version --verbose` | Recorded installation source commit, hashes, versions and installer difference indicator |
 | `version --manifest PATH` | Same as `version --verbose`, reading the manifest from PATH instead of `/etc/boxweave/install-manifest.json` |
@@ -95,3 +95,9 @@ BoxWeave diagnostics report compiled adapter support and leave the current
 Provider unprobed. The separate upstream Provider CLI adds --network-tenant and
 network-policy access preview/apply; see [the upstream contract](TENANT-UPSTREAM.md)
 and [Tenant operation](TENANTS.md). CLI exit 0 is not a live capability probe.
+
+After an explicit installer `--upgrade-provider` run, `version --verbose --json`
+includes install-time `tenant_network` observations: exact native contract,
+local-LXC scope, Guard readiness and independent Web credential verification.
+These observations do not replace a fresh authenticated probe or TCP test. See
+[Provider upgrade](INSTALL-UPDATE.md#explicit-official-provider-upgrade-050).

@@ -114,3 +114,10 @@ distinct enforcement identities. See [operation](TENANTS.md),
 post-start relabeling workaround enables A/B.
 
 The merged upstream source baseline is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to current upstream. Source builds require separate reviewed deployment; the normal installer selects official MCP releases. Official [v0.120.1](https://github.com/FootprintAI/Containarium/releases/tag/v0.120.1) contains the reviewed merge commit; installing its MCP alone does not upgrade the daemon or establish capability readiness.
+
+Since BoxWeave 0.5.0, an explicit
+[--upgrade-provider installation](INSTALL-UPDATE.md#explicit-official-provider-upgrade-050)
+can align supported local daemon/CLI/MCP binaries to one official release,
+set Tenant Guard to ENFORCE and require authenticated capability/Guard and
+independent Web credential checks before completion. A historical downstream
+contract receives an actionable upgrade message and does not enable Web writes.

@@ -12,7 +12,8 @@ class MCPError(RuntimeError): pass
 
 class Client:
     def __init__(self, launcher, timeout=20):
-        self.p = subprocess.Popen([str(launcher)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        command = list(launcher) if isinstance(launcher, (list, tuple)) else [str(launcher)]
+        self.p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, start_new_session=True)
         self.selector = selectors.DefaultSelector()
         self.selector.register(self.p.stdout, selectors.EVENT_READ)

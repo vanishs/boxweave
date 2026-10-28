@@ -161,3 +161,12 @@ over new writes. Schema-1 software cannot open schema-2 data. Reverting ingress
 uses a fresh reviewed source-only revoke, not full-policy replacement.
 
 The current native Tenant candidate is pinned in [the Provider source profile](../patches/containarium/README.md). The historical v0.114.2 patch is not applied to newer forks. Candidate binaries require separate reviewed deployment; the normal installer selects official MCP releases.
+
+## Installing the official enforcement path
+
+Use the explicit [Provider upgrade](INSTALL-UPDATE.md#explicit-official-provider-upgrade-050)
+when an existing host still returns the downstream `boxweave.tenant-network/v1`
+contract. It aligns the local Provider and MCP to official upstream and requires
+`native-network-tenant/v1` plus fresh enforced Guard. Default NIC ingress permits
+same-key members and drops other Tenants; existing explicit cross-Tenant grants
+remain exceptions. Changing display metadata never changes this behavior.

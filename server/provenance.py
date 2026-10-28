@@ -92,6 +92,8 @@ def build(directory, installer, repo, ref, commit, backend, daemon):
     for client in ('clients/windows/setup.ps1', 'clients/posix/setup.py'):
         files[client] = digest(p / client)
     files['VERSION'] = digest(p / 'VERSION')
+    if (p / 'server/provider_upgrade.py').is_file():
+        files['server/provider_upgrade.py'] = digest(p / 'server/provider_upgrade.py')
     local_hash, reference_hash = digest(installer), digest(p / 'reference-install.sh')
     return {'schema_version': 1, 'state': 'pending', 'prepared_at': utc(),
             'completed_at': None, 'boxweave_version': (p / 'VERSION').read_text().strip(),
@@ -132,12 +134,24 @@ def read_public(path):
         if isinstance(web, dict):
             result['web'] = {key: web.get(key) for key in ('sha256','mode','database_schema')
                              if isinstance(web.get(key), (str,int))}
+        tenant = d.get('tenant_network', {})
+        if isinstance(tenant, dict) and tenant.get('contract') == 'native-network-tenant/v1':
+            result['tenant_network'] = {
+                'contract': tenant['contract'],
+                'backendScope': text(tenant.get('backendScope'), r'local-lxc'),
+                'guardStatus': text(tenant.get('guardStatus'), r'ready'),
+                'sharedTenantCreate': tenant.get('sharedTenantCreate') is True,
+                'atomicTenantAccess': tenant.get('atomicTenantAccess') is True,
+                'independentWebCredentialVerified': tenant.get('independentWebCredentialVerified') is True,
+                'connectivityTested': False,
+                'observation': 'installation-time evidence; current readiness requires a fresh authenticated query',
+            }
         installer = d.get('installer', {})
         flag = installer.get('differs_from_source') if isinstance(installer, dict) else None
         result['installer']['differs_from_source'] = flag if type(flag) is bool else None
         hashes = d.get('component_sha256', {})
         result['component_sha256'] = {key: value for key, value in hashes.items()
-                                     if (key.startswith(('server/webui/','server/web_','web/')) or key in ('VERSION', 'clients/windows/setup.ps1', 'clients/posix/setup.py', *('server/' + n for n in ('cli.py','jobs.py','mcp_client.py','smoke.py','provenance.py','hostkeys.py','tokens.py','clients.py'))))
+                                     if (key.startswith(('server/webui/','server/web_','web/')) or key in ('VERSION', 'clients/windows/setup.ps1', 'clients/posix/setup.py', *('server/' + n for n in ('cli.py','jobs.py','mcp_client.py','smoke.py','provenance.py','hostkeys.py','tokens.py','clients.py','provider_upgrade.py'))))
                                      and text(value, r'[a-f0-9]{64}')} if isinstance(hashes, dict) else {}
         return result
     except FileNotFoundError:

@@ -69,7 +69,10 @@ backendScope `local-lxc`. A version string alone never enables Web writes.
 ## Release, compatibility and live acceptance gate
 
 The normal installer selects official MCP releases and does not upgrade the
-Provider daemon. An official release containing the contract can be selected
+Provider daemon during a normal rerun. The explicit
+[--upgrade-provider flow](INSTALL-UPDATE.md#explicit-official-provider-upgrade-050)
+can align local daemon/CLI/MCP binaries to one official release and verify the
+running authenticated contract. An official release containing the contract can be selected
 without applying the historical downstream patch. Optional source builds use
 the pinned upstream commit in an isolated checkout. Source-built binaries and
 checksums are development outputs, not signed upstream releases. Updating the daemon, CLI and

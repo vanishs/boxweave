@@ -53,3 +53,9 @@ The old v0.114.2 patch, manifest.json and historical fork verification in
 WEB-TESTING are retained as historical evidence only. Do not apply that patch to
 current upstream or treat its downstream contract id as supported by this
 adapter. Existing Box reassignment remains unsupported.
+
+For official binaries, the explicit
+[installer --upgrade-provider flow](../../docs/INSTALL-UPDATE.md#explicit-official-provider-upgrade-050)
+replaces supported local daemon/CLI installations and aligns MCP without source
+patches. It enables Tenant Guard and requires authenticated native capability,
+Guard and independent Web credential checks before declaring completion.

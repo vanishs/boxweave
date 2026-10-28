@@ -29,6 +29,8 @@ BACKUP_DIR=''
 TIMERS_PAUSED=0
 SAVED_BOX_PUB=''
 LOCAL_SOURCE_DIR=''
+UPGRADE_PROVIDER=0
+PROVIDER_CLI_TARGET=''
 WEB_MODE="${BOXWEAVE_WEB_MODE:-}"
 WEB_HOST="${BOXWEAVE_WEB_HOST:-}"
 WEB_PORT="${BOXWEAVE_WEB_PORT:-}"
@@ -76,7 +78,7 @@ Usage: curl -fsSL ${RAW_BASE}/install.sh | sudo bash
                             [--api-ready-timeout SECONDS]
                             [--web-mode https|http] [--web-host PRIVATE_IPV4]
                             [--web-port 18443] [--web-backend-port 18444]
-                            [--source-dir REVIEWED_CHECKOUT]
+                            [--source-dir REVIEWED_CHECKOUT] [--upgrade-provider]
                             [--repo OWNER/REPO] [--ref REF]
                             [--jwt-secret-file PATH] [--containariumd-binary PATH]
 Environment: BOXWEAVE_LINUX_USER, BOXWEAVE_SSH_HOST, BOXWEAVE_SSH_PORT,
@@ -86,6 +88,10 @@ Environment: BOXWEAVE_LINUX_USER, BOXWEAVE_SSH_HOST, BOXWEAVE_SSH_PORT,
              CONTAINARIUM_VERSION, BOXWEAVE_REPO, BOXWEAVE_REF.
 Rerun to update/repair BoxWeave. Saved settings are preserved unless explicitly
 overridden. Existing Containarium/Incus packages are reused, not upgraded.
+--upgrade-provider explicitly replaces local Provider binaries with one official
+release matching MCP, enables Tenant Guard, and restarts containarium.service.
+It resolves latest unless CONTAINARIUM_VERSION explicitly pins a release.
+Incus, packages, signing secrets, policies and existing membership are preserved.
 EOF
 }
 while (($#)); do
@@ -102,6 +108,7 @@ while (($#)); do
     --repo) BOXWEAVE_REPO="${2:?}"; EXPLICIT[BOXWEAVE_REPO]=1; shift 2;;
     --ref) BOXWEAVE_REF="${2:?}"; EXPLICIT[BOXWEAVE_REF]=1; shift 2;;
     --source-dir) LOCAL_SOURCE_DIR="${2:?}"; shift 2;;
+    --upgrade-provider) UPGRADE_PROVIDER=1; shift;;
     --web-mode) WEB_MODE="${2:?}"; shift 2;;
     --web-host) WEB_HOST="${2:?}"; shift 2;;
     --web-port) WEB_PORT="${2:?}"; shift 2;;
@@ -264,6 +271,10 @@ done
 
 INSTALL_PHASE='MCP download and checksum verification'
 log 'Staging all BoxWeave components and the checksum-verified MCP backend before replacing installed files'
+if (( UPGRADE_PROVIDER )) && [[ ! -v 'EXPLICIT[CONTAINARIUM_VERSION]' ]]; then
+  # Explicit host upgrade selects current upstream, not an old saved MCP pin.
+  CONTAINARIUM_VERSION=latest
+fi
 MCP_RELEASE="$CONTAINARIUM_VERSION"
 ARCH=$(dpkg --print-architecture)
 export ARCH
@@ -301,7 +312,7 @@ PY_LOCAL_SOURCE
   fi
 }
 export BOXWEAVE_LOCAL_SOURCE_STAGED="${LOCAL_SOURCE_DIR:+true}"
-for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION server/web_install.py server/web_token.py server/web_entry.py server/webui/__init__.py server/webui/store.py server/webui/tenants.py server/webui/access.py server/webui/graph.py server/webui/provider.py server/webui/app.py server/webui/command.py server/webui/requirements.txt server/webui/requirements.lock web/package.json web/package-lock.json web/tsconfig.json web/vite.config.ts web/index.html web/src/main.tsx web/src/tenants.tsx web/src/access.tsx web/src/model.ts web/src/style.css; do
+for source_file in server/cli.py server/hostkeys.py server/tokens.py server/jobs.py server/mcp_client.py server/smoke.py server/provenance.py server/provider_upgrade.py server/clients.py clients/windows/setup.ps1 clients/posix/setup.py VERSION server/web_install.py server/web_token.py server/web_entry.py server/webui/__init__.py server/webui/store.py server/webui/tenants.py server/webui/access.py server/webui/graph.py server/webui/provider.py server/webui/app.py server/webui/command.py server/webui/requirements.txt server/webui/requirements.lock web/package.json web/package-lock.json web/tsconfig.json web/vite.config.ts web/index.html web/src/main.tsx web/src/tenants.tsx web/src/access.tsx web/src/model.ts web/src/style.css; do
   mkdir -p "$TMPDIR_DL/$(dirname "$source_file")"
   stage_source "$source_file"
 done
@@ -320,6 +331,33 @@ curl -fsSL --retry 3 "$RELEASE_URL/SHA256SUMS.txt" -o "$TMPDIR_DL/SHA256SUMS.txt
 curl -fsSL --retry 3 "$RELEASE_URL/mcp-server-linux-${ARCH}" -o "$TMPDIR_DL/mcp-server-linux-${ARCH}"
 (cd "$TMPDIR_DL" && grep -E "^[a-fA-F0-9]{64}[[:space:]]+\\*?mcp-server-linux-${ARCH}$" SHA256SUMS.txt | sha256sum -c -) \
   || die 'Release binary checksum verification failed'
+
+if (( UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='official Provider release staging'
+  provider_stage_deadline=$((SECONDS + 600))
+  python3 - "$CONTAINARIUM_VERSION" <<'PY_PROVIDER_RELEASE'
+import sys
+version=tuple(map(int,sys.argv[1].removeprefix('v').split('.')))
+if version < (0,120,1):
+    sys.exit('Provider upgrade requires an official release v0.120.1 or newer')
+PY_PROVIDER_RELEASE
+  for asset in "containariumd-linux-${ARCH}" "containarium-linux-${ARCH}"; do
+    remaining=$((provider_stage_deadline - SECONDS))
+    (( remaining > 0 )) || die 'Provider release staging exceeded 600 seconds'
+    log "Staging checksum-verified official Provider asset: $asset"
+    timeout "$remaining" curl -fsSL --connect-timeout 10 --retry 3 "$RELEASE_URL/$asset" -o "$TMPDIR_DL/$asset"
+    (cd "$TMPDIR_DL" && grep -E "^[a-fA-F0-9]{64}[[:space:]]+\\*?${asset}$" SHA256SUMS.txt | sha256sum -c -) \
+      || die "Official Provider checksum verification failed: $asset"
+    chmod 0755 "$TMPDIR_DL/$asset"
+    python3 - "$TMPDIR_DL/server" "$TMPDIR_DL/$asset" "$CONTAINARIUM_VERSION" <<'PY_PROVIDER_VERSION'
+import sys
+sys.path.insert(0,sys.argv[1])
+from provenance import version
+if version(sys.argv[2]) != sys.argv[3].removeprefix('v'):
+    sys.exit('Staged Provider version does not match selected release')
+PY_PROVIDER_VERSION
+  done
+fi
 
 INSTALL_PHASE='provider installation'
 repair_zabbly_apt_permissions
@@ -413,37 +451,40 @@ runuser -u "$LINUX_USER" -- ssh-keygen -y -P "" -f "$PRIVATE_BOX_KEY" >/dev/null
 
 # Core containers may take several minutes to download and start for the
 # first time. Do not mistake their initialization delay for a failed daemon.
-INSTALL_PHASE='Containarium REST API readiness'
-systemctl enable --now containarium.service >/dev/null || die 'Could not enable/start containarium.service'
-log "Waiting up to ${API_READY_TIMEOUT}s for Containarium REST API at $API_URL"
-healthy=0
-start_time=$SECONDS
-last_report=$SECONDS
-while (( SECONDS - start_time < API_READY_TIMEOUT )); do
-  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
-  probe_timeout=$((remaining < 4 ? remaining : 4))
-  status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time "$probe_timeout" "${API_URL%/}/v1/containers" || true)
-  if [[ "$status" == 200 || "$status" == 401 || "$status" == 403 ]]; then
-    healthy=1
-    break
-  fi
-  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
-  (( remaining > 0 )) || break
-  probe_timeout=$((remaining < 5 ? remaining : 5))
-  daemon_state=$(timeout "${probe_timeout}s" systemctl show containarium.service -p ActiveState --value) || die 'Could not query Containarium service state'
-  if [[ "$daemon_state" != active && "$daemon_state" != activating && "$daemon_state" != reloading ]]; then
-    die "Containarium service is ${daemon_state:-unknown} during first boot. Review: sudo journalctl -u containarium -n 80 --no-pager"
-  fi
-  if (( SECONDS - last_report >= 30 )); then
-    log "Containarium is running; REST API not ready yet ($((SECONDS - start_time))s elapsed, last HTTP status: ${status:-unavailable}). Core containers may still be initializing."
-    last_report=$SECONDS
-  fi
-  remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
-  (( remaining > 0 )) || break
-  sleep "$((remaining < 5 ? remaining : 5))"
-done
-(( healthy == 1 )) || die "Containarium REST API did not become ready within ${API_READY_TIMEOUT}s. Check 'sudo incus list' and 'sudo journalctl -u containarium -n 80 --no-pager' before rerunning."
-log "Containarium REST API responded with HTTP $status"
+if (( ! UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='Containarium REST API readiness'
+  systemctl enable --now containarium.service >/dev/null || die 'Could not enable/start containarium.service'
+  log "Waiting up to ${API_READY_TIMEOUT}s for Containarium REST API at $API_URL"
+  healthy=0
+  start_time=$SECONDS
+  last_report=$SECONDS
+  while (( SECONDS - start_time < API_READY_TIMEOUT )); do
+    remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+    probe_timeout=$((remaining < 4 ? remaining : 4))
+    status=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time "$probe_timeout" "${API_URL%/}/v1/containers" || true)
+    if [[ "$status" == 200 || "$status" == 401 || "$status" == 403 ]]; then
+      healthy=1
+      break
+    fi
+    remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+    (( remaining > 0 )) || break
+    probe_timeout=$((remaining < 5 ? remaining : 5))
+    daemon_state=$(timeout "${probe_timeout}s" systemctl show containarium.service -p ActiveState --value) || die 'Could not query Containarium service state'
+    if [[ "$daemon_state" != active && "$daemon_state" != activating && "$daemon_state" != reloading ]]; then
+      die "Containarium service is ${daemon_state:-unknown} during first boot. Review: sudo journalctl -u containarium -n 80 --no-pager"
+    fi
+    if (( SECONDS - last_report >= 30 )); then
+      log "Containarium is running; REST API not ready yet ($((SECONDS - start_time))s elapsed, last HTTP status: ${status:-unavailable}). Core containers may still be initializing."
+      last_report=$SECONDS
+    fi
+    remaining=$((API_READY_TIMEOUT - (SECONDS - start_time)))
+    (( remaining > 0 )) || break
+    sleep "$((remaining < 5 ? remaining : 5))"
+  done
+  (( healthy == 1 )) || die "Containarium REST API did not become ready within ${API_READY_TIMEOUT}s. Check 'sudo incus list' and 'sudo journalctl -u containarium -n 80 --no-pager' before rerunning."
+  log "Containarium REST API responded with HTTP $status"
+
+fi
 
 INSTALL_PHASE='mandatory web staging and production build'
 web_options=()
@@ -452,6 +493,14 @@ web_options=()
 [[ -z "$WEB_PORT" ]] || web_options+=(--port "$WEB_PORT")
 [[ -z "$WEB_BACKEND_PORT" ]] || web_options+=(--backend-port "$WEB_BACKEND_PORT")
 python3 "$TMPDIR_DL/server/web_install.py" prepare "$TMPDIR_DL" "${web_options[@]}"
+
+if (( UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='Provider upgrade preflight'
+  python3 "$TMPDIR_DL/server/provider_upgrade.py" prepare --directory "$TMPDIR_DL" \
+    --daemon "$CONTAINARIUMD_BINARY" --cli "$(command -v containarium)" \
+    --origin "$API_URL" --release "$CONTAINARIUM_VERSION"
+  PROVIDER_CLI_TARGET=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cli"] or "")' "$TMPDIR_DL/provider-upgrade.json")
+fi
 
 INSTALL_PHASE='BoxWeave configuration staging'
 
@@ -606,6 +655,12 @@ publish_components() {
     'boxweave-token.service:/etc/systemd/system/boxweave-token.service:0644'
     'boxweave-token.timer:/etc/systemd/system/boxweave-token.timer:0644'
   )
+  if (( UPGRADE_PROVIDER )); then
+    files+=("containariumd-linux-ARCH:$CONTAINARIUMD_BINARY:0755"
+      'boxweave-tenant-guard.conf:/etc/systemd/system/containarium.service.d/90-boxweave-tenant-guard.conf:0644'
+      'provider-upgrade.json:/etc/boxweave/provider-upgrade.json:0600')
+    [[ -z "$PROVIDER_CLI_TARGET" ]] || files+=("containarium-linux-ARCH:$PROVIDER_CLI_TARGET:0755")
+  fi
   install -d -o root -g root -m 0700 /var/backups/boxweave
   BACKUP_DIR=$(mktemp -d /var/backups/boxweave/update-XXXXXXXX)
   for item in "${files[@]}"; do
@@ -637,6 +692,11 @@ publish_components() {
       fi
     fi
   done
+  if (( UPGRADE_PROVIDER )); then
+    # Keep the existing daemon running through staging and backup. Stop it only
+    # after the pending marker is durable and just before binary publication.
+    systemctl stop containarium.service || die 'Could not stop Provider for approved binary upgrade'
+  fi
   for item in "${files[@]}"; do
     source=${item%%:*}; source=${source/ARCH/$ARCH}
     destination=${item#*:}; mode=${destination##*:}; destination=${destination%:*}
@@ -646,6 +706,11 @@ publish_components() {
 publish_components
 # Token generation must pass before timers start. No token contents are printed.
 systemctl daemon-reload
+if (( UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='upgraded Provider startup'
+  systemctl enable containarium.service >/dev/null
+  systemctl start containarium.service || die 'Upgraded Provider failed to start; retain backup and inspect logs'
+fi
 /usr/bin/python3 /usr/local/libexec/boxweave/cli.py --version
 for unit in boxweave-token.service boxweave-hostkeys.service; do
   # Fresh oneshot units may be unloaded even after daemon-reload. reset-failed
@@ -655,6 +720,13 @@ for unit in boxweave-token.service boxweave-hostkeys.service; do
   fi
 done
 systemctl start boxweave-token.service || die 'Cannot mint MCP JWT. Inspect journalctl -u boxweave-token.service'
+if (( UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='authenticated native Tenant readiness'
+  timeout 610 python3 "$TMPDIR_DL/server/provider_upgrade.py" verify --user "$LINUX_USER" \
+    --timeout 600 --manifest "$CONFIG_DIR/install-manifest.json"
+  systemctl is-active --quiet containarium.service || die 'Upgraded Provider is not active'
+  systemctl is-enabled --quiet containarium.service || die 'Upgraded Provider is not enabled for autostart'
+fi
 systemctl start boxweave-hostkeys.service || die 'Host-key sync failed. Inspect journalctl -u boxweave-hostkeys.service'
 systemctl enable boxweave-token.timer boxweave-hostkeys.timer >/dev/null
 systemctl restart boxweave-token.timer boxweave-hostkeys.timer
@@ -662,9 +734,20 @@ systemctl is-active --quiet boxweave-token.timer boxweave-hostkeys.timer || die 
 TIMERS_PAUSED=0
 INSTALL_PHASE='mandatory independent web installation'
 python3 "$TMPDIR_DL/server/web_install.py" publish "$TMPDIR_DL"
+if (( UPGRADE_PROVIDER )); then
+  INSTALL_PHASE='independent Web Tenant credential verification'
+  timeout 60 python3 "$TMPDIR_DL/server/provider_upgrade.py" verify-web \
+    --manifest "$CONFIG_DIR/install-manifest.json"
+fi
 /usr/bin/python3 /usr/local/libexec/boxweave/provenance.py complete "$CONFIG_DIR/install-manifest.json"
 rm -f "$CONFIG_DIR/update-in-progress"
 TIMERS_PAUSED=0
+
+if (( UPGRADE_PROVIDER )); then
+  log 'Official Provider upgraded; native Tenant capabilities and Guard verified. TCP acceptance remains separate.'
+else
+  log 'Existing Provider preserved. To align it with official native Tenant networking, rerun the reviewed installer with --upgrade-provider (restarts Provider).'
+fi
 
 cat <<EOF
 

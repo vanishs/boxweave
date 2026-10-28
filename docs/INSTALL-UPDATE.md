@@ -43,7 +43,8 @@ explicitly changed. A source ref without the required files fails during staging
 Managed BoxWeave files are refreshed, missing files recreated, failed oneshot
 services retried, and managed timers enabled and restarted to apply the current
 configuration. Existing provider/Incus installations are reused. Provider package
-upgrades, daemon binary replacement and Incus upgrades are separate operations.
+upgrades and Incus upgrades remain separate operations. Daemon/CLI binary replacement
+is available only through the explicit `--upgrade-provider` option below.
 Container data, port routes and client enrollment keys are not replaced. A local
 modification to a managed BoxWeave file is backed up and overwritten; systemd
 drop-ins remain in place and can still affect service behavior.
@@ -170,3 +171,76 @@ Codex client transport updates preserve existing `mcp_servers.boxweave.tools.*`
 approval tables, including when replacing the BoxWeave transport registration.
 Inline MCP tables and other nested BoxWeave tables still require explicit
 migration; the setup does not remove them automatically.
+
+## Explicit official Provider upgrade (0.5.0)
+
+A normal rerun updates BoxWeave and its MCP backend but preserves the installed
+Provider daemon. An old or downstream daemon can therefore still return
+`boxweave.tenant-network/v1`; changing the MCP binary alone cannot change that
+response. The Web adapter requires the official `native-network-tenant/v1`.
+
+To align the Provider and MCP with the latest official release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh -o /tmp/boxweave-install.sh
+sudo bash /tmp/boxweave-install.sh --upgrade-provider
+```
+
+This explicit flag authorizes replacement of the configured local daemon binary
+and a separate CLI binary, enabling Tenant Guard, and a brief Provider service
+restart. It resolves `latest` once even if an earlier run saved a pinned MCP
+release. To deliberately select a reviewed release instead:
+
+```bash
+sudo env CONTAINARIUM_VERSION=v0.120.1 bash /tmp/boxweave-install.sh --upgrade-provider
+```
+
+The reviewed floor is v0.120.1. The selected release must publish checksum-listed
+Linux assets for the host architecture. Staging verifies SHA256 and reported
+versions before publication; it does not build or apply downstream patches. All
+BoxWeave/Web downloads and the Web production build finish before an existing
+Provider is stopped. Provider binary downloads share a 600-second deadline.
+
+The supported upgrade layout uses regular binaries under `/usr/local` and a
+`containarium.service` ExecStart that directly invokes the configured daemon.
+The conventional `containarium -> containariumd` alias is retained and follows
+the upgraded daemon; a separate regular CLI is replaced from the same release.
+Package-owned binaries, unexpected symlinks, wrappers and downgrades are refused
+before publication. Custom layouts require a separately reviewed Provider update.
+
+The installer preserves the existing service command, arguments and other
+configuration. Its own drop-in sets `CONTAINARIUM_TENANT_GUARD=enforce`;
+effective settings are checked through the running Provider rather than inferred
+from the file. It does not upgrade Incus/APT packages, enable account tenancy,
+relabel Boxes, reset ingress grants or publish ports. Existing cross-Tenant
+permissions remain deliberate exceptions to default isolation. Existing Boxes
+with a common explicit native key retain their shared membership.
+
+Publication backs up the daemon, separate CLI and managed drop-in with BoxWeave's
+other managed files and records `/etc/boxweave/provider-upgrade.json`. The daemon
+is stopped only after backup and the pending-update marker. Files are replaced
+atomically, the service is started/enabled, and the MCP credential is rotated by
+the existing managed issuer. One 600-second readiness deadline covers an actual
+non-root launcher initialize/initialized exchange, tools/list, capability and
+Guard calls, and a read-only list_containers call. Required observations are the
+exact native contract, local-LXC membership/shared-creation/atomic-policy support,
+and fresh converged nftables Tenant Guard in ENFORCE mode. After Web publication,
+its independent credential must also pass the Web capability, Guard and policy
+read paths. Installation success never claims a TCP test.
+
+`boxweave version --verbose --json` includes the install-time `tenant_network`
+evidence and actual post-upgrade daemon version/hash. Reconnect MCP afterward;
+existing agent processes retain their old backend until they reconnect. Failure
+keeps the update marker and backup location. Inspect logs and the actual service
+path before rerunning with the flag; the installer does not automatically roll
+back binaries, Provider database migrations or already reconciled ACLs. Before
+upgrading, keep an operator-managed compatible Provider database/configuration
+backup in addition to BoxWeave's managed-file backup. Restoring binaries alone is
+not a safe data rollback.
+
+Acceptance after deployment: create two Boxes with the same native Tenant key
+and one with a different key, verify member/Guard readback, then test fresh TCP
+connections in both directions. Same-key Boxes should communicate; different-key
+Boxes should be denied unless an explicit ingress grant permits them. Gateway,
+proxy/public routes, egress controls and established connections are separate
+paths. Live acceptance requires its own agreed resource/cleanup plan.

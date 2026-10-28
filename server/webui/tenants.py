@@ -245,6 +245,13 @@ class TenantService:
             raw = self.provider.tenant_capabilities()
         except (ProviderError, AttributeError):
             return result
+        if isinstance(raw, dict) and raw.get("contract") == "boxweave.tenant-network/v1":
+            result["reason"] = (
+                "Provider still runs the historical downstream Tenant contract. "
+                "Run the reviewed installer with --upgrade-provider to align "
+                "daemon/CLI/MCP with official native-network-tenant/v1, then reconnect MCP."
+            )
+            return result
         if (
             not isinstance(raw, dict)
             or raw.get("contract") != CONTRACT
