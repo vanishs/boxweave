@@ -86,6 +86,8 @@ class CommandTests(unittest.TestCase):
                     self.assertEqual(result['paste_into'],'Windows PowerShell')
                     self.assertIn('$env:BOXWEAVE_SSH_HOST',script)
                     self.assertIn('ExecutionPolicy Bypass',script)
+                    expected_transport = "'WSL'" if profile[-1]=='wsl' else "'Native'"
+                    self.assertIn('$env:BOXWEAVE_TRANSPORT = '+expected_transport,script)
                 else:
                     self.assertIn('BOXWEAVE_SSH_HOST=',script)
                     process=subprocess.run(['bash','-n','-c',script],capture_output=True)

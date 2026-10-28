@@ -240,7 +240,7 @@ def render(d, profile, options=None):
               '@@CONTAINER_KEY@@': quote(d['container_public_key']),
               '@@AGENT@@': quote(profile['agent']),
               '@@RUNTIME@@': quote(profile['runtime']),
-              '@@TRANSPORT@@': quote(profile['transport'].capitalize() if windows_native else profile['transport']),
+              '@@TRANSPORT@@': quote('WSL' if profile['transport'] == 'wsl' else 'Native') if windows_native else quote(profile['transport']),
               '@@WSL_DISTRO@@': ps_quote(''),
               '@@PROVIDER@@': quote(options.get('claude_provider') or ''),
               '@@MODEL@@': quote(options.get('glm_model') or '')}

@@ -378,11 +378,14 @@ function Get-ConnectionFromEnv {
     # The container key is required for enrollment but not for diagnostics;
     # validate it only when present.
     if ($containerKey -and $containerKey -cnotmatch '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+(?: [^\r\n]+)?$') { throw 'Invalid BOXWEAVE_CONTAINER_PUBLIC_KEY' }
-    if ($agent -cnotin @('codex','cursor','claude-code','zcode')) { throw 'Invalid or missing BOXWEAVE_AGENT' }
-    if ($transport -cnotin @('Native','WSL')) { throw 'Invalid or missing BOXWEAVE_TRANSPORT (Native or WSL)' }
+    if (-not $agent -or $agent -notmatch '^(codex|cursor|claude-code|zcode)$') { throw 'Invalid or missing BOXWEAVE_AGENT' }
+    # Accept any case: the generated script writes 'Wsl'/'Native' via
+    # capitalize(), and hand edits may vary; normalize for downstream -ceq.
+    if (-not $transport -or $transport -notmatch '^(Native|WSL)$') { throw 'Invalid or missing BOXWEAVE_TRANSPORT (Native or WSL)' }
+    $transport = if ($transport -ieq 'WSL') { 'WSL' } else { 'Native' }
     if ($transport -ceq 'WSL' -and $distro -and $distro -cnotmatch '^[A-Za-z0-9_.-]+$') { throw 'Invalid BOXWEAVE_WSL_DISTRO' }
     return @{Host=$hostName;Port=[int]$portText;User=$user;HostKey=$hostKey;ContainerKey=$containerKey;
-             Agent=$agent;Transport=$transport;Distro=$distro}
+             Agent=$agent.ToLowerInvariant();Transport=$transport;Distro=$distro}
 }
 
 function Get-PolicyText($conn) {
