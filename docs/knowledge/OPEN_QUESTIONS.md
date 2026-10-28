@@ -73,3 +73,11 @@ RISK-017: independent launcher/authentication/execution now established in the e
 RISK-020 — Observed provider flag mismatch: inner MCP create supplied enable_podman=false, but metadata readback reports podmanEnabled=true. Exact cause not attested. Preserve requested versus observed values, constrain test to approved harmless commands, and resolve before promising exact workload isolation/feature flag behavior. No relabeling, provider upgrade or silent flag repair occurred.
 
 The real HTTP run also exposed a worker time-sampling race (false deadline/clock rollback for newly queued work). Fixed in 0.1.1 with a failing-before/passing-after regression; actual HTTP and browser receipt paths now passed. Missing real Windows-native enrollment/registration/UI and developer architecture acceptance remain explicit. See LIVE_MCP_CHAIN; no phase5 feature has started.
+
+## Phase 5 iteration 1 complete — TASK-011 (SRC-051/052)
+
+Developer acceptance of the minimum architecture/slice is explicitly recorded in SRC-051, after verified real Web/MCP evidence. TASK-011 basic Prompt Graph is implemented in 0.2.0: bounded cards, editable comments/context, undirected links, revision-checked persistence, conflict-preserved drafts, Markdown/clipboard handling and graph-only deletion. REQ-011/014/016 and AC-011/014/016 graph subset are evidenced; other selected-feature/client obligations remain incomplete.
+
+Actual non-root project-LXC checks: 41 tests OK (11.173s), TypeScript/Vite build, final Chromium graph workflow including mobile fit and clipboard failure, original project hello/restart fixture regression; all exit0. Graph API forbids provider access in tests; browser has zero queued/executed operations. Thirteen changed source/lock files match remote SHA256. See PHASE_05_TASK_011.md for commands and precise evidence. No new box, infrastructure mutation, deployment, persistent listener, public route or push. Stop this iteration.
+
+Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/recognition evidence, then dependent TASK-006. Developer gate acceptance does not fabricate those missing client checks or waive per-task prerequisites. Phase 5 overall is not complete.

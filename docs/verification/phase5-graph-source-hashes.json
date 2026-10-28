@@ -1,0 +1,15 @@
+{
+  "VERSION": "1f930dd1f133c1f97a94fe3acb8db34372cf4c01ffdb2b3ff4ca72f9494121e9",
+  "pyproject.toml": "f77b7cb3cc8b60ddd534b2c5ff3a972b0430b29c8b997ada2c01f34370beee88",
+  "bwmini/mcp.py": "5a031397550f47bc747e1c842b0e2ccdfd4400058be50d0588d2ce4b955eafd8",
+  "bwmini/store.py": "3d5641423d8d63f74e62278fa4c249d0518133025f0b678e713e8a3b20e9d078",
+  "bwmini/web.py": "9bb633d93e0eb90595c74bac328f6c0dacc4d1e60a8e6ea95bacd7ec2627aa95",
+  "bwmini/graphs.py": "8aa9bbf986a31dee4a3a2f0629e7bf2ff27adf0a680d9063f3be7b9b058592e1",
+  "tests/test_graphs.py": "0f44b2d0e2ecad0ce70528a673dad27a97ed4203ee42dc76f11022a5ea6376e6",
+  "web/package.json": "c6d7538e11fec2f7e60fd2b968c994dc73250489bfc6a5c436c9f515cfcd0d68",
+  "web/package-lock.json": "5dc9887d2f367ce084d692a8c747af8dc3a5d35a3844bb0e9609802deb336d25",
+  "web/src/main.tsx": "9678cbf0303656f621ed0bd27869905946a609f073a30f7222bfbda55bc4504d",
+  "web/src/style.css": "cb65f2e277bfbb76fc9ae970c432bb8fa1983c9a581e4aa34891b34752aef541",
+  "web/src/PromptGraph.tsx": "219e63fe7f0969d957ab4555971f95af50e872d93a275b27e6f01b361f18c175",
+  "scripts/graph_browser_check.py": "17a01fdf06685b483c39da0f0f16522f0c93baacc1f17709fd6a0d7657ab4cfb"
+}

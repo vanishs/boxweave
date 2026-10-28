@@ -17,7 +17,7 @@ All rows describe partial minimum-system progress, not first-release completion.
 | REQ-011 | AC-011 | TASK-004, TASK-005 | Real authenticated loopback Web/browser fixture verified; production HTTPS/live services incomplete |
 | REQ-012 | AC-012 | TASK-009 | Not started; requires phase-4 developer gate before feature work |
 | REQ-013 | AC-013 | TASK-010 | Not started; no routes published |
-| REQ-014 | AC-014 | TASK-011 | Not started; minimal UI intentionally has no graph |
+| REQ-014 | AC-014 | TASK-011, TASK-013 | TASK-011 basic composition passed: real SQLite migration/CAS/API and Chromium card/comment/context/link/edit/copy/export/delete, zero graph provider calls. SRC-052; release TASK-013 remains pending |
 | REQ-015 | AC-015 | TASK-008 | Not started; no model requests or credentials moved |
 | REQ-016 | AC-016 | TASK-003, TASK-012 | Exact Linux wheel locks/source hashes; enrollment payload trust distribution incomplete |
 | REQ-017 | AC-017 | TASK-005, TASK-013 | Linux/browser fixture + Windows preflight evidence; no real selected-profile acceptance |
@@ -34,3 +34,11 @@ SRC-047: supporting backend install exit0, managed timers/oneshots/marker checks
 Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
 
 The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.
+
+## Phase 5 iteration 1 complete — TASK-011 (SRC-051/052)
+
+Developer acceptance of the minimum architecture/slice is explicitly recorded in SRC-051, after verified real Web/MCP evidence. TASK-011 basic Prompt Graph is implemented in 0.2.0: bounded cards, editable comments/context, undirected links, revision-checked persistence, conflict-preserved drafts, Markdown/clipboard handling and graph-only deletion. REQ-011/014/016 and AC-011/014/016 graph subset are evidenced; other selected-feature/client obligations remain incomplete.
+
+Actual non-root project-LXC checks: 41 tests OK (11.173s), TypeScript/Vite build, final Chromium graph workflow including mobile fit and clipboard failure, original project hello/restart fixture regression; all exit0. Graph API forbids provider access in tests; browser has zero queued/executed operations. Thirteen changed source/lock files match remote SHA256. See PHASE_05_TASK_011.md for commands and precise evidence. No new box, infrastructure mutation, deployment, persistent listener, public route or push. Stop this iteration.
+
+Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/recognition evidence, then dependent TASK-006. Developer gate acceptance does not fabricate those missing client checks or waive per-task prerequisites. Phase 5 overall is not complete.

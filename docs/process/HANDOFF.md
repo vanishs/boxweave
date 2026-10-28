@@ -1,3 +1,24 @@
+# Current handoff — phase 5 iteration 1, TASK-011
+
+Date: 2026-10-28 America/Los_Angeles. Branch rewrite/v2; parent 85fdd7c7e7c7846f651fc1ba933c1d8ae5b988af. Developer gate accepted SRC-051 after real-chain verification. This one iteration completes basic Prompt Graph, version 0.2.0, REQ-011/014/016 and AC-011/014/016 graph scope. No other task, phase6 or deployment is started.
+
+Delivered cards/drag, editable comments/context, undirected relations, explicit saves and revision conflicts preserving drafts, escaped/recognized-secret-redacted Markdown, accurate clipboard outcome reports and graph-only deletion. Schema2 additive migration preserves schema1 admin/project/session/receipt data; private consistent backup is the downgrade boundary. No provider dependency in graph service. Whole release/client acceptance remains incomplete.
+
+Actual commands in /home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a:
+
+- .venv/bin/python -m unittest discover -s tests -v: 41 OK, exit0, 11.173s.
+- cd web && npm run build: TypeScript/Vite pass, exit0. Exact XYFlow12.12.0 lock; benign client-only use-client directive warning.
+- PYTHONPATH=. .venv/bin/python scripts/graph_browser_check.py: real Chromium141.0.7390.37/HTTP/SQLite pass, infrastructure fixtures, zero operations/provider calls for graph actions; desktop/mobile reviewed.
+- PYTHONPATH=. .venv/bin/python scripts/browser_check.py: original fixture binding/hello/restart/no-replay/mobile regression pass, exit0.
+
+See ../verification/PHASE_05_TASK_011.md and its source/result manifests for full evidence and recovery limits. Graph state/screenshots retained under remote .runtime/graphs/70173ffb74452f30 and ignored local .runtime/phase5-graph. Source exact-byte synchronized from LXC; no state/dependency tree/credential/raw data staged. Final code/test/docs commit is this handoff's containing commit, identifiable by git log -1 and reported in final response; no push.
+
+Legacy main still d8a09dd, only unrelated untracked archive; no implementation merge. Original demo and live-test boxes remain as before; graph source has not been deployed there. Owned temporary ports18640/18643 have no remaining listeners. No new box, host/network/policy/model operation or persistent service.
+
+Stop after this iteration. Suggested next task: complete TASK-003/005 actual minimum Windows-native enrollment/recognition evidence, then TASK-006. Other selected clients/Tenant/ports/models/install/release obligations remain open. Pattern redaction is incomplete; copy reports are browser claims; schema2 requires a compatible private backup for downgrade. Do not treat local graph tests as real-client or infrastructure acceptance.
+
+## Historical handoff entries
+
 # Phase 4 handoff — retained partial minimum system
 
 Date: 2026-10-28 America/Los_Angeles. **Result: partial implementation; real minimum-system gate not passed.** User SRC-030 approved the exact execution scope; after the missing independent application launcher was reported, SRC-032 confirmed no path is available and requested preservation. No new credential was minted or borrowed.
@@ -99,3 +120,11 @@ Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, inc
 The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.
 
 Final validation for SRC-049/050: 30 Linux tests passed in the assigned project LXC; real HTTP and final Chromium live-MCP checks passed; live trust/identity negative paths passed; 38 Markdown documents' local links and the four changed source hashes match. Original legacy HEAD d8a09dd/client source hash/archive status are unchanged by this task. Ignored screenshots/state remain outside Git. The real-chain repair and related accumulated test/deployment records are committed on rewrite/v2; final commit identity is reported by Git/final response. No phase5 feature or push occurred.
+
+## Phase 5 opened — TASK-011 (SRC-051)
+
+Developer explicitly accepted the demonstrated minimum architecture and slice after real-chain verification, and authorized TASK-011. This records the phase-4 developer gate; remaining Windows/WSL Agent registration and release evidence are not waived. Execute one slice only: REQ-011/014/016, AC-011/014/016, basic Prompt Graph. Assigned development LXC remains boxweave-tenant-dev. No deployment, public exposure, model or infrastructure mutation is part of the graph slice.
+
+Before implementation: verify real SQLite additive migration and revision conflicts; authenticated/Origin/CSRF graph API; bounded cards/comments/undirected links/context; reject orphan/self/duplicate links; escaped and recognized-secret-redacted Markdown; record copy only after clipboard success (client report, not server proof); graph deletion preserves environments; browser save/reload/concurrent edit/clipboard failure/layout; assert graph services make zero provider calls. Explicit saves preserve local unsaved edits on conflict. Use architecture-selected XYFlow with an exact lock. Schema-1 data must survive migration; older binaries must refuse schema 2.
+
+Final TASK-011 validation: 13 source/lock hashes match the tested LXC bytes, 41 Markdown documents have valid local links, phase5 prompt archive is byte-identical, and the legacy HEAD/status/client hash remain unchanged. Whitespace and staged private-payload checks complete before commit. No owned graph/regression listeners remain.

@@ -62,3 +62,11 @@ Each evidence record: requirement/AC/task, exact revision/build hash, target ide
 ## Actual phase 4 commands/evidence
 
 29 tests run under both the development and a clean hash-locked Ubuntu/Python 3.12 environment; frontend TypeScript/Vite build; real Chromium with explicit infrastructure fixtures; Windows PowerShell AST and three no-network preflight cases. Commands and actual exits are in [VERTICAL_SLICE](VERTICAL_SLICE.md), with [FEATURE_MATRIX](FEATURE_MATRIX.md). No real independent application MCP session, native enrollment/UI acceptance, create/policy/route/model action or production deployment test ran. The direct Platform MCP identity/hello result is a separate observation, not completion of EXP-001 through the application. EXP-006 restart/no-replay is verified with fixture infrastructure; arbitrary remote cancellation remains unverified.
+
+## Phase 5 iteration 1 complete — TASK-011 (SRC-051/052)
+
+Developer acceptance of the minimum architecture/slice is explicitly recorded in SRC-051, after verified real Web/MCP evidence. TASK-011 basic Prompt Graph is implemented in 0.2.0: bounded cards, editable comments/context, undirected links, revision-checked persistence, conflict-preserved drafts, Markdown/clipboard handling and graph-only deletion. REQ-011/014/016 and AC-011/014/016 graph subset are evidenced; other selected-feature/client obligations remain incomplete.
+
+Actual non-root project-LXC checks: 41 tests OK (11.173s), TypeScript/Vite build, final Chromium graph workflow including mobile fit and clipboard failure, original project hello/restart fixture regression; all exit0. Graph API forbids provider access in tests; browser has zero queued/executed operations. Thirteen changed source/lock files match remote SHA256. See PHASE_05_TASK_011.md for commands and precise evidence. No new box, infrastructure mutation, deployment, persistent listener, public route or push. Stop this iteration.
+
+Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/recognition evidence, then dependent TASK-006. Developer gate acceptance does not fabricate those missing client checks or waive per-task prerequisites. Phase 5 overall is not complete.

@@ -21,6 +21,12 @@ CREATE TABLE operations (id TEXT PRIMARY KEY, project TEXT NOT NULL REFERENCES p
 CREATE TABLE audit (at REAL NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, code TEXT NOT NULL);
 """
 
+GRAPH_SCHEMA = """
+CREATE TABLE graphs (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL);
+CREATE TABLE graph_copies (id TEXT PRIMARY KEY, graph TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+ revision INTEGER NOT NULL, at REAL NOT NULL, status TEXT NOT NULL CHECK(status='reported_success'));
+"""
+
 class Store:
     def __init__(self, path):
         self.path = Path(path).absolute()
@@ -33,13 +39,19 @@ class Store:
         if os.name == "posix" and self.path.parent.stat().st_mode & 0o077:
             raise Fault("STATE_DIRECTORY_NOT_PRIVATE", 422)
         with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
                     raise Fault("SCHEMA_UNSUPPORTED", 422)
-                db.executescript("BEGIN IMMEDIATE;" + SCHEMA + "PRAGMA user_version=1;COMMIT;")
+                for statement in SCHEMA.split(";"):
+                    if statement.strip():db.execute(statement)
+            if version < 2:
+                for statement in GRAPH_SCHEMA.split(";"):
+                    if statement.strip():db.execute(statement)
+                db.execute("PRAGMA user_version=2")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager

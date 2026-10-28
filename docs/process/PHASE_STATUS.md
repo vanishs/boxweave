@@ -1,5 +1,11 @@
 # Phase status — authority
 
+## Current authority: phase 5, iteration 1 complete
+
+SRC-051 accepts the verified minimum architecture/slice; TASK-011 is complete in 0.2.0 (SRC-052). Full phase5/client/release acceptance remains incomplete. Earlier status entries below are history and do not override this gate. See the final iteration record and PHASE_05_TASK_011.md.
+
+## Earlier status history
+
 Date: 2026-10-28 America/Los_Angeles.
 
 Phase 1 knowledge root and phase 2 product approval remain recorded; phase 3 design parent is 40a600a56a7fd3a08a0c71b6763bbd7d79f7f621. Developer scope SRC-026 remains unchanged: four Windows-hosted Codex/ZCode native/WSL SSH profiles and the selected basic Web/Tenant/ports/Graph/model features, one trusted operator.
@@ -69,3 +75,17 @@ A concrete alternative was presented for explicit approval: new bw-v2-mcp-nested
 Version 0.1.1 fixes a real queue-claim timing race. Thirty Linux tests pass, including a new regression that failed before the fix. An explicitly approved nesting-enabled backend now supports the real application -> independent managed MCP -> inner workload path. HTTP and Chromium binding/confirm/hello/receipt/restart/no-replay plus live trust/identity rejection passed. See [LIVE_MCP_CHAIN](../verification/LIVE_MCP_CHAIN.md) for exact identities, operation IDs, versions, commands and limits.
 
 The previous missing-launcher/nested-startup blocker is resolved for this new lab only, not the old box or every LXC. TASK-005 selected Web path has live evidence; real Windows-native enrollment/Agent GUI acceptance remains incomplete. Developer required this real chain before phase 5 (SRC-048); no phase 5 feature was started and architecture/slice acceptance must still be recorded before TASK-011 or other new features. Original published demo remains fixture; isolated test servers are stopped, resources retained, no new public port or host-security change.
+
+## Phase 5 opened — TASK-011 (SRC-051)
+
+Developer explicitly accepted the demonstrated minimum architecture and slice after real-chain verification, and authorized TASK-011. This records the phase-4 developer gate; remaining Windows/WSL Agent registration and release evidence are not waived. Execute one slice only: REQ-011/014/016, AC-011/014/016, basic Prompt Graph. Assigned development LXC remains boxweave-tenant-dev. No deployment, public exposure, model or infrastructure mutation is part of the graph slice.
+
+Before implementation: verify real SQLite additive migration and revision conflicts; authenticated/Origin/CSRF graph API; bounded cards/comments/undirected links/context; reject orphan/self/duplicate links; escaped and recognized-secret-redacted Markdown; record copy only after clipboard success (client report, not server proof); graph deletion preserves environments; browser save/reload/concurrent edit/clipboard failure/layout; assert graph services make zero provider calls. Explicit saves preserve local unsaved edits on conflict. Use architecture-selected XYFlow with an exact lock. Schema-1 data must survive migration; older binaries must refuse schema 2.
+
+## Phase 5 iteration 1 complete — TASK-011 (SRC-051/052)
+
+Developer acceptance of the minimum architecture/slice is explicitly recorded in SRC-051, after verified real Web/MCP evidence. TASK-011 basic Prompt Graph is implemented in 0.2.0: bounded cards, editable comments/context, undirected links, revision-checked persistence, conflict-preserved drafts, Markdown/clipboard handling and graph-only deletion. REQ-011/014/016 and AC-011/014/016 graph subset are evidenced; other selected-feature/client obligations remain incomplete.
+
+Actual non-root project-LXC checks: 41 tests OK (11.173s), TypeScript/Vite build, final Chromium graph workflow including mobile fit and clipboard failure, original project hello/restart fixture regression; all exit0. Graph API forbids provider access in tests; browser has zero queued/executed operations. Thirteen changed source/lock files match remote SHA256. See PHASE_05_TASK_011.md for commands and precise evidence. No new box, infrastructure mutation, deployment, persistent listener, public route or push. Stop this iteration.
+
+Next suggestion: finish TASK-003/005 minimum actual Windows-native enrollment/recognition evidence, then dependent TASK-006. Developer gate acceptance does not fabricate those missing client checks or waive per-task prerequisites. Phase 5 overall is not complete.

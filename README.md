@@ -6,7 +6,7 @@ This is a new implementation on rewrite/v2, not a port of the legacy tree.
 The current slice provides operator login, reviewed project/environment binding,
 one-use hello plans, a separate worker, SQLite revisions and durable receipts.
 Fixture mode is prominently labeled. Missing live configuration never silently
-enables a fixture. Tenant writes, ports, Prompt Graph, model setup and the wider
+enables a fixture. Tenant writes, ports, model setup and the wider
 client matrix remain required later features, not implemented controls.
 
 ## Verified environment
@@ -113,3 +113,15 @@ auth/CSRF, target change, stale revision, no-replay recovery, MCP pagination and
 malformed responses. No real create/policy/route/model call or production
 installation/HTTPS/autostart/confinement acceptance is claimed. Phase 4 remains
 partial until the real selected-client/application path and developer gate pass.
+
+## Prompt Graph (0.2.0)
+
+After login choose Prompt Graph. Create/edit a named graph, drag cards, add/edit comments and undirected relations, and save explicitly. Project/environment/Tenant context is text only and never executes infrastructure. Revision conflicts keep the local draft; reload explicitly to reconcile. Save before copying or exporting Markdown. Recognized secrets are redacted and Markdown is escaped; review exports because redaction is not complete secret detection. Clipboard failure never reports a successful copy. Delete removes graph data only.
+
+Schema 2 migrates schema-1 data transactionally. Back up persistent SQLite state consistently before an update; older binaries refuse schema 2. This iteration is source/test delivery, not an update of the previously published demo. See [graph API, limits and actual tests](docs/verification/PHASE_05_TASK_011.md) and [ADR-006](docs/design/ADR/0006-prompt-composition.md).
+
+```bash
+PYTHONPATH=. .venv/bin/python scripts/graph_browser_check.py
+```
+
+The graph browser check uses owned loopback port 18643, real Chromium/HTTP/SQLite and fixture infrastructure, asserts zero execution operations, and stops its temporary server. Browser/system dependencies must already be installed as described above.

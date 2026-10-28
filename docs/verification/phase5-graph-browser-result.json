@@ -1,0 +1,21 @@
+{
+  "result": "passed",
+  "browser": "chromium",
+  "browser_version": "141.0.7390.37",
+  "infrastructure": "fixture, zero graph execution",
+  "checks": [
+    "card edit and drag",
+    "context and comment",
+    "undirected relation",
+    "save and full reload",
+    "concurrent edit conflict preserves draft",
+    "actual browser clipboard",
+    "clipboard rejection creates no success",
+    "escaped/redacted Markdown download",
+    "graph delete preserves binding",
+    "zero operations",
+    "desktop/mobile without overflow",
+    "mobile canvas fit"
+  ],
+  "state": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/graphs/70173ffb74452f30"
+}

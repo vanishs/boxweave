@@ -1,12 +1,14 @@
 import React, {useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
+import {PromptGraph} from './PromptGraph';
 
 type Resource={logical:string,user:string,hostname:string};
 type Project={id:string,name:string,revision:number};
 type Receipt={id:string,state:string,code:string|null,result:{stdout:string,exit_code:number,evidence:string}|null};
 
 function App(){
+  const [view,setView]=useState('projects'),[graphDirty,setGraphDirty]=useState(false);
   const [csrf,setCsrf]=useState(''), [mode,setMode]=useState(''), [password,setPassword]=useState('');
   const [resources,setResources]=useState<Resource[]>([]), [projects,setProjects]=useState<Project[]>([]);
   const [logical,setLogical]=useState(''), [workspace,setWorkspace]=useState(''), [label,setLabel]=useState('');
@@ -39,6 +41,8 @@ function App(){
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
         <button disabled={busy}>Sign in</button></form></section>:<>
       <aside className={mode==='fixture'?'fixture':'live'}>{mode==='fixture'?'Fixture mode — no live infrastructure is connected.':'Live MCP mode — target identity is checked before execution.'}</aside>
+      <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>setView('projects')}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button></nav>
+      {view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:<>
       <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setCsrf('');setReceipt(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
         <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api('projects','POST',{name:label,logical,workspace});setLabel('');await refresh();});}}>
           <label>Project name<input value={label} required maxLength={80} onChange={e=>setLabel(e.target.value)}/></label>
@@ -58,8 +62,9 @@ function App(){
           {receipt.result&&<><pre>{receipt.result.stdout}</pre><p>Command exit: {receipt.result.exit_code} · evidence: {receipt.result.evidence}</p></>}
           {receipt.state==='unknown'&&<p>Completion is unknown. Inspect the resource before authorizing another operation.</p>}</div>}
       </section>
+      </>}
     </>}
-    <footer>Phase 4 · project binding / trusted identity / durable evidence</footer>
+    <footer>Project binding / durable evidence / prompt composition</footer>
   </main>
 }
 createRoot(document.getElementById('root')!).render(<App/>);

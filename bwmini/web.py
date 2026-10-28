@@ -7,11 +7,13 @@ import time
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.security import check_password_hash
 from .domain import Fault
+from .graphs import Graphs
 
 def create_app(service, origin, dist, secure=True, clock=time.time):
     app = Flask(__name__, static_folder=None)
     app.config.update(MAX_CONTENT_LENGTH=16384)
     store = service.store
+    graphs = Graphs(store)
     def body(keys):
         data = request.get_json(silent=True)
         if not isinstance(data, dict) or set(data) != set(keys):
@@ -124,6 +126,24 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         r=store.receipt(oid)
         r["result"]=json.loads(r["result"]) if r["result"] else None
         return jsonify(r)
+    @app.get("/api/graphs")
+    def graph_list():return jsonify(graphs=graphs.list())
+    @app.post("/api/graphs")
+    def graph_create():return jsonify(graphs.save(body(["document"])["document"])),201
+    @app.get("/api/graphs/<gid>")
+    def graph_get(gid):return jsonify(graphs.get(gid))
+    @app.put("/api/graphs/<gid>")
+    def graph_save(gid):
+        d=body(["document","revision"])
+        return jsonify(graphs.save(d["document"],gid,d["revision"]))
+    @app.delete("/api/graphs/<gid>")
+    def graph_delete(gid):
+        graphs.delete(gid,body(["revision"])["revision"])
+        return jsonify(code="OK")
+    @app.get("/api/graphs/<gid>/markdown")
+    def graph_export(gid):return jsonify(graphs.export(gid))
+    @app.post("/api/graphs/<gid>/copies")
+    def graph_copy(gid):return jsonify(graphs.copied(gid,body(["revision"])["revision"]))
     @app.get("/")
     def index():
         return send_from_directory(dist,"index.html")
