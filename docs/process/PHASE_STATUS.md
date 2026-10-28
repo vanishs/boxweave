@@ -2,14 +2,14 @@
 
 Date: 2026-10-28 America/Los_Angeles.
 
-Current authorized phase: **2 — rethink product and requirements** (SRC-023). Document analysis only. No implementation, architecture/stack selection, resource creation, deployment or phase 3 work is authorized.
+Phase 1: complete; parentless root 4d352859f5c7e659d243634196b3b85265a14a9c; historical receipt in PHASE_01_HANDOFF.
 
-Phase 1: complete; parentless documentation root `4d352859f5c7e659d243634196b3b85265a14a9c`; phase-1 receipt at `58640ce939028ae37cfd6535bbf0702a84d4969a`. Historical checks and verbatim-source whitespace exception are preserved in [phase 1 handoff](PHASE_01_HANDOFF.md).
+Phase 2: **gate satisfied by developer SRC-026**. DEC-001..005 resolved: personal remote Agent work with binding; Windows native SSH and WSL SSH with Codex and ZCode(GLM); basic Web/Tenant network writes/ports/Prompt Graph/model wizard included; recursive deployment deferred; one trusted operator. 'WSL SSL' interpreted as SSH in context. Product REQUIREMENTS/ACCEPTANCE/SCOPE are updated; none is implemented or runtime-tested. Historical phase 2 draft is archived, not current authority.
 
-Phase 2 document result: **ready for developer review**. Four product documents define 18 proposed requirements, 18 proposed acceptance criteria, all 15 legacy feature dispositions and five pending product decisions. Authority: [requirements](../product/REQUIREMENTS.md) + [acceptance](../product/ACCEPTANCE.md); scope decisions: [SCOPE](../product/SCOPE.md). Current verification and review summary: [HANDOFF](HANDOFF.md).
+Current authorized phase: **3 — architecture and implementation planning** (SRC-025 following SRC-026). Document deliverables complete for handoff: architecture, four ADRs, 14 dependency-ordered tasks, test/experiment strategy, full 18-requirement coverage. Only documents are changed in the new worktree; legacy code/WIP remain untouched.
 
-Phase 2 exit gate: **NOT SATISFIED — awaiting explicit developer approval of direction, feature scope, launch profiles and key behavior**. DEC-001..005 are all pending. No product requirement is approved, implemented or tested. Approval of analysis is not approval of its recommendations.
+Phase 3 gate: design inputs/decisions/task coverage present; real feasibility explicitly pending. See HANDOFF for documentation validation and commit locator. No phase 4 code, package installation, container connect, policy/route mutation or model call occurred.
 
-Phase 3: not started. After receiving responses, record a new source for the developer decisions, reconcile REQ/AC/SCOPE/risks and this status in the same task, and verify consistency. Do not automatically start architecture because the proposal is complete. Phase 4 also requires explicit developer acceptance of the minimum system before broader implementation.
+Phase 4: **not started; awaits a new execution request** and concrete reviewed environment/experiment scope. Its minimum slice is Web login -> existing dedicated resource -> persisted binding -> verified MCP identity/hello -> durable receipt/restart. Phase 4 is not a full-feature release. Developer acceptance of the real slice is mandatory before phase 5; all selected basic features/four profiles remain later release obligations.
 
-Legacy knowledge baseline: main at `4318da6ea4e4e45c55cf43b64acbdd2ede65fc43`; no delta at phase 2 entry. Legacy WIP is preserved; see LEGACY_SYNC and the handoff. No old code/data is migrated. No VERSION bump is made for documentation-only product analysis.
+Legacy main remains 4318da6ea4e4e45c55cf43b64acbdd2ede65fc43. No old application implementation, VERSION or framework scaffold is inherited. No runtime pass follows from these document checks.

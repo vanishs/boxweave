@@ -1,6 +1,6 @@
 # Acceptance criteria — behavioral authority
 
-All criteria are **proposed / not executed**. They define later observable acceptance, not phase 2 test results or a technical design. Each AC maps to [REQUIREMENTS](REQUIREMENTS.md); sources and priorities are maintained there. A conditional AC is not waived as passed: it is out of selected scope only after an explicit decision. Supported/unsupported states must remain distinguishable.
+All criteria are **selected behavioral baseline / not executed**, within the developer-approved basic scope (SRC-026). They define later observable acceptance, not phase 2 test results or a technical design. Each AC maps to [REQUIREMENTS](REQUIREMENTS.md); sources and priorities are maintained there. A conditional AC is not waived as passed: it is out of selected scope only after an explicit decision. Supported/unsupported states must remain distinguishable.
 
 ## AC-001 — Enrollment preserves intent (REQ-001)
 
@@ -40,27 +40,27 @@ Given reachable API returning 401, report reachability without authenticated suc
 
 ## AC-010 — Explicit project binding (REQ-010)
 
-Given a project and an explicitly selected existing environment, persist a user-approved binding with sufficient scoped identity to revalidate later. Reselecting shows intended project/environment; moving to another authorized environment requires explicit change. Stale/missing/replaced target stops execution and offers reconciliation. Removing a binding deletes neither project data nor environment. Two clients with conflicting binding edits receive a conflict instead of silent overwrite. This is a proposed new scenario, requiring developer demand confirmation before implementation.
+Given a project and an explicitly selected existing environment, persist a user-approved binding with sufficient scoped identity to revalidate later. Reselecting shows intended project/environment; moving to another authorized environment requires explicit change. Stale/missing/replaced target stops execution and offers reconciliation. Removing a binding deletes neither project data nor environment. Two clients with conflicting binding edits receive a conflict instead of silent overwrite. Developer demand is confirmed in SRC-026; implementation and runtime validation remain pending.
 
-## AC-011 — Conditional console operations (REQ-011)
+## AC-011 — Basic console operations (REQ-011)
 
-If selected, given an unauthenticated or expired session, deny protected access. A valid user can preview exact targets/actions, then confirm an authorized unchanged plan once. Stale, replayed, wrong-user or cross-origin/CSRF-invalid confirmation is rejected before provider mutation. Mixed batches retain independent failed/succeeded/unknown item results and survive observer disconnect without automatic replay. Browser responses never contain provider credentials; local credential reset invalidates old sessions. Test browser behavior plus a real authorized provider path separately; fixture HTTP success alone is not fleet acceptance.
+Within the approved basic scope, given an unauthenticated or expired session, deny protected access. A valid user can preview exact targets/actions, then confirm an authorized unchanged plan once. Stale, replayed, wrong-user or cross-origin/CSRF-invalid confirmation is rejected before provider mutation. Mixed batches retain independent failed/succeeded/unknown item results and survive observer disconnect without automatic replay. Browser responses never contain provider credentials; local credential reset invalidates old sessions. Test browser behavior plus a real authorized provider path separately; fixture HTTP success alone is not fleet acceptance.
 
-## AC-012 — Conditional Tenant authority and atomic policy (REQ-012)
+## AC-012 — Basic Tenant authority and atomic policy (REQ-012)
 
-If selected, renaming display metadata leaves provider membership and enforcement unchanged. Old/unknown capability, remote unsupported placement or stale Guard blocks a new grant/shared create; a supported authenticated contract enables only its declared operation. Preserve account/shared identities distinctly. For reviewed multi-policy edits with full revisions, either apply the complete change or none on conflict; preserve unrelated ingress/egress fields and verify readback. Interrupted submission is unknown pending reconciliation. A revoke stored during degraded enforcement remains pending, not applied. Concurrent edits, malformed lists and default-emitted fields need negative coverage. Configured, Guard-verified and packet-tested statuses remain separate. Existing-box reassignment is excluded unless separately approved.
+Within the approved basic scope, renaming display metadata leaves provider membership and enforcement unchanged. Old/unknown capability, remote unsupported placement or stale Guard blocks a new grant/shared create; a supported authenticated contract enables only its declared operation. Preserve account/shared identities distinctly. For reviewed multi-policy edits with full revisions, either apply the complete change or none on conflict; preserve unrelated ingress/egress fields and verify readback. Interrupted submission is unknown pending reconciliation. A revoke stored during degraded enforcement remains pending, not applied. Concurrent edits, malformed lists and default-emitted fields need negative coverage. Configured, Guard-verified and packet-tested statuses remain separate. Existing-box reassignment is excluded unless separately approved.
 
-## AC-013 — Conditional exposure (REQ-013)
+## AC-013 — Basic port exposure (REQ-013)
 
-If selected, given conflicting routes or a reused target IP, reject or refresh the preview before confirmation. No route is published without explicit exposure authorization and current target identity. Show protocol, ports, destination, intended audience and the real source-filter/TLS capabilities before the write. Validate from an actual intended client before claiming client connectivity; passthrough alone does not prove LAN-only access or TLS. Deleting a route must not delete its workload; ambiguous route writes remain unknown until reconciled. A declared public boundary requires separate explicit public-exposure approval.
+Within the approved basic scope, given conflicting routes or a reused target IP, reject or refresh the preview before confirmation. No route is published without explicit exposure authorization and current target identity. Show protocol, ports, destination, intended audience and the real source-filter/TLS capabilities before the write. Validate from an actual intended client before claiming client connectivity; passthrough alone does not prove LAN-only access or TLS. Deleting a route must not delete its workload; ambiguous route writes remain unknown until reconciled. A declared public boundary requires separate explicit public-exposure approval.
 
-## AC-014 — Conditional prompt composition (REQ-014)
+## AC-014 — Basic prompt composition (REQ-014)
 
-If selected, save/edit/reload/export a graph without losing cards/comments/context; reject conflicting versions rather than overwriting the other editor. Clipboard failure does not record successful copying. Export escapes untrusted Markdown and applies documented secret handling without asserting that a pattern detector finds all secrets. Relations, Tenant context and import/export do not run agents or infrastructure writes. Deleting a graph removes its own context, not referenced environments/policies. Persistence/revision/browser cases must be verified later.
+Within the approved basic scope, save/edit/reload/export a graph without losing cards/comments/context; reject conflicting versions rather than overwriting the other editor. Clipboard failure does not record successful copying. Export escapes untrusted Markdown and applies documented secret handling without asserting that a pattern detector finds all secrets. Relations, Tenant context and import/export do not run agents or infrastructure writes. Deleting a graph removes its own context, not referenced environments/policies. Persistence/revision/browser cases must be verified later.
 
-## AC-015 — Conditional model setup (REQ-015)
+## AC-015 — Basic ZCode GLM setup (REQ-015)
 
-If selected, explicit provider/model choice affects only the intended agent/provider settings. Invalid combinations and missing credentials fail before partial configuration changes. Preserve unrelated settings and provide recovery for overwritten managed values. Public generated scripts/reports do not contain credentials; secret use stays in the selected runtime's authorized protected interface. Repeated setup is consistent with the effective chosen model/provider. Test the selected real agent separately from rendering/configuration fixtures; no inference-model quality or upstream service SLA is promised.
+Within the approved basic scope, explicit provider/model choice affects only the intended agent/provider settings. Invalid combinations and missing credentials fail before partial configuration changes. Preserve unrelated settings and provide recovery for overwritten managed values. Public generated scripts/reports do not contain credentials; secret use stays in the selected runtime's authorized protected interface. Repeated setup is consistent with the effective chosen model/provider. Test the selected real agent separately from rendering/configuration fixtures; no inference-model quality or upstream service SLA is promised.
 
 ## AC-016 — Reviewed source and secret-safe evidence (REQ-016)
 
@@ -73,3 +73,8 @@ For each developer-selected release profile, record actual client OS/runtime/age
 ## AC-018 — Authority and protected targets (REQ-018)
 
 Given a caller authorized for target A only, attempts to select another owner/backend/project or override host/user are rejected without operating on target B. Use safe synthetic or dedicated resources for denial tests. Review privileges actually granted by the provider; a forced command or hidden UI control is not authorization. Resource deletion and exposure require explicit scope and fresh target identity; ordinary observation/diagnosis must not silently grant privileges, alter credentials/SSH/firewall or touch provider core/unrelated resources. Shared-user scope requires real positive/negative enforcement evidence before release; personal scope still documents residual provider authority.
+
+
+## Selected launch matrix and model boundary
+
+AC-001, AC-003 and AC-017 must cover Windows-hosted Codex/native SSH, Codex/WSL SSH, ZCode/native SSH and ZCode/WSL SSH. Explicit WSL distro and client configuration precedence must be tested. WSL-hosted Agent CLIs and other platforms are deferred. ZCode model access is verified separately from MCP; AC-015 includes native-settings handoff where a stable automated contract is unavailable, with pending status until actual completion. No provider credential goes through Web. The exact GLM model/endpoint is recorded per tested version. AC-011 through AC-015 are release-required features, not optional deferrals; their basic operation boundaries are in SCOPE.

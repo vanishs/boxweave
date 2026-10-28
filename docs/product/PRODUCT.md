@@ -1,46 +1,26 @@
-# Product proposal for review
+# Approved product direction
 
-Phase 2, 2026-10-28 America/Los_Angeles. **Draft for developer decision; product scope is not approved.** [Requirements](REQUIREMENTS.md) and [acceptance criteria](ACCEPTANCE.md) own behavioral definitions. [Scope](SCOPE.md) owns feature dispositions and the five pending decisions. Source IDs resolve in the [register](../knowledge/SOURCE_REGISTER.md).
+Approved by the developer on 2026-10-28 (SRC-026), following the phase 2 proposal. [Requirements](REQUIREMENTS.md) and [acceptance](ACCEPTANCE.md) own behavior; [scope](SCOPE.md) owns selected features. No implementation or runtime acceptance is claimed.
 
-## Value and evidence
+BoxWeave serves one trusted operator using coding Agents for remote development, including explicit project/environment binding. It must make the selected environment, trust checks, actual execution result and uncertain outcomes understandable and recoverable.
 
-Proposed promise: a developer can connect a supported coding agent to an intended remote project environment, perform explicitly authorized work there, and understand what actually happened when connection or execution fails. Trustworthy outcomes and recoverability are more important than reproducing the old console's page list.
+First-release client matrix: Windows-hosted Codex and ZCode(GLM), each using Windows native SSH or WSL SSH. The developer wrote 'WSL SSL'; this is interpreted as WSL SSH from the preceding transport choices, not a request for a new SSL transport. WSL distro is selected explicitly. Running Agent CLIs inside WSL is a separate future profile, not silently included. Other platforms/Agents are later extensions.
 
-Evidence: SRC-001/003 describe a personal agent-and-machine entry point; SRC-004/014 show enrollment and diagnosis pain; SRC-009/011 show the importance of identity, deadlines and ambiguous outcomes. These establish legacy context, not validated market demand or a user-approved v2 direction. The user has authorized this analysis (SRC-023), not its proposed feature choices. No interviews, adoption metrics, willingness-to-pay data or fresh client acceptance exist.
+Basic Web, Tenant network writes, port publication, Prompt Graph and model wizard are included in the first-release scope; recursive deployment is deferred. Scope describes basic operations and exclusions. ZCode model access is distinct from MCP infrastructure access; model credentials remain client-owned. No migration from the old implementation or universal support claim is implied.
 
-## Proposed users and jobs
+## User scenarios
 
-- Primary: a developer using their own or explicitly entrusted Ubuntu development server. Job: get from an agent on a client computer to the correct project environment without manual identity guesswork or opaque failure.
-- Supporting: the server operator, potentially the same person. Job: install/update without losing configuration/data, see readiness and recover a failed operation with known limits.
-- Conditional: an administrator managing shared resources. Their authorization and isolation needs are materially broader; this is a separate scope decision, not implied by the personal workflow.
-
-These roles are hypotheses drawn from sources. A personal deployment can still contain valuable data and privileged provider credentials; single-operator scope does not waive trust, safe targeting or explicit destructive-action authorization.
-
-## Core scenarios and traceability
-
-| Scenario | Desired outcome | Requirement / acceptance references |
+| Job | Requirements | Criteria |
 | --- | --- | --- |
-| First connection | User selects a supported client profile, reviews server identity, enrolls through an authorized channel and gets honest connection/registration evidence | REQ-001/002/003; AC-001/002/003 |
-| Start project work | User selects an existing environment or authorizes a new one; actual identity is checked before a harmless project command | REQ-004/005/006; AC-004/005/006 |
-| Connection fails | User can distinguish missing prerequisites, pin mismatch, denied provider access and unsupported configuration without invoking enrollment/repair | REQ-002/003; AC-002/003 |
-| Create response disappears | User sees unknown/submitted rather than false failure; observation of the original target precedes any new create | REQ-005/006; AC-005/006 |
-| Work outlives a connection | User finds the same receipt, distinguishes job query from command exit, and does not accidentally replay work | REQ-007; AC-007 |
-| Update fails | Operator retains unrelated state, sees incomplete status and a bounded repair path rather than a false success banner | REQ-008/009; AC-008/009 |
-| Choose a project again | Optional binding presents a verifiable target, not a stale IP or assumed cloned UUID identity | REQ-010; AC-010 |
-| Share, expose or organize environments | Conditional console, Tenant access, routes and graph workflows retain evidence/authorization boundaries if included | REQ-011..015; AC-011..015 |
+| Enroll a chosen Agent/transport without losing settings, then diagnose it independently | REQ-001, REQ-002, REQ-003, REQ-016, REQ-017 | AC-001, AC-002, AC-003, AC-016, AC-017 |
+| Bind/select a project, verify target identity and execute authorized work | REQ-004, REQ-005, REQ-006, REQ-007, REQ-010 | AC-004, AC-005, AC-006, AC-007, AC-010 |
+| Install/update and understand actual readiness and repair limits | REQ-008, REQ-009 | AC-008, AC-009 |
+| Use basic Web to observe/manage selected resources without exposing credentials | REQ-011, REQ-018 | AC-011, AC-018 |
+| Create a shared Tenant and grant/revoke basic Tenant-wide ingress | REQ-012 | AC-012 |
+| Publish/remove a selected port with explicit authorization and honest connectivity evidence | REQ-013 | AC-013 |
+| Save/copy/export prompt context without implicit execution | REQ-014 | AC-014 |
+| Configure ZCode GLM access using supported client-local setup | REQ-015 | AC-015 |
 
-## Proposed success standards
+Success means the selected profiles and basic features pass their actual acceptance paths, including failure/recovery cases. Fake-provider/renderer tests alone cannot certify real Agent integration, isolation, route reachability or provider capability. Model generation requires a separately authorized provider request; no paid inference is run during design.
 
-For the selected release profiles, complete the reviewed end-to-end path on real clients and an assigned isolated environment; demonstrate negative/failure paths without duplicate mutations, silent configuration loss or fabricated success. Every supported claim must name the environment/version and verification level. REQ-017 and AC-017 define the release evidence gate; no timing SLA or platform coverage is promised without measurement.
-
-Completion of this document is not achievement of those standards. The current phase performs documentation checks only. Product observations, authenticated provider operation, workload execution, actual packet reachability and effective confinement are different claims.
-
-## Experience principles and boundaries
-
-Proposed defaults: make the intended target and action understandable before a write; preserve user choices across generation and execution; show a durable next diagnostic/reconciliation step after uncertainty; separate observation from repair. Exact UI, command names, state storage, framework, protocol implementation, package layout and service design are phase 3 matters.
-
-No first-release assumption of a hosted cloud, billing, arbitrary workflow scheduler, automatic Prompt Graph execution, universal agent/OS support, transparent provider interchangeability or security certification. These are proposed scope exclusions, pending the decisions in SCOPE. No old implementation is scheduled for removal by this document.
-
-## Short review summary
-
-Recommended first release: personal development connection/execution, safe environment targeting, independent diagnosis, honest asynchronous receipts and installation recovery. Add explicit project binding only after confirming that job is central. Make Web optional; defer Tenant writes, exposure management, model-provider configuration and Prompt Graph from the first release unless the developer identifies them as essential. The tradeoff is a smaller initial product with less console feature parity. All five DEC choices in SCOPE remain pending; no recommendation has become an approved requirement.
+One trusted operator is not an unprivileged multi-user platform. Broad upstream provider privileges remain visible; trust failure stops execution, unknown writes are not retried blindly, and recovery is bounded. Hosted service/billing, automatic workflow execution and recursive deployment are excluded. The phase 2 market-demand gaps remain historical; developer preference is now explicit, not inferred from old code.

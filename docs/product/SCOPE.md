@@ -1,45 +1,43 @@
-# Scope and decisions for developer review
+# Approved scope and basic feature boundary
 
-**Every disposition is a proposal; no feature removal or new release scope is approved yet.** Retain = preserve user outcome, not code; improve = change behavior/experience; remove = omit a legacy coupling or first-release feature, not delete old data/code; validate/defer = need developer demand/evidence. Normative behavior is only in [REQUIREMENTS](REQUIREMENTS.md) and [ACCEPTANCE](ACCEPTANCE.md).
+Developer decisions recorded 2026-10-28 in SRC-026 supersede the earlier proposal's deferrals. Behavioral authority remains [REQUIREMENTS](REQUIREMENTS.md) and [ACCEPTANCE](ACCEPTANCE.md). Detailed boundaries below operationalize 'basic' as phase 3 design choices; they do not authorize live resource writes now.
 
-## Every legacy feature
+| Decision | Confirmed scope |
+| --- | --- |
+| DEC-001 | Personal Agent remote development, including project/environment binding |
+| DEC-002 | Windows native SSH and WSL SSH with Codex and ZCode(GLM); other platforms/Agents later. 'WSL SSL' interpreted as SSH; WSL-hosted Agents are not assumed |
+| DEC-003 | Basic Web included; independently enabled component, part of first-release delivery, not a prerequisite for MCP connectivity |
+| DEC-004 | Basic Tenant network writes, port publication, Prompt Graph and model wizard included; recursive deployment deferred |
+| DEC-005 | Single trusted operator; stop on trust failure, preserve unknown results without automatic retry, state recovery limits |
 
-| Legacy ID | Proposed disposition | Reason, source and requirement mapping | Scope dependency |
-| --- | --- | --- | --- |
-| F-001 | Improve install/update; remove mandatory Web coupling | Recovery is central; console build should not be an inferred prerequisite for agent work. SRC-002; REQ-008/009/016 | DEC-001/003 |
-| F-002 | Improve enrollment | Preserve reviewable endpoint/trust and selection intent; clarify integrity. SRC-003/004; REQ-001/002/016 | DEC-002 |
-| F-003 | Retain supported adapter outcomes; validate launch matrix | Avoid a universal compatibility claim; start with measured profiles. SRC-004; REQ-001/003/017 | DEC-002 |
-| F-004 | Validate/defer model-provider wizard from first release | Related but not essential to proving remote work. SRC-003/004; REQ-015 | DEC-004 |
-| F-005 | Retain/improve independent diagnosis | Failure recovery must work without setup side effects. SRC-014; REQ-003/017 | DEC-001/002 |
-| F-006 | Retain observation outcomes | Separate health evidence and exact target inspection are valuable; old command names not fixed. SRC-005; REQ-004/009 | DEC-001 |
-| F-007 | Improve receipts and rediscovery | Existing durable jobs lack an approved end-user workflow; propose recoverable observation first. SRC-009/014; REQ-007 | DEC-001 |
-| F-008 | Retain reviewed smoke as optional verification; defer recursive deployment product | Recorded nesting success is useful, not proof of a customer need for recursive management. SRC-009/011/016; REQ-017 | DEC-004 |
-| F-009 | Validate/defer console; if retained improve safe independent access | An additional user interface is not evidence it belongs in core install. SRC-006/008; REQ-011/018 | DEC-003/005 |
-| F-010 | Retain explicit environment selection/create/connect; defer console batch parity | Core work needs targeting/provisioning. Full resize/start/stop/delete batch UI is not automatically needed. SRC-006/010; REQ-004/005/006/011/018 | DEC-001/003/004 |
-| F-011 | Validate/defer route/exposure management | Adds externally visible effects; no evidence first-release remote work needs it. SRC-010; REQ-013/018 | DEC-004 |
-| F-012 | Retain truthful state observations; remove misleading monitoring promise | No runtime telemetry was verified; avoid an inferred observability product. SRC-001/010; REQ-006/009 | DEC-001/004 |
-| F-013 | Validate/defer Tenant display/filtering | Personal project binding may serve the core job without requiring Tenant UI; cannot equate them. SRC-007; REQ-010/012 | DEC-001/004/005 |
-| F-014 | Validate/defer native shared create and cross-Tenant policy writes | Significant enforcement/compatibility obligation; decide need before carrying it into a rewrite. SRC-007/010/018/019; REQ-012/018 | DEC-004/005 |
-| F-015 | Validate/defer Prompt Graph from first release | Context composition is a different user job; retain as an option without pretending it executes work. SRC-006; REQ-014 | DEC-004 |
+## Legacy dispositions after approval
 
-## Proposed additions and explicit non-goals
+| Legacy | Disposition and first-release boundary | Requirements |
+| --- | --- | --- |
+| F-001 | Improve installation/repair; deliver Web independently so its failure cannot interrupt a working MCP transport | REQ-008, REQ-009, REQ-016 |
+| F-002 | Improve reviewed enrollment and payload integrity for selected profiles | REQ-001, REQ-002, REQ-016 |
+| F-003 | Retain Codex and ZCode adapter outcomes; defer other Agents | REQ-001, REQ-003, REQ-017 |
+| F-004 | Change model wizard to basic ZCode GLM configuration/guidance; no Claude adapter required | REQ-015 |
+| F-005 | Retain independent diagnosis with honest supported/unsupported observations | REQ-003, REQ-017 |
+| F-006 | Retain exact-target and health observations; command spelling not inherited | REQ-004, REQ-009 |
+| F-007 | Improve durable receipt discovery/reconciliation, no automatic replay | REQ-007 |
+| F-008 | Retain harmless direct-workload verification; defer recursive deployment/testing product | REQ-017 |
+| F-009 | Include one local administrator, session/login/logout/reset and CSRF/Origin protection | REQ-011, REQ-018 |
+| F-010 | Include list/detail/create/select/bind and confirmed start/stop/delete for one box per plan; defer resize and bulk workflows | REQ-004, REQ-005, REQ-006, REQ-011, REQ-018 |
+| F-011 | Include TCP/UDP port passthrough list/add/remove; defer HTTP domain proxy editor, advanced routing and automatic public publication | REQ-013 |
+| F-012 | Retain observed state/readiness; no fabricated telemetry product | REQ-006, REQ-009 |
+| F-013 | Include Tenant metadata and provider-attributed membership/readiness views | REQ-012 |
+| F-014 | Include native shared-Tenant creation and revision-checked directional ingress grant/revoke; unsupported provider stays gated, feature not dropped | REQ-012, REQ-018 |
+| F-015 | Include persistent cards/comments/undirected links, copy and Markdown export with revision conflicts; no execution scheduler | REQ-014 |
 
-Add explicit project/environment binding (REQ-010, new hypothesis) and improve operation rediscovery (REQ-007, legacy-derived). Add measurable source-integrity and per-profile evidence requirements (REQ-016/017), replacing contradictory prose with reviewable outcomes. These are proposals, not externally researched recommendations or commitments.
+## Basic boundaries and exclusions
 
-Proposed first-release exclusions: hosted billing/multi-tenant SaaS; arbitrary workflow/Prompt Graph execution; transparent multi-provider framework before another provider is selected; universal OS/agent promise; existing-box network-Tenant reassignment; automatic provider/Incus upgrades; full-host rollback guarantee; automatic public exposure; security certification from nesting/configuration. No requirement mandates preserving old API/CLI spelling, local database, service layout or framework. No destructive change to the legacy project is authorized.
+Tenant writes: native shared membership at new-box creation and Tenant-wide ingress allow/revoke only; existing-box reassignment, custom egress policy editor, per-port Tenant ACL authoring and account-team tenancy are excluded. A degraded Guard can leave revoke pending; never label it enforced. Provider upgrade is separate approval; lack of capability blocks the write and its acceptance, not the rest of the interface.
 
-## Five pending product decisions
+Port publication: exact box/protocol/internal/external port and intended audience are reviewed before mutation. Passthrough does not supply source filtering/TLS; do not promise LAN-only security from an internal address. Each actual publication/public exposure requires its own authorization; this product approval creates no route.
 
-All DEC statuses: **pending developer response**. IDs are product review questions, not architectural ADRs. Recommended defaults help review; silence never approves them.
+Model wizard: select Z.ai/BigModel or supported endpoint/model for ZCode, guide native sign-in or validated configuration, preserve unrelated settings and never move API keys through server Web/API. If a pinned ZCode version lacks a stable automated setup contract, provide an explicit native-settings handoff with completion marked pending until verified. Do not claim automated model setup from MCP registration alone; never fall back to Claude. Exact model ID is versioned input, not a permanently embedded 'latest' value.
 
-| ID | Question and alternatives | Recommendation / benefit / cost | Affected requirements and risks |
-| --- | --- | --- | --- |
-| DEC-001 | Primary release: A personal Agent-to-project workflow; B infrastructure console; C recursive environment platform. Include explicit project binding now, or keep manual selection initially? | A with explicit binding, subject to demand confirmation. Clear repeatable core path; loses immediate console/recursive parity and adds binding validation scope | REQ-004..010; RISK-001/002 |
-| DEC-002 | Launch coverage: A Windows + Codex first (native SSH; require real WSL bridge evidence if included); B all old agents/runtimes at once; C choose another named profile | A as a hypothesis based on current workspace context, not proven demand. Smaller real acceptance matrix; other users wait. Developer must explicitly name required profiles, and can choose B/C | REQ-001/002/003/015/016/017; RISK-003/005 |
-| DEC-003 | Web delivery: A optional later interface; B optional but first-release requirement; C mandatory console installed with core | A. Avoid coupling Agent onboarding/recovery to a larger UI release; reduced visual administration initially | REQ-008/011; F-001/009/010; RISK-002/009 |
-| DEC-004 | Capability breadth: A defer Tenant writes/routes/Prompt Graph/model wizard/recursive deployment; B retain selected named items; C retain full legacy parity | A, unless one is central to your actual job. Less enforcement/acceptance burden; capability loss versus old product. Read-only trustworthy target/state evidence remains core. Decide full lifecycle batch controls explicitly if needed | REQ-011..015/017; F-004/008/010..015; RISK-002/006/008/013 |
-| DEC-005 | Trust audience: A one trusted operator with documented provider privilege; B shared team with enforced per-user/resource scope; C publicly offered service | A for initial scope. Smaller authorization model; excludes shared untrusted access. B requires early positive/negative authorization evidence; C needs a separately expanded product/security scope. Neither A nor B permits trust bypass | REQ-011/012/018; RISK-006/007 |
+Web basics: project/binding overview, resource/Tenant/route views, exact single-resource action plans/receipts, prompt canvas and public setup-profile generation. Local administrator scope only. No cloud accounts, billing, shared-team RBAC, graph execution, generic provider framework, full-host rollback or implicit provider/Incus upgrade. Do not copy old code or delete old data.
 
-## Approval gate
-
-Developer must confirm direction, selected profiles/features and key behavioral definitions, including unknown-outcome/no-replay, trust failure, replacement intent and recovery limits. Record each DEC response with a new SRC entry; update affected REQ/AC priorities/status and omissions consistently. A changed recommendation needs revised acceptance, not an unrecorded exception. Only then mark the phase 2 gate satisfied. Authorization to analyze phase 2 is not approval to enter phase 3; no technology stack or architecture is selected here.
+Phase 2 gate is satisfied for the developer-confirmed direction and feature set. Phase 3 defines implementation boundaries/alternatives; all runtime validation remains pending. Phase 4 requires a new execution request; after its minimum system, developer confirmation is required before phase 5.
