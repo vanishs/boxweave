@@ -44,3 +44,5 @@
 | TASK-002/003 continuous run SRC-063 | d8a09dd -> same | Legacy ref/status unchanged at startup, only unrelated untracked archive. No legacy implementation migration or private/archive inspection. Assigned dev box identity verified; new source tested there |
 
 | TASK-003 completion SRC-065 | d8a09dd -> same | No legacy implementation migration, archive/private-data read or old-project edit. Existing client observations used as versioned evidence only. New keys generated locally, public-only bootstrap via existing MCP to dedicated box; normal transport identity never used as host shell |
+
+| TASK-005/006/007 startup SRC-066 | d8a09dd -> same | Legacy HEAD/status unchanged, only unrelated untracked archive. No code merge/archive/private-data review. Existing remote resources inspected; fresh current-source runtime packaged/tested separately, original services untouched |

@@ -32,3 +32,5 @@ Iteration4 SRC-061/062: [TASK-002a receipt history](verification/TASK_002A_RECEI
 TASK-002 completed0.3.0: [recovery/observation evidence](verification/TASK_002_COMPLETION.md); user explicitly requested TASK-002 and TASK-003 consecutively. TASK-003 continues after this separate commit.
 
 Requested TASK-002/003 run complete (SRC-063..065): [TASK-002 recovery/observation](verification/TASK_002_COMPLETION.md), [TASK-003 native identity/diagnosis](verification/TASK_003_COMPLETION.md), [native source hashes](verification/task003-source-hashes.json). Source0.4.0,64 Linux tests and actual isolated native Windows enrollment/diagnosis/regression passed. Full profile/release work remains pending; no push/deployment.
+
+TASK-005 current minimal chain complete (SRC-068): [current-source actual evidence and harnesses](verification/TASK_005_CURRENT.md). TASK-006/007 continue under explicit SRC-066; dedicated lifecycle create/stop/start/delete approval SRC-067 does not include existing resources or new exposure.

@@ -1,4 +1,8 @@
-# Current handoff — requested TASK-002 and TASK-003 complete
+# Current handoff — checkpoint TASK-005 complete, continue TASK-006/007
+
+Explicit SRC-066 requests all three consecutively. TASK-005 current0.4.0 minimal native chain complete; [actual commands/results](../verification/TASK_005_CURRENT.md). New generic live success/failure harnesses authored in dev LXC, current source/dist copied into private app test root with verified archive hash; HTTP/Chromium hello/receipts/history/restart no replay and actual trust/identity rejection passed. Native enrollment/diagnosis SRC-065 and human TUI SRC-057 remain distinct; gate SRC-051 accepted. Legacy main unchanged. No push/public exposure/service changes. This checkpoint's containing commit records TASK-005. Next implement TASK-006 scoped intents/readiness/stop/start/delete/reconciliation and tests; SRC-067 explicitly permits only newly created inner v2-lifecycle-e2e cleanup, preserves existing resources. Then TASK-007 actual native/WSL Codex/ZCode; installed Windows Ubuntu WSL and ZCode3.16.3/bundled CLI0.17.0 discovered read-only. No model request or client auth copying.
+
+## Historical handoff — TASK-002/003 complete
 
 SRC-063 explicitly authorizes these two tasks consecutively. TASK-002 approved fixed-command storage/worker scope complete0.3.0, commit9fb8786ba9afcaca325de39e05f75b5fd81c0534. TASK-003 selected minimal native Codex scope complete0.4.0 in this handoff's containing code/test/docs commit. [TASK-002 report](../verification/TASK_002_COMPLETION.md) and [TASK-003 report](../verification/TASK_003_COMPLETION.md) record reproducible commands and limits. This is not phase5/release or four-profile completion.
 

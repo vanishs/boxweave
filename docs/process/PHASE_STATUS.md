@@ -1,6 +1,8 @@
 # Phase status — authority
 
-## Current authority: continuous TASK-002/003 run complete
+## Current authority: TASK-005 complete; TASK-006/007 running
+
+SRC-066 authorizes these three tasks consecutively. Current0.4.0 TASK-005 minimal native chain passed actual HTTP/Chromium/MCP success and trust/identity failure checks (SRC-068), combined with distinct native enrollment/TUI evidence and SRC-051 developer gate. TASK-006 uses only separately approved new inner lifecycle target/cleanup SRC-067; TASK-007 still needs its own actual four-profile evidence. No all-release claim or new exposure.
 
 SRC-063 authorizes both tasks consecutively. TASK-002 approved fixed-command storage/worker scope complete0.3.0 (SRC-064), checkpoint9fb8786. TASK-003 selected minimal native Codex scope complete0.4.0 (SRC-065): real fresh-key public-only authorized enrollment, trusted registration and independent diagnosis;64 Linux tests and actual Windows positive/negative runs passed. Prior TUI evidence remains distinct. Unknown does not imply retry/cancellation; other profiles, current whole-system TASK-005 release evidence, lifecycle writes and packaging/release remain separate. See both completion reports and latest HANDOFF. Stop after the requested two tasks; no push.
 
