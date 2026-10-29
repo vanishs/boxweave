@@ -127,3 +127,9 @@ SRC-070 — Operator manually trusted only the dedicated ZCode workspace, then c
 SRC-071 — TASK-007 0.6.0 final actual four-profile Windows matrix passed with101 tools/read-only call, exact CLI/core registration, byte-idempotence/config preservation, payload/version/pin failures and absent distro refusal.95 non-root Linux tests29.282s/build passed. Separate TUI/native desktop/SRC-070 observations; no model request or global config changes. See verification/TASK_007_PROFILES.md.
 
 SRC-072 — Developer requests listing remaining work and completing compatible remaining tasks consecutively. Phase5 implementation continues in dependency order; no phase6, arbitrary model spending, unrelated destructive operation or new public-exposure authorization is inferred.
+
+SRC-073 — TASK-008 reviewed public vendor catalog schema1/revision33 and official ZCode model/FAQ documentation; native settings handoff selected, no personal provider/auth data read.
+
+SRC-074 — User confirms Z.ai, GLM-5.3, permissions available. No model task or credential requested. Exact existing-native intent and operator report saved via CLI; inference remains unverified.
+
+SRC-075 — TASK-008 0.7.0 shared service/CLI/Web and schema5 implemented in assigned LXC,106 tests37.759s/build and Chromium pass; standalone model CLI works without an infrastructure launcher. Separate native report and fixture UI evidence; no inference/new route/provider upgrade/push.

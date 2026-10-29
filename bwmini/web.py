@@ -8,12 +8,14 @@ from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.security import check_password_hash
 from .domain import Fault
 from .graphs import Graphs
+from .models import Models
 
 def create_app(service, origin, dist, secure=True, clock=time.time):
     app = Flask(__name__, static_folder=None)
     app.config.update(MAX_CONTENT_LENGTH=16384)
     store = service.store
     graphs = Graphs(store)
+    models = Models(store)
     def body(keys):
         data = request.get_json(silent=True)
         if not isinstance(data, dict) or set(data) != set(keys):
@@ -55,6 +57,18 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     @app.errorhandler(Exception)
     def internal(_):
         return jsonify(code="INTERNAL_ERROR"),500
+    @app.get("/api/model-wizard")
+    def model_wizard():return jsonify(models.read())
+    @app.put("/api/model-wizard")
+    def model_save():
+        data=body(["revision","client_version","provider","model","access_mode"])
+        return jsonify(models.save({k:v for k,v in data.items() if k!="revision"},data["revision"]))
+    @app.post("/api/model-wizard/confirm")
+    def model_confirm():
+        data=body(["revision","provider_model_selected","native_access_checked"])
+        return jsonify(models.confirm(data["revision"],data["provider_model_selected"],data["native_access_checked"]))
+    @app.get("/api/model-wizard/handoff")
+    def model_handoff():return jsonify(models.handoff())
     @app.post("/api/login")
     def login():
         data = body(["password"])

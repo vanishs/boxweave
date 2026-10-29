@@ -1,6 +1,10 @@
 # Phase status — authority
 
-## Current authority: TASK-007 complete; remaining phase5 run authorized
+## Current authority: TASK-007/008 complete in selected scopes; continue TASK-009/010
+
+TASK-0080.7.0 native-guided model wizard implemented with schema5, revisioned public choices and exact native handoff.106 non-root tests/build/Chromium passed. SRC-074 user confirms Z.ai/GLM-5.3/native access; saved as operator_reported_ready/inference unverified, not automatic model execution evidence. Continue remaining phase5 under SRC-072. Network compatibility, explicit route tests, install/update and release gates remain; no implicit phase6 or inference/public action.
+
+## Previous checkpoint: TASK-007 complete
 
 SRC-070 confirms actual ZCode/WSL desktop connection; SRC-071 records final0.6.0 four-profile Windows matrix,95 Linux tests and build. TASK-007 connection/recognition scope complete, model/inference and release remain separate. TASK-006 scoped implementation is committed0b28ee3 with first real success and final trust-failure evidence explicitly distinguished. SRC-072 requests remaining work in dependency order; continue TASK-008, then supported TASK-009/010 and packaging/release. No extra phase gate before authorized routine implementation; destructive/public/model actions still require their concrete existing authorization. No phase6 or release-ready claim.
 

@@ -10,11 +10,15 @@ from .provider import Fixture, Provider
 from .service import Service
 from .store import Store
 
-def load(path):
+def read_config(path):
     p=Path(path)
     if p.is_symlink() or p.stat().st_size>65536:
         raise Fault("INVALID_CONFIG",422)
     c=json.loads(p.read_text())
+    return c
+
+def load(path):
+    c=read_config(path)
     mode=c.get("mode")
     if mode=="fixture":
         provider=Fixture(Target(**c["target"]),c.get("fixture_counter"))
@@ -27,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","diagnose"])
+    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","diagnose"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -36,7 +40,20 @@ def main():
     p.add_argument("--logical")
     p.add_argument("--environment-action",choices=["create","start","stop","delete"])
     p.add_argument("--plan")
+    p.add_argument("--model-provider")
+    p.add_argument("--model-id")
+    p.add_argument("--access-mode")
+    p.add_argument("--client-version")
+    p.add_argument("--revision",type=int)
+    p.add_argument("--native-selected",action="store_true")
+    p.add_argument("--native-access-checked",action="store_true")
     a=p.parse_args()
+    model_values=[a.model_provider,a.model_id,a.access_mode,a.client_version]
+    if a.action=="model-select" and (any(v is None for v in model_values) or a.revision is None):p.error("model-select requires version/provider/model/access mode and revision")
+    if a.action!="model-select" and any(v is not None for v in model_values):p.error("model selection flags require model-select")
+    if a.action=="model-confirm" and (a.revision is None or not a.native_selected or not a.native_access_checked):p.error("model-confirm requires revision and both explicit native check flags")
+    if a.action not in ("model-select","model-confirm") and a.revision is not None:p.error("revision is only supported for model mutation")
+    if a.action!="model-confirm" and (a.native_selected or a.native_access_checked):p.error("native check flags require model-confirm")
     if a.action=="environment-plan" and (a.logical is None or a.environment_action is None):
         p.error("environment-plan requires --logical and --environment-action")
     if a.action=="environment-confirm" and (a.logical is None or a.plan is None):
@@ -52,7 +69,10 @@ def main():
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
     try:
-        c,s=load(a.config)
+        if a.action.startswith("model-"):
+            c=read_config(a.config);model_store=Store(c["database"])
+        else:
+            c,s=load(a.config)
         if a.action=="init-admin":
             password=getpass.getpass("New local administrator password: ")
             if not 12<=len(password)<=1024:
@@ -94,6 +114,14 @@ def main():
             print(json.dumps(s.lifecycle.receipt(a.operation),indent=2))
         elif a.action=="environment-observe":
             print(json.dumps(s.lifecycle.observe(a.operation),indent=2))
+        elif a.action.startswith("model-"):
+            from .models import Models
+            models=Models(model_store)
+            if a.action=="model-wizard":result=models.read()
+            elif a.action=="model-handoff":result=models.handoff()
+            elif a.action=="model-select":result=models.save({"client_version":a.client_version,"provider":a.model_provider,"model":a.model_id,"access_mode":a.access_mode},a.revision)
+            else:result=models.confirm(a.revision,a.native_selected,a.native_access_checked)
+            print(json.dumps(result,indent=2))
         elif a.action=="diagnose":
             if s.provider.mode!="mcp":
                 raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)

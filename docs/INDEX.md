@@ -38,3 +38,5 @@ TASK-005 current minimal chain complete (SRC-068): [current-source actual eviden
 - [TASK-006 lifecycle](verification/TASK_006_LIFECYCLE.md).
 
 - [TASK-007 four profiles](verification/TASK_007_PROFILES.md), [client setup](../clients/README.md).
+
+- [TASK-008 native-guided model wizard](verification/TASK_008_MODEL_WIZARD.md).

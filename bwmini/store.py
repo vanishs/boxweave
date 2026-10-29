@@ -46,7 +46,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4):
+            if version not in (0, 1, 2, 3, 4, 5):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -62,7 +62,10 @@ class Store:
                 from .lifecycle import SCHEMA as lifecycle_schema
                 for statement in lifecycle_schema.split(";"):
                     if statement.strip():db.execute(statement)
-                db.execute("PRAGMA user_version=4")
+            if version < 5:
+                from .models import SCHEMA as model_schema
+                db.execute(model_schema)
+                db.execute("PRAGMA user_version=5")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager

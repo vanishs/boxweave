@@ -1,4 +1,10 @@
-# Current handoff — TASK-007 complete, continue remaining phase5
+# Current handoff — TASK-008 complete, continue TASK-009/010
+
+TASK-0080.7.0 selected native-guided wizard complete; [report](../verification/TASK_008_MODEL_WIZARD.md).106 Linux tests37.759s, build and Chromium pass. SRC-074 user confirms Z.ai/GLM-5.3/access; CLI saved existing-native intent and explicit report, inference remains unverified. Model CLI now needs only private database config, no provider launcher. Schema5 migration preserves prior data; old binaries refuse5, consistent backup required for downgrade. No secret fields, private auth reads, inference or new routes. Native settings remain a deliberate handoff, not unverified config automation.
+
+Continue SRC-072: inspect exact authenticated Tenant compatibility and implement bounded network/port adapters. Inner MCP0.114.2 lacks native Tenant policy contract; outer current0.120.1 capability advertises native-network-tenant/v1 and atomic writes, but chosen app launcher still targets inner backend. Do not substitute scope, copy private identities or upgrade provider to make a test pass. Real policy/route tests need concrete authorized targets. TASK-012/013 retain dependencies; phase6 not authorized. Current checkpoint's commit contains code/tests/docs; legacy main unchanged, no push.
+
+## Previous checkpoint — TASK-007 complete
 
 Selected four-profile connection/recognition scope0.6.0 complete. [Evidence](../verification/TASK_007_PROFILES.md), [client instructions](../../clients/README.md). SRC-070 is operator's exact WSL command/green ZCode desktop confirmation, independent of core/MCP probes. SRC-071 final95 Linux tests29.282s/build and actual Windows matrix passed, including idempotence/config preservation/payload-version-pin failures and absent-distro refusal. Native workspace restored to native after sequential UI tests; separate WSL registration retained. No sign-in/private material inspection, inference, new route or daily global config changes. Latest code/test/docs commit contains this checkpoint; no push.
 
