@@ -4,7 +4,7 @@ This is the onboarding/runbook entry, not a second status/risk register. Read [P
 
 ## First fifteen minutes
 
-1. Confirm the rewrite root and branch explicitly. On the current Windows host the rewrite is C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2; tool default cwd may instead be the read-only legacy C:/Users/vanis/Downloads/boxweave. Run git status/branch/rev-parse with explicit workdir before editing. No private conversation is needed to identify these roles.
+1. Confirm the v2 root and current main branch explicitly. On the current Windows host the rewrite is C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2; tool default cwd may instead be the read-only legacy/pre-v2 checkout C:/Users/vanis/Downloads/boxweave. Run git status/branch/rev-parse with explicit workdir before editing. No private conversation is needed to identify these roles.
 2. Read [PRODUCT](../product/PRODUCT.md), [SCOPE](../product/SCOPE.md), [REQUIREMENTS](../product/REQUIREMENTS.md) and [ACCEPTANCE](../product/ACCEPTANCE.md). This is a personal trusted-operator Agent remote-development console, not a team-RBAC or graph-execution platform.
 3. Read [ARCHITECTURE](../design/ARCHITECTURE.md) and the [ADR index](../design/ADR/INDEX.md); use [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) to reach implementation/tests/evidence for a behavior.
 4. Inspect existing BoxWeave MCP inventory. Assigned development box: boxweave-tenant-dev, source /home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a. Verify whoami and hostname through its dynamic connect tool before work. The remote source copy may have no Git metadata; local rewrite Git plus exact synchronized hashes record provenance.
@@ -53,3 +53,7 @@ The first two are persistent workloads and need the requested deployment/service
 Use [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md) for task dependencies, [SOURCE_REGISTER](../knowledge/SOURCE_REGISTER.md) for evidence identities and [LEGACY_SYNC](../knowledge/LEGACY_SYNC.md) for the review baseline. Follow the maintenance pipeline for new requests. No new feature, deployment, model call, automatic legacy sync or forever-complete claim is implied by this handoff.
 
 Live acceptance drivers are retained for reproducibility, not universal startup commands. Read their original scoped report, inspect original resources/state, obtain any genuinely missing authorization and use a fresh explicit intent. Human GUI/model access reports, fixture runs, prior live network tests and new local checks are separate evidence. Refer to [phase6 comparison](../verification/COMPARISON_REPORT.md) and [phase7 review](../verification/PHASE_07_REVIEW.md) for exact findings.
+
+## Branch promotion
+
+Current source branch: main (formerly rewrite/v2). Legacy source branch: legacy/pre-v2 (formerly main). Existing worktree directories remain in place; never infer implementation from directory name. The legacy worktree must continue tracking origin/legacy/pre-v2, and the v2 worktree origin/main. See [promotion record](BRANCH_PROMOTION.md) for identities, publication checks and verification.

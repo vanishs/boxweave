@@ -1,7 +1,7 @@
 # BoxWeave v2
 
 **Version0.9.1: phase6 comparison/validation completed with three acceptance gaps fixed. Phase7 is eligible for a separate request and has not started.**
-This is a new implementation on rewrite/v2, not a port of the legacy tree.
+This is a new implementation on main, not a port of the legacy tree.
 
 The app provides local login/reset, project/environment binding, confirmed lifecycle operations,
 durable receipts, native Tenant access and TCP/UDP publication, Prompt Graph and native-guided
@@ -159,3 +159,9 @@ The selected Windows-native Codex path now supports preparing a fresh local Ed25
 ## Maintenance handoff
 
 Start at [documentation index](docs/INDEX.md) and [final handoff](docs/process/FINAL_HANDOFF.md). Current phase status has one owner: [PHASE_STATUS](docs/process/PHASE_STATUS.md). Historical completion observations below/elsewhere retain only their recorded scope.
+
+## Implementation branches
+
+`main` contains the v2 implementation. `legacy/pre-v2` preserves the previous implementation and its complete history at d8a09dd180139159e035963502e7793a37e92bae. Historical reports retain their original branch names. The old main/install.sh URL is intentionally retired; use the v2 [installation guide](docs/INSTALL.md). Branch promotion does not deploy or upgrade existing services.
+
+License: [MIT](LICENSE).

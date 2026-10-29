@@ -4,7 +4,7 @@
 
 After login, **Client setup** generates the four supported public configurations and a local PowerShell enrollment script. Use an already authorized SSH identity and prepared private profile directory. Enter paths/public server pin/exact Agent version and public ZCode catalog digest; do not enter credential contents. Save both downloads under their exact names in one new private folder. The script requires explicit absolute Python/helper paths, verifies helper and descriptor SHA256 before the existing local registrar, and preserves the selected replacement flag. It never installs dependencies, authorizes a key, invokes inference or executes on the Web server. Operator review/trusted delivery remain required. **Projects** now exposes reviewed identity, Edit binding and Unbind; unbound projects can be explicitly rebound.
 
-This is the rewrite/v2 app package, not the legacy BoxWeave/Containarium installer. It installs neither Provider nor Incus, changes no host SSH/firewall settings, and publishes no port. Tested target: non-root Ubuntu24.04, Linux x86_64, CPython3.12 with venv/ensurepip and a working systemd user manager. Windows-hosted Agent enrollment is a separate [client workflow](../clients/README.md). Other server runtimes are unsupported by this wheel lock.
+This is the v2 app package on main, not the legacy BoxWeave/Containarium installer. It installs neither Provider nor Incus, changes no host SSH/firewall settings, and publishes no port. Tested target: non-root Ubuntu24.04, Linux x86_64, CPython3.12 with venv/ensurepip and a working systemd user manager. Windows-hosted Agent enrollment is a separate [client workflow](../clients/README.md). Other server runtimes are unsupported by this wheel lock.
 
 ## Trust and preparation
 

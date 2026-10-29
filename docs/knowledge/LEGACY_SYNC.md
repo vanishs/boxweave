@@ -1,3 +1,7 @@
+# Current branch identity
+
+After the authorized branch promotion, the legacy review ref is refs/heads/legacy/pre-v2, pinned at d8a09dd180139159e035963502e7793a37e92bae. V2 is main. Earlier main/rewrite/v2 references below are historical identities, not current editing instructions. Review procedure and worktree boundaries are unchanged; see [promotion record](../process/BRANCH_PROMOTION.md).
+
 # Legacy knowledge synchronization
 
 Phase6/SRC-084..088: legacy d8a09dd180139159e035963502e7793a37e92bae is unchanged from phase5; export25 exact tracked public files only for isolated tests. Original main/worktree and untracked containarium-candidate.zip remain read-only/preserved; no archive inspection, code merge or push. Fresh committed replacement handling supersedes the initial SRC-020 WIP inference; a stale readiness-test extractor is newly recorded rather than edited. New0.9.0 base f602acf0996b46688ad2b1322769414fea894fe6 was audited and three acceptance gaps fixed independently in0.9.1. [Legacy hashes](../verification/phase6-legacy-hashes.json), [comparison](../verification/COMPARISON_REPORT.md).
