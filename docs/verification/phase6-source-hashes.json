@@ -1,0 +1,28 @@
+{
+  "sha256": "4e7c14982020c3a367cb4bdc61bf02d0057e4df9b547873a3e966edfd4267bac",
+  "files": {
+    "VERSION": "179a5390966e85c2071a87c1b31de13df67460665196f6529f8c4986842f81e5",
+    "pyproject.toml": "b414bbdb7d318cda9a8e6a02870e057c49c4336fe5b137221e7148690a7f2449",
+    "web/package.json": "a0f45f90d79fa157acf6925a9bc42c91e7848f9d74025e6f682c750ec8a584c3",
+    "web/package-lock.json": "61268066ca3ffc99fd28bd9eb0846295303a0bb9e235935a4f5c8f4e04c9a842",
+    "web/src/main.tsx": "6aa070a045c0048c8c2bca90b183e6000911ded4c9b3dab35586a769d57c6e04",
+    "web/src/ClientSetup.tsx": "ef5dfb23c597bc8ba5daa3ad73bf727db58adc14257cf0ffefde4448dc3176c9",
+    "bwmini/store.py": "80cd03f9d9dee5bda41ec4d13e4232f6b8f6a0547274e65cf2dbb63cd122267f",
+    "bwmini/service.py": "2e12b9cb47e695b636fcdd2db436cd01981a729521d0bf7e6ff722e41faa2ae8",
+    "bwmini/web.py": "27a79673f497996dff52d544fbea216d1562f5810a12a9b4728f2aa98285f3e4",
+    "bwmini/__main__.py": "56e8ba387948f4b868979e864c59ba933b43a53ecf6f314b3cba97cc84c94cd9",
+    "bwmini/deploy_check.py": "bbc7c3dbe34afd0644216f8c7e50738002702b415b216f8c73099157131a3168",
+    "bwmini/distribution.py": "503671381582bdec152a4fba59872a4d59c0eb499e2f69dcf67093048a393097",
+    "bwmini/profiles.py": "ceb44e8e1bdb039c655770e13fd1f362a5e73104fbb51582bb04b7a28b56005f",
+    "tests/test_bindings.py": "32d30a5294c93e20a228bf485ed75c25af8c4df9f46d970473d1378b99d76e35",
+    "tests/test_public_profiles.py": "24a3b56e780552e5277442391cb3c7124ba5526a3fff09384c1d8f9d252396d6",
+    "tests/mcp_peer.py": "35205c25140daa082841e5ff9d3d7f0b2c8a7044f034ddeff8fb73778588f115",
+    "tests/test_access.py": "a2d85feca2f380bf58585170e63f534f6f4f19ab2b0274a6f8d686a3a76a47c2",
+    "tests/test_models.py": "5ec153d62ebffe4b4cb1768b8cb3cb65325d9897789c4ece3f4b2898d9892541",
+    "tests/test_recovery.py": "023e4f332a46a29e83d17d3e18f11ed77e7e2a7d52484cd0c563d9c3a5ea6a48",
+    "tests/test_graphs.py": "e27c793ba542928779ed46adae86b91202b9d8319780aa7d4ebcd85f2f6f47b3",
+    "scripts/binding_browser_check.py": "5046233df06caac5f84ce931035f87d5894ad52867ae2bfa9a3736f9d07fe3d0",
+    "scripts/compare_local_receipts.py": "df98b34f372069b49a6b4c78723a798b3633d86ab9ac728b17586849f7433958",
+    "scripts/phase6_install_check.py": "3f47c60ad1f02946497331291abb198f217c9bdbc1794946e9ef25bfe6ff7732"
+  }
+}

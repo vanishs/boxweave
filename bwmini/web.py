@@ -57,6 +57,10 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     @app.errorhandler(Exception)
     def internal(_):
         return jsonify(code="INTERNAL_ERROR"),500
+    @app.post("/api/client-profile")
+    def public_client_profile():
+        from .profiles import generate,FIELDS
+        return jsonify(generate(body(list(FIELDS))))
     @app.get("/api/model-wizard")
     def model_wizard():return jsonify(models.read())
     @app.put("/api/model-wizard")
@@ -127,6 +131,9 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     def rebind(pid):
         d=body(["name","logical","workspace","revision"])
         return jsonify(service.bind(d["name"],d["logical"],d["workspace"],pid,d["revision"]))
+    @app.delete("/api/projects/<pid>/binding")
+    def unbind(pid):
+        return jsonify(service.unbind(pid,body(["revision"])["revision"]))
     @app.post("/api/plans")
     def plan():
         d=body(["project","revision"])

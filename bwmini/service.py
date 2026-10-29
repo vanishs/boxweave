@@ -41,9 +41,11 @@ class Service:
 
     def projects(self):
         with self.store.db() as db:
-            return [dict(r) for r in db.execute("SELECT id,name,revision FROM projects ORDER BY rowid")]
+            rows=[dict(r) for r in db.execute("SELECT p.id,p.name,p.revision,p.target,p.workspace,u.project AS unbound FROM projects p LEFT JOIN project_unbindings u ON p.id=u.project ORDER BY p.rowid")]
+        return [{"id":r["id"],"name":r["name"],"revision":r["revision"],"bound":r["unbound"] is None,"target":json.loads(r["target"]) if r["unbound"] is None else None,"workspace":r["workspace"] if r["unbound"] is None else None} for r in rows]
 
     def bind(self, label, logical, path, project=None, revision=None):
+        if project is not None and type(revision) is not int:raise Fault("INVALID_REVISION",422)
         target = self.observe_target(logical)
         label, path = name(label), workspace(path, target.user)
         pid = project or ident()
@@ -61,10 +63,25 @@ class Service:
             else:
                 db.execute("INSERT INTO projects VALUES(?,?,?,?,?,?)",
                            (pid,label,json.dumps(target.data()),target.digest(),path,rev))
+            db.execute("DELETE FROM project_unbindings WHERE project=?",(pid,))
         return self.store.project(pid)
 
+    def unbind(self, project, revision):
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT revision FROM projects WHERE id=?",(project,)).fetchone()
+            if row is None:raise Fault("NOT_FOUND",404)
+            if type(revision) is not int or row["revision"]!=revision:raise Fault("REVISION_CONFLICT")
+            if db.execute("SELECT 1 FROM project_unbindings WHERE project=?",(project,)).fetchone():raise Fault("PROJECT_UNBOUND")
+            db.execute("INSERT INTO project_unbindings VALUES(?)",(project,))
+            db.execute("UPDATE projects SET revision=revision+1 WHERE id=?",(project,))
+        return self.store.project(project)
+
     def plan(self, project, revision, actor="operator"):
+        if type(revision) is not int:raise Fault("INVALID_REVISION",422)
         p = self.store.project(project)
+        with self.store.db() as db:
+            if db.execute("SELECT 1 FROM project_unbindings WHERE project=?",(project,)).fetchone():raise Fault("PROJECT_UNBOUND")
         if p["revision"] != revision:
             raise Fault("REVISION_CONFLICT")
         current = self.observe_target(json.loads(p["target"])["logical"])

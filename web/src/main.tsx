@@ -5,13 +5,15 @@ import {PromptGraph} from './PromptGraph';
 import {Environments} from './Environments';
 import {ModelWizard} from './ModelWizard';
 import {AccessPanel} from './AccessPanel';
+import {ClientSetup} from './ClientSetup';
 
 type Resource={logical:string,user:string,hostname:string};
-type Project={id:string,name:string,revision:number};
+type Project={id:string,name:string,revision:number,bound:boolean,target:Resource|null,workspace:string|null};
 type HistoryItem={id:string,project:string,state:string,code:string|null,created:number};
 type Receipt={id:string,state:string,code:string|null,result:{stdout:string,exit_code:number,evidence:string,output_withheld?:boolean}|null};
 
 function App(){
+  const [editing,setEditing]=useState<Project|null>(null);
   const [view,setView]=useState('projects'),[graphDirty,setGraphDirty]=useState(false);
   const [csrf,setCsrf]=useState(''), [mode,setMode]=useState(''), [password,setPassword]=useState('');
   const [resources,setResources]=useState<Resource[]>([]), [projects,setProjects]=useState<Project[]>([]);
@@ -52,18 +54,20 @@ function App(){
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
         <button disabled={busy}>Sign in</button></form></section>:<>
       <aside className={mode==='fixture'?'fixture':'live'}>{mode==='fixture'?'Fixture mode — no live infrastructure is connected.':'Live MCP mode — target identity is checked before execution.'}</aside>
-      <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>{setView('projects');void run(refresh);}}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button><button disabled={view==='graphs'&&graphDirty} className={view==='environments'?'':'quiet'} onClick={()=>setView('environments')}>Environments</button><button disabled={view==='graphs'&&graphDirty} className={view==='models'?'':'quiet'} onClick={()=>setView('models')}>Model setup</button><button disabled={view==='graphs'&&graphDirty} className={view==='access'?'':'quiet'} onClick={()=>setView('access')}>Network &amp; ports</button></nav>
-      {view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:view==='environments'?<Environments api={api}/>:view==='models'?<ModelWizard api={api}/>:view==='access'?<AccessPanel api={api}/>:<>
-      <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setCsrf('');setReceipt(null);setObservation('');setHistory(null);setNextCursor(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
-        <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api('projects','POST',{name:label,logical,workspace});setLabel('');await refresh();});}}>
+      <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>{setView('projects');void run(refresh);}}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button><button disabled={view==='graphs'&&graphDirty} className={view==='environments'?'':'quiet'} onClick={()=>setView('environments')}>Environments</button><button disabled={view==='graphs'&&graphDirty} className={view==='models'?'':'quiet'} onClick={()=>setView('models')}>Model setup</button><button disabled={view==='graphs'&&graphDirty} className={view==='access'?'':'quiet'} onClick={()=>setView('access')}>Network &amp; ports</button><button disabled={view==='graphs'&&graphDirty} className={view==='clients'?'':'quiet'} onClick={()=>setView('clients')}>Client setup</button></nav>
+      {view==='clients'?<ClientSetup api={api}/>:view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:view==='environments'?<Environments api={api}/>:view==='models'?<ModelWizard api={api}/>:view==='access'?<AccessPanel api={api}/>:<>
+      <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setEditing(null);setLabel('');setWorkspace('');setLogical('');setCsrf('');setReceipt(null);setObservation('');setHistory(null);setNextCursor(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
+        <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api(editing?'projects/'+editing.id:'projects',editing?'PUT':'POST',{name:label,logical,workspace,...(editing?{revision:editing.revision}:{})});setEditing(null);setLabel('');setPlan(null);await refresh();});}}>
           <label>Project name<input value={label} required maxLength={80} onChange={e=>setLabel(e.target.value)}/></label>
           <label>Reviewed environment<select value={logical} onChange={e=>{setLogical(e.target.value);const r=resources.find(x=>x.logical===e.target.value);if(r)setWorkspace('/home/'+r.user);}}>
-            {resources.map(r=><option key={r.logical} value={r.logical}>{r.logical} · {r.hostname}</option>)}</select></label>
+            <option value="">Select reviewed environment</option>{resources.map(r=><option key={r.logical} value={r.logical}>{r.logical} · {r.hostname}</option>)}</select></label>
           <label>Remote workspace<input value={workspace} required onChange={e=>setWorkspace(e.target.value)}/></label>
-          <button disabled={busy||!logical}>Save binding</button></form></section>
+          <button disabled={busy||!logical}>Save binding</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setLabel('');}}>Cancel binding edit</button>}</form></section>
       <section><h2>02 / Review a harmless check</h2><p>Only identity verification and a fixed Python hello are available. No arbitrary shell commands.</p>
-        {projects.length===0?<p className="muted">No projects bound yet.</p>:projects.map(p=><div className="row" key={p.id}><strong>{p.name}</strong><span>revision {p.revision}</span>
-          <button disabled={busy} onClick={()=>void run(async()=>setPlan(await api('plans','POST',{project:p.id,revision:p.revision})))}>Preview hello</button></div>)}
+        {projects.length===0?<p className="muted">No projects bound yet.</p>:projects.map(p=><div className="row" key={p.id}><strong>{p.name}</strong><span>revision {p.revision} · {p.bound?(p.target?.logical+' · '+p.workspace):'Unbound'}</span><details><summary>Binding identity</summary><pre>{JSON.stringify(p.target,null,2)}</pre></details>
+          <button disabled={busy} onClick={()=>{setEditing(p);setLabel(p.name);setLogical(p.target?.logical||'');setWorkspace(p.workspace||'');setPlan(null);}}>Edit binding {p.name}</button>
+          <button disabled={busy||!p.bound} onClick={()=>{if(window.confirm('Unbind '+p.name+'? Project data, environments and receipts are retained. Already dispatched commands are not cancelled.'))void run(async()=>{await api('projects/'+p.id+'/binding','DELETE',{revision:p.revision});setEditing(null);setPlan(null);await refresh();});}}>Unbind {p.name}</button>
+          <button disabled={busy||!p.bound} onClick={()=>void run(async()=>setPlan(await api('plans','POST',{project:p.id,revision:p.revision})))}>Preview hello</button></div>)}
         {plan&&<div className="review"><h3>Confirm exact target</h3><p>{plan.target.logical} · {plan.target.hostname}</p><code>{plan.workspace}</code>
           <p>Expected output: hello world. The operation will not replay after uncertainty.</p><button disabled={busy} onClick={()=>void run(async()=>{setReceipt(await api('plans/'+plan.id+'/confirm','POST',{confirm:true}));setPlan(null);})}>Confirm hello</button></div>}
       </section>

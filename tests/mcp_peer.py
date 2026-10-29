@@ -16,6 +16,7 @@ for line in sys.stdin:
     elif method=="tools/list":
         tools=[{"name":"get_container","inputSchema":{"properties":{"username":{}}}},
                {"name":"connect","inputSchema":{"properties":{"box":{},"exec":{}}}}]
+        if mode=="diagnostic-empty":tools=[{"name":"list_containers","inputSchema":{"properties":{}}}]
         result={"tools":tools}
         if mode=="paged" and "cursor" not in m.get("params",{}):
             result={"tools":[],"nextCursor":"page-two"}
@@ -23,7 +24,9 @@ for line in sys.stdin:
             result={"tools":[],"nextCursor":"same"}
     elif method=="tools/call":
         p=m["params"]
-        if mode=="malformed":
+        if mode=="diagnostic-empty":
+            result={"content":[{"type":"text","text":"No containers found."}]}
+        elif mode=="malformed":
             result={}
         elif mode=="denied":
             result={"isError":True,"content":[{"type":"text","text":"denied"}]}

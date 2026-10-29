@@ -1,5 +1,7 @@
 # Approved scope and basic feature boundary
 
+Phase6 clarification SRC-086: the developer explicitly chose completing the Web public client setup entry rather than deferring it to CLI-only operation.0.9.1 supplies authenticated generation/download for the four selected profiles and a hash-gated local enrollment script with preserved replacement intent. Only public metadata/paths are inputs; no key contents, server-side enrollment/network connection or automatic execution. Existing authorized SSH identity/private client directory and independently reviewed source/pin remain prerequisites. This clarifies DEC003/REQ001/011/016 within the approved architecture.
+
 Developer decisions recorded 2026-10-28 in SRC-026 supersede the earlier proposal's deferrals. Behavioral authority remains [REQUIREMENTS](REQUIREMENTS.md) and [ACCEPTANCE](ACCEPTANCE.md). Detailed boundaries below operationalize 'basic' as phase 3 design choices; they do not authorize live resource writes now.
 
 | Decision | Confirmed scope |

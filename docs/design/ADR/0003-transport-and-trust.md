@@ -1,5 +1,7 @@
 # ADR-003 — Retain upstream transport and separate trust planes
 
+Phase6/SRC-086: user explicitly requires Web public client setup. The authenticated endpoint performs pure generation of four schema2 descriptors and a local PowerShell script, with no enrollment/Provider/process/credential-content access. Operator-reviewed host pin/helper source and authorized existing identity remain prerequisites. Generated scripts verify descriptor/helper hashes, preserve selected replacement and delegate runtime/ACL/SSH/version/registration gates to the existing client. Actual Chromium artifacts and Windows execution preserve isolated configuration bytes. Corrected app diagnosis always performs authenticated read for empty inventories without Store migration. This refines the existing trust planes; it is not publisher signing or a Web remote-shell authority.
+
 Status: selected for phase 4 validation. Inputs: REQ-001, REQ-002, REQ-003, REQ-016, REQ-018; SRC-008, SRC-010, SRC-026.
 
 TASK-012/0130.9.0 adds a reviewed standalone installer with independently delivered expected archive digest and public member/source manifest; payload verification precedes package execution. Real tamper refusal, marker/repair and four strict native/WSL transport fixed-command checks passed. Existing SSH/provider credentials and daily profiles are preserved; no publisher-signature or inference claim is inferred. See [release evidence](../../verification/TASK_012_013_RELEASE.md).

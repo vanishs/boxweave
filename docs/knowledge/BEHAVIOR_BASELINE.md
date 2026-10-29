@@ -1,5 +1,13 @@
 # Legacy behavior baseline
 
+## Phase6 fresh observations at d8a09dd (SRC-084..088)
+
+The initial phase1 statements below remain historical. In phase6, the unchanged latest legacy commit d8a09dd180139159e035963502e7793a37e92bae was exported from Git into an ignored isolated non-root LXC directory. Six local job tests and nine mocked hostkey tests passed. The readiness module could not collect because it extracts a missing shell marker from that commit's install.sh; no old readiness assertions or privileged installer ran. Source/member hashes and actual results are in [comparison](../verification/COMPARISON_REPORT.md). This does not establish old live Provider/Web/network health.
+
+B-016: fresh source server/clients.py at d8a09dd assigns options[replace] after an interactive yes choice. The phase1 uncommitted lost-choice inference SRC-020 is superseded for current committed legacy; no fresh old interactive Agent session was run. New Web-generated replacement scripts were independently executed against four isolated Windows profiles.
+
+B-017: same local Python print/exit0 and print/exit7 inputs actually ran through isolated old jobs and the new service's local test adapter. States and exits agree. New fixed-check failure output is intentionally withheld under approved REQ016/DEC005; identity is fixture, not remote integration. See runtime-evidence for exact stdout and scope.
+
 Sources resolve in [SOURCE_REGISTER](SOURCE_REGISTER.md). No legacy runtime/test execution occurred in phase 1. Code/test inspection establishes intended or inferred behavior only. Historical reports are explicitly separate.
 
 | ID | Conclusion and boundary | Status/source | Reproduction or future validation | v2 implication |
@@ -27,6 +35,6 @@ Sources resolve in [SOURCE_REGISTER](SOURCE_REGISTER.md). No legacy runtime/test
 - SRC-018 records earlier native Tenant reviewer regressions despite a green existing suite; SRC-019 records subsequent fixes and PostgreSQL execution. Both are historical, different source heads. Current deployed support is unknown.
 - SRC-017 records a later nested boundary sample with enforced AppArmor observations, yet no verified device filter. It does not prove complete effective policy or current host state.
 
-## Current uncommitted observation
+## Historical phase1 uncommitted observation — superseded for current legacy
 
 SRC-020: working-tree `server/clients.py:run` calls replacement `choose(...)` without assigning its return; options passed to render contain provider/model only. `render` can embed replacement when given `options['replace']`. **Inferred potential defect:** interactive replacement may not reach generated scripts. Not reproduced, not fixed; not part of committed main baseline. Track RISK-004.

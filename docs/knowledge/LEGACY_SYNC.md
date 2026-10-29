@@ -1,5 +1,7 @@
 # Legacy knowledge synchronization
 
+Phase6/SRC-084..088: legacy d8a09dd180139159e035963502e7793a37e92bae is unchanged from phase5; export25 exact tracked public files only for isolated tests. Original main/worktree and untracked containarium-candidate.zip remain read-only/preserved; no archive inspection, code merge or push. Fresh committed replacement handling supersedes the initial SRC-020 WIP inference; a stale readiness-test extractor is newly recorded rather than edited. New0.9.0 base f602acf0996b46688ad2b1322769414fea894fe6 was audited and three acceptance gaps fixed independently in0.9.1. [Legacy hashes](../verification/phase6-legacy-hashes.json), [comparison](../verification/COMPARISON_REPORT.md).
+
 Final phase5 check2026-10-29/SRC-079..083: legacy main d8a09dd180139159e035963502e7793a37e92bae unchanged. No new legacy implementation was merged; unrelated untracked containarium-candidate.zip remains preserved and unread. New distribution/client/release work was authored/tested in the assigned LXC and exact public bytes synchronized to rewrite/v2. Existing supporting bootstrap/provider versions are test context, not migrated product code. No push or legacy modification.
 
 ## Initial observation

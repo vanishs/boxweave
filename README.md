@@ -1,15 +1,17 @@
 # BoxWeave v2
 
-**Version0.9.0: phase5 selected basic features and isolated release evidence completed; phase6 is not started.**
+**Version0.9.1: phase6 comparison/validation completed with three acceptance gaps fixed. Phase7 is eligible for a separate request and has not started.**
 This is a new implementation on rewrite/v2, not a port of the legacy tree.
 
 The app provides local login/reset, project/environment binding, confirmed lifecycle operations,
 durable receipts, native Tenant access and TCP/UDP publication, Prompt Graph and native-guided
 ZCode/GLM setup. Four Windows-hosted Codex/ZCode native/Ubuntu-WSL profiles have actual
 transport/registration/command evidence. Fixture mode is explicitly separate from live MCP.
-See [install/update/repair](docs/INSTALL.md) and the [selected release report](docs/verification/TASK_012_013_RELEASE.md).
+See [install/update/repair](docs/INSTALL.md) and the [phase6 comparison report](docs/verification/COMPARISON_REPORT.md).
 The tested installation is private loopback inside the approved LXC environment; public TLS rollout,
 fresh bare-metal installation, model inference and LXC boot/confinement are not claimed.
+
+Phase6 adds project reselect/edit/unbind/rebind with preserved data/receipts, real MCP diagnosis even for empty target lists, and a Web Client setup entry generating four public descriptors plus hash-gated local enrollment scripts. [Comparison, actual tests and dispositions](docs/verification/COMPARISON_REPORT.md) supersede earlier broad completion statements; [open risks](docs/verification/OPEN_RISKS.md) identify the retained0.9.0 test deployment and evidence limits. Generation never enrolls a key or connects from the Web server. Prepare an existing authorized identity/private client directory and review source/pins before local execution.
 
 ## Verified environment
 

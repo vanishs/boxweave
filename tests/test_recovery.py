@@ -171,12 +171,12 @@ class RecoveryTests(Base):
             db.execute("DROP TABLE model_selections")
             for table in ('access_claims', 'access_events', 'access_operations', 'access_plans', 'access_routes', 'tenant_labels'):db.execute("DROP TABLE "+table)
             db.execute("INSERT INTO graphs VALUES('test',1,'{}')")
-            db.execute("PRAGMA user_version=2")
+            db.execute("DROP TABLE project_unbindings");db.execute("PRAGMA user_version=2")
         upgraded = Store(self.store.path)
         self.assertEqual(upgraded.receipt(op["id"]), op)
         with upgraded.db() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM graphs").fetchone()[0], 1)
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 6)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 7)
 
     def test_restart_keeps_expired_deadline_and_blocks_dispatch(self):
         op = self.operation()

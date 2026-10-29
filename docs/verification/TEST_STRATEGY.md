@@ -1,5 +1,7 @@
 # Test strategy and experiment plan
 
+Phase6 executed0.9.1:163 tests63.162s, build and seven real browser/HTTP/SQLite fixture flows; actual public downloads and local4-profile Windows scripts/registration; live empty-target diagnosis109 tools without DB changes; independent-copy install6→7/backup6/browser/original-state preservation. Legacy d8a09dd isolated6 job +9 hostkey tests pass; readiness fails collection, assertions not run. Actual local same-input Python exits0/7 and old0.9.0 false-diagnostic counterexample are distinct from remote fleet comparisons. No invented performance/coverage numbers. [Current comparison](COMPARISON_REPORT.md) and [risks](OPEN_RISKS.md) supersede earlier blanket completion claims; all actual/private evidence hashes remain traceable.
+
 Status: selected phase5 obligations executed through TASK-012/0130.9.0, with153 non-root Linux tests59.570s,21 distribution cases, actual systemd parser, built UI, actual installed-browser/package/failure-repair and Windows four-profile regression/guarded fixed commands. See [integrated report](TASK_012_013_RELEASE.md), [package evidence](task012-live-evidence.json), [client evidence](task013-profiles.json) and [exact source](task012013-source-manifest.json). Original strategy below is historical planning, not a substitute for the named actual results. Fixture/provider/packet/human/native-model evidence and unsupported deployment claims remain separate. No phase6 or inference ran.
 
 ## Layers and evidence

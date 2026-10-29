@@ -1,0 +1,113 @@
+{
+  "model_inference": "not_requested",
+  "result": "passed",
+  "source": "Actual Chromium downloads executed locally; strict identity/version/hash/connection gates",
+  "profiles": [
+    {
+      "profile": "codex-native",
+      "ast": "passed",
+      "result": {
+        "profile": "codex/windows/native",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "write": {
+          "changed": false,
+          "backup": null
+        },
+        "registration": {
+          "result": "verified_cli",
+          "agent_ui": "unverified"
+        }
+      },
+      "existing_config_unchanged": true
+    },
+    {
+      "profile": "codex-wsl",
+      "ast": "passed",
+      "result": {
+        "profile": "codex/windows/wsl",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "write": {
+          "changed": false,
+          "backup": null
+        },
+        "registration": {
+          "result": "verified_cli",
+          "agent_ui": "unverified"
+        }
+      },
+      "existing_config_unchanged": true
+    },
+    {
+      "profile": "zcode-native",
+      "ast": "passed",
+      "result": {
+        "profile": "zcode/windows/native",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "write": {
+          "changed": false,
+          "backup": null
+        },
+        "registration": {
+          "result": "verified_agent_core",
+          "agent_ui": "unverified",
+          "tool_count": 101
+        }
+      },
+      "existing_config_unchanged": true
+    },
+    {
+      "profile": "zcode-wsl",
+      "ast": "passed",
+      "result": {
+        "profile": "zcode/windows/wsl",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "write": {
+          "changed": false,
+          "backup": null
+        },
+        "registration": {
+          "result": "verified_agent_core",
+          "agent_ui": "unverified",
+          "tool_count": 101
+        }
+      },
+      "existing_config_unchanged": true
+    }
+  ]
+}

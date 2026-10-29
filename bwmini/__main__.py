@@ -89,6 +89,13 @@ def main():
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
     try:
+        if a.action=="diagnose":
+            c=read_config(a.config)
+            if c.get("mode")!="mcp":raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)
+            from .deploy_check import read_provider
+            connection=read_provider(c);provider=Provider(c)
+            print(json.dumps({"mode":"mcp","connection":connection,"targets":[provider.observe(x).data() for x in c.get("targets",{})]}))
+            return 0
         if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):
             c=read_config(a.config);model_store=Store(c["database"])
         else:
@@ -156,10 +163,6 @@ def main():
             elif a.action=="model-select":result=models.save({"client_version":a.client_version,"provider":a.model_provider,"model":a.model_id,"access_mode":a.access_mode},a.revision)
             else:result=models.confirm(a.revision,a.native_selected,a.native_access_checked)
             print(json.dumps(result,indent=2))
-        elif a.action=="diagnose":
-            if s.provider.mode!="mcp":
-                raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)
-            print(json.dumps({"mode":"mcp","targets":[s.provider.observe(x).data() for x in c["targets"]]}))
         return 0
     except (Fault,OSError,ValueError,KeyError) as error:
         print(json.dumps({"code":getattr(error,"code","CONFIG_OR_RUNTIME_UNAVAILABLE")}))

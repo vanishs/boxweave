@@ -1,5 +1,7 @@
 # ADR-002 — Transactional intent, observation after uncertainty
 
+Phase6 fix0.9.1/SRC-085: a schema7 project-unbinding marker preserves project records, Graph context and operation receipts instead of deleting foreign-key parents. Unbind increments the existing revision, so stale plans/queued checks cannot execute after it; explicit rebind keeps the same project identity. Already-dispatched work is not claimed cancelled. This is local metadata only and works without contacting the Provider. Migration6→7, consistent backup6, old0.9.0 refusal and an independent-copy installed browser path were executed. [Comparison](../../verification/COMPARISON_REPORT.md).
+
 Status: selected for phase 4 validation. Inputs: REQ-004, REQ-005, REQ-006, REQ-007, REQ-010, REQ-012.
 
 Options: JSON files + background threads; local SQLite + explicit worker; external queue/PostgreSQL. Select local SQLite with transactions/CAS, a single mutation worker and rollback journal/FULL synchronous initially. One host/one operator does not justify distributed infrastructure. SQLite has one writer; keep provider calls outside transactions ([official concurrency documentation](https://sqlite.org/wal.html), SRC-028). WAL could improve read concurrency, but adds checkpoint/shared-files concerns; revisit only after measured contention. DB stays on local storage.

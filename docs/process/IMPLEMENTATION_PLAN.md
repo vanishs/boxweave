@@ -1,5 +1,7 @@
 # Implementation plan — authorized design and iteration status
 
+Current phase6/TASK-0140.9.1: user SRC-084 and Web decision SRC-086; comparison, risk closure and all18 traceability rows complete. Three discovered0.9.0 paths were fixed within phase6.163 tests/build/seven browser/actual generated4-profile setup and independent-copy installation passed;15 old subset tests pass, readiness collection failure retained. Source-level phase7 entry eligible; no phase7 execution. See COMPARISON_REPORT/OPEN_RISKS, which supersede earlier completion prose for the fixed gaps.
+
 Phase 3 originally defined the tasks below. Phase 4 was authorized with its concrete scope (SRC-030); current progress is in the table at the end, not an assertion that all original completion conditions passed. After TASK-005 the developer must accept the minimum system before phase 5. Included release features are not dropped because the first slice is small.
 
 ## Ordered tasks
@@ -66,7 +68,7 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | TASK-010 | Implemented selected basic scope0.8.0 | Actual Web publish and shared-service/worker unpublish, TCP/UDP positive/negative client packets, exact cleanup. Config acknowledgment and delayed packet convergence are separate; no new outer public port/TLS/filter claim |
 | TASK-012 | Complete selected app installation/recovery scope0.9.0 | SRC-079..081:153 tests incl21 distribution cases, real systemd parser, actual staged install/rerun/preservation/tamper/failure/repair/marker-clear/MCP checks. No Provider/Incus/SSH upgrade, public mapping or whole-host rollback |
 | TASK-013 | Complete selected integrated evidence disposition0.9.0 | SRC-082/083:actual four profiles registration/read/identity/guarded fixed hello, separate same-version human UI/model report, installed browser and prior unchanged access/graph evidence. See TASK_012_013_RELEASE for all18 AC dispositions and explicit unclaimed extensions. Phase6 not authorized |
-| TASK-014 | Phase6 not authorized | Requires TASK-013 and separate phase6 decision |
+| TASK-014 | Complete phase6 selected validation0.9.1 | SRC-084..088; actual/static/fixture differences classified, three P1 fixes and developer Web decision verified;163 new tests,15 legacy subset tests, one explicit old collection failure. No pending selected P0/P1; phase7 not authorized/executed |
 
 The [feature matrix](../verification/FEATURE_MATRIX.md) and [vertical-slice report](../verification/VERTICAL_SLICE.md) map evidence to REQ/AC and distinguish fixtures from actual target execution. No status above is a first-release acceptance claim.
 

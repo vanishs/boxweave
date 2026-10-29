@@ -1,5 +1,13 @@
 # Phase status — authority
 
+## Current authority: phase6 complete / TASK-014 / 0.9.1
+
+SRC-084..088: user authorized phase6 and explicitly chose completing Web client setup. Audit corrected three0.9.0 acceptance gaps (binding lifecycle, empty-target false-ready diagnosis, Web public setup).163 tests63.162s, build, seven browser flows, actual four-profile generated-script registration/config preservation, real109-tool read-only diagnosis and independent-copy6→7 install/browser checks passed.15 isolated legacy tests pass; legacy readiness collection fails on a stale extractor and remains visible. Equal local Python inputs and a reproduced0.9.0 dead-launcher false-success counterexample distinguish actual execution from static/fixture evidence. [COMPARISON_REPORT](../verification/COMPARISON_REPORT.md) and [OPEN_RISKS](../verification/OPEN_RISKS.md) are current authority.
+
+All reviewed selected P0/P1 defects and product decisions are closed; source-level phase7 entry is eligible. Phase7 was not authorized/executed. Original legacy/main, primary0.9.0 test services/database, original workload, credentials/provider/host settings and public routes are preserved. Independent phase6 test services stopped/disabled; no new workload or exposure. Retained0.9.0 is not automatically patched; deployment/other-platform/boot/confinement/inference limits remain explicit P2 risks.
+
+## Historical phase5 authority
+
 ## Current authority: TASK-012/013 complete in selected scope; phase5 handoff
 
 SRC-079..083, version0.9.0:153 non-root Linux tests59.570s, built UI, actual systemd parser and Windows PowerShell AST checks passed. Real staged install/rerun/data preservation, failure marker/repair, installed browser/worker/MCP hello, Web-down MCP independence and exact cleanup passed; actual four-profile registration/negative/strict fixed-command matrix passed. Source, public/private evidence distinctions and all18 acceptance dispositions are in [the release report](../verification/TASK_012_013_RELEASE.md). TASK-009/010 network evidence remains separate and valid for unchanged access code on local Provider0.120.1. Native model setup uses existing human confirmation SRC-074; no inference was sent.

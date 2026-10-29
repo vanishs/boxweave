@@ -1,0 +1,30 @@
+{
+  "commit": "d8a09dd180139159e035963502e7793a37e92bae",
+  "files": {
+    "server/cli.py": "acf15f9a75a4074b3ec7f016c554e12d3acda4c47424e5a1be20872220c35524",
+    "server/clients.py": "43e218b05d90886ebed03015b6c02a4039dd1449abbbe147093213464f42b02b",
+    "server/hostkeys.py": "4210f3184c7c309bd7213cbd4327d4e7d0e8d9b17396a7e7a437510e64ee8996",
+    "server/jobs.py": "9a8766de55f4c1fa1b32bfd887ee38acf1e6f7d78203197989ed59e9d12f6e14",
+    "server/mcp_client.py": "56e1bbb9f98c5bcffb0d325e268aef97ae686893edc0e2b24017dbb0f8578dec",
+    "server/provenance.py": "0e4ea20b57fab513c1b3e697b9229130de54757dddb55d5b3b779820f91efa6b",
+    "server/provider_upgrade.py": "b19c78b4fc0a75f9ad1294cb2c22ced6186d0bd9bbe277417e251b8dc8f09915",
+    "server/smoke.py": "3fdbab2fe3e944ed77fb79bfa2637d0f05fc5534871bf979bdc5dade45f75396",
+    "server/tokens.py": "8c47d26b5aa3905b3603642a274b19d82aa19cfb2afdc5ed5e04d31b584acbce",
+    "server/web_entry.py": "c4b40e6c8117b66a9a758db234f3d6084e90abc21368ef32268bc54d46e880e6",
+    "server/web_install.py": "f07c4d82a38a427ecfe9b6c5c68675aa0e27196d47ad9d25289c617095c379d3",
+    "server/web_token.py": "4486e6cab26fa59d3f5a3efdd21afbdd652b6d92400d97be03cdc2abd6933c87",
+    "server/webui/__init__.py": "28c6f35f33f0dec5dcad92f9929e84542bde7894b0290fbb1f6ae3056dda5b46",
+    "server/webui/access.py": "3293ae54a74e9cec6109d8bdd693d636807fc57b33427a1091760f84c3cf6687",
+    "server/webui/app.py": "5a558484ab8f9c6e69324f587cfacbb2028933d683230ff057860b97d2d23c91",
+    "server/webui/command.py": "a915e4af714111648ab3abd531c2ace591173aa2a1cfae939a119cff008a1f92",
+    "server/webui/graph.py": "fcee52aa59fb969e15ae6076acde83865045d667a3ef0870b7ec6b460428de00",
+    "server/webui/provider.py": "100728124e42838ec7c2b34886c612668cbc2d09d38461c9ff58715ef5a8a3a8",
+    "server/webui/store.py": "9629b9bd294f202d8a1af6392b8f89b22426661883c3b16f5d1cb175d76ef9b4",
+    "server/webui/tenants.py": "0e0260f08454f79cd02437fd78a08992d04316d318f50f5a9ab8c8c44d4cca99",
+    "install.sh": "3f260a3fbb20950135e3d9b15d078a3ebf61465106aa0620794b987d6e92b95b",
+    "VERSION": "aba951626c8690ce493cbc8f018205bb468003f61fbf00fd3d3c71cebabc0177",
+    "tests/test_jobs.py": "5c47f7b547ec900d05cf0b92e323ba56837d476ef068a56208eb68c788d76e5a",
+    "tests/test_hostkeys.py": "00d21441d76e0462d52407726b9f7d8514e2697e8afbb86a53c2c9d186e23f09",
+    "tests/test_readiness_behavior.py": "c9bfc0ecedb3040d76573bb4cd10d63da051bc468acabc9b719e0efeb2983cdb"
+  }
+}

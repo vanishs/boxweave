@@ -1,0 +1,297 @@
+{
+  "new_base": "f602acf0996b46688ad2b1322769414fea894fe6",
+  "legacy": "d8a09dd180139159e035963502e7793a37e92bae",
+  "candidate_version": "0.9.1",
+  "new_suite": {
+    "exit": 0,
+    "tests": 163,
+    "elapsed_seconds": 63.162,
+    "browser_summaries": [
+      {
+        "browser": "chromium",
+        "infrastructure": "fixture",
+        "result": "passed",
+        "checks": [
+          "login",
+          "binding",
+          "preview",
+          "confirm",
+          "hello-receipt",
+          "api-worker-restart",
+          "no-replay",
+          "mobile-no-overflow"
+        ],
+        "screenshots": [
+          "slice-desktop.png",
+          "slice-mobile.png"
+        ],
+        "call_count": 1,
+        "evidence_dir": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/browser/60028d1eec821f27"
+      },
+      {
+        "result": "passed",
+        "browser": "Chromium",
+        "infrastructure": "fixture",
+        "operations": 26,
+        "executions": 1,
+        "checks": [
+          "20+6 pagination",
+          "unknown detail",
+          "read-only target reconciliation stays unknown",
+          "failed refresh retains evidence",
+          "receipt rediscovery after API/worker restart",
+          "no replay",
+          "mobile no overflow"
+        ],
+        "evidence_dir": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/history-browser/57f7c0a1b01cab50"
+      },
+      {
+        "result": "passed",
+        "browser": "chromium",
+        "browser_version": "141.0.7390.37",
+        "infrastructure": "fixture, zero graph execution",
+        "checks": [
+          "card edit and drag",
+          "context and comment",
+          "undirected relation",
+          "save and full reload",
+          "concurrent edit conflict preserves draft",
+          "actual browser clipboard",
+          "clipboard rejection creates no success",
+          "escaped/redacted Markdown download",
+          "graph delete preserves binding",
+          "zero operations",
+          "desktop/mobile without overflow",
+          "mobile canvas fit"
+        ],
+        "state": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/graphs/d31fd9e32efcf038"
+      },
+      {
+        "result": "passed",
+        "infrastructure": "fixture",
+        "state": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/access-browser/a7566e96408896c9",
+        "access_writes": 5,
+        "shared_creates": 1,
+        "checks": [
+          "metadata distinct from membership",
+          "atomic both-direction grant/revoke",
+          "publish/unpublish",
+          "exact confirmation",
+          "history reload no replay",
+          "unknown no adoption/retry",
+          "shared new membership/account separation",
+          "mobile no overflow"
+        ]
+      },
+      {
+        "result": "passed",
+        "state": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/model-browser/c323836dc7a56406",
+        "infrastructure": "fixture",
+        "native_access": "fixture_operator_report_only",
+        "inference": "not_requested",
+        "provider_execution_calls": 0,
+        "checks": [
+          "save/reload",
+          "public native handoff",
+          "two explicit native confirmations",
+          "changed selection clears readiness",
+          "stale revision rejected",
+          "mobile no overflow"
+        ]
+      },
+      {
+        "result": "passed",
+        "infrastructure": "fixture",
+        "writes": [
+          "create",
+          "stop",
+          "start",
+          "stop",
+          "delete"
+        ],
+        "checks": [
+          "exact confirmation required",
+          "create/stop/start/stop/delete",
+          "receipt reload no replay",
+          "mobile no overflow"
+        ],
+        "state": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/lifecycle-browser/9eec5fd32ee1b79c"
+      },
+      {
+        "result": "passed",
+        "infrastructure": "fixture; zero provider execution calls",
+        "browser": "141.0.7390.37",
+        "project_identity_preserved": true,
+        "reselect_edit_unbind_reload_rebind": true,
+        "stale_confirmation_rejected": true,
+        "queued_receipt_retained_failed_without_execution": true,
+        "javascript_errors": [],
+        "public_web_profile_downloads": {
+          "profiles": 4,
+          "files": 8,
+          "sha256": "8e56189c53f886d1cc81b432d2df814c7d6638d80204e6301f83d53e6a343644"
+        }
+      },
+      {
+        "result": "passed",
+        "records": [
+          {
+            "input": "print(\"hello world\");raise SystemExit(0)",
+            "old": {
+              "state": "succeeded",
+              "exit_code": 0,
+              "stdout": "hello world\n"
+            },
+            "new": {
+              "state": "succeeded",
+              "exit_code": 0,
+              "stdout": "hello world\n",
+              "output_withheld": false
+            },
+            "classification": "same successful result",
+            "evidence": "actual local Python processes, isolated SQLite/old job files; fixture identity, no remote integration"
+          },
+          {
+            "input": "print(\"hello world\");raise SystemExit(7)",
+            "old": {
+              "state": "failed",
+              "exit_code": 7,
+              "stdout": "hello world\n"
+            },
+            "new": {
+              "state": "failed",
+              "exit_code": 7,
+              "stdout": "",
+              "output_withheld": true
+            },
+            "classification": "approved narrower output disclosure; same failure/exit",
+            "evidence": "actual local Python processes, isolated SQLite/old job files; fixture identity, no remote integration"
+          }
+        ],
+        "v090_refuses_schema7": true,
+        "scope": "local isolated execution comparison, not old/new live infrastructure or performance benchmark"
+      }
+    ]
+  },
+  "legacy_suite": {
+    "jobs": {
+      "tests": 6,
+      "passed": true
+    },
+    "hostkeys": {
+      "tests": 9,
+      "passed": true
+    },
+    "readiness": {
+      "collected": false,
+      "error": "ValueError: substring not found in immutable installer text; stale extractor",
+      "suite_exit": 1
+    }
+  },
+  "same_input": {
+    "result": "passed",
+    "records": [
+      {
+        "input": "print(\"hello world\");raise SystemExit(0)",
+        "old": {
+          "state": "succeeded",
+          "exit_code": 0,
+          "stdout": "hello world\n"
+        },
+        "new": {
+          "state": "succeeded",
+          "exit_code": 0,
+          "stdout": "hello world\n",
+          "output_withheld": false
+        },
+        "classification": "same successful result",
+        "evidence": "actual local Python processes, isolated SQLite/old job files; fixture identity, no remote integration"
+      },
+      {
+        "input": "print(\"hello world\");raise SystemExit(7)",
+        "old": {
+          "state": "failed",
+          "exit_code": 7,
+          "stdout": "hello world\n"
+        },
+        "new": {
+          "state": "failed",
+          "exit_code": 7,
+          "stdout": "",
+          "output_withheld": true
+        },
+        "classification": "approved narrower output disclosure; same failure/exit",
+        "evidence": "actual local Python processes, isolated SQLite/old job files; fixture identity, no remote integration"
+      }
+    ],
+    "v090_refuses_schema7": true,
+    "false_ready_counterexample": {
+      "old_v090_exit": 0,
+      "new_exit": 2,
+      "old_no_provider_check": {
+        "mode": "mcp",
+        "targets": []
+      },
+      "new_failure": {
+        "code": "MCP_STREAM_CLOSED"
+      },
+      "same_input": "empty targets plus /usr/bin/false launcher"
+    },
+    "scope": "local isolated execution comparison, not old/new live infrastructure or performance benchmark"
+  },
+  "private_log_sha256": {
+    "final-reviewed.log": "edfc175d21e5275931183e9c2f119afb48ac67e83656d403e9859ac8187ec787",
+    "legacy-tests.log": "5aaf18d662974686ec05af650303f2d0fbedaddcb30762a0be5bb5be20083465",
+    "new-tests.log": "04fe0fdc0c1ea63911c09e91d8c4c20dc59237b9e254cc20750f575f369079e3"
+  },
+  "readonly_live_diagnosis": {
+    "result": "passed",
+    "diagnosis": {
+      "mode": "mcp",
+      "connection": {
+        "state": "authenticated_read_passed",
+        "server": {
+          "name": "containarium-mcp-server",
+          "version": "0.120.1"
+        },
+        "protocol": "2024-11-05",
+        "tools": 109,
+        "read": "list_containers"
+      },
+      "targets": []
+    },
+    "database_bytes_unchanged": true,
+    "installed_database_schema_unchanged": 6,
+    "installed_services_not_restarted": true
+  },
+  "isolated_migration": {
+    "result": "passed",
+    "installer": {
+      "state": "ready",
+      "archive_sha256": "58feeb1823197bc2a3d3aa3df8cdac4a04019d77b011d87a214f8fbcf96efb72",
+      "version": "0.9.1",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/phase6-install/second/installed/backups/1793309460612442904.sqlite3",
+      "mcp": {
+        "state": "authenticated_read_passed",
+        "server": {
+          "name": "containarium-mcp-server",
+          "version": "0.120.1"
+        },
+        "protocol": "2024-11-05",
+        "tools": 109,
+        "read": "list_containers"
+      }
+    },
+    "schema_migrated": {
+      "from": 6,
+      "to": 7,
+      "backup": 6
+    },
+    "installed_browser_unbind_preserves_project": true,
+    "installed_client_generation": true,
+    "original_database_bytes_unchanged": true,
+    "original_service_pids_unchanged": true,
+    "no_workload_mutation": true,
+    "isolated_test_services_stopped_disabled": true
+  }
+}
