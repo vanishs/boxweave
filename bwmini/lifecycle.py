@@ -1,0 +1,312 @@
+"""Exact app-owned lifecycle plans, durable single dispatch and observation-only recovery."""
+import base64
+import hashlib
+from pathlib import Path
+import json
+import re
+import time
+import uuid
+from .domain import Target, Fault
+
+SCHEMA = """
+CREATE TABLE environment_plans (id TEXT PRIMARY KEY, actor TEXT NOT NULL, action TEXT NOT NULL,
+ logical TEXT NOT NULL, spec TEXT NOT NULL, target TEXT, expected_state TEXT, expires REAL NOT NULL, used INTEGER NOT NULL);
+CREATE TABLE environment_operations (id TEXT PRIMARY KEY, actor TEXT NOT NULL, action TEXT NOT NULL,
+ logical TEXT NOT NULL, spec TEXT NOT NULL, target TEXT, expected_state TEXT, state TEXT NOT NULL,
+ phase TEXT NOT NULL, created REAL NOT NULL, deadline REAL NOT NULL, next_poll REAL NOT NULL,
+ acknowledged INTEGER NOT NULL, code TEXT, result TEXT, evidence TEXT NOT NULL);
+CREATE UNIQUE INDEX environment_one_pending ON environment_operations(logical)
+ WHERE state IN ('queued','dispatching','observing','unknown');
+CREATE TABLE managed_environments (logical TEXT PRIMARY KEY, target TEXT NOT NULL,
+ created_by TEXT NOT NULL REFERENCES environment_operations(id), deleted INTEGER NOT NULL);
+CREATE TABLE environment_events (operation TEXT NOT NULL REFERENCES environment_operations(id),
+ at REAL NOT NULL, state TEXT NOT NULL, phase TEXT NOT NULL, code TEXT NOT NULL);
+"""
+
+def uid():
+    return uuid.uuid4().hex
+
+class Lifecycle:
+    def __init__(self, store, provider, clock=time.time):
+        self.store, self.provider, self.clock = store, provider, clock
+        self.config = vars(provider).get("lifecycle_config")
+        if self.config is not None:
+            c = self.config
+            keys = {"allowed_names","cpu","memory","disk","ssh_public_key","readiness_timeout"}
+            if not isinstance(c, dict) or set(c) != keys:
+                raise Fault("LIFECYCLE_CONFIG_INVALID",422)
+            names = c["allowed_names"]
+            protected = set(vars(provider).get("config",{}).get("targets",{}))
+            if (not isinstance(names,list) or not 1 <= len(names) <= 32
+                    or any(not isinstance(n,str) or re.fullmatch(r"[a-z][a-z0-9-]{0,62}",n) is None
+                           or n.startswith("containarium-core-") or n in protected for n in names)
+                    or len(set(names)) != len(names)):
+                raise Fault("LIFECYCLE_CONFIG_INVALID",422)
+            if (c["cpu"] not in ("1","2","3","4","5","6","7","8")
+                    or c["memory"] not in ("1GB","2GB","4GB","8GB")
+                    or c["disk"] not in ("8GB","10GB","20GB","25GB","30GB","40GB","50GB","100GB")
+                    or type(c["readiness_timeout"]) is not int or not 1 <= c["readiness_timeout"] <= 1800):
+                raise Fault("LIFECYCLE_CONFIG_INVALID",422)
+            try:
+                key = c["ssh_public_key"]
+                if not isinstance(key,str) or len(key)>1024 or re.fullmatch(
+                        r"ssh-ed25519 [A-Za-z0-9+/]+={0,2}(?: [A-Za-z0-9@._-]{1,80})?",key) is None:
+                    raise ValueError()
+                blob = base64.b64decode(key.split()[1],validate=True)
+                if len(blob)!=51 or blob[:19] != b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20":
+                    raise ValueError()
+            except (ValueError,TypeError):
+                raise Fault("MANAGED_PUBLIC_KEY_REQUIRED",422) from None
+
+    def scope(self):
+        config=vars(self.provider).get("config",{})
+        argv=vars(self.provider).get("argv",[])
+        files=[]
+        for index,arg in enumerate(argv):
+            path=None
+            if index==0:path=arg
+            elif arg.startswith("UserKnownHostsFile="):path=arg.split("=",1)[1]
+            elif index>0 and argv[index-1]=="-i":path=arg
+            if path:
+                try:
+                    info=Path(path).stat()
+                    files.append([path,info.st_dev,info.st_ino,info.st_mtime_ns,info.st_size,info.st_mode])
+                except OSError:
+                    files.append([path,"unavailable"])
+        value={"provider":config.get("provider"),"backend":config.get("backend"),"project":config.get("project"),"launcher":argv,"files":files}
+        return hashlib.sha256(json.dumps(value,sort_keys=True).encode()).hexdigest()
+
+    def spec(self):
+        return {**self.config,"_scope":self.scope()}
+
+    def settings(self):
+        if self.config is None:
+            return {"enabled":False,"environments":[]}
+        with self.store.db() as db:
+            rows = [dict(r) for r in db.execute("SELECT logical,target,deleted FROM managed_environments ORDER BY logical")]
+        return {"enabled":True,"allowed_names":self.config["allowed_names"],
+                "resources":{k:self.config[k] for k in ("cpu","memory","disk")},
+                "readiness_timeout":self.config["readiness_timeout"],
+                "environments":[{"logical":r["logical"],"target":json.loads(r["target"]),"deleted":bool(r["deleted"])} for r in rows]}
+
+    def check_name(self, logical):
+        if self.config is None:
+            raise Fault("LIFECYCLE_DISABLED",409)
+        if not isinstance(logical,str) or logical not in self.config["allowed_names"]:
+            raise Fault("TARGET_NOT_ALLOWED",403)
+
+    def managed(self, logical):
+        self.check_name(logical)
+        with self.store.db() as db:
+            r = db.execute("SELECT * FROM managed_environments WHERE logical=? AND deleted=0",(logical,)).fetchone()
+        if r is None:
+            raise Fault("MANAGED_TARGET_REQUIRED",403)
+        return Target(**json.loads(r["target"]))
+
+    def preflight(self, action, logical, target, expected_state):
+        observed = self.provider.lifecycle_inspect(logical)
+        if action == "create":
+            if observed is not None:
+                raise Fault("RESOURCE_EXISTS")
+            with self.store.db() as db:
+                r = db.execute("SELECT deleted FROM managed_environments WHERE logical=?",(logical,)).fetchone()
+            if r is not None and not r["deleted"]:
+                raise Fault("MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED")
+        else:
+            pinned = self.managed(logical)
+            if observed is None or observed["target"] != target or pinned != target:
+                raise Fault("TARGET_CHANGED")
+            if observed["state"] != expected_state:
+                raise Fault("STALE_RESOURCE_STATE")
+
+    def plan(self, action, logical, actor="operator"):
+        self.check_name(logical)
+        if action not in ("create","start","stop","delete"):
+            raise Fault("ACTION_NOT_ALLOWED",400)
+        target, state = None, None
+        if action != "create":
+            target = self.managed(logical)
+            value = self.provider.lifecycle_inspect(logical)
+            if value is None or value["target"] != target:
+                raise Fault("TARGET_CHANGED")
+            state = value["state"]
+            wanted = "CONTAINER_STATE_RUNNING" if action=="stop" else "CONTAINER_STATE_STOPPED"
+            if state != wanted:
+                raise Fault("RESOURCE_STATE_NOT_ALLOWED")
+        self.preflight(action,logical,target,state)
+        spec = self.spec()
+        ident = uid()
+        with self.store.db() as db:
+            db.execute("INSERT INTO environment_plans VALUES(?,?,?,?,?,?,?,?,0)",
+                       (ident,actor,action,logical,json.dumps(spec),json.dumps(target.data()) if target else None,state,self.clock()+300))
+        return {"id":ident,"action":action,"logical":logical,"target":target.data() if target else None,
+                "expected_state":state,"resources":{k:spec[k] for k in ("cpu","memory","disk")},
+                "readiness_timeout":spec["readiness_timeout"],"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
+
+    def confirm(self, plan, logical, actor="operator"):
+        with self.store.db() as db:
+            row = db.execute("SELECT * FROM environment_plans WHERE id=? AND actor=?",(plan,actor)).fetchone()
+        if row is None:
+            raise Fault("NOT_FOUND",404)
+        row = dict(row)
+        if logical != row["logical"]:
+            raise Fault("EXACT_TARGET_CONFIRMATION_REQUIRED",400)
+        self.check_name(logical)
+        if json.loads(row["spec"]) != self.spec():
+            raise Fault("CONFIG_CHANGED")
+        if row["used"] or self.clock()>row["expires"]:
+            raise Fault("PLAN_EXPIRED_OR_USED")
+        target = Target(**json.loads(row["target"])) if row["target"] else None
+        self.preflight(row["action"],logical,target,row["expected_state"])
+        now = self.clock()
+        ident = uid()
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            current = db.execute("SELECT used,expires FROM environment_plans WHERE id=? AND actor=?",(plan,actor)).fetchone()
+            if current is None or current["used"] or now>current["expires"]:
+                raise Fault("PLAN_EXPIRED_OR_USED")
+            if db.execute("SELECT 1 FROM environment_operations WHERE logical=? AND state IN ('queued','dispatching','observing','unknown')",(logical,)).fetchone():
+                raise Fault("OPERATION_PENDING")
+            db.execute("UPDATE environment_plans SET used=1 WHERE id=?",(plan,))
+            db.execute("INSERT INTO environment_operations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (ident,actor,row["action"],logical,row["spec"],row["target"],row["expected_state"],
+                        "queued","queued",now,now+self.config["readiness_timeout"],now,0,None,None,"fixture" if self.provider.mode=="fixture" else "live_mcp"))
+            db.execute("INSERT INTO environment_events VALUES(?,?,?,?,?)",(ident,now,"queued","queued","CONFIRMED"))
+        return self.receipt(ident,actor)
+
+    def receipt(self, ident, actor="operator"):
+        with self.store.db() as db:
+            row = db.execute("SELECT * FROM environment_operations WHERE id=? AND actor=?",(ident,actor)).fetchone()
+        if row is None:
+            raise Fault("NOT_FOUND",404)
+        d = dict(row)
+        d.pop("spec")
+        for key in ("target","result"):
+            d[key] = json.loads(d[key]) if d[key] else None
+        d["acknowledged"] = bool(d["acknowledged"])
+        return d
+
+    def receipts(self, actor="operator"):
+        with self.store.db() as db:
+            return [dict(r) for r in db.execute(
+                "SELECT id,action,logical,state,phase,code,created,deadline,evidence FROM environment_operations WHERE actor=? ORDER BY created DESC,id DESC LIMIT 100",(actor,))]
+
+    def save(self, job, state, phase, code, target=None, result=None, acknowledged=None):
+        encoded = json.dumps(target.data()) if target else job["target"]
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state FROM environment_operations WHERE id=?",(job["id"],)).fetchone()
+            if row is None or row["state"] in ("succeeded","failed"):
+                return
+            db.execute("UPDATE environment_operations SET state=?,phase=?,code=?,target=?,result=?,next_poll=?,acknowledged=? WHERE id=?",
+                       (state,phase,code,encoded,json.dumps(result) if result is not None else None,
+                        self.clock()+15,job["acknowledged"] if acknowledged is None else acknowledged,job["id"]))
+            db.execute("INSERT INTO environment_events VALUES(?,?,?,?,?)",
+                       (job["id"],self.clock(),state,phase,code))
+            if state=="succeeded" and job["action"]=="create":
+                db.execute("INSERT INTO managed_environments VALUES(?,?,?,0) ON CONFLICT(logical) DO UPDATE SET target=excluded.target,created_by=excluded.created_by,deleted=0",
+                           (job["logical"],encoded,job["id"]))
+            if state=="succeeded" and job["action"]=="delete":
+                db.execute("UPDATE managed_environments SET deleted=1 WHERE logical=? AND target=?",(job["logical"],encoded))
+
+    def recover(self):
+        with self.store.db() as db:
+            db.execute("UPDATE environment_operations SET state=CASE acknowledged WHEN 1 THEN 'observing' ELSE 'unknown' END,code='WORKER_LOST' WHERE state='dispatching'")
+
+    def observe(self, ident, actor="operator"):
+        self.receipt(ident,actor)
+        with self.store.db() as db:
+            job = dict(db.execute("SELECT * FROM environment_operations WHERE id=? AND actor=?",(ident,actor)).fetchone())
+        if job["state"] in ("queued","dispatching","succeeded","failed"):
+            return self.receipt(ident,actor)
+        if json.loads(job["spec"])!=self.spec():
+            self.save(job,"unknown","scope_changed","CONFIG_CHANGED")
+            return self.receipt(ident,actor)
+        if job["state"]=="observing" and (self.clock()<job["created"] or self.clock()>=job["deadline"]):
+            self.save(job,"unknown","deadline","DEADLINE_EXCEEDED")
+            return self.receipt(ident,actor)
+        target = Target(**json.loads(job["target"])) if job["target"] else None
+        try:
+            value = self.provider.lifecycle_inspect(job["logical"])
+            if job["state"]=="unknown" or not job["acknowledged"]:
+                self.save(job,"unknown","reconciled","OUTCOME_UNKNOWN",result={
+                    "resource_state":value["state"] if value else "absent",
+                    "candidate":value["target"].data() if value else None,
+                    "completion":"unverified","retry":"not_authorized"})
+                return self.receipt(ident,actor)
+            if target and value and value["target"]!=target:
+                raise Fault("TARGET_CHANGED")
+            if job["action"]=="delete":
+                if value is None:
+                    self.save(job,"succeeded","absent","OK",target=target,
+                              result={"resource_state":"absent","readiness":"not_applicable","outcome":"observed_desired_state"})
+                else:
+                    self.save(job,"observing","deleting","WAITING_FOR_ABSENCE",target=target)
+            elif value is None:
+                self.save(job,"observing","submitted","WAITING_FOR_RESOURCE",target=target)
+            elif job["action"]=="stop":
+                state = "succeeded" if value["state"]=="CONTAINER_STATE_STOPPED" else "observing"
+                self.save(job,state,"stopped" if state=="succeeded" else "stopping","OK" if state=="succeeded" else "WAITING_FOR_STOP",target=target,
+                          result={"resource_state":value["state"],"readiness":"not_checked","outcome":"observed_desired_state"} if state=="succeeded" else None)
+            else:
+                target = target or value["target"]
+                if value["state"]!="CONTAINER_STATE_RUNNING":
+                    self.save(job,"observing","submitted","NOT_RUNNING",target=target)
+                else:
+                    self.save(job,"observing","running","CONNECTION_READINESS_PENDING",target=target)
+                    remaining=job["deadline"]-self.clock()
+                    if remaining<=0:
+                        raise Fault("DEADLINE_EXCEEDED")
+                    identity=self.provider.lifecycle_identity(target,remaining)
+                    self.save(job,"succeeded","connection_ready","OK",target=target,result={
+                        "resource_state":value["state"],"readiness":"identity_verified",
+                        "identity":identity,"observed_podman":value.get("podman_enabled"),
+                        "requested_podman":False,"remote_cleanup":"unverified","outcome":"observed_desired_state"})
+        except Fault as error:
+            if error.code=="STATE_UNAVAILABLE":
+                raise
+            if error.code in ("TARGET_CHANGED","IDENTITY_MISMATCH","TRUST_FAILED"):
+                self.save(job,"failed","blocked",error.code)
+            elif self.clock()>=job["deadline"] or error.code=="DEADLINE_EXCEEDED":
+                self.save(job,"unknown","deadline","DEADLINE_EXCEEDED")
+            else:
+                self.save(job,"observing" if job["acknowledged"] and job["state"]!="unknown" else "unknown",
+                          "running" if target else "submitted","OBSERVATION_UNAVAILABLE",target=target)
+        return self.receipt(ident,actor)
+
+    def work_one(self):
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT * FROM environment_operations WHERE state='queued' OR (state='observing' AND next_poll<=?) ORDER BY created,id LIMIT 1",(self.clock(),)).fetchone()
+            if row is None:
+                return False
+            job=dict(row)
+            now=self.clock()
+            if now<job["created"] or now>=job["deadline"]:
+                db.execute("UPDATE environment_operations SET state=?,phase='deadline',code=? WHERE id=?",
+                           ("failed" if job["state"]=="queued" else "unknown","CLOCK_ROLLBACK" if now<job["created"] else "DEADLINE_EXCEEDED",job["id"]))
+                return True
+            execute=job["state"]=="queued"
+            if execute:
+                db.execute("UPDATE environment_operations SET state='dispatching',phase='submitted' WHERE id=?",(job["id"],))
+        if execute:
+            try:
+                self.check_name(job["logical"])
+                if json.loads(job["spec"])!=self.spec():
+                    raise Fault("CONFIG_CHANGED")
+                target=Target(**json.loads(job["target"])) if job["target"] else None
+                self.preflight(job["action"],job["logical"],target,job["expected_state"])
+                self.provider.lifecycle_mutate(job["action"],job["logical"],json.loads(job["spec"]),job["deadline"]-self.clock())
+                self.save(job,"observing","submitted","ACKNOWLEDGED",acknowledged=1)
+            except Fault as error:
+                if error.code=="STATE_UNAVAILABLE":
+                    raise
+                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED"}
+                self.save(job,"failed" if error.code in known else "unknown","not_submitted" if error.code in known else "submitted",
+                          error.code if error.code in known else "OUTCOME_UNKNOWN")
+                return True
+            except Exception:
+                self.save(job,"unknown","submitted","OUTCOME_UNKNOWN")
+                return True
+        self.observe(job["id"],job["actor"])
+        return True

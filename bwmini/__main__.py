@@ -27,14 +27,27 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","diagnose"])
+    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","diagnose"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--cursor")
     p.add_argument("--operation")
+    p.add_argument("--logical")
+    p.add_argument("--environment-action",choices=["create","start","stop","delete"])
+    p.add_argument("--plan")
     a=p.parse_args()
-    if (a.action == "reconcile") != (a.operation is not None):
+    if a.action=="environment-plan" and (a.logical is None or a.environment_action is None):
+        p.error("environment-plan requires --logical and --environment-action")
+    if a.action=="environment-confirm" and (a.logical is None or a.plan is None):
+        p.error("environment-confirm requires --logical and --plan")
+    if a.logical is not None and a.action not in ("environment-plan","environment-confirm"):
+        p.error("--logical is only supported for environment plans/confirmation")
+    if a.environment_action is not None and a.action!="environment-plan":
+        p.error("--environment-action is only supported for environment-plan")
+    if a.plan is not None and a.action!="environment-confirm":
+        p.error("--plan is only supported for environment-confirm")
+    if (a.action in ("reconcile","environment-receipt","environment-observe")) != (a.operation is not None):
         p.error("reconcile requires --operation; other actions do not accept it")
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
@@ -69,6 +82,18 @@ def main():
             print(json.dumps(s.receipt_history(limit=a.limit, cursor=a.cursor),indent=2))
         elif a.action=="reconcile":
             print(json.dumps(s.reconcile(a.operation),indent=2))
+        elif a.action=="environments":
+            print(json.dumps(s.lifecycle.settings(),indent=2))
+        elif a.action=="environment-plan":
+            print(json.dumps(s.lifecycle.plan(a.environment_action,a.logical),indent=2))
+        elif a.action=="environment-confirm":
+            print(json.dumps(s.lifecycle.confirm(a.plan,a.logical),indent=2))
+        elif a.action=="environment-receipts":
+            print(json.dumps(s.lifecycle.receipts(),indent=2))
+        elif a.action=="environment-receipt":
+            print(json.dumps(s.lifecycle.receipt(a.operation),indent=2))
+        elif a.action=="environment-observe":
+            print(json.dumps(s.lifecycle.observe(a.operation),indent=2))
         elif a.action=="diagnose":
             if s.provider.mode!="mcp":
                 raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)

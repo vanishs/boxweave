@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 import {PromptGraph} from './PromptGraph';
+import {Environments} from './Environments';
 
 type Resource={logical:string,user:string,hostname:string};
 type Project={id:string,name:string,revision:number};
@@ -49,8 +50,8 @@ function App(){
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
         <button disabled={busy}>Sign in</button></form></section>:<>
       <aside className={mode==='fixture'?'fixture':'live'}>{mode==='fixture'?'Fixture mode — no live infrastructure is connected.':'Live MCP mode — target identity is checked before execution.'}</aside>
-      <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>setView('projects')}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button></nav>
-      {view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:<>
+      <nav className="view-tabs" aria-label="Workspace views"><button disabled={view==='graphs'&&graphDirty} className={view==='projects'?'':'quiet'} onClick={()=>{setView('projects');void run(refresh);}}>Projects</button><button className={view==='graphs'?'':'quiet'} onClick={()=>setView('graphs')}>Prompt Graph</button><button disabled={view==='graphs'&&graphDirty} className={view==='environments'?'':'quiet'} onClick={()=>setView('environments')}>Environments</button></nav>
+      {view==='graphs'?<PromptGraph api={api} onDirtyChange={setGraphDirty}/>:view==='environments'?<Environments api={api}/>:<>
       <section><div className="sectionhead"><h2>01 / Bind your project</h2><button className="quiet" onClick={()=>void run(async()=>{await api('logout','POST',{});setCsrf('');setReceipt(null);setObservation('');setHistory(null);setNextCursor(null);setPlan(null);setProjects([]);setResources([]);})}>Sign out</button></div>
         <form onSubmit={e=>{e.preventDefault();void run(async()=>{await api('projects','POST',{name:label,logical,workspace});setLabel('');await refresh();});}}>
           <label>Project name<input value={label} required maxLength={80} onChange={e=>setLabel(e.target.value)}/></label>

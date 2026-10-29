@@ -17,13 +17,31 @@ class Service:
     def __init__(self, store, provider, clock=time.time, budget=60):
         self.store, self.provider, self.clock = store, provider, clock
         self.budget = min(600, max(1, budget))
+        from .lifecycle import Lifecycle
+        self.lifecycle = Lifecycle(store,provider,clock)
+
+    def observe_target(self, logical):
+        if self.lifecycle.config is not None and logical in self.lifecycle.config["allowed_names"]:
+            try:
+                target=self.lifecycle.managed(logical)
+            except Fault as error:
+                if error.code=="MANAGED_TARGET_REQUIRED":
+                    raise Fault("TARGET_CHANGED") from None
+                raise
+            current=self.provider.lifecycle_inspect(logical)
+            if current is None or current["target"]!=target:
+                raise Fault("TARGET_CHANGED")
+            if current["state"]!="CONTAINER_STATE_RUNNING":
+                raise Fault("NOT_CONNECTION_READY")
+            return target
+        return self.provider.observe(logical)
 
     def projects(self):
         with self.store.db() as db:
             return [dict(r) for r in db.execute("SELECT id,name,revision FROM projects ORDER BY rowid")]
 
     def bind(self, label, logical, path, project=None, revision=None):
-        target = self.provider.observe(logical)
+        target = self.observe_target(logical)
         label, path = name(label), workspace(path, target.user)
         pid = project or ident()
         with self.store.db() as db:
@@ -46,7 +64,7 @@ class Service:
         p = self.store.project(project)
         if p["revision"] != revision:
             raise Fault("REVISION_CONFLICT")
-        current = self.provider.observe(json.loads(p["target"])["logical"])
+        current = self.observe_target(json.loads(p["target"])["logical"])
         if current.digest() != p["digest"]:
             raise Fault("TARGET_CHANGED")
         plan = ident()
@@ -130,7 +148,7 @@ class Service:
         else:
             try:
                 expected = Target(**json.loads(project["target"]))
-                observed = self.provider.observe(expected.logical)
+                observed = self.observe_target(expected.logical)
                 status, code = ("matching", "TARGET_MATCHES") if observed == expected else ("changed", "TARGET_CHANGED")
             except Fault as error:
                 if error.code == "TARGET_CHANGED":
@@ -158,6 +176,8 @@ class Service:
             db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST',result=NULL WHERE state='dispatching'")
 
     def work_one(self):
+        if self.lifecycle.work_one():
+            return True
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM operations WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
@@ -177,7 +197,7 @@ class Service:
             if p["revision"] != op["revision"] or p["digest"] != op["digest"]:
                 raise Fault("REVISION_CONFLICT")
             expected = Target(**json.loads(p["target"]))
-            observed = self.provider.observe(expected.logical)
+            observed = self.observe_target(expected.logical)
             if observed != expected:
                 raise Fault("TARGET_CHANGED")
             left = op["deadline"] - self.clock()
@@ -216,6 +236,7 @@ class Service:
             except BlockingIOError:
                 raise Fault("WORKER_ALREADY_RUNNING")
             self.recover()
+            self.lifecycle.recover()
             while True:
                 worked = self.work_one()
                 if once:

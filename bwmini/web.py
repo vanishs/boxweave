@@ -95,8 +95,13 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         # Only the explicit operator-reviewed allowlist, not arbitrary provider inventory.
         logicals = ([service.provider.target.logical] if service.provider.mode=="fixture"
                     else list(service.provider.config["targets"]))
-        return jsonify(resources=[service.provider.observe(x).data() for x in logicals],
-                       mode=service.provider.mode)
+        resources=[service.observe_target(x).data() for x in logicals]
+        unavailable=[]
+        for item in service.lifecycle.settings()["environments"]:
+            if item["deleted"] or item["logical"] in logicals:continue
+            try:resources.append(service.observe_target(item["logical"]).data())
+            except Fault as error:unavailable.append({"logical":item["logical"],"code":error.code})
+        return jsonify(resources=resources,unavailable=unavailable,mode=service.provider.mode)
     @app.get("/api/projects")
     def projects():
         return jsonify(projects=service.projects())
@@ -141,6 +146,29 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     def reconcile(oid):
         body([])
         return jsonify(service.reconcile(oid))
+    @app.get("/api/environments")
+    def environment_settings():
+        return jsonify(service.lifecycle.settings())
+    @app.post("/api/environment-plans")
+    def environment_plan():
+        d=body(["action","logical"])
+        return jsonify(service.lifecycle.plan(d["action"],d["logical"])),201
+    @app.post("/api/environment-plans/<pid>/confirm")
+    def environment_confirm(pid):
+        d=body(["confirm","logical"])
+        if d["confirm"] is not True:
+            raise Fault("CONFIRMATION_REQUIRED",400)
+        return jsonify(service.lifecycle.confirm(pid,d["logical"])),202
+    @app.get("/api/environment-operations")
+    def environment_receipts():
+        return jsonify(operations=service.lifecycle.receipts())
+    @app.get("/api/environment-operations/<oid>")
+    def environment_receipt(oid):
+        return jsonify(service.lifecycle.receipt(oid))
+    @app.post("/api/environment-operations/<oid>/observe")
+    def environment_observe(oid):
+        body([])
+        return jsonify(service.lifecycle.observe(oid))
     @app.get("/api/graphs")
     def graph_list():return jsonify(graphs=graphs.list())
     @app.post("/api/graphs")

@@ -70,6 +70,9 @@ class MCP:
             if ("result" in msg) == ("error" in msg):
                 raise Fault("MCP_INVALID")
             if "error" in msg:
+                message = str(msg["error"].get("message", "")).lower() if isinstance(msg["error"], dict) else ""
+                if any(marker in message for marker in ("knownhosts: key mismatch", "host key verification failed", "remote host identification has changed")):
+                    raise Fault("TRUST_FAILED")
                 raise Fault("PROVIDER_REJECTED")
             if not isinstance(msg["result"], dict):
                 raise Fault("MCP_INVALID")

@@ -165,6 +165,8 @@ class RecoveryTests(Base):
     def test_schema_two_upgrade_preserves_receipts_graphs_and_deadlines(self):
         op = self.operation()
         with self.store.db() as db:
+            for table in ("environment_events","managed_environments","environment_operations","environment_plans"):
+                db.execute("DROP TABLE "+table)
             db.execute("DROP TABLE operation_observations")
             db.execute("INSERT INTO graphs VALUES('test',1,'{}')")
             db.execute("PRAGMA user_version=2")
@@ -172,7 +174,7 @@ class RecoveryTests(Base):
         self.assertEqual(upgraded.receipt(op["id"]), op)
         with upgraded.db() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM graphs").fetchone()[0], 1)
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 4)
 
     def test_restart_keeps_expired_deadline_and_blocks_dispatch(self):
         op = self.operation()

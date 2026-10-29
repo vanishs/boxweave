@@ -46,3 +46,6 @@
 | TASK-003 completion SRC-065 | d8a09dd -> same | No legacy implementation migration, archive/private-data read or old-project edit. Existing client observations used as versioned evidence only. New keys generated locally, public-only bootstrap via existing MCP to dedicated box; normal transport identity never used as host shell |
 
 | TASK-005/006/007 startup SRC-066 | d8a09dd -> same | Legacy HEAD/status unchanged, only unrelated untracked archive. No code merge/archive/private-data review. Existing remote resources inspected; fresh current-source runtime packaged/tested separately, original services untouched |
+
+
+TASK-006 / SRC-069 / 0.5.0: scoped lifecycle plans, single dispatch, pinned managed environments, schema4 recovery, Web/CLI receipts and config-scope guards implemented. 82 non-root Linux tests and Chromium fixture passed; first actual five-action Web/MCP cycle passed. Final repeat correctly stops TRUST_FAILED after reused-IP mismatch; trusted reconciler reports failure and was not repaired or bypassed. Approved exact test resource cleanup read back absent; original hello preserved. See docs/verification/TASK_006_LIFECYCLE.md for separate success/failure evidence and limits. Continue TASK-007 under SRC-066; no full release claim.
