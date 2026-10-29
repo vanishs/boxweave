@@ -31,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","diagnose"])
+    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -47,7 +47,27 @@ def main():
     p.add_argument("--revision",type=int)
     p.add_argument("--native-selected",action="store_true")
     p.add_argument("--native-access-checked",action="store_true")
+    p.add_argument("--network-tenant")
+    p.add_argument("--source-tenant")
+    p.add_argument("--destination-tenant")
+    p.add_argument("--network-action",choices=["grant","revoke"])
+    p.add_argument("--both-directions",action="store_true")
+    p.add_argument("--port-profile")
+    p.add_argument("--port-action",choices=["publish","unpublish"])
+    p.add_argument("--access-plan")
+    p.add_argument("--confirmation")
+    p.add_argument("--access-operation")
+    p.add_argument("--tenant")
+    p.add_argument("--label")
+    p.add_argument("--label-revision",type=int)
     a=p.parse_args()
+    groups={"access-network-plan":[a.source_tenant,a.destination_tenant,a.network_action],"access-port-plan":[a.port_profile,a.port_action],"access-confirm":[a.access_plan,a.confirmation],"tenant-label":[a.tenant,a.label,a.label_revision]}
+    for action,values in groups.items():
+        if a.action==action and any(v is None for v in values):p.error(action+" requires its complete action-specific arguments")
+        if a.action!=action and any(v is not None for v in values):p.error(action+" arguments are not supported by this action")
+    if a.both_directions and a.action!="access-network-plan":p.error("--both-directions requires access-network-plan")
+    if (a.action in ("access-receipt","access-observe"))!=(a.access_operation is not None):p.error("access receipt/observation requires --access-operation")
+    if a.network_tenant is not None and (a.action!="environment-plan" or a.environment_action!="create"):p.error("--network-tenant requires environment-plan --environment-action create")
     model_values=[a.model_provider,a.model_id,a.access_mode,a.client_version]
     if a.action=="model-select" and (any(v is None for v in model_values) or a.revision is None):p.error("model-select requires version/provider/model/access mode and revision")
     if a.action!="model-select" and any(v is not None for v in model_values):p.error("model selection flags require model-select")
@@ -105,7 +125,7 @@ def main():
         elif a.action=="environments":
             print(json.dumps(s.lifecycle.settings(),indent=2))
         elif a.action=="environment-plan":
-            print(json.dumps(s.lifecycle.plan(a.environment_action,a.logical),indent=2))
+            print(json.dumps(s.lifecycle.plan(a.environment_action,a.logical,network_tenant=a.network_tenant),indent=2))
         elif a.action=="environment-confirm":
             print(json.dumps(s.lifecycle.confirm(a.plan,a.logical),indent=2))
         elif a.action=="environment-receipts":
@@ -114,6 +134,18 @@ def main():
             print(json.dumps(s.lifecycle.receipt(a.operation),indent=2))
         elif a.action=="environment-observe":
             print(json.dumps(s.lifecycle.observe(a.operation),indent=2))
+        elif a.action=="access":print(json.dumps(s.access.settings(),indent=2))
+        elif a.action=="access-memberships":print(json.dumps(s.access.memberships(),indent=2))
+        elif a.action=="access-receipts":print(json.dumps(s.access.receipts(),indent=2))
+        elif a.action=="access-receipt":print(json.dumps(s.access.receipt(a.access_operation),indent=2))
+        elif a.action=="access-observe":print(json.dumps(s.access.observe(a.access_operation),indent=2))
+        elif a.action=="access-confirm":print(json.dumps(s.access.confirm(a.access_plan,a.confirmation),indent=2))
+        elif a.action=="tenant-label":print(json.dumps(s.access.label(a.tenant,a.label,a.label_revision),indent=2))
+        elif a.action=="access-port-plan":print(json.dumps(s.access.port_plan(a.port_profile,a.port_action),indent=2))
+        elif a.action=="access-network-plan":
+            pairs=[(a.source_tenant,a.destination_tenant)]+([(a.destination_tenant,a.source_tenant)] if a.both_directions else [])
+            changes=[{"destination":destination,"add_sources":[source] if a.network_action=="grant" else [],"remove_sources":[source] if a.network_action=="revoke" else []} for source,destination in pairs]
+            print(json.dumps(s.access.network_plan(changes),indent=2))
         elif a.action.startswith("model-"):
             from .models import Models
             models=Models(model_store)

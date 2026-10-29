@@ -19,6 +19,9 @@ class Service:
         self.budget = min(600, max(1, budget))
         from .lifecycle import Lifecycle
         self.lifecycle = Lifecycle(store,provider,clock)
+        from .access import Access
+        self.access = Access(self)
+        self.lifecycle.network = self.access
 
     def observe_target(self, logical):
         if self.lifecycle.config is not None and logical in self.lifecycle.config["allowed_names"]:
@@ -176,6 +179,8 @@ class Service:
             db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST',result=NULL WHERE state='dispatching'")
 
     def work_one(self):
+        if self.access.work_one():
+            return True
         if self.lifecycle.work_one():
             return True
         with self.store.db() as db:
@@ -237,6 +242,7 @@ class Service:
                 raise Fault("WORKER_ALREADY_RUNNING")
             self.recover()
             self.lifecycle.recover()
+            self.access.recover()
             while True:
                 worked = self.work_one()
                 if once:

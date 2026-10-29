@@ -73,11 +73,20 @@ class Lifecycle:
                     files.append([path,info.st_dev,info.st_ino,info.st_mtime_ns,info.st_size,info.st_mode])
                 except OSError:
                     files.append([path,"unavailable"])
-        value={"provider":config.get("provider"),"backend":config.get("backend"),"project":config.get("project"),"launcher":argv,"files":files}
+        value={"provider":config.get("provider"),"backend":config.get("backend"),"project":config.get("project"),"launcher":argv,"files":files,"access":config.get("access")}
         return hashlib.sha256(json.dumps(value,sort_keys=True).encode()).hexdigest()
 
     def spec(self):
         return {**self.config,"_scope":self.scope()}
+
+    def matches_spec(self,spec):
+        return {k:v for k,v in spec.items() if k!="_network_tenant"}==self.spec()
+
+    def network_check(self,spec):
+        if "_network_tenant" in spec:
+            network=vars(self).get("network")
+            if network is None:raise Fault("SHARED_CREATE_UNSUPPORTED")
+            network.shared_check(spec["_network_tenant"])
 
     def settings(self):
         if self.config is None:
@@ -87,6 +96,7 @@ class Lifecycle:
         return {"enabled":True,"allowed_names":self.config["allowed_names"],
                 "resources":{k:self.config[k] for k in ("cpu","memory","disk")},
                 "readiness_timeout":self.config["readiness_timeout"],
+                "shared_network_tenants":(vars(self).get("network").config or {}).get("tenants",[]) if vars(self).get("network") else [],
                 "environments":[{"logical":r["logical"],"target":json.loads(r["target"]),"deleted":bool(r["deleted"])} for r in rows]}
 
     def check_name(self, logical):
@@ -119,7 +129,7 @@ class Lifecycle:
             if observed["state"] != expected_state:
                 raise Fault("STALE_RESOURCE_STATE")
 
-    def plan(self, action, logical, actor="operator"):
+    def plan(self, action, logical, actor="operator", network_tenant=None):
         self.check_name(logical)
         if action not in ("create","start","stop","delete"):
             raise Fault("ACTION_NOT_ALLOWED",400)
@@ -135,13 +145,17 @@ class Lifecycle:
                 raise Fault("RESOURCE_STATE_NOT_ALLOWED")
         self.preflight(action,logical,target,state)
         spec = self.spec()
+        if network_tenant is not None:
+            if action!="create":raise Fault("NETWORK_TENANT_CREATE_ONLY",422)
+            spec["_network_tenant"]=network_tenant
+            self.network_check(spec)
         ident = uid()
         with self.store.db() as db:
             db.execute("INSERT INTO environment_plans VALUES(?,?,?,?,?,?,?,?,0)",
                        (ident,actor,action,logical,json.dumps(spec),json.dumps(target.data()) if target else None,state,self.clock()+300))
         return {"id":ident,"action":action,"logical":logical,"target":target.data() if target else None,
                 "expected_state":state,"resources":{k:spec[k] for k in ("cpu","memory","disk")},
-                "readiness_timeout":spec["readiness_timeout"],"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
+                "readiness_timeout":spec["readiness_timeout"],"network_tenant":spec.get("_network_tenant"),"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
 
     def confirm(self, plan, logical, actor="operator"):
         with self.store.db() as db:
@@ -152,8 +166,9 @@ class Lifecycle:
         if logical != row["logical"]:
             raise Fault("EXACT_TARGET_CONFIRMATION_REQUIRED",400)
         self.check_name(logical)
-        if json.loads(row["spec"]) != self.spec():
+        if not self.matches_spec(json.loads(row["spec"])):
             raise Fault("CONFIG_CHANGED")
+        self.network_check(json.loads(row["spec"]))
         if row["used"] or self.clock()>row["expires"]:
             raise Fault("PLAN_EXPIRED_OR_USED")
         target = Target(**json.loads(row["target"])) if row["target"] else None
@@ -219,7 +234,7 @@ class Lifecycle:
             job = dict(db.execute("SELECT * FROM environment_operations WHERE id=? AND actor=?",(ident,actor)).fetchone())
         if job["state"] in ("queued","dispatching","succeeded","failed"):
             return self.receipt(ident,actor)
-        if json.loads(job["spec"])!=self.spec():
+        if not self.matches_spec(json.loads(job["spec"])):
             self.save(job,"unknown","scope_changed","CONFIG_CHANGED")
             return self.receipt(ident,actor)
         if job["state"]=="observing" and (self.clock()<job["created"] or self.clock()>=job["deadline"]):
@@ -234,6 +249,9 @@ class Lifecycle:
                     "candidate":value["target"].data() if value else None,
                     "completion":"unverified","retry":"not_authorized"})
                 return self.receipt(ident,actor)
+            selected_tenant=json.loads(job["spec"]).get("_network_tenant")
+            if selected_tenant and value and value.get("network_tenant")!=selected_tenant:
+                raise Fault("NETWORK_MEMBERSHIP_MISMATCH")
             if target and value and value["target"]!=target:
                 raise Fault("TARGET_CHANGED")
             if job["action"]=="delete":
@@ -260,12 +278,12 @@ class Lifecycle:
                     identity=self.provider.lifecycle_identity(target,remaining)
                     self.save(job,"succeeded","connection_ready","OK",target=target,result={
                         "resource_state":value["state"],"readiness":"identity_verified",
-                        "identity":identity,"observed_podman":value.get("podman_enabled"),
+                        "identity":identity,"network_tenant":value.get("network_tenant"),"account_user":target.user,"observed_podman":value.get("podman_enabled"),
                         "requested_podman":False,"remote_cleanup":"unverified","outcome":"observed_desired_state"})
         except Fault as error:
             if error.code=="STATE_UNAVAILABLE":
                 raise
-            if error.code in ("TARGET_CHANGED","IDENTITY_MISMATCH","TRUST_FAILED"):
+            if error.code in ("TARGET_CHANGED","IDENTITY_MISMATCH","TRUST_FAILED","NETWORK_MEMBERSHIP_MISMATCH"):
                 self.save(job,"failed","blocked",error.code)
             elif self.clock()>=job["deadline"] or error.code=="DEADLINE_EXCEEDED":
                 self.save(job,"unknown","deadline","DEADLINE_EXCEEDED")
@@ -292,16 +310,17 @@ class Lifecycle:
         if execute:
             try:
                 self.check_name(job["logical"])
-                if json.loads(job["spec"])!=self.spec():
+                if not self.matches_spec(json.loads(job["spec"])):
                     raise Fault("CONFIG_CHANGED")
                 target=Target(**json.loads(job["target"])) if job["target"] else None
+                self.network_check(json.loads(job["spec"]))
                 self.preflight(job["action"],job["logical"],target,job["expected_state"])
                 self.provider.lifecycle_mutate(job["action"],job["logical"],json.loads(job["spec"]),job["deadline"]-self.clock())
                 self.save(job,"observing","submitted","ACKNOWLEDGED",acknowledged=1)
             except Fault as error:
                 if error.code=="STATE_UNAVAILABLE":
                     raise
-                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED"}
+                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY"}
                 self.save(job,"failed" if error.code in known else "unknown","not_submitted" if error.code in known else "submitted",
                           error.code if error.code in known else "OUTCOME_UNKNOWN")
                 return True

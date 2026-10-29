@@ -40,3 +40,5 @@ TASK-005 current minimal chain complete (SRC-068): [current-source actual eviden
 - [TASK-007 four profiles](verification/TASK_007_PROFILES.md), [client setup](../clients/README.md).
 
 - [TASK-008 native-guided model wizard](verification/TASK_008_MODEL_WIZARD.md).
+
+- [TASK-009/010 Tenant access and TCP/UDP evidence](verification/TASK_009_010_ACCESS.md), [live results](verification/task009010-live-evidence.json), [source hashes](verification/task009010-source-manifest.json).

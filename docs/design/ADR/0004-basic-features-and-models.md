@@ -1,6 +1,6 @@
 # ADR-004 — Basic feature adapters, native model credentials
 
-Status: selected design; version-specific compatibility remains unverified. Inputs: SRC-026/027, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015.
+Status: selected design. Inputs: SRC-026/027, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015. Selected native model handoff is evidenced SRC-073..075; inference remains unverified. Native membership/atomic access and TCP/UDP adapters are implemented0.8.0 and tested only against the approved fresh local nested Provider0.120.1 (SRC-076..078). Other versions/placement are unsupported until separately verified. Passthrough configuration acknowledgment and actual packet convergence remain distinct. See [actual evidence](../../verification/TASK_009_010_ACCESS.md).
 
 Options: port the full legacy console/model logic; implement narrow typed services against approved basic boundaries; create a universal policy/model/workflow platform. Select narrow services. This includes the requested features without importing old stack structure, API breadth or provider forks.
 

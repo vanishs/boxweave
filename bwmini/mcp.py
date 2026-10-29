@@ -73,6 +73,15 @@ class MCP:
                 message = str(msg["error"].get("message", "")).lower() if isinstance(msg["error"], dict) else ""
                 if any(marker in message for marker in ("knownhosts: key mismatch", "host key verification failed", "remote host identification has changed")):
                     raise Fault("TRUST_FAILED")
+                if method=="tools/call" and params.get("name")=="get_network_policy":
+                    prefix="Tool execution failed: API error (status 404): "
+                    original=msg["error"].get("message","") if isinstance(msg["error"],dict) else ""
+                    if original.startswith(prefix):
+                        try:
+                            detail=json.loads(original[len(prefix):])
+                            expected='rpc error: code = NotFound desc = no network policy for tenant "'+params["arguments"]["tenant"]+'"'
+                            if detail=={"code":404,"error":expected}:raise Fault("POLICY_ABSENT",404)
+                        except (ValueError,KeyError,TypeError):pass
                 raise Fault("PROVIDER_REJECTED")
             if not isinstance(msg["result"], dict):
                 raise Fault("MCP_INVALID")

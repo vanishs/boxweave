@@ -1,6 +1,8 @@
 # Architecture — phase 3 design baseline
 
-Status: phase 3 design with a partial phase 4 implementation. The real application-to-MCP acceptance gate remains unverified; see ADR-005 and VERTICAL_SLICE. Product approval: SRC-026. Requirements/criteria are authoritative under docs/product; this document defines how to satisfy their selected basic scope. Provider contract in SRC-010 is a historical source profile, not proof of current deployment. No provider upgrade is authorized.
+Status: phase3 design with phase4 minimum chain verified and accepted SRC-051, and phase5 implementation through selected TASK-009/010 scope0.8.0. Packaging/release TASK-012/013 remain incomplete. Product approval: SRC-026. Requirements/criteria are authoritative under docs/product; current PHASE_STATUS and per-task evidence supersede historical gate descriptions. Provider contract SRC-010 is historical; SRC-077 separately authorizes a fresh0.120.1 test installation, not upgrading old providers.
+
+Implementation0.8.0 adds schema6 access plans/claims/receipts under the existing single worker lock, server-trusted Tenant/port allowlists and actor-bound one-use confirmation. Exact native v1/Guard/full-revision upstream atomic ingress edits and app-owned TCP/UDP passthrough are adapters over the shared service. Shared membership applies only to capability-verified new creation. Configuration, Guard observation and actual packet connectivity are separate evidence levels; route acknowledgment does not promise immediate convergence. See [TASK-009/010 evidence](../verification/TASK_009_010_ACCESS.md). Unknown writes never replay or authorize adoption. No generic policy/proxy editor or existing-container reassignment was added.
 
 ## Boundaries and topology
 

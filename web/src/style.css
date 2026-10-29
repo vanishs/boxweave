@@ -7,3 +7,5 @@
 .environment-panel p,.environment-panel .row span{overflow-wrap:anywhere;min-width:0}.environment-panel .row{flex-wrap:wrap}
 
 .view-tabs{flex-wrap:wrap}[aria-label="Model setup wizard"] input[type="checkbox"]{width:auto;margin-right:.5rem}[aria-label="Model setup wizard"] textarea{width:100%;box-sizing:border-box}
+
+.access-panel input[type="checkbox"]{width:auto;margin-right:.5rem}.access-member{overflow-wrap:anywhere}.access-panel select,.access-panel input{min-width:0;max-width:100%}

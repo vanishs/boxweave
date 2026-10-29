@@ -1,0 +1,31 @@
+{
+  "version": "0.8.0",
+  "origin": "Exact assigned-LXC source bytes synchronized to rewrite worktree",
+  "files": {
+    "bwmini/access.py": "e7635a1ec3bdce6dc02a4245a22e9ccf5189026392fedd4b0a04282e553b3a28",
+    "bwmini/access_provider.py": "065e5e5f1e22f6cb332fda781aa06773672e7919a5a270e2d8deecbe4b195294",
+    "bwmini/mcp.py": "a220f632df256db5daa8af537a514898d1e234b4c50576521e1637250694b9f1",
+    "bwmini/provider.py": "f1bf2b43cdc00db5cddf45eb7994c2733e014a4fbd2066a97686973ebb082f44",
+    "bwmini/lifecycle.py": "1146abeed7f85f98ecdbf0f687d2b3d80ddd63c8e0211d090e3f4e4d57b0588a",
+    "bwmini/service.py": "f7a9e92fcbe8af5a985a5e0855c8c9f6603ff0928f836222d76bd2f87a7f18e4",
+    "bwmini/store.py": "c077599f1b488dfd9f1742514d0a529003b3cf34f8e73636de3a83352f0bb251",
+    "bwmini/web.py": "61b94ad08c2c738fabfbab6640b929a2ae0cbe0d544347f7adb662852e5cda1d",
+    "bwmini/__main__.py": "09b4106826b1310d46670d9bfbb8ad3df5f3c8e6df7a37063c543fca0bc65f07",
+    "tests/test_access.py": "1a12791c2b5ca02fff9b217ed2297ba8e04cdf0840f084f327485fc8a826093f",
+    "tests/test_graphs.py": "921832fd1ae1dfe68109b1ef562816951f240ff94395f633c1848de6b164ac20",
+    "tests/test_recovery.py": "143e5174f480bb9f2a1b98bbe0bbc34f98e24f9f7c1f978f4fa14fc802d35d9a",
+    "tests/test_models.py": "8e788ed0108043b8fde7dd8fe98830d5220c4436e5263ed2bb2ba95f97c2cb0f",
+    "web/src/AccessPanel.tsx": "77e42e9480319050e3e901329cf476e5c7a76bf9d17717fdf10ea5a9bc69b7ed",
+    "web/src/Environments.tsx": "2c41c024b3a35554ac1b246185cba2444e025fc04920bb22069aa9902f0c6b30",
+    "web/src/main.tsx": "67af8da572f430d4816b347c401b4030966fe8dfa0d3ee736a17374b144b5597",
+    "web/src/style.css": "7a83dad1b5a9dffcad37273a6d1cfd4f2bc42212cb26406cd834f2ad35f75875",
+    "scripts/access_browser_check.py": "d483ce191d5a2b172c2baadbbec2ac9c350ed130a2034a275b7937854f46cfaf",
+    "VERSION": "a66780da23103beaf12432b418508966b31a2a3a787f9468a5b6cdaa8667c1ef",
+    "pyproject.toml": "1aee9f0869d912c210a68f9901b9e4b54e064a2717b24397377b96666fbbb409",
+    "web/package.json": "8bb41006c34312acc45f7206c8f817b586135711f20bf8cdbd9cebee40e6ff02",
+    "web/package-lock.json": "93e81691d1e482a3a16cddbc3f8d9af178119afdbaac53ef31e3e7bbc52704d3",
+    "scripts/live_access_check.py": "eac41b3e7b18f79eb4fe806b75542f481a92e0763451fb26a4ae566c1dccd725",
+    "scripts/live_access_existing_check.py": "1bd050c2b01f0ec4447b29728a55305a7991a83fc1b1b244e3c0aa272aff0a98",
+    "scripts/finish_access_check.py": "add7bee402584619fedc30eac269806be9c101b76ae008fc3d251676cf9851a9"
+  }
+}

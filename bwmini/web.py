@@ -165,8 +165,10 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         return jsonify(service.lifecycle.settings())
     @app.post("/api/environment-plans")
     def environment_plan():
-        d=body(["action","logical"])
-        return jsonify(service.lifecycle.plan(d["action"],d["logical"])),201
+        raw=request.get_json(silent=True)
+        keys=["action","logical"]+(["network_tenant"] if isinstance(raw,dict) and "network_tenant" in raw else [])
+        d=body(keys)
+        return jsonify(service.lifecycle.plan(d["action"],d["logical"],network_tenant=d.get("network_tenant"))),201
     @app.post("/api/environment-plans/<pid>/confirm")
     def environment_confirm(pid):
         d=body(["confirm","logical"])
@@ -183,6 +185,30 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     def environment_observe(oid):
         body([])
         return jsonify(service.lifecycle.observe(oid))
+    @app.get("/api/access")
+    def access_settings():return jsonify(service.access.settings())
+    @app.get("/api/access/memberships")
+    def access_memberships():return jsonify(service.access.memberships())
+    @app.put("/api/tenants/<key>/label")
+    def tenant_label(key):
+        d=body(["label","revision"])
+        return jsonify(service.access.label(key,d["label"],d["revision"]))
+    @app.post("/api/access-plans/network")
+    def access_network_plan():return jsonify(service.access.network_plan(body(["changes"])["changes"])),201
+    @app.post("/api/access-plans/port")
+    def access_port_plan():
+        d=body(["profile","action"])
+        return jsonify(service.access.port_plan(d["profile"],d["action"])),201
+    @app.post("/api/access-plans/<pid>/confirm")
+    def access_confirm(pid):return jsonify(service.access.confirm(pid,body(["confirmation"])["confirmation"])),202
+    @app.get("/api/access-operations")
+    def access_history():return jsonify(operations=service.access.receipts())
+    @app.get("/api/access-operations/<oid>")
+    def access_receipt(oid):return jsonify(service.access.receipt(oid))
+    @app.post("/api/access-operations/<oid>/observe")
+    def access_observe(oid):
+        body([])
+        return jsonify(service.access.observe(oid))
     @app.get("/api/graphs")
     def graph_list():return jsonify(graphs=graphs.list())
     @app.post("/api/graphs")

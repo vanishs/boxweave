@@ -62,7 +62,9 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | TASK-011 | Implemented basic scope, 0.2.0 | SRC-051 developer gate accepted; SRC-052 graph/service/browser evidence; see PHASE_05_TASK_011 |
 | TASK-007 | Complete selected four-profile connection/recognition scope0.6.0 | SRC-070/071:95 Linux tests/build, actual four-profile MCP/read/registration/idempotence/negative tests, Codex TUI and separate ZCode desktop observations. Model/release evidence remains separate; see TASK_007_PROFILES |
 | TASK-008 | Complete selected native-guided scope0.7.0 | SRC-073..075:106 tests, build/Chromium; user Z.ai/GLM-5.3/access confirmation saved as operator report with inference unverified. Public choices and native credentials/handoff remain separate; see TASK_008_MODEL_WIZARD |
-| TASK-009..010, TASK-012..013 | Pending, continuous run authorized SRC-072 | Follow dependencies; no unsupported contract, model inference or public route inferred from authorization to implement |
+| TASK-009 | Implemented selected basic scope0.8.0 | SRC-076..078:132 tests/build/fixture Chromium; actual shared membership, TCP isolation/grant/revoke and atomic stale-CAS rejection. Separate failed trust creation and corrected fresh-lab installer configuration retained; see TASK_009_010_ACCESS |
+| TASK-010 | Implemented selected basic scope0.8.0 | Actual Web publish and shared-service/worker unpublish, TCP/UDP positive/negative client packets, exact cleanup. Config acknowledgment and delayed packet convergence are separate; no new outer public port/TLS/filter claim |
+| TASK-012..013 | Pending, continuous run authorized SRC-072 | Staged packaging/install/update/repair then integrated release acceptance. No model inference, phase6 or unsupported deployment claim inferred |
 | TASK-014 | Phase6 not authorized | Requires TASK-013 and separate phase6 decision |
 
 The [feature matrix](../verification/FEATURE_MATRIX.md) and [vertical-slice report](../verification/VERTICAL_SLICE.md) map evidence to REQ/AC and distinguish fixtures from actual target execution. No status above is a first-release acceptance claim.

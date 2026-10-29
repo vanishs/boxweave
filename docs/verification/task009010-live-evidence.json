@@ -1,0 +1,461 @@
+{
+  "source_version": "0.8.0",
+  "evidence": "live_mcp_and_packets",
+  "backend": {
+    "server": {
+      "name": "containarium-mcp-server",
+      "version": "0.120.1"
+    },
+    "tools": 109,
+    "protocol": "2024-11-05",
+    "read": "list_containers"
+  },
+  "backend_scope": {
+    "logical": "bw-v2-access-lab",
+    "created": "1793244449",
+    "provider": "0.120.1",
+    "supporting_boxweave": "0.5.1"
+  },
+  "creation_attempts": [
+    {
+      "id": "af3c824ed5a0407c97ba1708a22230ac",
+      "action": "create",
+      "logical": "v2-net-a",
+      "state": "succeeded",
+      "code": "OK",
+      "result": {
+        "account_user": "v2-net-a",
+        "identity": {
+          "exit_code": 0,
+          "hostname": "v2-net-a-container",
+          "stdout": "v2-net-a\nv2-net-a-container\n",
+          "user": "v2-net-a"
+        },
+        "network_tenant": "v2-net-a",
+        "observed_podman": false,
+        "outcome": "observed_desired_state",
+        "readiness": "identity_verified",
+        "remote_cleanup": "unverified",
+        "requested_podman": false,
+        "resource_state": "CONTAINER_STATE_RUNNING"
+      }
+    },
+    {
+      "id": "fdba0d04d3994c62afe8f35e5d024358",
+      "action": "create",
+      "logical": "v2-net-peer",
+      "state": "succeeded",
+      "code": "OK",
+      "result": {
+        "account_user": "v2-net-peer",
+        "identity": {
+          "exit_code": 0,
+          "hostname": "v2-net-peer-container",
+          "stdout": "v2-net-peer\nv2-net-peer-container\n",
+          "user": "v2-net-peer"
+        },
+        "network_tenant": "v2-net-a",
+        "observed_podman": false,
+        "outcome": "observed_desired_state",
+        "readiness": "identity_verified",
+        "remote_cleanup": "unverified",
+        "requested_podman": false,
+        "resource_state": "CONTAINER_STATE_RUNNING"
+      }
+    },
+    {
+      "id": "6729645463574bf798923815e54f1320",
+      "action": "stop",
+      "logical": "v2-net-peer",
+      "state": "succeeded",
+      "code": "OK",
+      "result": {
+        "outcome": "observed_desired_state",
+        "readiness": "not_checked",
+        "resource_state": "CONTAINER_STATE_STOPPED"
+      }
+    },
+    {
+      "id": "e306d6d311684942bec7b0b408cd66fb",
+      "action": "delete",
+      "logical": "v2-net-peer",
+      "state": "succeeded",
+      "code": "OK",
+      "result": {
+        "outcome": "observed_desired_state",
+        "readiness": "not_applicable",
+        "resource_state": "absent"
+      }
+    },
+    {
+      "id": "bf53891ee54948ad88e1b83e715c4f5d",
+      "action": "create",
+      "logical": "v2-net-b",
+      "state": "failed",
+      "code": "TRUST_FAILED",
+      "result": null
+    }
+  ],
+  "network": {
+    "atomic_conflict_no_partial_write": true,
+    "packets": [
+      {
+        "from": "v2-net-a",
+        "to": "v2-net-a",
+        "tcp_port": 18761,
+        "reachable": true,
+        "expected": true
+      },
+      {
+        "from": "v2-net-b",
+        "to": "v2-net-b",
+        "tcp_port": 18761,
+        "reachable": true,
+        "expected": true
+      },
+      {
+        "from": "v2-net-b",
+        "to": "v2-net-a",
+        "tcp_port": 18761,
+        "reachable": false,
+        "expected": false
+      },
+      {
+        "from": "v2-net-a",
+        "to": "v2-net-b",
+        "tcp_port": 18761,
+        "reachable": false,
+        "expected": false
+      },
+      {
+        "from": "v2-net-a",
+        "to": "v2-net-b",
+        "tcp_port": 18761,
+        "reachable": true,
+        "expected": true
+      },
+      {
+        "from": "v2-net-b",
+        "to": "v2-net-a",
+        "tcp_port": 18761,
+        "reachable": true,
+        "expected": true
+      },
+      {
+        "from": "v2-net-a",
+        "to": "v2-net-b",
+        "tcp_port": 18761,
+        "reachable": false,
+        "expected": false
+      },
+      {
+        "from": "v2-net-b",
+        "to": "v2-net-a",
+        "tcp_port": 18761,
+        "reachable": false,
+        "expected": false
+      },
+      {
+        "from": "same-outer-Tenant app",
+        "to": "new nested backend",
+        "protocol": "tcp",
+        "external_port": 18849,
+        "reachable": false,
+        "expected": false
+      },
+      {
+        "from": "same-outer-Tenant app",
+        "to": "new nested backend",
+        "protocol": "tcp",
+        "external_port": 18849,
+        "reachable": true,
+        "expected": true
+      },
+      {
+        "from": "same-outer-Tenant app",
+        "to": "new nested backend",
+        "protocol": "udp",
+        "external_port": 18849,
+        "reachable": false,
+        "expected": false
+      }
+    ],
+    "operations": [
+      {
+        "id": "802616849d384f84b6949525560b90c2",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "port",
+        "action": "unpublish",
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "absent"
+        }
+      },
+      {
+        "id": "fc54afa3890243a38aa9666e9bcf9cf8",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "port",
+        "action": "unpublish",
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "absent"
+        }
+      },
+      {
+        "id": "087abeee72d44434b89202744c46d83a",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "port",
+        "action": "publish",
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "present"
+        }
+      },
+      {
+        "id": "85d5231a695745e1a2ad59cfe5f342b5",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "port",
+        "action": "publish",
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "present"
+        }
+      },
+      {
+        "id": "6b9739439397487195516e932da7376a",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "network",
+        "action": "patch",
+        "result": {
+          "configured": true,
+          "connectivity_tested": false,
+          "guard_observed": true
+        }
+      },
+      {
+        "id": "dbfd0901b6c843909ebac890954d1afb",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "network",
+        "action": "patch",
+        "result": {
+          "configured": true,
+          "connectivity_tested": false,
+          "guard_observed": true
+        }
+      },
+      {
+        "id": "b1aa448cd97a40d681b5d5bf459bce57",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "network",
+        "action": "patch",
+        "result": {
+          "configured": true,
+          "connectivity_tested": false,
+          "guard_observed": true
+        }
+      },
+      {
+        "id": "b5706bd70d604021a821a81dcd97c3c2",
+        "state": "succeeded",
+        "code": "OK",
+        "evidence": "live_mcp",
+        "kind": "network",
+        "action": "patch",
+        "result": {
+          "configured": true,
+          "connectivity_tested": false,
+          "guard_observed": true
+        }
+      }
+    ]
+  },
+  "completion": {
+    "initial_udp_immediate_probe": "timeout; retained in original run log",
+    "packets": [
+      {
+        "protocol": "tcp",
+        "reachable": true,
+        "expected": true,
+        "prior_observation_errors": []
+      },
+      {
+        "protocol": "udp",
+        "reachable": true,
+        "expected": true,
+        "prior_observation_errors": []
+      },
+      {
+        "protocol": "tcp",
+        "reachable": false,
+        "expected": false,
+        "prior_observation_errors": [
+          "ConnectionRefusedError"
+        ]
+      },
+      {
+        "protocol": "udp",
+        "reachable": false,
+        "expected": false,
+        "prior_observation_errors": [
+          "ConnectionRefusedError"
+        ]
+      }
+    ],
+    "unpublish": [
+      {
+        "id": "fc54afa3890243a38aa9666e9bcf9cf8",
+        "state": "succeeded",
+        "code": "OK",
+        "created": 1793255345.1732883,
+        "deadline": 1793255945.1732883,
+        "summary": {
+          "kind": "port",
+          "action": "unpublish",
+          "profile": "hello-tcp",
+          "target": {
+            "backend": "bw-v2-access-lab",
+            "created": "1793254450",
+            "hostname": "v2-net-a-container",
+            "instance": "v2-net-a-container",
+            "logical": "v2-net-a",
+            "project": "default",
+            "provider": "containarium",
+            "user": "v2-net-a"
+          },
+          "route": {
+            "container": "v2-net-a-container",
+            "external_port": 18849,
+            "protocol": "tcp",
+            "target_ip": "10.176.220.2",
+            "target_port": 18849
+          },
+          "audience": "Private app-to-nested-backend lab; no outer public mapping",
+          "source_filtering": false,
+          "tls": false,
+          "connectivity_tested": false
+        },
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "absent"
+        },
+        "evidence": "live_mcp"
+      },
+      {
+        "id": "802616849d384f84b6949525560b90c2",
+        "state": "succeeded",
+        "code": "OK",
+        "created": 1793255400.986707,
+        "deadline": 1793256000.986707,
+        "summary": {
+          "kind": "port",
+          "action": "unpublish",
+          "profile": "hello-udp",
+          "target": {
+            "backend": "bw-v2-access-lab",
+            "created": "1793254450",
+            "hostname": "v2-net-a-container",
+            "instance": "v2-net-a-container",
+            "logical": "v2-net-a",
+            "project": "default",
+            "provider": "containarium",
+            "user": "v2-net-a"
+          },
+          "route": {
+            "container": "v2-net-a-container",
+            "external_port": 18849,
+            "protocol": "udp",
+            "target_ip": "10.176.220.2",
+            "target_port": 18849
+          },
+          "audience": "Private app-to-nested-backend lab; no outer public mapping",
+          "source_filtering": false,
+          "tls": false,
+          "connectivity_tested": false
+        },
+        "result": {
+          "connectivity_tested": false,
+          "route_state": "absent"
+        },
+        "evidence": "live_mcp"
+      }
+    ],
+    "cleanup": [
+      {
+        "logical": "v2-net-a",
+        "created": "1793254450",
+        "action": "stop",
+        "via": "independent authenticated MCP; no lifecycle adoption",
+        "observed": "CONTAINER_STATE_STOPPED"
+      },
+      {
+        "logical": "v2-net-a",
+        "created": "1793254450",
+        "action": "delete",
+        "via": "independent authenticated MCP; no lifecycle adoption",
+        "observed": "absent"
+      },
+      {
+        "logical": "v2-net-b",
+        "created": "1793254620",
+        "action": "stop",
+        "via": "independent authenticated MCP; no lifecycle adoption",
+        "observed": "CONTAINER_STATE_STOPPED"
+      },
+      {
+        "logical": "v2-net-b",
+        "created": "1793254620",
+        "action": "delete",
+        "via": "independent authenticated MCP; no lifecycle adoption",
+        "observed": "absent"
+      }
+    ],
+    "initial_tcp_unpublish_probe": "immediate packet remained reachable; original completion.log retained",
+    "hello": {
+      "stdout": "hello world\n",
+      "exit_code": 0,
+      "output_withheld": false,
+      "identity": {
+        "user": "v2-net-a",
+        "hostname": "v2-net-a-container"
+      },
+      "evidence": "live_mcp",
+      "remote_cleanup": "not_verified"
+    },
+    "restart_no_replay": true,
+    "empty_policy_records_retained": [
+      "v2-net-a",
+      "v2-net-b"
+    ],
+    "result": "passed"
+  },
+  "final_observation": {
+    "all_three_workloads_absent": true,
+    "test_routes_absent": true,
+    "outer_retained": true,
+    "new_outer_public_ports": 0
+  },
+  "private_evidence_sha256": {
+    "receipts.json": "31fe9de4f955e66522d1bdfb6ca77bd0b4ff94f9b9e922683bfb94a96be1001b",
+    "network-receipts.json": "781a10cf964b3b7e678d7bd114f49687c45a4205d46f30dbb5579173d8b91f0d",
+    "run.log": "9e8cc67408efb4def459849656265a8b54b189ee16fa1090eea508d508337e21",
+    "network-run-2.log": "acd3be165127a151463b27d31c1019e8e68ee44124eb206ce3b189b76672a765",
+    "network-run-3.log": "d532c447a75f7933d52a14b2425ff2101ef86c488b0929763432b383841f3754",
+    "completion.log": "8e99fe990268acd9c315a4446ddee2b52a6f5fa5472f443c917adfe21b17d8ac",
+    "completion-2.log": "89d5030fc20af4bbcac19e447901dc0bc4356b3a042ef691df454c1b494333ad",
+    "completion.json": "b129a237fd9be3ee1b106ce524a2c88fe83b9f40ced36a4433dd3b39a65972df"
+  }
+}

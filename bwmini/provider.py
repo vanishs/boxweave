@@ -43,6 +43,8 @@ class Provider:
     mode = "mcp"
     def __init__(self, config):
         self.config = config
+        from .access import validate_config
+        validate_config(config.get("access"))
         argv = config.get("launcher")
         if not isinstance(argv, list) or not argv or any(not isinstance(a, str) for a in argv):
             raise Fault("MCP_LAUNCHER_REQUIRED", 422)
@@ -136,7 +138,7 @@ class Provider:
             state=c["state"]
             if not isinstance(state,str):
                 raise ValueError()
-            return {"target":target,"state":state,"podman_enabled":c.get("podmanEnabled") if type(c.get("podmanEnabled")) is bool else None}
+            return {"target":target,"state":state,"network_tenant":c.get("networkTenant"),"membership_source":c.get("networkTenantSource"),"account_user":c["username"],"podman_enabled":c.get("podmanEnabled") if type(c.get("podmanEnabled")) is bool else None}
         except (KeyError,ValueError,TypeError):
             raise Fault("TARGET_FORMAT_UNSUPPORTED") from None
 
@@ -158,6 +160,9 @@ class Provider:
                     raise Fault("CONTRACT_UNSUPPORTED")
                 args.update(cpu=spec["cpu"],memory=spec["memory"],disk=spec["disk"],
                             image="images:ubuntu/24.04",enable_podman=False,ssh_keys=[spec["ssh_public_key"]])
+                if spec.get("_network_tenant") is not None:
+                    if "network_tenant" not in props:raise Fault("CONTRACT_UNSUPPORTED")
+                    args["network_tenant"]=spec["_network_tenant"]
             elif action=="start":
                 if "waitForReady" in props:
                     args["waitForReady"]=False

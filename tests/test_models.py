@@ -46,11 +46,14 @@ class ModelTests(Base):
         self.assertNotIn('SYNTHETIC_SECRET',s);self.assertEqual(value['inference'],'unverified')
     def test_schema_four_upgrade_preserves_projects_and_lifecycle_state(self):
         project=self.bind()
-        with self.store.db() as db:db.execute('DROP TABLE model_selections');db.execute('PRAGMA user_version=4')
+        with self.store.db() as db:
+            db.execute('DROP TABLE model_selections')
+            for table in ('access_claims', 'access_events', 'access_operations', 'access_plans', 'access_routes', 'tenant_labels'):db.execute('DROP TABLE '+table)
+            db.execute('PRAGMA user_version=4')
         upgraded=Store(self.store.path)
         self.assertEqual(upgraded.project(project['id'])['revision'],1)
         self.assertEqual(Models(upgraded).read()['revision'],0)
-        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],5)
+        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],6)
     def test_http_auth_csrf_invalid_fields_and_secret_redaction(self):
         self.store.admin(HASH);c=create_app(self.s,'http://localhost',self.root,secure=False,clock=lambda:self.now[0]).test_client()
         self.assertEqual(c.get('/api/model-wizard').status_code,401)
