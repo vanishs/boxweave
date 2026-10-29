@@ -1,0 +1,124 @@
+{
+  "result": "passed",
+  "os": "Windows",
+  "profiles": [
+    {
+      "profile": "codex/windows/native",
+      "agent_version": "codex-cli 0.165.0-alpha.1.2",
+      "diagnosis": {
+        "profile": "codex/windows/native",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "registration": {
+          "result": "verified_cli",
+          "agent_ui": "unverified"
+        }
+      },
+      "idempotent": true,
+      "diagnose_config_unchanged": true,
+      "negatives": [
+        "PAYLOAD_MISMATCH",
+        "AGENT_VERSION_CHANGED",
+        "wrong_pin_stopped_before_config_write"
+      ]
+    },
+    {
+      "profile": "codex/windows/wsl",
+      "agent_version": "codex-cli 0.165.0-alpha.1.2",
+      "diagnosis": {
+        "profile": "codex/windows/wsl",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "registration": {
+          "result": "verified_cli",
+          "agent_ui": "unverified"
+        }
+      },
+      "idempotent": true,
+      "diagnose_config_unchanged": true,
+      "negatives": [
+        "PAYLOAD_MISMATCH",
+        "AGENT_VERSION_CHANGED",
+        "wrong_pin_stopped_before_config_write",
+        "missing_distro_no_install_or_fallback"
+      ]
+    },
+    {
+      "profile": "zcode/windows/native",
+      "agent_version": "0.17.0",
+      "diagnosis": {
+        "profile": "zcode/windows/native",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "registration": {
+          "result": "verified_agent_core",
+          "agent_ui": "unverified",
+          "tool_count": 101
+        }
+      },
+      "idempotent": true,
+      "diagnose_config_unchanged": true,
+      "negatives": [
+        "PAYLOAD_MISMATCH",
+        "AGENT_VERSION_CHANGED",
+        "wrong_pin_stopped_before_config_write"
+      ]
+    },
+    {
+      "profile": "zcode/windows/wsl",
+      "agent_version": "0.17.0",
+      "diagnosis": {
+        "profile": "zcode/windows/wsl",
+        "connection": {
+          "protocol": "2024-11-05",
+          "tool_count": 101,
+          "actual_read": "list_containers",
+          "result": "passed",
+          "remote_cleanup": "unverified"
+        },
+        "model": "not_requested",
+        "agent_ui": "unverified",
+        "overall": "incomplete",
+        "registration": {
+          "result": "verified_agent_core",
+          "agent_ui": "unverified",
+          "tool_count": 101
+        }
+      },
+      "idempotent": true,
+      "diagnose_config_unchanged": true,
+      "negatives": [
+        "PAYLOAD_MISMATCH",
+        "AGENT_VERSION_CHANGED",
+        "wrong_pin_stopped_before_config_write",
+        "missing_distro_no_install_or_fallback"
+      ]
+    }
+  ],
+  "model": "not_requested",
+  "ui": "separate_observation_required"
+}

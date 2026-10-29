@@ -36,3 +36,5 @@ Requested TASK-002/003 run complete (SRC-063..065): [TASK-002 recovery/observati
 TASK-005 current minimal chain complete (SRC-068): [current-source actual evidence and harnesses](verification/TASK_005_CURRENT.md). TASK-006/007 continue under explicit SRC-066; dedicated lifecycle create/stop/start/delete approval SRC-067 does not include existing resources or new exposure.
 
 - [TASK-006 lifecycle](verification/TASK_006_LIFECYCLE.md).
+
+- [TASK-007 four profiles](verification/TASK_007_PROFILES.md), [client setup](../clients/README.md).

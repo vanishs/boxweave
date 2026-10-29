@@ -1,6 +1,10 @@
 # Phase status — authority
 
-## Current authority: TASK-005 complete; TASK-006/007 running
+## Current authority: TASK-007 complete; remaining phase5 run authorized
+
+SRC-070 confirms actual ZCode/WSL desktop connection; SRC-071 records final0.6.0 four-profile Windows matrix,95 Linux tests and build. TASK-007 connection/recognition scope complete, model/inference and release remain separate. TASK-006 scoped implementation is committed0b28ee3 with first real success and final trust-failure evidence explicitly distinguished. SRC-072 requests remaining work in dependency order; continue TASK-008, then supported TASK-009/010 and packaging/release. No extra phase gate before authorized routine implementation; destructive/public/model actions still require their concrete existing authorization. No phase6 or release-ready claim.
+
+## Historical authority: TASK-005/006/007 continuous run
 
 SRC-066 authorizes these three tasks consecutively. Current0.4.0 TASK-005 minimal native chain passed actual HTTP/Chromium/MCP success and trust/identity failure checks (SRC-068), combined with distinct native enrollment/TUI evidence and SRC-051 developer gate. TASK-006 uses only separately approved new inner lifecycle target/cleanup SRC-067; TASK-007 still needs its own actual four-profile evidence. No all-release claim or new exposure.
 

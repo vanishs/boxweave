@@ -1,0 +1,11 @@
+{
+  "clients/profile_client.py": "44f9372f87d03db20ad73b55e9988530fdc6232efadf4beace8403ebe4e69e63",
+  "clients/wsl/prepare_identity.py": "450bbf2bdddb8d29251b626bfdec8dfc957c06607f173e69008d93215fedd709",
+  "clients/README.md": "572d556f3c9b006a1590364f0d32aaf9ed06e456c010663bac478f5446fc8489",
+  "tests/test_profiles.py": "03883b16ed9a8d5771c42882ddb5b34ee48d2b301d23b0dfeae953a9cc28d964",
+  "scripts/windows_profile_check.py": "2d1298e1b8dee16e06e9f251eb24cf293974ca9f7a9dee0daa7476eb110abfe6",
+  "VERSION": "97a5d6e540a6120d09c39ddb667e0e8e2bac7fcc2ffef813b82e08fd60365bce",
+  "pyproject.toml": "655fe0140828cc2cc8bbd582b9d127100a8a4536808aa1056e1bead02070d499",
+  "web/package.json": "f115208ad82a5d2dc6c9f44ed58bf15abbfa297d5e474fa26a31d5b3ed91a4fa",
+  "web/package-lock.json": "3e6bab03f9b7c305225f67871357cb6d54f7e2a10daa84c5a3422aed1fdecaec"
+}

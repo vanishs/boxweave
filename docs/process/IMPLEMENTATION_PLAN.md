@@ -60,7 +60,9 @@ First five tasks build and prove a deliberately small path; later tasks cover al
 | TASK-005 | Complete selected minimal native/current0.4.0 chain | SRC-065 native public-key enrollment/registration/diagnosis; SRC-057 separate human TUI/read; SRC-068 current HTTP/Chromium real hello/receipt/history/restart/no replay and trust/identity failures. Gate SRC-051 accepted; other profiles/release remain TASK-007/013 |
 | TASK-006 | Implemented scoped lifecycle0.5.0 | SRC-069:82 tests/fixture browser pass; first real five-action cycle passed. Final hardening repeat stops on real TRUST_FAILED; reconciler remains an environment limitation. Exact approved cleanup verified, original hello preserved. See TASK_006_LIFECYCLE for distinct evidence and recovery limits |
 | TASK-011 | Implemented basic scope, 0.2.0 | SRC-051 developer gate accepted; SRC-052 graph/service/browser evidence; see PHASE_05_TASK_011 |
-| TASK-006..010, TASK-012..014 | Not started | Keep per-task prerequisites and real-client/release evidence obligations |
+| TASK-007 | Complete selected four-profile connection/recognition scope0.6.0 | SRC-070/071:95 Linux tests/build, actual four-profile MCP/read/registration/idempotence/negative tests, Codex TUI and separate ZCode desktop observations. Model/release evidence remains separate; see TASK_007_PROFILES |
+| TASK-008..010, TASK-012..013 | Pending, continuous run authorized SRC-072 | Follow dependencies; no unsupported contract, model inference or public route inferred from authorization to implement |
+| TASK-014 | Phase6 not authorized | Requires TASK-013 and separate phase6 decision |
 
 The [feature matrix](../verification/FEATURE_MATRIX.md) and [vertical-slice report](../verification/VERTICAL_SLICE.md) map evidence to REQ/AC and distinguish fixtures from actual target execution. No status above is a first-release acceptance claim.
 

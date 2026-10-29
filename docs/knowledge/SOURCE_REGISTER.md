@@ -121,3 +121,9 @@ SRC-067 — Explicit approval to create inner v2-lifecycle-e2e in existing bw-v2
 SRC-068 — Current0.4.0 source/new frontend revalidated through independent app MCP: real HTTP and Chromium fixed hello, receipts/history and API/worker restart no replay; wrong public pin SSH255/normal trust preserved and identity mismatch0 hello. Actual outputs/IDs/archive hash and initial test-path correction in verification/TASK_005_CURRENT.md. Minimal selected native TASK-005 complete; native enrollment/TUI evidence remains explicitly separate; no release/profile overclaim.
 
 SRC-069 — TASK-006 0.5.0 lifecycle implementation: 82 Linux tests and Chromium fixture passed; first actual Web/MCP five-action cycle passed. Final scope repeat stopped TRUST_FAILED on reused-IP mismatch; reconciler failed, no bypass or repair. Approved exact cleanup verified; original preserved. See verification/TASK_006_LIFECYCLE.md for actual operations, limits and separate success/failure evidence.
+
+SRC-070 — Operator manually trusted only the dedicated ZCode workspace, then confirmed the exact Ubuntu WSL strict-SSH/18447/new-backend argv and green connected-and-available desktop status. This is user UI evidence, separate from automatic core/discovery/read checks.
+
+SRC-071 — TASK-007 0.6.0 final actual four-profile Windows matrix passed with101 tools/read-only call, exact CLI/core registration, byte-idempotence/config preservation, payload/version/pin failures and absent distro refusal.95 non-root Linux tests29.282s/build passed. Separate TUI/native desktop/SRC-070 observations; no model request or global config changes. See verification/TASK_007_PROFILES.md.
+
+SRC-072 — Developer requests listing remaining work and completing compatible remaining tasks consecutively. Phase5 implementation continues in dependency order; no phase6, arbitrary model spending, unrelated destructive operation or new public-exposure authorization is inferred.
