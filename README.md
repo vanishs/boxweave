@@ -155,3 +155,7 @@ Unknown receipts offer Check current target; matching identity is not proof that
 ## Native identity preparation and independent diagnosis (0.4.0)
 
 The selected Windows-native Codex path now supports preparing a fresh local Ed25519 identity with private ACLs, installing only its public half through an existing authorized bootstrap channel, trusted registration, and independent diagnosis of actual connection versus registration. Existing identities still work; old keys/config/trust are not silently replaced. No private key/sign-in data is copied and no host SSH configuration is repaired. Follow the [reviewed entry points, commands, recovery and actual native evidence](docs/verification/TASK_003_COMPLETION.md). WSL/ZCode and release installers remain separate work.
+
+## Maintenance handoff
+
+Start at [documentation index](docs/INDEX.md) and [final handoff](docs/process/FINAL_HANDOFF.md). Current phase status has one owner: [PHASE_STATUS](docs/process/PHASE_STATUS.md). Historical completion observations below/elsewhere retain only their recorded scope.

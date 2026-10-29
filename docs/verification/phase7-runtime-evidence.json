@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "evidence_class": "actual assigned-LXC execution with fixture infrastructure; no new live Provider acceptance",
+  "baseline_commit": "cb16e6d32f6443070a141da7a67e884ea1267fb8",
+  "runtime_version": "0.9.1",
+  "identity": {
+    "whoami": "boxweave-tenant-dev",
+    "hostname": "boxweave-tenant-dev-container"
+  },
+  "environment": {
+    "python": "3.12.3",
+    "node": "v18.19.1"
+  },
+  "validation": {
+    "state": "passed",
+    "started_utc": "2026-10-29T22:23:36.842919+00:00",
+    "deadline_utc": "2026-10-29T22:33:36.842919+00:00",
+    "scope": "fixture-only tests/build; no live MCP/profile enrollment/deployment",
+    "steps": [
+      {
+        "name": "knowledge",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 0.114
+      },
+      {
+        "name": "unit",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 65.241
+      },
+      {
+        "name": "build",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 5.301
+      },
+      {
+        "name": "browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 5.639
+      },
+      {
+        "name": "history_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 4.585
+      },
+      {
+        "name": "graph_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 5.888
+      },
+      {
+        "name": "access_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 12.722
+      },
+      {
+        "name": "model_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 3.93
+      },
+      {
+        "name": "lifecycle_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 8.151
+      },
+      {
+        "name": "binding_browser_check",
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 6.69
+      }
+    ]
+  },
+  "unit_summary": [
+    "----------------------------------------------------------------------",
+    "Ran 168 tests in 64.600s",
+    "",
+    "OK"
+  ],
+  "log_sha256": {
+    "graph_browser_check.log": "701da7f3272120bf44f43b93c7cafa7f2da4dcf5e432948c4a025d32b0ba2ed4",
+    "knowledge.log": "276353e257969c47cc381c32a4005456540f6fdf1195931c2b99cbf4d5c69803",
+    "model_browser_check.log": "d973b370bb4cb370a1ecee269579180a7006a452b0a05bb60ae2dcb7611d6c4e",
+    "history_browser_check.log": "657dac46823f31b4e6ef14b56f55850ad10025bca80018655c91cacd00272d9c",
+    "browser_check.log": "dd512c0e8eb926ee83c5b8caa6dce5d3636fdf4a3405449b1658b78da39d91cc",
+    "unit.log": "0a19e30818a95370e8d11519167a6238e288db16e5ef02acb60f78f6ef8d365f",
+    "lifecycle_browser_check.log": "9194faa16abf570606abbddbab925adc9b86d0c5811d7a768a4a3e08fdafe39b",
+    "build.log": "694b1e6253c90353f286bd969cbbe2ed39c6c39cc50a4da873445bb783f28de3",
+    "access_browser_check.log": "896a7b6a7f7179bbcd75d2dfee7e5d85ca2c00b0eb74325c3abdb454ccc27178",
+    "binding_browser_check.log": "14d92739f3bdb8301d80e6f3620af0e966669c33e56ec95d6140bb6df6214df0"
+  },
+  "source_sha256": {
+    "scripts/check_knowledge.py": "01c2ebba4ca95ab7b0892cca246e3f74e32b50399e3b1a3cc422792dec5acbb9",
+    "scripts/validate.py": "750c57c45cd68f91fe4e0e623e83fffe7c3674016ba40a986f454f823457a7be",
+    "scripts/binding_browser_check.py": "eb63a0ff171c96bf0d9fcfa20d3bf8a8299ad751eb7f6d93bf8a1eb43d394c4a",
+    "tests/test_knowledge.py": "8f19df1d78d0373a48e306ffa718923acdc92f22d2e65dd986207bf457585720",
+    "examples/client-profiles.public.json": "adb431d1ecc898e4bf0e22820c16c387ed63f6edcd6215b7ed0457d592596372"
+  },
+  "cold_start": {
+    "method": "fresh public source copy plus fresh subprocess and manual authority review; not independent reviewer",
+    "previous_runtime_copied": false,
+    "dependencies": "existing venv and node_modules symlinks; not fresh installation",
+    "knowledge": {
+      "result": "passed",
+      "errors": [],
+      "documents_checked": 69,
+      "authority_roles": 16,
+      "requirements": 18,
+      "acceptance": 18,
+      "cold_start_routes": {
+        "goals": "docs/product/PRODUCT.md",
+        "boundaries": "docs/product/SCOPE.md",
+        "run": "docs/INSTALL.md",
+        "design": "docs/design/ARCHITECTURE.md",
+        "tests": "docs/verification/TEST_STRATEGY.md",
+        "risks": "docs/verification/OPEN_RISKS.md",
+        "legacy": "docs/knowledge/LEGACY_SYNC.md",
+        "state": "docs/process/PHASE_STATUS.md"
+      },
+      "scope": "read-only local links/authority/ID coverage/navigation; not semantic proof or historical hash revalidation"
+    },
+    "browser": {
+      "result": "passed",
+      "infrastructure": "fixture; zero provider execution calls",
+      "browser": "141.0.7390.37",
+      "project_identity_preserved": true,
+      "reselect_edit_unbind_reload_rebind": true,
+      "stale_confirmation_rejected": true,
+      "queued_receipt_retained_failed_without_execution": true,
+      "javascript_errors": [],
+      "public_web_profile_downloads": {
+        "profiles": 4,
+        "files": 8,
+        "sha256": "1fb935dab84cf8876ddd8e37d089a5c5eaf9be11fc40b091c1ea679843b5d61c"
+      },
+      "profile_input_kind": "committed_nonexecuting_fixture",
+      "artifact_directory": "/home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a/.runtime/phase7/cold-7120960fcad6/.runtime/binding-browser/be18bf3f1311"
+    },
+    "exit_code": 0
+  },
+  "prior_artifact_preserved": {
+    "path": ".runtime/phase6/browser-generated-profiles.zip",
+    "sha256": "8e56189c53f886d1cc81b432d2df814c7d6638d80204e6301f83d53e6a343644",
+    "matches_pre_run": true
+  },
+  "initial_failure": {
+    "reason": "two existing historical screenshot assets omitted from documentation sync, restored from public checkout; no expectation weakened",
+    "result": {
+      "state": "failed",
+      "started_utc": "2026-10-29T22:22:54.966607+00:00",
+      "deadline_utc": "2026-10-29T22:32:54.966607+00:00",
+      "scope": "fixture-only tests/build; no live MCP/profile enrollment/deployment",
+      "steps": [
+        {
+          "name": "knowledge",
+          "state": "failed",
+          "exit_code": 1,
+          "elapsed_seconds": 0.115
+        }
+      ]
+    }
+  },
+  "limits": [
+    "No runtime product code change",
+    "No new live MCP/workload/enrollment/network/model/deployment test",
+    "Cold start reused installed dependencies and had no independent human/Agent reviewer",
+    "RISK-604 through RISK-609 remain unchanged"
+  ],
+  "instructions_sha256": "50b1b7a9d33a8e70738e236655c96725e17e028a8fc2de45734e4afbf50f5cf4"
+}

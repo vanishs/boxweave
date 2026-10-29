@@ -126,3 +126,7 @@ All four original startup checks are satisfied; see [entry audit](../verificatio
 ## Phase5 iteration4 — TASK-002a (SRC-061/062)
 
 Split TASK-002's remaining scope: TASK-002a receipt discovery (complete0.2.3, REQ-007/011 and AC-007/011 read subset), TASK-002b state-write failure/crash-window coverage (planned), other provider reconciliation remains pending. TASK-002a needs existing storage/HTTP foundations; it adds no provider write and does not waive TASK-006 dependencies. [Actual evidence](../verification/TASK_002A_RECEIPT_HISTORY.md):46 tests, TypeScript/Vite, Chromium history plus original hello/Graph regressions passed. Stop this slice; suggest the bounded TASK-002b before expanding mutations.
+
+## TASK-015 — Phase7 maintenance
+
+Complete in the tested maintenance scope, SRC-089..091. Consolidate current authority, retain history, remove ignored-state dependency from fixture browser regression, provide bounded routine validation and cold-start handoff. No product runtime change. Completion evidence: [phase7 review](../verification/PHASE_07_REVIEW.md); current state: [PHASE_STATUS](PHASE_STATUS.md).

@@ -1,5 +1,7 @@
 # ADR-005 — Phase 4 implementation boundary and evidence
 
+Status: historical phase-four checkpoint. Later real execution evidence and current architecture supersede its pending gate; see [decision index](INDEX.md).
+
 Status: implemented subset, live acceptance blocked; 2026-10-28. Inputs: SRC-030/032, TASK-001 through TASK-005.
 
 The approved target lacked an installed managed MCP launcher and had no reviewed independent application launch/credential path. Alternatives: borrow the existing Agent token, mint a new identity, or preserve a runnable explicit-fixture slice while reporting the live gate incomplete. The approved plan forbids the first two; developer subsequently requested preservation. Choose the third. This does not change the required live acceptance or remove any selected feature.

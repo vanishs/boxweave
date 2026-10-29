@@ -101,3 +101,7 @@ TASK-007 / SRC-070..072 / 0.6.0: selected four-profile connection/registration/U
 
 
 TASK-008 / SRC-073..075 / 0.7.0: native-guided GLM wizard complete in selected scope; schema5 revisioned public intent, shared CLI/Web, native credentials only and operator report distinct from inference.106 tests/build/Chromium pass; user confirms Z.ai/GLM-5.3/access. See TASK_008_MODEL_WIZARD.md for independent native and fixture evidence. No model request, provider repair or public deployment. Continue SRC-072 network/ports and dependent packaging/release.
+
+## Routine maintenance validation
+
+Use `python scripts/check_knowledge.py` for authority/links/traceability and non-root assigned-LXC `python scripts/validate.py --browser` for the existing suite, build and seven fixture browser flows. See [maintenance](../process/MAINTENANCE.md) for prerequisites, deadline, logs, evidence classes and separately authorized live checks. This runner never invokes live lab drivers.

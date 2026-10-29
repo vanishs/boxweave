@@ -80,3 +80,7 @@ Given a caller authorized for target A only, attempts to select another owner/ba
 ## Selected launch matrix and model boundary
 
 AC-001, AC-003 and AC-017 must cover Windows-hosted Codex/native SSH, Codex/WSL SSH, ZCode/native SSH and ZCode/WSL SSH. Explicit WSL distro and client configuration precedence must be tested. WSL-hosted Agent CLIs and other platforms are deferred. ZCode model access is verified separately from MCP; AC-015 includes native-settings handoff where a stable automated contract is unavailable, with pending status until actual completion. No provider credential goes through Web. The exact GLM model/endpoint is recorded per tested version. AC-011 through AC-015 are release-required features, not optional deferrals; their basic operation boundaries are in SCOPE.
+
+## Maintenance authority
+
+Normative outcomes remain unchanged in phase7. [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) owns implementation/test/evidence links; [MAINTENANCE](../process/MAINTENANCE.md) defines how a newly authorized outcome changes these IDs. Historical reports do not redefine acceptance.

@@ -1,0 +1,30 @@
+{
+  "authority": {
+    "product": "docs/product/PRODUCT.md",
+    "requirements": "docs/product/REQUIREMENTS.md",
+    "acceptance": "docs/product/ACCEPTANCE.md",
+    "scope": "docs/product/SCOPE.md",
+    "architecture": "docs/design/ARCHITECTURE.md",
+    "decisions": "docs/design/ADR/INDEX.md",
+    "tasks": "docs/process/IMPLEMENTATION_PLAN.md",
+    "traceability": "docs/verification/FEATURE_MATRIX.md",
+    "sources": "docs/knowledge/SOURCE_REGISTER.md",
+    "legacy": "docs/knowledge/LEGACY_SYNC.md",
+    "risks": "docs/verification/OPEN_RISKS.md",
+    "status": "docs/process/PHASE_STATUS.md",
+    "handoff": "docs/process/FINAL_HANDOFF.md",
+    "maintenance": "docs/process/MAINTENANCE.md",
+    "install": "docs/INSTALL.md",
+    "tests": "docs/verification/TEST_STRATEGY.md"
+  },
+  "cold_start": {
+    "goals": "product",
+    "boundaries": "scope",
+    "run": "install",
+    "design": "architecture",
+    "tests": "tests",
+    "risks": "risks",
+    "legacy": "legacy",
+    "state": "status"
+  }
+}

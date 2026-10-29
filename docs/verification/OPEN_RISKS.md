@@ -1,4 +1,4 @@
-# Phase6 risk register — 0.9.1
+# Current risk register — 0.9.1
 
 Owner is the project maintainer/operator unless specified. P0/P1 = blocks the selected claim until resolved or explicitly cannot accept; P2 = bounded operational/coverage limitation. Source: [comparison](COMPARISON_REPORT.md), SRC-084..088. No reviewed P0/P1 item remains open. Residual P2 entries do not silently certify the unverified property.
 
@@ -14,4 +14,4 @@ Owner is the project maintainer/operator unless specified. P0/P1 = blocks the se
 | RISK-608 | P2 accepted trust assumption | Operator-delivered source/pin/digests and broad upstream credential authority remain trusted; generated descriptor does not grant per-tool least privilege | Single trusted operator DEC005. Public setup never contains private key/JWT; helper/payload hashes, exact versions, local ACL/pin and registration gates remain. No publisher signature or general secret-detector completeness claimed |
 | RISK-609 | P2 accepted recovery/convergence boundary | Unknown commands cannot be replayed/adopted; dispatched work cannot be cancelled by unbinding; route acknowledgment is not instant packet convergence | UI warning and retained receipts/revision gates; previous real TCP/UDP delay evidence. Reconcile original identities and inspect saved outcomes before a fresh explicit action; no whole-host rollback promise |
 
-Phase7 source cleanup/optimization entry: eligible with the tested0.9.1 source and these explicit bounds; not authorization to begin phase7 or publish/deploy. No pending product decision remains after SRC-086. A future required claim becoming unsupported must be reopened as cannot accept, not hidden under a P2 label.
+Phase7 maintenance is authorized by SRC-089; its completion evidence belongs in [PHASE_07_REVIEW](PHASE_07_REVIEW.md). It does not resolve these operational bounds or authorize publication/deployment. No pending product decision remains after SRC-086. A future required claim becoming unsupported must be reopened as cannot accept, not hidden under a P2 label.

@@ -28,3 +28,7 @@ Evidence classes: constraint = current authorized governance; legacy-derived = i
 | REQ-018 | Enforce authorized operation/target boundaries; reject untrusted host/project/owner overrides, require explicit destructive/exposure scope, and never broaden provider privileges or change host security as silent repair | P0 / constraint + legacy-derived | SRC-008/010/016/023; prevent authority confusion | REQ-004; DEC-005 | AC-018 |
 
 Developer confirmation is recorded in SRC-026; all rows remain first-release obligations. Phase 4 implementation was authorized by SRC-030, with partial evidence in FEATURE_MATRIX; phase 5 remains gated. Historical implementation choices such as a mandatory Web install, a specific Python/React/Caddy stack, fixed resource sizes, old MCP version or CLI exit codes are not automatically requirements.
+
+## Maintenance authority
+
+Normative outcomes remain unchanged in phase7. [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) owns implementation/test/evidence links; [MAINTENANCE](../process/MAINTENANCE.md) defines how a newly authorized outcome changes these IDs. Historical reports do not redefine acceptance.

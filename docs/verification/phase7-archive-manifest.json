@@ -1,0 +1,38 @@
+[
+  {
+    "source": "docs/INDEX.md",
+    "archive": "docs/INDEX_HISTORY.md",
+    "original_sha256": "dcaef1ee7f184f87c1e94d5e7f9fbc78cd895ead772c58b0cbda8597037fc94f",
+    "original_bytes": 8407
+  },
+  {
+    "source": "docs/process/PHASE_STATUS.md",
+    "archive": "docs/process/PHASE_STATUS_HISTORY.md",
+    "original_sha256": "31a4ac68949a6f7eb2eaf03af8103817c04dc90758ad48c1f45ea69debecdae1",
+    "original_bytes": 23750
+  },
+  {
+    "source": "docs/process/HANDOFF.md",
+    "archive": "docs/process/HANDOFF_HISTORY.md",
+    "original_sha256": "b7d83952cb02ce6fbb6f61da93bd74bb88bed5b3024d862cf5b35e96015fdfce",
+    "original_bytes": 48763
+  },
+  {
+    "source": "docs/verification/FEATURE_MATRIX.md",
+    "archive": "docs/verification/FEATURE_MATRIX_HISTORY.md",
+    "original_sha256": "7e739f97cbe2dbe9f4ba838a2daaaa6bc142b480644d9b72fc4dd6bfd4ab8ac2",
+    "original_bytes": 22121
+  },
+  {
+    "source": "docs/knowledge/OPEN_QUESTIONS.md",
+    "archive": "docs/knowledge/OPEN_QUESTIONS_HISTORY.md",
+    "original_sha256": "4d60325cecd7f397712681dd2ba5b69b5ef963e6e176f525061d8b93cba2a127",
+    "original_bytes": 24018
+  },
+  {
+    "source": "docs/design/ARCHITECTURE.md",
+    "archive": "docs/design/ARCHITECTURE_HISTORY.md",
+    "original_sha256": "79f7a901700d77865a0933c5dac4ae0a8ad0c14575b6ef6ea654c132212033f5",
+    "original_bytes": 21954
+  }
+]
