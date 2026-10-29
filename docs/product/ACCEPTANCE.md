@@ -1,6 +1,6 @@
 # Acceptance criteria — behavioral authority
 
-All criteria are **selected behavioral baseline / partially evidenced**, within the developer-approved basic scope (SRC-026). They define release acceptance; current phase 4 subset results are in ../verification/FEATURE_MATRIX.md and do not constitute full passes. Each AC maps to [REQUIREMENTS](REQUIREMENTS.md); sources and priorities are maintained there. A conditional AC is not waived as passed: it is out of selected scope only after an explicit decision. Supported/unsupported states must remain distinguishable.
+All criteria are the selected behavioral baseline within the developer-approved basic scope (SRC-026). Current TASK-012/0130.9.0 dispositions for all18 criteria are in [the release report](../verification/TASK_012_013_RELEASE.md), with actual/fixture/human evidence and explicit unclaimed deployment extensions separated. Phase5 selected implementation/evidence is ready for developer acceptance, not universal platform certification or phase6 authorization. Each AC maps to [REQUIREMENTS](REQUIREMENTS.md); sources and priorities are maintained there. A conditional AC is not waived as passed: it is out of selected scope only after an explicit decision. Supported/unsupported states must remain distinguishable.
 
 ## AC-001 — Enrollment preserves intent (REQ-001)
 

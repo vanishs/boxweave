@@ -31,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose"])
+    p.add_argument("action",choices=["init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -89,18 +89,20 @@ def main():
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
     try:
-        if a.action.startswith("model-"):
+        if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):
             c=read_config(a.config);model_store=Store(c["database"])
         else:
             c,s=load(a.config)
-        if a.action=="init-admin":
+        if a.action in ("init-admin","reset-admin"):
+            if a.action=="reset-admin" and input("Type RESET to replace the local administrator and revoke browser sessions: ")!="RESET":
+                raise Fault("RESET_DECLINED",422)
             password=getpass.getpass("New local administrator password: ")
             if not 12<=len(password)<=1024:
                 raise Fault("PASSWORD_LENGTH",422)
             if password!=getpass.getpass("Repeat password: "):
                 raise Fault("PASSWORD_MISMATCH",422)
-            s.store.admin(generate_password_hash(password))
-            print("Administrator initialized; no password recorded.")
+            (model_store.reset_admin if a.action=="reset-admin" else model_store.admin)(generate_password_hash(password))
+            print("Administrator saved; browser sessions revoked on reset; no password recorded.")
         elif a.action=="worker":
             s.worker(a.once)
         elif a.action=="serve":

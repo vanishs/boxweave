@@ -1,4 +1,8 @@
-# Phase 4 feature/evidence matrix
+# Feature/evidence matrix — selected phase5 scope0.9.0
+
+Current authority SRC-079..083: TASK-012 and TASK-013 complete in the declared tested scope; all18 selected AC/REQ mappings and actual evidence are listed in [the integrated release report](TASK_012_013_RELEASE.md).153 tests/build and separate actual four-profile, installed-Web/package and native network/packet evidence pass. Model choice/access uses the prior human-confirmed native handoff, not inference. Failed candidates and repaired states remain explicit. Private loopback installation/user services are verified; public TLS rollout, fresh bare-metal/other server runtimes, reboot/LXC boot.autostart and effective confinement are unclaimed. Phase6 comparison is not authorized. The historical rows below describe earlier checkpoints, not current missing features.
+
+## Historical phase4 matrix
 
 All rows describe partial minimum-system progress, not first-release completion. Sources: SRC-030..032; details in [VERTICAL_SLICE](VERTICAL_SLICE.md). No deferred phase-5 feature is silently dropped.
 

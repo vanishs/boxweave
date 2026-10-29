@@ -1,5 +1,7 @@
 # Open questions and risks
 
+Current disposition0.9.0/SRC-079..083 supersedes the earlier implementation blockers below: selected TASK-012/013 and all18 AC dispositions are complete/evidenced in [the release report](../verification/TASK_012_013_RELEASE.md). No remaining selected phase5 implementation blocker. Retain operational limits: single trusted operator and broad upstream credential authority; unknown writes never replay/adopt; convergence delays are not immediate connectivity proof; pre-upgrade consistent backup is required for downgrade; no whole-host rollback. Fresh public TLS rollout, other server runtimes/clean bare metal, reboot/LXC boot.autostart, effective confinement and inference are unclaimed extensions, not fabricated passes. Phase6 comparison still requires authorization. Historical questions below remain traceability, not a declaration that already-evidenced features are missing.
+
 No item below is silently resolved by the phase 1 document commit. Sources: [register](SOURCE_REGISTER.md). Priority P0 = product-scope decision before design; P1 = acceptance/safety concern before relevant implementation/release; P2 = later operational/maintenance evidence.
 
 | ID | Priority/status | Unknown or risk and impact | Source | How to resolve / owner and gate |

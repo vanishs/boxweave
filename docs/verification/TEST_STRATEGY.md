@@ -1,6 +1,6 @@
 # Test strategy and experiment plan
 
-Status: original phase 3 strategy with an executed phase 4 subset; see VERTICAL_SLICE for actual results. Authority: approved REQ/AC (SRC-026). Legacy B/F observations inform regression selection but do not override new acceptance. Test/task names below describe future obligations; the current implementation suite covers only the minimum slice; planned release coverage is not implied.
+Status: selected phase5 obligations executed through TASK-012/0130.9.0, with153 non-root Linux tests59.570s,21 distribution cases, actual systemd parser, built UI, actual installed-browser/package/failure-repair and Windows four-profile regression/guarded fixed commands. See [integrated report](TASK_012_013_RELEASE.md), [package evidence](task012-live-evidence.json), [client evidence](task013-profiles.json) and [exact source](task012013-source-manifest.json). Original strategy below is historical planning, not a substitute for the named actual results. Fixture/provider/packet/human/native-model evidence and unsupported deployment claims remain separate. No phase6 or inference ran.
 
 ## Layers and evidence
 

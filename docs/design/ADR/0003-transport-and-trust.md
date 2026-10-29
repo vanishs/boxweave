@@ -2,6 +2,8 @@
 
 Status: selected for phase 4 validation. Inputs: REQ-001, REQ-002, REQ-003, REQ-016, REQ-018; SRC-008, SRC-010, SRC-026.
 
+TASK-012/0130.9.0 adds a reviewed standalone installer with independently delivered expected archive digest and public member/source manifest; payload verification precedes package execution. Real tamper refusal, marker/repair and four strict native/WSL transport fixed-command checks passed. Existing SSH/provider credentials and daily profiles are preserved; no publisher-signature or inference claim is inferred. See [release evidence](../../verification/TASK_012_013_RELEASE.md).
+
 Options: preserve upstream restricted SSH/MCP and add fixed REST application adapter; replace with custom MCP gateway; expose a new general remote HTTP/shell proxy. Select the first. It preserves provider metadata and avoids an unnecessary credential-bearing gateway. CLI/Web plans govern their own operations; they cannot restrict direct upstream Agent calls. Single trusted operator accepts the disclosed residual upstream authority; no team-RBAC claim is made.
 
 Windows native and explicit WSL SSH are distinct profiles with separate key/trust stores. Pin host identity, require authenticated MCP lifecycle/read-only call, verify workload identity independently. No disabled verification, known_hosts shortcut, host credential edit or implicit provider upgrade. Web has its own scoped provider credential and HTTPS/session plane; neither borrows client GLM secrets.

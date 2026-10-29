@@ -1,6 +1,8 @@
 # Knowledge and design index
 
-Legacy baseline: refs/heads/main at 4318da6ea4e4e45c55cf43b64acbdd2ede65fc43. Current implementation/evidence date: 2026-10-28 America/Los_Angeles.
+Initial legacy baseline: refs/heads/main4318da6ea4e4e45c55cf43b64acbdd2ede65fc43; current reviewed legacy HEAD d8a09dd180139159e035963502e7793a37e92bae remains unchanged. Current finalization date:2026-10-29 America/Los_Angeles.
+
+Current0.9.0: [installation/recovery](INSTALL.md), [TASK-012/013 release and acceptance](verification/TASK_012_013_RELEASE.md), [actual package evidence](verification/task012-live-evidence.json), [four-profile command evidence](verification/task013-profiles.json), [exact source hashes](verification/task012013-source-manifest.json). Phase5 selected implementation/evidence is complete; phase6 is separately gated.
 
 Read in order:
 

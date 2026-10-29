@@ -1,0 +1,17 @@
+{
+  "version": "0.9.0",
+  "origin": "Exact assigned project LXC source bytes synchronized and hash-verified",
+  "files": {
+    "bwmini/distribution.py": "cfa28e5d9256394e761119e06d66eb638b4f60329dae3aa5af859c49c6b4bc31",
+    "bwmini/deploy_check.py": "e075cca5c9dd6fc9d7b8a2d2f3488894284307c468d0522f0a19fc4835e5cfd3",
+    "bwmini/store.py": "6176604377fe562ddf81076230d087cf198c72132cc01c1d1775c9b5f71b51f3",
+    "bwmini/__main__.py": "ef78a60eaa8d6335c5746dc62b58a51857993a9a9e9226fa75e4894482e9915f",
+    "tests/test_distribution.py": "89d00b7a063cd9498ab694a08bfc3a935ba01a94837ad642ebf2fff8e581f3b3",
+    "scripts/package_live_check.py": "fe73381f2b580b89f397af433bab31cf90460f4c479283be63faf65b7e8b4fc5",
+    "scripts/release_profiles_check.py": "5d14174c5cc35110818d990b24260bcae241ddf2aa7608c7e3af02ba33ea68ac",
+    "VERSION": "9d8c94f1ad3ea96b1e2ac4914fda4cb93c76b4a3e0d8cc6dd8976d6c0b227d15",
+    "pyproject.toml": "ce6bdf1cd29d08b2cef2f8ea9bd43e004fd772ed7a27c4bce7be924f9cfce7ce",
+    "web/package.json": "f97a376d70bc3f83432f76a50e8d15ea583324ff6ac5dae99f44211700228815",
+    "web/package-lock.json": "180fb3abe683307fa48bf7ee5d75649bc9bd6083b6561e2d30788291b8c27c95"
+  }
+}

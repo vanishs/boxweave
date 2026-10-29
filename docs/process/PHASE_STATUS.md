@@ -1,6 +1,12 @@
 # Phase status — authority
 
-## Current authority: TASK-007/008 complete in selected scopes; continue TASK-009/010
+## Current authority: TASK-012/013 complete in selected scope; phase5 handoff
+
+SRC-079..083, version0.9.0:153 non-root Linux tests59.570s, built UI, actual systemd parser and Windows PowerShell AST checks passed. Real staged install/rerun/data preservation, failure marker/repair, installed browser/worker/MCP hello, Web-down MCP independence and exact cleanup passed; actual four-profile registration/negative/strict fixed-command matrix passed. Source, public/private evidence distinctions and all18 acceptance dispositions are in [the release report](../verification/TASK_012_013_RELEASE.md). TASK-009/010 network evidence remains separate and valid for unchanged access code on local Provider0.120.1. Native model setup uses existing human confirmation SRC-074; no inference was sent.
+
+The selected phase5 implementation/evidence is complete for developer acceptance. No further phase5 implementation task remains pending. Phase6 comparison requires separate authorization and has not run. Unclaimed extensions remain explicit: public TLS rollout, fresh bare-metal/other server runtimes, reboot/LXC boot.autostart, effective confinement and model inference/quality. No push, new public mapping, provider upgrade, old-environment modification or secret export occurred. Private installed app/services are retained; temporary dedicated workload is absent.
+
+## Previous authority: TASK-007/008 complete; TASK-009/010 subsequently completed
 
 TASK-0080.7.0 native-guided model wizard implemented with schema5, revisioned public choices and exact native handoff.106 non-root tests/build/Chromium passed. SRC-074 user confirms Z.ai/GLM-5.3/native access; saved as operator_reported_ready/inference unverified, not automatic model execution evidence. Continue remaining phase5 under SRC-072. Network compatibility, explicit route tests, install/update and release gates remain; no implicit phase6 or inference/public action.
 

@@ -1,5 +1,7 @@
 # Legacy knowledge synchronization
 
+Final phase5 check2026-10-29/SRC-079..083: legacy main d8a09dd180139159e035963502e7793a37e92bae unchanged. No new legacy implementation was merged; unrelated untracked containarium-candidate.zip remains preserved and unread. New distribution/client/release work was authored/tested in the assigned LXC and exact public bytes synchronized to rewrite/v2. Existing supporting bootstrap/provider versions are test context, not migrated product code. No push or legacy modification.
+
 ## Initial observation
 
 - Reviewed: 2026-10-28 America/Los_Angeles.

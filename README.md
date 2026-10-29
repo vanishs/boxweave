@@ -1,15 +1,19 @@
-# BoxWeave minimum system
+# BoxWeave v2
 
-**Phase 4 minimum system: real Web-to-MCP hello/receipt verified in an approved nested lab; developer/client acceptance remains incomplete.**
+**Version0.9.0: phase5 selected basic features and isolated release evidence completed; phase6 is not started.**
 This is a new implementation on rewrite/v2, not a port of the legacy tree.
 
-The current slice provides operator login, reviewed project/environment binding,
-one-use hello plans, a separate worker, SQLite revisions and durable receipts.
-Fixture mode is prominently labeled. Missing live configuration never silently
-enables a fixture. Tenant writes, ports, model setup and the wider
-client matrix remain required later features, not implemented controls.
+The app provides local login/reset, project/environment binding, confirmed lifecycle operations,
+durable receipts, native Tenant access and TCP/UDP publication, Prompt Graph and native-guided
+ZCode/GLM setup. Four Windows-hosted Codex/ZCode native/Ubuntu-WSL profiles have actual
+transport/registration/command evidence. Fixture mode is explicitly separate from live MCP.
+See [install/update/repair](docs/INSTALL.md) and the [selected release report](docs/verification/TASK_012_013_RELEASE.md).
+The tested installation is private loopback inside the approved LXC environment; public TLS rollout,
+fresh bare-metal installation, model inference and LXC boot/confinement are not claimed.
 
 ## Verified environment
+
+The development commands and versioned checkpoints below retain their original scope. Historical statements about incomplete client/phase4 work are superseded by the0.9.0 release report above; they are not current missing-feature declarations. Use the current installation guide for deployment and recovery.
 
 Development and Linux tests ran as the non-root boxweave-tenant-dev account in
 the approved project Ubuntu 24.04 LXC: Python 3.12.3, Node 18.19.1, npm 9.2.0.

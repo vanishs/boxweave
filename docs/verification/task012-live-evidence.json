@@ -1,0 +1,423 @@
+{
+  "scope": "private loopback installed app; no new outer public route",
+  "artifact_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+  "installs": [
+    {
+      "state": "ready",
+      "archive_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+      "version": "0.9.0",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259144674718518.sqlite3",
+      "mcp": {
+        "state": "authenticated_read_passed",
+        "server": {
+          "name": "containarium-mcp-server",
+          "version": "0.120.1"
+        },
+        "protocol": "2024-11-05",
+        "tools": 109,
+        "read": "list_containers"
+      }
+    },
+    {
+      "state": "ready",
+      "archive_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+      "version": "0.9.0",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259234866280779.sqlite3",
+      "mcp": {
+        "state": "authenticated_read_passed",
+        "server": {
+          "name": "containarium-mcp-server",
+          "version": "0.120.1"
+        },
+        "protocol": "2024-11-05",
+        "tools": 109,
+        "read": "list_containers"
+      }
+    },
+    {
+      "state": "incomplete",
+      "code": "POSTPUBLICATION_HEALTH_FAILED"
+    },
+    {
+      "state": "ready",
+      "archive_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+      "version": "0.9.0",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/failure-installed/backups/1793259297560711836.sqlite3",
+      "mcp": {
+        "state": "authenticated_read_passed",
+        "server": {
+          "name": "containarium-mcp-server",
+          "version": "0.120.1"
+        },
+        "protocol": "2024-11-05",
+        "tools": 109,
+        "read": "list_containers"
+      }
+    }
+  ],
+  "lifecycle": [
+    {
+      "acknowledged": true,
+      "action": "create",
+      "actor": "operator",
+      "code": "OK",
+      "created": 1793259149.9804902,
+      "deadline": 1793260949.9804902,
+      "evidence": "live_mcp",
+      "expected_state": null,
+      "id": "eb26ab0041d64b17ba976ad800305f82",
+      "logical": "v2-net-a",
+      "next_poll": 1793259237.3094199,
+      "phase": "connection_ready",
+      "result": {
+        "account_user": "v2-net-a",
+        "identity": {
+          "exit_code": 0,
+          "hostname": "v2-net-a-container",
+          "stdout": "v2-net-a\nv2-net-a-container\n",
+          "user": "v2-net-a"
+        },
+        "network_tenant": "v2-net-a",
+        "observed_podman": false,
+        "outcome": "observed_desired_state",
+        "readiness": "identity_verified",
+        "remote_cleanup": "unverified",
+        "requested_podman": false,
+        "resource_state": "CONTAINER_STATE_RUNNING"
+      },
+      "state": "succeeded",
+      "target": {
+        "backend": "bw-v2-access-lab",
+        "created": "1793259152",
+        "hostname": "v2-net-a-container",
+        "instance": "v2-net-a-container",
+        "logical": "v2-net-a",
+        "project": "default",
+        "provider": "containarium",
+        "user": "v2-net-a"
+      }
+    },
+    {
+      "acknowledged": true,
+      "action": "stop",
+      "actor": "operator",
+      "code": "OK",
+      "created": 1793259242.3905768,
+      "deadline": 1793261042.3905768,
+      "evidence": "live_mcp",
+      "expected_state": "CONTAINER_STATE_RUNNING",
+      "id": "edc793d894d04701bac1b656eadfb01b",
+      "logical": "v2-net-a",
+      "next_poll": 1793259260.7326314,
+      "phase": "stopped",
+      "result": {
+        "outcome": "observed_desired_state",
+        "readiness": "not_checked",
+        "resource_state": "CONTAINER_STATE_STOPPED"
+      },
+      "state": "succeeded",
+      "target": {
+        "backend": "bw-v2-access-lab",
+        "created": "1793259152",
+        "hostname": "v2-net-a-container",
+        "instance": "v2-net-a-container",
+        "logical": "v2-net-a",
+        "project": "default",
+        "provider": "containarium",
+        "user": "v2-net-a"
+      }
+    },
+    {
+      "acknowledged": true,
+      "action": "delete",
+      "actor": "operator",
+      "code": "OK",
+      "created": 1793259249.230904,
+      "deadline": 1793261049.230904,
+      "evidence": "live_mcp",
+      "expected_state": "CONTAINER_STATE_STOPPED",
+      "id": "d73f78e589bf48b8b036f0c859b15a59",
+      "logical": "v2-net-a",
+      "next_poll": 1793259267.408202,
+      "phase": "absent",
+      "result": {
+        "outcome": "observed_desired_state",
+        "readiness": "not_applicable",
+        "resource_state": "absent"
+      },
+      "state": "succeeded",
+      "target": {
+        "backend": "bw-v2-access-lab",
+        "created": "1793259152",
+        "hostname": "v2-net-a-container",
+        "instance": "v2-net-a-container",
+        "logical": "v2-net-a",
+        "project": "default",
+        "provider": "containarium",
+        "user": "v2-net-a"
+      }
+    }
+  ],
+  "model_inference": "not_requested",
+  "health": {
+    "state": "ready",
+    "incomplete": false,
+    "installed": {
+      "archive_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259144674718518.sqlite3",
+      "manifest_sha256": "6ec88b21738603b771bd85efb433cf08f2bac315ab3b99696a1dabd1ee9f1be2",
+      "source": {
+        "commit": "fc6703e54792cfd6e5697a0d14a7bae5a8f36fc5",
+        "state": "modified"
+      },
+      "unit_sha256": {
+        "boxweave-v2-ac6a17a43f18-serve.service": "3fdc2f7e57afaee6cd3d2df5acba973c793f63119df7d0db9b1bfb0ee2b8376b",
+        "boxweave-v2-ac6a17a43f18-worker.service": "95d5894a36ae19713a4ff55aa3d017e54549b21d2de37e518d344274bc86a597"
+      },
+      "units": [
+        "boxweave-v2-ac6a17a43f18-serve.service",
+        "boxweave-v2-ac6a17a43f18-worker.service"
+      ],
+      "version": "0.9.0"
+    },
+    "services": {
+      "boxweave-v2-ac6a17a43f18-serve.service": {
+        "MainPID": "33405",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      },
+      "boxweave-v2-ac6a17a43f18-worker.service": {
+        "MainPID": "33411",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      }
+    },
+    "web": {
+      "reachable": true,
+      "authenticated": false,
+      "status": 401
+    },
+    "mcp": {
+      "state": "authenticated_read_passed",
+      "server": {
+        "name": "containarium-mcp-server",
+        "version": "0.120.1"
+      },
+      "protocol": "2024-11-05",
+      "tools": 109,
+      "read": "list_containers"
+    },
+    "boot_autostart": "unverified",
+    "confinement": "unverified"
+  },
+  "hello": {
+    "stdout": "hello world\n",
+    "exit_code": 0,
+    "output_withheld": false,
+    "identity": {
+      "user": "v2-net-a",
+      "hostname": "v2-net-a-container"
+    },
+    "evidence": "live_mcp",
+    "remote_cleanup": "not_verified"
+  },
+  "retention": {
+    "settings_bytes_unchanged": true,
+    "project_graph_comment_model_session_receipts_preserved": true,
+    "no_replay": true,
+    "redacted_markdown": true
+  },
+  "web_down_mcp_works": true,
+  "dedicated_workload_absent": true,
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "errors": []
+  },
+  "tamper_before_side_effect": true,
+  "real_failure_marker_stage": "published",
+  "real_repair_ready": true,
+  "failure_test_units_stopped_and_disabled": true,
+  "final_health": {
+    "state": "ready",
+    "incomplete": false,
+    "installed": {
+      "archive_sha256": "3d77a54a85cfb5e2eb133d69068acbf32517f50caa0907ce9ee95000ac9fa0cd",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259234866280779.sqlite3",
+      "manifest_sha256": "6ec88b21738603b771bd85efb433cf08f2bac315ab3b99696a1dabd1ee9f1be2",
+      "source": {
+        "commit": "fc6703e54792cfd6e5697a0d14a7bae5a8f36fc5",
+        "state": "modified"
+      },
+      "unit_sha256": {
+        "boxweave-v2-ac6a17a43f18-serve.service": "3fdc2f7e57afaee6cd3d2df5acba973c793f63119df7d0db9b1bfb0ee2b8376b",
+        "boxweave-v2-ac6a17a43f18-worker.service": "95d5894a36ae19713a4ff55aa3d017e54549b21d2de37e518d344274bc86a597"
+      },
+      "units": [
+        "boxweave-v2-ac6a17a43f18-serve.service",
+        "boxweave-v2-ac6a17a43f18-worker.service"
+      ],
+      "version": "0.9.0"
+    },
+    "services": {
+      "boxweave-v2-ac6a17a43f18-serve.service": {
+        "MainPID": "33666",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      },
+      "boxweave-v2-ac6a17a43f18-worker.service": {
+        "MainPID": "33646",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      }
+    },
+    "web": {
+      "reachable": true,
+      "authenticated": false,
+      "status": 401
+    },
+    "mcp": {
+      "state": "authenticated_read_passed",
+      "server": {
+        "name": "containarium-mcp-server",
+        "version": "0.120.1"
+      },
+      "protocol": "2024-11-05",
+      "tools": 109,
+      "read": "list_containers"
+    },
+    "boot_autostart": "unverified",
+    "confinement": "unverified"
+  },
+  "result": "passed",
+  "final-update": {
+    "state": "ready",
+    "archive_sha256": "1998d030b038bf0042e2c4966f8b733a8e03ab68c532676fa409a876ed521b0e",
+    "version": "0.9.0",
+    "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259380550522620.sqlite3",
+    "mcp": {
+      "state": "authenticated_read_passed",
+      "server": {
+        "name": "containarium-mcp-server",
+        "version": "0.120.1"
+      },
+      "protocol": "2024-11-05",
+      "tools": 109,
+      "read": "list_containers"
+    }
+  },
+  "reviewed-update": {
+    "state": "ready",
+    "archive_sha256": "94ec2bb6998e3bb0f69fb7563331f45e9b0daedb5967812e4a7643f227550bc8",
+    "version": "0.9.0",
+    "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259495812931280.sqlite3",
+    "mcp": {
+      "state": "authenticated_read_passed",
+      "server": {
+        "name": "containarium-mcp-server",
+        "version": "0.120.1"
+      },
+      "protocol": "2024-11-05",
+      "tools": 109,
+      "read": "list_containers"
+    }
+  },
+  "latest_health": {
+    "state": "ready",
+    "incomplete": false,
+    "installed": {
+      "archive_sha256": "94ec2bb6998e3bb0f69fb7563331f45e9b0daedb5967812e4a7643f227550bc8",
+      "backup": "/home/boxweave-v2-test/boxweave-v2-package-lab/installed/backups/1793259495812931280.sqlite3",
+      "manifest_sha256": "f007d540810571d29d4cd8854ad06a3c919d24763d4abdb2c41d83beee7c14a2",
+      "source": {
+        "commit": "fc6703e54792cfd6e5697a0d14a7bae5a8f36fc5",
+        "state": "modified"
+      },
+      "unit_sha256": {
+        "boxweave-v2-ac6a17a43f18-serve.service": "3fdc2f7e57afaee6cd3d2df5acba973c793f63119df7d0db9b1bfb0ee2b8376b",
+        "boxweave-v2-ac6a17a43f18-worker.service": "95d5894a36ae19713a4ff55aa3d017e54549b21d2de37e518d344274bc86a597"
+      },
+      "units": [
+        "boxweave-v2-ac6a17a43f18-serve.service",
+        "boxweave-v2-ac6a17a43f18-worker.service"
+      ],
+      "version": "0.9.0"
+    },
+    "services": {
+      "boxweave-v2-ac6a17a43f18-serve.service": {
+        "MainPID": "34484",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      },
+      "boxweave-v2-ac6a17a43f18-worker.service": {
+        "MainPID": "34485",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled"
+      }
+    },
+    "web": {
+      "reachable": true,
+      "authenticated": false,
+      "status": 401
+    },
+    "mcp": {
+      "state": "authenticated_read_passed",
+      "server": {
+        "name": "containarium-mcp-server",
+        "version": "0.120.1"
+      },
+      "protocol": "2024-11-05",
+      "tools": 109,
+      "read": "list_containers"
+    },
+    "boot_autostart": "unverified",
+    "confinement": "unverified",
+    "administrator_initialized": true
+  },
+  "final_counts": {
+    "projects": 1,
+    "graphs": 1,
+    "model_selections": 1,
+    "operations": 1,
+    "environment_operations": 3,
+    "access_operations": 0
+  },
+  "private_log_sha256": {
+    "command-1793259026193099266.log": "d87c7d7162915afc7264e7c3f640f645f3a864afe07d5ace5ebf729d25b553da",
+    "command-1793259253807853884.log": "59b750b14304b3424a4f86d821c2ad25a30cc1a34bb67225e83056acca02ae22",
+    "final-update.log": "fd3e7a0c3107af528adb761f45ec0d0dbff6cb9f1805f0dca0c23977da0ca6f0",
+    "command-1793259025618077573.log": "c546060036d675cb5b71765caccbce6ece544b94c386ff2ca0de1286bf0f4e60",
+    "reviewed-update.log": "aec06c6d18cff0b0ce41dfe3fbd8a0b24ad6788f6d385c54a5c4197f4b0415f6",
+    "command-1793258905248418462.log": "c8c6b07abefcc71553ed846ed8b74a1525b83c457abac0757de041cce1c921ea",
+    "command-1793258543706921677.log": "06614ef965c64174ad17e38f8c1cc25256d9cf55d6c4df343e1316fa9d5e6547",
+    "command-1793259292479397451.log": "06614ef965c64174ad17e38f8c1cc25256d9cf55d6c4df343e1316fa9d5e6547",
+    "run-browser.log": "4e567a6c87f46460d3c785bf7bed77f55e9d4078b461a724436e57972666dd0f",
+    "run-fixed.log": "99efd0d316a33c446db0a7ecba535f1a896a2a05dcdf390801a8b419b348812b",
+    "command-1793259300261675238.log": "2cba6ee79f9c590688aa2ee836c9adae5d2855879ad12dd9dd3bb830729e35c2",
+    "command-1793259146608922580.log": "ac2d4234f1a6468b62f97fe2ee838d871b65aee82e2158b31d5b7ef2a66cbac5",
+    "command-1793259299512286501.log": "c1b5ceadbeddbcf574c793fe1eaa6d51a6102795a996147b30059d6e66b77eab",
+    "command-1793259237625419332.log": "76b716f45f3453e814fb6f98dee6f77494b50382f54c6d4949447b2cc8dab82c",
+    "run-repair.log": "ddf54684fca7e3c9b8c908068a0ce797cbd1123e3b2c683cdb9bb52a02548258",
+    "command-1793259236942608889.log": "a6683b4a995f3bfad3af1a32184c76bd49a6721c70d4952a8272b4bccfbef400",
+    "command-1793259147187863894.log": "86d284ac73d11726453e63b039b78735deb9d7f0146f07260a7a68b7594af6fc",
+    "run.log": "99efd0d316a33c446db0a7ecba535f1a896a2a05dcdf390801a8b419b348812b"
+  }
+}

@@ -100,6 +100,15 @@ class Store:
                 raise Fault("ADMIN_ALREADY_INITIALIZED")
             db.execute("INSERT INTO admin VALUES(1,?)", (hashed,))
 
+    def reset_admin(self, hashed):
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute("SELECT 1 FROM admin").fetchone():
+                raise Fault("ADMIN_NOT_INITIALIZED")
+            db.execute("UPDATE admin SET password=? WHERE id=1",(hashed,))
+            db.execute("DELETE FROM sessions")
+            db.execute("DELETE FROM attempts")
+
     def project(self, ident):
         with self.db() as db:
             row = db.execute("SELECT * FROM projects WHERE id=?", (ident,)).fetchone()
