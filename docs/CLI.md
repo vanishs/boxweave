@@ -15,7 +15,7 @@ boxweave --help          # Display the complete installed host CLI
 boxweave version         # Published release identity only
 boxweave status          # Loopback Web reachability; NOT authenticated login/MCP
 boxweave doctor          # Read-only host/systemd state; no sudo
-boxweave client          # Reviewable Windows Codex/WSL setup script; no sudo
+boxweave client          # Interactive Windows Codex/WSL setup; final choice controls MCP replacement only
 boxweave box             # Show inspect/diagnose help
 boxweave box inspect NAME --project default
 ```

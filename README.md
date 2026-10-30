@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.11.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.12.** This is a preview, not a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -80,8 +80,11 @@ administrator can read it locally; the installer never prints the password.
 The service account `boxweave` is deliberately different from your SSH
 administrator and must **not** be used as an everyday login.
 
-Generate the client enrollment script with `boxweave client`, review and run
-it on the Windows client. Only the actual client-key enrollment requires
+Generate the client enrollment script with `boxweave client`; its last question
+controls whether an *existing Windows BoxWeave MCP registration* may be replaced
+after authentication (backup preserved), not whether to overwrite a local
+PowerShell file. If `boxweave-setup.ps1` already exists, keep it and choose a
+new numbered output. Review and run the generated script on the Windows client. Only the actual client-key enrollment requires
 administrative authorization. Finish by verifying MCP discovery and a real
 read-only call; simply generating a script does not prove a connected Agent.
 

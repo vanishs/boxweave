@@ -105,12 +105,88 @@ class ClientGeneratorTests(unittest.TestCase):
             with (patch.object(client_setup.os,"geteuid",return_value=0),
                   patch.object(client_setup,"load_public_state",return_value=ready_state()),
                   patch("sys.stdin.isatty",return_value=True),
-                  patch("builtins.input",side_effect=["1","1"]),
+                  patch("builtins.input",side_effect=["1","1","1"]),
                   patch.dict(os.environ,{"SUDO_USER":"root"}),
                   patch("sys.stdout",new_callable=io.StringIO)):
                 code = manage.main(["client","--admin-user","example-admin","--output",str(out)])
                 self.assertEqual(code,0)
                 self.assertEqual(out.read_text(),client_setup.render(ready_state(),"example-admin"))
+
+    def test_last_wizard_choice_is_mcp_registration_not_script_overwrite(self):
+        base = ready_state()
+        normal = client_setup.render(base, "example-admin")
+        replace = client_setup.render(base, "example-admin", replace=True)
+        marker = "if (-not $PSBoundParameters.ContainsKey('Replace')) { $Replace = $true }"
+        self.assertNotIn(marker, normal)
+        self.assertIn(marker, replace)
+        self.assertIn("[switch]$Replace,", normal)
+        self.assertNotIn("__REPLACE_POLICY__", replace)
+        with self.assertRaisesRegex(ValueError, "CLIENT_REPLACE_POLICY_INVALID"):
+            client_setup.render(base, "example-admin", replace="yes")
+
+    def test_existing_script_interactively_preserved_with_numbered_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "boxweave-setup.ps1"
+            path.write_text("original", encoding="utf-8")
+            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
+                  patch("sys.stdin.isatty", return_value=True),
+                  patch("builtins.input", side_effect=["1", "1", "1", "2"]),
+                  patch("sys.stdout", new_callable=io.StringIO) as out):
+                code = client_setup.main(["--admin-user", "example-admin",
+                                          "--output", str(path)])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(), "original")
+            result = json.loads(out.getvalue())
+            self.assertEqual(result["file"], str(Path(tmp) / "boxweave-setup-2.ps1"))
+            self.assertTrue(result["existing_script_preserved"])
+            self.assertEqual(result["mcp_registration_policy"], "replace_after_verified_read")
+            self.assertIn("$Replace = $true", (Path(tmp) / "boxweave-setup-2.ps1").read_text())
+            self.assertEqual(stat.S_IMODE((Path(tmp) / "boxweave-setup-2.ps1").stat().st_mode), 0o600)
+
+    def test_existing_script_interactively_can_cancel_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "boxweave-setup.ps1"
+            path.write_text("original")
+            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
+                  patch("sys.stdin.isatty", return_value=True),
+                  patch("builtins.input", side_effect=["1", "1", "2"]),
+                  patch("sys.stderr", new_callable=io.StringIO) as err):
+                code = client_setup.main(["--admin-user", "example-admin", "--output", str(path)])
+            self.assertEqual(code, 130)
+            self.assertEqual(path.read_text(), "original")
+            self.assertFalse((Path(tmp) / "boxweave-setup-2.ps1").exists())
+            self.assertIn('"state": "cancelled"', err.getvalue())
+
+    def test_existing_script_noninteractive_requires_new_filename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "boxweave-setup.ps1"
+            path.write_text("original")
+            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
+                  patch("sys.stdin.isatty", return_value=False),
+                  patch("sys.stderr", new_callable=io.StringIO) as err):
+                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
+                                          "--admin-user", "example-admin", "--output", str(path)])
+            self.assertEqual(code, 2)
+            self.assertIn("CLIENT_OUTPUT_EXISTS_USE_NEW_OUTPUT_OR_STDOUT", err.getvalue())
+            self.assertEqual(path.read_text(), "original")
+
+    def test_noninteractive_mcp_replace_is_explicit_and_cannot_overwrite_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "new.ps1"
+            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
+                  patch("sys.stdin.isatty", return_value=False),
+                  patch("sys.stdout", new_callable=io.StringIO) as out):
+                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
+                                          "--admin-user", "example-admin", "--replace",
+                                          "--output", str(path)])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out.getvalue())["mcp_registration_policy"], "replace_after_verified_read")
+            self.assertIn("$Replace = $true", path.read_text())
+            with patch("sys.stderr", new_callable=io.StringIO):
+                self.assertEqual(client_setup.main(["--agent", "codex", "--transport", "wsl",
+                                                     "--admin-user", "example-admin", "--replace",
+                                                     "--output", str(path)]), 2)
+            self.assertIn("$Replace = $true", path.read_text())
 
     def test_generator_refuses_missing_descriptor_before_output(self):
         with tempfile.TemporaryDirectory() as tmp:

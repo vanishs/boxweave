@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.11)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.12)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -9,7 +9,7 @@ boxweave client
 boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --output "$HOME/boxweave-setup.ps1"
 ```
 
-The wizard asks for Agent and transport; presently the integrated profile is `codex/windows/wsl` (Codex itself stays on Windows). The generator reads the root-owned 0644 **public** client descriptor without sudo and writes a new mode-0600 PowerShell script, never a JWT or a private key. Omit `--output` to write a new `boxweave-setup.ps1` in the current directory; an existing file is refused rather than overwritten. `--stdout` emits public script source for a reviewed transfer. CLI generation never enrolls keys or edits client machines.
+The wizard asks for Agent and transport; presently the integrated profile is `codex/windows/wsl` (Codex itself stays on Windows). Its **last question** asks whether an existing Windows **BoxWeave MCP registration** may be updated if the transport differs. Choose **No** (the safe default) to preserve conflicting entries; choose **Yes** to bake a replacement policy into the generated script. Replacement occurs only **after a verified MCP read**, touches only the BoxWeave transport fields in the Windows Codex configuration, and retains a backup. It does **not** mean overwriting the generated PowerShell file. Noninteractive equivalents: `--replace` or `--no-replace`; the default without either is no replacement. The generator reads the root-owned 0644 **public** client descriptor without sudo and writes a new mode-0600 PowerShell script, never a JWT or a private key. Omit `--output` to write `boxweave-setup.ps1` in the current directory. If that file already exists, the interactive wizard offers to keep it and create `boxweave-setup-2.ps1` (or another free number), or cancel. **No generated script is overwritten.** In noninteractive mode an existing output is refused: specify a new `--output PATH` or `--stdout`. `--stdout` emits public script source for a reviewed transfer. CLI generation never enrolls keys or edits client machines.
 
 Copy the script from your authorized Linux SSH account on the BoxWeave server to the Windows machine via an authenticated transfer, inspect it, and execute in **Windows PowerShell**, using the actual WSL distro name:
 

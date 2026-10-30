@@ -64,6 +64,9 @@ param(
     [switch]$Replace,
     [switch]$WslGuidance
 )
+# The server-side wizard chooses a default. An explicit -Replace:$false at
+# execution time can still veto replacement after reviewing the script.
+__REPLACE_POLICY__
 $ErrorActionPreference = 'Stop'
 $ServerHost = '__HOST__'
 $ServerPort = __PORT__
@@ -458,7 +461,9 @@ def ps_quote(value):
     return "'" + value.replace("'", "''") + "'"
 
 
-def render(state, admin_user):
+def render(state, admin_user, replace=False):
+    if type(replace) is not bool:
+        raise ValueError("CLIENT_REPLACE_POLICY_INVALID")
     host, port = state.get("host"), state.get("port")
     key = state.get("server_key", "")
     managed_key = state.get("managed_public_key", "")
@@ -474,7 +479,10 @@ def render(state, admin_user):
     host_key = " ".join(key.split()[:2])
     return (POWERSHELL.replace("__HOST__", host).replace("__PORT__", str(port))
             .replace("__SERVER_KEY__", host_key).replace("__MANAGED_PUBLIC_KEY__", managed_key)
-            .replace("__ADMIN_USER__", admin_user))
+            .replace("__ADMIN_USER__", admin_user)
+            .replace("__REPLACE_POLICY__",
+                     "if (-not $PSBoundParameters.ContainsKey('Replace')) { $Replace = $true }"
+                     if replace else ""))
 
 
 def publish(path, script):
@@ -502,6 +510,22 @@ def publish(path, script):
     return str(dest)
 
 
+class ClientCancelled(Exception):
+    """The human declined the reviewed client setup change."""
+
+
+def choose(prompt, options):
+    """Interactive, bounded list: [(label, value), ...]. No implicit yes."""
+    print("\n" + prompt, file=sys.stderr)
+    for number, (label, _) in enumerate(options, 1):
+        print(f"  {number}) {label}", file=sys.stderr)
+    while True:
+        answer = input("Select number: ").strip()
+        if answer.isdecimal() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1][1]
+        print("Choose one of the listed numbers.", file=sys.stderr)
+
+
 def select(name, available, prompt, interactive):
     if name:
         if name not in available:
@@ -509,13 +533,37 @@ def select(name, available, prompt, interactive):
         return name
     if not interactive:
         raise ValueError("NONINTERACTIVE_CLIENT_SELECTION_REQUIRED")
-    print(prompt, file=sys.stderr)
-    for i, choice in enumerate(available, 1):
-        print(f"  {i}) {choice}", file=sys.stderr)
-    value = input("Select number: ").strip()
-    if not value.isdecimal() or not 1 <= int(value) <= len(available):
-        raise ValueError("CLIENT_SELECTION_CANCELLED")
-    return available[int(value) - 1]
+    return choose(prompt, [(item, item) for item in available])
+
+
+def choose_output(path, interactive):
+    """Never overwrite the user's existing generated script.
+
+    On a terminal, explicitly select a fresh numbered sibling or cancel.
+    Noninteractive callers must supply a new --output or use --stdout.
+    """
+    destination = Path(path).absolute()
+    if destination.is_symlink():
+        raise ValueError("CLIENT_OUTPUT_SYMLINK_REFUSED")
+    if not destination.exists():
+        return str(destination), False
+    if not destination.is_file():
+        raise ValueError("CLIENT_OUTPUT_NOT_A_REGULAR_FILE")
+    if not interactive:
+        raise ValueError("CLIENT_OUTPUT_EXISTS_USE_NEW_OUTPUT_OR_STDOUT")
+    decision = choose(
+        "Client script already exists: " + str(destination) + "\n"
+        "This is a local script file, NOT an MCP registration.",
+        [("Keep existing script; write a new numbered script", "new"),
+         ("Cancel (leave existing file unchanged)", "cancel")])
+    if decision == "cancel":
+        raise ClientCancelled()
+    for index in range(2, 1002):
+        candidate = destination.with_name(
+            destination.stem + "-" + str(index) + destination.suffix)
+        if not candidate.exists() and not candidate.is_symlink():
+            return str(candidate), True
+    raise ValueError("CLIENT_OUTPUT_NO_UNUSED_NUMBERED_PATH")
 
 
 def main(argv=None):
@@ -523,8 +571,14 @@ def main(argv=None):
     parser.add_argument("--agent", choices=("codex",))
     parser.add_argument("--transport", choices=("wsl",))
     parser.add_argument("--admin-user", help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
-    parser.add_argument("--output", help="New PowerShell file; defaults to ./boxweave-setup.ps1")
+    parser.add_argument("--output", help="New PowerShell script file; defaults to ./boxweave-setup.ps1. Existing files are preserved.")
     parser.add_argument("--stdout", action="store_true", help="Emit the public script to stdout instead of a file")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--replace", dest="mcp_replace", action="store_const", const=True,
+                       help="Bake consent to replace only the Windows BoxWeave MCP transport entry after authenticated verification; backup retained")
+    group.add_argument("--no-replace", dest="mcp_replace", action="store_const", const=False,
+                       help="Preserve conflicting Windows BoxWeave MCP entries (default for noninteractive runs)")
+    parser.set_defaults(mcp_replace=None)
     args = parser.parse_args(argv)
     try:
         state = load_public_state()
@@ -533,9 +587,8 @@ def main(argv=None):
         interactive = sys.stdin.isatty()
         select(args.agent, ("codex",), "Choose agent", interactive)
         select(args.transport, ("wsl",), "Choose SSH transport", interactive)
-        # Ordinary users may generate public profiles without sudo. The login
-        # used later to enroll a key is an existing administrator, not the
-        # dedicated boxweave application account.
+        # This is a human host administrator for explicit key enrollment,
+        # never the dedicated boxweave service account.
         admin = args.admin_user or os.environ.get("SUDO_USER", "") or (pwd.getpwuid(os.getuid()).pw_name if os.geteuid() != 0 else "")
         if not USER.fullmatch(admin or ""):
             if not interactive:
@@ -543,18 +596,40 @@ def main(argv=None):
             admin = input("Existing Linux SSH administrator: ").strip()
         if not USER.fullmatch(admin):
             raise ValueError("ADMIN_USER_INVALID")
-        script = render(state, admin)
+
+        target, existing_script_kept = (None, False)
+        if not args.stdout:
+            target, existing_script_kept = choose_output(
+                args.output or str(Path.cwd() / "boxweave-setup.ps1"), interactive)
+
+        # Match archive/0.5.1: the LAST interactive choice is about the
+        # *client MCP registration*, never the already generated script file.
+        if args.mcp_replace is not None:
+            replace_mcp = args.mcp_replace
+        elif interactive:
+            replace_mcp = choose(
+                "On Windows, replace an existing BoxWeave MCP registration if its transport differs?",
+                [("No: preserve a conflicting registration; ask for review", False),
+                 ("Yes: replace only BoxWeave transport fields after a real MCP read; backup existing config", True)])
+        else:
+            replace_mcp = False
+
+        script = render(state, admin, replace=replace_mcp)
         if args.stdout:
             sys.stdout.write(script)
         else:
-            target = args.output or str(Path.cwd() / "boxweave-setup.ps1")
             published = publish(target, script)
-            print(json.dumps({"state":"generated","profile":"codex/windows/wsl",
-                              "file":published,"registration":"not_attempted",
-                              "next":"Copy to Windows; review; execute in PowerShell. Use -Distro NAME for multiple WSL distributions."}))
+            print(json.dumps({"state": "generated", "profile": "codex/windows/wsl",
+                              "file": published, "existing_script_preserved": existing_script_kept,
+                              "mcp_registration_policy": "replace_after_verified_read" if replace_mcp else "preserve_conflicts",
+                              "registration": "not_attempted",
+                              "next": "Copy the new script to Windows; review; run in PowerShell. Use -Distro NAME to select WSL."}))
         return 0
-    except (ValueError, OSError, EOFError) as exc:
-        print(json.dumps({"state":"error","code":str(exc)}), file=sys.stderr)
+    except (ClientCancelled, KeyboardInterrupt, EOFError):
+        print(json.dumps({"state": "cancelled", "changed": False}), file=sys.stderr)
+        return 130
+    except (ValueError, OSError) as exc:
+        print(json.dumps({"state": "error", "code": str(exc)}), file=sys.stderr)
         return 2
 
 
