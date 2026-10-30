@@ -9,7 +9,7 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_public_readme_order_and_terminology(self):
         from pathlib import Path
         text = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
-        self.assertLess(text.index('## Install on Ubuntu'), text.index('## Connect an AI coding agent'))
+        self.assertLess(text.index('## Install (Ubuntu 24.04+ recommended)'), text.index('## Connect an AI coding agent'))
         self.assertLess(text.index('## Connect an AI coding agent'), text.index('## Common management commands'))
         self.assertIn('curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash', text)
         self.assertIn('| Client platform | Agent | Transport | Support |', text)
