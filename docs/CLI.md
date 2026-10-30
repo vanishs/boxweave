@@ -49,7 +49,7 @@ actual port displayed by `boxweave`, for example:
 
 ```sh
 # Run on your own computer, not inside the server's boxweave service account:
-ssh -N -L 18640:127.0.0.1:18640 YOUR_HOST_ADMIN@YOUR_UBUNTU_HOST
+ssh -N -L 18640:127.0.0.1:18640 YOUR_HOST_ADMIN@YOUR_LINUX_HOST
 ```
 
 Then open `http://127.0.0.1:18640` in the local browser. Only an authorized
