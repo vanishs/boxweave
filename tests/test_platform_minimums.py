@@ -1,4 +1,4 @@
-"""Lower-bound platform contract: Ubuntu >= 24.04, CPython >= 3.12.
+"""Lower-bound platform contract: Linux CPython >= 3.12, Ubuntu APT provisioning.
 
 These are pure checks. No host provisioning or root operations are performed.
 """
@@ -37,7 +37,9 @@ class MinimumVersionTests(unittest.TestCase):
         script = (ROOT / "install.sh").read_text()
         version = (ROOT / "VERSION").read_text().strip()
         self.assertIn('python3 - "' + version + '"', script)
-        self.assertIn("Ubuntu >= 24.04 and Python >= 3.12", script)
+        self.assertIn("Recommended: Ubuntu >= 24.04", script)
+        self.assertIn("Linux x86_64, Python >= 3.12 and systemd required", script)
+        self.assertIn("if (( PROVISION )); then", script)
 
 
 if __name__ == "__main__":
