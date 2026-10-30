@@ -144,7 +144,7 @@ Write-Host ('WSL identity ready in distribution: ' + $Distro)
 # before writing Codex configuration. The host key is still pinned.
 if ($NoEnroll -and $AlreadyEnrolled) { throw 'Cannot combine -NoEnroll and -AlreadyEnrolled' }
 if ($NoEnroll) {
-    Write-Host 'Enrollment pending. On the Ubuntu BoxWeave server, run (then rerun with -AlreadyEnrolled):'
+    Write-Host 'Enrollment pending. On the Linux BoxWeave server, run (then rerun with -AlreadyEnrolled):'
     Write-Host ("sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key '" + $identity.public_key + "'")
     exit 0
 }
