@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.6)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.7)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -59,3 +59,10 @@ The generated PowerShell setup selects one specific Windows WSL executable at `$
 ### Existing nested Codex MCP configuration (0.17.6)
 
 An existing Codex `[mcp_servers.boxweave]` may have legitimate nested TOML subtables (for example `[mcp_servers.boxweave.env]` or `[mcp_servers.boxweave.http_headers]`). These are **not** ambiguous or invalid. After the real MCP read check, the generated installer examines only the root BoxWeave transport keys (`command`, `args`, `startup_timeout_sec`, `tool_timeout_sec`), preserves other root keys, nested BoxWeave tables and unrelated MCP servers, and requires an explicit `-Replace` if the transport differs. Files are backed up before atomic replacement. Duplicate tables/keys, unsafe multiline transport fields, quoted/dotted ambiguous alternatives and missing parent tables still fail closed for manual review. `-AlreadyEnrolled` skips public-key registration once it has been verified as successful. The cross-platform PowerShell merger now has a **real execution regression** in CI with a parent and two nested tables; generating only valid PowerShell syntax was not enough to catch this issue.
+
+
+### SSH user@host argument regression (0.17.7)
+
+Real Windows Codex testing found that the generated PowerShell array expression `'boxweave@' + $ServerHost` yielded two distinct SSH arguments (`boxweave@` and `192.168.2.233`). The MCP probe executed through a separate Python path and passed, but the Codex registration was not runnable. The generator now computes `$sshTarget = 'boxweave@' + $ServerHost` **before** building the `$sshArgs` array; `$sshTarget` occupies exactly one argument. CI executes the generated argument assignment using `pwsh`, parses the actual JSON array, and asserts the single destination is present and both split fragments absent. 
+
+For users who already corrected their desktop `config.toml` manually and successfully reached MCP initialize, tools/list and list_containers, no new server install or re-enrollment is needed. Switching Codex Agent environment from Windows native to WSL does not itself convert this Windows `wsl.exe`-based registration into a Linux-native `/usr/bin/ssh` registration. Independently exercising the SSH/MCP launcher is not equivalent to confirming direct Codex session tool injection; test each separately.

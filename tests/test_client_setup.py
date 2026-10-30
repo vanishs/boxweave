@@ -42,6 +42,8 @@ class ClientGeneratorTests(unittest.TestCase):
         self.assertNotIn("ssh-keyscan", payload)
         self.assertIn("enrollment not confirmed", payload.lower())
         self.assertIn("MCP read verification failed", payload)
+        self.assertIn("$sshTarget = 'boxweave@' + $ServerHost", payload)
+        self.assertIn('$sshTarget,$RemoteMcp)', payload)
         self.assertIn("function Merge-BoxWeaveToml(", payload)
         self.assertIn("Nested BoxWeave MCP table without explicit parent", payload)
         self.assertNotIn("$Original -match '(?m)^[ \\t]*\\[mcp_servers\\.boxweave\\.' -or", payload)

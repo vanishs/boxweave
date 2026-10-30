@@ -182,12 +182,15 @@ if ($LASTEXITCODE -ne 0) {
 
 # ChatGPT/Codex Windows desktop reads %USERPROFILE%\.codex\config.toml.
 # No external codex CLI or WindowsApps binary execution is required.
+# PowerShell array expressions require a single scalar SSH destination.
+# Do not use string concatenation as bare tokens in @(...).
+$sshTarget = 'boxweave@' + $ServerHost
 $sshArgs = @('--distribution',$Distro,'--exec','/usr/bin/ssh',
              '-F','/dev/null','-T',
              '-o','BatchMode=yes','-o','IdentitiesOnly=yes',
              '-o','StrictHostKeyChecking=yes',
              '-o','ConnectTimeout=15','-o',('UserKnownHostsFile=' + $identity.known_hosts),
-             '-i',$identity.key,'-p',"$ServerPort",'boxweave@' + $ServerHost,$RemoteMcp)
+             '-i',$identity.key,'-p',"$ServerPort",$sshTarget,$RemoteMcp)
 $homeDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 if (-not [IO.Path]::IsPathRooted($homeDir)) { throw 'Codex home must be an absolute Windows path' }
 $homeDir = [IO.Path]::GetFullPath($homeDir)
