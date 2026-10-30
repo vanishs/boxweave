@@ -197,6 +197,18 @@ jobs:
           else
             echo 'No installer apt.log found'
           fi
+      - name: Diagnose APT dependency resolver without making changes
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo 'Held packages:'
+            apt-mark showhold || true
+            echo 'APT simulation for exact requested prerequisites:'
+            sudo apt-get -s -o Debug::pkgProblemResolver=yes install \
+              ca-certificates curl gnupg openssh-client python3-venv \
+              dbus-user-session openssh-server iproute2 || true
+          } 2>&1 | tee install-smoke-evidence/apt-simulation.log
       - name: Preserve installer stdout stderr and exit status
         if: always()
         uses: actions/upload-artifact@v4
