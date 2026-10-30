@@ -1,167 +1,86 @@
 # BoxWeave v2
 
-**Version0.9.1: phase6 comparison/validation completed with three acceptance gaps fixed. Phase7 is eligible for a separate request and has not started.**
-This is a new implementation on main, not a port of the legacy tree.
+**Your agents. Your machines. Connected — with explicit trust and review boundaries.**
 
-The app provides local login/reset, project/environment binding, confirmed lifecycle operations,
-durable receipts, native Tenant access and TCP/UDP publication, Prompt Graph and native-guided
-ZCode/GLM setup. Four Windows-hosted Codex/ZCode native/Ubuntu-WSL profiles have actual
-transport/registration/command evidence. Fixture mode is explicitly separate from live MCP.
-See [install/update/repair](docs/INSTALL.md) and the [phase6 comparison report](docs/verification/COMPARISON_REPORT.md).
-The tested installation is private loopback inside the approved LXC environment; public TLS rollout,
-fresh bare-metal installation, model inference and LXC boot/confinement are not claimed.
+BoxWeave is a personal control plane for a **single trusted operator** working with coding agents and explicitly selected remote development environments. Its independent Web application supports project/environment binding, confirmed environment operations, durable receipts, native Tenant and TCP/UDP access workflows, a non-executing Prompt Graph, and reviewed client/model setup guidance. It connects to an **existing, separately administered** Containarium MCP service; it does not replace Containarium or Incus.
 
-Phase6 adds project reselect/edit/unbind/rebind with preserved data/receipts, real MCP diagnosis even for empty target lists, and a Web Client setup entry generating four public descriptors plus hash-gated local enrollment scripts. [Comparison, actual tests and dispositions](docs/verification/COMPARISON_REPORT.md) supersede earlier broad completion statements; [open risks](docs/verification/OPEN_RISKS.md) identify the retained0.9.0 test deployment and evidence limits. Generation never enrolls a key or connects from the Web server. Prepare an existing authorized identity/private client directory and review source/pins before local execution.
+**Current source:** `main`, version **0.9.1** (`VERSION`). **Phase 7 maintenance is complete within its documented scope.** This is a source/release evidence statement, not a claim that every existing installation has been upgraded or that production deployment has been certified. Current gates are in [PHASE_STATUS](docs/process/PHASE_STATUS.md); actual phase-7 evidence is in [PHASE_07_REVIEW](docs/verification/PHASE_07_REVIEW.md); remaining limitations are in [OPEN_RISKS](docs/verification/OPEN_RISKS.md).
 
-## Verified environment
+## What is supported
 
-The development commands and versioned checkpoints below retain their original scope. Historical statements about incomplete client/phase4 work are superseded by the0.9.0 release report above; they are not current missing-feature declarations. Use the current installation guide for deployment and recovery.
+| Area | Current v2 scope | Important limit |
+| --- | --- | --- |
+| Coding clients | **Windows-hosted Codex and ZCode**, each using Windows-native SSH or an **explicit WSL SSH** distribution (four profiles) | This is not WSL-hosted Agent CLI support. Agent registration, GUI loading and model access are separate checks. |
+| Server application | Non-root **Ubuntu 24.04**, CPython **3.12**, Linux **x86_64** locked package; React/TypeScript Web UI and separate worker | The locked wheels and recorded runs do not establish other Linux, Windows or macOS server support. |
+| Provider | Reviewed Containarium MCP launcher, exact project/backend/resource identity and authenticated capability checks | Provider/Incus installation, restricted SSH launcher provisioning, JWT rotation, container host-key reconciliation and Provider upgrades are **external prerequisites**. |
+| Console | Project bind/edit/unbind/rebind; resource observation and confirmed create/start/stop/delete; receipts; Tenant shared creation/ingress; TCP/UDP passthrough; Prompt Graph; ZCode GLM handoff; public client setup downloads | Actions depend on explicit configuration, permissions and actual Provider capabilities. Graph relations do not execute operations. Public profile generation does not enroll clients. |
 
-Development and Linux tests ran as the non-root boxweave-tenant-dev account in
-the approved project Ubuntu 24.04 LXC: Python 3.12.3, Node 18.19.1, npm 9.2.0.
-Runtime/test wheel locks target CPython 3.12 on Linux x86_64; do not claim they
-are universal Windows/macOS locks. Frontend dependencies are pinned by npm lock.
-Chromium/system library availability is a prerequisite for browser tests;
-the scripts do not install privileged operating-system packages.
+**Not claimed by this version:** macOS enrollment; Cursor or Claude Code integration; WSL-hosted Agent execution; old all-in-one host bootstrap; Web HTTP domain-proxy editor; batch resize; automatic public TLS or source filtering for passthrough; production-ready public exposure; verified boot/confinement; model inference or SLA. Some are deliberate [scope decisions](docs/product/SCOPE.md), not automatically missing code. See the [cross-version source audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md) for the explicit old-to-new dispositions.
 
-## Reproduce isolated verification
+## Choose the correct installation path
 
-Run from this checkout inside the assigned Linux project environment:
+**Important:** The old `install.sh` / `boxweave.sh` workflow belongs to the historical [`archive/0.5.1`](https://github.com/vanishs/boxweave/tree/archive/0.5.1) implementation, **not `main`**. In particular, do **not** run an old `raw.githubusercontent.com/.../main/install.sh` command or use the archived host installer as a v2 updater. The current application installer installs **only the independent v2 app**, not Containarium, Incus, SSH forced commands, JWT/key timers or a TLS reverse proxy.
 
-```bash
+### A. Local fixture for exploration (no live Provider)
+
+Use a prepared non-root Linux environment with Python 3.12, Node/npm, and the locked dependencies. These commands do not provision infrastructure:
+
+```sh
 python3 -m venv .venv
 .venv/bin/pip install --require-hashes -r requirements-dev.lock
 (cd web && npm ci --ignore-scripts --no-audit --no-fund && npm run build)
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m playwright install chromium
-PYTHONPATH=. .venv/bin/python scripts/browser_check.py
+.venv/bin/python -m bwmini init-admin --config examples/fixture.json
 ```
 
-The browser check creates private unique test state under .runtime/browser,
-uses real Chromium/HTTP/application/SQLite and synthetic infrastructure,
-restarts only its owned API/worker processes, verifies no replay and stops them.
-It refuses an occupied loopback port 18640. Screenshots and state remain there
-for review; no resource, policy, route, host trust or client registration changes.
+Run the following in two separate terminals **from the repository root**:
 
-## Run a local fixture for review
-
-From the repository root, after building/installing as above:
-
-```bash
-.venv/bin/python -m bwmini init-admin --config examples/fixture.json
+```sh
 .venv/bin/python -m bwmini worker --config examples/fixture.json
-# In a second terminal:
+```
+
+```sh
 .venv/bin/python -m bwmini serve --config examples/fixture.json
 ```
 
-Administrator initialization is interactive (12+ characters); no password in
-arguments. Open http://127.0.0.1:18640 in that environment. Sign in, name a
-project, save a binding, preview and confirm hello, then load the receipt.
-This loopback fixture deliberately uses HTTP and non-Secure cookies; it is not
-a production HTTPS deployment. Stop these foreground processes when finished.
-The database parent must be private; symlinked/shared state is rejected.
+Open **http://127.0.0.1:18640** in that same environment, log in using the locally created administrator, bind the fixture project, preview/confirm the fixed hello operation and inspect its receipt. The password is entered interactively. The fixture uses real HTTP/SQLite but **synthetic infrastructure**; HTTP and non-Secure cookies are for loopback review only. If port 18640 is in use, do not stop an unrelated service. The example's `.runtime` state is private local test data, not a live deployment.
 
-CLI observation uses the same services and DB:
+### B. Install the v2 application with an existing authorized MCP Provider
 
-```bash
-.venv/bin/python -m bwmini projects --config examples/fixture.json
-.venv/bin/python -m bwmini receipts --config examples/fixture.json
+Follow [INSTALL](docs/INSTALL.md) for the complete, reviewed **build → archive hash verification → non-root install → local administrator initialization → health/repair** procedure. This is not a one-command installation from a clean Ubuntu/Containarium host.
+
+Prerequisites include an independently authorized MCP launcher and identity, exact permitted Provider/backend/project/targets, private external configuration and state paths, prepared Python 3.12/Linux x86_64 dependencies, a usable non-root systemd user manager, and a separately reviewed HTTPS front end if remote Web access is intended. [`examples/live.json`](examples/live.json) is **non-operational** placeholder data. The app listener must remain loopback-only; no public route is created by the installer.
+
+The package entry points are `python3 bwmini/distribution.py build`, then a **separately trusted** `distribution.py install --archive ... --sha256 ... --prefix ... --config ... --activate`; see the exact parameters and independent digest requirement in [INSTALL](docs/INSTALL.md). A successful HTTP response is not an authenticated MCP check. Installed binaries, database schema and recorded evidence must be checked against the actual running release. Existing private test deployment(s) may still run an older version; see [RISK-605](docs/verification/OPEN_RISKS.md).
+
+For a configured deployment, the application CLI exposes `python -m bwmini diagnose --config /private/reviewed.json` for a **read-only authenticated** MCP discovery/read check. It requires a genuinely working reviewed configuration; it is not an installer, host doctor or automatic repair tool. The full operator handoff is in [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md).
+
+## Client onboarding and model access
+
+After logging into the Web UI, **Client setup** generates a public descriptor and a local hash-gated registration script for one of the four selected Windows profiles. It does not connect to the Provider, enroll public keys or read client private keys. Independently review the downloaded source and expected digests, provide an **existing authorized identity and host-key pin**, and perform the local enrollment under the selected agent/runtime; see [clients/README](clients/README.md). A generated/downloaded script is **not** proof that Codex/ZCode has loaded the MCP server.
+
+**Model wizard** records versioned ZCode Z.ai/GLM settings choices and produces native setup guidance. Credentials stay client-side. Completion of an MCP registration is not proof of ZCode model access or inference. See [REQ/AC-015](docs/product/ACCEPTANCE.md) and [model evidence](docs/verification/TASK_008_MODEL_WIZARD.md).
+
+## Verify and understand the evidence
+
+On the **assigned prepared non-root Linux project environment only**, run:
+
+```sh
+.venv/bin/python scripts/check_knowledge.py
+.venv/bin/python scripts/validate.py
+# Optional: seven real-browser / synthetic-infrastructure fixture workflows
+.venv/bin/python scripts/validate.py --browser
 ```
 
-## Live prerequisite
+The validation script does **not** install dependencies, run live Provider drivers or deploy services. Its browser lane requires existing Chromium/system libraries. Do not interpret historical recorded test results as a fresh run, or fixture success as real network, TLS, Agent UI or isolation acceptance. Consult [TEST_STRATEGY](docs/verification/TEST_STRATEGY.md), [FEATURE_MATRIX](docs/verification/FEATURE_MATRIX.md) and [OPEN_RISKS](docs/verification/OPEN_RISKS.md).
 
-examples/live.json is a placeholder, not an operational or credential-bearing
-configuration. A separately reviewed independent application MCP launcher,
-protected runtime credential and exact target identity are required. The
-original project container had no verified launcher at the first check. A later
-approved independent nesting-enabled lab now verifies real MCP, HTTP and
-Chromium hello/receipt/restart behavior with version 0.1.1; see
-[actual live-chain evidence](docs/verification/LIVE_MCP_CHAIN.md). The bundled
-example remains a placeholder and fails before creating state. No existing
-Agent token/private key was borrowed or exported. The original public demo
-remains fixture; this live result comes from isolated loopback test instances.
+## Documentation and historical version
 
-Live mode allows only explicitly listed targets, compares scoped creation/name
-identity on observation, initializes/discovers/calls MCP, verifies exact
-whoami/hostname before fixed hello, and rejects unsupported wire formats.
-Its current parser accepts the observed exit_code/stdout envelope or structured
-stdout/exit_code result, not arbitrary guest markers. The synthetic peer tests
-do not prove installed provider compatibility. Only protocol 2024-11-05 has
-fixtures; other versions fail closed.
+- [Documentation index](docs/INDEX.md) — current authoritative product, architecture, status, installation, test and risk references.
+- [Archive 0.5.1 → main source audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md) — code-based function mapping and known product/verification gaps.
+- [R-00/R-01 validation handoff](docs/verification/R00_R01_TEST_HANDOFF.md) — checks that require an authorized repository checkout or prepared Linux environment.
+- [Current status](docs/process/PHASE_STATUS.md) and [final handoff](docs/process/FINAL_HANDOFF.md) — the next maintainer's starting points.
+- [Archive 0.5.1](https://github.com/vanishs/boxweave/tree/archive/0.5.1) — historical implementation and evidence only. Older setup instructions are **not** current v2 instructions. The `legacy/pre-v2` historical ref is also documented in [LEGACY_SYNC](docs/knowledge/LEGACY_SYNC.md).
 
-## Windows connection probe
-
-clients/windows/diagnose-connection.ps1 consumes an operator-reviewed public
-descriptor, existing private-key path (presence only; never reads its contents),
-and existing pinned public known_hosts. It uses native Windows OpenSSH with
-BatchMode/strict trust and performs initialize/initialized/discovery/read-only
-call. It does not enroll or edit registration/trust. Even a connection success
-reports registration/UI unverified and overall incomplete. Cleanup requests
-local SSH termination; remote descendants are not certified cancelled.
-The descriptor example contains placeholders.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows_connection.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File clients/windows/diagnose-connection.ps1 -Descriptor C:\reviewed\public-profile.json
-```
-
-Only AST and three no-network rejection cases passed on Windows PowerShell 5.1.
-Real native SSH/Agent recognition and enrollment remain unverified. Full
-enrollment, setup-payload integrity distribution and WSL profiles are not
-completed by this connection probe.
-
-## Evidence and limits
-
-See [vertical-slice evidence](docs/verification/VERTICAL_SLICE.md),
-[task status](docs/process/IMPLEMENTATION_PLAN.md) and
-[handoff](docs/process/HANDOFF.md). Linux tests cover normal/failure state paths,
-auth/CSRF, target change, stale revision, no-replay recovery, MCP pagination and
-malformed responses. No real create/policy/route/model call or production
-installation/HTTPS/autostart/confinement acceptance is claimed. Phase 4 remains
-partial until the real selected-client/application path and developer gate pass.
-
-## Prompt Graph (0.2.0)
-
-After login choose Prompt Graph. Create/edit a named graph, drag cards, add/edit comments and undirected relations, and save explicitly. Project/environment/Tenant context is text only and never executes infrastructure. Revision conflicts keep the local draft; reload explicitly to reconcile. Save before copying or exporting Markdown. Recognized secrets are redacted and Markdown is escaped; review exports because redaction is not complete secret detection. Clipboard failure never reports a successful copy. Delete removes graph data only.
-
-Schema 2 migrates schema-1 data transactionally. Back up persistent SQLite state consistently before an update; older binaries refuse schema 2. This iteration is source/test delivery, not an update of the previously published demo. See [graph API, limits and actual tests](docs/verification/PHASE_05_TASK_011.md) and [ADR-006](docs/design/ADR/0006-prompt-composition.md).
-
-```bash
-PYTHONPATH=. .venv/bin/python scripts/graph_browser_check.py
-```
-
-The graph browser check uses owned loopback port 18643, real Chromium/HTTP/SQLite and fixture infrastructure, asserts zero execution operations, and stops its temporary server. Browser/system dependencies must already be installed as described above.
-
-## Reviewed existing-identity native Codex registration (0.2.1)
-
-The Windows-native client package now has an operator-trusted bootstrap that verifies payload bytes before executing them, probes strict authenticated MCP, and registers in an explicitly selected Codex home. Existing conflicting registration needs explicit -Replace; unrelated configuration/tool approval tables are preserved, unsupported forms stop. It does not provision SSH identities, copy sign-in data or claim GUI loading. Use the [scope, descriptor, recovery and actual native tests](docs/verification/TASK_003A_NATIVE_REGISTRATION.md); the example is intentionally non-operational until reviewed. Never trust a digest delivered only with an untrusted download.
-
-## Explicit native Codex executable (0.2.2)
-
-When a regular Windows shell cannot find codex.exe, pass -CodexExecutable with the reviewed absolute .exe path to clients/windows/bootstrap-native.ps1. It forwards the selected binary to the hash-verified registration payload, which still checks the descriptor's exact Codex version. Omitting the parameter uses PATH. No global PATH changes or app-directory discovery are performed. An App-bundled binary is version-specific and can move after an update; select and validate the new path explicitly. No extra installation is required merely to repair PATH when a reviewed binary already exists.
-
-See [native client acceptance and reproducible checks](docs/verification/TASK_003B1_NATIVE_CLIENT.md). The dedicated native TUI/read-only test passed with user cooperation; automatic SSH identity bootstrap and WSL/ZCode/full-release acceptance remain incomplete. Historical unverified statements above describe their original test scope.
-
-## Receipt history (0.2.3)
-
-In the receipt section choose Refresh receipt history, Older receipts, then Open receipt to inspect an earlier result. A query never repeats work. Unknown means completion is still unknown; refreshing does not retry or certify cancellation. A failed refresh keeps the previous page and selected receipt. History is local stored evidence and does not need a live provider connection.
-
-For the same paged view use python -m bwmini history --config /private/reviewed.json --limit 20, optionally --cursor with the returned next_cursor. Existing CLI receipts and Web Load latest receipt stay available. [Verification and API limits](docs/verification/TASK_002A_RECEIPT_HISTORY.md). This source iteration has not updated the previously published demo.
-
-## Recovery observations (0.3.0)
-
-Unknown receipts offer Check current target; matching identity is not proof that the old command completed and does not authorize retry. CLI reconcile --config <private-config> --operation <id> has the same boundary. Actual nonzero fixed-command exits are preserved; unexpected output is withheld. Schema3 adds observations; take a consistent private backup before updating, older binaries reject3. See [recovery tests and limits](docs/verification/TASK_002_COMPLETION.md).
-
-## Native identity preparation and independent diagnosis (0.4.0)
-
-The selected Windows-native Codex path now supports preparing a fresh local Ed25519 identity with private ACLs, installing only its public half through an existing authorized bootstrap channel, trusted registration, and independent diagnosis of actual connection versus registration. Existing identities still work; old keys/config/trust are not silently replaced. No private key/sign-in data is copied and no host SSH configuration is repaired. Follow the [reviewed entry points, commands, recovery and actual native evidence](docs/verification/TASK_003_COMPLETION.md). WSL/ZCode and release installers remain separate work.
-
-## Maintenance handoff
-
-Start at [documentation index](docs/INDEX.md) and [final handoff](docs/process/FINAL_HANDOFF.md). Current phase status has one owner: [PHASE_STATUS](docs/process/PHASE_STATUS.md). Historical completion observations below/elsewhere retain only their recorded scope.
-
-## Implementation branches
-
-`main` contains the v2 implementation. `legacy/pre-v2` preserves the previous implementation and its complete history at d8a09dd180139159e035963502e7793a37e92bae. Historical reports retain their original branch names. The old main/install.sh URL is intentionally retired; use the v2 [installation guide](docs/INSTALL.md). Branch promotion does not deploy or upgrade existing services.
+The old `README` mixed obsolete phase-specific progress statements from versions 0.2.x–0.9.x with current behavior. Their scoped evidence remains in the [versioned verification reports](docs/verification/FEATURE_MATRIX_HISTORY.md) and [handoff history](docs/process/HANDOFF_HISTORY.md); it must not be used as a substitute for a current release or deployment check.
 
 License: [MIT](LICENSE).
