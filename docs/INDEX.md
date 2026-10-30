@@ -31,3 +31,6 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [New change validation queue](verification/REMEDIATION_TEST_QUEUE.md)
 
 - [New host/CLI architecture decision](design/ADR/0007-host-install-boundary.md)
+
+- [F-001–F-015 semantic parity](verification/FEATURE_PARITY_ARCHIVE_051.md)
+- [Old/new Web workflow navigation and browser validation](verification/WEB_WORKFLOW_PARITY.md)
