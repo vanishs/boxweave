@@ -16,7 +16,7 @@ PROVIDER_ASSETS = {
     "containarium": "dc356b07ca2138f28052d021458f8081753b2c6c186fe7508b0645a06a9b121d",
     "mcp-server": "5b12e284b3b103c01bf9eff0cfe2f2a1e3b25476dfcc72aebe8166b4235198a2",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "nesting.py", "client_setup.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "nesting.py", "client_setup.py", "host_cli.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 
@@ -467,19 +467,16 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py","nesting.py","client_setup.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","nesting.py","client_setup.py","host_cli.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
             old["managed_files"][str(target)] = sha(payload)
-        # Root-owned entrypoint: client generation is reviewed, public-only, and
-        # never mutates Incus or the external Provider. Other management actions
-        # continue to use the application-owned management module.
+        # Execute only root-owned, isolated stdlib code for all host CLI
+        # actions. Application-owned modules must never be run as root.
         entry = Path("/usr/local/bin/boxweave")
         entry_script = (b'#!/bin/sh\n'
-                        b'if [ "${1:-}" = client ]; then shift; exec /usr/bin/python3 /usr/local/lib/boxweave/default/client_setup.py "$@"; fi\n'
-                        b'cd /home/boxweave/boxweave/current || exit 2\n'
-                        b'exec /home/boxweave/boxweave/current/.venv/bin/python -m bwmini.manage "$@"\n')
+                        b'exec /usr/bin/python3 -I /usr/local/lib/boxweave/default/host_cli.py "$@"\n')
         require(not entry.exists() or str(entry) in old["managed_files"], "FOREIGN_BOXWEAVE_ENTRY")
         atomic(entry, entry_script, 0o755)
         old["managed_files"][str(entry)] = sha(entry_script)
@@ -514,14 +511,55 @@ store.admin(generate_password_hash(password))
         require(sshd.returncode==0,"SSHD_OBSERVATION_FAILED")
         for line in sshd.stdout.splitlines():
             if line.startswith("port "):port=int(line.split()[1]);break
+        # Publish only non-secret connection details in a root-owned 0644
+        # descriptor. The app directory and credentials remain private.
+        app_cfg = Path("/home/boxweave/boxweave/config.json")
+        require(app_cfg.is_file() and not app_cfg.is_symlink(), "APP_PUBLIC_CONFIG_UNAVAILABLE")
+        raw_cfg = app_cfg.read_bytes()
+        require(len(raw_cfg) <= 65536, "APP_CONFIG_TOO_LARGE")
+        cfg = json.loads(raw_cfg)
+        web_port = cfg.get("port")
+        require(cfg.get("host") == "127.0.0.1" and type(web_port) is int
+                and 1024 <= web_port <= 65535, "PUBLIC_WEB_ENDPOINT_NOT_LOOPBACK")
+        descriptor = {"schema_version":1,"phase":"ready","version":version,"application_user":APP,
+                      "app_prefix":"/home/boxweave/boxweave","web_port":web_port,
+                      "host":host,"port":port,"server_key":key,
+                      "managed_public_key":managed_public_key}
+        public_path = PUBLIC / "client-public.json"
+        public_payload = (json.dumps(descriptor,sort_keys=True,indent=2)+"\n").encode()
+        atomic(public_path,public_payload,0o644)
+        old["managed_files"][str(public_path)] = sha(public_payload)
         old.update(phase="ready",host=host,port=port,server_key=key,managed_public_key=managed_public_key,
                    credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())
+        print(json.dumps({"next_steps":{
+            "cli":"boxweave", "cli_help":"boxweave --help", "status":"boxweave status",
+            "web_on_server":"http://127.0.0.1:"+str(web_port),
+            "web_access":"Use a reviewed SSH tunnel; Web is loopback-only",
+            "client_setup":"boxweave client (no sudo)",
+            "client_role":"Use your authorized Ubuntu SSH/sudo login; not the boxweave service account",
+            "admin_password_location":"/home/boxweave/boxweave/initial-admin-password",
+            "verification":"Run boxweave doctor; verify real client MCP calls"
+        }}),flush=True)
         print(json.dumps({"state":"ready","version":version,"host":host,"ssh_port":port,"user":APP,
                           "client_config_command":"/usr/bin/python3 /usr/local/lib/boxweave/default/online.py client-config --identity ABSOLUTE_CLIENT_KEY --known-hosts ABSOLUTE_CLIENT_KNOWN_HOSTS",
                           "enroll_command":"sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key FULL_CLIENT_PUBLIC_KEY",
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
+        # Human-facing last screen; the JSON above remains machine-readable.
+        print("\n[boxweave] Installation complete — next steps", flush=True)
+        print("  1. Run as your normal Ubuntu login: boxweave", flush=True)
+        print("  2. CLI help and diagnostics: boxweave --help | boxweave status | boxweave doctor", flush=True)
+        print("  3. Web (on Ubuntu only): http://127.0.0.1:" + str(web_port), flush=True)
+        print("     From your own computer: ssh -N -L " + str(web_port) + ":127.0.0.1:" +
+              str(web_port) + " YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST", flush=True)
+        print("     Then open http://127.0.0.1:" + str(web_port) + " on your computer.", flush=True)
+        print("  4. First Web admin password (private): /home/boxweave/boxweave/initial-admin-password", flush=True)
+        print("  5. Generate client setup (no sudo): boxweave client", flush=True)
+        print("     Use your authorized Ubuntu SSH/sudo login; boxweave is the service user.", flush=True)
+        print("  6. Verify the resulting client's actual MCP initialize/tools/read; status alone is not proof.", flush=True)
+        print("  Privileged SSH enrollment still requires explicit administrator approval.", flush=True)
+
     finally: os.close(lock)
 
 

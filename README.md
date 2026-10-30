@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.8.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.9.** This is a preview, not a certified clean-host deployment.
 
 ## Install on Ubuntu
 
@@ -50,13 +50,54 @@ Run `bash install.sh --help` for all parameters.
 
 Streamed install/update/repair automatically preserves an already-installed complete Containarium and Incus. It does **not** adopt an unrelated BoxWeave installation or silently repair/upgrade a third-party Provider. For a preinstalled `dir` storage pool on bcachefs, first verify its source and mount dependencies; the installer will not reconfigure the storage pool.
 
+## After installation: finish the setup
+
+The successful installer prints a `next_steps` record. These commands work as
+a regular Ubuntu login; **do not use `sudo` for ordinary help, status or
+client setup**:
+
+```sh
+boxweave                # Web address, SSH tunnel, next steps
+boxweave --help         # All available host commands
+boxweave status         # Public Web reachability, not an authenticated MCP proof
+boxweave doctor         # Safe host/service observations
+boxweave client         # Windows Codex/WSL guided client setup
+```
+
+The Web server is bound to **127.0.0.1** for safety, so its URL is
+accessible on the Ubuntu host only. To open it in your own browser, make an
+authenticated tunnel from your local computer (use the actual port printed by
+`boxweave`):
+
+```sh
+ssh -N -L 18640:127.0.0.1:18640 YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST
+```
+
+Then browse to `http://127.0.0.1:18640` locally (replace 18640 when
+the installed port differs). The initial Web administrator password is stored
+privately at `/home/boxweave/boxweave/initial-admin-password`: an authorized
+administrator can read it locally; the installer never prints the password.
+The service account `boxweave` is deliberately different from your SSH
+administrator and must **not** be used as an everyday login.
+
+Generate the client enrollment script with `boxweave client`, review and run
+it on the Windows client. Only the actual client-key enrollment requires
+administrative authorization. Finish by verifying MCP discovery and a real
+read-only call; simply generating a script does not prove a connected Agent.
+
+If an installation fails, inspect its original log/phase and repair that
+specific issue before retrying. Do not relax `/home/boxweave` from mode 0700
+or grant the human login broad Incus privileges just to run the CLI.
+[Host CLI reference](docs/CLI.md).
+
+
 ## Connect an AI coding agent
 
 For **Windows Codex using WSL SSH**, the installed server now offers a unified client generator with an interactive terminal wizard or explicit non-interactive flags:
 
 ```bash
-sudo boxweave client
-sudo boxweave client --agent codex --transport wsl --admin-user luka --output /home/luka/boxweave-setup.ps1
+boxweave client
+boxweave client --agent codex --transport wsl --admin-user YOUR_UBUNTU_ADMIN --output "$HOME/boxweave-setup.ps1"
 ```
 
 Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed Ubuntu enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The wizard also installs a separately managed Codex AGENTS block containing this server's public workload key for create_container.ssh_keys; -WslGuidance additionally installs that guidance under the selected WSL user's Codex home. The server-side MCP create gate refuses a missing/mismatched managed workload key before forwarding. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.

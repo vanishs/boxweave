@@ -14,6 +14,27 @@ import re
 import stat
 import sys
 
+PUBLIC_DESCRIPTOR = Path("/usr/local/lib/boxweave/default/client-public.json")
+
+
+def load_public_state(path=None):
+    """Only root-published, non-secret metadata; never read the private install marker."""
+    path = PUBLIC_DESCRIPTOR if path is None else Path(path)
+    meta = path.lstat()
+    if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+            or meta.st_mode & 0o022 or meta.st_size > 16384):
+        raise ValueError("PUBLIC_DESCRIPTOR_UNTRUSTED")
+    for parent in path.parents:
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError("PUBLIC_DESCRIPTOR_PARENT_UNTRUSTED")
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(state, dict) or state.get("schema_version") != 1
+            or state.get("phase") != "ready"):
+        raise ValueError("READY_INSTALL_REQUIRED")
+    return state
+
+
 try:
     from . import online
 except ImportError:
@@ -506,15 +527,16 @@ def main(argv=None):
     parser.add_argument("--stdout", action="store_true", help="Emit the public script to stdout instead of a file")
     args = parser.parse_args(argv)
     try:
-        if os.geteuid() != 0:
-            raise ValueError("ROOT_REQUIRED_FOR_CLIENT_PUBLIC_STATE")
-        state = online.current_state()
+        state = load_public_state()
         if state.get("phase") != "ready":
             raise ValueError("READY_INSTALL_REQUIRED")
         interactive = sys.stdin.isatty()
         select(args.agent, ("codex",), "Choose agent", interactive)
         select(args.transport, ("wsl",), "Choose SSH transport", interactive)
-        admin = args.admin_user or os.environ.get("SUDO_USER", "")
+        # Ordinary users may generate public profiles without sudo. The login
+        # used later to enroll a key is an existing administrator, not the
+        # dedicated boxweave application account.
+        admin = args.admin_user or os.environ.get("SUDO_USER", "") or (pwd.getpwuid(os.getuid()).pw_name if os.geteuid() != 0 else "")
         if not USER.fullmatch(admin or ""):
             if not interactive:
                 raise ValueError("ADMIN_USER_REQUIRED")

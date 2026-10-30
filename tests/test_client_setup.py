@@ -86,7 +86,7 @@ class ClientGeneratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)/"setup.ps1"
             with (patch.object(client_setup.os, "geteuid", return_value=0),
-                  patch.object(client_setup.online, "current_state", return_value=ready_state()),
+                  patch.object(client_setup, "load_public_state", return_value=ready_state()),
                   patch("sys.stdin.isatty", return_value=False),
                   patch.dict(os.environ, {"SUDO_USER": "root"}),
                   patch("sys.stdout", new_callable=io.StringIO) as stdout):
@@ -103,7 +103,7 @@ class ClientGeneratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)/"wizard.ps1"
             with (patch.object(client_setup.os,"geteuid",return_value=0),
-                  patch.object(client_setup.online,"current_state",return_value=ready_state()),
+                  patch.object(client_setup,"load_public_state",return_value=ready_state()),
                   patch("sys.stdin.isatty",return_value=True),
                   patch("builtins.input",side_effect=["1","1"]),
                   patch.dict(os.environ,{"SUDO_USER":"root"}),
@@ -112,17 +112,39 @@ class ClientGeneratorTests(unittest.TestCase):
                 self.assertEqual(code,0)
                 self.assertEqual(out.read_text(),client_setup.render(ready_state(),"luka"))
 
-    def test_generator_refuses_unready_and_nonroot_before_output(self):
+    def test_generator_refuses_missing_descriptor_before_output(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target=str(Path(tmp)/"never.ps1")
-            with (patch.object(client_setup.os,"geteuid",return_value=1234),
-                  patch.object(client_setup.online,"current_state") as state,
-                  patch("sys.stderr",new_callable=io.StringIO)):
-                code=client_setup.main(["--agent","codex","--transport","wsl",
-                                        "--admin-user","luka","--output",target])
-            self.assertEqual(code,2)
-            state.assert_not_called()
+            target = str(Path(tmp) / "never.ps1")
+            with patch.object(client_setup, "load_public_state", side_effect=ValueError("PUBLIC_DESCRIPTOR_NOT_AVAILABLE")), \
+                 patch("sys.stderr", new_callable=io.StringIO):
+                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
+                                          "--admin-user", "luka", "--output", target])
+            self.assertEqual(code, 2)
             self.assertFalse(Path(target).exists())
+
+    def test_nonroot_generator_uses_public_descriptor_without_sudo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = str(Path(tmp) / "normal.ps1")
+            with patch.object(client_setup.os, "geteuid", return_value=1001), \
+                 patch.object(client_setup, "load_public_state", return_value=ready_state()), \
+                 patch("sys.stdout", new_callable=io.StringIO):
+                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
+                                          "--admin-user", "luka", "--output", target])
+            self.assertEqual(code, 0)
+            self.assertIn("ManagedWorkloadPublicKey", Path(target).read_text())
+
+    def test_rejects_untrusted_descriptor_not_even_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "public.json"
+            target.write_text(json.dumps(ready_state() | {"schema_version": 1}))
+            target.chmod(0o666)
+            with self.assertRaisesRegex(ValueError, "PUBLIC_DESCRIPTOR_UNTRUSTED"):
+                client_setup.load_public_state(target)
+            target.chmod(0o600)
+            link = Path(tmp) / "alias.json"
+            link.symlink_to(target)
+            with self.assertRaisesRegex(ValueError, "PUBLIC_DESCRIPTOR_UNTRUSTED"):
+                client_setup.load_public_state(link)
 
 
 if __name__ == "__main__":
