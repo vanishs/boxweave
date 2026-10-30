@@ -201,7 +201,7 @@ def main(argv=None):
         result, code = inspect(args.name, args.project, diagnose=args.box_action == "diagnose")
     elif args.action == "doctor":
         result = status(info)
-        result["services"] = {"credential_timer": service_observation("boxweave-"+info["application_user"]+"-credential.timer"),
+        result["services"] = {"credential_timer": service_observation("boxweave-credential-"+info["application_user"]+".timer"),
                               "trust_timer": service_observation("boxweave-trust.timer")}
         result["user_manager"] = service_observation("user@" + str(pwd.getpwnam(info["application_user"]).pw_uid) + ".service")
         if args.mcp:
