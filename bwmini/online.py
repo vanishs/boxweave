@@ -236,7 +236,9 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
             "UBUNTU_MIN_2404_X86_64_PYTHON_MIN312_REQUIRED")
     system = platform.freedesktop_os_release()
-    require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")), "UBUNTU_MIN_2404_REQUIRED")
+    # Application-only installs may run on another suitable Linux distribution
+    # with a preinstalled, reviewed Provider. Host package provisioning below
+    # is deliberately Ubuntu-specific (APT/Zabbly/PostgreSQL packages).
     require(Path("/run/systemd/system").is_dir(), "SYSTEMD_REQUIRED")
     detected = subprocess.run(["systemd-detect-virt","--container"], capture_output=True, text=True, timeout=5)
     print(json.dumps({"nesting_preflight":{"environment":detected.stdout.strip() or "unknown",
@@ -247,6 +249,9 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     marker = STATE / "state.json"
     if not marker.exists():
         provider = existing_provider_options(provider_url, provider_secret_file, provider_cli)
+        if provider is None:
+            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+                    "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
         if provider is not None:
             verify_existing_provider(provider)
         else:
@@ -277,6 +282,9 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         except BlockingIOError: raise Failure("INSTALL_ALREADY_RUNNING") from None
         old = current_state(); check_managed(old)
         external = old.get("provider_mode") == "external"
+        if not external:
+            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+                    "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
         require(old.get("provider_mode", "standalone") in ("external", "standalone"),
                 "UNKNOWN_PROVIDER_MODE")
         if external:
@@ -300,6 +308,8 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
             return time.monotonic()+600
         if importlib.util.find_spec("ensurepip") is None:
+            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+                    "PYTHON_VENV_PREREQUISITE_INSTALL_MANUALLY")
             deadline = phase("python_venv_prerequisite")
             env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
             with (STATE / "python-venv-apt.log").open("ab") as log:
@@ -537,7 +547,7 @@ store.admin(generate_password_hash(password))
             "web_on_server":"http://127.0.0.1:"+str(web_port),
             "web_access":"Use a reviewed SSH tunnel; Web is loopback-only",
             "client_setup":"boxweave client (no sudo)",
-            "client_role":"Use your authorized Ubuntu SSH/sudo login; not the boxweave service account",
+            "client_role":"Use your authorized Linux SSH/sudo login; not the boxweave service account",
             "admin_password_location":"/home/boxweave/boxweave/initial-admin-password",
             "verification":"Run boxweave doctor; verify real client MCP calls"
         }}),flush=True)
@@ -550,13 +560,13 @@ store.admin(generate_password_hash(password))
         print("\n[boxweave] Installation complete — next steps", flush=True)
         print("  1. Run as your normal Ubuntu login: boxweave", flush=True)
         print("  2. CLI help and diagnostics: boxweave --help | boxweave status | boxweave doctor", flush=True)
-        print("  3. Web (on Ubuntu only): http://127.0.0.1:" + str(web_port), flush=True)
+        print("  3. Web (on this Linux host): http://127.0.0.1:" + str(web_port), flush=True)
         print("     From your own computer: ssh -N -L " + str(web_port) + ":127.0.0.1:" +
-              str(web_port) + " YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST", flush=True)
+              str(web_port) + " YOUR_HOST_ADMIN@YOUR_LINUX_HOST", flush=True)
         print("     Then open http://127.0.0.1:" + str(web_port) + " on your computer.", flush=True)
         print("  4. First Web admin password (private): /home/boxweave/boxweave/initial-admin-password", flush=True)
         print("  5. Generate client setup (no sudo): boxweave client", flush=True)
-        print("     Use your authorized Ubuntu SSH/sudo login; boxweave is the service user.", flush=True)
+        print("     Use your authorized Linux SSH/sudo login; boxweave is the service user.", flush=True)
         print("  6. Verify the resulting client's actual MCP initialize/tools/read; status alone is not proof.", flush=True)
         print("  Privileged SSH enrollment still requires explicit administrator approval.", flush=True)
 
