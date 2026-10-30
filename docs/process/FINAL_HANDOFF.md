@@ -57,3 +57,7 @@ Live acceptance drivers are retained for reproducibility, not universal startup 
 ## Branch promotion
 
 Current source branch: main (formerly rewrite/v2). Legacy source branch: legacy/pre-v2 (formerly main). Existing worktree directories remain in place; never infer implementation from directory name. The legacy worktree must continue tracking origin/legacy/pre-v2, and the v2 worktree origin/main. See [promotion record](BRANCH_PROMOTION.md) for identities, publication checks and verification.
+
+## 2026-10-29 R-08/09 operator documentation update
+
+Use [manual migration](../MIGRATING_FROM_051.md), [troubleshooting](../TROUBLESHOOTING.md), and [upstream ownership](../UPSTREAM_PROVIDER.md) rather than the archived installer/host patch. No legacy schema conversion is authorized. Source version is read from [VERSION](../../VERSION), not historical phase headers. Remaining full-host acceptance and CI are [queued](../verification/REMEDIATION_TEST_QUEUE.md).

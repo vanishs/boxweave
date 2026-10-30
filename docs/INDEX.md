@@ -34,3 +34,7 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 
 - [F-001–F-015 semantic parity](verification/FEATURE_PARITY_ARCHIVE_051.md)
 - [Old/new Web workflow navigation and browser validation](verification/WEB_WORKFLOW_PARITY.md)
+
+- [Operator troubleshooting](TROUBLESHOOTING.md)
+- [Manual migration from archived 0.5.1](MIGRATING_FROM_051.md)
+- [Upstream Provider/Incus contract](UPSTREAM_PROVIDER.md)

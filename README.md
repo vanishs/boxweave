@@ -1,6 +1,6 @@
 # BoxWeave
 
-**Current source version: 0.13.2.** BoxWeave is a self-hosted, single-operator workspace for remote development with project/environment bindings, deliberate lifecycle actions, durable operation receipts, Tenant membership and network access, TCP/UDP publication, Prompt Graph, and an assisted ZCode model configuration handoff.
+**Current source version: 0.13.3.** BoxWeave is a self-hosted, single-operator workspace for remote development with project/environment bindings, deliberate lifecycle actions, durable operation receipts, Tenant membership and network access, TCP/UDP publication, Prompt Graph, and an assisted ZCode model configuration handoff.
 
 The current application was independently reconstructed from the archived 0.5.1 implementation; it is **not** a drop-in replacement for the old host deployment. The historical source is at [archive/0.5.1](https://github.com/vanishs/boxweave/tree/archive/0.5.1). Do not execute the archived installer against a new installation. Phase 7 maintenance has completed in its documented test scope; host bootstrap and operational parity are a new remediation effort, not a previously accepted release. See [current status](docs/process/PHASE_STATUS.md) and [open risks](docs/verification/OPEN_RISKS.md).
 
@@ -53,6 +53,7 @@ Generate the wheels first with the hash-locked requirements as described in [ins
 - [Documentation map](docs/INDEX.md), [host/bootstrap boundaries](docs/HOST_BOOTSTRAP.md), [application installation](docs/INSTALL.md)
 - [Management CLI](docs/CLI.md), [client profiles](clients/README.md) and [scope](docs/product/SCOPE.md)
 - [R-00 cross-branch audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [semantic parity F-001–F-015](docs/verification/FEATURE_PARITY_ARCHIVE_051.md), [Web workflow mapping](docs/verification/WEB_WORKFLOW_PARITY.md), [feature/evidence matrix](docs/verification/FEATURE_MATRIX.md), [remaining risks](docs/verification/OPEN_RISKS.md)
+- [Manual migration from 0.5.1](docs/MIGRATING_FROM_051.md), [troubleshooting](docs/TROUBLESHOOTING.md), [upstream contract](docs/UPSTREAM_PROVIDER.md)
 - [Contributing agent instructions](AGENTS.md), [handoff](docs/process/FINAL_HANDOFF.md), [change procedure](docs/process/MAINTENANCE.md)
 
 Historical version-by-version reports are indexed under [verification](docs/INDEX.md); they describe their original environment and source, not today's deployment.

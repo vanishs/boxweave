@@ -179,3 +179,5 @@ SRC-093 — Actual authorized branch promotion: user renamed remote old main to 
 | SRC-094 | main commits c61be3f, 4f05ead, c346934; `install.sh`, `boxweave.sh`, `bwmini/manage.py`, `docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md` | S: GitHub source changes; analog isolated parser/unit checks reported; U: submitted revision full regression, host deployment/Provider, fresh Ubuntu, boot |
 
 | SRC-095 | `docs/verification/FEATURE_PARITY_ARCHIVE_051.md`, `WEB_WORKFLOW_PARITY.md` and `clients/README.md` at new source | S/D: selected legacy/new source paths and approved Windows-only matrix; U: no new Web/Windows live test in this review |
+
+| SRC-096 | `docs/MIGRATING_FROM_051.md`, `docs/TROUBLESHOOTING.md`, `docs/UPSTREAM_PROVIDER.md` | D/S: new operator docs derived from selected old/new code and current upstream public README; U: no legacy migration, credential handling, fresh host or Provider test |
