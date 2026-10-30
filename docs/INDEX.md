@@ -22,3 +22,9 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 Earlier evidence remains available: [phase6 comparison](verification/COMPARISON_REPORT.md), [phase5 release](verification/TASK_012_013_RELEASE.md), [native network/ports](verification/TASK_009_010_ACCESS.md), [historical index](INDEX_HISTORY.md). These are dated/revisioned records, not current gate owners. Archived status/handoff/matrix snapshots are linked from their current owners.
 
 Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs. Reports record evidence; the code, schema and installed manifest remain the truth for actual runtime state. Documentation does not deploy an application.
+
+## 0.10+ operator remediation routes
+
+- [Host bootstrap and upstream ownership](HOST_BOOTSTRAP.md)
+- [0.5.1 source parity audit](verification/ARCHIVE_051_TO_MAIN_AUDIT.md)
+- [New change validation queue](verification/REMEDIATION_TEST_QUEUE.md)
