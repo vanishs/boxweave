@@ -546,6 +546,20 @@ store.admin(generate_password_hash(password))
                           "enroll_command":"sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key FULL_CLIENT_PUBLIC_KEY",
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
+        # Human-facing last screen; the JSON above remains machine-readable.
+        print("\n[boxweave] Installation complete — next steps", flush=True)
+        print("  1. Run as your normal Ubuntu login: boxweave", flush=True)
+        print("  2. CLI help and diagnostics: boxweave --help | boxweave status | boxweave doctor", flush=True)
+        print("  3. Web (on Ubuntu only): http://127.0.0.1:" + str(web_port), flush=True)
+        print("     From your own computer: ssh -N -L " + str(web_port) + ":127.0.0.1:" +
+              str(web_port) + " YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST", flush=True)
+        print("     Then open http://127.0.0.1:" + str(web_port) + " on your computer.", flush=True)
+        print("  4. First Web admin password (private): /home/boxweave/boxweave/initial-admin-password", flush=True)
+        print("  5. Generate client setup (no sudo): boxweave client", flush=True)
+        print("     Use your authorized Ubuntu SSH/sudo login; boxweave is the service user.", flush=True)
+        print("  6. Verify the resulting client's actual MCP initialize/tools/read; status alone is not proof.", flush=True)
+        print("  Privileged SSH enrollment still requires explicit administrator approval.", flush=True)
+
     finally: os.close(lock)
 
 
