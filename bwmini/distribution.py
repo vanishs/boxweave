@@ -37,15 +37,15 @@ def verify(archive,sha):
   require(set(manifest['source'])=={'commit','state'} and re.fullmatch('[0-9a-f]{40}',manifest['source']['commit']) is not None and manifest['source']['state'] in ('clean','modified'),'PROVENANCE_INVALID')
   files=manifest['files'];require(isinstance(files,dict) and set(files)|{'manifest.json'}==set(names),'MANIFEST_MEMBERS_MISMATCH')
   require({'bwmini/__main__.py','bwmini/deploy_check.py','requirements.lock','VERSION','web/dist/index.html'}<=set(files),'PACKAGE_INCOMPLETE')
-  require(all(n.startswith(('bwmini/','clients/','web/dist/','wheels/')) or n in ('VERSION','requirements.lock') for n in files),'PACKAGE_CONTENT_INVALID')
+  require(all(n.startswith(('bwmini/','clients/','web/dist/','wheels/')) or n in ('VERSION','requirements.lock','boxweave.sh') for n in files),'PACKAGE_CONTENT_INVALID')
   for name,sha256 in files.items():require(re.fullmatch('[0-9a-f]{64}',sha256) is not None and digest(z.read(name))==sha256,'MEMBER_DIGEST_MISMATCH')
   require(z.read('VERSION').decode().strip()==manifest['version'],'VERSION_MISMATCH')
   return manifest
 def build(root,wheels,output,commit,source_state):
  root=Path(root).resolve();files={}
- modules=('__init__','__main__','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
+ modules=('__init__','__main__','manage','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
- public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+list((root/'web/dist').rglob('*'))
+ public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh']+list((root/'web/dist').rglob('*'))
  for p in public:
   if p.is_file():
    require(not p.is_symlink(),'SYMLINK_SOURCE');files[p.relative_to(root).as_posix()]=p.read_bytes()

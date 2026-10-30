@@ -13,7 +13,7 @@ The current application was independently reconstructed from the archived 0.5.1 
 | Infrastructure | A reviewed Containarium Provider, Incus and an independently authorized application MCP launcher |
 | Web | Local administrator, bindings, environments, Tenant/port plans, receipt history, Graph and client setup guidance |
 
-macOS, Cursor, Claude Code, WSL-hosted Agent binaries, automatic inference, recursive deployment and an automatically trusted public HTTPS endpoint are **not** included in the selected current support matrix. Provider/Incus bootstrap, host-key rotation, SSH hardening and token ownership are not supplied by the existing v2 application package: [host-installation work and operator boundaries](docs/HOST_BOOTSTRAP.md). A replacement `install.sh` and `boxweave.sh` are being implemented in staged source changes; do not mistake this document or a commit for an already verified fresh-host install.
+macOS, Cursor, Claude Code, WSL-hosted Agent binaries, automatic inference, recursive deployment and an automatically trusted public HTTPS endpoint are **not** included in the selected current support matrix. Provider/Incus bootstrap, host-key rotation, SSH hardening and token ownership are not supplied by the existing v2 application package: [host-installation work and operator boundaries](docs/HOST_BOOTSTRAP.md). A new [read-only management CLI](docs/CLI.md) is included in source and release packages. The integrated host installer remains a separately gated task; do not mistake this source commit for a verified fresh-host install.
 
 ## Try the isolated fixture
 
@@ -51,7 +51,7 @@ Generate the wheels first with the hash-locked requirements as described in [ins
 ## Operator and contributor navigation
 
 - [Documentation map](docs/INDEX.md), [host/bootstrap boundaries](docs/HOST_BOOTSTRAP.md), [application installation](docs/INSTALL.md)
-- [Client profiles](clients/README.md) and [scope](docs/product/SCOPE.md)
+- [Management CLI](docs/CLI.md), [client profiles](clients/README.md) and [scope](docs/product/SCOPE.md)
 - [R-00 cross-branch audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [feature/evidence matrix](docs/verification/FEATURE_MATRIX.md), [remaining risks](docs/verification/OPEN_RISKS.md)
 - [Contributing agent instructions](AGENTS.md), [handoff](docs/process/FINAL_HANDOFF.md), [change procedure](docs/process/MAINTENANCE.md)
 
