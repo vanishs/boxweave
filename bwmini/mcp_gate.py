@@ -1,5 +1,5 @@
 """MCP stdio relay: require explicit creation keys and Incus-authenticated SSH trust."""
-import base64, json, re, subprocess, sys, time
+import base64, json, os, re, stat, subprocess, sys, time
 from pathlib import Path
 
 try:
@@ -20,6 +20,10 @@ def catalog(message):
     if "result" not in message: return message
     for tool in message["result"].get("tools", []):
         if tool.get("name") == "create_container":
+            tool["inputSchema"]["properties"].setdefault("ssh_keys", {})["description"] = (
+                "Supply full Ed25519 public keys, including the managed workload key "
+                "for THIS BoxWeave MCP host. The client transport key and a "
+                "fingerprint are not substitutes. Extra explicit keys are permitted.")
             tool["inputSchema"]["properties"]["enable_nesting"] = {
                 "type":"boolean",
                 "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
@@ -37,16 +41,53 @@ REGISTRY = Path("/var/lib/boxweave-default/public/targets.json")
 LAUNCHER = "/usr/local/lib/boxweave/boxweave/launcher"
 
 
+MANAGED_PUBLIC_KEY_FILE = Path("/home/boxweave/.ssh/id_ed25519.pub")
+
+
+def normalized_public_key(value):
+    if not isinstance(value, str) or len(value) > 512 or not re.fullmatch(
+        r"ssh-ed25519 [A-Za-z0-9+/]+={0,2}(?: [A-Za-z0-9@._-]{1,80})?", value
+    ):
+        raise ValueError("FULL_ED25519_PUBLIC_KEY_REQUIRED")
+    try:
+        blob = base64.b64decode(value.split()[1], validate=True)
+    except ValueError:
+        raise ValueError("FULL_ED25519_PUBLIC_KEY_REQUIRED") from None
+    if len(blob) != 51 or blob[:19] != b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20":
+        raise ValueError("FULL_ED25519_PUBLIC_KEY_REQUIRED")
+    return " ".join(value.split()[:2])
+
+
+def managed_public_key():
+    # Read only the public half of this MCP server's *own* identity. Never
+    # substitute the client's transport key or an identity from another layer.
+    path = MANAGED_PUBLIC_KEY_FILE
+    if path.is_symlink():
+        raise ValueError("MANAGED_IDENTITY_UNAVAILABLE")
+    try:
+        info = path.stat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+            or info.st_mode & 0o022 or info.st_nlink != 1
+            or info.st_size > 512):
+            raise ValueError("MANAGED_IDENTITY_UNAVAILABLE")
+        return normalized_public_key(path.read_text(encoding="ascii").strip())
+    except (OSError, UnicodeError, ValueError):
+        raise ValueError("MANAGED_IDENTITY_UNAVAILABLE") from None
+
+
 def explicit_keys(args):
-    if not isinstance(args, dict): raise ValueError("ARGUMENTS_OBJECT_REQUIRED")
+    if not isinstance(args, dict):
+        raise ValueError("ARGUMENTS_OBJECT_REQUIRED")
     keys = args.get("ssh_keys")
-    if not isinstance(keys, list) or not keys: raise ValueError("EXPLICIT_MANAGED_PUBLIC_KEY_REQUIRED")
-    for key in keys:
-        if not isinstance(key, str) or not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/]+={0,2}(?: [A-Za-z0-9@._-]{1,80})?", key):
-            raise ValueError("FULL_ED25519_PUBLIC_KEY_REQUIRED")
-        blob = base64.b64decode(key.split()[1], validate=True)
-        if len(blob) != 51 or blob[:19] != b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20":
-            raise ValueError("FULL_ED25519_PUBLIC_KEY_REQUIRED")
+    if not isinstance(keys, list) or not 1 <= len(keys) <= 16:
+        raise ValueError("EXPLICIT_MANAGED_PUBLIC_KEY_REQUIRED")
+    normalized = [normalized_public_key(key) for key in keys]
+    if len(normalized) != len(set(normalized)):
+        raise ValueError("DUPLICATE_SSH_PUBLIC_KEY")
+    if managed_public_key() not in normalized:
+        raise ValueError("MANAGED_PUBLIC_KEY_REQUIRED")
+    # Additional explicit valid keys are permitted, but never replace the
+    # server-managed key needed by the upstream connect tool.
 
 
 def trusted(args, registry, container):
@@ -133,9 +174,14 @@ def main():
                         if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
                         text = "".join(b["text"] for b in result["content"] if b.get("type") == "text")
                         trusted(args, registry, json.loads(text)["container"])
-                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError):
+                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
+                    # Never disclose actual public/private key data in errors.
+                    reason = str(error) if str(error) in (
+                        "MANAGED_IDENTITY_UNAVAILABLE", "MANAGED_PUBLIC_KEY_REQUIRED",
+                        "DUPLICATE_SSH_PUBLIC_KEY", "FULL_ED25519_PUBLIC_KEY_REQUIRED"
+                    ) else "TRUST_OR_EXPLICIT_KEY_GATE: wait for trusted reconciliation and use the exact managed target/key"
                     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
-                                      "error": {"code": -32602, "message": "TRUST_OR_EXPLICIT_KEY_GATE: wait for trusted reconciliation and use the exact managed target/key"}}), flush=True)
+                                      "error": {"code": -32602, "message": reason}}), flush=True)
                     continue
             send(request)
             if "id" in request:

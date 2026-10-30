@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.7)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.8)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -66,3 +66,21 @@ An existing Codex `[mcp_servers.boxweave]` may have legitimate nested TOML subta
 Real Windows Codex testing found that the generated PowerShell array expression `'boxweave@' + $ServerHost` yielded two distinct SSH arguments (`boxweave@` and `192.168.2.233`). The MCP probe executed through a separate Python path and passed, but the Codex registration was not runnable. The generator now computes `$sshTarget = 'boxweave@' + $ServerHost` **before** building the `$sshArgs` array; `$sshTarget` occupies exactly one argument. CI executes the generated argument assignment using `pwsh`, parses the actual JSON array, and asserts the single destination is present and both split fragments absent. 
 
 For users who already corrected their desktop `config.toml` manually and successfully reached MCP initialize, tools/list and list_containers, no new server install or re-enrollment is needed. Switching Codex Agent environment from Windows native to WSL does not itself convert this Windows `wsl.exe`-based registration into a Linux-native `/usr/bin/ssh` registration. Independently exercising the SSH/MCP launcher is not equivalent to confirming direct Codex session tool injection; test each separately.
+
+## Managed workload SSH identity restoration (0.17.8)
+
+The **client transport identity** (generated in WSL `~/.config/boxweave`) authenticates to the BoxWeave MCP launcher; it is **not** the key the server uses to SSH into a newly created box. The installed server generates a distinct `/home/boxweave/.ssh/id_ed25519` key pair, retaining the private half exclusively on the server. Only its validated public half, originally exported by the old `archive/0.5.1` setup workflow, is source-bound into the new generated setup script. The generator refuses absent/invalid `managed_public_key` before publishing any script.
+
+After SSH enrollment and the real MCP read probe, the script safely merges the BoxWeave-only `<!-- BEGIN/END BOXWEAVE MANAGED -->` instruction block into the effective Windows Codex `AGENTS.md` (or nonempty `AGENTS.override.md`). It preserves unrelated instructions and refuses duplicate/malformed markers or conflicting managed blocks in both files. Existing files are backed up before atomic replacement. Other agent settings and MCP entries remain unchanged beyond the existing explicit `-Replace` contract. A separate **opt-in** `-WslGuidance` switch writes the same public instruction to the selected WSL user's `~/.codex/AGENTS.md` (or populated `AGENTS.override.md`), with atomic file replacement, private backups, and refusal on ambiguous/symlinked files. This is guidance-only WSL assistance; the current unified generator still registers the **Windows** `config.toml` and does **not** automatically install a WSL-native MCP registration.
+
+For newly generated Windows WSL bridge scripts, after the operator reviews the generated source:
+
+```powershell
+.\boxweave-setup.ps1 -Distro Ubuntu -AlreadyEnrolled -Replace -WslGuidance
+```
+
+Use `-AlreadyEnrolled` **only after enrollment is verified**. The `-Replace` switch is needed only when an existing BoxWeave MCP transport entry differs. Avoid rerunning this Windows bridge installer solely for guidance if you have independently changed your Codex WSL Agent registration to a Linux-native `/usr/bin/ssh` command: it may replace a working client configuration. Instead obtain and carefully merge the publicly exported managed key into your WSL Codex guidance under its actual user home, or use the additional script in a disposable/reviewed environment first.
+
+The server's `bwmini/mcp_gate.py` reads **its own** managed identity's public half as the configured non-root user and checks that at least one `create_container.ssh_keys` element equals it. It rejects a malformed/missing public key, a wrong (including client transport) key, duplicates and an unavailable managed identity before forwarding to Containarium; additional individually provided valid public keys are permitted. Tool discovery describes the condition, and errors distinguish `MANAGED_PUBLIC_KEY_REQUIRED` from `MANAGED_IDENTITY_UNAVAILABLE` without printing the expected public key or private material. This applies to **new create calls**. Existing box `authorized_keys` is not rewritten, and failing `connect` is not silently repaired. The correct key depends on which server/layer hosts the MCP launcher.
+
+Historical foundation: `archive/0.5.1/server/clients.py` published `container_public_key`, `clients/windows/setup.ps1` and `clients/posix/setup.py` installed agent instructions, and `server/smoke.py` bound the exact public key to create/connect/Python validation. The historical October 22 nested Hello World pass is not a test of today's client or container. Next live acceptance: inspect the existing `hello-world-test-container`, compare its authorized public key fingerprint with the server-managed public key, repair that box through a separately reviewed, authorized procedure if different, and verify actual MCP identity and Python stdout `hello world\n` with exit 0. Do not create a replacement box, weaken SSH policy or claim the present failed run passed.

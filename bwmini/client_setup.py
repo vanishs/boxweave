@@ -40,12 +40,14 @@ param(
     [string]$BootstrapIdentity = '',
     [switch]$NoEnroll,
     [switch]$AlreadyEnrolled,
-    [switch]$Replace
+    [switch]$Replace,
+    [switch]$WslGuidance
 )
 $ErrorActionPreference = 'Stop'
 $ServerHost = '__HOST__'
 $ServerPort = __PORT__
 $ServerKey = '__SERVER_KEY__'
+$ManagedWorkloadPublicKey = '__MANAGED_PUBLIC_KEY__'
 $McpServer = 'boxweave'
 $RemoteMcp = '/usr/bin/python3 /usr/local/lib/boxweave/default/mcp_gate.py'
 $wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
@@ -302,8 +304,133 @@ if ($changed) {
         if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
     }
 }
+# Restore archive/0.5.1's public workload-key guidance. Client transport
+# identity must NEVER be used for a new workload's ssh_keys.
+$guidance = @'
+<!-- BEGIN BOXWEAVE MANAGED -->
+## BoxWeave managed box SSH identity
+- The BoxWeave MCP server at __HOST__:__PORT__ connects to workload boxes with its own separate server-managed SSH key.
+- When calling this server's create_container, include the following FULL public key in ssh_keys (not merely a fingerprint):
+  __MANAGED_PUBLIC_KEY__
+- You may include other explicitly authorized public keys, but must retain the key above for this server's connect tool.
+- Do NOT use your Windows/WSL-to-BoxWeave transport public key or a key from another nested MCP host instead. Never read, request, copy or disclose private keys, JWTs, or host trust secrets.
+- Reuse and inspect existing boxes before creating. After creation, Running is not SSH readiness; use get_container, then connect to verify whoami and hostname before running commands. A failed connect does not justify duplicate creation.
+- If this MCP server reports MANAGED_PUBLIC_KEY_REQUIRED or MANAGED_IDENTITY_UNAVAILABLE, stop and reconcile the correct public identity; do not bypass host-key verification.
+<!-- END BOXWEAVE MANAGED -->
+'@
+function Merge-BoxWeaveGuidance([string]$Original, [string]$Block) {
+    $begin = '<!-- BEGIN BOXWEAVE MANAGED -->'
+    $end = '<!-- END BOXWEAVE MANAGED -->'
+    $startCount = [regex]::Matches($Original, [regex]::Escape($begin)).Count
+    $endCount = [regex]::Matches($Original, [regex]::Escape($end)).Count
+    if ($startCount -ne $endCount -or $startCount -gt 1) {
+        throw 'Ambiguous BoxWeave AGENTS marker: manual review required'
+    }
+    if ($startCount -eq 0) {
+        if (-not $Original) { return $Block + "`r`n" }
+        return $Original.TrimEnd([char]13,[char]10) + "`r`n`r`n" + $Block + "`r`n"
+    }
+    $pattern = '(?s)' + [regex]::Escape($begin) + '.*?' + [regex]::Escape($end)
+    return ([regex]::new($pattern)).Replace($Original,
+        [Text.RegularExpressions.MatchEvaluator]{ param($match) $Block }, 1)
+}
+$guidancePath = Join-Path $homeDir 'AGENTS.md'
+$overridePath = Join-Path $homeDir 'AGENTS.override.md'
+foreach ($candidate in @($guidancePath,$overridePath)) {
+    if ((Test-Path -LiteralPath $candidate) -and
+        ((Get-Item -LiteralPath $candidate).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Codex AGENTS symlink/reparse point refused'
+    }
+}
+if ((Test-Path -LiteralPath $overridePath -PathType Leaf) -and
+    [IO.File]::ReadAllText($overridePath).Trim()) {
+    $guidancePath = $overridePath
+}
+# Do not silently leave two different managed policies in the active and
+# inactive AGENTS files.
+$otherGuidance = if ($guidancePath -eq $overridePath) {
+    Join-Path $homeDir 'AGENTS.md'
+} else { $overridePath }
+if ((Test-Path -LiteralPath $otherGuidance -PathType Leaf) -and
+    [IO.File]::ReadAllText($otherGuidance).Contains('<!-- BEGIN BOXWEAVE MANAGED -->')) {
+    throw 'Existing BoxWeave guidance in another AGENTS file: manual review required'
+}
+$oldGuidance = if (Test-Path -LiteralPath $guidancePath -PathType Leaf) {
+    [IO.File]::ReadAllText($guidancePath, [Text.Encoding]::UTF8)
+} else { '' }
+$newGuidance = Merge-BoxWeaveGuidance $oldGuidance $guidance
+if ($newGuidance -cne $oldGuidance) {
+    $temporary = Join-Path $homeDir ('.boxweave-guidance-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        [IO.File]::WriteAllText($temporary, $newGuidance, [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $guidancePath -PathType Leaf) {
+            $backup = $guidancePath + '.boxweave-' + [guid]::NewGuid().ToString('N') + '.bak'
+            [IO.File]::Replace($temporary, $guidancePath, $backup)
+            Write-Host ('Previous Codex guidance backed up: ' + $backup)
+        } else {
+            [IO.File]::Move($temporary, $guidancePath)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+Write-Host ('Windows Codex managed box guidance: ' + $guidancePath)
+
+# Optional: the Codex WSL Agent has a distinct Linux home/instruction scope.
+# The current Windows-generated MCP registration remains independently managed.
+if ($WslGuidance) {
+    $policyBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($guidance))
+    $installWslGuidance = @'
+import base64, os, pathlib, re, stat, sys, tempfile, uuid
+policy = base64.b64decode(sys.argv[1], validate=True).decode("utf-8")
+begin, end = "<!-- BEGIN BOXWEAVE MANAGED -->", "<!-- END BOXWEAVE MANAGED -->"
+assert policy.count(begin) == policy.count(end) == 1
+home = pathlib.Path.home()
+assert home.is_dir() and not home.is_symlink() and home.stat().st_uid == os.getuid()
+root = home / ".codex"
+assert not root.is_symlink()
+root.mkdir(mode=0o700, exist_ok=True)
+assert root.is_dir() and root.stat().st_uid == os.getuid()
+regular = root / "AGENTS.md"
+override = root / "AGENTS.override.md"
+for p in (regular, override):
+    if p.is_symlink() or (p.exists() and (not p.is_file() or p.stat().st_uid != os.getuid())):
+        raise ValueError("UNSAFE_WSL_GUIDANCE_PATH")
+active = override if override.is_file() and override.read_text(encoding="utf-8").strip() else regular
+other = regular if active == override else override
+if other.is_file() and begin in other.read_text(encoding="utf-8"):
+    raise ValueError("DUPLICATE_WSL_GUIDANCE_LOCATION")
+before = active.read_text(encoding="utf-8") if active.exists() else ""
+if before.count(begin) != before.count(end) or before.count(begin) > 1:
+    raise ValueError("AMBIGUOUS_WSL_GUIDANCE_MARKERS")
+if begin in before:
+    after = re.sub(re.escape(begin) + r".*?" + re.escape(end),
+                   lambda match: policy, before, count=1, flags=re.S)
+else:
+    after = before.rstrip("\r\n") + ("\n\n" if before else "") + policy + "\n"
+if after != before:
+    fd, stage = tempfile.mkstemp(prefix=".boxweave-guidance-", dir=root)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(after); stream.flush(); os.fsync(stream.fileno())
+        if active.exists():
+            backup = root / (active.name + ".boxweave-" + uuid.uuid4().hex + ".bak")
+            with backup.open("xb") as dest:
+                dest.write(before.encode("utf-8")); dest.flush(); os.fsync(dest.fileno())
+            os.chmod(backup, 0o600)
+        os.replace(stage, active)
+    finally:
+        pathlib.Path(stage).unlink(missing_ok=True)
+print("WSL Codex managed box guidance: " + str(active))
+'@
+    & $wsl --distribution $Distro --exec /usr/bin/python3 -c $installWslGuidance $policyBase64
+    if ($LASTEXITCODE -ne 0) {
+        throw 'WSL Codex guidance failed; Windows registration/guidance may have been saved'
+    }
+}
 Write-Host ('Windows ChatGPT/Codex MCP config: ' + $configPath)
-Write-Host 'MCP read verified and BoxWeave configured. Restart ChatGPT/Codex desktop to load the MCP server.'
+Write-Host 'MCP read verified and BoxWeave configured with managed workload public key guidance. Restart ChatGPT/Codex desktop.'
+
 """;
 
 def ps_quote(value):
@@ -313,14 +440,20 @@ def ps_quote(value):
 def render(state, admin_user):
     host, port = state.get("host"), state.get("port")
     key = state.get("server_key", "")
+    managed_key = state.get("managed_public_key", "")
     if (not isinstance(host, str) or not HOST.fullmatch(host)
         or type(port) is not int or not 1 <= port <= 65535
         or not isinstance(key, str) or not PUB.fullmatch(" ".join(key.split()[:2]))
         or not USER.fullmatch(admin_user)):
         raise ValueError("PUBLIC_CLIENT_IDENTITY_INVALID")
+    try:
+        managed_key = online.public_key(managed_key)
+    except (ValueError, online.Failure, TypeError):
+        raise ValueError("MANAGED_WORKLOAD_PUBLIC_KEY_INVALID") from None
     host_key = " ".join(key.split()[:2])
     return (POWERSHELL.replace("__HOST__", host).replace("__PORT__", str(port))
-            .replace("__SERVER_KEY__", host_key).replace("__ADMIN_USER__", admin_user))
+            .replace("__SERVER_KEY__", host_key).replace("__MANAGED_PUBLIC_KEY__", managed_key)
+            .replace("__ADMIN_USER__", admin_user))
 
 
 def publish(path, script):

@@ -29,3 +29,8 @@ Source anchors: `archive/0.5.1@d8a09dd180139159e035963502e7793a37e92bae` and pre
 - Old `publish.*` and root installer are not an automatic trusted publisher or schema migration. Exact signed artifact provenance remains a separate obligation.
 
 Approved decisions: restore primary host installer and read-only/management entry, maintain four selected Windows-hosted profiles, no automatic legacy database migration. Remaining real tests and attribution: [verification queue](REMEDIATION_TEST_QUEUE.md).
+
+
+### Post-audit F-002/F-003 managed SSH workload key correction (0.17.8)
+
+The 2026-10-29 parity baseline above is intentionally preserved. A later **source** comparison recovered one missing, selected Codex behavior from `archive/0.5.1`: the public `container_public_key` was published by `server/clients.py` and inserted into a managed AGENTS block by `clients/windows/setup.ps1` / `clients/posix/setup.py`. The current server had independently created `managed_public_key` but `bwmini/client_setup.py` did not provide it to the Codex agent. The v0.17.8 follow-up restores this behavior only in the approved Windows Codex/WSL bridge profile, plus opt-in WSL user AGENTS guidance, without reintroducing legacy macOS/Cursor/Claude profiles. Server `mcp_gate` additionally checks the exact per-host managed public key on create, preserving separate nested identities and explicit extra keys. Source-level change **S**, fixture execution only when CI confirmed **T**, actual preexisting box SSH/Python remains **U**.

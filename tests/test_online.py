@@ -16,9 +16,43 @@ class StreamedInstallTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises((online.Failure,ValueError)):online.public_key(value)
 
     def test_create_gate_never_allows_implicit_private_key_return(self):
-        mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
-        for args in ({},{"ssh_keys":[]},{"ssh_keys":["SHA256:fingerprint"]},None):
-            with self.subTest(args=args),self.assertRaises(ValueError):mcp_gate.explicit_keys(args)
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/"id_ed25519.pub"
+            path.write_text(self.key()+"\\n")
+            with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
+                mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
+                for args in ({},{"ssh_keys":[]},{"ssh_keys":["SHA256:fingerprint"]},None):
+                    with self.subTest(args=args),self.assertRaises(ValueError):
+                        mcp_gate.explicit_keys(args)
+
+    def test_create_gate_requires_this_server_managed_key_not_transport_key(self):
+        import stat
+        other="ssh-ed25519 "+base64.b64encode(
+            struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"y"*32).decode()
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/"managed.pub"
+            path.write_text(self.key()+"\\n")
+            with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
+                with self.assertRaisesRegex(ValueError,"MANAGED_PUBLIC_KEY_REQUIRED"):
+                    mcp_gate.explicit_keys({"ssh_keys":[other]})
+                mcp_gate.explicit_keys({"ssh_keys":[other,self.key()]})
+                with self.assertRaisesRegex(ValueError,"DUPLICATE_SSH_PUBLIC_KEY"):
+                    mcp_gate.explicit_keys({"ssh_keys":[self.key(),self.key()]})
+                path.chmod(0o666)
+                with self.assertRaisesRegex(ValueError,"MANAGED_IDENTITY_UNAVAILABLE"):
+                    mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
+                path.chmod(0o644)
+                path.unlink()
+                path.symlink_to(Path(folder)/"missing")
+                with self.assertRaisesRegex(ValueError,"MANAGED_IDENTITY_UNAVAILABLE"):
+                    mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
+
+    def test_catalog_describes_required_workload_identity(self):
+        sample={"result":{"tools":[{"name":"create_container",
+                 "inputSchema":{"properties":{"ssh_keys":{"type":"array"}}}}]}}
+        annotated=mcp_gate.catalog(sample)
+        text=annotated["result"]["tools"][0]["inputSchema"]["properties"]["ssh_keys"]["description"]
+        self.assertIn("THIS BoxWeave MCP host",text)
 
     def test_connect_gate_requires_fresh_exact_incarnation_and_ip(self):
         target={"name":"work-container","created":"123","user":"work","ip":"10.203.0.2","keys":[self.key()]}
