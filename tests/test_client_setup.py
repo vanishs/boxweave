@@ -29,8 +29,11 @@ class ClientGeneratorTests(unittest.TestCase):
         for expected in ("192.168.2.233", host_key(), "'luka'", "online.py enroll",
                          "Codex", "/usr/bin/ssh", "list_containers",
                          "StrictHostKeyChecking=yes", "NoEnroll", "AlreadyEnrolled",
-                         "& $codex mcp add"):
+                         "Windows ChatGPT/Codex MCP config:", "PubkeyAuthentication=no",
+                         "CODEX_HOME", "config.toml"):
             self.assertIn(expected, payload)
+        self.assertNotIn("Get-Command codex", payload)
+        self.assertNotIn("codex mcp add", payload)
         self.assertNotIn("jwt.secret", payload)
         self.assertNotIn("StrictHostKeyChecking=no", payload)
         self.assertNotIn("ssh-keyscan", payload)

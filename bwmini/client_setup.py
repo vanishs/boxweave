@@ -36,6 +36,8 @@ SSH key using sudo online.py enroll. Use -NoEnroll to do that independently.
 param(
     [string]$Distro = '',
     [string]$BootstrapUser = '__ADMIN_USER__',
+    [ValidateSet('password','publickey')][string]$AdminAuthentication = 'password',
+    [string]$BootstrapIdentity = '',
     [switch]$NoEnroll,
     [switch]$AlreadyEnrolled,
     [switch]$Replace
@@ -47,7 +49,6 @@ $ServerKey = '__SERVER_KEY__'
 $McpServer = 'boxweave'
 $RemoteMcp = '/usr/bin/python3 /usr/local/lib/boxweave/default/mcp_gate.py'
 $wsl = (Get-Command wsl.exe -CommandType Application -ErrorAction Stop).Source
-$codex = (Get-Command codex -ErrorAction Stop).Source
 if (-not $Distro) {
     $available = @(& $wsl --list --quiet | ForEach-Object { ($_ -replace [char]0, '').Trim() } | Where-Object { $_ })
     if ($LASTEXITCODE -ne 0 -or $available.Count -eq 0) { throw 'No WSL distribution is available' }
@@ -125,8 +126,20 @@ if (-not $AlreadyEnrolled) {
     $remote = "sudo /usr/bin/python3 /usr/local/lib/boxweave/default/online.py enroll --public-key '" + $identity.public_key + "'"
     $authArgs = @('-F','/dev/null','-tt',
                   '-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes',
-                  '-o','ConnectTimeout=15','-o',('UserKnownHostsFile=' + $identity.known_hosts),
-                  '-p',"$ServerPort",("$BootstrapUser@$ServerHost"),$remote)
+                  '-o','IdentityAgent=none','-o','ConnectTimeout=15',
+                  '-o',('UserKnownHostsFile=' + $identity.known_hosts))
+    if ($AdminAuthentication -eq 'password') {
+        if ($BootstrapIdentity) { throw 'Password login cannot use -BootstrapIdentity' }
+        $authArgs += @('-o','PubkeyAuthentication=no',
+                       '-o','PreferredAuthentications=password,keyboard-interactive')
+    } else {
+        if (-not $BootstrapIdentity -or -not $BootstrapIdentity.StartsWith('/')) {
+            throw 'Public-key administrator auth needs -BootstrapIdentity ABSOLUTE_WSL_PATH'
+        }
+        $authArgs += @('-o','PreferredAuthentications=publickey',
+                       '-i',$BootstrapIdentity)
+    }
+    $authArgs += @('-p',"$ServerPort",("$BootstrapUser@$ServerHost"),$remote)
     Write-Host ('Authorizing public key via existing Ubuntu administrator: ' + $BootstrapUser)
     & $wsl --distribution $Distro --exec /usr/bin/ssh @authArgs
     if ($LASTEXITCODE -ne 0) {
@@ -164,28 +177,80 @@ if ($LASTEXITCODE -ne 0) {
     throw 'MCP read verification failed; no Codex MCP entry was modified'
 }
 
-# Codex itself owns TOML mutations; unrelated MCP configuration is not edited
-# by this script. Existing BoxWeave entries require explicit -Replace.
-& $codex mcp get $McpServer *> $null
-$exists = ($LASTEXITCODE -eq 0)
-if ($exists -and -not $Replace) {
-    throw 'Codex already has a BoxWeave MCP entry. Review it; rerun with -Replace to replace only that entry'
-}
-if ($exists) {
-    & $codex mcp remove $McpServer
-    if ($LASTEXITCODE -ne 0) { throw 'Could not remove old BoxWeave MCP entry' }
-}
+# ChatGPT/Codex Windows desktop reads %USERPROFILE%\.codex\config.toml.
+# No external codex CLI or WindowsApps binary execution is required.
 $sshArgs = @('--distribution',$Distro,'--exec','/usr/bin/ssh',
              '-F','/dev/null','-T',
              '-o','BatchMode=yes','-o','IdentitiesOnly=yes',
              '-o','StrictHostKeyChecking=yes',
              '-o','ConnectTimeout=15','-o',('UserKnownHostsFile=' + $identity.known_hosts),
              '-i',$identity.key,'-p',"$ServerPort",'boxweave@' + $ServerHost,$RemoteMcp)
-& $codex mcp add $McpServer -- $wsl @sshArgs
-if ($LASTEXITCODE -ne 0) { throw 'Codex MCP registration failed; inspect Codex configuration before retry' }
-& $codex mcp get $McpServer
-if ($LASTEXITCODE -ne 0) { throw 'Codex MCP registration not observable' }
-Write-Host 'BoxWeave MCP registered in Windows Codex. Restart Codex and check the MCP tools.'
+$homeDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+if (-not [IO.Path]::IsPathRooted($homeDir)) { throw 'Codex home must be an absolute Windows path' }
+$homeDir = [IO.Path]::GetFullPath($homeDir)
+if (-not (Test-Path -LiteralPath $homeDir)) {
+    [void][IO.Directory]::CreateDirectory($homeDir)
+}
+if (-not (Test-Path -LiteralPath $homeDir -PathType Container) -or
+    ((Get-Item -LiteralPath $homeDir).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Codex home path is unsafe'
+}
+$configPath = Join-Path $homeDir 'config.toml'
+if ((Test-Path -LiteralPath $configPath) -and
+    ((Get-Item -LiteralPath $configPath).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Codex configuration symlink/reparse point refused'
+}
+$oldConfig = if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+    [IO.File]::ReadAllText($configPath, [Text.Encoding]::UTF8)
+} else { '' }
+# Preserve all unrelated TOML. For ambiguous MCP structures refuse automation.
+if ($oldConfig -match '(?m)^[ \t]*mcp_servers[ \t]*=' -or
+    $oldConfig -match '(?m)^[ \t]*mcp_servers\.boxweave\.' -or
+    $oldConfig -match '(?m)^[ \t]*\[mcp_servers\.boxweave\.' -or
+    $oldConfig -match '(?m)^[ \t]*\[[^\]\r\n]*["'']boxweave["''][^\]\r\n]*\]') {
+    throw 'Ambiguous existing MCP TOML; inspect config.toml manually'
+}
+$wslString = ConvertTo-Json -InputObject $wsl -Compress
+$argsString = ConvertTo-Json -InputObject @($sshArgs) -Compress
+$entry = "[mcp_servers.boxweave]" + "`r`n" +
+         "command = " + $wslString + "`r`n" +
+         "args = " + $argsString + "`r`n" +
+         "startup_timeout_sec = 30" + "`r`n" +
+         "tool_timeout_sec = 180" + "`r`n"
+$pattern = '(?ms)^[ \t]*\[mcp_servers\.boxweave\][ \t]*(?:\#[^\r\n]*)?\r?\n.*?(?=^[ \t]*\[|\z)'
+$matches = [regex]::Matches($oldConfig, $pattern)
+if ($matches.Count -gt 1) { throw 'Multiple BoxWeave MCP TOML sections: manual review required' }
+$changed = $false
+if ($matches.Count -eq 1) {
+    if ($matches[0].Value.Trim() -ne $entry.Trim()) {
+        if (-not $Replace) {
+            throw 'BoxWeave MCP is already configured. Review it and pass -Replace to update only this entry'
+        }
+        $matcher = [regex]::new($pattern)
+        $newConfig = $matcher.Replace($oldConfig, [Text.RegularExpressions.MatchEvaluator]{ param($match) $entry }, 1)
+        $changed = $true
+    }
+} else {
+    $newConfig = $oldConfig.TrimEnd([char]13,[char]10) + "`r`n`r`n" + $entry
+    $changed = $true
+}
+if ($changed) {
+    $temp = Join-Path $homeDir ('.boxweave-config-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        [IO.File]::WriteAllText($temp, $newConfig, [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $configPath) {
+            $backup = $configPath + '.boxweave-' + [guid]::NewGuid().ToString('N') + '.bak'
+            [IO.File]::Replace($temp, $configPath, $backup)
+            Write-Host ('Previous Codex configuration backed up: ' + $backup)
+        } else {
+            [IO.File]::Move($temp, $configPath)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+    }
+}
+Write-Host ('Windows ChatGPT/Codex MCP config: ' + $configPath)
+Write-Host 'MCP read verified and BoxWeave configured. Restart ChatGPT/Codex desktop to load the MCP server.'
 """;
 
 def ps_quote(value):

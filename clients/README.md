@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows Codex + WSL SSH (v0.17.3)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.4)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -17,9 +17,9 @@ Copy the script from your SSH-admin account on the BoxWeave server to the Window
 powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu
 ```
 
-The script checks or generates an Ed25519 key only under `~/.config/boxweave` in that WSL distro, pins the server's reviewed Ed25519 host key, and runs the existing Ubuntu administrator SSH login with `sudo /usr/bin/python3 /usr/local/lib/boxweave/default/online.py enroll --public-key ...`. It may prompt for the administrator SSH/sudo password **on that SSH session**. The restricted `boxweave` account does not gain shell access. If the server requires separate administration, run the script with `-NoEnroll` to print a public enrollment command, authorize it on the server, then rerun with `-AlreadyEnrolled`. Never send the client private key or JWT to the server.
+The script checks or generates an Ed25519 key only under `~/.config/boxweave` in that WSL distro, pins the server's reviewed Ed25519 host key, and runs the existing Ubuntu administrator SSH login with `sudo /usr/bin/python3 /usr/local/lib/boxweave/default/online.py enroll --public-key ...`. It defaults to password-only SSH administrator authentication, avoiding excess-key disconnects, and may request SSH/sudo credentials. For SSH-key-only administration use `-AdminAuthentication publickey -BootstrapIdentity /absolute/wsl/path/to/admin_key`. The restricted `boxweave` account does not gain shell access. If the server requires separate administration, run the script with `-NoEnroll` to print a public enrollment command, authorize it on the server, then rerun with `-AlreadyEnrolled`. Never send the client private key or JWT to the server.
 
-After public-key authorization, the script performs MCP initialize, tools/list and a **real read-only** list_containers tool call over WSL SSH. Only after it succeeds will the script use the installed Windows Codex CLI to add the `boxweave` stdio MCP entry. If the entry exists, inspect it first; `-Replace` authorizes replacing that entry only. Restart Codex to verify tool recognition. Neither the generator nor setup configures public routes, edits Incus storage, resets an SSH host pin, or modifies the Containarium daemon.
+After public-key authorization, the script performs MCP initialize, tools/list and a **real read-only** list_containers tool call over WSL SSH. Only after it succeeds will the script updates the Windows ChatGPT/Codex desktop app's shared user-level `config.toml` at `%USERPROFILE%\\.codex` (or `CODEX_HOME`). It never executes a bundled WindowsApps binary or requires a standalone Codex CLI. If the entry exists, inspect it first; `-Replace` authorizes replacing the simple named MCP table only, while other TOML settings are preserved and previous config backed up. Ambiguous TOML must be migrated manually. Restart Codex to verify tool recognition. Neither the generator nor setup configures public routes, edits Incus storage, resets an SSH host pin, or modifies the Containarium daemon.
 
 The script is not intended to be executed unattended without a reviewed preauthorized administration method: non-interactive **generator input** does not imply bypassing authentication or automatic security approval. For new release upgrades, rerun the generator to acquire a source-bound script; copying an old release's script can retain old behavior.
 
