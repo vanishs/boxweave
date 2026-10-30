@@ -21,6 +21,11 @@ working user systemd bus are prerequisites. Rerun apply for app update/repair.
 USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
+if (( $# == 0 )); then
+  printf '%s\\n' '[boxweave] DEFAULT_INSTALL_UNAVAILABLE: no independently reviewed application release is published.' >&2
+  printf '%s\\n' '[boxweave] No host changes were made; see README for prerequisites and offline installation.' >&2
+  exit 2
+fi
 (( $# )) || { usage; exit 2; }
 ACTION=$1; shift
 case "$ACTION" in plan|apply) ;; --help|-h|help) usage; exit 0;; *) die 'Choose plan or apply';; esac

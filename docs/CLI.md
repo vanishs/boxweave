@@ -1,6 +1,6 @@
-# BoxWeave management CLI — 0.11.0
+# BoxWeave management CLI
 
-The new `boxweave.sh` is a **read-only management and diagnostic entry**. From a reviewed source checkout use `bash boxweave.sh <command>`; from a verified installed release use `bash "$HOME/boxweave-v2/current/boxweave.sh" <command>`. It uses the package-local Python interpreter when present and does not elevate privileges. All successful responses are bounded JSON.
+The new `boxweave.sh` is a **read-only management and diagnostic entry**. From a reviewed source checkout use `bash boxweave.sh <command>`; from the verified installed release use its bundled `boxweave.sh`. It uses the package-local Python interpreter when present and does not elevate privileges. All successful responses are bounded JSON.
 
 | Command | Meaning |
 | --- | --- |

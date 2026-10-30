@@ -16,3 +16,9 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 - Only conduct Linux installation/real browser/Provider tests in a specifically approved prepared non-root Linux environment. The standard validation lane is `python scripts/check_knowledge.py`; in the prepared LXC, `.venv/bin/python scripts/validate.py` and optionally `--browser`. These are not host/provider acceptance. Check executable help and syntax before integration tests.
 - Maintain `REQ/AC -> ADR/TASK -> code/tests/evidence` traceability. Follow [MAINTENANCE](docs/process/MAINTENANCE.md). Update the authoritative scope/requirements if an approved outcome changes, and keep [audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [risks](docs/verification/OPEN_RISKS.md), source register and handoff aligned. Preserve old reports as historical evidence.
 - For every slice record *what changed*, *what was actually tested* (command, environment, exit code and evidence), *what remains untested*, *blockers*, and next Agent's executable checks in [remediation verification queue](docs/verification/REMEDIATION_TEST_QUEUE.md). A static code review is **S**, historical documentation **D**, genuinely run tests **T**, and untested properties **U**. Never report source code, fixture or CI as a successful real-host install.
+
+## User-facing documentation conventions
+
+- Keep internal development-stage labels and obsolete names out of current public installation, support, and command descriptions. Preserve historical evidence separately.
+- Use tables for supported OS/Agent/SSH combinations, installer flags, and management commands.
+- Do not claim the streamed default installer works until reviewed release artifacts and a complete host/launcher bootstrap have been accepted with real tests.

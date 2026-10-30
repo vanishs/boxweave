@@ -1,73 +1,86 @@
 # BoxWeave
 
-**Current source version: 0.13.5.** BoxWeave is a self-hosted, single-operator workspace for remote development with project/environment bindings, deliberate lifecycle actions, durable operation receipts, Tenant membership and network access, TCP/UDP publication, Prompt Graph, and an assisted ZCode model configuration handoff.
+**Your agents. Your machines. Connected.**
 
-The current application was independently reconstructed from the archived 0.5.1 implementation; it is **not** a drop-in replacement for the old host deployment. The historical source is at [archive/0.5.1](https://github.com/vanishs/boxweave/tree/archive/0.5.1). Do not execute the archived installer against a new installation. Phase 7 maintenance has completed in its documented test scope; host bootstrap and operational parity are a new remediation effort, not a previously accepted release. See [current status](docs/process/PHASE_STATUS.md) and [open risks](docs/verification/OPEN_RISKS.md).
+BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-## Support and boundaries
+**Current source version: 0.13.6.** This is a preview, not a certified clean-host deployment.
 
-| Area | Current supported scope |
-| --- | --- |
-| Agent and transport | Windows-hosted Codex or ZCode via native SSH or explicit Ubuntu WSL SSH (four profiles) |
-| Server | Non-root Ubuntu 24.04, Linux x86_64, CPython 3.12, systemd user manager for the packaged application |
-| Infrastructure | A reviewed Containarium Provider, Incus and an independently authorized application MCP launcher |
-| Web | Local administrator, bindings, environments, Tenant/port plans, receipt history, Graph and client setup guidance |
+## Install on Ubuntu
 
-macOS, Cursor, Claude Code, WSL-hosted Agent binaries, automatic inference, recursive deployment and an automatically trusted public HTTPS endpoint are **not** included in the selected current support matrix. Provider/Incus bootstrap, host-key rotation, SSH hardening and token ownership are not supplied by the existing v2 application package: [host-installation work and operator boundaries](docs/HOST_BOOTSTRAP.md). A new [read-only management CLI](docs/CLI.md) is included in source and release packages. The new [host installer](install.sh) supports reviewed local release preflight, non-root app installation/update/repair and optionally a separately pinned upstream bootstrap on an empty host. It **does not yet create an MCP launcher, app account, login bus, SSH authority or real TLS**; these remain explicit operator prerequisites and a tracked end-to-end gap. Do not treat this source as verified fresh-host deployment.
+The desired default command is:
 
-## Install, update, or repair (real Provider)
+```bash
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
+```
 
-**Start here for a real BoxWeave application, not with the fixture.** The supported operator-facing entry is [`install.sh`](install.sh), which checks reviewed local artifacts and delegates application installation, updates, and repairs to the existing verified-package mechanism. This is **not yet a complete one-command setup from a blank Ubuntu host**: creating the application account and user systemd bus, preparing an independent MCP launcher and credentials, SSH trust, and TLS still require separate operator work and acceptance.
+**Availability:** There is not yet a verified downloadable application release or a complete independent MCP launcher bootstrap. Running this command currently **fails safely with a clear message**, rather than reporting a successful installation. It does not silently configure SSH, secrets, Provider upgrades, or public networking. One-command clean-host installation remains a tracked delivery requirement.
 
-Before running the installer, prepare Ubuntu 24.04 x86_64 with Python 3.12, an existing non-root app user with a working systemd user bus, reviewed Incus/Containarium dependencies, an independently authorized working MCP launcher, a private [live-mode configuration](examples/live.json), and a trusted offline application archive. Build the archive using the exact locked wheels and built Web UI as described in [installation and release packaging](docs/INSTALL.md). Obtain **independently reviewed SHA256 digests** for both the archive and the local `bwmini/distribution.py` file; do not treat a digest downloaded alongside untrusted code as proof of authenticity.
+On a prepared Ubuntu 24.04 x86_64 host with Python 3.12, reviewed Containarium/Incus, a non-root application user with a functioning systemd user bus, an authorized MCP launcher and a trusted release archive, use the existing installer:
 
-From a reviewed checkout, with the prerequisites in place:
-
-```sh
-# Read-only preflight; replace placeholders with actual independently reviewed digests.
+```bash
 bash install.sh plan --app-user boxweave \
-  --archive /reviewed/boxweave-v2.zip --sha256 ARCHIVE_SHA256 \
-  --distribution-sha256 DISTRIBUTION_PY_SHA256 \
-  --config /reviewed/application.json
+  --archive /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
+  --distribution-sha256 INSTALLER_SHA256 --config /reviewed/application.json
 
-# Explicit installation, update, or repair after reviewing the preflight result.
 bash install.sh apply --app-user boxweave \
-  --archive /reviewed/boxweave-v2.zip --sha256 ARCHIVE_SHA256 \
-  --distribution-sha256 DISTRIBUTION_PY_SHA256 \
-  --config /reviewed/application.json
+  --archive /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
+  --distribution-sha256 INSTALLER_SHA256 --config /reviewed/application.json
 ```
 
-The placeholders above are intentionally non-operational. `plan` performs local checks without installing anything; `apply` may fail with `ADMIN_SETUP_REQUIRED` until local administrator initialization and a subsequent rerun. It does not declare the application ready without real authenticated MCP checks. For first administrator setup, upgrades, backups, failure markers, and recovery, use [INSTALL](docs/INSTALL.md) and the [host bootstrap prerequisites](docs/HOST_BOOTSTRAP.md). The optional `--provision-provider` path is a separately approved, digest-pinned, privileged operation for an otherwise empty host; it is **not** an automatic Provider upgrade.
+The paths and SHA256 values are placeholders, not ready-made downloads. The first installation may require local administrator initialization and a rerun. See [installation and repair](docs/INSTALL.md) and [host prerequisites](docs/HOST_BOOTSTRAP.md).
 
-**Do not run the archived 0.5.1 installer or pipe an unreviewed remote script to sudo.** An application source commit is not proof of clean-host installation, boot persistence, TLS, effective confinement, Agent GUI, or model inference. See [current operational gaps](docs/verification/OPEN_RISKS.md).
+### Common installer parameters
 
-## Operator and contributor navigation
+| Option | Purpose |
+| --- | --- |
+| `plan` | Read-only prerequisites and artifact verification |
+| `apply` | Install, update or repair from the reviewed package |
+| `--app-user NAME` | Existing non-root application account |
+| `--archive FILE` / `--sha256 HEX` | Application package and trusted digest |
+| `--distribution-sha256 HEX` | Trusted digest of the application installer code |
+| `--config FILE` | Approved application/MCP configuration |
+| `--prefix PATH` | Optional installation location in the application user's home |
+| `--provision-provider` | Explicit empty-host provisioning only; requires a separately verified upstream installer, SHA256 and root-change acknowledgment |
 
-- [Documentation map](docs/INDEX.md), [host/bootstrap boundaries](docs/HOST_BOOTSTRAP.md), [application installation](docs/INSTALL.md)
-- [Management CLI](docs/CLI.md), [client profiles](clients/README.md) and [scope](docs/product/SCOPE.md)
-- [R-00 cross-branch audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [semantic parity F-001–F-015](docs/verification/FEATURE_PARITY_ARCHIVE_051.md), [Web workflow mapping](docs/verification/WEB_WORKFLOW_PARITY.md), [feature/evidence matrix](docs/verification/FEATURE_MATRIX.md), [remaining risks](docs/verification/OPEN_RISKS.md)
-- [Manual migration from 0.5.1](docs/MIGRATING_FROM_051.md), [troubleshooting](docs/TROUBLESHOOTING.md), [upstream contract](docs/UPSTREAM_PROVIDER.md)
-- [Contributing agent instructions](AGENTS.md), [handoff](docs/process/FINAL_HANDOFF.md), [change procedure](docs/process/MAINTENANCE.md)
+Run `bash install.sh --help` for all parameters.
 
-Historical version-by-version reports are indexed under [verification](docs/INDEX.md); they describe their original environment and source, not today's deployment.
+## Connect an AI coding agent
 
-## Development & testing
+The Web Client Setup page generates public descriptors and local client enrollment scripts. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
 
-### Isolated fixture (synthetic)
+| Client platform | Agent | Transport | Support |
+| --- | --- | --- | --- |
+| Windows | Codex | Native OpenSSH | Selected |
+| Windows | Codex | Explicit WSL SSH | Selected |
+| Windows | ZCode | Native OpenSSH | Selected |
+| Windows | ZCode | Explicit WSL SSH | Selected |
+| macOS | Codex / ZCode | Native SSH | Not currently supported |
+| Windows / macOS | Cursor / Claude Code | Any | Not currently supported |
+| WSL-hosted Agent | Codex / ZCode | Agent runs inside WSL | Not currently supported |
 
-This is the local developer/demo and regression-test mode, **not a real installation**. It exercises the Web UI, project binding, and operation receipts using synthetic infrastructure without contacting or changing a real Incus/Containarium Provider.
+WSL refers only to the SSH transport used by an Agent running on Windows. See [client setup](clients/README.md).
 
-On a prepared non-root Ubuntu 24.04 x86_64 machine with Python 3.12, Node/npm, browser test dependencies if needed, and no occupied port 18640:
+## Web console
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install --require-hashes -r requirements-dev.lock
-(cd web && npm ci --ignore-scripts --no-audit --no-fund && npm run build)
-.venv/bin/python -m bwmini init-admin --config examples/fixture.json
-.venv/bin/python -m bwmini worker --config examples/fixture.json
-# In another terminal:
-.venv/bin/python -m bwmini serve --config examples/fixture.json
-```
+The Web UI includes project and environment binding, reviewed lifecycle plans and durable receipts, Tenant membership and controlled network access, TCP/UDP port publication, Prompt Graph, model setup guidance for ZCode, and supported client setup downloads. Graphs do not execute commands and an HTTP response is not proof of authenticated MCP or effective network isolation.
 
-Open `http://127.0.0.1:18640`, sign in using the administrator password entered locally, save a project binding and inspect a receipt. This is a **synthetic fixture**: working UI and simulated activity do not prove real Provider access or isolation. Processes are foreground-only and bind loopback. See [verification strategy](docs/verification/TEST_STRATEGY.md).
+## Common management commands
 
+From a checked-out source directory or its matching installed release:
+
+| Command | Purpose |
+| --- | --- |
+| `bash boxweave.sh version` | Read the local BoxWeave version |
+| `bash boxweave.sh version --components` | Also observe Incus/Containarium CLI versions |
+| `bash boxweave.sh status` | Observe application and user service state |
+| `bash boxweave.sh doctor` | Read-only host and service diagnostics |
+| `bash boxweave.sh doctor --mcp` | Additionally run an explicitly authorized MCP read |
+| `bash boxweave.sh box inspect NAME --project default` | Inspect one exact Incus instance |
+| `bash boxweave.sh client` | Display supported client profile guidance; no enrollment |
+
+These commands do not automatically install missing components or modify the host. The command set is smaller than the historical implementation. See the [CLI reference](docs/CLI.md) for exit codes.
+
+## Documentation
+
+[Install and update](docs/INSTALL.md) · [Host prerequisites](docs/HOST_BOOTSTRAP.md) · [Client setup](clients/README.md) · [CLI reference](docs/CLI.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Supported scope](docs/product/SCOPE.md) · [Development and tests](docs/DEVELOPMENT.md) · [Open risks](docs/verification/OPEN_RISKS.md)

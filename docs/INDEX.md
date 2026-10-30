@@ -38,3 +38,5 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [Operator troubleshooting](TROUBLESHOOTING.md)
 - [Manual migration from archived 0.5.1](MIGRATING_FROM_051.md)
 - [Upstream Provider/Incus contract](UPSTREAM_PROVIDER.md)
+
+- [Development and isolated fixture](DEVELOPMENT.md)
