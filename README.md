@@ -4,9 +4,9 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.9.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.10.** This is a preview, not a certified clean-host deployment.
 
-## Install on Ubuntu
+## Install (Ubuntu 24.04+ recommended)
 
 The desired default command is:
 
@@ -14,7 +14,7 @@ The desired default command is:
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
 ```
 
-The streamed installer requires Ubuntu >= 24.04, CPython >= 3.12 and x86_64. It verifies source-bound release assets, provisions missing infrastructure on a clean host, **preserves an already configured Incus storage pool**, and **reuses an existing complete Containarium** without installing or upgrading it. Existing Provider identity, configuration, network and storage remain external. Partial installations are refused. See [existing Provider instructions](docs/verification/EXISTING_PROVIDER_INSTALL.md) and [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md). The released offline wheelhouse includes CPython 3.12–3.15 x86_64 wheels; Ubuntu 26.04 requires live host acceptance. Selected Agent clients: Windows Codex and ZCode via native SSH or WSL SSH; macOS clients are not currently supported.
+For automatic provisioning on a fresh host, **Ubuntu 24.04 or newer is recommended and currently required by the APT-based provisioning path**. The application/CLI targets Linux x86_64 with CPython >= 3.12 and systemd; hosts on other Linux distributions may use the reviewed, preinstalled Containarium/Incus path if all prerequisites pass, but live compatibility is not yet certified. It verifies source-bound release assets, provisions missing infrastructure on a clean host, **preserves an already configured Incus storage pool**, and **reuses an existing complete Containarium** without installing or upgrading it. Existing Provider identity, configuration, network and storage remain external. Partial installations are refused. See [existing Provider instructions](docs/verification/EXISTING_PROVIDER_INSTALL.md) and [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md). The released offline wheelhouse includes CPython 3.12–3.15 x86_64 wheels; Ubuntu 26.04 requires live host acceptance. Selected Agent clients: Windows Codex and ZCode via native SSH or WSL SSH; macOS clients are not currently supported.
 
 The Provider API and Web application stay on loopback; the MCP client uses the existing SSH service with an explicitly enrolled client public key and a verified server pin. No public route, firewall change or SSH host-key replacement is performed. The initial Web administrator password is saved only in a private file whose location is printed; it is never printed by the installer.
 The explicit `bootstrap-plan` / `bootstrap` workflow can now prepare a dedicated application account, systemd user bus, independent scoped MCP launcher and rotating credential on an already reviewed Provider. It requires independently reviewed artifact digests and explicit root-change acknowledgment; see [application bootstrap](docs/HOST_BOOTSTRAP.md#independent-application-bootstrap).
@@ -53,7 +53,7 @@ Streamed install/update/repair automatically preserves an already-installed comp
 ## After installation: finish the setup
 
 The successful installer prints a `next_steps` record. These commands work as
-a regular Ubuntu login; **do not use `sudo` for ordinary help, status or
+a regular Linux login; **do not use `sudo` for ordinary help, status or
 client setup**:
 
 ```sh
@@ -65,12 +65,12 @@ boxweave client         # Windows Codex/WSL guided client setup
 ```
 
 The Web server is bound to **127.0.0.1** for safety, so its URL is
-accessible on the Ubuntu host only. To open it in your own browser, make an
+accessible on the server host only. To open it in your own browser, make an
 authenticated tunnel from your local computer (use the actual port printed by
 `boxweave`):
 
 ```sh
-ssh -N -L 18640:127.0.0.1:18640 YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST
+ssh -N -L 18640:127.0.0.1:18640 YOUR_HOST_ADMIN@YOUR_LINUX_HOST
 ```
 
 Then browse to `http://127.0.0.1:18640` locally (replace 18640 when
@@ -97,10 +97,10 @@ For **Windows Codex using WSL SSH**, the installed server now offers a unified c
 
 ```bash
 boxweave client
-boxweave client --agent codex --transport wsl --admin-user YOUR_UBUNTU_ADMIN --output "$HOME/boxweave-setup.ps1"
+boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --output "$HOME/boxweave-setup.ps1"
 ```
 
-Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed Ubuntu enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The wizard also installs a separately managed Codex AGENTS block containing this server's public workload key for create_container.ssh_keys; -WslGuidance additionally installs that guidance under the selected WSL user's Codex home. The server-side MCP create gate refuses a missing/mismatched managed workload key before forwarding. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.
+Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed server-side enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The wizard also installs a separately managed Codex AGENTS block containing this server's public workload key for create_container.ssh_keys; -WslGuidance additionally installs that guidance under the selected WSL user's Codex home. The server-side MCP create gate refuses a missing/mismatched managed workload key before forwarding. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.
 
 The Web Client Setup page also generates public descriptors and local client enrollment scripts for selected profiles. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
 
