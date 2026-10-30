@@ -1,6 +1,6 @@
 # BoxWeave contributor and AGENT operating rules
 
-Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [PHASE_STATUS](docs/process/PHASE_STATUS.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language.
+Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [current status through the documentation index](docs/INDEX.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language.
 
 ## Authorized 0.10+ remediation
 
@@ -10,11 +10,11 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 
 ## Trust and execution
 
-- Archived `archive/0.5.1` is read-only behavioral evidence, not a merge source. Its installer, bootstrap assumptions and test claims must not be transplanted unexamined.
+- Historical source revisions are read-only behavioral evidence, not a merge source. Its installer, bootstrap assumptions and test claims must not be transplanted unexamined.
 - Never modify real host, Incus, Provider, SSH/firewall, token/key trust, private credentials, external network routes or public TLS without separate **specific environment authorization**. Repo source code for these operations can be drafted, but not run against a real host under the repository-write authorization. Prefer safe preflight, explicit operator confirmation, idempotent owned state, isolated boundaries and rollback/repair instructions.
 - Do not read or export private keys, signing secrets, JWT values or production DBs. Preserve original evidence, ignored directories, historical SHAs, installed services, and legacy branch. No implicit provider upgrade, SSH trust-on-first-use, tenant/policy mutation or live inference.
 - Only conduct Linux installation/real browser/Provider tests in a specifically approved prepared non-root Linux environment. The standard validation lane is `python scripts/check_knowledge.py`; in the prepared LXC, `.venv/bin/python scripts/validate.py` and optionally `--browser`. These are not host/provider acceptance. Check executable help and syntax before integration tests.
-- Maintain `REQ/AC -> ADR/TASK -> code/tests/evidence` traceability. Follow [MAINTENANCE](docs/process/MAINTENANCE.md). Update the authoritative scope/requirements if an approved outcome changes, and keep [audit](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [risks](docs/verification/OPEN_RISKS.md), source register and handoff aligned. Preserve old reports as historical evidence.
+- Maintain `REQ/AC -> ADR/TASK -> code/tests/evidence` traceability. Follow [MAINTENANCE](docs/process/MAINTENANCE.md). Update the authoritative scope/requirements if an approved outcome changes, and keep [historical comparison listed in the documentation index](docs/INDEX.md), [risks](docs/verification/OPEN_RISKS.md), source register and handoff aligned. Preserve old reports as historical evidence.
 - For every slice record *what changed*, *what was actually tested* (command, environment, exit code and evidence), *what remains untested*, *blockers*, and next Agent's executable checks in [remediation verification queue](docs/verification/REMEDIATION_TEST_QUEUE.md). A static code review is **S**, historical documentation **D**, genuinely run tests **T**, and untested properties **U**. Never report source code, fixture or CI as a successful real-host install.
 
 ## User-facing documentation conventions
