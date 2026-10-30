@@ -48,7 +48,10 @@ $ServerPort = __PORT__
 $ServerKey = '__SERVER_KEY__'
 $McpServer = 'boxweave'
 $RemoteMcp = '/usr/bin/python3 /usr/local/lib/boxweave/default/mcp_gate.py'
-$wsl = (Get-Command wsl.exe -CommandType Application -ErrorAction Stop).Source
+$wsl = Join-Path $env:SystemRoot 'System32\wsl.exe'
+if (-not (Test-Path -LiteralPath $wsl -PathType Leaf)) {
+    throw ('Windows WSL executable not found: ' + $wsl)
+}
 if (-not $Distro) {
     $available = @(& $wsl --list --quiet | ForEach-Object { ($_ -replace [char]0, '').Trim() } | Where-Object { $_ })
     if ($LASTEXITCODE -ne 0 -or $available.Count -eq 0) { throw 'No WSL distribution is available' }

@@ -33,6 +33,9 @@ class ClientGeneratorTests(unittest.TestCase):
                          "CODEX_HOME", "config.toml"):
             self.assertIn(expected, payload)
         self.assertNotIn("Get-Command codex", payload)
+        self.assertNotIn("Get-Command wsl.exe", payload)
+        self.assertIn("$wsl = Join-Path $env:SystemRoot 'System32\\wsl.exe'", payload)
+        self.assertIn("Test-Path -LiteralPath $wsl -PathType Leaf", payload)
         self.assertNotIn("codex mcp add", payload)
         self.assertNotIn("jwt.secret", payload)
         self.assertNotIn("StrictHostKeyChecking=no", payload)

@@ -127,3 +127,8 @@ New `boxweave client` server-side wizard and explicit `--agent codex --transport
 Source update: generated Windows + WSL SSH installer does not require `Get-Command codex`, an external Codex CLI, or execution of a WindowsApps-packaged binary. The Windows desktop app shares `%USERPROFILE%\\.codex\\config.toml` (or the user's `CODEX_HOME`); the script updates only the BoxWeave MCP table, refusing ambiguous TOML, backing up existing configurations, and requiring `-Replace` for conflicts. Administrator SSH enrollment defaults to password authentication to prevent too many keys; `-AdminAuthentication publickey -BootstrapIdentity /absolute/wsl/path` is available for key-only administrator SSH.
 
 **S**: updated source and fixture regression coverage. **T**: full CI and generated PowerShell grammar. **U**: real ChatGPT desktop recognition after restart, Windows/WSL password+sudo, optional authorized key login, preserve other Codex MCP settings, safe rerun and actual MCP read. Existing Incus and Containarium remain untouched.
+
+
+## 0.17.5 Windows WSL executable selection
+
+Fix generated PowerShell `$wsl` resolving from multiple `Get-Command wsl.exe` matches (System32 and WindowsApps). Select `$env:SystemRoot\System32\wsl.exe` as exactly one absolute executable, with a required file check. Regression test asserts no Get-Command WSL ambiguity and CI parses generated PowerShell. **S/T**: source and CI syntax/unit. **U**: actual Windows host with multiple `wsl.exe` matches, selected distro `Ubuntu`, real enrollment and MCP reading. Direct local patch to existing script is safe; no Containarium/Incus changes.

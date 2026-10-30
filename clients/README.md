@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.4)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.5)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -49,3 +49,8 @@ Read [actual evidence](../docs/verification/TASK_007_PROFILES.md). These checks 
 ## R-04 verified scope, not new platform coverage
 
 The owner **did not approve** adding macOS, Cursor or Claude Code. Current selected descriptors are `codex/windows/native`, `codex/windows/wsl`, `zcode/windows/native`, `zcode/windows/wsl` only. WSL means **Windows-hosted Agent with WSL SSH transport**, not automatically installing a WSL Agent or distro. The new `boxweave.sh client` prints guidance, not a generator. Web Client setup generates reviewed **public** descriptors and a hash-checked script for local use; neither implies enrollment, Agent GUI recognition, or model access. Run each of four real Windows profiles with explicit runtime/distro/path/pin and independently check GUI/model evidence. See [R-04 queue](../docs/verification/REMEDIATION_TEST_QUEUE.md).
+
+
+### Windows PATH ambiguity guard (0.17.5)
+
+The generated PowerShell setup selects one specific Windows WSL executable at `$env:SystemRoot\System32\wsl.exe`, validating that it exists before invoking it. Do not derive its command path from all `Get-Command wsl.exe` matches: Windows commonly exposes both the System32 binary and a WindowsApps alias, and coercing both matches into a single PowerShell string makes invocation fail with CommandNotFoundException. Existing v0.17.4 generated scripts can be corrected by replacing that assignment locally; doing so does not change WSL keys or the server enrollment. The fix is also covered by a generator regression test and PowerShell syntax CI.
