@@ -57,7 +57,7 @@ try {
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_public_metadata_is_rendered_without_secrets(self):
-        text=client_setup.render(ready_state(),"luka")
+        text=client_setup.render(ready_state(),"example-admin")
         self.assertIn("for this server's connect tool.",text.lower())
         self.assertIn("ssh_keys",text)
         self.assertNotIn("__MANAGED_PUBLIC_KEY__",text)

@@ -5,7 +5,7 @@ Always start from a reviewed source/package and a known app user. Never print or
 | Symptom | Safe observation | Interpretation and next action |
 | --- | --- | --- |
 | Untrusted artifact/source | `sha256sum /trusted/boxweave-v2.zip` against **independent** operator digest | Mismatch blocks execution. Obtain reviewed bytes; do not disable hash verification |
-| Installer plan rejects host | `bash install.sh --help`, then `plan` with reviewed paths | Confirm Ubuntu 24.04/x86_64/Python 3.12, app user, local user bus and Provider. No implicit privilege repair |
+| Installer plan rejects host | `bash install.sh --help`, then `plan` with reviewed paths | Confirm Linux x86_64/Python >=3.12, systemd, app user, local user bus and Provider. Ubuntu >=24.04 is required for the automated APT provisioning path. No implicit privilege repair |
 | Install marker persists | `bash boxweave.sh status --prefix "$HOME/boxweave-v2"`; inspect owned `update-in-progress.json` stage only | Correct exact failure then rerun the same reviewed package; never delete locks/marker/backups to force ready |
 | `ADMIN_SETUP_REQUIRED` | Interactive `python -m bwmini init-admin` as the app user per install guide | First admin setup must finish before marker can clear; password is entered locally only |
 | App unavailable or HTTP 401 | `boxweave.sh status` / owned user-service status | 401 is unauthenticated reachability; not proof of MCP, login, TLS or host availability |

@@ -1,4 +1,4 @@
-"""Lower-bound platform contract: Ubuntu >= 24.04, CPython >= 3.12.
+"""Lower-bound platform contract: Linux CPython >= 3.12, Ubuntu APT provisioning.
 
 These are pure checks. No host provisioning or root operations are performed.
 """
@@ -21,6 +21,18 @@ class MinimumVersionTests(unittest.TestCase):
             with self.subTest(version=rejected):
                 self.assertFalse(online.supported_ubuntu(rejected))
 
+    def test_preinstalled_provider_does_not_require_ubuntu_label(self):
+        # Host compatibility is still subject to Linux/systemd/Incus/venv
+        # checks. This only checks that the OS name is not a blanket rejection.
+        for distro in ({"ID": "fedora", "VERSION_ID": "42"},
+                       {"ID": "debian", "VERSION_ID": "13"},
+                       {"ID": "ubuntu", "VERSION_ID": "22.04"}):
+            with self.subTest(distro=distro):
+                self.assertTrue(online.host_can_use_provider(distro, True))
+                self.assertFalse(online.host_can_use_provider(distro, False))
+        self.assertTrue(online.host_can_use_provider(
+            {"ID": "ubuntu", "VERSION_ID": "26.04"}, False))
+
     def test_python_minimum_includes_new_minor_versions(self):
         for version in ((3, 12), (3, 13), (3, 14), (3, 15), (4, 0)):
             with self.subTest(version=version):
@@ -37,7 +49,9 @@ class MinimumVersionTests(unittest.TestCase):
         script = (ROOT / "install.sh").read_text()
         version = (ROOT / "VERSION").read_text().strip()
         self.assertIn('python3 - "' + version + '"', script)
-        self.assertIn("Ubuntu >= 24.04 and Python >= 3.12", script)
+        self.assertIn("Recommended: Ubuntu >= 24.04", script)
+        self.assertIn("Linux x86_64, Python >= 3.12 and systemd required", script)
+        self.assertIn("if (( PROVISION )); then", script)
 
 
 if __name__ == "__main__":

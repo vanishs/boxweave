@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Explicit, digest-gated Ubuntu application install/update coordinator.
+# Explicit, digest-gated Linux application install/update coordinator.
 # Offline application coordinator; explicit bootstrap can initialize scoped credentials.
 set -Eeuo pipefail
 umask 077
@@ -13,7 +13,9 @@ Usage: sudo bash install.sh [--provider-url URL --provider-secret-file ABSOLUTE_
   /etc/containarium/jwt.secret, and containariumd on PATH.
   A standalone preinstalled Incus storage pool is also preserved.
   Custom Provider settings require the options above.
-  Minimum host versions: Ubuntu >= 24.04 and Python >= 3.12 (x86_64).
+  Recommended: Ubuntu >= 24.04. Linux x86_64, Python >= 3.12 and systemd required.
+  Automatic host package provisioning remains Ubuntu-specific; preinstalled
+  reviewed Provider paths may work on other Linux distributions.
 Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
   --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
@@ -45,8 +47,8 @@ if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secr
     esac
   done
   [[ "$EUID" -eq 0 ]] || die 'DEFAULT_INSTALL_REQUIRES_ROOT: run the reviewed installer with sudo bash'
-  command -v python3 >/dev/null || die 'Ubuntu Python 3 is required'
-  python3 - "0.17.9" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  command -v python3 >/dev/null || die 'Python 3 is required'
+  python3 - "0.17.10" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
@@ -149,10 +151,14 @@ if (( PROVISION )); then
 else
   [[ -z "$PROVIDER_INSTALLER" && -z "$PROVIDER_SHA" && -z "$ACK" ]] || die 'Provider options require --provision-provider'
 fi
-[[ -f /etc/os-release ]] || die 'Cannot identify host OS'
-# shellcheck disable=SC1091
-. /etc/os-release
-[[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 ]] || die 'Only Ubuntu 24.04 host is supported by this entry'
+if (( PROVISION )); then
+  [[ -f /etc/os-release ]] || die 'Cannot identify host OS for Provider provisioning'
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  [[ "$ID" == ubuntu && "$VERSION_ID" =~ ^[0-9]+\.[0-9]+$ ]] || die 'Provider provisioning requires Ubuntu >= 24.04'
+  major=${VERSION_ID%%.*}; minor=${VERSION_ID#*.}
+  (( 10#$major > 24 || (10#$major == 24 && 10#$minor >= 4) )) || die 'Provider provisioning requires Ubuntu >= 24.04'
+fi
 [[ "$(uname -m)" == x86_64 ]] || die 'Release wheel lock requires x86_64'
 python3 -c 'import sys;raise SystemExit(0 if sys.version_info[:2]>=(3,12) else 2)' || die 'Python >= 3.12 is required'
 command -v systemctl >/dev/null || die 'systemd is required'

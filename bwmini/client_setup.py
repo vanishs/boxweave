@@ -50,7 +50,7 @@ POWERSHELL = r"""#requires -version 5.1
 <#
 BoxWeave Codex/Windows + WSL SSH setup. Generated from the reviewed server release.
 Read this script before executing. No secrets are embedded or downloaded.
-By default it will ask an existing Ubuntu administrator to authorize a public
+By default it will ask an existing Linux administrator to authorize a public
 SSH key using sudo online.py enroll. Use -NoEnroll to do that independently.
 #>
 [CmdletBinding()]
@@ -89,7 +89,7 @@ if (-not $Distro) {
     }
 }
 if ($Distro -cnotmatch '^[A-Za-z0-9_.-]{1,80}$') { throw 'Invalid WSL distribution name' }
-if ($BootstrapUser -cnotmatch '^[a-z_][a-z0-9_-]{0,30}$') { throw 'Invalid Ubuntu administrator login' }
+if ($BootstrapUser -cnotmatch '^[a-z_][a-z0-9_-]{0,30}$') { throw 'Invalid Linux administrator login' }
 
 # The Python program below is always executed INSIDE the selected WSL distro.
 # Its only writes are under ~/.config/boxweave in that distro. Existing pins
@@ -144,7 +144,7 @@ Write-Host ('WSL identity ready in distribution: ' + $Distro)
 # before writing Codex configuration. The host key is still pinned.
 if ($NoEnroll -and $AlreadyEnrolled) { throw 'Cannot combine -NoEnroll and -AlreadyEnrolled' }
 if ($NoEnroll) {
-    Write-Host 'Enrollment pending. On the Ubuntu BoxWeave server, run (then rerun with -AlreadyEnrolled):'
+    Write-Host 'Enrollment pending. On the Linux BoxWeave server, run (then rerun with -AlreadyEnrolled):'
     Write-Host ("sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key '" + $identity.public_key + "'")
     exit 0
 }
@@ -166,7 +166,7 @@ if (-not $AlreadyEnrolled) {
                        '-i',$BootstrapIdentity)
     }
     $authArgs += @('-p',"$ServerPort",("$BootstrapUser@$ServerHost"),$remote)
-    Write-Host ('Authorizing public key via existing Ubuntu administrator: ' + $BootstrapUser)
+    Write-Host ('Authorizing public key via existing Linux administrator: ' + $BootstrapUser)
     & $wsl --distribution $Distro --exec /usr/bin/ssh @authArgs
     if ($LASTEXITCODE -ne 0) {
         throw 'Public-key enrollment not confirmed; no Codex MCP entry was modified'
@@ -522,7 +522,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="BoxWeave reviewed Windows Codex/WSL setup script generator")
     parser.add_argument("--agent", choices=("codex",))
     parser.add_argument("--transport", choices=("wsl",))
-    parser.add_argument("--admin-user", help="Existing Ubuntu SSH administrator authorized to run sudo online.py enroll")
+    parser.add_argument("--admin-user", help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
     parser.add_argument("--output", help="New PowerShell file; defaults to ./boxweave-setup.ps1")
     parser.add_argument("--stdout", action="store_true", help="Emit the public script to stdout instead of a file")
     args = parser.parse_args(argv)
@@ -540,7 +540,7 @@ def main(argv=None):
         if not USER.fullmatch(admin or ""):
             if not interactive:
                 raise ValueError("ADMIN_USER_REQUIRED")
-            admin = input("Existing Ubuntu SSH administrator: ").strip()
+            admin = input("Existing Linux SSH administrator: ").strip()
         if not USER.fullmatch(admin):
             raise ValueError("ADMIN_USER_INVALID")
         script = render(state, admin)
