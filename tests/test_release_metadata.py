@@ -16,7 +16,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn('| Client platform | Agent | Transport | Support |', text)
         self.assertIn('| Command | Purpose |', text)
         self.assertNotIn('## Isolated fixture', text)
-        self.assertIsNone(re.search(r'\\b(?:phase|archive|v2)\\b', text, re.I))
+        self.assertIsNone(re.search(r'\b(?:phase|archive|v2)\b', text, re.I))
 
     def test_versions_agree_and_bad_lock_is_rejected(self):
         with tempfile.TemporaryDirectory() as root:

@@ -18,7 +18,7 @@ python3 -m venv .venv
 .venv/bin/python -m bwmini serve --config examples/fixture.json
 ```
 
-Open `http://127.0.0.1:18640`, sign in using the administrator password entered locally, save a project binding and inspect a receipt. This is a **synthetic fixture**: working UI and simulated activity do not prove real Provider access or isolation. Processes are foreground-only and bind loopback. See [verification strategy](docs/verification/TEST_STRATEGY.md).
+Open `http://127.0.0.1:18640`, sign in using the administrator password entered locally, save a project binding and inspect a receipt. This is a **synthetic fixture**: working UI and simulated activity do not prove real Provider access or isolation. Processes are foreground-only and bind loopback. See [verification strategy](verification/TEST_STRATEGY.md).
 
 ## Routine checks
 
