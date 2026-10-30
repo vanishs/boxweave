@@ -44,10 +44,10 @@ def public_state():
         raise ValueError("PUBLIC_DESCRIPTOR_NOT_AVAILABLE") from exc
 
 
-def observe(argv, timeout=8, limit=16384):
+def observe(argv, timeout=8, limit=16384, cwd=None):
     try:
         result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+                                stderr=subprocess.DEVNULL, timeout=timeout, check=False, cwd=cwd)
         if len(result.stdout) > limit:
             return None
         return result.stdout.decode("utf-8", "replace") if result.returncode == 0 else None
@@ -96,7 +96,8 @@ def mcp_probe(info):
     result = observe(["runuser", "-u", account.pw_name, "--", "env",
                       "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
                       str(prefix / "current/.venv/bin/python"), "-m", "bwmini.deploy_check",
-                      "--config", str(prefix / "runtime.json"), "--mcp"], timeout=110, limit=8192)
+                      "--config", str(prefix / "runtime.json"), "--mcp"], timeout=110, limit=8192,
+                     cwd=str(prefix / "current"))
     if result is None:
         return {"state": "unavailable", "reason": "APP_USER_PROBE_FAILED"}
     try:
