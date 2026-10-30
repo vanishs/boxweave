@@ -3,6 +3,20 @@ import argparse,collections,json,re,sys,urllib.parse
 from pathlib import Path
 QUESTIONS=('goals','boundaries','run','design','tests','risks','legacy','state')
 REQUIRED_ROLES={'product','requirements','acceptance','scope','architecture','decisions','tasks','traceability','sources','legacy','risks','status','handoff','maintenance','install','tests'}
+def readme_narrative_errors(text):
+ """Reject obsolete product/stage narratives, not ordinary technical words."""
+ # Executable examples and exact identifiers retain their technical spelling.
+ prose=re.sub(r"\x60\x60\x60[\s\S]*?\x60\x60\x60|~~~[\s\S]*?~~~", "", text)
+ prose=re.sub(r"\x60[^\x60\n]*\x60", "", prose)
+ patterns=(
+  (r"\bphase[ \t-]*[1-7]\b", "README has an internal development-stage narrative"),
+  (r"\b(?:archived?|legacy)[ \t]+(?:v)?0\.5\.1\b", "README has an archived-release narrative"),
+  (r"\bboxweave[ \t]+v2\b|\b(?:this[ \t]+is[ \t]+(?:the[ \t]+)?|our[ \t]+|current[ \t]+)v2[ \t]+(?:app(?:lication)?|implementation|rewrite)\b",
+   "README brands the current product as v2 instead of BoxWeave 0.X.X"),
+ )
+ return [message for pattern,message in patterns if re.search(pattern,prose,re.I)]
+
+
 def release_errors(root):
  """Check public release metadata when this is a real repository checkout."""
  import tomllib
@@ -17,6 +31,7 @@ def release_errors(root):
   if not re.fullmatch(r'0\.[0-9]+\.[0-9]+',version) or any(v!=version for v in (project,web,lock['version'],lock['packages']['']['version'])):
    errors.append('Release version mismatch across VERSION, Python project, Web package and lock root')
   readme=(root/'README.md').read_text(encoding='utf-8')
+  errors.extend(readme_narrative_errors(readme))
   if version not in readme[:2000]:errors.append('README does not declare the current release version')
   if re.search(r'Phase\s*7.{0,70}(has not started|not started|eligible for)',readme[:3000],re.I):
    errors.append('README has obsolete historical phase claim')

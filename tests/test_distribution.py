@@ -81,6 +81,7 @@ class DistributionTests(unittest.TestCase):
   self.assertTrue(d.unit_ready(good,timer=True));self.assertFalse(d.unit_ready(good|{'UnitFileState':'disabled'},timer=True));self.assertFalse(d.unit_ready({},timer=True))
  def test_units_escape_paths_and_do_not_start_provider(self):
   content=d.unit_text(Path('/tmp/a space%p'),Path('/tmp/a space%p/runtime.json'),'serve').decode()
+  self.assertIn('Description=BoxWeave serve\n',content);self.assertNotIn('Description=BoxWeave v2',content)
   self.assertIn('%%p',content);self.assertIn(r'WorkingDirectory=/tmp/a\x20space%%p/current',content);self.assertNotIn('containarium',content);self.assertNotIn('sudo',content)
  def test_builder_excludes_unreviewed_private_client_and_runtime_files(self):
   for name in ['clients/private-profile.json','.runtime/session.json']:

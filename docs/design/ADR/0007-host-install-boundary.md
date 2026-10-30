@@ -12,3 +12,7 @@ The source `install.sh` implements a constrained coordinator, not the missing fu
 
 ## Consequences and verification
 Operators must explicitly prepare privileged artifacts and authorization and retain previous host state; partial failures are not whole-host rollback. Tests need malformed inputs, existing-host refusal, isolation, first administrator, true MCP read, re-run/repair, reboot, file ownership, TLS/SSH responsibility and confirmation the old 0.5.1 services remain untouched. See [host guide](../../HOST_BOOTSTRAP.md), [R-02 queue](../../verification/REMEDIATION_TEST_QUEUE.md), and [risks](../../verification/OPEN_RISKS.md).
+
+## 0.14.0 application initialization
+
+The explicit `install.sh bootstrap-plan/bootstrap` implements the application account, user-manager, separate launcher and scoped credential-rotation boundary on an already reviewed Provider. It snapshots reviewed bytes and executes package installation as the new non-root account. Existing accounts and Provider/MCP upgrades are refused; root signing authority stays separate from app-readable token files. This does not close the remaining published-release, empty-host Provider, client SSH trust or reboot acceptance requirements. [Evidence](../../verification/MAIN_014_REVIEW.md).

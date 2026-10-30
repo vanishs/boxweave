@@ -6,7 +6,7 @@ Choose and retain an explicit private installation location, for example `APP_PR
 
 ## Trust and preparation
 
-Obtain a reviewed standalone `bwmini/distribution.py` and the expected package SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The package embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
+Obtain a reviewed standalone `bwmini/distribution.py` and the expected package SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The ZIP archive embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
 
 Build inside the assigned Linux development box, using the existing exact wheel lock and built UI:
 
@@ -30,7 +30,7 @@ The listener stays127.0.0.1. For a local HTTP test, use an exact loopback HTTP o
 
 ```sh
 APP_PREFIX="$HOME/boxweave"
-python3 /trusted/distribution.py install --package /trusted/boxweave.zip \
+python3 /trusted/distribution.py install --archive /trusted/boxweave.zip \
   --sha256 REVIEWED_ARCHIVE_SHA256 --prefix "$APP_PREFIX" \
   --config /private/application.json --activate
 ```
@@ -50,7 +50,7 @@ Then repeat the same install command to finish verification. For a later intenti
 
 Repeat `install` with the reviewed new package/digest. Saved settings are reused when `--config` is omitted; conflicting supplied settings are refused rather than silently merged. Deliberate setting changes require reviewing/editing the protected saved config while quiesced. Different installs must use distinct state paths and ports.
 
-The installer verifies all package members before running package code, rejects traversal/links/duplicate members, takes an install lock, stages an immutable release, stops only its owned API/worker units, builds a fresh environment from offline hash-locked wheels, takes the worker lock and a consistent SQLite backup, validates candidate state/config, then atomically switches `current`. Old environments and backups are retained for review. During a failure, `update-in-progress.json` records the last stage, package, previous release and backup. Configuration acknowledgment is not authenticated MCP evidence: the marker clears only after required service/HTTP checks and a real initialize/discovery/list_containers call, plus initialized local administrator state.
+The installer verifies all archive members before running package code, rejects traversal/links/duplicate members, takes an install lock, stages an immutable release, stops only its owned API/worker units, builds a fresh environment from offline hash-locked wheels, takes the worker lock and a consistent SQLite backup, validates candidate state/config, then atomically switches `current`. Old environments and backups are retained for review. During a failure, `update-in-progress.json` records the last stage, package, previous release and backup. Configuration acknowledgment is not authenticated MCP evidence: the marker clears only after required service/HTTP checks and a real initialize/discovery/list_containers call, plus initialized local administrator state.
 
 For a known installation failure, inspect the marker, services and diagnosis; correct the specific cause and rerun the same reviewed package. Do not start a competing installer or delete locks. Changed managed payloads/foreign services, invalid configuration, a busy worker and downgrades are refused. An inactive invalid owned unit with MainPID0 has no running process to stop; unknown service state is not treated as quiesced. The first candidate's incorrect WorkingDirectory quoting was found and repaired this way, with original evidence preserved.
 
@@ -68,4 +68,8 @@ Actual evidence and recovery limits: [TASK-012/013 report](verification/TASK_012
 
 `install.sh` is a preflight/coordinator for operator-reviewed offline artifacts. See [host bootstrap boundaries](HOST_BOOTSTRAP.md) for its `plan`/`apply` arguments and Provider gating. Existing standalone app package, backup, user services and incomplete-marker behavior above remain the implementation of app update/repair. The host entry does not yet assemble credentials/MCP launcher, configure a fresh systemd user bus or expose HTTPS; a full new-host end-to-end pass is still required.
 
-Host coordinator 0.13.4 requires `--distribution-sha256` as an additional independent review gate for `distribution.py`. Do not treat an package digest as verification of the Python installer code executing it.
+Host coordinator 0.13.4 requires `--distribution-sha256` as an additional independent review gate for `distribution.py`. Do not treat an archive digest as verification of the Python installer code executing it.
+
+## Optional dedicated application-account setup
+
+On an independently prepared Provider, the explicit [application bootstrap](HOST_BOOTSTRAP.md#independent-application-bootstrap) can now create the separate app user/bus, launcher and scoped credential rotation. It retains the same non-root package installer, first-admin, backup and repair checks. It does not publish a release, provision the Provider or replace existing accounts/deployments.

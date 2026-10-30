@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.13.10.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.14.0.** This is a preview, not a certified clean-host deployment.
 
 ## Install on Ubuntu
 
@@ -14,17 +14,19 @@ The desired default command is:
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
 ```
 
-**Availability:** There is not yet a verified downloadable application release or a complete independent MCP launcher bootstrap. Running this command currently **fails safely with a clear message**, rather than reporting a successful installation. It does not silently configure SSH, secrets, Provider upgrades, or public networking. One-command clean-host installation remains a tracked delivery requirement.
+**Availability:** There is not yet a published application release or a verified complete clean-host installation. Running this command currently **fails safely with a clear message**, rather than reporting a successful installation. It does not silently configure SSH, secrets, Provider upgrades, or public networking. One-command clean-host installation remains a tracked delivery requirement.
 
-On a prepared Ubuntu 24.04 x86_64 host with Python 3.12, reviewed Containarium/Incus, a non-root application user with a functioning systemd user bus, an authorized MCP launcher and a trusted release package, use the existing installer:
+The explicit `bootstrap-plan` / `bootstrap` workflow can now prepare a dedicated application account, systemd user bus, independent scoped MCP launcher and rotating credential on an already reviewed Provider. It requires independently reviewed artifact digests and explicit root-change acknowledgment; see [application bootstrap](docs/HOST_BOOTSTRAP.md#independent-application-bootstrap).
+
+On a prepared Ubuntu 24.04 x86_64 host with Python 3.12, reviewed Containarium/Incus, a non-root application user with a functioning systemd user bus, an authorized MCP launcher and a trusted release archive, use the existing installer:
 
 ```bash
 bash install.sh plan --app-user boxweave \
-  --package /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
+  --archive /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
   --distribution-sha256 INSTALLER_SHA256 --config /reviewed/application.json
 
 bash install.sh apply --app-user boxweave \
-  --package /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
+  --archive /reviewed/boxweave.zip --sha256 ARCHIVE_SHA256 \
   --distribution-sha256 INSTALLER_SHA256 --config /reviewed/application.json
 ```
 
@@ -37,7 +39,7 @@ The paths and SHA256 values are placeholders, not ready-made downloads. The firs
 | `plan` | Read-only prerequisites and artifact verification |
 | `apply` | Install, update or repair from the reviewed package |
 | `--app-user NAME` | Existing non-root application account |
-| `--package FILE` / `--sha256 HEX` | Application package and trusted digest |
+| `--archive FILE` / `--sha256 HEX` | Application ZIP archive and trusted digest; `--package` is a compatible alias |
 | `--distribution-sha256 HEX` | Trusted digest of the application installer code |
 | `--config FILE` | Approved application/MCP configuration |
 | `--prefix PATH` | Optional installation location in the application user's home |

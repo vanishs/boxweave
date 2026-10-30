@@ -37,15 +37,15 @@ def verify(archive,sha):
   require(set(manifest['source'])=={'commit','state'} and re.fullmatch('[0-9a-f]{40}',manifest['source']['commit']) is not None and manifest['source']['state'] in ('clean','modified'),'PROVENANCE_INVALID')
   files=manifest['files'];require(isinstance(files,dict) and set(files)|{'manifest.json'}==set(names),'MANIFEST_MEMBERS_MISMATCH')
   require({'bwmini/__main__.py','bwmini/deploy_check.py','requirements.lock','VERSION','web/dist/index.html'}<=set(files),'PACKAGE_INCOMPLETE')
-  require(all(n.startswith(('bwmini/','clients/','web/dist/','wheels/')) or n in ('VERSION','requirements.lock','boxweave.sh') for n in files),'PACKAGE_CONTENT_INVALID')
+  require(all(n.startswith(('bwmini/','clients/','web/dist/','wheels/')) or n in ('VERSION','requirements.lock','boxweave.sh','install.sh') for n in files),'PACKAGE_CONTENT_INVALID')
   for name,sha256 in files.items():require(re.fullmatch('[0-9a-f]{64}',sha256) is not None and digest(z.read(name))==sha256,'MEMBER_DIGEST_MISMATCH')
   require(z.read('VERSION').decode().strip()==manifest['version'],'VERSION_MISMATCH')
   return manifest
 def build(root,wheels,output,commit,source_state):
  root=Path(root).resolve();files={}
- modules=('__init__','__main__','manage','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
+ modules=('__init__','__main__','bootstrap','manage','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
- public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh']+list((root/'web/dist').rglob('*'))
+ public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
  for p in public:
   if p.is_file():
    require(not p.is_symlink(),'SYMLINK_SOURCE');files[p.relative_to(root).as_posix()]=p.read_bytes()
@@ -78,7 +78,7 @@ def stop_owned_unit(name):
  systemctl('stop',name)
 def q(value):return '"'+str(value).replace('\\','\\\\').replace('"','\\"').replace('%','%%')+'"'
 def unit_text(prefix,config,action):
- return ('[Unit]\nDescription=BoxWeave v2 '+action+'\n[Service]\nType=simple\nWorkingDirectory='+str(prefix/'current').replace('%','%%').replace(' ',r'\x20').replace(chr(34),r'\x22')+'\nExecStart='+q(prefix/'current/.venv/bin/python')+' -m bwmini '+action+' --config '+q(config)+'\nRestart=on-failure\nRestartSec=2\nUMask=0077\n[Install]\nWantedBy=default.target\n').encode()
+ return ('[Unit]\nDescription=BoxWeave '+action+'\n[Service]\nType=simple\nWorkingDirectory='+str(prefix/'current').replace('%','%%').replace(' ',r'\x20').replace(chr(34),r'\x22')+'\nExecStart='+q(prefix/'current/.venv/bin/python')+' -m bwmini '+action+' --config '+q(config)+'\nRestart=on-failure\nRestartSec=2\nUMask=0077\n[Install]\nWantedBy=default.target\n').encode()
 def config_read(path,prefix):
  raw=regular(Path(path));require(len(raw)<=65536,'CONFIG_TOO_LARGE');c=json.loads(raw)
  require(isinstance(c,dict) and c.get('mode')=='mcp' and c.get('host','127.0.0.1')=='127.0.0.1','CONFIG_INVALID')
@@ -150,7 +150,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
     f=directory/name
     if f.exists():
      previous=regular(f);legacy=content.replace(('WorkingDirectory='+str(prefix/'current').replace('%','%%').replace(' ',r'\x20').replace(chr(34),r'\x22')).encode(),('WorkingDirectory='+q(prefix/'current')).encode())
-     owned=old is not None and name in old['units'] and (digest(previous)==old.get('unit_sha256',{}).get(name) or ('unit_sha256' not in old and previous in (content,legacy)))
+     owned=old is not None and name in old['units'] and (digest(previous)==old.get('unit_sha256',{}).get(name) or ('unit_sha256' not in old and previous in (content,legacy,content.replace(b'Description=BoxWeave ',b'Description=BoxWeave v2 '),legacy.replace(b'Description=BoxWeave ',b'Description=BoxWeave v2 '))))
      require(owned,'FOREIGN_SERVICE')
   marker=prefix/'update-in-progress.json'
   def mark(stage,**kw):atomic(marker,encoded({'stage':stage,'archive_sha256':sha,'previous':current.name if current else None,'time':time.time(),**kw}))
@@ -215,7 +215,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
 def main():
  p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='action',required=True)
  b=sub.add_parser('build');b.add_argument('--root',required=True);b.add_argument('--wheels',required=True);b.add_argument('--output',required=True);b.add_argument('--source-commit',required=True);b.add_argument('--source-state',choices=['clean','modified'],required=True)
- i=sub.add_parser('install');i.add_argument('--package','--archive',dest='archive',required=True);i.add_argument('--sha256',required=True);i.add_argument('--prefix',required=True);i.add_argument('--config');i.add_argument('--activate',action='store_true');i.add_argument('--quiesced',action='store_true')
+ i=sub.add_parser('install');i.add_argument('--archive','--package',dest='archive',required=True);i.add_argument('--sha256',required=True);i.add_argument('--prefix',required=True);i.add_argument('--config');i.add_argument('--activate',action='store_true');i.add_argument('--quiesced',action='store_true')
  h=sub.add_parser('health');h.add_argument('--prefix',required=True);h.add_argument('--mcp',action='store_true')
  a=p.parse_args()
  try:

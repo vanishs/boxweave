@@ -15,3 +15,7 @@ SRC-092 separately authorizes publishing v2 as main and preserving the old imple
 ## 2026-10-29 remediation authorization
 
 SRC-093: The owner authorizes R-00–R-09 source remediation in small direct commits to main, no PR and no force push; restoration of fresh-host install/update/repair and management CLI is in scope, starting at 0.10.0. No automatic 0.5.1 data migration or additional Agent platforms. This supersedes older no-push restrictions **for repository source commits only**; it does not authorize any host, Provider, secret, network, public TLS or deployed application changes. See [remediation audit](../verification/ARCHIVE_051_TO_MAIN_AUDIT.md) and [execution queue](../verification/REMEDIATION_TEST_QUEUE.md). Current phase 7 historical results remain unchanged.
+
+## Current main-completion work
+
+SRC-097 separately authorizes the isolated 0.14.0 implementation and experiment scope. Results and remaining delivery boundaries are recorded in [MAIN_014_REVIEW](../verification/MAIN_014_REVIEW.md); this does not upgrade the original deployment or authorize public exposure, model spending, destructive cleanup or source publication.

@@ -31,3 +31,29 @@ jobs:
         run: |
           npm --prefix web ci --ignore-scripts --no-audit --no-fund
           npm --prefix web run build
+      - name: Install fixture browser
+        run: python -m playwright install --with-deps chromium
+      - name: Seven fixture browser workflows
+        run: python scripts/validate.py --browser-only
+      - name: Retain fixture validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixture-browser-evidence
+          path: |
+            .runtime/validation/
+            .runtime/**/result.json
+            .runtime/**/*.png
+          if-no-files-found: ignore
+      - name: Build reviewed application candidate
+        run: |
+          mkdir -p .runtime/release
+          python -m pip download --require-hashes --only-binary=:all: --no-deps -r requirements.lock --dest .runtime/release-wheels
+          python bwmini/distribution.py build --root . --wheels .runtime/release-wheels --output .runtime/release/boxweave.zip --source-commit "$GITHUB_SHA" --source-state clean
+          cp bwmini/distribution.py bwmini/bootstrap.py install.sh .runtime/release/
+          (cd .runtime/release && sha256sum boxweave.zip distribution.py bootstrap.py install.sh > SHA256SUMS)
+      - name: Retain application candidate for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-candidate
+          path: .runtime/release/

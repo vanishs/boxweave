@@ -42,3 +42,5 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [Development and isolated fixture](DEVELOPMENT.md)
 
 - [Historical installation-guide snapshot](INSTALL_HISTORY.md)
+
+- [0.14.0 main completion and current acceptance evidence](verification/MAIN_014_REVIEW.md)

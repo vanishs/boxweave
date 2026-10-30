@@ -76,3 +76,11 @@ Replaced outdated stage/branch labels in active AGENT, product, scope, host, and
 ## 0.13.10 user-facing installation history separation
 
 Preserved the previous operator installation guide in `docs/INSTALL_HISTORY.md` and reorganized current `docs/INSTALL.md` around explicit application preparation and a selected private prefix. Removed stale stage/evidence prose from current installation instructions without changing runtime file locations or schema. New installation examples use an explicitly selected prefix and the supported package alias; existing deployed locations must not be renamed without a separately reviewed migration. No host installation test performed. GitHub CI source checks are required.
+
+## 0.14.0 current execution
+
+The source-only environment description above belongs to the historical entries. The current authorized assigned-LXC, Windows and dedicated app bootstrap runs are recorded in [MAIN_014_REVIEW](MAIN_014_REVIEW.md). Preserve planned versus actually executed boundaries and keep RISK-610 open until the full published clean-host path exists.
+
+## Corrected public-document convention (SRC-099)
+
+The owner clarified that the earlier change was about current product narrative, mainly README, not forbidden substrings in all code/docs. The README regression now allows ordinary release archives, `--archive`, technical phases and upstream API v2, while rejecting obsolete archived-release/development-stage narratives and BoxWeave-v2 branding in prose. The compatible `--archive`/`--package` options are retained. Direct contributor links and historical records remain; the current installation/history split is retained.

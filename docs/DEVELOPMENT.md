@@ -29,3 +29,5 @@ python scripts/check_knowledge.py
 ```
 
 The browser checks are fixture-only. The runtime lane requires an approved prepared non-root Linux environment. Record any additional real infrastructure validation separately in [the test queue](verification/REMEDIATION_TEST_QUEUE.md).
+
+After an existing build, `scripts/validate.py --browser-only` runs just the seven fixture browser workflows with the same shared 600-second deadline and private reports. GitHub CI now includes this lane and publishes selected fixture logs/results/screenshots, plus a separately built application candidate; a configured workflow is not evidence of a successful run.

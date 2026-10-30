@@ -4,10 +4,10 @@ This is the onboarding/runbook entry, not a second status/risk register. Read [P
 
 ## First fifteen minutes
 
-1. Confirm the v2 root and current main branch explicitly. On the current Windows host the rewrite is C:/Users/vanis/.codex/visualizations/2026/10/28/01a18158-8e09-7373-b64c-800d96ecb72e/boxweave-rewrite-v2; tool default cwd may instead be the read-only legacy/pre-v2 checkout C:/Users/vanis/Downloads/boxweave. Run git status/branch/rev-parse with explicit workdir before editing. No private conversation is needed to identify these roles.
+1. Verify the chosen checkout using explicit `git status`, `git branch -vv`, `git rev-parse HEAD` and `git worktree list`. Do not infer its role from an old path or branch label. The current owner-selected main workspace is C:/Users/vanis/Downloads/boxweave; the previous rewrite worktree may be detached. Preserve all unrelated changes.
 2. Read [PRODUCT](../product/PRODUCT.md), [SCOPE](../product/SCOPE.md), [REQUIREMENTS](../product/REQUIREMENTS.md) and [ACCEPTANCE](../product/ACCEPTANCE.md). This is a personal trusted-operator Agent remote-development console, not a team-RBAC or graph-execution platform.
 3. Read [ARCHITECTURE](../design/ARCHITECTURE.md) and the [ADR index](../design/ADR/INDEX.md); use [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) to reach implementation/tests/evidence for a behavior.
-4. Inspect existing BoxWeave MCP inventory. Assigned development box: boxweave-tenant-dev, source /home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a. Verify whoami and hostname through its dynamic connect tool before work. The remote source copy may have no Git metadata; local rewrite Git plus exact synchronized hashes record provenance.
+4. Inspect existing BoxWeave MCP inventory. Assigned development box: boxweave-tenant-dev. Current remediation source is /home/boxweave-tenant-dev/main-completion-20261030/source; the earlier /home/boxweave-tenant-dev/rewrite-v2-phase4-40a600a is retained. Verify whoami and hostname through its dynamic connect tool before work. The remote source copy may have no Git metadata; local rewrite Git plus exact synchronized hashes record provenance.
 5. Run the prepared checks below. Read the failure report before changing anything; do not install dependencies or repeat a live mutation just to get a green result.
 
 ## Resource and trust boundaries

@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 # Explicit, digest-gated Ubuntu application install/update coordinator.
-# Never executes network downloads, invents credentials, or upgrades existing providers.
+# Offline application coordinator; explicit bootstrap can initialize scoped credentials.
 set -Eeuo pipefail
 umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
-Usage: bash install.sh plan|apply --app-user NAME --package FILE --sha256 HEX \
+Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
   --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
    --ack-provider-root-changes PROVISION_PROVIDER]
 
+bootstrap-plan|bootstrap --bootstrap-sha256 HEX [bootstrap options]:
+  Prepare a dedicated app user, independent scoped MCP launcher and credential timer
+  on an already reviewed Provider. See docs/HOST_BOOTSTRAP.md.
+
 plan: read-only artifact/host checks; no installation.
-apply: run digest-verified package installation as an existing non-root app user.
+apply: run digest-verified archive installation as an existing non-root app user.
+--package is also accepted as an alias for --archive.
 The optional provider provisioning invokes a separately reviewed, pinned LOCAL
 upstream installer as root only on a host with no detected Incus/Containarium.
 It does not configure an MCP launcher, issue credentials, manage SSH/firewall,
@@ -28,6 +33,18 @@ if (( $# == 0 )); then
 fi
 (( $# )) || { usage; exit 2; }
 ACTION=$1; shift
+if [[ "$ACTION" == bootstrap || "$ACTION" == bootstrap-plan ]]; then
+  [[ "${1:-}" == --bootstrap-sha256 && "${2:-}" =~ ^[a-f0-9]{64}$ ]] || die 'Bootstrap requires --bootstrap-sha256 HEX as its first option'
+  BOOTSTRAP_SHA=$2; shift 2
+  bootstrap_stage=$(mktemp -d)
+  trap 'rm -f -- "$bootstrap_stage/bootstrap.py"; rmdir -- "$bootstrap_stage"' EXIT
+  cp -- "$ROOT/bwmini/bootstrap.py" "$bootstrap_stage/bootstrap.py"
+  actual=$(sha256sum -- "$bootstrap_stage/bootstrap.py"); actual=${actual%% *}
+  [[ "$actual" == "$BOOTSTRAP_SHA" ]] || die 'Independent bootstrap digest mismatch: no execution'
+  mode=apply; [[ "$ACTION" != bootstrap-plan ]] || mode=plan
+  python3 "$bootstrap_stage/bootstrap.py" "$mode" "$@"
+  exit $?
+fi
 case "$ACTION" in plan|apply) ;; --help|-h|help) usage; exit 0;; *) die 'Choose plan or apply';; esac
 APP_USER=''; ARCHIVE=''; EXPECTED=''; CONFIG=''; PREFIX=''; DISTRIBUTION="$ROOT/bwmini/distribution.py"; DIST_SHA=''
 PROVISION=0; PROVIDER_INSTALLER=''; PROVIDER_SHA=''; ACK=''
@@ -101,12 +118,14 @@ except (OSError, ValueError, KeyError, AssertionError, TypeError):
 PY
 [[ -d "/run/user/$UID_APP" ]] || die 'Application user runtime bus is missing; prepare login/linger separately'
 if [[ "$ACTION" == plan ]]; then
-  printf '[boxweave] plan checked: user=%s prefix=%s provision_provider=%s; no writes, MCP/TLS/boot not verified\n' "$APP_USER" "$PREFIX" "$PROVISION"
+  printf '[boxweave] plan checked: user=%s prefix=%s provision_provider=%s; no writes, MCP/TLS/boot not verified
+' "$APP_USER" "$PREFIX" "$PROVISION"
   exit 0
 fi
 if (( PROVISION )); then
   [[ "$EUID" -eq 0 ]] || die 'Provider provisioning requires root; application itself remains non-root'
-  printf '[boxweave] Executing independently reviewed local upstream installer as root; check its own rollback boundary\n' >&2
+  printf '[boxweave] Executing independently reviewed local upstream installer as root; check its own rollback boundary
+' >&2
   [[ "$(stat -c '%u' -- "$PROVIDER_INSTALLER")" == 0 ]] || die 'Privileged Provider installer must be root-owned'
   check_hash "$PROVIDER_INSTALLER" "$PROVIDER_SHA"
   bash "$PROVIDER_INSTALLER"

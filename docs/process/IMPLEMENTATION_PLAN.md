@@ -136,3 +136,7 @@ Complete in the tested maintenance scope, SRC-089..091. Consolidate current auth
 - **TASK-015 / R-02**: implement reviewed integrated first-host Incus/Provider prerequisite handling, app-user MCP launcher setup, independent root/user boundary, safe update/repair; currently only digest-gated `install.sh` coordinator. Requires AC-019 clean-host, failed-install and repair evidence. RISK-610 open.
 - **TASK-016 / R-05**: restore honest read-only `boxweave.sh` version/status/doctor/exact inspect and selected profile guidance. Source and isolated tests exist; real approved host/Provider read evidence needed before AC-020. RISK-611 open.
 - **TASK-017 / R-07/08/09**: CI/doc version checks; migration and upstream runbooks, semantic parity and Web/clients verification queue. CI success and deployment acceptance are independent.
+
+## Current owner-confirmed completion slice (SRC-097/099)
+
+TASK-015: dedicated application user/bus, independent scoped launcher and token refresh now have actual isolated app install/repair evidence; published release and integrated empty-host Provider/SSH/reboot acceptance remain open. TASK-016: installed CLI and exact local Incus/authenticated MCP/error/repair scenarios passed within the selected read-only scope. TASK-017: browser CI/candidate packaging and the corrected README narrative rule are implemented; new GitHub pipeline execution awaits source publication. [Evidence](../verification/MAIN_014_REVIEW.md).
