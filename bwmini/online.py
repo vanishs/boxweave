@@ -32,6 +32,13 @@ def supported_ubuntu(version):
 def supported_python(version):
     return tuple(version[:2]) >= (3, 12)
 
+def host_can_use_provider(system, existing_provider):
+    """Linux application mode is distro-neutral; APT provisioning is not."""
+    return bool(existing_provider) or (
+        system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID"))
+    )
+
+
 
 
 def require(value, code):
@@ -250,7 +257,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     if not marker.exists():
         provider = existing_provider_options(provider_url, provider_secret_file, provider_cli)
         if provider is None:
-            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+            require(host_can_use_provider(system, False),
                     "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
         if provider is not None:
             verify_existing_provider(provider)
@@ -283,7 +290,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         old = current_state(); check_managed(old)
         external = old.get("provider_mode") == "external"
         if not external:
-            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+            require(host_can_use_provider(system, False),
                     "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
         require(old.get("provider_mode", "standalone") in ("external", "standalone"),
                 "UNKNOWN_PROVIDER_MODE")
@@ -308,7 +315,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
             return time.monotonic()+600
         if importlib.util.find_spec("ensurepip") is None:
-            require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")),
+            require(host_can_use_provider(system, False),
                     "PYTHON_VENV_PREREQUISITE_INSTALL_MANUALLY")
             deadline = phase("python_venv_prerequisite")
             env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
