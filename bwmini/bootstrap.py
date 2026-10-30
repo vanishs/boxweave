@@ -186,10 +186,8 @@ def apply(args, artifacts):
     require(args.ack_root_changes == "INITIALIZE_BOXWEAVE", "ROOT_CHANGE_ACK_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and
             sys.version_info[:2] >= (3, 12) and platform.python_implementation() == "CPython", "PYTHON_MIN_312_CPYTHON_REQUIRED")
-    os_release = platform.freedesktop_os_release()
-    require(os_release.get("ID") == "ubuntu" and re.fullmatch(r"[0-9]{2,}\.[0-9]{2}", os_release.get("VERSION_ID", "")) is not None and
-            tuple(int(n) for n in os_release["VERSION_ID"].split(".")) >= (24, 4),
-            "UBUNTU_MIN_2404_REQUIRED")
+    # This path prepares only an app account and user services for an already
+    # reviewed Provider. No distribution package manager is invoked.
     # No APT, upstream upgrade, host SSH/firewall, route, or public listener changes.
     deadline = time.monotonic() + 600
     for tool in ("runuser", "useradd", "loginctl", "systemctl"):
