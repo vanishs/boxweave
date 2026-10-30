@@ -1,7 +1,7 @@
 name: Static and fixture-safe validation
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/install-cli-onboarding-*']
   pull_request:
     branches: [main]
   workflow_dispatch:
