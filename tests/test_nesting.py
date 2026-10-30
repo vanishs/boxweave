@@ -137,7 +137,7 @@ class GateProtocolTests(unittest.TestCase):
                 def close(self):pass
             process.stdin=KeepBytes()
             output=StringIO()
-            with patch.object(mcp_gate.sys,"stdin",StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=process),patch.object(mcp_gate,"nesting_invoke",side_effect=[plan,{"nesting":True}]) as invoke:
+            with patch.object(mcp_gate.sys,"stdin",StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=process),patch.object(mcp_gate,"managed_public_key",return_value=key),patch.object(mcp_gate,"nesting_invoke",side_effect=[plan,{"nesting":True}]) as invoke:
                 mcp_gate.main()
             forwarded=json.loads(process.stdin.getvalue().splitlines()[0])
             self.assertNotIn("enable_nesting",forwarded["params"]["arguments"])

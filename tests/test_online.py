@@ -18,7 +18,7 @@ class StreamedInstallTests(unittest.TestCase):
     def test_create_gate_never_allows_implicit_private_key_return(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"id_ed25519.pub"
-            path.write_text(self.key()+"\\n")
+            path.write_text(self.key()+"\n")
             with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
                 mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
                 for args in ({},{"ssh_keys":[]},{"ssh_keys":["SHA256:fingerprint"]},None):
@@ -26,12 +26,11 @@ class StreamedInstallTests(unittest.TestCase):
                         mcp_gate.explicit_keys(args)
 
     def test_create_gate_requires_this_server_managed_key_not_transport_key(self):
-        import stat
         other="ssh-ed25519 "+base64.b64encode(
             struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"y"*32).decode()
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"managed.pub"
-            path.write_text(self.key()+"\\n")
+            path.write_text(self.key()+"\n")
             with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
                 with self.assertRaisesRegex(ValueError,"MANAGED_PUBLIC_KEY_REQUIRED"):
                     mcp_gate.explicit_keys({"ssh_keys":[other]})
