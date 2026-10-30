@@ -101,3 +101,8 @@ Actual0.16.0 source validation: .venv/bin/python scripts/validate.py --browser i
 Changed: the streamed entry now detects a complete preinstalled Containarium/Incus as an external Provider, validates its loopback API, root-private secret-file metadata and nonempty local Incus storage, and skips Provider installation, Incus init, PostgreSQL setup and service mutation. With only a separately preinstalled Incus/pool, it provisions the pinned managed Provider without resetting storage. The recorded Provider mode is immutable across BoxWeave reruns. Updated streamed help, README and operator acceptance notes. Historical `archive/0.5.1` conditional-provider reuse was referenced, not copied. Added offline detection/refusal/read-only probe contract tests in `tests/test_online_adoption.py`.
 
 **S:** source review via GitHub connection. **U:** exact submitted revision unit/shell/CI and any live host acceptance until results are inspected. Execute the tests and live scenarios from [EXISTING_PROVIDER_INSTALL](EXISTING_PROVIDER_INSTALL.md). The published CPython 3.12 / Ubuntu 24.04 release is not a verified Ubuntu 26.04 installer; do not pretend this feature change fixes that separate packaging problem.
+
+
+## 0.17.1 custom Provider CLI path correction
+
+Allow explicit `--provider-cli` to identify a reviewed installed Containarium binary outside PATH. Retain Incus and Containarium CLI detection and the external Provider read-only checks. Added an isolated path-selection regression. **S:** source-only GitHub edit; **U:** exact-commit CI and live custom-path acceptance until independently verified.

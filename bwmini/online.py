@@ -158,7 +158,7 @@ def existing_provider_options(provider_url=None, provider_secret_file=None, prov
     """Read-only provider selection; an existing Incus alone is not a Provider."""
     incus = shutil.which("incus")
     containarium = shutil.which("containarium")
-    daemon = shutil.which("containariumd")
+    daemon = provider_cli or shutil.which("containariumd")
     if not containarium and not daemon:
         require(not any((provider_url, provider_secret_file, provider_cli)),
                 "PROVIDER_OPTIONS_REQUIRE_EXISTING_CONTAINARIUM")

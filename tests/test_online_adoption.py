@@ -37,6 +37,11 @@ class ExistingProviderTests(unittest.TestCase):
                     "secret": "/etc/approved-provider.jwt",
                     "cli": "/opt/provider/containariumd"})
 
+    def test_explicit_cli_outside_path_is_accepted_for_discovery(self):
+        with self.tools({"incus", "containarium"}):
+            selected = online.existing_provider_options(provider_cli="/opt/approved/containariumd")
+            self.assertEqual(selected["cli"], "/opt/approved/containariumd")
+
     def test_incomplete_provider_is_never_installed_over(self):
         for binaries in ({"containarium"}, {"incus", "containarium"},
                          {"incus", "containariumd"}):
