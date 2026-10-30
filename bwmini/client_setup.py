@@ -520,7 +520,8 @@ def choose(prompt, options):
     for number, (label, _) in enumerate(options, 1):
         print(f"  {number}) {label}", file=sys.stderr)
     while True:
-        answer = input("Select number: ").strip()
+        print("Select number: ", end="", file=sys.stderr, flush=True)
+        answer = input().strip()
         if answer.isdecimal() and 1 <= int(answer) <= len(options):
             return options[int(answer) - 1][1]
         print("Choose one of the listed numbers.", file=sys.stderr)
@@ -536,34 +537,21 @@ def select(name, available, prompt, interactive):
     return choose(prompt, [(item, item) for item in available])
 
 
-def choose_output(path, interactive):
-    """Never overwrite the user's existing generated script.
-
-    On a terminal, explicitly select a fresh numbered sibling or cancel.
-    Noninteractive callers must supply a new --output or use --stdout.
-    """
-    destination = Path(path).absolute()
-    if destination.is_symlink():
-        raise ValueError("CLIENT_OUTPUT_SYMLINK_REFUSED")
-    if not destination.exists():
-        return str(destination), False
-    if not destination.is_file():
-        raise ValueError("CLIENT_OUTPUT_NOT_A_REGULAR_FILE")
-    if not interactive:
-        raise ValueError("CLIENT_OUTPUT_EXISTS_USE_NEW_OUTPUT_OR_STDOUT")
-    decision = choose(
-        "Client script already exists: " + str(destination) + "\n"
-        "This is a local script file, NOT an MCP registration.",
-        [("Keep existing script; write a new numbered script", "new"),
-         ("Cancel (leave existing file unchanged)", "cancel")])
-    if decision == "cancel":
-        raise ClientCancelled()
-    for index in range(2, 1002):
-        candidate = destination.with_name(
-            destination.stem + "-" + str(index) + destination.suffix)
-        if not candidate.exists() and not candidate.is_symlink():
-            return str(candidate), True
-    raise ValueError("CLIENT_OUTPUT_NO_UNUSED_NUMBERED_PATH")
+def script_header(replace_mcp):
+    """PowerShell comments only; safe to copy or redirect as .ps1 source."""
+    policy = ("Update only the existing BoxWeave MCP transport after verified read "
+              "(backup kept)." if replace_mcp else
+              "Preserve conflicting existing BoxWeave MCP transport settings.")
+    return ("# ===============================================================\n"
+            "# BoxWeave: Windows Codex + WSL SSH client setup\n"
+            "# 请将这段完整脚本保存到 Windows 客户端的 boxweave-setup.ps1。\n"
+            "# 然后在 Windows PowerShell 执行: .\\boxweave-setup.ps1 -Distro Ubuntu\n"
+            "# Ubuntu 只是 WSL 发行版示例，请使用客户端上实际的发行版名称。\n"
+            "# 这是 PowerShell 脚本，不可在 Linux Bash 上直接运行。\n"
+            "# The script contains public data only. Review it before execution.\n"
+            "# Windows MCP policy: " + policy + "\n"
+            "# SSH public-key enrollment still needs host administrator approval.\n"
+            "# ===============================================================\n\n")
 
 
 def main(argv=None):
@@ -571,8 +559,9 @@ def main(argv=None):
     parser.add_argument("--agent", choices=("codex",))
     parser.add_argument("--transport", choices=("wsl",))
     parser.add_argument("--admin-user", help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
-    parser.add_argument("--output", help="New PowerShell script file; defaults to ./boxweave-setup.ps1. Existing files are preserved.")
-    parser.add_argument("--stdout", action="store_true", help="Emit the public script to stdout instead of a file")
+    destination = parser.add_mutually_exclusive_group()
+    destination.add_argument("--output", help="Optional NEW .ps1 file; refuses to overwrite (stdout is the default)")
+    destination.add_argument("--stdout", action="store_true", help="Explicit stdout output (the default)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--replace", dest="mcp_replace", action="store_const", const=True,
                        help="Bake consent to replace only the Windows BoxWeave MCP transport entry after authenticated verification; backup retained")
@@ -593,14 +582,10 @@ def main(argv=None):
         if not USER.fullmatch(admin or ""):
             if not interactive:
                 raise ValueError("ADMIN_USER_REQUIRED")
-            admin = input("Existing Linux SSH administrator: ").strip()
+            print("Existing Linux SSH administrator: ", end="", file=sys.stderr, flush=True)
+            admin = input().strip()
         if not USER.fullmatch(admin):
             raise ValueError("ADMIN_USER_INVALID")
-
-        target, existing_script_kept = (None, False)
-        if not args.stdout:
-            target, existing_script_kept = choose_output(
-                args.output or str(Path.cwd() / "boxweave-setup.ps1"), interactive)
 
         # Match archive/0.5.1: the LAST interactive choice is about the
         # *client MCP registration*, never the already generated script file.
@@ -614,16 +599,15 @@ def main(argv=None):
         else:
             replace_mcp = False
 
-        script = render(state, admin, replace=replace_mcp)
-        if args.stdout:
-            sys.stdout.write(script)
+        script = script_header(replace_mcp) + render(state, admin, replace=replace_mcp)
+        if args.output:
+            published = publish(args.output, script)
+            print("PowerShell script saved to: " + published, file=sys.stderr)
         else:
-            published = publish(target, script)
-            print(json.dumps({"state": "generated", "profile": "codex/windows/wsl",
-                              "file": published, "existing_script_preserved": existing_script_kept,
-                              "mcp_registration_policy": "replace_after_verified_read" if replace_mcp else "preserve_conflicts",
-                              "registration": "not_attempted",
-                              "next": "Copy the new script to Windows; review; run in PowerShell. Use -Distro NAME to select WSL."}))
+            print("BoxWeave Windows Codex/WSL script generated. Copy the PowerShell block below,", file=sys.stderr)
+            print("or redirect stdout to a .ps1 file and transfer it to Windows.", file=sys.stderr)
+            print("Run in Windows PowerShell, not Linux Bash. Generation changed no server or client settings.", file=sys.stderr)
+            sys.stdout.write(script)
         return 0
     except (ClientCancelled, KeyboardInterrupt, EOFError):
         print(json.dumps({"state": "cancelled", "changed": False}), file=sys.stderr)
