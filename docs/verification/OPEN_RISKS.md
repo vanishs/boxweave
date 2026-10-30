@@ -54,3 +54,6 @@ Current SRC-100 experiment: source0.15.1 streamed reinstall and separate peer cr
 
 
 **RISK-617 (P1 open, workload managed SSH identity):** Historical `archive/0.5.1` clients exposed a separate full server-to-box public key in AGENTS, but the new client generator omitted it. A real `hello-world-test-container` creation returned Running, followed by an SSH public-key-authentication failure; actual supplied `ssh_keys` and guest `authorized_keys` are not yet independently attested. Version 0.17.8 adds a fail-closed create gate and restored client guidance, but **does not** modify existing resources or establish a successful `connect`/Python receipt. Operator must compare trusted full public key fingerprints, reconcile exactly the existing box with explicit approval if needed, and prove `whoami && hostname` and actual Python stdout/exit through MCP. This remains unverified until live evidence; no duplicate create or trust bypass.
+
+
+**0.18.0 RISK-617 update:** The new Linux MCP gateway adds its own validated public key to each new create request, so Codex no longer needs BoxWeave-managed AGENTS guidance. The original `hello-world-test-container` still needs authorized investigation and live SSH/Python verification; neither the old block nor guest authorized keys are changed by installing this release.

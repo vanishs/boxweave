@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.14.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.18.0.** This is a preview, not a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -109,10 +109,10 @@ For **Windows Codex using WSL SSH**, the installed server now offers a unified c
 
 ```bash
 boxweave client
-boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --output "$HOME/boxweave-setup.ps1"
+boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --no-replace > boxweave-setup.ps1
 ```
 
-Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed server-side enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The wizard also installs a separately managed Codex AGENTS block containing this server's public workload key for create_container.ssh_keys; -WslGuidance additionally installs that guidance under the selected WSL user's Codex home. The server-side MCP create gate refuses a missing/mismatched managed workload key before forwarding. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.
+Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed server-side enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The Linux MCP gateway automatically supplies its validated server-managed workload public key for new create_container requests. The client setup script no longer writes Codex AGENTS files; optional additional user-supplied public keys remain validated. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.
 
 The Web Client Setup page also generates public descriptors and local client enrollment scripts for selected profiles. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
 
