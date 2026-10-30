@@ -4,6 +4,7 @@ Only public installation metadata is read here. Application files, credentials a
 system service changes retain their separate privilege boundaries.
 """
 import argparse
+import importlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,40 @@ from urllib.request import build_opener, ProxyHandler
 
 PUBLIC_STATE = Path("/usr/local/lib/boxweave/default/client-public.json")
 IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}\Z")
+
+
+
+def trusted_helper(name):
+    """Resolve sibling code in isolated Python without importing user search paths.
+
+    The installed directory and helper files must all be owned by root and
+    unmodifiable by non-root callers. Development fixtures run only non-root.
+    """
+    if name not in ("client_setup", "nesting"):
+        raise ValueError("UNKNOWN_HOST_HELPER")
+    directory = Path(__file__).absolute().parent
+    installed = Path("/usr/local/lib/boxweave/default")
+    if directory != installed:
+        if os.geteuid() == 0:
+            raise ValueError("UNTRUSTED_HOST_CLI_LOCATION")
+    else:
+        for path in (directory, *directory.parents):
+            info = path.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                raise ValueError("HOST_HELPER_DIRECTORY_UNTRUSTED")
+        for filename in ("host_cli.py", "client_setup.py", "online.py", "nesting.py"):
+            info = (directory / filename).lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                    or info.st_mode & 0o022 or info.st_nlink != 1):
+                raise ValueError("HOST_HELPER_CODE_UNTRUSTED")
+    # -I keeps the interpreter isolated. Explicitly allow this *verified*
+    # root-owned directory only for the bundled helper's local imports.
+    location = str(directory)
+    sys.path.insert(0, location)
+    try:
+        return importlib.import_module(name)
+    finally:
+        sys.path.remove(location)
 
 
 def public_state():
@@ -128,7 +163,7 @@ def inspect(name, project, diagnose=False):
                   "confinement": "not_verified"}
         if diagnose:
             # Only a classified diagnosis is returned, never raw instance logs.
-            from nesting import diagnostic
+            diagnostic = trusted_helper("nesting").diagnostic
             logs = observe(["incus", "--force-local", "--project", project, "info", name, "--show-log"],
                            timeout=15, limit=16384)
             result["nesting_diagnostic"] = diagnostic(logs) if logs is not None else {"state": "unavailable"}
@@ -141,17 +176,17 @@ def onboarding(info):
     version = info["version"]
     port = info["web_port"]
     print("BoxWeave " + version + " — installed host CLI")
-    print("  Web on this Ubuntu host: http://127.0.0.1:" + str(port))
+    print("  Web on this Linux host: http://127.0.0.1:" + str(port))
     print("  The Web listener is loopback-only, not a public LAN URL.")
     print("  From your own computer, make a reviewed SSH tunnel:")
     print("    ssh -N -L " + str(port) + ":127.0.0.1:" + str(port) +
-          " YOUR_SSH_USER@YOUR_UBUNTU_HOST")
+          " YOUR_SSH_USER@YOUR_LINUX_HOST")
     print("  Then open http://127.0.0.1:" + str(port) + " on that computer.")
     print("  CLI: boxweave --help | boxweave status | boxweave doctor")
     print("  Agent setup: boxweave client (Windows Codex / WSL)")
     print("  First Web admin password location: /home/boxweave/boxweave/initial-admin-password")
     print("  Only an authorized administrator should read that private file.")
-    print("  SSH account for enrollment is your authorized Ubuntu login, not the boxweave service account.")
+    print("  SSH enrollment uses an authorized host administrator, not the boxweave service account.")
     print("  Need an Incus-only inspection? boxweave box inspect NAME [--project PROJECT]")
     print("  No host changes or authenticated MCP test are performed by this guide.")
 
@@ -159,8 +194,13 @@ def onboarding(info):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "client":
-        from client_setup import main as client_main
-        return client_main(argv[1:])
+        try:
+            return trusted_helper("client_setup").main(argv[1:])
+        except (ImportError, OSError, ValueError) as exc:
+            print(json.dumps({"state": "error", "code": "CLIENT_HELPER_UNAVAILABLE",
+                              "reason": str(exc) if isinstance(exc, ValueError) else "IMPORT_FAILED"}),
+                  file=sys.stderr)
+            return 2
     parser = argparse.ArgumentParser(description=__doc__,
                                      epilog="Run 'boxweave' with no arguments for next-step Web and Agent guidance.")
     sub = parser.add_subparsers(dest="action")
