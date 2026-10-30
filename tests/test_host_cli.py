@@ -1,6 +1,9 @@
 """Host CLI contracts: no privileged host changes, network or credential access."""
 import io
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,6 +20,19 @@ def fixture():
 
 
 class HostCliTests(unittest.TestCase):
+    def test_installed_style_isolated_interpreter_client_help(self):
+        # Exactly the production -I invocation; normal imports in unittest
+        # masked this regression in 0.17.9. No root, host state or SSH needed.
+        root = Path(__file__).resolve().parents[1]
+        env = dict(os.environ, PYTHONPATH=str(root / "bwmini"))
+        process = subprocess.run([sys.executable, "-I", str(root / "bwmini/host_cli.py"),
+                                  "client", "--help"],
+                                 cwd="/", env=env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertIn("--admin-user", process.stdout)
+        self.assertNotIn("ModuleNotFoundError", process.stderr)
+        self.assertNotIn("Traceback", process.stderr)
+
     def test_host_cli_never_invokes_app_owned_root_interpreter(self):
         online = Path("bwmini/online.py").read_text()
         self.assertIn("exec /usr/bin/python3 -I /usr/local/lib/boxweave/default/host_cli.py", online)
