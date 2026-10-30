@@ -68,3 +68,5 @@ Actual evidence and recovery limits: [TASK-012/013 report](verification/TASK_012
 ## Source 0.12.0 host entry (remediation, not yet a released host-acceptance claim)
 
 `install.sh` is a preflight/coordinator for operator-reviewed offline artifacts. See [host bootstrap boundaries](HOST_BOOTSTRAP.md) for its `plan`/`apply` arguments and Provider gating. Existing standalone app package, backup, user services and incomplete-marker behavior above remain the implementation of app update/repair. The host entry does not yet assemble credentials/MCP launcher, configure a fresh systemd user bus or expose HTTPS; a full new-host end-to-end pass is still required.
+
+Host coordinator 0.13.4 requires `--distribution-sha256` as an additional independent review gate for `distribution.py`. Do not treat an archive digest as verification of the Python installer code executing it.

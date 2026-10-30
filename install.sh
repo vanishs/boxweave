@@ -7,7 +7,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
 Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
-  --config FILE [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
+  --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
    --ack-provider-root-changes PROVISION_PROVIDER]
 
@@ -24,15 +24,16 @@ die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
 (( $# )) || { usage; exit 2; }
 ACTION=$1; shift
 case "$ACTION" in plan|apply) ;; --help|-h|help) usage; exit 0;; *) die 'Choose plan or apply';; esac
-APP_USER=''; ARCHIVE=''; EXPECTED=''; CONFIG=''; PREFIX=''; DISTRIBUTION="$ROOT/bwmini/distribution.py"
+APP_USER=''; ARCHIVE=''; EXPECTED=''; CONFIG=''; PREFIX=''; DISTRIBUTION="$ROOT/bwmini/distribution.py"; DIST_SHA=''
 PROVISION=0; PROVIDER_INSTALLER=''; PROVIDER_SHA=''; ACK=''
 while (( $# )); do
   case "$1" in
-    --app-user|--archive|--sha256|--config|--prefix|--distribution|--provider-installer|--provider-sha256|--ack-provider-root-changes)
+    --app-user|--archive|--sha256|--config|--prefix|--distribution|--distribution-sha256|--provider-installer|--provider-sha256|--ack-provider-root-changes)
       (( $# >= 2 )) || die "Missing value for $1"
       case "$1" in
         --app-user) APP_USER=$2;; --archive) ARCHIVE=$2;; --sha256) EXPECTED=$2;;
         --config) CONFIG=$2;; --prefix) PREFIX=$2;; --distribution) DISTRIBUTION=$2;;
+        --distribution-sha256) DIST_SHA=$2;;
         --provider-installer) PROVIDER_INSTALLER=$2;; --provider-sha256) PROVIDER_SHA=$2;;
         --ack-provider-root-changes) ACK=$2;;
       esac
@@ -43,6 +44,7 @@ while (( $# )); do
 done
 [[ "$APP_USER" =~ ^[a-z_][a-z0-9_-]*$ && "$APP_USER" != root ]] || die 'Specify a non-root --app-user'
 [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]] || die 'Expected --sha256 must be lowercase SHA256'
+[[ "$DIST_SHA" =~ ^[a-f0-9]{64}$ ]] || die 'Expected --distribution-sha256 must be lowercase SHA256'
 [[ "$ARCHIVE" == /* && "$CONFIG" == /* && "$DISTRIBUTION" == /* ]] || die 'Archive, config and distribution paths must be absolute'
 [[ -z "$PREFIX" || "$PREFIX" == /* ]] || die 'Prefix must be absolute'
 command -v sha256sum >/dev/null && command -v python3 >/dev/null || die 'sha256sum and python3 are required'
@@ -59,6 +61,7 @@ check_hash() {
   [[ "$actual" == "$2" ]] || die 'Independent digest mismatch: no execution'
 }
 check_hash "$ARCHIVE" "$EXPECTED"
+check_hash "$DISTRIBUTION" "$DIST_SHA"
 if (( PROVISION )); then
   [[ "$ACK" == PROVISION_PROVIDER ]] || die 'Explicit provider root-change acknowledgement required'
   [[ "$PROVIDER_INSTALLER" == /* && "$PROVIDER_SHA" =~ ^[a-f0-9]{64}$ ]] || die 'Pinned absolute provider installer and digest required'
@@ -99,6 +102,8 @@ fi
 if (( PROVISION )); then
   [[ "$EUID" -eq 0 ]] || die 'Provider provisioning requires root; application itself remains non-root'
   printf '[boxweave] Executing independently reviewed local upstream installer as root; check its own rollback boundary\n' >&2
+  [[ "$(stat -c '%u' -- "$PROVIDER_INSTALLER")" == 0 ]] || die 'Privileged Provider installer must be root-owned'
+  check_hash "$PROVIDER_INSTALLER" "$PROVIDER_SHA"
   bash "$PROVIDER_INSTALLER"
   command -v incus >/dev/null && command -v containarium >/dev/null || die 'Provider provisioning did not establish both CLI prerequisites'
 fi

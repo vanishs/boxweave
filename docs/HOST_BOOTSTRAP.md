@@ -21,11 +21,15 @@ Example for **already prepared trusted Incus and Provider** (not a complete fres
 
 ```sh
 bash install.sh plan --app-user boxweave --archive /reviewed/boxweave-v2.zip \
-  --sha256 EXPECTED_ARCHIVE_SHA256 --config /reviewed/application.json
+  --sha256 EXPECTED_ARCHIVE_SHA256 --distribution-sha256 EXPECTED_DISTRIBUTION_SHA256 \
+  --config /reviewed/application.json
 bash install.sh apply --app-user boxweave --archive /reviewed/boxweave-v2.zip \
-  --sha256 EXPECTED_ARCHIVE_SHA256 --config /reviewed/application.json
+  --sha256 EXPECTED_ARCHIVE_SHA256 --distribution-sha256 EXPECTED_DISTRIBUTION_SHA256 \
+  --config /reviewed/application.json
 ```
 
 The example SHA is deliberately non-operational; use an independently supplied lowercase 64-character digest. `apply` delegates to the existing non-root hash-gated release installer and may return `ADMIN_SETUP_REQUIRED` until interactive initialization. Repeat it after correcting only the known cause. Source code alone does not establish host compatibility.
 
 `--provision-provider` requires an independent local root installer with an exact SHA, the literal `PROVISION_PROVIDER` acknowledgement and an empty host; **inspect that installer separately** because it can change host packages and infrastructure. Existing Incus, Provider state, foreign services and legacy installs are intentionally not upgraded. It does not synthesize an MCP launcher or safe SSH/token/known_hosts setup. That remaining integration is tracked as **not yet complete**. Next Agent must provide safe staged provisioning contracts and real Ubuntu test evidence, not call this complete one-command deployment.
+
+**0.13.4 security patch:** The host coordinator now requires a separately reviewed lowercase SHA256 for the local `distribution.py` itself (`--distribution-sha256`), in addition to the archive SHA256. An independently reviewed source digest is a necessary operator trust boundary, not a publisher signature. The optional root Provider installer must be root-owned at the time of execution and is rehashed just before invocation; this is not a whole-host rollback or guarantee of a clean upstream release.

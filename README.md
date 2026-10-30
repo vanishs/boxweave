@@ -1,6 +1,6 @@
 # BoxWeave
 
-**Current source version: 0.13.3.** BoxWeave is a self-hosted, single-operator workspace for remote development with project/environment bindings, deliberate lifecycle actions, durable operation receipts, Tenant membership and network access, TCP/UDP publication, Prompt Graph, and an assisted ZCode model configuration handoff.
+**Current source version: 0.13.4.** BoxWeave is a self-hosted, single-operator workspace for remote development with project/environment bindings, deliberate lifecycle actions, durable operation receipts, Tenant membership and network access, TCP/UDP publication, Prompt Graph, and an assisted ZCode model configuration handoff.
 
 The current application was independently reconstructed from the archived 0.5.1 implementation; it is **not** a drop-in replacement for the old host deployment. The historical source is at [archive/0.5.1](https://github.com/vanishs/boxweave/tree/archive/0.5.1). Do not execute the archived installer against a new installation. Phase 7 maintenance has completed in its documented test scope; host bootstrap and operational parity are a new remediation effort, not a previously accepted release. See [current status](docs/process/PHASE_STATUS.md) and [open risks](docs/verification/OPEN_RISKS.md).
 
