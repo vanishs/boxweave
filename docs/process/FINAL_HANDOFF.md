@@ -61,3 +61,11 @@ Current source branch: main (formerly rewrite/v2). Legacy source branch: legacy/
 ## 2026-10-29 R-08/09 operator documentation update
 
 Use [manual migration](../MIGRATING_FROM_051.md), [troubleshooting](../TROUBLESHOOTING.md), and [upstream ownership](../UPSTREAM_PROVIDER.md) rather than the archived installer/host patch. No legacy schema conversion is authorized. Source version is read from [VERSION](../../VERSION), not historical phase headers. Remaining full-host acceptance and CI are [queued](../verification/REMEDIATION_TEST_QUEUE.md).
+
+## Current 0.13.4 source verification and incomplete host capability
+
+Latest tested source feature commit: `17cf4c23f57afdcbf17ae6246270395935c01965`; [GitHub Actions run 40981405630](https://github.com/vanishs/boxweave/actions/runs/40981405630) completed **success** for release/document checks, non-privileged Shell syntax, Python fixture/contract unittest suite, and frontend build. These are source CI checks, not a completed independent fresh-host installation.
+
+**Not complete, requires next Agent:** full old-`install.sh` primary goal of a standalone, end-to-end safe Ubuntu/Incus/Containarium/SSH/MCP launcher/user-service bootstrap (AC-019 / RISK-610). The 0.12+ script presently gates offline artifacts and delegates existing v2 application install/update/repair only after app user, user bus, and independently authorized MCP launcher/config are prepared. No real host or Provider test was run in this remediation session. `boxweave.sh` offers a read-only initial CLI subset, not every old job/client/provisioning operation (AC-020 / RISK-611). Legacy auto-migration remains expressly excluded by user choice.
+
+Run the prioritized tests and preserve failure evidence described by [the remediation verification queue](../verification/REMEDIATION_TEST_QUEUE.md), [open risks](../verification/OPEN_RISKS.md), [operator host boundary](../HOST_BOOTSTRAP.md), [ADR-007](../design/ADR/0007-host-install-boundary.md) and the [legacy comparison](../verification/FEATURE_PARITY_ARCHIVE_051.md). This appended handoff report is documentation only; confirm its own CI revision before labeling the latest head verified.
