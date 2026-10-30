@@ -208,6 +208,13 @@ jobs:
             sudo apt-get -s -o Debug::pkgProblemResolver=yes install \
               ca-certificates curl gnupg openssh-client python3-venv \
               dbus-user-session openssh-server iproute2 || true
+            echo 'Pinned Incus version availability:'
+            apt-cache policy incus incus-client incus-extra || true
+            echo 'Exact pinned Incus package resolver:'
+            sudo apt-get -s -o Debug::pkgProblemResolver=yes install \
+              'incus=1:7.5.1-ubuntu24.04-202610270033' \
+              'incus-client=1:7.5.1-ubuntu24.04-202610270033' \
+              'incus-extra=1:7.5.1-ubuntu24.04-202610270033' || true
           } 2>&1 | tee install-smoke-evidence/apt-simulation.log
       - name: Preserve installer stdout stderr and exit status
         if: always()
