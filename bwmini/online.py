@@ -16,7 +16,7 @@ PROVIDER_ASSETS = {
     "containarium": "dc356b07ca2138f28052d021458f8081753b2c6c186fe7508b0645a06a9b121d",
     "mcp-server": "5b12e284b3b103c01bf9eff0cfe2f2a1e3b25476dfcc72aebe8166b4235198a2",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "nesting.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "nesting.py", "client_setup.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 
@@ -467,11 +467,22 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py","nesting.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","nesting.py","client_setup.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
             old["managed_files"][str(target)] = sha(payload)
+        # Root-owned entrypoint: client generation is reviewed, public-only, and
+        # never mutates Incus or the external Provider. Other management actions
+        # continue to use the application-owned management module.
+        entry = Path("/usr/local/bin/boxweave")
+        entry_script = (b'#!/bin/sh\n'
+                        b'if [ "${1:-}" = client ]; then shift; exec /usr/bin/python3 /usr/local/lib/boxweave/default/client_setup.py "$@"; fi\n'
+                        b'cd /home/boxweave/boxweave/current || exit 2\n'
+                        b'exec /home/boxweave/boxweave/current/.venv/bin/python -m bwmini.manage "$@"\n')
+        require(not entry.exists() or str(entry) in old["managed_files"], "FOREIGN_BOXWEAVE_ENTRY")
+        atomic(entry, entry_script, 0o755)
+        old["managed_files"][str(entry)] = sha(entry_script)
         sudoers = Path("/etc/sudoers.d/boxweave-nesting")
         require(not sudoers.exists() or str(sudoers) in old["managed_files"], "FOREIGN_NESTING_SUDOERS")
         payload = b"boxweave ALL=(root) NOPASSWD: /usr/bin/python3 -I /usr/local/lib/boxweave/default/nesting.py\n"

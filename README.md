@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.2.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.3.** This is a preview, not a certified clean-host deployment.
 
 ## Install on Ubuntu
 
@@ -52,7 +52,16 @@ Streamed install/update/repair automatically preserves an already-installed comp
 
 ## Connect an AI coding agent
 
-The Web Client Setup page generates public descriptors and local client enrollment scripts. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
+For **Windows Codex using WSL SSH**, the installed server now offers a unified client generator with an interactive terminal wizard or explicit non-interactive flags:
+
+```bash
+sudo boxweave client
+sudo boxweave client --agent codex --transport wsl --admin-user luka --output /home/luka/boxweave-setup.ps1
+```
+
+Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then registers Windows Codex. For separate administrator approval use `-NoEnroll`, perform the printed Ubuntu enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. No installed Provider, Incus or storage settings are changed by client generation.
+
+The Web Client Setup page also generates public descriptors and local client enrollment scripts for selected profiles. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
 
 | Client platform | Agent | Transport | Support |
 | --- | --- | --- | --- |

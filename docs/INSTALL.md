@@ -98,3 +98,8 @@ The installer saves the chosen ownership mode on first installation. Repeating t
 ## Cross-version release wheel verification (0.17.2)
 
 The CI build downloads the locked wheels for x86_64 CPython 3.12–3.15 using `pip download --python-version` with `--require-hashes` and `--only-binary=:all:`, then packs all exact verified wheels into one source-bound release ZIP. On Python 3.14 it also creates a real virtual environment, installs **offline only** from that ZIP using the unchanged requirements lock, and imports Flask/MarkupSafe/Waitress. The application installer never downloads packages at activation time. This CI evidence is still not a claim about a live Ubuntu 26.04 host.
+
+
+## Streamed Windows Codex client setup (0.17.3)
+
+After BoxWeave's host installer reports `ready`, run `sudo boxweave client` for a terminal wizard or `sudo boxweave client --agent codex --transport wsl --admin-user luka --output /home/luka/boxweave-setup.ps1` for an explicitly selected non-interactive generator. The output is a public-only PowerShell script, never a private key or Provider secret. Copy it over an authenticated administrative channel and run on Windows Codex using an existing WSL distribution. Administrator-approved public-key enrollment uses the already-installed `online.py enroll` (not direct `authorized_keys` rewriting). Only after an actual MCP read passes will it register the Codex entry. This is distinct from the older manual `client-config` fallback. See [client setup](../clients/README.md) for review, `-NoEnroll`, `-AlreadyEnrolled` and `-Replace` modes.

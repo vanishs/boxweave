@@ -29,10 +29,11 @@ class ManagementTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(outcome['security']['security.nesting'], 'true')
         self.assertNotIn('PRIVATE', json.dumps(outcome))
-    def test_client_is_guidance_not_registration(self):
-        with patch('sys.stdout', new_callable=io.StringIO) as stdout: code = manage.main(['client'])
+    def test_client_delegates_to_single_setup_generator(self):
+        with patch('bwmini.client_setup.main', return_value=0) as generator:
+            code = manage.main(['client', '--agent', 'codex', '--transport', 'wsl'])
         self.assertEqual(code, 0)
-        self.assertEqual(json.loads(stdout.getvalue())['registration'], 'not_attempted')
+        generator.assert_called_once_with(['--agent', 'codex', '--transport', 'wsl'])
     def test_missing_install_is_not_ready(self):
         with patch.object(manage, 'app_health', return_value={"state":"starting"}):
             with patch('sys.stdout', new_callable=io.StringIO):

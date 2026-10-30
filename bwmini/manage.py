@@ -1,4 +1,4 @@
-"""Read-only BoxWeave management CLI; never repairs hosts or exports secrets."""
+"""BoxWeave management CLI: read-only diagnostics and reviewed client setup generation."""
 import argparse
 import hashlib
 import json
@@ -74,6 +74,10 @@ def app_health(prefix, mcp=False):
     return health(Path(prefix), mcp=mcp)
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "client":
+        from .client_setup import main as client_main
+        return client_main(argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
     v = sub.add_parser("version", help="Installed source version, optionally upstream client versions")
@@ -91,7 +95,6 @@ def main(argv=None):
     n = bs.add_parser("diagnose")
     n.add_argument("name")
     n.add_argument("--project", default="default")
-    sub.add_parser("client", help="Print selected client setup boundary")
     args = parser.parse_args(argv)
     exit_code = 0
     if args.action == "version":
@@ -111,9 +114,6 @@ def main(argv=None):
 
         except ValueError:
             outcome, exit_code = {"state": "error", "reason": "invalid_exact_target"}, 2
-    elif args.action == "client":
-        outcome = {"state": "guidance_only", "profiles": ["codex-native", "codex-wsl", "zcode-native", "zcode-wsl"],
-                   "guide": "clients/README.md", "registration": "not_attempted"}
     else:
         outcome = app_health(args.prefix, mcp=args.action == "doctor" and args.mcp)
         if args.action == "doctor":
