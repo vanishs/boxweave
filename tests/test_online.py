@@ -15,43 +15,45 @@ class StreamedInstallTests(unittest.TestCase):
         for value in ("SHA256:fingerprint","ssh-ed25519 AAAA","not-a-key"):
             with self.subTest(value=value),self.assertRaises((online.Failure,ValueError)):online.public_key(value)
 
-    def test_create_gate_never_allows_implicit_private_key_return(self):
+    def test_server_adds_workload_key_when_client_omits_it(self):
+        extra = "ssh-ed25519 " + base64.b64encode(
+            struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"y"*32).decode()
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"id_ed25519.pub"
             path.write_text(self.key()+"\n")
             with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
-                mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
-                for args in ({},{"ssh_keys":[]},{"ssh_keys":["SHA256:fingerprint"]},None):
-                    with self.subTest(args=args),self.assertRaises(ValueError):
-                        mcp_gate.explicit_keys(args)
-
-    def test_create_gate_requires_this_server_managed_key_not_transport_key(self):
-        other="ssh-ed25519 "+base64.b64encode(
-            struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"y"*32).decode()
-        with tempfile.TemporaryDirectory() as folder:
-            path=Path(folder)/"managed.pub"
-            path.write_text(self.key()+"\n")
-            with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
-                with self.assertRaisesRegex(ValueError,"MANAGED_PUBLIC_KEY_REQUIRED"):
-                    mcp_gate.explicit_keys({"ssh_keys":[other]})
-                mcp_gate.explicit_keys({"ssh_keys":[other,self.key()]})
-                with self.assertRaisesRegex(ValueError,"DUPLICATE_SSH_PUBLIC_KEY"):
-                    mcp_gate.explicit_keys({"ssh_keys":[self.key(),self.key()]})
+                managed=mcp_gate.normalized_public_key(self.key())
+                for input_args in ({}, {"ssh_keys":[]}, {"ssh_keys":[extra]},
+                                   {"ssh_keys":[managed]}, {"ssh_keys":[managed,extra]}):
+                    with self.subTest(input_args=input_args):
+                        result=mcp_gate.managed_create_arguments(input_args)
+                        self.assertEqual(result["ssh_keys"].count(managed),1)
+                self.assertEqual(mcp_gate.managed_create_arguments({"ssh_keys":[extra]})["ssh_keys"],
+                                 [extra,managed])
+                for bad in (None, {"ssh_keys":None}, {"ssh_keys":["SHA256:invalid"]},
+                            {"ssh_keys":[extra,extra]}, {"ssh_keys":[extra]*17}):
+                    with self.subTest(bad=bad), self.assertRaises(ValueError):
+                        mcp_gate.managed_create_arguments(bad)
+                many=["ssh-ed25519 "+base64.b64encode(
+                    struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+bytes([i])*32).decode()
+                    for i in range(1,17)]
+                with self.assertRaisesRegex(ValueError,"TOO_MANY_PUBLIC_KEYS"):
+                    mcp_gate.managed_create_arguments({"ssh_keys":many})
                 path.chmod(0o666)
                 with self.assertRaisesRegex(ValueError,"MANAGED_IDENTITY_UNAVAILABLE"):
-                    mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
-                path.chmod(0o644)
-                path.unlink()
-                path.symlink_to(Path(folder)/"missing")
+                    mcp_gate.managed_create_arguments({})
+                path.chmod(0o644);path.unlink();path.symlink_to(Path(folder)/"missing")
                 with self.assertRaisesRegex(ValueError,"MANAGED_IDENTITY_UNAVAILABLE"):
-                    mcp_gate.explicit_keys({"ssh_keys":[self.key()]})
+                    mcp_gate.managed_create_arguments({})
 
-    def test_catalog_describes_required_workload_identity(self):
+    def test_catalog_no_longer_requires_managed_key_from_client(self):
         sample={"result":{"tools":[{"name":"create_container",
-                 "inputSchema":{"properties":{"ssh_keys":{"type":"array"}}}}]}}
+            "inputSchema":{"properties":{"ssh_keys":{"type":"array"}},
+                           "required":["username","ssh_keys"]}}]}}
         annotated=mcp_gate.catalog(sample)
-        text=annotated["result"]["tools"][0]["inputSchema"]["properties"]["ssh_keys"]["description"]
-        self.assertIn("THIS BoxWeave MCP host",text)
+        schema=annotated["result"]["tools"][0]["inputSchema"]
+        self.assertEqual(schema["required"],["username"])
+        self.assertIn("automatically supplies",schema["properties"]["ssh_keys"]["description"])
 
     def test_connect_gate_requires_fresh_exact_incarnation_and_ip(self):
         target={"name":"work-container","created":"123","user":"work","ip":"10.203.0.2","keys":[self.key()]}

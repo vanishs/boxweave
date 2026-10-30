@@ -1,4 +1,4 @@
-"""MCP stdio relay: require explicit creation keys and Incus-authenticated SSH trust."""
+"""MCP stdio relay: inject a server-owned workload key and enforce SSH trust."""
 import base64, json, os, re, stat, subprocess, sys, time
 from pathlib import Path
 
@@ -20,10 +20,12 @@ def catalog(message):
     if "result" not in message: return message
     for tool in message["result"].get("tools", []):
         if tool.get("name") == "create_container":
-            tool["inputSchema"]["properties"].setdefault("ssh_keys", {})["description"] = (
-                "Supply full Ed25519 public keys, including the managed workload key "
-                "for THIS BoxWeave MCP host. The client transport key and a "
-                "fingerprint are not substitutes. Extra explicit keys are permitted.")
+            schema = tool["inputSchema"]
+            schema["required"] = [field for field in schema.get("required", []) if field != "ssh_keys"]
+            schema["properties"].setdefault("ssh_keys", {})["description"] = (
+                "Optional additional authorized full Ed25519 public keys. The "
+                "BoxWeave MCP host automatically supplies its own managed workload "
+                "public key. Do not pass client transport keys, fingerprints or private keys.")
             tool["inputSchema"]["properties"]["enable_nesting"] = {
                 "type":"boolean",
                 "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
@@ -75,19 +77,26 @@ def managed_public_key():
         raise ValueError("MANAGED_IDENTITY_UNAVAILABLE") from None
 
 
-def explicit_keys(args):
+def managed_create_arguments(args):
+    """Always give the Provider the verified server-owned public key.
+
+    This prevents the upstream missing-key private-key fallback, without
+    requiring Codex AGENTS guidance or exposing the server's private key.
+    """
     if not isinstance(args, dict):
         raise ValueError("ARGUMENTS_OBJECT_REQUIRED")
-    keys = args.get("ssh_keys")
-    if not isinstance(keys, list) or not 1 <= len(keys) <= 16:
-        raise ValueError("EXPLICIT_MANAGED_PUBLIC_KEY_REQUIRED")
+    keys = args.get("ssh_keys", [])
+    if not isinstance(keys, list) or len(keys) > 16:
+        raise ValueError("SSH_KEYS_ARRAY_REQUIRED")
     normalized = [normalized_public_key(key) for key in keys]
     if len(normalized) != len(set(normalized)):
         raise ValueError("DUPLICATE_SSH_PUBLIC_KEY")
-    if managed_public_key() not in normalized:
-        raise ValueError("MANAGED_PUBLIC_KEY_REQUIRED")
-    # Additional explicit valid keys are permitted, but never replace the
-    # server-managed key needed by the upstream connect tool.
+    host_key = managed_public_key()
+    if host_key not in normalized:
+        if len(normalized) >= 16:
+            raise ValueError("TOO_MANY_PUBLIC_KEYS")
+        normalized.append(host_key)
+    return {**args, "ssh_keys": normalized}
 
 
 def trusted(args, registry, container):
@@ -156,7 +165,8 @@ def main():
                             "content":[{"type":"text","text":json.dumps(value)}]}}), flush=True)
                         continue
                     if params.get("name") == "create_container":
-                        explicit_keys(args)
+                        args = managed_create_arguments(args)
+                        params["arguments"] = args
                         if "enable_nesting" in args:
                             if (any(args.get(k) for k in ("backend_id","pool","region"))
                                     or args.get("isolation") not in (None,"","container")
@@ -177,9 +187,10 @@ def main():
                 except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in (
-                        "MANAGED_IDENTITY_UNAVAILABLE", "MANAGED_PUBLIC_KEY_REQUIRED",
-                        "DUPLICATE_SSH_PUBLIC_KEY", "FULL_ED25519_PUBLIC_KEY_REQUIRED"
-                    ) else "TRUST_OR_EXPLICIT_KEY_GATE: wait for trusted reconciliation and use the exact managed target/key"
+                        "MANAGED_IDENTITY_UNAVAILABLE", "SSH_KEYS_ARRAY_REQUIRED",
+                        "DUPLICATE_SSH_PUBLIC_KEY", "FULL_ED25519_PUBLIC_KEY_REQUIRED",
+                        "TOO_MANY_PUBLIC_KEYS"
+                    ) else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
                                       "error": {"code": -32602, "message": reason}}), flush=True)
                     continue

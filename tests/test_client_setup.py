@@ -43,11 +43,11 @@ class ClientGeneratorTests(unittest.TestCase):
         self.assertIn("enrollment not confirmed", payload.lower())
         self.assertIn("MCP read verification failed", payload)
         self.assertIn("$sshTarget = 'boxweave@' + $ServerHost", payload)
-        self.assertIn("$ManagedWorkloadPublicKey = '", payload)
-        self.assertIn("function Merge-BoxWeaveGuidance", payload)
-        self.assertIn("MANAGED_PUBLIC_KEY_REQUIRED", payload)
-        self.assertIn("if ($WslGuidance)", payload)
-        self.assertNotIn("__MANAGED_PUBLIC_KEY__", payload)
+        self.assertIn("# EDIT ME: use the client-reachable host/IP and SSH port.", payload)
+        self.assertNotIn("$ManagedWorkloadPublicKey", payload)
+        self.assertNotIn("Merge-BoxWeaveGuidance", payload)
+        self.assertNotIn("AGENTS.md", payload)
+        self.assertNotIn("WslGuidance", payload)
         self.assertIn('$sshTarget,$RemoteMcp)', payload)
         self.assertIn("function Merge-BoxWeaveToml(", payload)
         self.assertIn("Nested BoxWeave MCP table without explicit parent", payload)
@@ -58,10 +58,11 @@ class ClientGeneratorTests(unittest.TestCase):
                        {"port": -1}, {"port": "22"}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 client_setup.render(ready_state() | change, "example-admin")
-        for managed in (None, "", "SHA256:fingerprint", "ssh-ed25519 AAAA",
-                        "ssh-ed25519 AAAA\\nWindows script injection"):
-            with self.subTest(managed=managed), self.assertRaises(ValueError):
-                client_setup.render(ready_state() | {"managed_public_key": managed}, "example-admin")
+        # The Linux MCP gateway supplies the server's workload key.
+        for value in (None, "", "SHA256:fingerprint"):
+            with self.subTest(value=value):
+                script = client_setup.render(ready_state() | {"managed_public_key":value}, "example-admin")
+                self.assertNotIn("ManagedWorkloadPublicKey", script)
         for admin in ("root;whoami", "bob's", "", "../../tmp"):
             with self.subTest(admin=admin), self.assertRaises(ValueError):
                 client_setup.render(ready_state(), admin)
