@@ -25,8 +25,8 @@ def ready_state():
 
 class ClientGeneratorTests(unittest.TestCase):
     def test_public_only_source_bound_script(self):
-        payload = client_setup.render(ready_state(), "luka")
-        for expected in ("192.168.2.233", host_key(), "'luka'", "online.py enroll",
+        payload = client_setup.render(ready_state(), "example-admin")
+        for expected in ("192.168.2.233", host_key(), "'example-admin'", "online.py enroll",
                          "Codex", "/usr/bin/ssh", "list_containers",
                          "StrictHostKeyChecking=yes", "NoEnroll", "AlreadyEnrolled",
                          "Windows ChatGPT/Codex MCP config:", "PubkeyAuthentication=no",
@@ -57,11 +57,11 @@ class ClientGeneratorTests(unittest.TestCase):
         for change in ({"host": "127.0.0.1;rm -rf /"}, {"server_key": "ssh-ed25519 'malicious'"},
                        {"port": -1}, {"port": "22"}):
             with self.subTest(change=change), self.assertRaises(ValueError):
-                client_setup.render(ready_state() | change, "luka")
+                client_setup.render(ready_state() | change, "example-admin")
         for managed in (None, "", "SHA256:fingerprint", "ssh-ed25519 AAAA",
                         "ssh-ed25519 AAAA\\nWindows script injection"):
             with self.subTest(managed=managed), self.assertRaises(ValueError):
-                client_setup.render(ready_state() | {"managed_public_key": managed}, "luka")
+                client_setup.render(ready_state() | {"managed_public_key": managed}, "example-admin")
         for admin in ("root;whoami", "bob's", "", "../../tmp"):
             with self.subTest(admin=admin), self.assertRaises(ValueError):
                 client_setup.render(ready_state(), admin)
@@ -91,11 +91,11 @@ class ClientGeneratorTests(unittest.TestCase):
                   patch.dict(os.environ, {"SUDO_USER": "root"}),
                   patch("sys.stdout", new_callable=io.StringIO) as stdout):
                 code = client_setup.main(["--agent","codex","--transport","wsl",
-                                          "--admin-user","luka","--output",str(out)])
+                                          "--admin-user","example-admin","--output",str(out)])
                 self.assertEqual(code, 0)
                 self.assertEqual(json.loads(stdout.getvalue())["state"], "generated")
                 self.assertIn("$ServerHost", out.read_text())
-                missing = client_setup.main(["--admin-user","luka","--output",str(Path(tmp)/"missing.ps1")])
+                missing = client_setup.main(["--admin-user","example-admin","--output",str(Path(tmp)/"missing.ps1")])
                 self.assertEqual(missing, 2)
                 self.assertFalse((Path(tmp)/"missing.ps1").exists())
 
@@ -108,9 +108,9 @@ class ClientGeneratorTests(unittest.TestCase):
                   patch("builtins.input",side_effect=["1","1"]),
                   patch.dict(os.environ,{"SUDO_USER":"root"}),
                   patch("sys.stdout",new_callable=io.StringIO)):
-                code = manage.main(["client","--admin-user","luka","--output",str(out)])
+                code = manage.main(["client","--admin-user","example-admin","--output",str(out)])
                 self.assertEqual(code,0)
-                self.assertEqual(out.read_text(),client_setup.render(ready_state(),"luka"))
+                self.assertEqual(out.read_text(),client_setup.render(ready_state(),"example-admin"))
 
     def test_generator_refuses_missing_descriptor_before_output(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,7 +118,7 @@ class ClientGeneratorTests(unittest.TestCase):
             with patch.object(client_setup, "load_public_state", side_effect=ValueError("PUBLIC_DESCRIPTOR_NOT_AVAILABLE")), \
                  patch("sys.stderr", new_callable=io.StringIO):
                 code = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                          "--admin-user", "luka", "--output", target])
+                                          "--admin-user", "example-admin", "--output", target])
             self.assertEqual(code, 2)
             self.assertFalse(Path(target).exists())
 
@@ -129,7 +129,7 @@ class ClientGeneratorTests(unittest.TestCase):
                  patch.object(client_setup, "load_public_state", return_value=ready_state()), \
                  patch("sys.stdout", new_callable=io.StringIO):
                 code = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                          "--admin-user", "luka", "--output", target])
+                                          "--admin-user", "example-admin", "--output", target])
             self.assertEqual(code, 0)
             self.assertIn("ManagedWorkloadPublicKey", Path(target).read_text())
 
