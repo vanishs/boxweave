@@ -49,7 +49,7 @@ actual port displayed by `boxweave`, for example:
 
 ```sh
 # Run on your own computer, not inside the server's boxweave service account:
-ssh -N -L 18640:127.0.0.1:18640 YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST
+ssh -N -L 18640:127.0.0.1:18640 YOUR_HOST_ADMIN@YOUR_UBUNTU_HOST
 ```
 
 Then open `http://127.0.0.1:18640` in the local browser. Only an authorized
@@ -58,7 +58,7 @@ host administrator may read the private first-password file
 
 ```sh
 boxweave client --agent codex --transport wsl \
-  --admin-user YOUR_UBUNTU_ADMIN --output "$HOME/boxweave-setup.ps1"
+  --admin-user YOUR_HOST_ADMIN --output "$HOME/boxweave-setup.ps1"
 ```
 
 Transfer the script to Windows through an authenticated channel; review and
@@ -89,7 +89,7 @@ allow passwordless broad sudo/Incus access as a workaround.
 ## Verification scope
 
 Static tests exercise public descriptor trust, normal-user generator, exact
-Incus request names, no implicit escalation and onboarding help. An Ubuntu
+Incus request names, no implicit escalation and onboarding help. An Linux
 operator still needs to verify the installed release and service paths,
 tunnel/browser login, Windows enrollment and real `MCP initialize/tools/read`,
 plus a reboot check. See [installation](INSTALL.md) and the
