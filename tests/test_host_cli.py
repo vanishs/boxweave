@@ -45,10 +45,10 @@ class HostCliTests(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO) as out:
             self.assertEqual(host_cli.main([]), 0)
         text = out.getvalue()
-        self.assertIn("配置客户端使用", text)
+        self.assertIn("Configure your client", text)
         self.assertRegex(text, r"(?m)^  boxweave client$")
-        self.assertRegex(text, r"(?m)^  boxweave client --help  # 更多选项$")
-        self.assertLess(text.index("  boxweave client\n"), text.index("Optional / 可选操作:"))
+        self.assertRegex(text, r"(?m)^  boxweave client --help  # More options$")
+        self.assertLess(text.index("  boxweave client\n"), text.index("Optional operations:"))
         self.assertIn("127.0.0.1:18640", text)
         self.assertIn("ssh -N -L", text)
         self.assertIn("not the boxweave service account", text)

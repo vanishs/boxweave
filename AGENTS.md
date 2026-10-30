@@ -1,6 +1,6 @@
 # BoxWeave contributor and AGENT operating rules
 
-Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [current status](docs/process/PHASE_STATUS.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language.
+Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [current status](docs/process/PHASE_STATUS.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language. **Do not copy the requester's language into project artifacts or generated user-facing text; preserve standard technical terminology.**
 
 ## Authorized 0.10+ remediation
 

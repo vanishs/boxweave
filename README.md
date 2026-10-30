@@ -58,7 +58,7 @@ action: configure your client**. As your ordinary Linux administrator login
 
 ```sh
 boxweave client
-boxweave client --help  # 更多选项
+boxweave client --help  # More options
 ```
 
 **Optional commands** for viewing the Web address and diagnosing the host (not
