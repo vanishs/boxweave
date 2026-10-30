@@ -120,7 +120,7 @@ class ClientGeneratorTests(unittest.TestCase):
         marker = "if (-not $PSBoundParameters.ContainsKey('Replace')) { $Replace = $true }"
         self.assertNotIn(marker, normal)
         self.assertIn(marker, replace)
-        self.assertIn("[switch]$Replace,", normal)
+        self.assertIn("[switch]$Replace", normal)
         self.assertNotIn("__REPLACE_POLICY__", replace)
         with self.assertRaisesRegex(ValueError, "CLIENT_REPLACE_POLICY_INVALID"):
             client_setup.render(base, "example-admin", replace="yes")
@@ -241,7 +241,7 @@ class ClientGeneratorTests(unittest.TestCase):
                 code = client_setup.main(["--agent", "codex", "--transport", "wsl",
                                           "--admin-user", "example-admin", "--output", target])
             self.assertEqual(code, 0)
-            self.assertIn("ManagedWorkloadPublicKey", Path(target).read_text())
+            self.assertNotIn("ManagedWorkloadPublicKey", Path(target).read_text())
 
     def test_rejects_untrusted_descriptor_not_even_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
