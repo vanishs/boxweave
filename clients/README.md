@@ -1,23 +1,23 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.9)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.10)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
 ```sh
 boxweave client
-boxweave client --agent codex --transport wsl --admin-user YOUR_UBUNTU_ADMIN --output "$HOME/boxweave-setup.ps1"
+boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --output "$HOME/boxweave-setup.ps1"
 ```
 
 The wizard asks for Agent and transport; presently the integrated profile is `codex/windows/wsl` (Codex itself stays on Windows). The generator reads the root-owned 0644 **public** client descriptor without sudo and writes a new mode-0600 PowerShell script, never a JWT or a private key. Omit `--output` to write a new `boxweave-setup.ps1` in the current directory; an existing file is refused rather than overwritten. `--stdout` emits public script source for a reviewed transfer. CLI generation never enrolls keys or edits client machines.
 
-Copy the script from your authorized Ubuntu SSH account on the BoxWeave server to the Windows machine via an authenticated transfer, inspect it, and execute in **Windows PowerShell**, using the actual WSL distro name:
+Copy the script from your authorized Linux SSH account on the BoxWeave server to the Windows machine via an authenticated transfer, inspect it, and execute in **Windows PowerShell**, using the actual WSL distro name:
 
 ```powershell
 powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu
 ```
 
-The script checks or generates an Ed25519 key only under `~/.config/boxweave` in that WSL distro, pins the server's reviewed Ed25519 host key, and runs the existing Ubuntu administrator SSH login with `sudo /usr/bin/python3 /usr/local/lib/boxweave/default/online.py enroll --public-key ...`. It defaults to password-only SSH administrator authentication, avoiding excess-key disconnects, and may request SSH/sudo credentials. For SSH-key-only administration use `-AdminAuthentication publickey -BootstrapIdentity /absolute/wsl/path/to/admin_key`. The restricted `boxweave` account does not gain shell access. If the server requires separate administration, run the script with `-NoEnroll` to print a public enrollment command, authorize it on the server, then rerun with `-AlreadyEnrolled`. Never send the client private key or JWT to the server.
+The script checks or generates an Ed25519 key only under `~/.config/boxweave` in that WSL distro, pins the server's reviewed Ed25519 host key, and runs the existing Linux administrator SSH login with `sudo /usr/bin/python3 /usr/local/lib/boxweave/default/online.py enroll --public-key ...`. It defaults to password-only SSH administrator authentication, avoiding excess-key disconnects, and may request SSH/sudo credentials. For SSH-key-only administration use `-AdminAuthentication publickey -BootstrapIdentity /absolute/wsl/path/to/admin_key`. The restricted `boxweave` account does not gain shell access. If the server requires separate administration, run the script with `-NoEnroll` to print a public enrollment command, authorize it on the server, then rerun with `-AlreadyEnrolled`. Never send the client private key or JWT to the server.
 
 After public-key authorization, the script performs MCP initialize, tools/list and a **real read-only** list_containers tool call over WSL SSH. Only after it succeeds will the script update the Windows ChatGPT/Codex desktop app's shared user-level `config.toml` at `%USERPROFILE%\\.codex` (or `CODEX_HOME`). It never executes a bundled WindowsApps binary or requires a standalone Codex CLI. If the entry exists, inspect it first; `-Replace` authorizes replacing the simple named MCP table only, while other TOML settings are preserved and previous config backed up. Ambiguous TOML must be migrated manually. Restart Codex to verify tool recognition. Neither the generator nor setup configures public routes, edits Incus storage, resets an SSH host pin, or modifies the Containarium daemon.
 
