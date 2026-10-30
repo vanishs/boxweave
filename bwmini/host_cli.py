@@ -176,19 +176,26 @@ def onboarding(info):
     version = info["version"]
     port = info["web_port"]
     print("BoxWeave " + version + " — installed host CLI")
+    print()
+    print("==============================================================")
+    print("  Configure your client / 配置客户端使用")
+    print("==============================================================")
+    print()
+    print("  boxweave client")
+    print("  boxweave client --help  # 更多选项")
+    print()
+    print("Run as your normal Linux SSH/sudo administrator (no sudo for client setup),")
+    print("not the boxweave service account. Key enrollment needs admin approval.")
+    print()
+    print("Optional / 可选操作:")
     print("  Web on this Linux host: http://127.0.0.1:" + str(port))
-    print("  The Web listener is loopback-only, not a public LAN URL.")
-    print("  From your own computer, make a reviewed SSH tunnel:")
-    print("    ssh -N -L " + str(port) + ":127.0.0.1:" + str(port) +
-          " YOUR_SSH_USER@YOUR_LINUX_HOST")
-    print("  Then open http://127.0.0.1:" + str(port) + " on that computer.")
-    print("  CLI: boxweave --help | boxweave status | boxweave doctor")
-    print("  Agent setup: boxweave client (Windows Codex / WSL)")
-    print("  First Web admin password location: /home/boxweave/boxweave/initial-admin-password")
-    print("  Only an authorized administrator should read that private file.")
-    print("  SSH enrollment uses an authorized host administrator, not the boxweave service account.")
-    print("  Need an Incus-only inspection? boxweave box inspect NAME [--project PROJECT]")
-    print("  No host changes or authenticated MCP test are performed by this guide.")
+    print("    Loopback-only; from your computer: ssh -N -L " + str(port) +
+          ":127.0.0.1:" + str(port) + " YOUR_HOST_ADMIN@YOUR_LINUX_HOST")
+    print("    Then open http://127.0.0.1:" + str(port) + " on your computer.")
+    print("  First Web admin password (private): /home/boxweave/boxweave/initial-admin-password")
+    print("  CLI commands: boxweave --help | boxweave status | boxweave doctor")
+    print("  Incus inspection: boxweave box inspect NAME [--project PROJECT]")
+    print("  This overview does not verify authenticated MCP access.")
 
 
 def main(argv=None):

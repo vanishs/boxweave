@@ -105,4 +105,19 @@ class StreamedInstallTests(unittest.TestCase):
             with self.assertRaisesRegex(online.Failure,"ROOT_REQUIRED"):online.install(Path("/unused"),"0.15.0")
             mutate.assert_not_called()
 
+class InstallCompletionTextTests(unittest.TestCase):
+    def test_first_time_client_is_prominent_other_steps_are_optional(self):
+        summary = online.installation_summary(18640)
+        self.assertIn("Installation complete", summary)
+        self.assertIn("配置客户端使用", summary)
+        self.assertRegex(summary, r"(?m)^  boxweave client$")
+        self.assertRegex(summary, r"(?m)^  boxweave client --help  # 更多选项$")
+        self.assertLess(summary.index("  boxweave client\n"), summary.index("Optional / 可选操作:"))
+        self.assertIn("http://127.0.0.1:18640", summary)
+        self.assertIn("ssh -N -L 18640:127.0.0.1:18640", summary)
+        self.assertIn("/home/boxweave/boxweave/initial-admin-password", summary)
+        self.assertIn("administrator approval", summary)
+        self.assertNotRegex(summary, r"(?m)^\\s*[1-9]\\.\\s")
+
+
 if __name__=="__main__":unittest.main()

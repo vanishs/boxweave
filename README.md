@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.17.13.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.14.** This is a preview, not a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -52,16 +52,23 @@ Streamed install/update/repair automatically preserves an already-installed comp
 
 ## After installation: finish the setup
 
-The successful installer prints a `next_steps` record. These commands work as
-a regular Linux login; **do not use `sudo` for ordinary help, status or
-client setup**:
+The installer prints a `next_steps` record and prominently shows the **first
+action: configure your client**. As your ordinary Linux administrator login
+(**no sudo**), run:
 
 ```sh
-boxweave                # Web address, SSH tunnel, next steps
-boxweave --help         # All available host commands
+boxweave client
+boxweave client --help  # 更多选项
+```
+
+**Optional commands** for viewing the Web address and diagnosing the host (not
+required before generating client configuration):
+
+```sh
+boxweave                # Host overview and connection instructions
+boxweave --help         # Full host command reference
 boxweave status         # Public Web reachability, not an authenticated MCP proof
 boxweave doctor         # Safe host/service observations
-boxweave client         # Windows Codex/WSL guided client setup
 ```
 
 The Web server is bound to **127.0.0.1** for safety, so its URL is

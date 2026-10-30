@@ -15,7 +15,8 @@ boxweave --help          # Display the complete installed host CLI
 boxweave version         # Published release identity only
 boxweave status          # Loopback Web reachability; NOT authenticated login/MCP
 boxweave doctor          # Read-only host/systemd state; no sudo
-boxweave client          # Prints PowerShell script on stdout; prompts on stderr; final MCP replacement choice
+boxweave client          # First step: client PowerShell setup; prints script on stdout
+boxweave client --help   # More client setup options
 boxweave box             # Show inspect/diagnose help
 boxweave box inspect NAME --project default
 ```

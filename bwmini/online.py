@@ -247,6 +247,36 @@ def verify_existing_provider(provider):
     return provider
 
 
+
+def installation_summary(web_port):
+    """Human-facing last screen. Only client setup is the prominent next step."""
+    port = str(web_port)
+    web_url = "http://127.0.0.1:" + port
+    return "\n".join((
+        "",
+        "[boxweave] Installation complete",
+        "",
+        "==============================================================",
+        "  Configure your client / 配置客户端使用",
+        "==============================================================",
+        "",
+        "  boxweave client",
+        "  boxweave client --help  # 更多选项",
+        "",
+        "Use your ordinary Linux administrator login (no sudo).",
+        "SSH public-key enrollment later requires explicit administrator approval.",
+        "",
+        "Optional / 可选操作:",
+        "  Web dashboard (server-local only): " + web_url,
+        "    From your computer: ssh -N -L " + port + ":127.0.0.1:" + port +
+        " YOUR_HOST_ADMIN@YOUR_LINUX_HOST",
+        "    Then open " + web_url + " on your computer.",
+        "  First Web admin password (private): /home/boxweave/boxweave/initial-admin-password",
+        "  Host overview: boxweave",
+        "  Diagnostics: boxweave status | boxweave doctor",
+        "  After client setup: verify actual MCP initialize/tools/read",
+    ))
+
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
@@ -554,10 +584,11 @@ store.admin(generate_password_hash(password))
                    credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())
         print(json.dumps({"next_steps":{
+            "client_setup":"boxweave client (no sudo)",
+            "client_help":"boxweave client --help",
             "cli":"boxweave", "cli_help":"boxweave --help", "status":"boxweave status",
             "web_on_server":"http://127.0.0.1:"+str(web_port),
             "web_access":"Use a reviewed SSH tunnel; Web is loopback-only",
-            "client_setup":"boxweave client (no sudo)",
             "client_role":"Use your authorized Linux SSH/sudo login; not the boxweave service account",
             "admin_password_location":"/home/boxweave/boxweave/initial-admin-password",
             "verification":"Run boxweave doctor; verify real client MCP calls"
@@ -567,19 +598,8 @@ store.admin(generate_password_hash(password))
                           "enroll_command":"sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key FULL_CLIENT_PUBLIC_KEY",
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
-        # Human-facing last screen; the JSON above remains machine-readable.
-        print("\n[boxweave] Installation complete — next steps", flush=True)
-        print("  1. Run as your normal Linux login: boxweave", flush=True)
-        print("  2. CLI help and diagnostics: boxweave --help | boxweave status | boxweave doctor", flush=True)
-        print("  3. Web (on this Linux host): http://127.0.0.1:" + str(web_port), flush=True)
-        print("     From your own computer: ssh -N -L " + str(web_port) + ":127.0.0.1:" +
-              str(web_port) + " YOUR_HOST_ADMIN@YOUR_LINUX_HOST", flush=True)
-        print("     Then open http://127.0.0.1:" + str(web_port) + " on your computer.", flush=True)
-        print("  4. First Web admin password (private): /home/boxweave/boxweave/initial-admin-password", flush=True)
-        print("  5. Generate client setup (no sudo): boxweave client", flush=True)
-        print("     Use your authorized Linux SSH/sudo login; boxweave is the service user.", flush=True)
-        print("  6. Verify the resulting client's actual MCP initialize/tools/read; status alone is not proof.", flush=True)
-        print("  Privileged SSH enrollment still requires explicit administrator approval.", flush=True)
+        # Human-facing last screen; JSON above remains machine-readable.
+        print(installation_summary(web_port), flush=True)
 
     finally: os.close(lock)
 
