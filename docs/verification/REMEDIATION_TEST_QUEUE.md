@@ -64,3 +64,7 @@ Restructured the README with a clear desired single-command entry, an explicit n
 ## 0.13.7 CI correction
 
 Previous source check failed at GitHub CI run 40985248991 due to an incorrect relative link in the relocated developer guide. Fixed the link, normalized the default-installer error newline format, and corrected the README terminology regression's regex escaping. New CI is required; no real host deployment was attempted.
+
+## 0.13.8 CLI package naming correction
+
+CI run 40985401561 completed with one failure in the new README terminology test; it found an active `--archive` option in public copy. The public installer now accepts `--package` as the preferred alias while preserving the existing option for backward compatibility; standalone distribution accepts the same alias and retains the internal argument destination. Rewrote active installation examples and added a negative test that the new alias is parsed before any installation action. Full fresh-host bootstrapping remains not implemented. GitHub CI of this exact revision must be checked; no real host installation was run.

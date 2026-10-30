@@ -26,6 +26,14 @@ class BootstrapSafetyTests(unittest.TestCase):
         self.assertEqual(p.returncode,2)
         self.assertIn('SHA256',p.stderr)
 
+    def test_package_alias_is_recognized_without_executing(self):
+        p = subprocess.run(['bash', str(SCRIPT), 'apply', '--app-user', 'nobody',
+                            '--package', '/tmp/nonexistent-boxweave-package',
+                            '--sha256', 'bad', '--config', '/tmp/nonexistent-config'],
+                           capture_output=True, text=True, timeout=5)
+        self.assertEqual(p.returncode, 2)
+        self.assertIn('SHA256', p.stderr)
+
     def test_missing_distribution_digest_rejected_without_execution(self):
         p = subprocess.run(['bash',str(SCRIPT),'apply','--app-user','nobody',
                             '--archive','/tmp/not-a-release','--sha256','0'*64,

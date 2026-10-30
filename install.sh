@@ -6,7 +6,7 @@ umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
-Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
+Usage: bash install.sh plan|apply --app-user NAME --package FILE --sha256 HEX \
   --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
    --ack-provider-root-changes PROVISION_PROVIDER]
@@ -33,10 +33,10 @@ APP_USER=''; ARCHIVE=''; EXPECTED=''; CONFIG=''; PREFIX=''; DISTRIBUTION="$ROOT/
 PROVISION=0; PROVIDER_INSTALLER=''; PROVIDER_SHA=''; ACK=''
 while (( $# )); do
   case "$1" in
-    --app-user|--archive|--sha256|--config|--prefix|--distribution|--distribution-sha256|--provider-installer|--provider-sha256|--ack-provider-root-changes)
+    --app-user|--package|--archive|--sha256|--config|--prefix|--distribution|--distribution-sha256|--provider-installer|--provider-sha256|--ack-provider-root-changes)
       (( $# >= 2 )) || die "Missing value for $1"
       case "$1" in
-        --app-user) APP_USER=$2;; --archive) ARCHIVE=$2;; --sha256) EXPECTED=$2;;
+        --app-user) APP_USER=$2;; --package|--archive) ARCHIVE=$2;; --sha256) EXPECTED=$2;;
         --config) CONFIG=$2;; --prefix) PREFIX=$2;; --distribution) DISTRIBUTION=$2;;
         --distribution-sha256) DIST_SHA=$2;;
         --provider-installer) PROVIDER_INSTALLER=$2;; --provider-sha256) PROVIDER_SHA=$2;;

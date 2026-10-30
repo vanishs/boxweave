@@ -215,7 +215,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
 def main():
  p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='action',required=True)
  b=sub.add_parser('build');b.add_argument('--root',required=True);b.add_argument('--wheels',required=True);b.add_argument('--output',required=True);b.add_argument('--source-commit',required=True);b.add_argument('--source-state',choices=['clean','modified'],required=True)
- i=sub.add_parser('install');i.add_argument('--archive',required=True);i.add_argument('--sha256',required=True);i.add_argument('--prefix',required=True);i.add_argument('--config');i.add_argument('--activate',action='store_true');i.add_argument('--quiesced',action='store_true')
+ i=sub.add_parser('install');i.add_argument('--package','--archive',dest='archive',required=True);i.add_argument('--sha256',required=True);i.add_argument('--prefix',required=True);i.add_argument('--config');i.add_argument('--activate',action='store_true');i.add_argument('--quiesced',action='store_true')
  h=sub.add_parser('health');h.add_argument('--prefix',required=True);h.add_argument('--mcp',action='store_true')
  a=p.parse_args()
  try:

@@ -1,14 +1,14 @@
-# Install, update and repair the v2 application
+# Install, update and repair the application
 
 0.9.1 / phase6: schema7 preserves project/binding history using a local unbound marker; migration6→7 and its consistent schema6 backup were tested on an independent copy.0.9.0 binaries refuse7. Project unbinding never deletes a project/environment/receipt or cancels dispatched work. Use the installer/backup boundary before downgrade. The retained primary test installation remains0.9.0 until explicitly updated; source changes alone are not deployment.
 
 After login, **Client setup** generates the four supported public configurations and a local PowerShell enrollment script. Use an already authorized SSH identity and prepared private profile directory. Enter paths/public server pin/exact Agent version and public ZCode catalog digest; do not enter credential contents. Save both downloads under their exact names in one new private folder. The script requires explicit absolute Python/helper paths, verifies helper and descriptor SHA256 before the existing local registrar, and preserves the selected replacement flag. It never installs dependencies, authorizes a key, invokes inference or executes on the Web server. Operator review/trusted delivery remain required. **Projects** now exposes reviewed identity, Edit binding and Unbind; unbound projects can be explicitly rebound.
 
-This is the v2 app package on main, not the legacy BoxWeave/Containarium installer. It installs neither Provider nor Incus, changes no host SSH/firewall settings, and publishes no port. Tested target: non-root Ubuntu24.04, Linux x86_64, CPython3.12 with venv/ensurepip and a working systemd user manager. Windows-hosted Agent enrollment is a separate [client workflow](../clients/README.md). Other server runtimes are unsupported by this wheel lock.
+This is the standalone application package on main, not the legacy BoxWeave/Containarium installer. It installs neither Provider nor Incus, changes no host SSH/firewall settings, and publishes no port. Tested target: non-root Ubuntu24.04, Linux x86_64, CPython3.12 with venv/ensurepip and a working systemd user manager. Windows-hosted Agent enrollment is a separate [client workflow](../clients/README.md). Other server runtimes are unsupported by this wheel lock.
 
 ## Trust and preparation
 
-Obtain a reviewed standalone `bwmini/distribution.py` and the expected archive SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The archive embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
+Obtain a reviewed standalone `bwmini/distribution.py` and the expected package SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The archive embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
 
 Build inside the assigned Linux development box, using the existing exact wheel lock and built UI:
 
@@ -22,7 +22,7 @@ python3 bwmini/distribution.py build --root . --wheels /private/build/wheels \
   --source-commit REVIEWED_40_CHARACTER_COMMIT --source-state clean
 ```
 
-Use `modified` instead of `clean` when any packaged source differs from that commit. The caller supplies the reviewed source record; the builder does not pretend that a source string authenticates itself. Keep the printed archive digest and the independently reviewed installer digest with the delivery record.
+Use `modified` instead of `clean` when any packaged source differs from that commit. The caller supplies the reviewed source record; the builder does not pretend that a source string authenticates itself. Keep the printed package digest and the independently reviewed installer digest with the delivery record.
 
 Prepare a private application account and an operator-reviewed JSON configuration with `mode=mcp`, exact provider/backend/project, authorized targets/lifecycle/access profiles, an independently authorized application launcher, absolute database path, loopback host and a nonconflicting port. Preserve each nested host's managed public key separately. Credential files stay outside releases; never copy a Windows/WSL transport private key or read a Provider JWT into setup output. The application account must already have a usable systemd user bus (`XDG_RUNTIME_DIR`); the installer does not enable linger or change account/boot policy.
 
@@ -31,7 +31,7 @@ The listener stays127.0.0.1. For a local HTTP test, use an exact loopback HTTP o
 ## Install and first administrator
 
 ```sh
-python3 /trusted/distribution.py install --archive /trusted/boxweave-v2.zip \
+python3 /trusted/distribution.py install --package /trusted/boxweave-v2.zip \
   --sha256 REVIEWED_ARCHIVE_SHA256 --prefix "$HOME/boxweave-v2" \
   --config /private/application.json --activate
 ```
@@ -69,4 +69,4 @@ Actual evidence and recovery limits: [TASK-012/013 report](verification/TASK_012
 
 `install.sh` is a preflight/coordinator for operator-reviewed offline artifacts. See [host bootstrap boundaries](HOST_BOOTSTRAP.md) for its `plan`/`apply` arguments and Provider gating. Existing standalone app package, backup, user services and incomplete-marker behavior above remain the implementation of app update/repair. The host entry does not yet assemble credentials/MCP launcher, configure a fresh systemd user bus or expose HTTPS; a full new-host end-to-end pass is still required.
 
-Host coordinator 0.13.4 requires `--distribution-sha256` as an additional independent review gate for `distribution.py`. Do not treat an archive digest as verification of the Python installer code executing it.
+Host coordinator 0.13.4 requires `--distribution-sha256` as an additional independent review gate for `distribution.py`. Do not treat an package digest as verification of the Python installer code executing it.
