@@ -64,3 +64,7 @@ python3 /trusted/distribution.py health --prefix "$HOME/boxweave-v2" --mcp
 Machine states distinguish starting, incomplete, failed and ready. HTTP401 is reachable/unauthenticated; MCP authentication is reported separately. Enabled/running user services prove current user-manager operation, not LXC boot.autostart or a fresh-host reboot. Successful inactive oneshots and required waiting/enabled timers are assessed separately in supporting-provider evidence. Web can be stopped independently while the existing restricted SSH MCP remains usable.
 
 Actual evidence and recovery limits: [TASK-012/013 report](verification/TASK_012_013_RELEASE.md). Do not rerun its destructive lab driver without inspecting its original state and exact authorization.
+
+## Source 0.12.0 host entry (remediation, not yet a released host-acceptance claim)
+
+`install.sh` is a preflight/coordinator for operator-reviewed offline artifacts. See [host bootstrap boundaries](HOST_BOOTSTRAP.md) for its `plan`/`apply` arguments and Provider gating. Existing standalone app package, backup, user services and incomplete-marker behavior above remain the implementation of app update/repair. The host entry does not yet assemble credentials/MCP launcher, configure a fresh systemd user bus or expose HTTPS; a full new-host end-to-end pass is still required.
