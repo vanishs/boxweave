@@ -206,37 +206,84 @@ if ((Test-Path -LiteralPath $configPath) -and
 $oldConfig = if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     [IO.File]::ReadAllText($configPath, [Text.Encoding]::UTF8)
 } else { '' }
-# Preserve all unrelated TOML. For ambiguous MCP structures refuse automation.
-if ($oldConfig -match '(?m)^[ \t]*mcp_servers[ \t]*=' -or
-    $oldConfig -match '(?m)^[ \t]*mcp_servers\.boxweave\.' -or
-    $oldConfig -match '(?m)^[ \t]*\[mcp_servers\.boxweave\.' -or
-    $oldConfig -match '(?m)^[ \t]*\[[^\]\r\n]*["'']boxweave["''][^\]\r\n]*\]') {
-    throw 'Ambiguous existing MCP TOML; inspect config.toml manually'
+# Preserve unrelated TOML, including legitimate nested BoxWeave tables
+# such as [mcp_servers.boxweave.env] and [mcp_servers.boxweave.oauth].
+# Only the top-level transport fields are candidates for replacement.
+function Merge-BoxWeaveToml([string]$Original, [string]$CommandJson,
+                            [string]$ArgsJson, [bool]$AllowReplace) {
+    if ($Original -match '(?m)^[ \t]*mcp_servers[ \t]*=' -or
+        $Original -match '(?m)^[ \t]*mcp_servers\.boxweave\.' -or
+        $Original -match '(?m)^[ \t]*\[[^\]\r\n]*["'']boxweave["''][^\]\r\n]*\]') {
+        throw 'Ambiguous existing MCP TOML; inspect config.toml manually'
+    }
+    $desired = [ordered]@{
+        command = $CommandJson
+        args = $ArgsJson
+        startup_timeout_sec = '30'
+        tool_timeout_sec = '180'
+    }
+    $rootPattern = '(?ms)^[ \t]*\[mcp_servers\.boxweave\][ \t]*(?:\#[^\r\n]*)?\r?\n.*?(?=^[ \t]*\[|\z)'
+    $roots = [regex]::Matches($Original, $rootPattern)
+    if ($roots.Count -gt 1) { throw 'Duplicate BoxWeave MCP root table; manual review required' }
+    if ($roots.Count -eq 0) {
+        if ($Original -match '(?m)^[ \t]*\[mcp_servers\.boxweave\.') {
+            throw 'Nested BoxWeave MCP table without explicit parent: manual review required'
+        }
+        $newRoot = '[mcp_servers.boxweave]' + "`r`n"
+        foreach ($key in $desired.Keys) {
+            $newRoot += $key + ' = ' + $desired[$key] + "`r`n"
+        }
+        return $Original.TrimEnd([char]13,[char]10) + "`r`n`r`n" + $newRoot
+    }
+    $root = $roots[0].Value
+    $lines = @($root -split '\r?\n')
+    $remaining = New-Object 'System.Collections.Generic.List[string]'
+    $found = @{}
+    $alreadyMatching = $true
+    for ($i = 1; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        $kv = [regex]::Match($line, '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(.*)$')
+        if (-not $kv.Success -or -not $desired.Contains($kv.Groups[1].Value)) {
+            $remaining.Add($line)
+            continue
+        }
+        $key = $kv.Groups[1].Value
+        if ($found.ContainsKey($key)) { throw 'Duplicate BoxWeave transport field: manual review required' }
+        $found[$key] = $true
+        $value = $kv.Groups[2].Value.Trim()
+        if (($key -eq 'args' -and ($value -notmatch '^\[.*\](?:[ \t]*#.*)?$')) -or
+            ($key -eq 'command' -and $value -match '^(?:"{3}|''{3})')) {
+            throw 'Multiline BoxWeave transport field: manual review required'
+        }
+        if ($line.Trim() -cne ($key + ' = ' + $desired[$key])) {
+            $alreadyMatching = $false
+        }
+    }
+    foreach ($key in $desired.Keys) {
+        if (-not $found.ContainsKey($key)) { $alreadyMatching = $false }
+    }
+    if ($alreadyMatching) { return $Original }
+    if (-not $AllowReplace) {
+        throw 'BoxWeave MCP is already configured. Review it and pass -Replace to update only transport fields'
+    }
+    $newRoot = $lines[0] + "`r`n"
+    if ($remaining.Count -gt 0) {
+        $keptText = ($remaining -join "`r`n").TrimEnd([char]13,[char]10)
+        if ($keptText) { $newRoot += $keptText + "`r`n" }
+    }
+    foreach ($key in $desired.Keys) {
+        $newRoot += $key + ' = ' + $desired[$key] + "`r`n"
+    }
+    $matcher = [regex]::new($rootPattern)
+    return $matcher.Replace($Original, [Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $newRoot
+    }, 1)
 }
 $wslString = ConvertTo-Json -InputObject $wsl -Compress
 $argsString = ConvertTo-Json -InputObject @($sshArgs) -Compress
-$entry = "[mcp_servers.boxweave]" + "`r`n" +
-         "command = " + $wslString + "`r`n" +
-         "args = " + $argsString + "`r`n" +
-         "startup_timeout_sec = 30" + "`r`n" +
-         "tool_timeout_sec = 180" + "`r`n"
-$pattern = '(?ms)^[ \t]*\[mcp_servers\.boxweave\][ \t]*(?:\#[^\r\n]*)?\r?\n.*?(?=^[ \t]*\[|\z)'
-$matches = [regex]::Matches($oldConfig, $pattern)
-if ($matches.Count -gt 1) { throw 'Multiple BoxWeave MCP TOML sections: manual review required' }
-$changed = $false
-if ($matches.Count -eq 1) {
-    if ($matches[0].Value.Trim() -ne $entry.Trim()) {
-        if (-not $Replace) {
-            throw 'BoxWeave MCP is already configured. Review it and pass -Replace to update only this entry'
-        }
-        $matcher = [regex]::new($pattern)
-        $newConfig = $matcher.Replace($oldConfig, [Text.RegularExpressions.MatchEvaluator]{ param($match) $entry }, 1)
-        $changed = $true
-    }
-} else {
-    $newConfig = $oldConfig.TrimEnd([char]13,[char]10) + "`r`n`r`n" + $entry
-    $changed = $true
-}
+$newConfig = Merge-BoxWeaveToml $oldConfig $wslString $argsString ([bool]$Replace)
+$changed = $newConfig -cne $oldConfig
 if ($changed) {
     $temp = Join-Path $homeDir ('.boxweave-config-' + [guid]::NewGuid().ToString('N') + '.tmp')
     try {

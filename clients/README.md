@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.5)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.17.6)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 
@@ -54,3 +54,8 @@ The owner **did not approve** adding macOS, Cursor or Claude Code. Current selec
 ### Windows PATH ambiguity guard (0.17.5)
 
 The generated PowerShell setup selects one specific Windows WSL executable at `$env:SystemRoot\System32\wsl.exe`, validating that it exists before invoking it. Do not derive its command path from all `Get-Command wsl.exe` matches: Windows commonly exposes both the System32 binary and a WindowsApps alias, and coercing both matches into a single PowerShell string makes invocation fail with CommandNotFoundException. Existing v0.17.4 generated scripts can be corrected by replacing that assignment locally; doing so does not change WSL keys or the server enrollment. The fix is also covered by a generator regression test and PowerShell syntax CI.
+
+
+### Existing nested Codex MCP configuration (0.17.6)
+
+An existing Codex `[mcp_servers.boxweave]` may have legitimate nested TOML subtables (for example `[mcp_servers.boxweave.env]` or `[mcp_servers.boxweave.http_headers]`). These are **not** ambiguous or invalid. After the real MCP read check, the generated installer examines only the root BoxWeave transport keys (`command`, `args`, `startup_timeout_sec`, `tool_timeout_sec`), preserves other root keys, nested BoxWeave tables and unrelated MCP servers, and requires an explicit `-Replace` if the transport differs. Files are backed up before atomic replacement. Duplicate tables/keys, unsafe multiline transport fields, quoted/dotted ambiguous alternatives and missing parent tables still fail closed for manual review. `-AlreadyEnrolled` skips public-key registration once it has been verified as successful. The cross-platform PowerShell merger now has a **real execution regression** in CI with a parent and two nested tables; generating only valid PowerShell syntax was not enough to catch this issue.

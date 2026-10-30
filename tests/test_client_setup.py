@@ -42,6 +42,9 @@ class ClientGeneratorTests(unittest.TestCase):
         self.assertNotIn("ssh-keyscan", payload)
         self.assertIn("enrollment not confirmed", payload.lower())
         self.assertIn("MCP read verification failed", payload)
+        self.assertIn("function Merge-BoxWeaveToml(", payload)
+        self.assertIn("Nested BoxWeave MCP table without explicit parent", payload)
+        self.assertNotIn("$Original -match '(?m)^[ \\t]*\\[mcp_servers\\.boxweave\\.' -or", payload)
 
     def test_rejects_invalid_public_metadata(self):
         for change in ({"host": "127.0.0.1;rm -rf /"}, {"server_key": "ssh-ed25519 'malicious'"},
