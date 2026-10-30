@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.16.0.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.17.0.** This is a preview, not a certified clean-host deployment.
 
 ## Install on Ubuntu
 
@@ -14,7 +14,7 @@ The desired default command is:
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
 ```
 
-The streamed installer targets a fresh Ubuntu 24.04 x86_64 host with systemd. It verifies the matching GitHub release assets and source tag, installs pinned Incus/Containarium prerequisites only on an empty host, and prepares an independent application account and MCP endpoint. Existing unmanaged infrastructure is refused. Published source and fixture CI are not live host acceptance; the new default path is undergoing the [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md).
+The streamed installer targets a fresh Ubuntu 24.04 x86_64 host with systemd. It verifies the matching GitHub release assets and source tag, installs pinned Incus/Containarium prerequisites only on an empty host, and prepares an independent application account and MCP endpoint. An existing Incus with a configured pool is preserved; an existing complete Containarium/Incus installation is reused rather than installed over or upgraded. BoxWeave still creates its own app account, scoped MCP launcher and managed units. An incomplete Provider or missing storage pool is refused. Existing-Provider defaults are loopback REST at `http://127.0.0.1:8080`, `/etc/containarium/jwt.secret`, and `containariumd` on PATH; use `sudo bash install.sh --provider-url URL --provider-secret-file FILE --provider-cli FILE` for nonstandard setups. The streamed release still requires Ubuntu 24.04 with Python 3.12; Ubuntu 26.04 needs a separately built/verified compatible release. Published source and fixture CI are not live-host acceptance; see [existing Provider acceptance](docs/verification/EXISTING_PROVIDER_INSTALL.md) and [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md).
 
 The Provider API and Web application stay on loopback; the MCP client uses the existing SSH service with an explicitly enrolled client public key and a verified server pin. No public route, firewall change or SSH host-key replacement is performed. The initial Web administrator password is saved only in a private file whose location is printed; it is never printed by the installer.
 The explicit `bootstrap-plan` / `bootstrap` workflow can now prepare a dedicated application account, systemd user bus, independent scoped MCP launcher and rotating credential on an already reviewed Provider. It requires independently reviewed artifact digests and explicit root-change acknowledgment; see [application bootstrap](docs/HOST_BOOTSTRAP.md#independent-application-bootstrap).
@@ -47,6 +47,8 @@ The paths and SHA256 values are placeholders, not ready-made downloads. The firs
 | `--provision-provider` | Explicit empty-host provisioning only; requires a separately verified upstream installer, SHA256 and root-change acknowledgment |
 
 Run `bash install.sh --help` for all parameters.
+
+Streamed install/update/repair automatically preserves an already-installed complete Containarium and Incus. It does **not** adopt an unrelated BoxWeave installation or silently repair/upgrade a third-party Provider. For a preinstalled `dir` storage pool on bcachefs, first verify its source and mount dependencies; the installer will not reconfigure the storage pool.
 
 ## Connect an AI coding agent
 

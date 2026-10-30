@@ -1,5 +1,5 @@
-"""Streamed release installer and public SSH/MCP enrollment for fresh Ubuntu hosts.
-Existing unmanaged infrastructure is refused. Credentials never enter command output.
+"""Source-bound BoxWeave install/update/repair for fresh or reviewed existing Providers.
+Existing Containarium/Incus are never replaced or upgraded. Credentials stay private.
 """
 import argparse, base64, datetime, fcntl, hashlib, ipaddress, json, os
 from pathlib import Path
@@ -154,7 +154,61 @@ $body$;"""
     atomic(STATE / "state.json", json.dumps(old, sort_keys=True).encode())
 
 
-def install(stage, version):
+def existing_provider_options(provider_url=None, provider_secret_file=None, provider_cli=None):
+    """Read-only provider selection; an existing Incus alone is not a Provider."""
+    incus = shutil.which("incus")
+    containarium = shutil.which("containarium")
+    daemon = shutil.which("containariumd")
+    if not containarium and not daemon:
+        require(not any((provider_url, provider_secret_file, provider_cli)),
+                "PROVIDER_OPTIONS_REQUIRE_EXISTING_CONTAINARIUM")
+        return None
+    require(incus and containarium and daemon, "PARTIAL_EXISTING_PROVIDER_REVIEW_REQUIRED")
+    cli = str(Path(provider_cli or daemon).resolve())
+    url = provider_url or "http://127.0.0.1:8080"
+    secret = str(Path(provider_secret_file or "/etc/containarium/jwt.secret"))
+    # Never accept an arbitrary remote Provider or a symlinked signer.
+    from urllib.parse import urlsplit
+    parsed = urlsplit(url)
+    require(parsed.scheme == "http" and parsed.hostname == "127.0.0.1" and
+            parsed.username is None and parsed.password is None and
+            parsed.path == "" and parsed.query == "" and parsed.fragment == "" and
+            parsed.port is not None and 1024 <= parsed.port <= 65535,
+            "EXISTING_PROVIDER_LOOPBACK_URL_REQUIRED")
+    require(Path(secret).is_absolute() and ".." not in Path(secret).parts,
+            "EXISTING_PROVIDER_SECRET_PATH_INVALID")
+    require(Path(cli).is_absolute(), "EXISTING_PROVIDER_CLI_PATH_INVALID")
+    return {"url": url, "secret": secret, "cli": cli}
+
+
+def verify_existing_provider(provider):
+    """No mutations of the installed service, its Incus state or signing secret."""
+    secret = Path(provider["secret"])
+    require(not secret.is_symlink() and secret.is_file(), "EXISTING_PROVIDER_SECRET_NOT_FOUND")
+    mode = secret.stat()
+    require(mode.st_uid == 0 and not mode.st_mode & 0o077,
+            "EXISTING_PROVIDER_SECRET_NOT_PRIVATE")
+    cli = Path(provider["cli"])
+    require(not cli.is_symlink() and cli.is_file() and os.access(cli, os.X_OK),
+            "EXISTING_PROVIDER_CLI_UNAVAILABLE")
+    meta = cli.stat()
+    require(meta.st_uid == 0 and not meta.st_mode & 0o022, "EXISTING_PROVIDER_CLI_NOT_TRUSTED")
+    require(shutil.which("incus") and shutil.which("containarium"), "EXISTING_PROVIDER_DEPENDENCY_MISSING")
+    pools = subprocess.run(["incus", "--force-local", "storage", "list", "--format", "json"],
+                           capture_output=True, text=True, timeout=20)
+    require(pools.returncode == 0 and isinstance(json.loads(pools.stdout), list) and
+            bool(json.loads(pools.stdout)), "EXISTING_INCUS_STORAGE_NOT_READY")
+    try:
+        with urllib.request.urlopen(provider["url"] + "/v1/containers", timeout=5) as response:
+            require(response.status == 200, "EXISTING_PROVIDER_API_UNEXPECTED_STATUS")
+    except urllib.error.HTTPError as error:
+        require(error.code == 401, "EXISTING_PROVIDER_API_UNEXPECTED_STATUS")
+    except (urllib.error.URLError, TimeoutError):
+        raise Failure("EXISTING_PROVIDER_API_UNAVAILABLE") from None
+    return provider
+
+
+def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and sys.version_info[:2] == (3,12),
             "UBUNTU_2404_X86_64_PYTHON312_REQUIRED")
@@ -169,15 +223,29 @@ def install(stage, version):
     release_url = "https://github.com/vanishs/boxweave/releases/download/v" + version + "/"
     marker = STATE / "state.json"
     if not marker.exists():
-        require(not any(shutil.which(x) for x in ("incus", "containarium", "containariumd")) and
-                not Path("/var/lib/incus").exists() and not Path("/etc/containarium").exists(),
-                "EXISTING_PROVIDER_REQUIRES_EXPLICIT_OFFLINE_REVIEW")
+        provider = existing_provider_options(provider_url, provider_secret_file, provider_cli)
+        if provider is not None:
+            verify_existing_provider(provider)
+        else:
+            require(not Path("/etc/containarium").exists(), "UNMANAGED_PROVIDER_STATE_REVIEW_REQUIRED")
+        # A separately prepared Incus (and its storage pool) is never overwritten.
+        preexisting_incus = bool(shutil.which("incus") or Path("/var/lib/incus").exists())
+        if preexisting_incus and provider is None:
+            require(shutil.which("incus"), "EXISTING_INCUS_INCOMPLETE_REVIEW_REQUIRED")
+            pools = subprocess.run(["incus", "--force-local", "storage", "list", "--format", "json"],
+                                   capture_output=True, text=True, timeout=20)
+            require(pools.returncode == 0 and bool(json.loads(pools.stdout)),
+                    "EXISTING_INCUS_STORAGE_NOT_READY")
         require(not STATE.exists() and not PUBLIC.exists() and not SECRET.exists(), "FOREIGN_INSTALL_PATH")
         try: pwd.getpwnam(APP)
         except KeyError: pass
         else: raise Failure("EXISTING_APP_ACCOUNT_NOT_ADOPTED")
         directory(STATE, 0o755)
-        old = {"format":1, "hostname":socket.gethostname(), "phase":"created", "managed_files":{}}
+        old = {"format": 1, "hostname": socket.gethostname(), "phase": "created",
+               "managed_files": {}, "provider_mode": "external" if provider else "standalone",
+               "preexisting_incus": preexisting_incus}
+        if provider:
+            old["external_provider"] = provider
         atomic(marker, json.dumps(old).encode())
     directory(STATE, 0o755)
     lock = os.open(STATE / ".install.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -185,6 +253,20 @@ def install(stage, version):
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: raise Failure("INSTALL_ALREADY_RUNNING") from None
         old = current_state(); check_managed(old)
+        external = old.get("provider_mode") == "external"
+        require(old.get("provider_mode", "standalone") in ("external", "standalone"),
+                "UNKNOWN_PROVIDER_MODE")
+        if external:
+            existing = old["external_provider"]
+            # Reruns cannot silently adopt a different Provider/signing authority.
+            for requested, saved in ((provider_url, existing["url"]),
+                                     (provider_secret_file, existing["secret"]),
+                                     (provider_cli, existing["cli"])):
+                require(requested is None or requested == saved, "EXISTING_PROVIDER_IDENTITY_CHANGED")
+            verify_existing_provider(existing)
+        else:
+            require(not any((provider_url, provider_secret_file, provider_cli)),
+                    "PROVIDER_OPTIONS_REQUIRE_EXISTING_CONTAINARIUM")
         directory(STATE / "releases")
         release = STATE / "releases" / (version + "-" + m["source"])
         directory(release)
@@ -202,94 +284,111 @@ def install(stage, version):
             else: download(release_url + name, release / name, expected)
         # Fixed official upstream assets, never mutable latest or an existing-host upgrade.
         for name, digest in PROVIDER_ASSETS.items():
-            download("https://github.com/FootprintAI/Containarium/releases/download/v" + PROVIDER_VERSION + "/" + name + "-linux-amd64",
-                     release / name, digest)
-        if not shutil.which("incus"):
-            deadline = phase("signed_ubuntu_prerequisites")
-            env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
-            with (STATE / "apt.log").open("ab") as log:
-                run(["apt-get", "update", "-qq"], deadline, log, env)
-                run(["apt-get", "install", "-y", "-qq", "ca-certificates", "curl", "gnupg", "openssh-client",
-                     "python3-venv", "dbus-user-session", "openssh-server", "iproute2"], deadline, log, env)
-                download("https://pkgs.zabbly.com/key.asc", release / "zabbly.asc", KEY_SHA256, 65536)
-                directory(Path("/etc/apt/keyrings"), 0o755)
-                keyring = Path("/etc/apt/keyrings/boxweave-zabbly.asc")
-                source = Path("/etc/apt/sources.list.d/boxweave-incus.sources")
-                require(all(not p.exists() or str(p) in old["managed_files"] for p in (keyring,source)), "FOREIGN_APT_CONFIGURATION")
-                atomic(keyring, (release/"zabbly.asc").read_bytes(), 0o644)
-                atomic(source, b"Types: deb\nURIs: https://pkgs.zabbly.com/incus/stable\nSuites: noble\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/boxweave-zabbly.asc\n", 0o644)
-                # Record exact managed files before invoking APT so repair preserves their provenance.
-                old["managed_files"].update({str(keyring):sha(keyring.read_bytes()), str(source):sha(source.read_bytes())})
-                atomic(marker, json.dumps(old, sort_keys=True).encode())
-                run(["apt-get", "update", "-qq"], deadline, log, env)
-                run(["apt-get", "install", "-y", "-qq", "incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
-                     "incus-extra="+INCUS_PACKAGE], deadline, log, env)
-        deadline = phase("local_provider")
-        observed = subprocess.run(["incus", "--version"], capture_output=True, text=True, timeout=10)
-        require(observed.returncode == 0 and observed.stdout.strip() == "7.5.1", "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
-        # Initialize only an inspected empty local daemon; never replace an existing pool/profile.
-        pools=subprocess.run(["incus","--force-local","storage","list","--format","json"],capture_output=True,text=True,timeout=20)
-        require(pools.returncode==0,"LOCAL_INCUS_NOT_READY")
-        if not json.loads(pools.stdout):
-            inventory=subprocess.run(["incus","--force-local","list","--all-projects","--format","json"],capture_output=True,text=True,timeout=20)
-            require(inventory.returncode==0 and json.loads(inventory.stdout)==[],"INCUS_NONEMPTY_WITHOUT_STORAGE")
-            routes=json.loads(subprocess.check_output(["ip","-j","-4","route"],text=True,timeout=10))
-            occupied=[ipaddress.ip_network(r["dst"],strict=False) for r in routes if r.get("dst") not in (None,"default")]
-            subnet=next((ipaddress.ip_network("10."+str(n)+".0.0/24") for n in range(203,250)
-                         if all(not ipaddress.ip_network("10."+str(n)+".0.0/24").overlaps(other) for other in occupied)),None)
-            require(subnet is not None,"NO_FREE_PRIVATE_SUBNET")
-            address=str(subnet.network_address+1)+"/24"
-            preseed={"config":{},"networks":[{"name":"incusbr0","type":"bridge","config":{"ipv4.address":address,"ipv4.nat":"true","ipv6.address":"none"}}],
-                     "storage_pools":[{"name":"default","driver":"dir","config":{}}],
-                     "profiles":[{"name":"default","devices":{"eth0":{"type":"nic","name":"eth0","network":"incusbr0"},"root":{"type":"disk","path":"/","pool":"default"}}}]}
-            prepared=subprocess.run(["incus","--force-local","admin","init","--preseed"],input=json.dumps(preseed).encode(),
-                                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
-            require(prepared.returncode==0,"EMPTY_INCUS_INITIALIZATION_FAILED")
-            old["network_subnet"]=address
-            atomic(marker,json.dumps(old,sort_keys=True).encode())
-        for name, expected in PROVIDER_ASSETS.items():
-            target = Path("/usr/local/bin") / name
-            if target.exists(): require(not target.is_symlink() and sha(target.read_bytes()) == expected, "PROVIDER_UPGRADE_OR_FOREIGN_BINARY_REFUSED")
-            else: atomic(target, (release/name).read_bytes(), 0o755)
-            old["managed_files"][str(target)] = expected
-        if not SECRET.exists():
-            directory(SECRET.parent)
-            atomic(SECRET, secrets.token_hex(32).encode())
-        require(not SECRET.is_symlink() and SECRET.stat().st_uid == 0 and not SECRET.stat().st_mode & 0o077, "SIGNING_FILE_NOT_PRIVATE")
-        deadline = phase("local_postgres")
-        prepare_postgres(old, deadline)
-        deadline = phase("local_provider_start")
-        provider = ("[Unit]\nDescription=BoxWeave local Provider\nAfter=incus.service\n[Service]\n"
-                    "ExecStart=/usr/local/bin/containariumd daemon --address 127.0.0.1 --http-port 18080 --rest --standalone "
-                    "--disable-security-scanner --disable-pentest-scanner --disable-zap-scanner "
-                    "--postgres "+PG_DSN+" --network-subnet "+old.get("network_subnet","10.203.0.1/24")+" --jwt-secret-file /etc/boxweave-provider/jwt.secret\nRestart=on-failure\nRestartSec=3\nUMask=0077\n"
-                    "[Install]\nWantedBy=multi-user.target\n").encode()
-        provider_unit = UNIT_DIR / "boxweave-provider.service"
-        require(not provider_unit.exists() or str(provider_unit) in old["managed_files"], "FOREIGN_PROVIDER_UNIT")
-        previous = provider_unit.read_bytes() if provider_unit.exists() else None
-        atomic(provider_unit, provider, 0o644)
-        old["managed_files"][str(provider_unit)] = sha(provider)
-        atomic(marker, json.dumps(old, sort_keys=True).encode())
-        run(["systemctl", "daemon-reload"], deadline)
-        run(["systemctl", "enable", "--now", provider_unit.name], deadline)
-        if previous is not None and previous != provider:
-            run(["systemctl", "restart", provider_unit.name], deadline)
-        # Reachability only. The app installer independently proves authenticated MCP.
-        while True:
-            try:
-                urllib.request.urlopen("http://127.0.0.1:18080/v1/containers", timeout=3).close(); break
-            except urllib.error.HTTPError as e:
-                if e.code == 401: break
-            except OSError: pass
-            require(time.monotonic() < deadline, "PROVIDER_API_NOT_READY")
-            time.sleep(15)
+            # The externally managed Provider's binaries are never downloaded or installed.
+            if not external or name == "mcp-server":
+                download("https://github.com/FootprintAI/Containarium/releases/download/v" + PROVIDER_VERSION + "/" + name + "-linux-amd64",
+                         release / name, digest)
+        if external:
+            deadline = phase("external_provider_preflight")
+            # Do not install, upgrade, restart, or initialize Containarium or Incus.
+            verify_existing_provider(old["external_provider"])
+        else:
+            if not shutil.which("incus"):
+                deadline = phase("signed_ubuntu_prerequisites")
+                env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+                with (STATE / "apt.log").open("ab") as log:
+                    run(["apt-get", "update", "-qq"], deadline, log, env)
+                    run(["apt-get", "install", "-y", "-qq", "ca-certificates", "curl", "gnupg", "openssh-client",
+                         "python3-venv", "dbus-user-session", "openssh-server", "iproute2"], deadline, log, env)
+                    download("https://pkgs.zabbly.com/key.asc", release / "zabbly.asc", KEY_SHA256, 65536)
+                    directory(Path("/etc/apt/keyrings"), 0o755)
+                    keyring = Path("/etc/apt/keyrings/boxweave-zabbly.asc")
+                    source = Path("/etc/apt/sources.list.d/boxweave-incus.sources")
+                    require(all(not p.exists() or str(p) in old["managed_files"] for p in (keyring,source)), "FOREIGN_APT_CONFIGURATION")
+                    atomic(keyring, (release/"zabbly.asc").read_bytes(), 0o644)
+                    atomic(source, b"Types: deb\nURIs: https://pkgs.zabbly.com/incus/stable\nSuites: noble\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/boxweave-zabbly.asc\n", 0o644)
+                    # Record exact managed files before invoking APT so repair preserves their provenance.
+                    old["managed_files"].update({str(keyring):sha(keyring.read_bytes()), str(source):sha(source.read_bytes())})
+                    atomic(marker, json.dumps(old, sort_keys=True).encode())
+                    run(["apt-get", "update", "-qq"], deadline, log, env)
+                    run(["apt-get", "install", "-y", "-qq", "incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
+                         "incus-extra="+INCUS_PACKAGE], deadline, log, env)
+            deadline = phase("local_provider")
+            observed = subprocess.run(["incus", "--version"], capture_output=True, text=True, timeout=10)
+            if old.get("preexisting_incus"):
+                require(observed.returncode == 0 and re.fullmatch(r"[0-9]+\\.[0-9]+(?:\\.[0-9]+)?", observed.stdout.strip()),
+                        "EXISTING_INCUS_VERSION_UNKNOWN")
+            else:
+                require(observed.returncode == 0 and observed.stdout.strip() == "7.5.1",
+                        "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
+            # Initialize only an inspected empty local daemon; never replace an existing pool/profile.
+            pools=subprocess.run(["incus","--force-local","storage","list","--format","json"],capture_output=True,text=True,timeout=20)
+            require(pools.returncode==0,"LOCAL_INCUS_NOT_READY")
+            if not json.loads(pools.stdout):
+                inventory=subprocess.run(["incus","--force-local","list","--all-projects","--format","json"],capture_output=True,text=True,timeout=20)
+                require(inventory.returncode==0 and json.loads(inventory.stdout)==[],"INCUS_NONEMPTY_WITHOUT_STORAGE")
+                routes=json.loads(subprocess.check_output(["ip","-j","-4","route"],text=True,timeout=10))
+                occupied=[ipaddress.ip_network(r["dst"],strict=False) for r in routes if r.get("dst") not in (None,"default")]
+                subnet=next((ipaddress.ip_network("10."+str(n)+".0.0/24") for n in range(203,250)
+                             if all(not ipaddress.ip_network("10."+str(n)+".0.0/24").overlaps(other) for other in occupied)),None)
+                require(subnet is not None,"NO_FREE_PRIVATE_SUBNET")
+                address=str(subnet.network_address+1)+"/24"
+                preseed={"config":{},"networks":[{"name":"incusbr0","type":"bridge","config":{"ipv4.address":address,"ipv4.nat":"true","ipv6.address":"none"}}],
+                         "storage_pools":[{"name":"default","driver":"dir","config":{}}],
+                         "profiles":[{"name":"default","devices":{"eth0":{"type":"nic","name":"eth0","network":"incusbr0"},"root":{"type":"disk","path":"/","pool":"default"}}}]}
+                prepared=subprocess.run(["incus","--force-local","admin","init","--preseed"],input=json.dumps(preseed).encode(),
+                                        stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+                require(prepared.returncode==0,"EMPTY_INCUS_INITIALIZATION_FAILED")
+                old["network_subnet"]=address
+                atomic(marker,json.dumps(old,sort_keys=True).encode())
+            for name, expected in PROVIDER_ASSETS.items():
+                target = Path("/usr/local/bin") / name
+                if target.exists(): require(not target.is_symlink() and sha(target.read_bytes()) == expected, "PROVIDER_UPGRADE_OR_FOREIGN_BINARY_REFUSED")
+                else: atomic(target, (release/name).read_bytes(), 0o755)
+                old["managed_files"][str(target)] = expected
+            if not SECRET.exists():
+                directory(SECRET.parent)
+                atomic(SECRET, secrets.token_hex(32).encode())
+            require(not SECRET.is_symlink() and SECRET.stat().st_uid == 0 and not SECRET.stat().st_mode & 0o077, "SIGNING_FILE_NOT_PRIVATE")
+            deadline = phase("local_postgres")
+            prepare_postgres(old, deadline)
+            deadline = phase("local_provider_start")
+            provider = ("[Unit]\nDescription=BoxWeave local Provider\nAfter=incus.service\n[Service]\n"
+                        "ExecStart=/usr/local/bin/containariumd daemon --address 127.0.0.1 --http-port 18080 --rest --standalone "
+                        "--disable-security-scanner --disable-pentest-scanner --disable-zap-scanner "
+                        "--postgres "+PG_DSN+" --network-subnet "+old.get("network_subnet","10.203.0.1/24")+" --jwt-secret-file /etc/boxweave-provider/jwt.secret\nRestart=on-failure\nRestartSec=3\nUMask=0077\n"
+                        "[Install]\nWantedBy=multi-user.target\n").encode()
+            provider_unit = UNIT_DIR / "boxweave-provider.service"
+            require(not provider_unit.exists() or str(provider_unit) in old["managed_files"], "FOREIGN_PROVIDER_UNIT")
+            previous = provider_unit.read_bytes() if provider_unit.exists() else None
+            atomic(provider_unit, provider, 0o644)
+            old["managed_files"][str(provider_unit)] = sha(provider)
+            atomic(marker, json.dumps(old, sort_keys=True).encode())
+            run(["systemctl", "daemon-reload"], deadline)
+            run(["systemctl", "enable", "--now", provider_unit.name], deadline)
+            if previous is not None and previous != provider:
+                run(["systemctl", "restart", provider_unit.name], deadline)
+            # Reachability only. The app installer independently proves authenticated MCP.
+            while True:
+                try:
+                    urllib.request.urlopen("http://127.0.0.1:18080/v1/containers", timeout=3).close(); break
+                except urllib.error.HTTPError as e:
+                    if e.code == 401: break
+                except OSError: pass
+                require(time.monotonic() < deadline, "PROVIDER_API_NOT_READY")
+                time.sleep(15)
         deadline = phase("independent_application")
+        mcp_binary = str(release / "mcp-server") if external else "/usr/local/bin/mcp-server"
+        provider_binary = old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"
+        provider_digest = sha(Path(provider_binary).read_bytes()) if external else PROVIDER_ASSETS["containariumd"]
+        secret_file = old["external_provider"]["secret"] if external else str(SECRET)
+        api_url = old["external_provider"]["url"] if external else "http://127.0.0.1:18080"
         args = ["/usr/bin/python3", str(release/"bootstrap.py"), "apply", "--app-user", APP,
                 "--archive", str(release/"boxweave.zip"), "--sha256", m["files"]["boxweave.zip"],
                 "--distribution", str(release/"distribution.py"), "--distribution-sha256", m["files"]["distribution.py"],
-                "--mcp-binary", "/usr/local/bin/mcp-server", "--mcp-sha256", PROVIDER_ASSETS["mcp-server"],
-                "--provider-cli", "/usr/local/bin/containariumd", "--provider-cli-sha256", PROVIDER_ASSETS["containariumd"],
-                "--secret-file", str(SECRET), "--provider-url", "http://127.0.0.1:18080",
+                "--mcp-binary", mcp_binary, "--mcp-sha256", PROVIDER_ASSETS["mcp-server"],
+                "--provider-cli", provider_binary, "--provider-cli-sha256", provider_digest,
+                "--secret-file", secret_file, "--provider-url", api_url,
                 "--ssh-entry", "--ack-root-changes", "INITIALIZE_BOXWEAVE"]
         with (STATE/"application.log").open("ab") as log:
             code = run(args, deadline, log, check=False)
@@ -367,13 +466,13 @@ store.admin(generate_password_hash(password))
         for line in sshd.stdout.splitlines():
             if line.startswith("port "):port=int(line.split()[1]);break
         old.update(phase="ready",host=host,port=port,server_key=key,managed_public_key=managed_public_key,
-                   credential_contents="not_read",provider_mode="standalone",version=version,source=m["source"])
+                   credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())
         print(json.dumps({"state":"ready","version":version,"host":host,"ssh_port":port,"user":APP,
                           "client_config_command":"/usr/bin/python3 /usr/local/lib/boxweave/default/online.py client-config --identity ABSOLUTE_CLIENT_KEY --known-hosts ABSOLUTE_CLIENT_KNOWN_HOSTS",
                           "enroll_command":"sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key FULL_CLIENT_PUBLIC_KEY",
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
-                          "public_routes_created":False,"reboot":"not_verified"}),flush=True)
+                          "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
     finally: os.close(lock)
 
 
@@ -409,11 +508,12 @@ def client_config(identity,known_hosts):
 def main():
     p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest="action",required=True)
     a=sub.add_parser("install");a.add_argument("--stage",required=True);a.add_argument("--version",required=True)
+    a.add_argument("--provider-url");a.add_argument("--provider-secret-file");a.add_argument("--provider-cli")
     a=sub.add_parser("enroll");a.add_argument("--public-key",required=True)
     a=sub.add_parser("client-config");a.add_argument("--identity",required=True);a.add_argument("--known-hosts",required=True)
     args=p.parse_args()
     try:
-        if args.action=="install":install(Path(args.stage),args.version)
+        if args.action=="install":install(Path(args.stage),args.version,args.provider_url,args.provider_secret_file,args.provider_cli)
         elif args.action=="enroll":enroll(args.public_key)
         else:client_config(args.identity,args.known_hosts)
         return 0

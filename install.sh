@@ -6,6 +6,14 @@ umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
+Usage: sudo bash install.sh [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE]
+  Streamed install/update/repair. Reuse an existing Containarium + Incus
+  without changing its binaries, service, storage or signing secret.
+  Existing Provider defaults: http://127.0.0.1:8080,
+  /etc/containarium/jwt.secret, and containariumd on PATH.
+  A standalone preinstalled Incus storage pool is also preserved.
+  Custom Provider settings require the options above.
+  The streamed release remains restricted to Ubuntu 24.04 / Python 3.12.
 Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
   --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
@@ -26,10 +34,19 @@ working user systemd bus are prerequisites. Rerun apply for app update/repair.
 USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
-if (( $# == 0 )); then
+if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli ]]; then
+  streamed_options=()
+  while (( $# )); do
+    case "$1" in
+      --provider-url|--provider-secret-file|--provider-cli)
+        (( $# >= 2 )) || die "Missing value for $1"
+        streamed_options+=("$1" "$2"); shift 2;;
+      *) die "Unknown streamed installer option: $1";;
+    esac
+  done
   [[ "$EUID" -eq 0 ]] || die 'DEFAULT_INSTALL_REQUIRES_ROOT: run the reviewed installer with sudo bash'
   command -v python3 >/dev/null || die 'Ubuntu Python 3 is required'
-  python3 - "0.16.0" <<'PY_DEFAULT_RELEASE'
+  python3 - "0.17.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
@@ -60,7 +77,7 @@ try:
         stage=pathlib.Path(folder);stage.chmod(0o700)
         (stage/"release.json").write_bytes(metadata)
         helper=stage/"online.py";helper.write_bytes(payload);helper.chmod(0o600)
-        code=subprocess.run([sys.executable,str(helper),"install","--stage",folder,"--version",version],stdin=subprocess.DEVNULL).returncode
+        code=subprocess.run([sys.executable,str(helper),"install","--stage",folder,"--version",version,*sys.argv[2:]],stdin=subprocess.DEVNULL).returncode
         raise SystemExit(code)
 except (OSError,ValueError,KeyError,AssertionError) as error:
     print("[boxweave] DEFAULT_RELEASE_NOT_READY_OR_INVALID: matching published release assets could not be verified; no unverified installer was executed.",file=sys.stderr)

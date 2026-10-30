@@ -94,3 +94,10 @@ SRC-100 authorizes source fixes/commit/push/reinstall within the dedicated two-b
 TASK-017/SRC-103: independent MCP create field, exact stale-checked nesting tool, Web choice, installer preflight and read-only diagnosis. [NESTING_VERIFICATION](NESTING_VERIFICATION.md) owns actual0.15.1 comparisons, new source validation and U privileged integration. Next: verify installed helper/sudo policy, peer inspect/plan, reviewed apply and unchanged target/no restart. No general parent-shell credentials or automatic recreation.
 
 Actual0.16.0 source validation: .venv/bin/python scripts/validate.py --browser in the assigned non-root LXC, exit0;209 tests/build/seven browser workflows. Exact report and untested privilege surface: [NESTING_VERIFICATION](NESTING_VERIFICATION.md).
+
+
+## 0.17.0 existing Containarium reuse and installer rerun
+
+Changed: the streamed entry now detects a complete preinstalled Containarium/Incus as an external Provider, validates its loopback API, root-private secret-file metadata and nonempty local Incus storage, and skips Provider installation, Incus init, PostgreSQL setup and service mutation. With only a separately preinstalled Incus/pool, it provisions the pinned managed Provider without resetting storage. The recorded Provider mode is immutable across BoxWeave reruns. Updated streamed help, README and operator acceptance notes. Historical `archive/0.5.1` conditional-provider reuse was referenced, not copied. Added offline detection/refusal/read-only probe contract tests in `tests/test_online_adoption.py`.
+
+**S:** source review via GitHub connection. **U:** exact submitted revision unit/shell/CI and any live host acceptance until results are inspected. Execute the tests and live scenarios from [EXISTING_PROVIDER_INSTALL](EXISTING_PROVIDER_INSTALL.md). The published CPython 3.12 / Ubuntu 24.04 release is not a verified Ubuntu 26.04 installer; do not pretend this feature change fixes that separate packaging problem.

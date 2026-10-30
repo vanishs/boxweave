@@ -31,3 +31,8 @@ Streamed source0.15.0 is now being implemented/tested under SRC-100. RISK-610 re
 Current SRC-100 experiment: source0.15.1 streamed reinstall and separate peer create/identity/Python passed. This resolves the specific experiment, not wider RISK-610 platform acceptance. [Measured follow-up](NESTING_VERIFICATION.md).
 
 | RISK-613 | P1 open, new0.16.0 privilege path | New fixed helper/sudo rule and MCP extension need real installed-copy acceptance; old0.15.1 evidence does not certify this surface | [Validation and next checks](NESTING_VERIFICATION.md); no implicit restart or parent access |
+
+
+## 0.17.0 existing Provider adoption risk
+
+**RISK-614 (P1 open, existing-host acceptance):** Streamed installer source recognizes reviewed existing Containarium/Incus and retains Provider ownership across BoxWeave repair/update. The existing Provider's API must be reachable at the configured loopback endpoint and its signer readable only by the external Provider/token issuer. No real preexisting-host adoption, storage-source preservation, reboot or independent update/repair test is claimed. The current published artifact remains Ubuntu 24.04 / CPython 3.12; Ubuntu 26.04 compatibility is a separate package and acceptance task. [Test matrix](EXISTING_PROVIDER_INSTALL.md).
