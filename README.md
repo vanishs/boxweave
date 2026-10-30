@@ -52,8 +52,8 @@ Streamed install/update/repair automatically preserves an already-installed comp
 
 ## After installation: finish the setup
 
-The successful installer prints a \`next_steps\` record. These commands work as
-a regular Ubuntu login; **do not use \`sudo\` for ordinary help, status or
+The successful installer prints a `next_steps` record. These commands work as
+a regular Ubuntu login; **do not use `sudo` for ordinary help, status or
 client setup**:
 
 ```sh
@@ -67,26 +67,26 @@ boxweave client         # Windows Codex/WSL guided client setup
 The Web server is bound to **127.0.0.1** for safety, so its URL is
 accessible on the Ubuntu host only. To open it in your own browser, make an
 authenticated tunnel from your local computer (use the actual port printed by
-\`boxweave\`):
+`boxweave`):
 
 ```sh
 ssh -N -L 18640:127.0.0.1:18640 YOUR_UBUNTU_ADMIN@YOUR_UBUNTU_HOST
 ```
 
-Then browse to \`http://127.0.0.1:18640\` locally (replace 18640 when
+Then browse to `http://127.0.0.1:18640` locally (replace 18640 when
 the installed port differs). The initial Web administrator password is stored
-privately at \`/home/boxweave/boxweave/initial-admin-password\`: an authorized
+privately at `/home/boxweave/boxweave/initial-admin-password`: an authorized
 administrator can read it locally; the installer never prints the password.
-The service account \`boxweave\` is deliberately different from your SSH
+The service account `boxweave` is deliberately different from your SSH
 administrator and must **not** be used as an everyday login.
 
-Generate the client enrollment script with \`boxweave client\`, review and run
+Generate the client enrollment script with `boxweave client`, review and run
 it on the Windows client. Only the actual client-key enrollment requires
 administrative authorization. Finish by verifying MCP discovery and a real
 read-only call; simply generating a script does not prove a connected Agent.
 
 If an installation fails, inspect its original log/phase and repair that
-specific issue before retrying. Do not relax \`/home/boxweave\` from mode 0700
+specific issue before retrying. Do not relax `/home/boxweave` from mode 0700
 or grant the human login broad Incus privileges just to run the CLI.
 [Host CLI reference](docs/CLI.md).
 
