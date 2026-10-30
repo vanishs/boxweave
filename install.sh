@@ -13,7 +13,7 @@ Usage: sudo bash install.sh [--provider-url URL --provider-secret-file ABSOLUTE_
   /etc/containarium/jwt.secret, and containariumd on PATH.
   A standalone preinstalled Incus storage pool is also preserved.
   Custom Provider settings require the options above.
-  The streamed release remains restricted to Ubuntu 24.04 / Python 3.12.
+  Minimum host versions: Ubuntu >= 24.04 and Python >= 3.12 (x86_64).
 Usage: bash install.sh plan|apply --app-user NAME --archive FILE --sha256 HEX \
   --config FILE --distribution-sha256 HEX [--prefix ABSOLUTE_PATH] [--distribution ABSOLUTE_FILE]
   [--provision-provider --provider-installer FILE --provider-sha256 HEX \
@@ -46,7 +46,7 @@ if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secr
   done
   [[ "$EUID" -eq 0 ]] || die 'DEFAULT_INSTALL_REQUIRES_ROOT: run the reviewed installer with sudo bash'
   command -v python3 >/dev/null || die 'Ubuntu Python 3 is required'
-  python3 - "0.17.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  python3 - "0.17.2" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
@@ -154,7 +154,7 @@ fi
 . /etc/os-release
 [[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 ]] || die 'Only Ubuntu 24.04 host is supported by this entry'
 [[ "$(uname -m)" == x86_64 ]] || die 'Release wheel lock requires x86_64'
-python3 -c 'import sys;raise SystemExit(0 if sys.version_info[:2]==(3,12) else 2)' || die 'Python 3.12 is required'
+python3 -c 'import sys;raise SystemExit(0 if sys.version_info[:2]>=(3,12) else 2)' || die 'Python >= 3.12 is required'
 command -v systemctl >/dev/null || die 'systemd is required'
 if (( ! PROVISION )); then
   command -v incus >/dev/null && command -v containarium >/dev/null || die 'Install/review Incus and Provider before application setup or explicitly provision the host'

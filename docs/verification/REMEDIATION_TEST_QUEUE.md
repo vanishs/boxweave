@@ -106,3 +106,10 @@ Changed: the streamed entry now detects a complete preinstalled Containarium/Inc
 ## 0.17.1 custom Provider CLI path correction
 
 Allow explicit `--provider-cli` to identify a reviewed installed Containarium binary outside PATH. Retain Incus and Containarium CLI detection and the external Provider read-only checks. Added an isolated path-selection regression. **S:** source-only GitHub edit; **U:** exact-commit CI and live custom-path acceptance until independently verified.
+
+
+## 0.17.2 Ubuntu/Python minimum version gate and wheelhouse
+
+Changed the **minimum** versions to Ubuntu >= 24.04, CPython >= 3.12 (x86_64) in the streamed entry, online host coordinator, scoped bootstrap and application installer. Updated the source-bound release selection, Ubuntu-specific signed Incus APT source, managed PostgreSQL version selection, and multi-ABI hash-locked offline wheelhouse. Existing Containarium remains externally owned; no Provider/Incus/secret mutation. Added `tests/test_platform_minimums.py` and a CPython 3.14 offline-installation CI smoke step.
+
+**S**: code changes inspected; **U**: live Ubuntu 26.04 mount preflight, real existing-Provider reuse, authenticated MCP, Web, reboot and interruption/repair. CI and release evidence should be updated after the exact commit completes. On Python versions later than the bundled wheelhouse, the package manager must fail closed; no unverified network wheel download permitted.

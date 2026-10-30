@@ -1,6 +1,6 @@
 # Existing Containarium reuse: source change and acceptance plan
 
-Scope: source 0.17.0, user-requested install/update/repair behavior. Reference:
+Scope: source 0.17.2, user-requested install/update/repair and minimum-platform compatibility. Reference:
 `archive/0.5.1` `install.sh` used the installed Incus and Containarium
 rather than replacing the Provider on ordinary reruns. Its implementation is
 historical evidence, not code copied into the current release.
@@ -31,9 +31,12 @@ installer.
 
 ## Present limitations
 
-- The streamed package and its offline wheel lock remain Ubuntu **24.04 /
-  CPython 3.12**. Ubuntu 26.04 support and a matching released wheel package
-  require a separate verified build; do not bypass the version/platform checks.
+- The **minimum** version gate is Ubuntu 24.04 / CPython 3.12, x86_64.
+  The immutable release bundles SHA256-locked CPython 3.12–3.15 Linux x86_64
+  wheels. Future Python versions are not guaranteed a compatible wheel until
+  the distribution is rebuilt and verified. Ubuntu 26.04 real-host testing
+  remains separate from CI; do not confuse a passing version gate with proven
+  Provider or reboot integration.
 - A Provider installed with a custom secret or API endpoint needs explicit
   operator flags. A non-REST Provider is refused; no service options are modified.
 - Bootstrap pins a snapshot of the installed daemon binary. If an administrator
@@ -72,3 +75,10 @@ systemd action was executed from this repository-edit session.
    `bash -n install.sh`, `python scripts/check_knowledge.py` and
    `python scripts/validate.py --browser` with a prepared non-root test
    checkout, then inspect exact GitHub CI results. CI is not host acceptance.
+
+
+## 0.17.2 platform floor verification
+
+**S**: all three host checks (`online.py`, `bootstrap.py`, `install.sh`) now use numeric Ubuntu >= 24.04 and CPython >= 3.12; the app ZIP targets CPython >= 3.12. Fresh-host Incus provisioning uses the actual Ubuntu codename and preserves the 24.04 package pin, while other accepted releases use the signed distribution-specific stable repository. The managed-provider-only local PostgreSQL install selects the distribution's default PostgreSQL package on newer Ubuntu versions; external Containarium retains its own PostgreSQL, unchanged.
+
+**T**: CI is required to prove version-floor unit checks, shell syntax, package candidate, and actual Python 3.14 offline wheel installation after release publication. **U**: Ubuntu 26.04 standalone install, existing Provider reuse, real Web/MCP create and restart recovery; execute with before/after Incus pool, mounted bcachefs and Provider checks before claiming success.

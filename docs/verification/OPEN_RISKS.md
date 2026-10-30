@@ -36,3 +36,8 @@ Current SRC-100 experiment: source0.15.1 streamed reinstall and separate peer cr
 ## 0.17.0 existing Provider adoption risk
 
 **RISK-614 (P1 open, existing-host acceptance):** Streamed installer source recognizes reviewed existing Containarium/Incus and retains Provider ownership across BoxWeave repair/update. The existing Provider's API must be reachable at the configured loopback endpoint and its signer readable only by the external Provider/token issuer. No real preexisting-host adoption, storage-source preservation, reboot or independent update/repair test is claimed. The current published artifact remains Ubuntu 24.04 / CPython 3.12; Ubuntu 26.04 compatibility is a separate package and acceptance task. [Test matrix](EXISTING_PROVIDER_INSTALL.md).
+
+
+## 0.17.2 cross-version installation acceptance
+
+**RISK-615 (P1 open, host verification):** Minimum host version is Ubuntu >= 24.04 / CPython >= 3.12, but the release bundles wheels only for CPython 3.12–3.15 and exact CI builds do not certify all future Python versions. The owner-provided Ubuntu 26.04 + bcachefs + existing Incus/Containarium/PostgreSQL must still pass a full real-host source-bound install, update/repair, container creation, and post-reboot mount/provider persistence check. **S**: source review; **U**: real-host acceptance. Do not bypass storage mount guards or silently replace external Provider state.

@@ -48,9 +48,41 @@ jobs:
       - name: Build reviewed application candidate
         run: |
           mkdir -p .runtime/release
-          python -m pip download --require-hashes --only-binary=:all: --no-deps -r requirements.lock --dest .runtime/release-wheels
+          for minor in 12 13 14 15; do
+            python -m pip download --require-hashes --only-binary=:all: --no-deps \
+              --python-version "3.$minor" --implementation cp --abi "cp3$minor" \
+              --platform manylinux2014_x86_64 -r requirements.lock \
+              --dest .runtime/release-wheels
+          done
           python bwmini/distribution.py build --root . --wheels .runtime/release-wheels --output .runtime/release/boxweave.zip --source-commit "$GITHUB_SHA" --source-state clean
           python scripts/build_release_manifest.py --root . --output .runtime/release --source "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Python 3.14 tests and verified offline wheel smoke
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m unittest tests.test_online tests.test_online_adoption tests.test_distribution tests.test_host_bootstrap tests.test_platform_minimums -v
+          python - <<'PY_SMOKE'
+          import pathlib, subprocess, sys, tempfile, zipfile
+          with tempfile.TemporaryDirectory() as location:
+              root = pathlib.Path(location)
+              wheels = root / "wheels"
+              wheels.mkdir()
+              with zipfile.ZipFile(".runtime/release/boxweave.zip") as package:
+                  for name in package.namelist():
+                      if name.startswith("wheels/") and name.endswith(".whl"):
+                          (wheels / pathlib.PurePosixPath(name).name).write_bytes(package.read(name))
+                      elif name == "requirements.lock":
+                          (root / "requirements.lock").write_bytes(package.read(name))
+              venv = root / "python314"
+              subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+              python = str(venv / "bin/python")
+              subprocess.run([python, "-m", "pip", "install", "--no-index", "--no-deps",
+                              "--require-hashes", "--only-binary=:all:", "--find-links", str(wheels),
+                              "-r", str(root / "requirements.lock")], check=True)
+              subprocess.run([python, "-c", "import flask, markupsafe, waitress; print('offline Python 3.14 import passed')"], check=True)
+          PY_SMOKE
       - name: Retain application candidate for review
         uses: actions/upload-artifact@v4
         with:

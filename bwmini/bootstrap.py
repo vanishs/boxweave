@@ -3,6 +3,7 @@ Provider installation remains a separately reviewed prerequisite. Never reads a 
 """
 import argparse
 import fcntl
+import importlib.util
 import hashlib
 import json
 import os
@@ -184,15 +185,16 @@ def apply(args, artifacts):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(args.ack_root_changes == "INITIALIZE_BOXWEAVE", "ROOT_CHANGE_ACK_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and
-            sys.version_info[:2] == (3, 12), "UBUNTU_2404_PYTHON312_REQUIRED")
+            sys.version_info[:2] >= (3, 12) and platform.python_implementation() == "CPython", "PYTHON_MIN_312_CPYTHON_REQUIRED")
     os_release = platform.freedesktop_os_release()
-    require(os_release.get("ID") == "ubuntu" and os_release.get("VERSION_ID") == "24.04",
-            "UBUNTU_2404_REQUIRED")
+    require(os_release.get("ID") == "ubuntu" and re.fullmatch(r"[0-9]{2,}\.[0-9]{2}", os_release.get("VERSION_ID", "")) is not None and
+            tuple(int(n) for n in os_release["VERSION_ID"].split(".")) >= (24, 4),
+            "UBUNTU_MIN_2404_REQUIRED")
     # No APT, upstream upgrade, host SSH/firewall, route, or public listener changes.
     deadline = time.monotonic() + 600
     for tool in ("runuser", "useradd", "loginctl", "systemctl"):
         require(shutil.which(tool), "PREREQUISITE_MISSING:" + tool)
-    require(Path("/usr/lib/python3.12/ensurepip").is_dir(), "PYTHON_VENV_PREREQUISITE_REQUIRED")
+    require(importlib.util.find_spec("ensurepip") is not None, "PYTHON_VENV_PREREQUISITE_REQUIRED")
     user = args.app_user
     folder = BASE / user
     public = PUBLIC / user

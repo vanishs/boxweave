@@ -1,6 +1,6 @@
 # Application installation, update and repair
 
-This operator guide covers verified application packages on a **prepared Ubuntu 24.04 x86_64 host**. It does not promise a working one-command installation from a blank server, nor install/upgrade upstream infrastructure, repair SSH/firewall, or configure public TLS. For the current host entry and exact prerequisites, read [host installation](HOST_BOOTSTRAP.md).
+This operator guide covers verified application packages on a **prepared Ubuntu >= 24.04 x86_64 host with CPython >= 3.12**. It does not promise a working one-command installation from a blank server, nor install/upgrade upstream infrastructure, repair SSH/firewall, or configure public TLS. For the current host entry and exact prerequisites, read [host installation](HOST_BOOTSTRAP.md).
 
 Choose and retain an explicit private installation location, for example `APP_PREFIX="$HOME/boxweave"`; use this exact value consistently with all installation, administrator and health commands. Existing installations may use older managed directories and service identifiers; **do not rename or move them without a reviewed migration and consistent database backup**. Prior checkpoints are in [installation history](INSTALL_HISTORY.md).
 
@@ -86,10 +86,15 @@ Installation's app health/MCP read is separate from a later client's actual crea
 
 ## Streamed installation with an existing Containarium
 
-On the **supported Ubuntu 24.04 / CPython 3.12** release platform, the default streamed entry can now reuse an existing Incus + Containarium deployment. The installed Provider must expose its authenticated REST API on loopback and have a root-private JWT signing-secret file. BoxWeave inspects its availability and the existing Incus pool, but never installs/upgrades/restarts the external Provider, rewrites its secret, or replaces its network/storage configuration. BoxWeave-owned application bootstrap, user/timer, trust helper and app updates are still carried out.
+On **Ubuntu >= 24.04 / CPython >= 3.12 (x86_64)**, the default streamed entry can now reuse an existing Incus + Containarium deployment. The installed Provider must expose its authenticated REST API on loopback and have a root-private JWT signing-secret file. BoxWeave inspects its availability and the existing Incus pool, but never installs/upgrades/restarts the external Provider, rewrites its secret, or replaces its network/storage configuration. BoxWeave-owned application bootstrap, user/timer, trust helper and app updates are still carried out.
 
 The ordinary zero-argument streamed command uses Provider URL `http://127.0.0.1:8080`, secret path `/etc/containarium/jwt.secret` and installed `containariumd`. For a different local Provider setup, download and review the matching release `install.sh`, then execute `sudo bash install.sh --provider-url http://127.0.0.1:PORT --provider-secret-file /reviewed/secret/path --provider-cli /absolute/path/to/containariumd`. The custom options are only for the streamed entry; the independent `plan/apply` mode is unchanged. Existing Incus **without** Containarium is also supported when its storage pool is already configured: the installer preserves the pool and provisions the fixed managed Provider.
 
 The installer saves the chosen ownership mode on first installation. Repeating the command updates or repairs only BoxWeave-owned artifacts and verifies the same external Provider identity. Changes to the external Provider binary/secret require a separate operator-reviewed adoption process, not an implicit upgrade. Partial existing Provider installations, foreign BoxWeave accounts/state, and empty Incus pools are refused safely. This does not import historical 0.5.1 data.
 
-**Ubuntu 26.04 remains unsupported by the published streamed CPython 3.12 wheel lock and explicit host checks.** Do not bypass those checks to install this release; separate packaging and host acceptance are required. See [implementation and test queue](verification/EXISTING_PROVIDER_INSTALL.md).
+**Minimum versions: Ubuntu >= 24.04 and CPython >= 3.12 on x86_64.** The release contains hash-checked offline wheels for CPython 3.12, 3.13, 3.14 and 3.15. A later Python may pass the version gate but lack a compatible bundled wheel: it must fail safely rather than download an unreviewed dependency. Ubuntu 26.04 is accepted by source checks but still needs live host and reboot acceptance. See [implementation and test queue](verification/EXISTING_PROVIDER_INSTALL.md).
+
+
+## Cross-version release wheel verification (0.17.2)
+
+The CI build downloads the locked wheels for x86_64 CPython 3.12–3.15 using `pip download --python-version` with `--require-hashes` and `--only-binary=:all:`, then packs all exact verified wheels into one source-bound release ZIP. On Python 3.14 it also creates a real virtual environment, installs **offline only** from that ZIP using the unchanged requirements lock, and imports Flask/MarkupSafe/Waitress. The application installer never downloads packages at activation time. This CI evidence is still not a claim about a live Ubuntu 26.04 host.

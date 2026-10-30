@@ -1,7 +1,7 @@
 """Source-bound BoxWeave install/update/repair for fresh or reviewed existing Providers.
 Existing Containarium/Incus are never replaced or upgraded. Credentials stay private.
 """
-import argparse, base64, datetime, fcntl, hashlib, ipaddress, json, os
+import argparse, base64, datetime, fcntl, hashlib, importlib.util, ipaddress, json, os
 from pathlib import Path
 import platform, pwd, re, secrets, shutil, socket, stat, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
@@ -22,6 +22,16 @@ UNIT_DIR = Path("/etc/systemd/system")
 
 
 class Failure(Exception): pass
+
+
+def supported_ubuntu(version):
+    """Accept Ubuntu 24.04 and newer; do not parse release numbers as floats."""
+    return isinstance(version, str) and re.fullmatch(r"[0-9]{2,}\.[0-9]{2}", version) is not None and tuple(map(int, version.split("."))) >= (24, 4)
+
+
+def supported_python(version):
+    return tuple(version[:2]) >= (3, 12)
+
 
 
 def require(value, code):
@@ -107,7 +117,7 @@ def check_managed(old):
 
 PG_ETC = Path("/etc/postgresql")
 PG_DATA = Path("/var/lib/postgresql")
-PG_BINARY = Path("/usr/lib/postgresql/16/bin/postgres")
+PG_BINARY_ROOT = Path("/usr/lib/postgresql")
 PG_DSN = "postgresql:///boxweave_provider?host=/var/run/postgresql"
 
 
@@ -119,13 +129,26 @@ def prepare_postgres(old, deadline):
         require(not PG_DATA.exists() or not any(PG_DATA.iterdir()), "FOREIGN_POSTGRES_DATA")
         old["postgres_managed"] = True
         atomic(STATE / "state.json", json.dumps(old, sort_keys=True).encode())
-    if not PG_BINARY.exists():
+    def installed_majors():
+        return sorted((int(p.parent.parent.name) for p in PG_BINARY_ROOT.glob("*/bin/postgres")
+                       if p.parent.parent.name.isdigit()), reverse=True)
+    majors = installed_majors()
+    if not majors:
         env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+        packages = (["postgresql-16", "postgresql-contrib"] if
+                    platform.freedesktop_os_release()["VERSION_ID"] == "24.04"
+                    else ["postgresql", "postgresql-contrib"])
         with (STATE / "postgres-apt.log").open("ab") as log:
             run(["apt-get", "update", "-qq"], deadline, log, env)
-            run(["apt-get", "install", "-y", "-qq", "postgresql-16", "postgresql-contrib"], deadline, log, env)
+            run(["apt-get", "install", "-y", "-qq", *packages], deadline, log, env)
+        majors = installed_majors()
+    require(bool(majors), "POSTGRES_BINARY_NOT_FOUND")
+    major = old.get("postgres_major", majors[0])
+    require(major in majors, "MANAGED_POSTGRES_VERSION_CHANGED")
+    old["postgres_major"] = major
+    atomic(STATE / "state.json", json.dumps(old, sort_keys=True).encode())
     run(["systemctl", "enable", "--now", "postgresql.service"], deadline)
-    run(["systemctl", "start", "postgresql@16-main.service"], deadline)
+    run(["systemctl", "start", "postgresql@" + str(major) + "-main.service"], deadline)
     sql = """DO $body$
 BEGIN
  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='root') THEN
@@ -210,10 +233,10 @@ def verify_existing_provider(provider):
 
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
-    require(sys.platform == "linux" and platform.machine() == "x86_64" and sys.version_info[:2] == (3,12),
-            "UBUNTU_2404_X86_64_PYTHON312_REQUIRED")
+    require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
+            "UBUNTU_MIN_2404_X86_64_PYTHON_MIN312_REQUIRED")
     system = platform.freedesktop_os_release()
-    require(system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04", "UBUNTU_2404_REQUIRED")
+    require(system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID")), "UBUNTU_MIN_2404_REQUIRED")
     require(Path("/run/systemd/system").is_dir(), "SYSTEMD_REQUIRED")
     detected = subprocess.run(["systemd-detect-virt","--container"], capture_output=True, text=True, timeout=5)
     print(json.dumps({"nesting_preflight":{"environment":detected.stdout.strip() or "unknown",
@@ -276,6 +299,15 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             atomic(marker, json.dumps(old, sort_keys=True, indent=2).encode())
             print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
             return time.monotonic()+600
+        if importlib.util.find_spec("ensurepip") is None:
+            deadline = phase("python_venv_prerequisite")
+            env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+            with (STATE / "python-venv-apt.log").open("ab") as log:
+                run(["apt-get", "update", "-qq"], deadline, log, env)
+                run(["apt-get", "install", "-y", "-qq", "python3-venv"], deadline, log, env)
+            importlib.invalidate_caches()
+            require(importlib.util.find_spec("ensurepip") is not None,
+                    "PYTHON_VENV_PREREQUISITE_REQUIRED")
         phase("release_download")
         for name, expected in m["files"].items():
             if name == "online.py":
@@ -306,21 +338,27 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                     source = Path("/etc/apt/sources.list.d/boxweave-incus.sources")
                     require(all(not p.exists() or str(p) in old["managed_files"] for p in (keyring,source)), "FOREIGN_APT_CONFIGURATION")
                     atomic(keyring, (release/"zabbly.asc").read_bytes(), 0o644)
-                    atomic(source, b"Types: deb\nURIs: https://pkgs.zabbly.com/incus/stable\nSuites: noble\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/boxweave-zabbly.asc\n", 0o644)
+                    codename = system.get("VERSION_CODENAME", "")
+                    require(re.fullmatch(r"[a-z]{4,32}", codename), "UBUNTU_CODENAME_INVALID")
+                    source_text = ("Types: deb\nURIs: https://pkgs.zabbly.com/incus/stable\nSuites: " + codename +
+                                   "\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/boxweave-zabbly.asc\n")
+                    atomic(source, source_text.encode(), 0o644)
                     # Record exact managed files before invoking APT so repair preserves their provenance.
                     old["managed_files"].update({str(keyring):sha(keyring.read_bytes()), str(source):sha(source.read_bytes())})
                     atomic(marker, json.dumps(old, sort_keys=True).encode())
                     run(["apt-get", "update", "-qq"], deadline, log, env)
-                    run(["apt-get", "install", "-y", "-qq", "incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
-                         "incus-extra="+INCUS_PACKAGE], deadline, log, env)
+                    packages = (["incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
+                                 "incus-extra="+INCUS_PACKAGE] if system["VERSION_ID"] == "24.04"
+                                else ["incus", "incus-client", "incus-extra"])
+                    run(["apt-get", "install", "-y", "-qq", *packages], deadline, log, env)
             deadline = phase("local_provider")
             observed = subprocess.run(["incus", "--version"], capture_output=True, text=True, timeout=10)
-            if old.get("preexisting_incus"):
-                require(observed.returncode == 0 and re.fullmatch(r"[0-9]+\\.[0-9]+(?:\\.[0-9]+)?", observed.stdout.strip()),
-                        "EXISTING_INCUS_VERSION_UNKNOWN")
-            else:
-                require(observed.returncode == 0 and observed.stdout.strip() == "7.5.1",
-                        "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
+            require(observed.returncode == 0 and re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", observed.stdout.strip()),
+                    "INCUS_VERSION_UNKNOWN")
+            incus_version = tuple(int(n) for n in observed.stdout.strip().split("."))
+            require(incus_version >= (7, 5, 1), "INCUS_MIN_VERSION_REQUIRED")
+            if not old.get("preexisting_incus") and system["VERSION_ID"] == "24.04":
+                require(observed.stdout.strip() == "7.5.1", "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
             # Initialize only an inspected empty local daemon; never replace an existing pool/profile.
             pools=subprocess.run(["incus","--force-local","storage","list","--format","json"],capture_output=True,text=True,timeout=20)
             require(pools.returncode==0,"LOCAL_INCUS_NOT_READY")

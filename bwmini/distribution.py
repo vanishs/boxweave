@@ -2,6 +2,8 @@
 import argparse,fcntl,hashlib,json,os,platform,re,shutil,sqlite3,stat,subprocess,sys,tempfile,time,urllib.error,urllib.request,urllib.parse,uuid,venv,zipfile
 from pathlib import Path
 
+PLATFORM = 'linux-x86_64-cpython3-min312'
+
 class InstallError(Exception): pass
 def require(ok,code):
  if not ok:raise InstallError(code)
@@ -33,7 +35,7 @@ def verify(archive,sha):
   require(sum(x.file_size for x in infos)<=180_000_000,'ARCHIVE_TOO_LARGE')
   manifest=json.loads(z.read('manifest.json'));require(set(manifest)=={'format','version','platform','source','files'},'MANIFEST_INVALID')
   require(manifest['format']==1 and re.fullmatch(r'0\.[0-9]+\.[0-9]+',manifest['version']) is not None,'MANIFEST_INVALID')
-  require(manifest['platform']=='linux-x86_64-cpython312','PLATFORM_UNSUPPORTED')
+  require(manifest['platform'] == PLATFORM, 'PLATFORM_UNSUPPORTED')
   require(set(manifest['source'])=={'commit','state'} and re.fullmatch('[0-9a-f]{40}',manifest['source']['commit']) is not None and manifest['source']['state'] in ('clean','modified'),'PROVENANCE_INVALID')
   files=manifest['files'];require(isinstance(files,dict) and set(files)|{'manifest.json'}==set(names),'MANIFEST_MEMBERS_MISMATCH')
   require({'bwmini/__main__.py','bwmini/deploy_check.py','requirements.lock','VERSION','web/dist/index.html'}<=set(files),'PACKAGE_INCOMPLETE')
@@ -53,7 +55,7 @@ def build(root,wheels,output,commit,source_state):
  for p in Path(wheels).glob('*.whl'):files['wheels/'+p.name]=regular(p)
  require(bool([x for x in files if x.startswith('wheels/')]),'OFFLINE_WHEELS_REQUIRED')
  # pip enforces the independently locked wheel digests during installation.
- manifest={'format':1,'version':files['VERSION'].decode().strip(),'platform':'linux-x86_64-cpython312','source':{'commit':commit,'state':source_state},'files':{n:digest(b) for n,b in files.items()}}
+ manifest={'format':1,'version':files['VERSION'].decode().strip(),'platform':PLATFORM,'source':{'commit':commit,'state':source_state},'files':{n:digest(b) for n,b in files.items()}}
  require(not Path(output).exists(),'OUTPUT_EXISTS')
  with zipfile.ZipFile(output,'x',compression=zipfile.ZIP_DEFLATED) as z:
   for n,b in sorted(files.items()):
@@ -123,7 +125,7 @@ def health(prefix,mcp=False):
  except (InstallError,OSError,ValueError,subprocess.SubprocessError) as e:result['state']='failed';result['code']=str(e) if isinstance(e,InstallError) else 'HEALTH_UNAVAILABLE'
  return result
 def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
- require(sys.platform=='linux' and platform.machine()=='x86_64' and sys.version_info[:2]==(3,12),'PLATFORM_UNSUPPORTED')
+ require(sys.platform=='linux' and platform.machine()=='x86_64' and sys.version_info[:2]>=(3,12) and platform.python_implementation()=='CPython','PLATFORM_UNSUPPORTED')
  manifest=verify(archive,sha) # No untrusted package code executes before this.
  prefix=Path(prefix).absolute();require(prefix==prefix.resolve() and '\n' not in str(prefix),'PREFIX_UNSAFE')
  require(os.geteuid()!=0,'RUN_AS_APPLICATION_USER')
