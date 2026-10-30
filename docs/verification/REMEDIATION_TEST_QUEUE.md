@@ -88,3 +88,9 @@ The owner clarified that the earlier change was about current product narrative,
 ## Streamed installer iteration
 
 SRC-100 authorizes source fixes/commit/push/reinstall within the dedicated two-box test. First actual main9f03b9f streamed command failed installer2. Current0.15.0 source/package/CI and eventual live outcomes belong to [STREAMED_INSTALL_TEST](STREAMED_INSTALL_TEST.md); no pass is assumed from publishing source.
+
+## 0.16.0 nesting slice
+
+TASK-017/SRC-103: independent MCP create field, exact stale-checked nesting tool, Web choice, installer preflight and read-only diagnosis. [NESTING_VERIFICATION](NESTING_VERIFICATION.md) owns actual0.15.1 comparisons, new source validation and U privileged integration. Next: verify installed helper/sudo policy, peer inspect/plan, reviewed apply and unchanged target/no restart. No general parent-shell credentials or automatic recreation.
+
+Actual0.16.0 source validation: .venv/bin/python scripts/validate.py --browser in the assigned non-root LXC, exit0;209 tests/build/seven browser workflows. Exact report and untested privilege surface: [NESTING_VERIFICATION](NESTING_VERIFICATION.md).

@@ -19,3 +19,7 @@ SRC-093: The owner authorizes R-00–R-09 source remediation in small direct com
 ## Current main-completion work
 
 SRC-097 separately authorizes the isolated 0.14.0 implementation and experiment scope. Results and remaining delivery boundaries are recorded in [MAIN_014_REVIEW](../verification/MAIN_014_REVIEW.md); this does not upgrade the original deployment or authorize public exposure, model spending, destructive cleanup or source publication.
+
+## Nesting source remediation
+
+SRC-103 authorizes implementation and commit/push. SRC-100 dedicated-test scope remains; source publication does not authorize original parent-host changes. [Current source and actual evidence](../verification/NESTING_VERIFICATION.md).

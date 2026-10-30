@@ -13,3 +13,5 @@ This index owns decision status/navigation, not copied decision bodies. Runtime 
 | [006 prompt composition](0006-prompt-composition.md) | Accepted, implemented: revisioned context, not execution | Explicitly approved workflow semantics or storage needs |
 
 Keep rationale/consequences in each ADR. A changed decision needs its source, old decision link, new choice, implications and regression plan; mark superseded records rather than silently deleting them.
+
+[ADR-008 independent nesting](0008-independent-nesting.md): accepted SRC-103, implemented source0.16.0; privileged live acceptance pending.

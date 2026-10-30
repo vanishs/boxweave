@@ -13,3 +13,7 @@ The new `boxweave.sh` is a **read-only management and diagnostic entry**. From a
 Exit: `0` for successful observation/ready status, `1` for read failure/failed status, `2` for malformed arguments or an incomplete/missing app. A product version is **not** a verified running release. CLI health does not prove effective confinement, boot readiness, Agent GUI, packet enforcement, public TLS or inference.
 
 Old job/selftest, provider upgrade, host-key/token and client script generation commands are not recreated as unsafe aliases. Application mutations continue through explicit `python -m bwmini` plan/confirm actions. [Scope](product/SCOPE.md), [host bootstrap](HOST_BOOTSTRAP.md), [tests](verification/REMEDIATION_TEST_QUEUE.md).
+
+| box diagnose NAME [--project PROJECT] | Exact read-only instance/log observation and proc mount denial guidance; parent value unverified |
+
+Doctor now includes local container detection and unverified parent/effective nesting state. [Nesting guide](NESTING.md).

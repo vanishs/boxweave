@@ -46,3 +46,5 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [0.14.0 main completion and current acceptance evidence](verification/MAIN_014_REVIEW.md)
 
 - [Streamed installer and two-box MCP acceptance](verification/STREAMED_INSTALL_TEST.md)
+
+- [Container nesting](NESTING.md) and [measured verification](verification/NESTING_VERIFICATION.md)

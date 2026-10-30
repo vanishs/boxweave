@@ -16,7 +16,7 @@ PROVIDER_ASSETS = {
     "containarium": "dc356b07ca2138f28052d021458f8081753b2c6c186fe7508b0645a06a9b121d",
     "mcp-server": "5b12e284b3b103c01bf9eff0cfe2f2a1e3b25476dfcc72aebe8166b4235198a2",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "nesting.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 
@@ -161,6 +161,10 @@ def install(stage, version):
     system = platform.freedesktop_os_release()
     require(system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04", "UBUNTU_2404_REQUIRED")
     require(Path("/run/systemd/system").is_dir(), "SYSTEMD_REQUIRED")
+    detected = subprocess.run(["systemd-detect-virt","--container"], capture_output=True, text=True, timeout=5)
+    print(json.dumps({"nesting_preflight":{"environment":detected.stdout.strip() or "unknown",
+                      "parent_nesting":"not_verified","effective_nested_execution":"not_verified",
+                      "guidance":"Inside LXC, configure security.nesting=true on the exact parent instance, restart that outer box and verify a child workload. This installer does not change parent policy."}}), flush=True)
     m = manifest_read(stage / "release.json", version)
     release_url = "https://github.com/vanishs/boxweave/releases/download/v" + version + "/"
     marker = STATE / "state.json"
@@ -326,11 +330,20 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","nesting.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
             old["managed_files"][str(target)] = sha(payload)
+        sudoers = Path("/etc/sudoers.d/boxweave-nesting")
+        require(not sudoers.exists() or str(sudoers) in old["managed_files"], "FOREIGN_NESTING_SUDOERS")
+        payload = b"boxweave ALL=(root) NOPASSWD: /usr/bin/python3 -I /usr/local/lib/boxweave/default/nesting.py\n"
+        # Fixed executable/arguments only; the isolated helper reads bounded validated stdin.
+        require(shutil.which("visudo") is not None, "SUDO_POLICY_VALIDATOR_REQUIRED")
+        candidate = release / "nesting.sudoers"
+        atomic(candidate, payload, 0o440)
+        run(["visudo","-cf",str(candidate)], deadline)
+        atomic(sudoers, payload, 0o440); old["managed_files"][str(sudoers)] = sha(payload)
         sync_service = b"[Unit]\nDescription=Synchronize Incus-authenticated public host keys\n[Service]\nType=oneshot\nUMask=0077\nExecStart=/usr/bin/python3 /usr/local/lib/boxweave/default/hostkeys.py\n"
         sync_timer = b"[Unit]\nDescription=Refresh trusted workload host keys\n[Timer]\nOnBootSec=15s\nOnUnitInactiveSec=15s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n"
         for name,payload in (("boxweave-trust.service",sync_service),("boxweave-trust.timer",sync_timer)):

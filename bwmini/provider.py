@@ -97,6 +97,13 @@ class Provider:
                     "hostname":target.hostname}, "evidence":"live_mcp",
                     "remote_cleanup":"not_verified", "protocol":"2024-11-05"}
 
+    def nesting_check(self, wanted):
+        if type(wanted) is not bool: raise Fault("NESTING_BOOLEAN_REQUIRED",422)
+        with self.session() as m:
+            props=m.discover().get("create_container",{}).get("inputSchema",{}).get("properties",{})
+            if props.get("enable_nesting",{}).get("type") != "boolean":
+                raise Fault("INDEPENDENT_NESTING_UNSUPPORTED",409)
+
     def lifecycle_inventory(self):
         with self.session() as m:
             m.discover()
@@ -160,6 +167,11 @@ class Provider:
                     raise Fault("CONTRACT_UNSUPPORTED")
                 args.update(cpu=spec["cpu"],memory=spec["memory"],disk=spec["disk"],
                             image="images:ubuntu/24.04",enable_podman=False,ssh_keys=[spec["ssh_public_key"]])
+                if "_nesting" in spec:
+                    if props.get("enable_nesting",{}).get("type") != "boolean":
+                        raise Fault("INDEPENDENT_NESTING_UNSUPPORTED",409)
+                    if type(spec["_nesting"]) is not bool:raise Fault("NESTING_BOOLEAN_REQUIRED",422)
+                    args["enable_nesting"]=spec["_nesting"]
                 if spec.get("_network_tenant") is not None:
                     if "network_tenant" not in props:raise Fault("CONTRACT_UNSUPPORTED")
                     args["network_tenant"]=spec["_network_tenant"]

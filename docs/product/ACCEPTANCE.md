@@ -92,3 +92,5 @@ On an approved clean Ubuntu 24.04 x86_64 host, inspect source artifact provenanc
 ## AC-020 — Non-destructive management and diagnostics (REQ-020)
 
 Verify local version/provenance, optional CLI versions, app status with missing/foreign user service, and exact Incus read-only inspection under invalid/ambiguous names, inaccessible socket, timed-out subprocess and filtered secret metadata. Real MCP diagnosis is an independent opt-in authorized read; HTTP alone must not imply authentication. Exit 0 only for a completed observation in that command's limited scope, 1 for confirmed failure and 2 for invalid/incomplete. No host key/credential read or repair. **Current implementation has only isolated unit tests, not full real-host acceptance.**
+
+AC-003/008/009/011/018/019 nesting cases (SRC-103): independent boolean/omitted legacy dispatch, unsupported endpoint, protected/unmanaged targets, stale UUID/config and exact confirmation. Preserve unrelated config/Podman; no restart. Validate changes using the same child and actual MCP. [Evidence and U integration](../verification/NESTING_VERIFICATION.md).

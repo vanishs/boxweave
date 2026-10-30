@@ -2,6 +2,37 @@
 import base64, json, re, subprocess, sys, time
 from pathlib import Path
 
+try:
+    from .nesting import invoke as nesting_invoke
+except ImportError:
+    from nesting import invoke as nesting_invoke
+
+NESTING_TOOL = {
+    "name": "boxweave_nesting",
+    "description": "Inspect or preview/confirm one managed box nesting setting. Runs on its parent host; never restarts. Capability remains unverified until child MCP execution.",
+    "inputSchema": {"type": "object", "additionalProperties": False,
+        "properties": {"action": {"type":"string","enum":["inspect","plan","apply"]},
+                       "logical": {"type":"string"}, "nesting":{"type":"boolean"},
+                       "expected":{"type":"object"}, "confirm":{"type":"string"}},
+        "required":["action","logical"]}}
+
+def catalog(message):
+    if "result" not in message: return message
+    for tool in message["result"].get("tools", []):
+        if tool.get("name") == "create_container":
+            tool["inputSchema"]["properties"]["enable_nesting"] = {
+                "type":"boolean",
+                "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
+    message["result"].setdefault("tools", []).append(NESTING_TOOL)
+    return message
+
+def nesting_plan(logical, wanted, observed):
+    plan = nesting_invoke({"action":"plan","logical":logical,"nesting":wanted})
+    target = plan["target"]
+    if target["name"] != observed["name"] or target["created"] != str(observed["createdAt"]):
+        raise ValueError("TARGET_CHANGED")
+    return plan
+
 REGISTRY = Path("/var/lib/boxweave-default/public/targets.json")
 LAUNCHER = "/usr/local/lib/boxweave/boxweave/launcher"
 
@@ -45,14 +76,53 @@ def main():
                 return message
             print(json.dumps(message), flush=True)
         raise ValueError("UPSTREAM_MESSAGE_LIMIT")
+    def container(logical, ident):
+        internal = "boxweave-nesting-" + str(ident)
+        send({"jsonrpc":"2.0","id":internal,"method":"tools/call",
+              "params":{"name":"get_container","arguments":{"username":logical}}})
+        result = reply(internal, False)["result"]
+        if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
+        return json.loads("".join(b["text"] for b in result["content"] if b.get("type")=="text"))["container"]
     try:
         for line in sys.stdin:
             if len(line) > 65536: raise ValueError("REQUEST_LIMIT")
             request = json.loads(line)
+            if request.get("method") == "tools/list":
+                send(request)
+                message = reply(request["id"], False)
+                if not request.get("params", {}).get("cursor"): message = catalog(message)
+                print(json.dumps(message), flush=True)
+                continue
+            nesting = None
             if request.get("method") == "tools/call":
                 params = request.get("params", {}); args = params.get("arguments", {})
                 try:
-                    if params.get("name") == "create_container": explicit_keys(args)
+                    if params.get("name") == "boxweave_nesting":
+                        observed = container(args.get("logical"), request["id"])
+                        action = args.get("action")
+                        # Require current credential-authorized visibility before root helper access.
+                        if observed.get("username") != args.get("logical"): raise ValueError("TARGET_CHANGED")
+                        if action == "apply":
+                            expected = args.get("expected", {})
+                            if (not isinstance(expected, dict) or expected.get("name") != observed.get("name")
+                                    or expected.get("created") != str(observed.get("createdAt"))):
+                                raise ValueError("TARGET_CHANGED")
+                        value = nesting_invoke(args)
+                        target = value["target"]
+                        if target["name"] != observed["name"] or target["created"] != str(observed["createdAt"]):
+                            raise ValueError("TARGET_CHANGED")
+                        print(json.dumps({"jsonrpc":"2.0","id":request["id"],"result":{
+                            "content":[{"type":"text","text":json.dumps(value)}]}}), flush=True)
+                        continue
+                    if params.get("name") == "create_container":
+                        explicit_keys(args)
+                        if "enable_nesting" in args:
+                            if (any(args.get(k) for k in ("backend_id","pool","region"))
+                                    or args.get("isolation") not in (None,"","container")
+                                    or args.get("os_type") not in (None,"","ubuntu")):
+                                raise ValueError("LOCAL_UBUNTU_NESTING_ONLY")
+                            nesting = args.pop("enable_nesting")
+                            if type(nesting) is not bool: raise ValueError("NESTING_BOOLEAN_REQUIRED")
                     if params.get("name") == "connect":
                         registry = json.loads(REGISTRY.read_text())
                         internal = "boxweave-trust-" + str(request["id"])
@@ -63,12 +133,27 @@ def main():
                         if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
                         text = "".join(b["text"] for b in result["content"] if b.get("type") == "text")
                         trusted(args, registry, json.loads(text)["container"])
-                except (ValueError, KeyError, TypeError, OSError):
+                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError):
                     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
                                       "error": {"code": -32602, "message": "TRUST_OR_EXPLICIT_KEY_GATE: wait for trusted reconciliation and use the exact managed target/key"}}), flush=True)
                     continue
             send(request)
-            if "id" in request: reply(request["id"])
+            if "id" in request:
+                if nesting is None:
+                    reply(request["id"])
+                else:
+                    message = reply(request["id"], False)
+                    if "error" not in message and not message.get("result", {}).get("isError"):
+                        try:
+                            logical = args["username"]
+                            plan = nesting_plan(logical, nesting, container(logical, request["id"]))
+                            value = nesting_invoke({"action":"apply","logical":logical,"nesting":nesting,
+                                                    "expected":plan["expected"],"confirm":plan["target"]["name"]})
+                            message["result"]["content"].append({"type":"text","text":json.dumps({"boxweave_nesting":value})})
+                        except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError):
+                            message = {"jsonrpc":"2.0","id":request["id"],"error":{
+                                "code":-32603,"message":"NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE; creation must not be repeated"}}
+                    print(json.dumps(message), flush=True)
     finally:
         if process.poll() is None:
             process.terminate()

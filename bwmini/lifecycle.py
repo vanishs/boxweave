@@ -80,9 +80,13 @@ class Lifecycle:
         return {**self.config,"_scope":self.scope()}
 
     def matches_spec(self,spec):
-        return {k:v for k,v in spec.items() if k!="_network_tenant"}==self.spec()
+        return {k:v for k,v in spec.items() if k not in ("_network_tenant","_nesting")}==self.spec()
 
     def network_check(self,spec):
+        if "_nesting" in spec:
+            check=getattr(self.provider,"nesting_check",None)
+            if check is None:raise Fault("INDEPENDENT_NESTING_UNSUPPORTED",409)
+            check(spec["_nesting"])
         if "_network_tenant" in spec:
             network=vars(self).get("network")
             if network is None:raise Fault("SHARED_CREATE_UNSUPPORTED")
@@ -129,7 +133,7 @@ class Lifecycle:
             if observed["state"] != expected_state:
                 raise Fault("STALE_RESOURCE_STATE")
 
-    def plan(self, action, logical, actor="operator", network_tenant=None):
+    def plan(self, action, logical, actor="operator", network_tenant=None, nesting=None):
         self.check_name(logical)
         if action not in ("create","start","stop","delete"):
             raise Fault("ACTION_NOT_ALLOWED",400)
@@ -149,13 +153,17 @@ class Lifecycle:
             if action!="create":raise Fault("NETWORK_TENANT_CREATE_ONLY",422)
             spec["_network_tenant"]=network_tenant
             self.network_check(spec)
+        if nesting is not None:
+            if action!="create":raise Fault("NESTING_CREATE_ONLY",422)
+            spec["_nesting"]=nesting
+            self.network_check(spec)
         ident = uid()
         with self.store.db() as db:
             db.execute("INSERT INTO environment_plans VALUES(?,?,?,?,?,?,?,?,0)",
                        (ident,actor,action,logical,json.dumps(spec),json.dumps(target.data()) if target else None,state,self.clock()+300))
         return {"id":ident,"action":action,"logical":logical,"target":target.data() if target else None,
                 "expected_state":state,"resources":{k:spec[k] for k in ("cpu","memory","disk")},
-                "readiness_timeout":spec["readiness_timeout"],"network_tenant":spec.get("_network_tenant"),"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
+                "readiness_timeout":spec["readiness_timeout"],"network_tenant":spec.get("_network_tenant"),"nesting":spec.get("_nesting"),"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
 
     def confirm(self, plan, logical, actor="operator"):
         with self.store.db() as db:
@@ -279,7 +287,7 @@ class Lifecycle:
                     self.save(job,"succeeded","connection_ready","OK",target=target,result={
                         "resource_state":value["state"],"readiness":"identity_verified",
                         "identity":identity,"network_tenant":value.get("network_tenant"),"account_user":target.user,"observed_podman":value.get("podman_enabled"),
-                        "requested_podman":False,"remote_cleanup":"unverified","outcome":"observed_desired_state"})
+                        "requested_podman":False,"requested_nesting":json.loads(job["spec"]).get("_nesting"),"effective_nested_execution":"not_verified","nesting_restart_guidance":"Restart this configured box before relying on a changed nesting capability; verify child MCP execution separately." if "_nesting" in json.loads(job["spec"]) else None,"remote_cleanup":"unverified","outcome":"observed_desired_state"})
         except Fault as error:
             if error.code=="STATE_UNAVAILABLE":
                 raise

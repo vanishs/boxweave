@@ -35,3 +35,5 @@ Developer confirmation is recorded in SRC-026; all rows remain first-release obl
 ## Maintenance authority
 
 Normative outcomes remain unchanged in phase7. [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) owns implementation/test/evidence links; [MAINTENANCE](../process/MAINTENANCE.md) defines how a newly authorized outcome changes these IDs. Historical reports do not redefine acceptance.
+
+REQ-003/008/009/011/018/019 elaboration (SRC-103): independently select nesting without enabling Podman; preserve omitted legacy behavior, reject unsupported explicit selection. Inspect/plan/confirm exact owned instances with stale identity/config rejection. Installer/doctor distinguish unknown parent policy, configured value and verified execution; no silent parent escalation or restart.

@@ -47,3 +47,7 @@ Implementation scope has been selected, but runtime claims require independent c
 ## 2026-10-29 approved restoration (SRC-093)
 
 Owner approved restoring the **user-visible first-host `install.sh` and `boxweave.sh` management workflows** in independently reviewed current application code; priority is fresh Ubuntu provisioning, application update and repair, not automatic 0.5.1 data migration. The first-host path may coordinate approved Incus/Containarium prerequisites but must not silently upgrade or mutate an existing upstream, SSH/firewall, credentials, TLS, or release trust. Stage the work with verifiable preflight, explicit privilege boundary, artifact pinning and dedicated lab acceptance. The already approved Windows Codex/ZCode Native/WSL profiles remain unchanged; macOS, Cursor, Claude Code and other Agents are deferred. This scope decision is **not** implementation or deployment evidence. [Audit](../verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [host boundary](../HOST_BOOTSTRAP.md).
+
+## Independent nesting (SRC-103)
+
+Include separate nesting choice in reviewed creation and exact managed-instance inspect/plan/apply through parent BoxWeave MCP. Preserve omitted legacy behavior; explicit unsupported selection fails before dispatch. Guest installer never changes parent policy. No automatic restart or privileged-container fallback. Configuration and effective child execution remain distinct. [Decision](../design/ADR/0008-independent-nesting.md).

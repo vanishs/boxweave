@@ -38,3 +38,7 @@ Baseline checked 2026-10-29, read-only via GitHub refs/tree and selected source:
 ## Decisions already obtained
 
 Owner confirms: restore **integrated fresh Ubuntu installation/update/repair** and a useful `boxweave.sh` CLI, keep the four-profile Windows scope, do **not** auto-migrate 0.5.1 data, no automatic Provider upgrade. Version line begins `0.10.0`; small commits to `main` explicitly authorized. Each feature and its tests belong to a separate source commit. Unsupported/untested behavior remains in [verification queue](REMEDIATION_TEST_QUEUE.md).
+
+## Nesting knowledge (SRC-103)
+
+Read-only origin/archive/0.5.1 patch maps EnableNesting to EnablePodman. Retain prerequisite knowledge, reject coupling for new explicit selections.0.16.0 uses independently implemented capability and parent handoff, never applies old Provider patches. [Evidence](NESTING_VERIFICATION.md).

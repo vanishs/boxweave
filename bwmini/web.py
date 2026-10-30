@@ -173,9 +173,9 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
     @app.post("/api/environment-plans")
     def environment_plan():
         raw=request.get_json(silent=True)
-        keys=["action","logical"]+(["network_tenant"] if isinstance(raw,dict) and "network_tenant" in raw else [])
+        keys=["action","logical"]+[k for k in ("network_tenant","nesting") if isinstance(raw,dict) and k in raw]
         d=body(keys)
-        return jsonify(service.lifecycle.plan(d["action"],d["logical"],network_tenant=d.get("network_tenant"))),201
+        return jsonify(service.lifecycle.plan(d["action"],d["logical"],network_tenant=d.get("network_tenant"),nesting=d.get("nesting"))),201
     @app.post("/api/environment-plans/<pid>/confirm")
     def environment_confirm(pid):
         d=body(["confirm","logical"])

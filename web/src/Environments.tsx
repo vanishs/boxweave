@@ -1,13 +1,14 @@
 import React,{useEffect,useState} from 'react';
 type Api=(path:string,method?:string,data?:unknown)=>Promise<any>;
 type Settings={enabled:boolean,shared_network_tenants?:string[],allowed_names?:string[],resources?:Record<string,string>,readiness_timeout?:number,environments:{logical:string,target:unknown,deleted:boolean}[]};
-type Plan={network_tenant?:string|null,id:string,action:string,logical:string,target:unknown,resources:unknown,scope:unknown,expected_state:string|null,readiness_timeout:number};
+type Plan={nesting?:boolean|null,network_tenant?:string|null,id:string,action:string,logical:string,target:unknown,resources:unknown,scope:unknown,expected_state:string|null,readiness_timeout:number};
 type Receipt={id:string,action:string,logical:string,state:string,phase:string,code:string|null,deadline:number,acknowledged:boolean,evidence:string,target:unknown,result:unknown};
 export function Environments({api}:{api:Api}){
   const [settings,setSettings]=useState<Settings|null>(null),[logical,setLogical]=useState('');
   const [plan,setPlan]=useState<Plan|null>(null),[confirmation,setConfirmation]=useState('');
   const [receipt,setReceipt]=useState<Receipt|null>(null),[history,setHistory]=useState<Receipt[]>([]);
   const [networkTenant,setNetworkTenant]=useState('');
+  const [nesting,setNesting]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   async function refresh(){
     const s=await api('environments');setSettings(s);
@@ -31,14 +32,17 @@ export function Environments({api}:{api:Api}){
         {settings.allowed_names?.map(n=><option key={n} value={n}>{n}</option>)}
       </select></label>
       {!!settings.shared_network_tenants?.length&&<label>New environment network Tenant<select aria-label="New environment network Tenant" value={networkTenant} onChange={e=>{setNetworkTenant(e.target.value);setPlan(null);}}><option value="">Default personal isolation</option>{settings.shared_network_tenants.map(t=><option key={t}>{t}</option>)}</select><small>Only new creation changes membership. Capability and Guard are checked at preview and dispatch.</small></label>}
+      <label>Allow containers inside the new box<select aria-label="New box nesting" value={nesting} onChange={e=>{setNesting(e.target.value);setPlan(null);setConfirmation('');}}>
+        <option value="">Provider default</option><option value="true">Enabled — for a BoxWeave server</option><option value="false">Disabled</option>
+      </select><small>Independent of Podman. Preview checks Provider support. A changed setting may require restarting this box before child execution works; no automatic restart.</small></label>
       <p>New environment profile: {JSON.stringify(settings.resources)}. Readiness budget: {settings.readiness_timeout}s.</p>
       <div className="graph-toolbar">{['create','start','stop','delete'].map(action=><button key={action} disabled={busy||!logical} onClick={()=>void run(async()=>{
-        setPlan(await api('environment-plans','POST',{action,logical,...(action==='create'&&networkTenant?{network_tenant:networkTenant}:{})}));setConfirmation('');
+        setPlan(await api('environment-plans','POST',{action,logical,...(action==='create'&&networkTenant?{network_tenant:networkTenant}:{}),...(action==='create'&&nesting!==''?{nesting:nesting==='true'}:{})}));setConfirmation('');
       })}>Preview {action}</button>)}</div>
       <p>Stop, start and delete require an identity recorded from a successful app-managed creation. Delete requires the target to be stopped. No force fallback.</p>
       {plan&&<div className="review">
         <h3>Review {plan.action}: {plan.logical}</h3>
-        <pre>{JSON.stringify({scope:plan.scope,network_tenant:plan.network_tenant,target:plan.target,resources:plan.resources,expected_state:plan.expected_state},null,2)}</pre>
+        <pre>{JSON.stringify({scope:plan.scope,nesting:plan.nesting,network_tenant:plan.network_tenant,target:plan.target,resources:plan.resources,expected_state:plan.expected_state},null,2)}</pre>
         <label>Type the exact environment name<input value={confirmation} onChange={e=>setConfirmation(e.target.value)}/></label>
         <button disabled={busy||confirmation!==plan.logical} onClick={()=>void run(async()=>{
           setReceipt(await api('environment-plans/'+plan.id+'/confirm','POST',{confirm:true,logical:confirmation}));setPlan(null);setConfirmation('');

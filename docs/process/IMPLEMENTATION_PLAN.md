@@ -140,3 +140,7 @@ Complete in the tested maintenance scope, SRC-089..091. Consolidate current auth
 ## Current owner-confirmed completion slice (SRC-097/099)
 
 TASK-015: dedicated application user/bus, independent scoped launcher and token refresh now have actual isolated app install/repair evidence; published release and integrated empty-host Provider/SSH/reboot acceptance remain open. TASK-016: installed CLI and exact local Incus/authenticated MCP/error/repair scenarios passed within the selected read-only scope. TASK-017: browser CI/candidate packaging and the corrected README narrative rule are implemented; new GitHub pipeline execution awaits source publication. [Evidence](../verification/MAIN_014_REVIEW.md).
+
+## TASK-017 — Independent nesting (SRC-103)
+
+REQ-003/008/009/011/018/019 -> ADR-008 -> nesting.py/mcp_gate.py/lifecycle/Provider/Web/install/doctor -> test_nesting.py and [verification](../verification/NESTING_VERIFICATION.md). Dependencies: reviewed streamed root boundary, authenticated MCP. Privileged live acceptance remains separate from CI; preserve failed instances.

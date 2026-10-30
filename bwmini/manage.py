@@ -88,6 +88,9 @@ def main(argv=None):
     i = bs.add_parser("inspect")
     i.add_argument("name")
     i.add_argument("--project", default="default")
+    n = bs.add_parser("diagnose")
+    n.add_argument("name")
+    n.add_argument("--project", default="default")
     sub.add_parser("client", help="Print selected client setup boundary")
     args = parser.parse_args(argv)
     exit_code = 0
@@ -100,6 +103,12 @@ def main(argv=None):
     elif args.action == "box":
         try:
             outcome, exit_code = inspect_box(args.name, args.project)
+            if args.box_action == "diagnose" and exit_code == 0:
+                from .nesting import diagnostic
+                log = command(["incus","--force-local","--project",args.project,"info",args.name,"--show-log"], timeout=15)
+                outcome["nesting_diagnostic"] = diagnostic(log.get("text","")) if log["state"]=="ok" else {
+                    "state":"unavailable","cause":"not_identified"}
+
         except ValueError:
             outcome, exit_code = {"state": "error", "reason": "invalid_exact_target"}, 2
     elif args.action == "client":
@@ -114,6 +123,8 @@ def main(argv=None):
                 "incus_cli": component("incus", ["--version"]),
                 "containarium_cli": component("containarium", ["version"]),
                 "effective_confinement": "not_verified"}
+            from .nesting import environment
+            outcome["host_observations"]["nesting"] = environment()
         exit_code = 0 if outcome.get("state") == "ready" else 1 if outcome.get("state") == "failed" else 2
     print(json.dumps(outcome, sort_keys=True))
     return exit_code

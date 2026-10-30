@@ -75,3 +75,7 @@ The app credential and API stay local. A dedicated app account may receive expli
 The root trust timer reads public host keys through the exact local default Incus project and publishes an atomic observed target registry. The MCP relay requires explicit valid creation keys and checks each connect target's current name/creation time/IP/username against that fresh trusted registry. Unknown/stale/reused targets are rejected until reconciliation; no host-key checking is disabled or replaced with accept-new. Existing SSH daemon configuration and host identity remain unchanged.
 
 The initial local Web administrator is generated inside the non-root app process and its password is stored in a private app-owned file. Do not include that file in reports or packages. Code handling credentials during ordinary installation is distinct from an Agent reading/exporting their contents. Actual acceptance belongs to [the streamed test](verification/STREAMED_INSTALL_TEST.md).
+
+## Running inside LXC
+
+Parent must allow nesting. Inspect the exact outer instance from its parent management connection; never infer its name from guest hostname. Tested mount-capability transitions required outer restart. Installer reports parent policy unverified and never changes it. [Operator guide](NESTING.md).
