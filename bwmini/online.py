@@ -24,21 +24,28 @@ UNIT_DIR = Path("/etc/systemd/system")
 class Failure(Exception): pass
 
 
-def supported_ubuntu(version):
-    """Accept Ubuntu 24.04 and newer; do not parse release numbers as floats."""
-    return isinstance(version, str) and re.fullmatch(r"[0-9]{2,}\.[0-9]{2}", version) is not None and tuple(map(int, version.split("."))) >= (24, 4)
-
-
 def supported_python(version):
     return tuple(version[:2]) >= (3, 12)
 
-def host_can_use_provider(system, existing_provider):
-    """Linux application mode is distro-neutral; APT provisioning is not."""
-    return bool(existing_provider) or (
-        system.get("ID") == "ubuntu" and supported_ubuntu(system.get("VERSION_ID"))
-    )
 
+def host_package_preflight(external, system):
+    """Check missing host capabilities rather than a Linux distro name.
 
+    Fail before writing managed state if APT is needed but unavailable.
+    A separately prepared Provider does not need the host package manager.
+    """
+    missing_venv = importlib.util.find_spec("ensurepip") is None
+    missing_incus = not external and not shutil.which("incus")
+    missing_postgres = not external and not any(PG_BINARY_ROOT.glob("*/bin/postgres"))
+    if missing_venv or missing_incus or missing_postgres:
+        require(bool(shutil.which("apt-get")), "APT_GET_REQUIRED_FOR_MISSING_HOST_DEPENDENCIES")
+    if missing_incus:
+        codename = system.get("VERSION_CODENAME", "")
+        require(isinstance(codename, str) and re.fullmatch(r"[a-z]{4,32}", codename),
+                "APT_REPOSITORY_SUITE_REQUIRED_FOR_INCUS")
+    return {"apt_needed": bool(missing_venv or missing_incus or missing_postgres),
+            "missing_venv": missing_venv, "missing_incus": bool(missing_incus),
+            "missing_postgres": bool(missing_postgres)}
 
 
 def require(value, code):
@@ -141,9 +148,11 @@ def prepare_postgres(old, deadline):
                        if p.parent.parent.name.isdigit()), reverse=True)
     majors = installed_majors()
     if not majors:
+        require(bool(shutil.which("apt-get")), "APT_GET_REQUIRED_FOR_POSTGRES")
         env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+        os_release = platform.freedesktop_os_release()
         packages = (["postgresql-16", "postgresql-contrib"] if
-                    platform.freedesktop_os_release()["VERSION_ID"] == "24.04"
+                    os_release.get("ID") == "ubuntu" and os_release.get("VERSION_ID") == "24.04"
                     else ["postgresql", "postgresql-contrib"])
         with (STATE / "postgres-apt.log").open("ab") as log:
             run(["apt-get", "update", "-qq"], deadline, log, env)
@@ -243,9 +252,8 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
             "LINUX_X86_64_CPYTHON_MIN312_REQUIRED")
     system = platform.freedesktop_os_release()
-    # Application-only installs may run on another suitable Linux distribution
-    # with a preinstalled, reviewed Provider. Host package provisioning below
-    # is deliberately Ubuntu-specific (APT/Zabbly/PostgreSQL packages).
+    # Linux runtime, systemd and actual package/tool availability are checked
+    # independently. Distribution identity is not an installation gate.
     require(Path("/run/systemd/system").is_dir(), "SYSTEMD_REQUIRED")
     detected = subprocess.run(["systemd-detect-virt","--container"], capture_output=True, text=True, timeout=5)
     print(json.dumps({"nesting_preflight":{"environment":detected.stdout.strip() or "unknown",
@@ -256,9 +264,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     marker = STATE / "state.json"
     if not marker.exists():
         provider = existing_provider_options(provider_url, provider_secret_file, provider_cli)
-        if provider is None:
-            require(host_can_use_provider(system, False),
-                    "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
+        host_package_preflight(provider is not None, system)
         if provider is not None:
             verify_existing_provider(provider)
         else:
@@ -289,9 +295,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         except BlockingIOError: raise Failure("INSTALL_ALREADY_RUNNING") from None
         old = current_state(); check_managed(old)
         external = old.get("provider_mode") == "external"
-        if not external:
-            require(host_can_use_provider(system, False),
-                    "AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU_2404")
+        host_package_preflight(external, system)
         require(old.get("provider_mode", "standalone") in ("external", "standalone"),
                 "UNKNOWN_PROVIDER_MODE")
         if external:
@@ -315,8 +319,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
             return time.monotonic()+600
         if importlib.util.find_spec("ensurepip") is None:
-            require(host_can_use_provider(system, False),
-                    "PYTHON_VENV_PREREQUISITE_INSTALL_MANUALLY")
+            require(bool(shutil.which("apt-get")), "APT_GET_REQUIRED_FOR_PYTHON_VENV")
             deadline = phase("python_venv_prerequisite")
             env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
             with (STATE / "python-venv-apt.log").open("ab") as log:
@@ -343,7 +346,8 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             verify_existing_provider(old["external_provider"])
         else:
             if not shutil.which("incus"):
-                deadline = phase("signed_ubuntu_prerequisites")
+                require(bool(shutil.which("apt-get")), "APT_GET_REQUIRED_FOR_INCUS")
+                deadline = phase("signed_apt_prerequisites")
                 env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
                 with (STATE / "apt.log").open("ab") as log:
                     run(["apt-get", "update", "-qq"], deadline, log, env)
@@ -356,7 +360,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                     require(all(not p.exists() or str(p) in old["managed_files"] for p in (keyring,source)), "FOREIGN_APT_CONFIGURATION")
                     atomic(keyring, (release/"zabbly.asc").read_bytes(), 0o644)
                     codename = system.get("VERSION_CODENAME", "")
-                    require(re.fullmatch(r"[a-z]{4,32}", codename), "UBUNTU_CODENAME_INVALID")
+                    require(re.fullmatch(r"[a-z]{4,32}", codename), "APT_REPOSITORY_SUITE_REQUIRED_FOR_INCUS")
                     source_text = ("Types: deb\nURIs: https://pkgs.zabbly.com/incus/stable\nSuites: " + codename +
                                    "\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/boxweave-zabbly.asc\n")
                     atomic(source, source_text.encode(), 0o644)
@@ -365,7 +369,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                     atomic(marker, json.dumps(old, sort_keys=True).encode())
                     run(["apt-get", "update", "-qq"], deadline, log, env)
                     packages = (["incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
-                                 "incus-extra="+INCUS_PACKAGE] if system["VERSION_ID"] == "24.04"
+                                 "incus-extra="+INCUS_PACKAGE] if (system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04")
                                 else ["incus", "incus-client", "incus-extra"])
                     run(["apt-get", "install", "-y", "-qq", *packages], deadline, log, env)
             deadline = phase("local_provider")
@@ -374,7 +378,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                     "INCUS_VERSION_UNKNOWN")
             incus_version = tuple(int(n) for n in observed.stdout.strip().split("."))
             require(incus_version >= (7, 5, 1), "INCUS_MIN_VERSION_REQUIRED")
-            if not old.get("preexisting_incus") and system["VERSION_ID"] == "24.04":
+            if not old.get("preexisting_incus") and system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04":
                 require(observed.stdout.strip() == "7.5.1", "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
             # Initialize only an inspected empty local daemon; never replace an existing pool/profile.
             pools=subprocess.run(["incus","--force-local","storage","list","--format","json"],capture_output=True,text=True,timeout=20)

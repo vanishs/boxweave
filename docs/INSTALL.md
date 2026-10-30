@@ -1,6 +1,6 @@
 # Application installation, update and repair
 
-This operator guide covers verified application packages on a **prepared Ubuntu >= 24.04 x86_64 host with CPython >= 3.12**. It does not promise a working one-command installation from a blank server, nor install/upgrade upstream infrastructure, repair SSH/firewall, or configure public TLS. For the current host entry and exact prerequisites, read [host installation](HOST_BOOTSTRAP.md).
+This operator guide covers verified application packages on a **prepared Linux x86_64 host with CPython >= 3.12 and systemd**. It does not promise a working one-command installation from a blank server, nor install/upgrade upstream infrastructure, repair SSH/firewall, or configure public TLS. For the current host entry and exact prerequisites, read [host installation](HOST_BOOTSTRAP.md).
 
 Choose and retain an explicit private installation location, for example `APP_PREFIX="$HOME/boxweave"`; use this exact value consistently with all installation, administrator and health commands. Existing installations may use older managed directories and service identifiers; **do not rename or move them without a reviewed migration and consistent database backup**. Prior checkpoints are in [installation history](INSTALL_HISTORY.md).
 
@@ -92,7 +92,7 @@ The ordinary zero-argument streamed command uses Provider URL `http://127.0.0.1:
 
 The installer saves the chosen ownership mode on first installation. Repeating the command updates or repairs only BoxWeave-owned artifacts and verifies the same external Provider identity. Changes to the external Provider binary/secret require a separate operator-reviewed adoption process, not an implicit upgrade. Partial existing Provider installations, foreign BoxWeave accounts/state, and empty Incus pools are refused safely. This does not import historical 0.5.1 data.
 
-**Minimum application runtime: Linux x86_64 and CPython >= 3.12, with systemd and reviewed Provider prerequisites. Ubuntu >= 24.04 remains the required host for automatic APT-based provisioning.** The release contains hash-checked offline wheels for CPython 3.12, 3.13, 3.14 and 3.15. A later Python may pass the version gate but lack a compatible bundled wheel: it must fail safely rather than download an unreviewed dependency. Ubuntu 26.04 is accepted by source checks but still needs live host and reboot acceptance. See [implementation and test queue](verification/EXISTING_PROVIDER_INSTALL.md).
+**Minimum application runtime: Linux x86_64 and CPython >= 3.12, with systemd and reviewed Provider prerequisites. No Ubuntu-version or distribution-name gate remains.** If packages are missing, APT is used only when apt-get and a compatible suite are available; otherwise prepare reviewed dependencies/Provider first. Ubuntu 24.04+ is recommended, not required. The release contains hash-checked offline wheels for CPython 3.12, 3.13, 3.14 and 3.15. A later Python may pass the version gate but lack a compatible bundled wheel: it must fail safely rather than download an unreviewed dependency. Ubuntu 26.04 is accepted by source checks but still needs live host and reboot acceptance. See [implementation and test queue](verification/EXISTING_PROVIDER_INSTALL.md).
 
 
 ## Cross-version release wheel verification (0.17.2)

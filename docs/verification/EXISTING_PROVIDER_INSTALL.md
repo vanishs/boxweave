@@ -31,7 +31,7 @@ installer.
 
 ## Present limitations
 
-- The **minimum** version gate is Ubuntu 24.04 / CPython 3.12, x86_64.
+- The **minimum** platform gate is Linux / CPython 3.12, x86_64; Ubuntu 24.04+ is recommended.
   The immutable release bundles SHA256-locked CPython 3.12–3.15 Linux x86_64
   wheels. Future Python versions are not guaranteed a compatible wheel until
   the distribution is rebuilt and verified. Ubuntu 26.04 real-host testing
@@ -79,6 +79,6 @@ systemd action was executed from this repository-edit session.
 
 ## 0.17.2 platform floor verification
 
-**S**: all three host checks (`online.py`, `bootstrap.py`, `install.sh`) now use numeric Ubuntu >= 24.04 and CPython >= 3.12; the app ZIP targets CPython >= 3.12. Fresh-host Incus provisioning uses the actual Ubuntu codename and preserves the 24.04 package pin, while other accepted releases use the signed distribution-specific stable repository. The managed-provider-only local PostgreSQL install selects the distribution's default PostgreSQL package on newer Ubuntu versions; external Containarium retains its own PostgreSQL, unchanged.
+**S (historical 0.17.2)**: the host checks then required numeric Ubuntu >= 24.04 and CPython >= 3.12. From 0.17.11, distribution-name gates are removed, while missing-package installation remains APT-dependent; the app ZIP targets CPython >= 3.12. Fresh-host Incus provisioning uses the actual Ubuntu codename and preserves the 24.04 package pin, while other accepted releases use the signed distribution-specific stable repository. The managed-provider-only local PostgreSQL install selects the distribution's default PostgreSQL package on newer Ubuntu versions; external Containarium retains its own PostgreSQL, unchanged.
 
 **T**: CI is required to prove version-floor unit checks, shell syntax, package candidate, and actual Python 3.14 offline wheel installation after release publication. **U**: Ubuntu 26.04 standalone install, existing Provider reuse, real Web/MCP create and restart recovery; execute with before/after Incus pool, mounted bcachefs and Provider checks before claiming success.
