@@ -234,7 +234,7 @@ def verify_existing_provider(provider):
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
-            "UBUNTU_MIN_2404_X86_64_PYTHON_MIN312_REQUIRED")
+            "LINUX_X86_64_CPYTHON_MIN312_REQUIRED")
     system = platform.freedesktop_os_release()
     # Application-only installs may run on another suitable Linux distribution
     # with a preinstalled, reviewed Provider. Host package provisioning below
