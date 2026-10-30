@@ -21,6 +21,18 @@ class MinimumVersionTests(unittest.TestCase):
             with self.subTest(version=rejected):
                 self.assertFalse(online.supported_ubuntu(rejected))
 
+    def test_preinstalled_provider_does_not_require_ubuntu_label(self):
+        # Host compatibility is still subject to Linux/systemd/Incus/venv
+        # checks. This only checks that the OS name is not a blanket rejection.
+        for distro in ({"ID": "fedora", "VERSION_ID": "42"},
+                       {"ID": "debian", "VERSION_ID": "13"},
+                       {"ID": "ubuntu", "VERSION_ID": "22.04"}):
+            with self.subTest(distro=distro):
+                self.assertTrue(online.host_can_use_provider(distro, True))
+                self.assertFalse(online.host_can_use_provider(distro, False))
+        self.assertTrue(online.host_can_use_provider(
+            {"ID": "ubuntu", "VERSION_ID": "26.04"}, False))
+
     def test_python_minimum_includes_new_minor_versions(self):
         for version in ((3, 12), (3, 13), (3, 14), (3, 15), (4, 0)):
             with self.subTest(version=version):
