@@ -558,7 +558,7 @@ store.admin(generate_password_hash(password))
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
         # Human-facing last screen; the JSON above remains machine-readable.
         print("\n[boxweave] Installation complete — next steps", flush=True)
-        print("  1. Run as your normal Ubuntu login: boxweave", flush=True)
+        print("  1. Run as your normal Linux login: boxweave", flush=True)
         print("  2. CLI help and diagnostics: boxweave --help | boxweave status | boxweave doctor", flush=True)
         print("  3. Web (on this Linux host): http://127.0.0.1:" + str(web_port), flush=True)
         print("     From your own computer: ssh -N -L " + str(web_port) + ":127.0.0.1:" +
