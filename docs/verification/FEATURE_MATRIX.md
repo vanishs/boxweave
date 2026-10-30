@@ -1,4 +1,4 @@
-# Feature/evidence matrix — phase6 reviewed scope0.9.1
+# Feature/evidence matrix — historical phase6 scope plus 0.13.0 remediation obligations
 
 Current authority SRC-084..088: [comparison and run inventory](COMPARISON_REPORT.md), [risk dispositions](OPEN_RISKS.md), [fresh phase6 evidence](phase6-runtime-evidence.json), [actual generated Windows enrollment](phase6-windows-web-profiles.json). Three missing/false-positive paths in0.9.0 are now fixed; earlier completion prose does not override these findings. The following REQ→AC→TASK/implementation→normal/error/authority/boundary/state matrix is authoritative. Fixture, current live, previous live, human and static evidence stay distinct.
 
@@ -23,7 +23,14 @@ Current authority SRC-084..088: [comparison and run inventory](COMPARISON_REPORT
 | REQ-017 / AC-017 |007/013/014; evidence/matrix | Actual Agent/runtime/protocol/source revisions, declared unsupported states, separate old/new static/fixture/live and human evidence | Current generated4-profile registration, previous actual hello/human UI, fresh suite/install/comparison. No fabricated performance/coverage percentages |
 | REQ-018 / AC-018 |003/006/009/010/014; allowlists/pinned targets | Wrong owner/backend/host mutation fields denied; exact destructive/public scope; unbind is local and generator never contacts Provider | All denial/actor/scope tests, actual original state preserved and private test services cleaned up. Broad upstream authority remains single-operator trust boundary |
 
-No reviewed selected P0/P1 remains open. Source-level phase7 entry is eligible; phase7 maintenance is recorded separately; production deployment is not implied. See OPEN_RISKS for explicit operational/unverifiable bounds.
+The historical selected phase6 P0/P1 comparison was closed within its reported scope. **New REQ-019/020 are open, not accepted**; the owner-approved integrated first-host experience remains incomplete. Source-level phase7 entry is eligible; phase7 maintenance is recorded separately; production deployment is not implied. See OPEN_RISKS for explicit operational/unverifiable bounds.
 
 
 Historical matrices: [preserved snapshot](FEATURE_MATRIX_HISTORY.md).
+
+## New 0.10+ requirements — separate from historical phase6 acceptance
+
+| REQ / AC | TASK and implementation | Executed normal / abnormal / authority / boundary / state checks | Evidence and remaining boundary |
+| --- | --- | --- | --- |
+| REQ-019 / AC-019 | TASK-015; `install.sh`, `distribution.py`, ADR-007 | Shell syntax/help/wrong digest only in isolated copy. No clean-host/user-bus/MCP/update/repair/boot acceptance | **Open**: host bootstrap incomplete. [queue](REMEDIATION_TEST_QUEUE.md), RISK-610 |
+| REQ-020 / AC-020 | TASK-016; `boxweave.sh`, `manage.py`, `deploy_check.py` | Five isolated tests plus source structural review; no real Incus/app/service/MCP full integration | **Open**: runtime tests outstanding. [queue](REMEDIATION_TEST_QUEUE.md), RISK-611 |

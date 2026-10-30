@@ -27,6 +27,9 @@ Evidence classes: constraint = current authorized governance; legacy-derived = i
 | REQ-017 | Support/release claims name tested client/server/provider versions and evidence level; selected profiles need real end-to-end and failure-path evidence, and untested platforms/capabilities remain unverified | P0 / constraint + legacy-derived | SRC-011/014/015/023; honest coverage | All selected requirements; DEC-002 | AC-017 |
 | REQ-018 | Enforce authorized operation/target boundaries; reject untrusted host/project/owner overrides, require explicit destructive/exposure scope, and never broaden provider privileges or change host security as silent repair | P0 / constraint + legacy-derived | SRC-008/010/016/023; prevent authority confusion | REQ-004; DEC-005 | AC-018 |
 
+| REQ-019 | Operator can perform safe, reviewed fresh Ubuntu host bootstrap plus independent v2 app install/update/repair, with exact trust/privilege boundaries, existing upstream preservation, failure recovery and no automatic 0.5.1 migration | P1 / newly approved | SRC-093; old F-001 delivery difference | REQ-008/016/018, ADR-007 | AC-019 |
+| REQ-020 | A read-only management entry reports product version, selected host/app readiness, diagnosed MCP status and exact Incus inspection without leaking credentials or silently repairing upstream | P1 / newly approved | SRC-093; old F-005/F-006 | REQ-003/009/018, ADR-007 | AC-020 |
+
 Developer confirmation is recorded in SRC-026; all rows remain first-release obligations. Phase 4 implementation was authorized by SRC-030, with partial evidence in FEATURE_MATRIX; phase 5 remains gated. Historical implementation choices such as a mandatory Web install, a specific Python/React/Caddy stack, fixed resource sizes, old MCP version or CLI exit codes are not automatically requirements.
 
 ## Maintenance authority

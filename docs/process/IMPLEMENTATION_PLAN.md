@@ -130,3 +130,9 @@ Split TASK-002's remaining scope: TASK-002a receipt discovery (complete0.2.3, RE
 ## TASK-015 — Phase7 maintenance
 
 Complete in the tested maintenance scope, SRC-089..091. Consolidate current authority, retain history, remove ignored-state dependency from fixture browser regression, provide bounded routine validation and cold-start handoff. No product runtime change. Completion evidence: [phase7 review](../verification/PHASE_07_REVIEW.md); current state: [PHASE_STATUS](PHASE_STATUS.md).
+
+## 2026-10-29 approved remediation tasks (SRC-093)
+
+- **TASK-015 / R-02**: implement reviewed integrated first-host Incus/Provider prerequisite handling, app-user MCP launcher setup, independent root/user boundary, safe update/repair; currently only digest-gated `install.sh` coordinator. Requires AC-019 clean-host, failed-install and repair evidence. RISK-610 open.
+- **TASK-016 / R-05**: restore honest read-only `boxweave.sh` version/status/doctor/exact inspect and selected profile guidance. Source and isolated tests exist; real approved host/Provider read evidence needed before AC-020. RISK-611 open.
+- **TASK-017 / R-07/08/09**: CI/doc version checks; migration and upstream runbooks, semantic parity and Web/clients verification queue. CI success and deployment acceptance are independent.

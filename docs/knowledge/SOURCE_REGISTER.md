@@ -170,3 +170,10 @@ SRC-091 — Phase7 actual non-root assigned-LXC validation exit0:168 tests64.600
 SRC-092 — User explicitly accepts retiring old main URLs and authorizes the proposed branch promotion: preserve old implementation/history as legacy/pre-v2, make v2 main, prepare license/current documentation/publication review and verify remote/local/default tracking. No application deployment or private runtime export. Results are recorded in docs/process/BRANCH_PROMOTION.md.
 
 SRC-093 — Actual authorized branch promotion: user renamed remote old main to legacy/pre-v2 atd8a09dd; normal push created v2 main, repository default changed to main using existing nonlogged Git authentication, local branches/upstreams and origin/HEAD verified. MIT retained, current docs updated, bounded21-commit publication scan reviewed two synthetic test headers only. Knowledge/links and whitespace checks passed; old files/archive unchanged, no force push/deployment/release. See BRANCH_PROMOTION.
+
+## 2026-10-29 remediation decisions and static evidence
+
+| ID | Evidence paths/version | Kind/confidence and scope |
+| --- | --- | --- |
+| SRC-093 | Owner request in this chat; archive/0.5.1@d8a09dd180139159e035963502e7793a37e92bae, main@19b3b61c75c85754d6b53699f5bfcdb4e0791b04 | Explicit authorization for integrated fresh-host installer/CLI, version0.10.0+, Windows-only current matrix, no automatic old DB migration, independent small main commits. Read-only API baseline, no host test |
+| SRC-094 | main commits c61be3f, 4f05ead, c346934; `install.sh`, `boxweave.sh`, `bwmini/manage.py`, `docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md` | S: GitHub source changes; analog isolated parser/unit checks reported; U: submitted revision full regression, host deployment/Provider, fresh Ubuntu, boot |

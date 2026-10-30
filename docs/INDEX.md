@@ -29,3 +29,5 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [Host bootstrap and upstream ownership](HOST_BOOTSTRAP.md)
 - [0.5.1 source parity audit](verification/ARCHIVE_051_TO_MAIN_AUDIT.md)
 - [New change validation queue](verification/REMEDIATION_TEST_QUEUE.md)
+
+- [New host/CLI architecture decision](design/ADR/0007-host-install-boundary.md)

@@ -1,4 +1,4 @@
-# Current risk register — 0.9.1
+# Current risk register — 0.13.0 remediation (historical 0.9.1 evidence preserved)
 
 Owner is the project maintainer/operator unless specified. P0/P1 = blocks the selected claim until resolved or explicitly cannot accept; P2 = bounded operational/coverage limitation. Source: [comparison](COMPARISON_REPORT.md), SRC-084..088. No reviewed P0/P1 item remains open. Residual P2 entries do not silently certify the unverified property.
 
@@ -15,3 +15,11 @@ Owner is the project maintainer/operator unless specified. P0/P1 = blocks the se
 | RISK-609 | P2 accepted recovery/convergence boundary | Unknown commands cannot be replayed/adopted; dispatched work cannot be cancelled by unbinding; route acknowledgment is not instant packet convergence | UI warning and retained receipts/revision gates; previous real TCP/UDP delay evidence. Reconcile original identities and inspect saved outcomes before a fresh explicit action; no whole-host rollback promise |
 
 Phase7 maintenance is authorized by SRC-089; its completion evidence belongs in [PHASE_07_REVIEW](PHASE_07_REVIEW.md). It does not resolve these operational bounds or authorize publication/deployment. No pending product decision remains after SRC-086. A future required claim becoming unsupported must be reopened as cannot accept, not hidden under a P2 label.
+
+## New 0.10+ remediation risks (current; not closed by the old phase6 report)
+
+| ID | Priority / status | Impact / scope | Evidence and action / owner |
+| --- | --- | --- | --- |
+| RISK-610 | P1 open / blocks AC-019 | `install.sh` is an offline, gated coordinator, **not** complete host bootstrap. It cannot create a secure independent app MCP launcher, credentials, user bus, trusted SSH/TLS/hostkey/token lifecycle, or prove clean-host install | ADR-007; maintainer must design and test separate upstream + app end-to-end in authorized clean Ubuntu; existing upstream preserved |
+| RISK-611 | P1 open / blocks AC-020 | New management CLI and packaging not exercised on the submitted GitHub source in a prepared environment; missing/foreign services, exact Incus reads and authenticated MCP remain untested | [test queue](REMEDIATION_TEST_QUEUE.md). Owner: run full source CI and approved live read |
+| RISK-612 | P1 open / CI pending | First new CI has no known fresh successful GitHub runner status at source submission; dependency lock/platform and frontend build require actual execution | Check Actions run SHA, errors and exit; green CI cannot certify host/Provider/network |

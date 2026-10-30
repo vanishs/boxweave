@@ -84,3 +84,11 @@ AC-001, AC-003 and AC-017 must cover Windows-hosted Codex/native SSH, Codex/WSL 
 ## Maintenance authority
 
 Normative outcomes remain unchanged in phase7. [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) owns implementation/test/evidence links; [MAINTENANCE](../process/MAINTENANCE.md) defines how a newly authorized outcome changes these IDs. Historical reports do not redefine acceptance.
+
+## AC-019 — Verified first-host and update/repair (REQ-019)
+
+On an approved clean Ubuntu 24.04 x86_64 host, inspect source artifact provenance and preconditions, obtain explicit authority for any privileged Incus/Provider work, then install an independently trusted app archive with non-root services, a reviewed MCP launcher and private configuration. Verify first admin init, real authenticated MCP discovery/read, restart/boot prerequisites, data/service preservation on reinstall, broken package refusal, marker and consistent backup recovery. Existing upstream instances, tokens, timers, SSH trust, firewall and TLS must remain unchanged without their own exact approval. On an empty-host failure, no implicit destructive cleanup or claim of whole-host rollback. **Current source does not yet meet this AC end-to-end.** Never auto-convert 0.5.1 data.
+
+## AC-020 — Non-destructive management and diagnostics (REQ-020)
+
+Verify local version/provenance, optional CLI versions, app status with missing/foreign user service, and exact Incus read-only inspection under invalid/ambiguous names, inaccessible socket, timed-out subprocess and filtered secret metadata. Real MCP diagnosis is an independent opt-in authorized read; HTTP alone must not imply authentication. Exit 0 only for a completed observation in that command's limited scope, 1 for confirmed failure and 2 for invalid/incomplete. No host key/credential read or repair. **Current implementation has only isolated unit tests, not full real-host acceptance.**

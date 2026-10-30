@@ -3,8 +3,31 @@ import argparse,collections,json,re,sys,urllib.parse
 from pathlib import Path
 QUESTIONS=('goals','boundaries','run','design','tests','risks','legacy','state')
 REQUIRED_ROLES={'product','requirements','acceptance','scope','architecture','decisions','tasks','traceability','sources','legacy','risks','status','handoff','maintenance','install','tests'}
+def release_errors(root):
+ """Check public release metadata when this is a real repository checkout."""
+ import tomllib
+ root=Path(root)
+ if not (root/'VERSION').exists():return []
+ errors=[]
+ try:
+  version=(root/'VERSION').read_text(encoding='utf-8').strip()
+  project=tomllib.loads((root/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+  web=json.loads((root/'web/package.json').read_text(encoding='utf-8'))['version']
+  lock=json.loads((root/'web/package-lock.json').read_text(encoding='utf-8'))
+  if not re.fullmatch(r'0\.[0-9]+\.[0-9]+',version) or any(v!=version for v in (project,web,lock['version'],lock['packages']['']['version'])):
+   errors.append('Release version mismatch across VERSION, Python project, Web package and lock root')
+  readme=(root/'README.md').read_text(encoding='utf-8')
+  if version not in readme[:2000]:errors.append('README does not declare the current release version')
+  if re.search(r'Phase\s*7.{0,70}(has not started|not started|eligible for)',readme[:3000],re.I):
+   errors.append('README has obsolete historical phase claim')
+  if not all(word in readme[:4500] for word in ('Windows','Codex','ZCode','WSL','macOS')):
+   errors.append('README current selected client matrix/boundaries missing')
+ except (OSError,KeyError,ValueError,TypeError) as error:
+  errors.append('Release metadata missing or malformed')
+ return errors
+
 def audit(root):
- root=Path(root).resolve();errors=[]
+ root=Path(root).resolve();errors=release_errors(root)
  def read(p):
   try:return p.read_text(encoding='utf-8')
   except (OSError,UnicodeError):errors.append('Unreadable document: '+str(p.relative_to(root)));return ''
