@@ -86,9 +86,9 @@ class ClientGeneratorTests(unittest.TestCase):
                   patch.object(client_setup.online,"current_state",return_value=ready_state()),
                   patch("sys.stdin.isatty",return_value=True),
                   patch("builtins.input",side_effect=["1","1"]),
-                  patch.dict(os.environ,{"SUDO_USER":"luka"}),
+                  patch.dict(os.environ,{"SUDO_USER":"root"}),
                   patch("sys.stdout",new_callable=io.StringIO)):
-                code = manage.main(["client","--output",str(out)])
+                code = manage.main(["client","--admin-user","luka","--output",str(out)])
                 self.assertEqual(code,0)
                 self.assertEqual(out.read_text(),client_setup.render(ready_state(),"luka"))
 
