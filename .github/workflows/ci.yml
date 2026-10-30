@@ -185,6 +185,18 @@ jobs:
               echo "$unit: $(systemctl is-active "$unit" 2>/dev/null || true)"
             done
           } | tee install-smoke-evidence/services.txt
+      - name: Capture installer APT failure diagnostics
+        if: always()
+        shell: bash
+        run: |
+          if sudo test -f /var/lib/boxweave-default/apt.log; then
+            echo 'Installer apt.log (last 120 lines):'
+            sudo tail -n 120 /var/lib/boxweave-default/apt.log \
+              | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\\1[credentials-redacted]@#g' \
+              | tee install-smoke-evidence/apt.log
+          else
+            echo 'No installer apt.log found'
+          fi
       - name: Preserve installer stdout stderr and exit status
         if: always()
         uses: actions/upload-artifact@v4
