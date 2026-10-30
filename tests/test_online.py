@@ -59,6 +59,14 @@ class StreamedInstallTests(unittest.TestCase):
             with self.assertRaises(online.Failure):online.download("https://example.com/file",path,"0"*64)
             self.assertEqual(path.read_bytes(),b"changed")
 
+    def test_unmanaged_postgres_is_refused_before_any_mutation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base=Path(folder);etc=base/'etc';data=base/'data';etc.mkdir();data.mkdir()
+            (etc/'foreign-cluster').mkdir()
+            with patch.object(online,'PG_ETC',etc),patch.object(online,'PG_DATA',data),patch.object(online,'atomic') as write,patch.object(online,'run') as run:
+                with self.assertRaisesRegex(online.Failure,'FOREIGN_POSTGRES_CONFIGURATION'):online.prepare_postgres({},time.monotonic()+600)
+                write.assert_not_called();run.assert_not_called()
+
     def test_nonroot_install_stops_before_creating_host_state(self):
         with patch.object(online.os,"geteuid",return_value=1000),patch.object(online,"directory") as mutate:
             with self.assertRaisesRegex(online.Failure,"ROOT_REQUIRED"):online.install(Path("/unused"),"0.15.0")

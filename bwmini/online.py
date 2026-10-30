@@ -105,6 +105,55 @@ def check_managed(old):
     require(old.get("hostname") == socket.gethostname(), "HOST_IDENTITY_CHANGED")
 
 
+PG_ETC = Path("/etc/postgresql")
+PG_DATA = Path("/var/lib/postgresql")
+PG_BINARY = Path("/usr/lib/postgresql/16/bin/postgres")
+PG_DSN = "postgresql:///boxweave_provider?host=/var/run/postgresql"
+
+
+def prepare_postgres(old, deadline):
+    # A dedicated, peer-authenticated local database; no database password or
+    # network listener configuration is generated or copied into the app.
+    if not old.get("postgres_managed"):
+        require(not PG_ETC.exists() or not any(PG_ETC.iterdir()), "FOREIGN_POSTGRES_CONFIGURATION")
+        require(not PG_DATA.exists() or not any(PG_DATA.iterdir()), "FOREIGN_POSTGRES_DATA")
+        old["postgres_managed"] = True
+        atomic(STATE / "state.json", json.dumps(old, sort_keys=True).encode())
+    if not PG_BINARY.exists():
+        env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+        with (STATE / "postgres-apt.log").open("ab") as log:
+            run(["apt-get", "update", "-qq"], deadline, log, env)
+            run(["apt-get", "install", "-y", "-qq", "postgresql-16", "postgresql-contrib"], deadline, log, env)
+    run(["systemctl", "enable", "--now", "postgresql.service"], deadline)
+    run(["systemctl", "start", "postgresql@16-main.service"], deadline)
+    sql = """DO $body$
+BEGIN
+ IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='root') THEN
+  CREATE ROLE root LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+ ELSIF EXISTS (SELECT FROM pg_roles WHERE rolname='root' AND (rolsuper OR NOT rolcanlogin)) THEN
+  RAISE EXCEPTION 'managed peer role changed';
+ END IF;
+END
+$body$;"""
+    configured = subprocess.run(["runuser", "-u", "postgres", "--", "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+                                 "--dbname=postgres"], input=sql.encode(), stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=max(.01, deadline-time.monotonic()))
+    require(configured.returncode == 0, "LOCAL_POSTGRES_ROLE_FAILED")
+    owner = subprocess.run(["runuser", "-u", "postgres", "--", "psql", "-X", "-At", "--dbname=postgres", "--command",
+                            "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='boxweave_provider'"],
+                           capture_output=True, text=True, timeout=15)
+    require(owner.returncode == 0, "LOCAL_POSTGRES_DATABASE_OBSERVATION_FAILED")
+    if not owner.stdout.strip():
+        run(["runuser", "-u", "postgres", "--", "createdb", "--owner=root", "boxweave_provider"], deadline)
+    else:
+        require(owner.stdout.strip() == "root", "FOREIGN_POSTGRES_DATABASE_OWNER")
+    ready = subprocess.run(["psql", "-X", "-At", "--dbname="+PG_DSN, "--command=SELECT 1"],
+                           capture_output=True, text=True, timeout=15)
+    require(ready.returncode == 0 and ready.stdout.strip() == "1", "LOCAL_POSTGRES_AUTHENTICATED_READ_FAILED")
+    old["postgres_dsn"] = PG_DSN
+    atomic(STATE / "state.json", json.dumps(old, sort_keys=True).encode())
+
+
 def install(stage, version):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and sys.version_info[:2] == (3,12),
@@ -203,10 +252,13 @@ def install(stage, version):
             directory(SECRET.parent)
             atomic(SECRET, secrets.token_hex(32).encode())
         require(not SECRET.is_symlink() and SECRET.stat().st_uid == 0 and not SECRET.stat().st_mode & 0o077, "SIGNING_FILE_NOT_PRIVATE")
+        deadline = phase("local_postgres")
+        prepare_postgres(old, deadline)
+        deadline = phase("local_provider_start")
         provider = ("[Unit]\nDescription=BoxWeave local Provider\nAfter=incus.service\n[Service]\n"
                     "ExecStart=/usr/local/bin/containariumd daemon --address 127.0.0.1 --http-port 18080 --rest --standalone "
                     "--disable-security-scanner --disable-pentest-scanner --disable-zap-scanner "
-                    "--network-subnet "+old.get("network_subnet","10.203.0.1/24")+" --jwt-secret-file /etc/boxweave-provider/jwt.secret\nRestart=on-failure\nRestartSec=3\nUMask=0077\n"
+                    "--postgres "+PG_DSN+" --network-subnet "+old.get("network_subnet","10.203.0.1/24")+" --jwt-secret-file /etc/boxweave-provider/jwt.secret\nRestart=on-failure\nRestartSec=3\nUMask=0077\n"
                     "[Install]\nWantedBy=multi-user.target\n").encode()
         provider_unit = UNIT_DIR / "boxweave-provider.service"
         require(not provider_unit.exists() or str(provider_unit) in old["managed_files"], "FOREIGN_PROVIDER_UNIT")

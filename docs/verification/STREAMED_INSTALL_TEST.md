@@ -19,3 +19,11 @@ Source validation and actual install/client/workload outcomes will be appended a
 ## Pre-publication source checks
 
 Corrected assigned non-root validation exited0 with Ran 199 tests in 61.019s, frontend typecheck/build and all seven Chromium fixture workflows. Report: `/home/boxweave-tenant-dev/e2e-default-1029/source/.runtime/validation/99070125dd2f4aad9256f17cc3b0e7d3/result.json`. Shell syntax, new public-key/trust/release-manifest gates and YAML parsing passed. The earlier source-only run failed an import due to an authoring transfer EOF escape; it was retained and corrected before publication. These are source/fixture checks, not yet the requested live hello-world acceptance.
+
+## 0.15.0 live feedback
+
+Commit dcad890 and GitHub run40995597271 verification/publication succeeded. The exact original streamed command was rerun in the same server box: curl0/installer0, source-bound release0.15.0 ready, with API/worker and credential timer verified by the app installer. The server generated the public MCP config; only the peer's newly generated public key was enrolled, and the private key stayed on the peer.
+
+The peer actually completed initialize/initialized, tools/list58 and list_containers against the new SSH/MCP endpoint. Workload creation returned a definite FailedPrecondition: Tenant Guard refused because network-policy storage was the in-memory fallback (Postgres unavailable). Original-name get/debug/list plus local names/status proved no workload existed. A same-name diagnostic retry reproduced the exact refusal; no alternate or force-recreated workload was used. This was not a successful hello-world test.
+
+Patch0.15.1 adds a dedicated Ubuntu PostgreSQL16 dependency in this owned service LXC. It refuses foreign PostgreSQL state, creates a minimal peer-authenticated database owner with no database password, verifies an actual SQL read, and supplies its Unix-socket DSN to the managed Provider. The stopped core container is not modified. Reinstall/update must preserve server/client keys, enrollment, signing authority and app config; actual rerun results remain pending.
