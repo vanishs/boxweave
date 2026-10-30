@@ -1,14 +1,12 @@
-# Install, update and repair the application
+# Application installation, update and repair
 
-0.9.1 / phase6: schema7 preserves project/binding history using a local unbound marker; migration6→7 and its consistent schema6 backup were tested on an independent copy.0.9.0 binaries refuse7. Project unbinding never deletes a project/environment/receipt or cancels dispatched work. Use the installer/backup boundary before downgrade. The retained primary test installation remains0.9.0 until explicitly updated; source changes alone are not deployment.
+This operator guide covers verified application packages on a **prepared Ubuntu 24.04 x86_64 host**. It does not promise a working one-command installation from a blank server, nor install/upgrade upstream infrastructure, repair SSH/firewall, or configure public TLS. For the current host entry and exact prerequisites, read [host installation](HOST_BOOTSTRAP.md).
 
-After login, **Client setup** generates the four supported public configurations and a local PowerShell enrollment script. Use an already authorized SSH identity and prepared private profile directory. Enter paths/public server pin/exact Agent version and public ZCode catalog digest; do not enter credential contents. Save both downloads under their exact names in one new private folder. The script requires explicit absolute Python/helper paths, verifies helper and descriptor SHA256 before the existing local registrar, and preserves the selected replacement flag. It never installs dependencies, authorizes a key, invokes inference or executes on the Web server. Operator review/trusted delivery remain required. **Projects** now exposes reviewed identity, Edit binding and Unbind; unbound projects can be explicitly rebound.
-
-This is the standalone application package on main, not the legacy BoxWeave/Containarium installer. It installs neither Provider nor Incus, changes no host SSH/firewall settings, and publishes no port. Tested target: non-root Ubuntu24.04, Linux x86_64, CPython3.12 with venv/ensurepip and a working systemd user manager. Windows-hosted Agent enrollment is a separate [client workflow](../clients/README.md). Other server runtimes are unsupported by this wheel lock.
+Choose and retain an explicit private installation location, for example `APP_PREFIX="$HOME/boxweave"`; use this exact value consistently with all installation, administrator and health commands. Existing installations may use older managed directories and service identifiers; **do not rename or move them without a reviewed migration and consistent database backup**. Prior checkpoints are in [installation history](INSTALL_HISTORY.md).
 
 ## Trust and preparation
 
-Obtain a reviewed standalone `bwmini/distribution.py` and the expected package SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The archive embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
+Obtain a reviewed standalone `bwmini/distribution.py` and the expected package SHA256 through an authenticated operator channel. A digest downloaded alongside untrusted bytes is not independent authenticity evidence. The package embeds exact public-file hashes, source commit/state, locked offline wheels, built UI and public client helpers. Deterministic ZIP metadata makes repeated builds from identical inputs reproducible. Private runtime/state, unknown client files, keys, JWTs and sign-in data are excluded. This is an operator-trusted digest workflow, not a publisher signature or automatic updater.
 
 Build inside the assigned Linux development box, using the existing exact wheel lock and built UI:
 
@@ -18,7 +16,7 @@ python3 -m pip download --require-hashes --only-binary=:all: --no-deps \
 npm --prefix web ci
 npm --prefix web run build
 python3 bwmini/distribution.py build --root . --wheels /private/build/wheels \
-  --output /private/build/boxweave-v2.zip \
+  --output /private/build/boxweave.zip \
   --source-commit REVIEWED_40_CHARACTER_COMMIT --source-state clean
 ```
 
@@ -31,8 +29,9 @@ The listener stays127.0.0.1. For a local HTTP test, use an exact loopback HTTP o
 ## Install and first administrator
 
 ```sh
-python3 /trusted/distribution.py install --package /trusted/boxweave-v2.zip \
-  --sha256 REVIEWED_ARCHIVE_SHA256 --prefix "$HOME/boxweave-v2" \
+APP_PREFIX="$HOME/boxweave"
+python3 /trusted/distribution.py install --package /trusted/boxweave.zip \
+  --sha256 REVIEWED_ARCHIVE_SHA256 --prefix "$APP_PREFIX" \
   --config /private/application.json --activate
 ```
 
@@ -41,7 +40,7 @@ Run as the application user, not root. The private prefix is dedicated to this i
 A new database requires explicit local administrator setup. The first install may leave `ADMIN_SETUP_REQUIRED` and its marker after publishing the verified application. Initialize using the verified release, entering the password only at the local terminal prompts:
 
 ```sh
-cd "$HOME/boxweave-v2/current"
+cd "$APP_PREFIX/current"
 .venv/bin/python -m bwmini init-admin --config ../runtime.json
 ```
 
@@ -49,16 +48,16 @@ Then repeat the same install command to finish verification. For a later intenti
 
 ## Update, failure and repair
 
-Repeat `install` with the reviewed new archive/digest. Saved settings are reused when `--config` is omitted; conflicting supplied settings are refused rather than silently merged. Deliberate setting changes require reviewing/editing the protected saved config while quiesced. Different installs must use distinct state paths and ports.
+Repeat `install` with the reviewed new package/digest. Saved settings are reused when `--config` is omitted; conflicting supplied settings are refused rather than silently merged. Deliberate setting changes require reviewing/editing the protected saved config while quiesced. Different installs must use distinct state paths and ports.
 
-The installer verifies all archive members before running package code, rejects traversal/links/duplicate members, takes an install lock, stages an immutable release, stops only its owned API/worker units, builds a fresh environment from offline hash-locked wheels, takes the worker lock and a consistent SQLite backup, validates candidate state/config, then atomically switches `current`. Old environments and backups are retained for review. During a failure, `update-in-progress.json` records the last stage, archive, previous release and backup. Configuration acknowledgment is not authenticated MCP evidence: the marker clears only after required service/HTTP checks and a real initialize/discovery/list_containers call, plus initialized local administrator state.
+The installer verifies all package members before running package code, rejects traversal/links/duplicate members, takes an install lock, stages an immutable release, stops only its owned API/worker units, builds a fresh environment from offline hash-locked wheels, takes the worker lock and a consistent SQLite backup, validates candidate state/config, then atomically switches `current`. Old environments and backups are retained for review. During a failure, `update-in-progress.json` records the last stage, package, previous release and backup. Configuration acknowledgment is not authenticated MCP evidence: the marker clears only after required service/HTTP checks and a real initialize/discovery/list_containers call, plus initialized local administrator state.
 
 For a known installation failure, inspect the marker, services and diagnosis; correct the specific cause and rerun the same reviewed package. Do not start a competing installer or delete locks. Changed managed payloads/foreign services, invalid configuration, a busy worker and downgrades are refused. An inactive invalid owned unit with MainPID0 has no running process to stop; unknown service state is not treated as quiesced. The first candidate's incorrect WorkingDirectory quoting was found and repaired this way, with original evidence preserved.
 
 Before publication, the old pointer remains. After publication, a failed health check retains the new pointer and marker; there is no whole-host rollback promise. Downgrade needs a reviewed pre-upgrade consistent database backup and compatible release/environment restored while API/worker are stopped. Never copy only a live SQLite database file over active state. A corrupted managed release needs explicit quarantine/review, not an insecure trust bypass. `--quiesced` supports files-only installation after the operator stops all app writers; it explicitly reports services_not_activated and is not autostart evidence.
 
 ```sh
-python3 /trusted/distribution.py health --prefix "$HOME/boxweave-v2" --mcp
+python3 /trusted/distribution.py health --prefix "$APP_PREFIX" --mcp
 ```
 
 Machine states distinguish starting, incomplete, failed and ready. HTTP401 is reachable/unauthenticated; MCP authentication is reported separately. Enabled/running user services prove current user-manager operation, not LXC boot.autostart or a fresh-host reboot. Successful inactive oneshots and required waiting/enabled timers are assessed separately in supporting-provider evidence. Web can be stopped independently while the existing restricted SSH MCP remains usable.

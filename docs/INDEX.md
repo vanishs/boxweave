@@ -40,3 +40,5 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [Upstream Provider/Incus contract](UPSTREAM_PROVIDER.md)
 
 - [Development and isolated fixture](DEVELOPMENT.md)
+
+- [Historical installation-guide snapshot](INSTALL_HISTORY.md)

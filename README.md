@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.13.9.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.13.10.** This is a preview, not a certified clean-host deployment.
 
 ## Install on Ubuntu
 

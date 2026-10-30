@@ -72,3 +72,7 @@ CI run 40985401561 completed with one failure in the new README terminology test
 ## 0.13.9 active guidance terminology cleanup
 
 Replaced outdated stage/branch labels in active AGENT, product, scope, host, and application-install prose. Historical evidence and runtime identifiers are unchanged. The persisted managed service and installation directory identifiers must not be renamed in-place without a designed backward-compatible migration. Some older process/verification materials and path names retain historical labels; inventory and isolate them before attempting a repository-wide rename. No real host execution occurred; CI must verify this submitted source.
+
+## 0.13.10 user-facing installation history separation
+
+Preserved the previous operator installation guide in `docs/INSTALL_HISTORY.md` and reorganized current `docs/INSTALL.md` around explicit application preparation and a selected private prefix. Removed stale stage/evidence prose from current installation instructions without changing runtime file locations or schema. New installation examples use an explicitly selected prefix and the supported package alias; existing deployed locations must not be renamed without a separately reviewed migration. No host installation test performed. GitHub CI source checks are required.
