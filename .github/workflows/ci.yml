@@ -50,10 +50,44 @@ jobs:
           mkdir -p .runtime/release
           python -m pip download --require-hashes --only-binary=:all: --no-deps -r requirements.lock --dest .runtime/release-wheels
           python bwmini/distribution.py build --root . --wheels .runtime/release-wheels --output .runtime/release/boxweave.zip --source-commit "$GITHUB_SHA" --source-state clean
-          cp bwmini/distribution.py bwmini/bootstrap.py install.sh .runtime/release/
-          (cd .runtime/release && sha256sum boxweave.zip distribution.py bootstrap.py install.sh > SHA256SUMS)
+          python scripts/build_release_manifest.py --root . --output .runtime/release --source "$GITHUB_SHA"
       - name: Retain application candidate for review
         uses: actions/upload-artifact@v4
         with:
           name: application-candidate
           path: .runtime/release/
+
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-candidate
+          path: release
+      - name: Publish immutable source-bound installer assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import json; print(json.load(open("release/release.json"))["version"])')
+          source=$(python3 -c 'import json; print(json.load(open("release/release.json"))["source"])')
+          test "$source" = "$GITHUB_SHA"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --jq '.object.sha')
+            test "$existing" = "$GITHUB_SHA"
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$version" > release-state.json
+            for file in release/*; do
+              name=$(basename "$file")
+              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))["assets"]) else 1)' "$name"; then
+                gh release upload "v$version" "$file" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+          else
+            gh release create "v$version" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."
+          fi

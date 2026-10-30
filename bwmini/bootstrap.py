@@ -224,7 +224,7 @@ def apply(args, artifacts):
         require(fresh or old is not None, "BOOTSTRAP_STATE_MISSING_REVIEW_REQUIRED")
         if old:
             require(old["user"] == user and old["url"] == args.provider_url and old["port"] == args.port and
-                    old["secret"] == str(safe_path(args.secret_file)), "BOOTSTRAP_SETTINGS_CONFLICT")
+                    old["secret"] == str(safe_path(args.secret_file)) and old.get("ssh_entry", False) == args.ssh_entry, "BOOTSTRAP_SETTINGS_CONFLICT")
             for name, data in (("mcp", artifacts["mcp"]), ("provider", artifacts["provider"])):
                 require(old[name + "_sha256"] == hashlib.sha256(data).hexdigest(), "PROVIDER_UPGRADE_NOT_ALLOWED")
             for path, sha in old["managed_files"].items():
@@ -232,7 +232,7 @@ def apply(args, artifacts):
         else:
             # Snapshot reviewed bytes before any privileged execution or account setup.
             make_directory(public, 0o755)
-            run(["useradd", "--create-home", "--shell", "/usr/sbin/nologin", user], deadline)
+            run(["useradd", "--create-home", "--shell", "/bin/sh" if args.ssh_entry else "/usr/sbin/nologin", user], deadline)
         # Only this managed namespace is public; the token itself remains mode 0400.
         PUBLIC.chmod(0o755)
         public.chmod(0o755)
@@ -264,7 +264,7 @@ def apply(args, artifacts):
         units = {UNIT_DIR / (rotation + ".service"): service, UNIT_DIR / (rotation + ".timer"): timer}
         for path in units:
             require(old is not None or not path.exists(), "FOREIGN_CREDENTIAL_UNIT")
-        state = {"format": 1, "user": user, "url": args.provider_url, "port": args.port,
+        state = {"format": 1, "ssh_entry": args.ssh_entry, "user": user, "url": args.provider_url, "port": args.port,
                  "secret": str(safe_path(args.secret_file)), "mcp": str(public / "mcp"),
                  "mcp_sha256": args.mcp_sha256, "provider": str(public / "provider"),
                  "provider_sha256": args.provider_cli_sha256, "token": str(token), "prefix": str(prefix),
@@ -337,6 +337,7 @@ def main(argv=None):
             p.add_argument("--" + flag, required=True)
         p.add_argument("--port", type=int, default=18640)
         p.add_argument("--ack-root-changes")
+        p.add_argument("--ssh-entry", action="store_true", help="Create the new app account with a shell for explicitly enrolled forced-command SSH keys")
     p = sub.add_parser("rotate")
     p.add_argument("--state", required=True)
     args = parser.parse_args(argv)

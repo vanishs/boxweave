@@ -27,9 +27,46 @@ USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
 if (( $# == 0 )); then
-  printf '%s\n' '[boxweave] DEFAULT_INSTALL_UNAVAILABLE: no independently reviewed application release is published.' >&2
-  printf '%s\n' '[boxweave] No host changes were made; see README for prerequisites and offline installation.' >&2
-  exit 2
+  [[ "$EUID" -eq 0 ]] || die 'DEFAULT_INSTALL_REQUIRES_ROOT: run the reviewed installer with sudo bash'
+  command -v python3 >/dev/null || die 'Ubuntu Python 3 is required'
+  python3 - "0.15.0" <<'PY_DEFAULT_RELEASE'
+import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
+version=sys.argv[1]
+api="https://api.github.com/repos/vanishs/boxweave"
+prefix="https://github.com/vanishs/boxweave/releases/download/v"+version+"/"
+def get(url,limit=1048576):
+    request=urllib.request.Request(url,headers={"User-Agent":"BoxWeave-streamed-installer","Accept":"application/vnd.github+json"})
+    with urllib.request.urlopen(request,timeout=60) as response:data=response.read(limit+1)
+    if len(data)>limit:raise ValueError("release metadata limit")
+    return data
+try:
+    release=json.loads(get(api+"/releases/tags/v"+version))
+    assert release.get("tag_name")=="v"+version and not release.get("draft") and not release.get("prerelease")
+    assets={a["name"]:a for a in release["assets"]}
+    entry=assets["release.json"];expected=entry.get("digest","")
+    assert re.fullmatch("sha256:[a-f0-9]{64}",expected)
+    assert entry["browser_download_url"]==prefix+"release.json"
+    metadata=get(entry["browser_download_url"])
+    assert hashlib.sha256(metadata).hexdigest()==expected[7:]
+    manifest=json.loads(metadata)
+    assert manifest["format"]==1 and manifest["version"]==version and re.fullmatch("[a-f0-9]{40}",manifest["source"])
+    reference=json.loads(get(api+"/git/ref/tags/v"+version))
+    assert reference["object"]["type"]=="commit" and reference["object"]["sha"]==manifest["source"]
+    expected=manifest["files"]["online.py"]
+    assert re.fullmatch("[a-f0-9]{64}",expected)
+    payload=get(prefix+"online.py",262144)
+    assert hashlib.sha256(payload).hexdigest()==expected
+    with tempfile.TemporaryDirectory(prefix="boxweave-release-") as folder:
+        stage=pathlib.Path(folder);stage.chmod(0o700)
+        (stage/"release.json").write_bytes(metadata)
+        helper=stage/"online.py";helper.write_bytes(payload);helper.chmod(0o600)
+        code=subprocess.run([sys.executable,str(helper),"install","--stage",folder,"--version",version],stdin=subprocess.DEVNULL).returncode
+        raise SystemExit(code)
+except (OSError,ValueError,KeyError,AssertionError) as error:
+    print("[boxweave] DEFAULT_RELEASE_NOT_READY_OR_INVALID: matching published release assets could not be verified; no unverified installer was executed.",file=sys.stderr)
+    raise SystemExit(2)
+PY_DEFAULT_RELEASE
+  exit $?
 fi
 (( $# )) || { usage; exit 2; }
 ACTION=$1; shift

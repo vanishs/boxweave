@@ -7,10 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'install.sh'
 
 class BootstrapSafetyTests(unittest.TestCase):
-    def test_no_args_fail_closed_without_a_release(self):
+    def test_no_args_reject_nonroot_before_download(self):
         p = subprocess.run(['bash', str(SCRIPT)], capture_output=True, text=True, timeout=5)
         self.assertEqual(p.returncode, 2)
-        self.assertIn('DEFAULT_INSTALL_UNAVAILABLE', p.stderr)
+        self.assertIn('DEFAULT_INSTALL_REQUIRES_ROOT', p.stderr)
         self.assertEqual(p.stdout, '')
 
     def test_shell_syntax(self):

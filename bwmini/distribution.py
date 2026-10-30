@@ -43,7 +43,7 @@ def verify(archive,sha):
   return manifest
 def build(root,wheels,output,commit,source_state):
  root=Path(root).resolve();files={}
- modules=('__init__','__main__','bootstrap','manage','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
+ modules=('__init__','__main__','bootstrap','online','hostkeys','mcp_gate','manage','access','access_provider','deploy_check','distribution','domain','graphs','lifecycle','mcp','models','profiles','provider','service','store','web')
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
  public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
  for p in public:

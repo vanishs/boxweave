@@ -25,3 +25,5 @@ Phase7 maintenance is authorized by SRC-089; its completion evidence belongs in 
 | RISK-612 | P2 source CI gate verified at 0.13.4 / continuing | GitHub Actions run 40985891994 on 08efb069 succeeded for source 0.13.10; 0.14.0 working-tree changes require their own pipeline after publication. Fresh CI must still be checked for every later commit | [Exact source CI and handoff](REMEDIATION_TEST_QUEUE.md); no host, Provider, Windows, browser or security acceptance follows from a green source pipeline |
 
 Current remediation evidence: [0.14.0 review](MAIN_014_REVIEW.md). This separate test application does not upgrade the retained primary deployment in RISK-605.
+
+Streamed source0.15.0 is now being implemented/tested under SRC-100. RISK-610 remains open until the exact streamed install and separate client creation/connect/Python path pass; [progress](STREAMED_INSTALL_TEST.md). Standalone Provider optional/native-policy/boot boundaries remain explicit.

@@ -62,3 +62,16 @@ First administrator creation remains a deliberate local action: inspect the priv
 Inspect the original state on interrupted/unknown operations before retrying. A failure before the coordinator records its managed state can require explicit review of a partially created account; it is not automatically adopted. Do not delete the state, recreate the user or overwrite foreign units to force a retry. Postpublication app failure retains the regular install marker/backups and follows the existing [repair contract](INSTALL.md#update-failure-and-repair).
 
 Actual evidence and remaining boundaries: [0.14.0 review](verification/MAIN_014_REVIEW.md).
+
+
+## Streamed fresh-host workflow
+
+The zero-argument install entry now downloads only a matching source-bound release. GitHub HTTPS publisher identity, release asset SHA256 metadata, manifest member digests and an exact tag-to-source match are required before executing the downloaded root coordinator. This is an explicitly publisher-trusted workflow, not an independent publisher signature; keep the existing independently supplied digest workflow when that stronger operator channel is required.
+
+Only an empty Ubuntu24.04 x86_64/systemd host is provisioned. Exact signed Zabbly Incus7.5.1 packages and official Containarium0.120.1 asset digests are pinned. A managed install state and exact file digests govern rerun/update/repair; an unrelated preexisting Incus/Provider/account/unit is refused. No APT locks are removed and no unrelated host or core container is repaired/deleted. The selected Provider runs standalone with optional scanners disabled; this does not certify native-policy persistence or all optional hosting features.
+
+The app credential and API stay local. A dedicated app account may receive explicitly enrolled SSH keys restricted to the root-controlled MCP relay; it does not gain sudo or Incus-admin membership. Use the printed root helper enrollment command with the **client's public key only**. The helper's `client-config` action emits public MCP SSH arguments, the server's full public host-key pin and this server's distinct managed workload public key. It never exports a client private key, JWT or signing secret.
+
+The root trust timer reads public host keys through the exact local default Incus project and publishes an atomic observed target registry. The MCP relay requires explicit valid creation keys and checks each connect target's current name/creation time/IP/username against that fresh trusted registry. Unknown/stale/reused targets are rejected until reconciliation; no host-key checking is disabled or replaced with accept-new. Existing SSH daemon configuration and host identity remain unchanged.
+
+The initial local Web administrator is generated inside the non-root app process and its password is stored in a private app-owned file. Do not include that file in reports or packages. Code handling credentials during ordinary installation is distinct from an Agent reading/exporting their contents. Actual acceptance belongs to [the streamed test](verification/STREAMED_INSTALL_TEST.md).

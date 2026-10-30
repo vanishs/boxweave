@@ -73,3 +73,12 @@ Host coordinator 0.13.4 requires `--distribution-sha256` as an additional indepe
 ## Optional dedicated application-account setup
 
 On an independently prepared Provider, the explicit [application bootstrap](HOST_BOOTSTRAP.md#independent-application-bootstrap) can now create the separate app user/bus, launcher and scoped credential rotation. It retains the same non-root package installer, first-admin, backup and repair checks. It does not publish a release, provision the Provider or replace existing accounts/deployments.
+
+
+## Fresh-host streamed entry
+
+The README command selects the source-bound release's `online.py` coordinator. It stages/validates all artifacts, provisions only an inspected empty local host, then delegates app installation to the dedicated non-root account. Repeat the same command for managed app update/repair after inspecting a failed phase and any original package processes; existing Provider binary/version mismatches remain refused. No old data migration or arbitrary environment adoption occurs.
+
+After a ready result, generate a client identity on the **client** machine, enroll only its public half with the printed root helper command, and run that helper's `client-config --identity ABSOLUTE_CLIENT_KEY --known-hosts ABSOLUTE_CLIENT_KNOWN_HOSTS`. Deliver the resulting public JSON through the authenticated administrative channel. Put the returned pin line in the selected known_hosts file and configure the returned `mcpServers.boxweave` entry. Start a standard MCP client and verify initialize/initialized, tools/list and an actual read before creating workloads. Supply the returned managed workload public key explicitly in create_container.ssh_keys; it belongs to this nesting layer.
+
+Installation's app health/MCP read is separate from a later client's actual creation/connect/Python test. See [current test progress and exact outcomes](verification/STREAMED_INSTALL_TEST.md).
