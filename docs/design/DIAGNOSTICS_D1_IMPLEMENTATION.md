@@ -2,6 +2,8 @@
 
 Status: **implementation-ready architecture specification, not implemented**. Source review baseline `main@817273d98d8823fcd8489eb0d3f329a67929b91d` / BoxWeave 0.21.4. Depends on [D0](DIAGNOSTICS_D0_IMPLEMENTATION.md). Enables [D2](DIAGNOSTICS_D2_IMPLEMENTATION.md). Parent [proposal](DIAGNOSTICS_PROPOSAL.md), [source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). Implementation needs a new owner decision; no deployment or privileged host action is implied.
 
+**Implementation status:** Implemented in 0.22.0 (4baf245, schema v9); live gate-side capture remains not_installed by design.
+
 ## 0. Objective and decision boundaries
 
 When BoxWeave itself fails or behaves unexpectedly, a maintainer should be able to answer:

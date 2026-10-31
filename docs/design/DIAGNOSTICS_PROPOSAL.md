@@ -1,7 +1,6 @@
 # Proposal: evidence-first diagnostics for the existing BoxWeave MCP and CLI
 
-**Proposal, not accepted ADR or implementation authorization.** SRC-104;
-reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4.
+**Implemented** in BoxWeave 0.22.0 (D0-D2; see [SOURCE_REGISTER](../knowledge/SOURCE_REGISTER.md) SRC-108 and the D0/D1/D2 implementation documents). Original status: proposal under SRC-104; reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4. The conditional D3 existing-MCP read remains unapproved and unimplemented; D4 user-project debugging remains out of scope.
 Source findings: [diagnostics source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md).
 Related accepted requirements (do not silently extend): REQ-002/003/004/005/006/007/
 008/009/016/017/018/019/020 and their corresponding AC. Existing
