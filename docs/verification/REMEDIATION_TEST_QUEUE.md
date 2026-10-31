@@ -291,3 +291,42 @@ server reboot persistence, install.sh update/repair rerun. The
 "PROVISIONING TAKES MINUTES / poll get_container" create text is
 emitted by the upstream Containarium MCP server binary, not this
 repository; clarification belongs upstream.
+
+
+## 0.21.0 Legacy-only capability restoration (selftest, diagnose, resize, jobs, provenance)
+
+The 2026-10-30 archive/0.5.1 gap review identified five capabilities with
+no current counterpart; each is restored on the new architecture as an
+independent slice. `boxweave selftest plan|run` produces a hash-confirmed
+plan for a dedicated `boxweave-selftest-*` box and drives create,
+identity+hello over the connect tool, stop and delete against the live
+MCP provider only, with unconditional best-effort cleanup and a per-step
+receipt that never records remote output. The generated client script
+gains `--diagnose`: a read-only report of local tools, pinned-identity
+state (no key material printed), live MCP stages and registration state.
+`resize` joins the environment lifecycle as a reviewed plan/confirm
+action over the existing resource vocabulary, verified against observed
+provider inventory (unknown at deadline on persistent mismatch;
+provider rejections such as disk shrink fail deterministically); the web
+Environments panel and CLI `environment-plan --cpu/--memory/--disk`
+expose it. `boxweave job [--budget N] -- COMMAND` runs one explicit
+local command as the non-root application user with a durable receipt
+(argv, state, exit code, duration, output hash/size only; store schema
+user_version 8). `boxweave provenance` reads the installer-published
+root-owned provenance.json (version, source, provider mode, endpoint,
+phase history, managed-file count).
+
+**S:** source review of selftest.py, jobs.py, client_profiles.py,
+lifecycle.py/provider.py, online.py/host_cli.py and Environments.tsx.
+**T:** 60+ new and existing unit tests green on WSL Python 3.10 across
+test_selftest, test_jobs, test_client_setup, test_lifecycle, test_access, test_bindings,
+test_models, test_recovery and test_graphs (schema migration fixtures
+updated for user_version 8), test_online, test_host_cli;
+frontend tsc+vite build green; check_knowledge and bash -n clean. The
+known WSL 3.10 gaps (tomllib import, interpreter-floor assertion in
+test_platform_minimums, test_distribution suite) are pre-existing and
+unrelated. **U:** real-host acceptance of all five features against a
+fresh streamed v0.21.0 install (selftest live run, resize against a
+real box, job via sudo, provenance after install, --diagnose from a
+client box), web resize through a browser, and update/repair rerun of
+install.sh from 0.20.x.

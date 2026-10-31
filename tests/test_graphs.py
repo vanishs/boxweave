@@ -89,7 +89,7 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(store.project('existing')['revision'],3)
             self.assertEqual(store.receipt('prior-op')['code'],'WORKER_LOST')
             with store.db() as db:
-                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],7)
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],8)
                 self.assertEqual(db.execute('SELECT password FROM admin').fetchone()[0],HASH)
                 self.assertEqual(db.execute('SELECT id FROM sessions').fetchone()[0],'prior-session')
             self.assertEqual(Graphs(Store(path)).list(),[])
