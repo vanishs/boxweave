@@ -22,7 +22,7 @@ class JobsTests(unittest.TestCase):
 
     def test_store_migrates_to_job_schema(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 8)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 9)
             columns = {r[1] for r in db.execute("PRAGMA table_info(job_runs)")}
         self.assertIn("output_sha256", columns)
         self.assertNotIn("output", columns)

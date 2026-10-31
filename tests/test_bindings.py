@@ -50,7 +50,10 @@ class BindingTests(Base):
   failed=subprocess.run([sys.executable,'-m','bwmini','diagnose','--config',str(config)],capture_output=True,text=True);self.assertNotEqual(failed.returncode,0)
  def test_schema6_migrates_preserves_bound(self):
   p=self.bind()
-  with self.store.db() as db:db.execute('DROP TABLE project_unbindings');db.execute('DROP TABLE job_runs');db.execute('PRAGMA user_version=6')
+  with self.store.db() as db:
+    db.execute('DROP TABLE project_unbindings');db.execute('DROP TABLE job_runs')
+    for t in ('diagnostic_events','diagnostic_trace_links'):db.execute('DROP TABLE '+t)
+    db.execute('PRAGMA user_version=6')
   updated=Store(self.store.path)
-  with updated.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],8)
+  with updated.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],9)
   self.assertEqual(updated.project(p['id'])['target'],json.dumps(TARGET.data()))

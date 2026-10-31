@@ -4,6 +4,7 @@ import json
 import re
 import time
 import uuid
+from . import diagnostics
 from .domain import Fault,Target,name
 from .access_provider import Wire,tenant,guarded,unchanged_fields
 
@@ -194,6 +195,7 @@ class Access:
                 if db.execute('SELECT 1 FROM access_claims WHERE resource=?',(resource,)).fetchone():raise Fault('ACCESS_OPERATION_PENDING')
             db.execute('INSERT INTO access_operations VALUES(?,?,?,?,?,?,?,?,NULL,NULL)',(operation,actor,encode(payload),'queued','QUEUED',now,now+600,now))
             for resource in resources:db.execute('INSERT INTO access_claims VALUES(?,?)',(resource,operation))
+            diagnostics.link(db,actor,'access',operation)
         return self.receipt(operation,actor)
     def receipt(self,ident,actor='operator'):
         self.actor(actor)
@@ -212,8 +214,17 @@ class Access:
             if state=='succeeded' and json.loads(job['payload'])['kind']=='port':
                 p=json.loads(job['payload']);db.execute('INSERT INTO access_routes VALUES(?,?,?,?) ON CONFLICT(resource) DO UPDATE SET route=excluded.route,target=excluded.target,deleted=excluded.deleted',(self.resource(p['route']),encode(p['route']),encode(p['target']),int(p['action']=='unpublish')))
     def recover(self):
-        with self.store.db() as db:rows=[dict(r) for r in db.execute("SELECT * FROM access_operations WHERE state='dispatching'")]
-        for job in rows:self.save(job,'observing' if job['ack'] else 'unknown','ACKNOWLEDGED' if job['ack'] else 'OUTCOME_UNKNOWN')
+        with self.store.db() as db:
+            rows=[dict(r) for r in db.execute("SELECT id,actor,ack FROM access_operations WHERE state='dispatching'")]
+            db.execute("UPDATE access_operations SET state=CASE WHEN ack IS NULL THEN 'unknown' ELSE 'observing' END,code=CASE WHEN ack IS NULL THEN 'OUTCOME_UNKNOWN' ELSE 'ACKNOWLEDGED' END WHERE state='dispatching'")
+        for job in rows:
+            trace = diagnostics.trace_for_operation(self.store, job['actor'], 'access', job['id']) \
+                or diagnostics.new_trace_id()
+            acknowledged = job['ack'] is not None
+            diagnostics.emit(self.store, component='access', phase='recovered', event_type='recovered',
+                             outcome='unknown', code='ACKNOWLEDGED' if acknowledged else 'OUTCOME_UNKNOWN',
+                             trace_id=trace, actor_scope=job['actor'], operation_kind='access',
+                             operation_id=job['id'])
     def observe(self,ident,actor='operator'):
         self.actor(actor)
         with self.store.db() as db:row=db.execute('SELECT * FROM access_operations WHERE id=? AND actor=?',(ident,actor)).fetchone()
@@ -256,7 +267,13 @@ class Access:
             if not row:return False
             job=dict(row);execute=job['state']=='queued'
             if execute:db.execute("UPDATE access_operations SET state='dispatching' WHERE id=?",(job['id'],))
+        trace = diagnostics.trace_for_operation(self.store, job['actor'], 'access', job['id']) \
+            or diagnostics.new_trace_id()
         if not execute:self.observe(job['id'],job['actor']);return True
+        started = time.monotonic()
+        diagnostics.emit(self.store, component='access', phase='claimed', event_type='claimed',
+                         outcome='passed', code='CLAIMED', trace_id=trace, actor_scope=job['actor'],
+                         operation_kind='access', operation_id=job['id'])
         try:
             if self.clock()<job['created'] or self.clock()>=job['deadline']:raise Fault('DEADLINE_EXCEEDED')
             p=json.loads(job['payload']);self.preflight(p)
@@ -267,9 +284,18 @@ class Access:
         try:
             response=self.wire.patch(p['changes']) if p['kind']=='network' else self.wire.route_mutate(p['action'],p['route'])
             self.save(job,'observing','ACKNOWLEDGED',ack={'at':self.clock(),'response':response})
+            diagnostics.emit(self.store, component='access', phase='submitted', event_type='acknowledged',
+                             outcome='passed', code='ACKNOWLEDGED', trace_id=trace, actor_scope=job['actor'],
+                             operation_kind='access', operation_id=job['id'],
+                             elapsed_ms=int((time.monotonic()-started)*1000))
         except Exception as e:
             if isinstance(e,Fault) and e.code=='STATE_UNAVAILABLE':raise
-            self.save(job,'unknown','OUTCOME_UNKNOWN');return True
+            self.save(job,'unknown','OUTCOME_UNKNOWN')
+            diagnostics.emit(self.store, component='access', phase='submitted', event_type='unknown',
+                             outcome='unknown', code=diagnostics.error_class(e), trace_id=trace,
+                             actor_scope=job['actor'], operation_kind='access', operation_id=job['id'],
+                             elapsed_ms=int((time.monotonic()-started)*1000))
+            return True
         self.observe(job['id'],job['actor']);return True
 
 def datetime_stamp(value):

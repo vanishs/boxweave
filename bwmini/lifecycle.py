@@ -6,6 +6,7 @@ import json
 import re
 import time
 import uuid
+from . import diagnostics
 from .domain import Target, Fault
 
 SCHEMA = """
@@ -210,6 +211,7 @@ class Lifecycle:
             db.execute("INSERT INTO environment_operations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (ident,actor,row["action"],logical,row["spec"],row["target"],row["expected_state"],
                         "queued","queued",now,now+self.config["readiness_timeout"],now,0,None,None,"fixture" if self.provider.mode=="fixture" else "live_mcp"))
+            diagnostics.link(db, actor, "environment", ident)
             db.execute("INSERT INTO environment_events VALUES(?,?,?,?,?)",(ident,now,"queued","queued","CONFIRMED"))
         return self.receipt(ident,actor)
 
@@ -250,7 +252,15 @@ class Lifecycle:
 
     def recover(self):
         with self.store.db() as db:
+            rows = [dict(r) for r in db.execute(
+                "SELECT id,actor FROM environment_operations WHERE state='dispatching'")]
             db.execute("UPDATE environment_operations SET state=CASE acknowledged WHEN 1 THEN 'observing' ELSE 'unknown' END,code='WORKER_LOST' WHERE state='dispatching'")
+        for job in rows:
+            trace = diagnostics.trace_for_operation(self.store, job["actor"], "environment", job["id"]) \
+                or diagnostics.new_trace_id()
+            diagnostics.emit(self.store, component="worker", phase="recovered", event_type="recovered",
+                             outcome="unknown", code="WORKER_LOST", trace_id=trace,
+                             actor_scope=job["actor"], operation_kind="environment", operation_id=job["id"])
 
     def observe(self, ident, actor="operator"):
         self.receipt(ident,actor)
@@ -341,13 +351,25 @@ class Lifecycle:
             job=dict(row)
             now=self.clock()
             if now<job["created"] or now>=job["deadline"]:
+                code="CLOCK_ROLLBACK" if now<job["created"] else "DEADLINE_EXCEEDED"
                 db.execute("UPDATE environment_operations SET state=?,phase='deadline',code=? WHERE id=?",
-                           ("failed" if job["state"]=="queued" else "unknown","CLOCK_ROLLBACK" if now<job["created"] else "DEADLINE_EXCEEDED",job["id"]))
+                           ("failed" if job["state"]=="queued" else "unknown",code,job["id"]))
+                trace = diagnostics.trace_for_operation(self.store, job["actor"], "environment", job["id"]) \
+                    or diagnostics.new_trace_id()
+                diagnostics.emit(self.store, component="lifecycle", phase="deadline", event_type="observed",
+                                 outcome="failed", code=code, trace_id=trace,
+                                 actor_scope=job["actor"], operation_kind="environment", operation_id=job["id"])
                 return True
             execute=job["state"]=="queued"
             if execute:
                 db.execute("UPDATE environment_operations SET state='dispatching',phase='submitted' WHERE id=?",(job["id"],))
+        trace = diagnostics.trace_for_operation(self.store, job["actor"], "environment", job["id"]) \
+            or diagnostics.new_trace_id()
         if execute:
+            started = time.monotonic()
+            diagnostics.emit(self.store, component="lifecycle", phase="claimed", event_type="claimed",
+                             outcome="passed", code="CLAIMED", trace_id=trace,
+                             actor_scope=job["actor"], operation_kind="environment", operation_id=job["id"])
             try:
                 self.check_name(job["logical"])
                 if not self.matches_spec(json.loads(job["spec"])):
@@ -357,15 +379,32 @@ class Lifecycle:
                 self.preflight(job["action"],job["logical"],target,job["expected_state"])
                 self.provider.lifecycle_mutate(job["action"],job["logical"],json.loads(job["spec"]),job["deadline"]-self.clock())
                 self.save(job,"observing","submitted","ACKNOWLEDGED",acknowledged=1)
+                diagnostics.emit(self.store, component="lifecycle", phase="submitted", event_type="acknowledged",
+                                 outcome="passed", code="ACKNOWLEDGED", trace_id=trace,
+                                 actor_scope=job["actor"], operation_kind="environment", operation_id=job["id"],
+                                 elapsed_ms=int((time.monotonic()-started)*1000))
             except Fault as error:
                 if error.code=="STATE_UNAVAILABLE":
                     raise
                 known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED"}
-                self.save(job,"failed" if error.code in known else "unknown","not_submitted" if error.code in known else "submitted",
-                          error.code if error.code in known else "OUTCOME_UNKNOWN")
+                classified = error.code in known
+                self.save(job,"failed" if classified else "unknown","not_submitted" if classified else "submitted",
+                          error.code if classified else "OUTCOME_UNKNOWN")
+                diagnostics.emit(self.store, component="lifecycle",
+                                 phase="not_submitted" if classified else "submitted",
+                                 event_type="rejected" if classified else "unknown",
+                                 outcome="failed" if classified else "unknown",
+                                 code=getattr(error,"error_class",None) or (error.code if classified else "OUTCOME_UNKNOWN"),
+                                 trace_id=trace, actor_scope=job["actor"],
+                                 operation_kind="environment", operation_id=job["id"],
+                                 elapsed_ms=int((time.monotonic()-started)*1000))
                 return True
             except Exception:
                 self.save(job,"unknown","submitted","OUTCOME_UNKNOWN")
+                diagnostics.emit(self.store, component="lifecycle", phase="submitted", event_type="unknown",
+                                 outcome="unknown", code="UNCLASSIFIED_EXCEPTION", trace_id=trace,
+                                 actor_scope=job["actor"], operation_kind="environment",
+                                 operation_id=job["id"], elapsed_ms=int((time.monotonic()-started)*1000))
                 return True
         self.observe(job["id"],job["actor"])
         return True
