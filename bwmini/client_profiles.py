@@ -63,8 +63,7 @@ def safe_dir(path):
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     require(path.is_dir(), "Expected directory")
     if os.name != "nt":
-        require(path.stat().st_uid == os.getuid() and not path.stat().st_mode & 0o077,
-                "Private directory ownership/mode required")
+        require(path.stat().st_uid == os.getuid(), "User-owned directory required")
 
 def safe_file(path):
     require(not path.is_symlink(), "Refusing a symlinked file")
@@ -78,6 +77,8 @@ def posix_identity(host, port, host_key):
     root = pathlib.Path.home()/".config"/"boxweave"
     safe_dir(root.parent)
     safe_dir(root)
+    if os.name != "nt":
+        require(not root.stat().st_mode & 0o077, "BoxWeave identity directory must be private")
     private = root/"id_ed25519"
     public = root/"id_ed25519.pub"
     pin = root/"known_hosts"
@@ -245,16 +246,11 @@ def update_json(command,args):
     if path.exists():
         with os.fdopen(os.open(backup,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),"wb") as fd:
             fd.write(path.read_bytes())
-    with os.fdopen(os.open(path.parent/(".boxweave-"+uuid.uuid4().hex+".tmp"),
-                             os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),"w",encoding="utf-8") as fd:
-        temp=pathlib.Path(fd.name) if isinstance(fd.name,str) else None
+    temp=path.parent/(".boxweave-"+uuid.uuid4().hex+".tmp")
+    with os.fdopen(os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),
+                   "w",encoding="utf-8") as fd:
         fd.write(json.dumps(root,indent=2,ensure_ascii=False)+"\n")
-    # Use an owned, freshly created staging file for atomic replacement.
-    # The temporary path was created above but fd.name is an integer on Unix;
-    # retrieve it by tracking its path directly in the current directory.
-    candidates=list(path.parent.glob(".boxweave-*.tmp"))
-    require(len(candidates)==1, "Unexpected staging files; manual cleanup required")
-    candidates[0].replace(path)
+    temp.replace(path)
     print("BoxWeave MCP configured: "+str(path))
 
 def update_codex(command,args):
