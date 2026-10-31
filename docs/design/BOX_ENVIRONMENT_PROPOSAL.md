@@ -241,3 +241,8 @@ Each linked document is a **design/specification only; NOT IMPLEMENTED**. All fi
 | **E4** | [Clone current Box / clone snapshot](BOX_ENV_E4_CLONE.md) | E2; E1 optional metadata | provider-managed new identity and rekey, no exposed duplicate |
 
 **Backward cross-references:** [diagnostic proposal (D0-D2, NOT IMPLEMENTED)](DIAGNOSTICS_PROPOSAL.md) and [diagnostic source audit (S/D research, NOT a feature implementation)](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). The linked diagnostics documents must reciprocally label this independent area as **NOT IMPLEMENTED**; no completed Phase/ADR/REQ state is asserted by these links.
+
+
+## Related MCP capability reuse (SRC-109, research baseline)
+
+[Capability-led integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare existing BoxWeave features with the Platform/agent-box MCP source catalogs. This is separate from the v0.22.0 **implemented D0–D2** diagnostic work (SRC-108) and the **unimplemented** Box Environment E0–E4 proposal. The optional direct-gateway diagnostic D3 remains deferred. Tool inventories are static and do not establish installed Provider permissions or production readiness.
