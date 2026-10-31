@@ -6,12 +6,18 @@ detail field exists by design - a generic regex scrubber is not a redaction
 policy. Trace and event identifiers are unpredictable opaque correlation
 labels, not authority tokens.
 """
+import argparse
+import contextlib
+import json
+import os
 import re
+import stat
 import secrets
 import sqlite3
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .domain import Fault
 
@@ -182,3 +188,139 @@ def emit(store, clock=time.time, **fields):
     except (sqlite3.Error, ValueError, Fault):
         return None
     return event
+
+
+# ---------------------------------------------------------------------------
+# App-owned read-only report reader (D2). Runs as the application user; the
+# root-owned host CLI invokes it with fixed arguments and a byte budget.
+# It never instantiates Store(), never migrates, and never writes state.
+
+RECEIPT_SOURCES = {
+    "hello": ("operations", ("id", "project", "state", "code", "created", "deadline"),
+              "SELECT {fields} FROM operations WHERE id=? AND actor=?"),
+    "environment": ("environment_operations",
+                    ("id", "actor", "action", "logical", "state", "phase", "code", "created",
+                     "deadline", "acknowledged", "evidence", "expected_state"),
+                    "SELECT {fields} FROM environment_operations WHERE id=? AND actor=?"),
+    "access": ("access_operations", ("id", "actor", "state", "code", "created", "deadline"),
+               "SELECT {fields} FROM access_operations WHERE id=? AND actor=?"),
+}
+# Deliberately excluded from every receipt export: spec, target, result detail,
+# payload, ack response, workspace paths - configuration and document content
+# never enter a report; the omissions manifest says so explicitly.
+MAX_REPORT_EVENTS = 1000
+ID_PATTERN_BROAD = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
+
+
+def _read_only_connection(database):
+    """Read-only, query-only SQLite connection to the configured state; fail closed."""
+    path = Path(database)
+    info = path.lstat()
+    if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+        raise Fault("UNSAFE_STATE_PATH", 422)
+    if info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_mode & 0o077:
+        raise Fault("STATE_FILE_NOT_PRIVATE", 422)
+    connection = sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True, timeout=5)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA query_only=ON")
+    return connection
+
+
+def _state_database(config_path):
+    config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    database = config.get("database")
+    if not isinstance(database, str) or not database.startswith("/") or len(database) > 4096:
+        raise Fault("CONFIG_INVALID", 422)
+    return database
+
+
+def read_report(config_path, selector):
+    """Return one typed report payload, or a typed refusal; read-only throughout."""
+    kind = selector.get("kind")
+    payload = {"schema_version": SCHEMA_VERSION, "reader": "app-owned-diagnostics",
+               "found": False, "events": [], "omissions": []}
+    database = _state_database(config_path)
+    if kind == "operation":
+        operation_kind = selector.get("operation_kind")
+        operation_id = selector.get("operation_id")
+        actor = selector.get("actor")
+        if operation_kind not in RECEIPT_SOURCES or not isinstance(operation_id, str) \
+                or not ID_PATTERN_BROAD.fullmatch(operation_id) or not isinstance(actor, str) \
+                or not SCOPE_PATTERN.fullmatch(actor or ""):
+            raise Fault("INVALID_SELECTOR", 422)
+        table, fields, query = RECEIPT_SOURCES[operation_kind]
+        with contextlib.closing(_read_only_connection(database)) as connection:
+            row = connection.execute(query.format(fields=",".join(fields)), (operation_id, actor)).fetchone()
+            if row is None:
+                payload["omissions"].append("receipt_not_found_for_actor")
+                return payload
+            payload["found"] = True
+            payload["receipt"] = {field: row[field] for field in fields}
+            link = connection.execute(
+                "SELECT trace_id FROM diagnostic_trace_links WHERE actor=? AND operation_kind=? AND operation_id=?",
+                (actor, operation_kind, operation_id)).fetchone()
+            if link is None:
+                payload["omissions"].append("trace_unavailable_pre_migration")
+            else:
+                payload["trace_id"] = link["trace_id"]
+                payload["events"] = [dict(item) for item in connection.execute(
+                    "SELECT * FROM diagnostic_events WHERE trace_id=? ORDER BY seq LIMIT ?",
+                    (link["trace_id"], MAX_REPORT_EVENTS + 1))]
+            payload["omissions"].append("receipt_detail_fields_not_exported")
+    elif kind == "trace":
+        trace_id = selector.get("trace_id")
+        if not isinstance(trace_id, str) or not ID_PATTERN.fullmatch(trace_id):
+            raise Fault("INVALID_SELECTOR", 422)
+        with contextlib.closing(_read_only_connection(database)) as connection:
+            link = connection.execute(
+                "SELECT actor,operation_kind,operation_id FROM diagnostic_trace_links WHERE trace_id=?",
+                (trace_id,)).fetchone()
+            if link is None:
+                payload["omissions"].append("trace_not_found")
+                return payload
+            payload["found"] = True
+            payload["trace_id"] = trace_id
+            payload["receipt"] = {"actor": link["actor"], "operation_kind": link["operation_kind"],
+                                  "operation_id": link["operation_id"]}
+            payload["events"] = [dict(item) for item in connection.execute(
+                "SELECT * FROM diagnostic_events WHERE trace_id=? ORDER BY seq LIMIT ?",
+                (trace_id, MAX_REPORT_EVENTS + 1))]
+    elif kind == "window":
+        since, until = selector.get("since"), selector.get("until")
+        for value in (since, until):
+            if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", value):
+                raise Fault("INVALID_SELECTOR", 422)
+        with contextlib.closing(_read_only_connection(database)) as connection:
+            payload["found"] = True
+            payload["events"] = [dict(item) for item in connection.execute(
+                "SELECT * FROM diagnostic_events WHERE time_utc>=? AND time_utc<=? ORDER BY seq LIMIT ?",
+                (since, until, MAX_REPORT_EVENTS + 1))]
+        payload["omissions"].append("window_receipts_not_joined")
+    else:
+        raise Fault("INVALID_SELECTOR", 422)
+    if len(payload["events"]) > MAX_REPORT_EVENTS:
+        payload["events"] = payload["events"][:MAX_REPORT_EVENTS]
+        payload["omissions"].append("events_truncated_at_limit")
+    payload["event_count"] = len(payload["events"])
+    return payload
+
+
+def main_report():
+    parser = argparse.ArgumentParser(description="App-owned read-only diagnostic report reader")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--selector", required=True, help="JSON selector, host-validated")
+    arguments = parser.parse_args()
+    try:
+        selector = json.loads(arguments.selector)
+        if not isinstance(selector, dict):
+            raise ValueError
+        print(json.dumps(read_report(arguments.config, selector), sort_keys=True))
+        return 0
+    except (Fault, OSError, ValueError, KeyError, sqlite3.Error) as error:
+        print(json.dumps({"state": "reader_failed",
+                          "code": error.code if isinstance(error, Fault) else "READER_UNAVAILABLE"}))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main_report())
