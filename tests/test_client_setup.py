@@ -257,5 +257,90 @@ class ClientGeneratorTests(unittest.TestCase):
                 client_setup.load_public_state(link)
 
 
+    def test_every_cross_platform_profile_compiles(self):
+        from bwmini import client_profiles
+        self.assertEqual(client_profiles.APPS, tuple(sorted(client_profiles.APPS)))
+        self.assertEqual(client_profiles.APPS,
+            ("antigravity","claude","codex","copilot","cursor",
+             "opencode","qoder","trae","zcode"))
+        self.assertEqual(client_profiles.SYSTEMS, ("linux","macos","windows"))
+        public=ready_state()
+        for system in client_profiles.SYSTEMS:
+            for transport in (("native","wsl") if system=="windows" else ("native",)):
+                for app in client_profiles.APPS:
+                    with self.subTest(system=system,transport=transport,app=app):
+                        script=client_profiles.render({
+                            "app":app,"os":system,"transport":transport,
+                            "host":public["host"],"port":public["port"],
+                            "server_key":public["server_key"],
+                            "admin_user":"example-admin","replace":False})
+                        compile(script, "boxweave-setup.py", "exec")
+                        self.assertIn("StrictHostKeyChecking=yes",script)
+                        self.assertIn("list_containers",script)
+                        self.assertIn("online.py enroll",script)
+                        self.assertIn('"boxweave"',script)
+                        self.assertNotIn("jwt.secret",script)
+        with self.assertRaisesRegex(ValueError,"UNSUPPORTED"):
+            client_profiles.render({
+                "app":"cursor","os":"macos","transport":"wsl",
+                "host":public["host"],"port":22,
+                "server_key":public["server_key"],
+                "admin_user":"example-admin","replace":False})
+
+    def test_new_profile_generates_portable_python(self):
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch("sys.stdin.isatty",return_value=False),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stderr",new_callable=io.StringIO)):
+            rc=client_setup.main(["--app","cursor","--os","macos","--transport","native",
+                                  "--admin-user","example-admin","--no-replace"])
+        self.assertEqual(rc,0)
+        self.assertTrue(out.getvalue().startswith("#!/usr/bin/env python3"))
+        self.assertIn("cursor / macos / native",out.getvalue())
+        compile(out.getvalue(),"boxweave-setup.py","exec")
+
+    def test_portable_json_registration_preserves_other_servers(self):
+        from bwmini import client_profiles
+        script=client_profiles.render({
+            "app":"cursor","os":"linux","transport":"native",
+            "host":"server.internal","port":22,"server_key":host_key(),
+            "admin_user":"example-admin","replace":False})
+        ns={"__name__":"client_fixture"}
+        exec(compile(script,"fixture.py","exec"),ns)
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp)
+            folder=home/".cursor"
+            folder.mkdir()
+            path=folder/"mcp.json"
+            path.write_text(json.dumps({"mcpServers":{"other":{"command":"safe"}}}))
+            with patch.object(Path,"home",return_value=home):
+                ns["update_json"]("ssh",["-T","boxweave@host"])
+                data=json.loads(path.read_text())
+                self.assertEqual(data["mcpServers"]["other"],{"command":"safe"})
+                self.assertEqual(data["mcpServers"]["boxweave"]["command"],"ssh")
+                ns["update_json"]("ssh",["-T","boxweave@host"])
+                self.assertEqual(len(list(folder.glob("*.bak"))),1)
+                with self.assertRaisesRegex(ValueError,"differs"):
+                    ns["update_json"]("ssh",["-T","changed@host"])
+                self.assertEqual(json.loads(path.read_text()),data)
+
+    def test_qoder_and_trae_use_official_manual_import(self):
+        from bwmini import client_profiles
+        for app in ("qoder","trae"):
+            with self.subTest(app=app):
+                script=client_profiles.render({
+                    "app":app,"os":"linux","transport":"native",
+                    "host":"example.test","port":22,"server_key":host_key(),
+                    "admin_user":"example-admin","replace":False})
+                ns={"__name__":"fixture"}
+                exec(compile(script,"manual.py","exec"),ns)
+                with tempfile.TemporaryDirectory() as tmp, \
+                     patch.object(Path,"home",return_value=Path(tmp)), \
+                     patch("sys.stdout",new_callable=io.StringIO) as output:
+                    ns["update_json"]("ssh",["-T","boxweave@host"])
+                    self.assertIn('"mcpServers"',output.getvalue())
+                    self.assertEqual(list(Path(tmp).iterdir()),[])
+
+
 if __name__ == "__main__":
     unittest.main()

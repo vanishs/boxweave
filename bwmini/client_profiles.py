@@ -142,7 +142,8 @@ def client_ssh_base(identity, distro):
     return ["ssh"]
 
 def ssh_opts(identity):
-    return ["-F", "/dev/null", "-T", "-o", "BatchMode=yes",
+    config_null = "none" if SYSTEM=="windows" and TRANSPORT=="native" else "/dev/null"
+    return ["-F", config_null, "-T", "-o", "BatchMode=yes",
             "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=yes",
             "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=4",
@@ -164,7 +165,8 @@ def transport_command(identity, distro):
 def enroll(identity,distro):
     base=client_ssh_base(identity,distro)
     # Administrator password login is separate from the restricted MCP key.
-    opts=["-F","/dev/null","-tt","-o","StrictHostKeyChecking=yes",
+    config_null = "none" if SYSTEM=="windows" and TRANSPORT=="native" else "/dev/null"
+    opts=["-F",config_null,"-tt","-o","StrictHostKeyChecking=yes",
           "-o","IdentityAgent=none","-o","PubkeyAuthentication=no",
           "-o","PreferredAuthentications=password,keyboard-interactive",
           "-o","UserKnownHostsFile="+identity["known_hosts"],"-p",str(PORT)]
@@ -231,6 +233,10 @@ def update_json(command,args):
     safe_file(path)
     root=json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     require(isinstance(root,dict),"App configuration must be a JSON object")
+    # OpenCode v2 introduced mcp.servers; preserve that layout when present.
+    if APP=="opencode" and isinstance(root.get("mcp"),dict) and isinstance(
+            root["mcp"].get("servers"),dict):
+        keys=("mcp","servers")
     section=root
     for key in keys:
         if key not in section: section[key]={}

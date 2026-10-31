@@ -5,7 +5,7 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 ## Authorized 0.10+ remediation
 
 - The 2026-10-29 owner request authorizes **small, independent commits directly to main**, without a PR, for the remediation R-00–R-09; do not force-push. Confirm the current main SHA before each commit and reject unexpected changes. Never use an unreviewed working tree or wipe unrelated work. Remote repository-only edits via the approved GitHub connection are permitted; lack of a checked-out/test-capable environment must be recorded rather than invented.
-- Restore useful `install.sh` host bootstrap and `boxweave.sh` management experiences via a reviewed new design. Retain the approved four Windows-hosted Codex/ZCode native/WSL profiles; no macOS/Cursor/Claude Code scope expansion. Fresh installation/update/repair come first; **no automatic 0.5.1 data migration**.
+- Restore useful `install.sh` host bootstrap and `boxweave.sh` management experiences via a reviewed new design. Support the owner-approved cross-platform App catalog and native/WSL transports; never silently migrate existing client settings. Fresh installation/update/repair come first; **no automatic 0.5.1 data migration**.
 - Start the version line at `0.10.0`. Treat `A.B.C` as: increment B for a completed new feature slice and reset C to zero; increment C for fixes of existing behavior. Align `VERSION`, `pyproject.toml`, `web/package.json`, and the root metadata in `web/package-lock.json` on each version change. Do not bump for an empty promise. Use a distinct, descriptive English commit for each coherent slice.
 
 ## Trust and execution
@@ -22,4 +22,5 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 - Describe the current product as **BoxWeave**, using its `0.X.X` release version. Keep obsolete archived-release and numbered development-stage narratives out of current user-facing prose, especially README; retain historical evidence in the historical records.
 - This is a narrative/branding convention, not a ban on the words `archive`, `phase` or `v2`. Keep accurate ZIP/archive terminology, compatible CLI options, upstream protocol/API versions, technical phase fields, existing paths/service identifiers and useful developer-history links. Never rename runtime identities or remove compatibility to satisfy a word blacklist.
 - Use tables for supported OS/Agent/SSH combinations, installer flags, and management commands.
+- **Always list client Apps alphabetically (case-insensitive)** in code constants, interactive selectors, Web UI, support matrices and docs. Do not append new Apps out of order. The ordered catalog is: Antigravity, Claude, Codex, Copilot, Cursor, OpenCode, Qoder, TRAE, ZCode.
 - Do not claim the streamed default installer works until reviewed release artifacts and a complete host/launcher bootstrap have been accepted with real tests.
