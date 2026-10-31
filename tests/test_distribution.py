@@ -39,6 +39,16 @@ class DistributionTests(unittest.TestCase):
   self.assertFalse((self.prefix/'update-in-progress.json').exists());self.assertEqual(first['state'],'installed_services_not_activated')
   with sqlite3.connect(second['backup']) as c:self.assertEqual(c.execute('select value from retained').fetchone()[0],'nondefault-project')
   self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['operator_extension'],{'keep':42})
+ def test_operator_keys_in_runtime_refuse_update_until_moved_to_config(self):
+  self.install()
+  runtime=json.loads((self.prefix/'runtime.json').read_text());runtime['lifecycle']={'allowed_names':['demo-1']}
+  (self.prefix/'runtime.json').write_text(json.dumps(runtime))
+  with self.assertRaisesRegex(d.InstallError,'OPERATOR_RUNTIME_KEYS_REQUIRE_CONFIG_JSON:lifecycle'):
+   d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  saved=json.loads((self.prefix/'config.json').read_text());saved['lifecycle']=runtime['lifecycle']
+  (self.prefix/'config.json').write_text(json.dumps(saved))
+  d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['lifecycle'],{'allowed_names':['demo-1']})
  def test_config_conflict_refuses_publication(self):
   self.install();before=os.readlink(self.prefix/'current');self.config.write_text(json.dumps(self.settings|{'port':18983}))
   with self.assertRaisesRegex(d.InstallError,'CONFIG_CONFLICT'):self.install()

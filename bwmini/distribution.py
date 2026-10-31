@@ -158,7 +158,14 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
   def mark(stage,**kw):atomic(marker,encoded({'stage':stage,'archive_sha256':sha,'previous':current.name if current else None,'time':time.time(),**kw}))
   mark('verified')
   if not saved.exists():atomic(saved,raw)
-  runtime=dict(c);runtime['dist']=str(prefix/'current/web/dist');atomic(prefix/'runtime.json',encoded(runtime))
+  runtime=dict(c);runtime['dist']=str(prefix/'current/web/dist')
+  previous=prefix/'runtime.json'
+  if previous.exists():
+   require(len(previous.read_bytes())<=65536,'CONFIG_TOO_LARGE')
+   prior=json.loads(regular(previous));require(isinstance(prior,dict),'RUNTIME_CONFIG_INVALID')
+   dropped=sorted(set(prior)-set(runtime))
+   require(not dropped,'OPERATOR_RUNTIME_KEYS_REQUIRE_CONFIG_JSON:'+','.join(dropped))
+  atomic(prefix/'runtime.json',encoded(runtime))
   releases=prefix/'releases';releases.mkdir(mode=0o700,exist_ok=True);release=releases/sha
   if not release.exists():
    staging=releases/('.stage-'+uuid.uuid4().hex);staging.mkdir(mode=0o700)

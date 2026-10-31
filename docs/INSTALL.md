@@ -115,7 +115,7 @@ The installer saves the chosen ownership mode on first installation. Repeating t
 The CI build downloads the locked wheels for x86_64 CPython 3.12–3.15 using `pip download --python-version` with `--require-hashes` and `--only-binary=:all:`, then packs all exact verified wheels into one source-bound release ZIP. On Python 3.14 it also creates a real virtual environment, installs **offline only** from that ZIP using the unchanged requirements lock, and imports Flask/MarkupSafe/Waitress. The application installer never downloads packages at activation time. This CI evidence is still not a claim about a live Ubuntu 26.04 host.
 
 
-## Unified client Python setup (0.21.3)
+## Unified client Python setup (0.21.4)
 
 After BoxWeave's host installer reports `ready`, use `boxweave client`
 for the interactive alphabetic App selector or an explicit command such as
