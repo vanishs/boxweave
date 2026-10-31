@@ -57,3 +57,14 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [D1 implementation specification — trace and evidence](design/DIAGNOSTICS_D1_IMPLEMENTATION.md)
 - [D2 implementation specification — reports and nested diagnosis](design/DIAGNOSTICS_D2_IMPLEMENTATION.md)
 
+## Box environment management research (proposal; NOT IMPLEMENTED)
+
+- [Architecture — Box checkpoints, cloning and environment fingerprints](design/BOX_ENVIRONMENT_PROPOSAL.md)
+- [E0 — Provider capability / security boundary](design/BOX_ENV_E0_CAPABILITIES.md)
+- [E1 — Environment fingerprint capture and difference](design/BOX_ENV_E1_FINGERPRINTS.md)
+- [E2 — Snapshot create, list and delete](design/BOX_ENV_E2_SNAPSHOTS.md)
+- [E3 — Snapshot restore](design/BOX_ENV_E3_RESTORE.md)
+- [E4 — Independent Box cloning](design/BOX_ENV_E4_CLONE.md)
+
+These are **design-only** and complement, but do not implement, the D0-D2 diagnostic proposals.
+

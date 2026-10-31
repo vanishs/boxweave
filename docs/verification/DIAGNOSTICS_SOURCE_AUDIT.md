@@ -207,3 +207,8 @@ Primary code refs at reviewed commit:
   `2024-11-05` negotiation and a reviewed current specification, not presumed:
   [MCP tools (2025-11-25)](https://modelcontextprotocol.io/specification/2025-11-25/server/tools);
   [base JSON-RPC contract](https://modelcontextprotocol.io/specification/2025-11-25/basic).
+
+## Related later proposal — not part of this historical source audit
+
+A distinct [Box checkpoints, clone and environment fingerprint proposal](../design/BOX_ENVIRONMENT_PROPOSAL.md) now documents phased [E0-E4 implementation handoffs](../design/BOX_ENVIRONMENT_PROPOSAL.md#12-development-batches--source-of-implementation-handoffs) for the owner's reused-box and fresh-box development workflow. **NOT IMPLEMENTED**. These proposed features do not change the reviewed `main@0fcfa6a` behavior or the evidentiary classification of this audit. Similarly, [D0-D2 diagnostics](../design/DIAGNOSTICS_PROPOSAL.md) remain design-only; snapshot or cloning support is not established for the deployed Containarium MCP by native Incus capabilities alone.
+

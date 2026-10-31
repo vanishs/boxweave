@@ -19,6 +19,10 @@ This proposal has three **separate, source-reviewed implementation specification
 
 **Implementation order:** D0 -> D1 app-side -> D2-a -> D2-b only after approval. The optional existing-MCP diagnostic lookup (D3) and generic user-project debugging (D4) remain deferred. Before any coding, reconcile the specs with the then-current main HEAD and maintainer decisions in [OPEN_QUESTIONS](../knowledge/OPEN_QUESTIONS.md). Source-only documentation is S/D evidence, not CI, deployment or live health proof.
 
+## Related environment-management proposal (independent; NOT IMPLEMENTED)
+
+The proposed [Box checkpoints, clone and fingerprint architecture](BOX_ENVIRONMENT_PROPOSAL.md) and its [E0 capability](BOX_ENV_E0_CAPABILITIES.md), [E1 fingerprint](BOX_ENV_E1_FINGERPRINTS.md), [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md), [E3 restore](BOX_ENV_E3_RESTORE.md), [E4 clone](BOX_ENV_E4_CLONE.md) coding handoffs complement D0-D2 but **are NOT IMPLEMENTED**. Their primary use is a dual-mode development workflow (reuse an existing nested Box, or create a new test Box); the capabilities are designed as general BoxWeave product features. D0/D1/D2 diagnostics are also proposals, not already shipped. Environment capture/checkpoint features must not require working diagnostics, and diagnostics must not imply that an Incus native operation is authenticated via deployed Containarium MCP. No additional MCP, host privilege, DB schema or runtime capability was added by this document link.
+
 ## 1. Design choice
 
 Implement **one evidence model** behind separate, appropriately authorized
