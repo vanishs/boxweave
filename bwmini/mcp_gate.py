@@ -42,6 +42,21 @@ def nesting_plan(logical, wanted, observed):
 REGISTRY = Path("/var/lib/boxweave-default/public/targets.json")
 LAUNCHER = "/usr/local/lib/boxweave/boxweave/launcher"
 
+# Fixed, non-disclosing failure codes that may be surfaced verbatim; anything
+# else stays behind the generic trust-gate message.
+GATE_ERROR_CODES = frozenset((
+    "MANAGED_IDENTITY_UNAVAILABLE", "SSH_KEYS_ARRAY_REQUIRED",
+    "DUPLICATE_SSH_PUBLIC_KEY", "FULL_ED25519_PUBLIC_KEY_REQUIRED",
+    "TOO_MANY_PUBLIC_KEYS", "TARGET_CHANGED", "TARGET_READ_FAILED",
+    "EXACT_MANAGED_TARGET_REQUIRED", "MANAGED_INSTANCE_IDENTITY_REQUIRED",
+    "LOCAL_INCUS_OBSERVATION_OR_CHANGE_FAILED", "NESTING_BOOLEAN_REQUIRED",
+    "NESTING_CONFIG_INVALID", "NESTING_REQUEST_INVALID", "REQUEST_LIMIT",
+    "OWNED_PROVIDER_REQUIRED", "NESTING_HELPER_UNAVAILABLE",
+    "NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE",
+    "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED",
+    "CHANGE_OUTCOME_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE",
+))
+
 
 MANAGED_PUBLIC_KEY_FILE = Path("/home/boxweave/.ssh/id_ed25519.pub")
 
@@ -186,11 +201,7 @@ def main():
                         trusted(args, registry, json.loads(text)["container"])
                 except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
                     # Never disclose actual public/private key data in errors.
-                    reason = str(error) if str(error) in (
-                        "MANAGED_IDENTITY_UNAVAILABLE", "SSH_KEYS_ARRAY_REQUIRED",
-                        "DUPLICATE_SSH_PUBLIC_KEY", "FULL_ED25519_PUBLIC_KEY_REQUIRED",
-                        "TOO_MANY_PUBLIC_KEYS"
-                    ) else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
+                    reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
                                       "error": {"code": -32602, "message": reason}}), flush=True)
                     continue
@@ -207,9 +218,10 @@ def main():
                             value = nesting_invoke({"action":"apply","logical":logical,"nesting":nesting,
                                                     "expected":plan["expected"],"confirm":plan["target"]["name"]})
                             message["result"]["content"].append({"type":"text","text":json.dumps({"boxweave_nesting":value})})
-                        except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError):
+                        except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
+                            detail = str(error) if str(error) in GATE_ERROR_CODES else "NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE"
                             message = {"jsonrpc":"2.0","id":request["id"],"error":{
-                                "code":-32603,"message":"NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE; creation must not be repeated"}}
+                                "code":-32603,"message":"BOXWEAVE_NESTING_NOT_APPLIED; box creation itself succeeded and must not be repeated; "+detail}}
                     print(json.dumps(message), flush=True)
     finally:
         if process.poll() is None:

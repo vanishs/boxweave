@@ -146,3 +146,41 @@ class GateProtocolTests(unittest.TestCase):
             reply=json.loads(output.getvalue())
             if failure:self.assertIn("error",reply)
             else:self.assertTrue(json.loads(reply["result"]["content"][-1]["text"])["boxweave_nesting"]["nesting"])
+
+    def peer(self,upstream):
+        from types import SimpleNamespace
+        class KeepBytes(io.BytesIO):
+            def close(self):pass
+        return SimpleNamespace(stdin=KeepBytes(),stdout=io.BytesIO("".join(json.dumps(x)+"\n" for x in upstream).encode()),
+                               poll=lambda:0)
+
+    def test_nesting_helper_gap_is_named_not_masked_as_trust_gate(self):
+        request={"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"boxweave_nesting",
+                    "arguments":{"action":"inspect","logical":"work"}}}
+        observed={"container":{"name":"work-container","createdAt":"123","username":"work"}}
+        upstream=[{"jsonrpc":"2.0","id":"boxweave-nesting-7","result":{"content":[{"type":"text","text":json.dumps(observed)}]}}]
+        output=io.StringIO()
+        with patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=self.peer(upstream)),patch.object(mcp_gate,"nesting_invoke",side_effect=ValueError("NESTING_HELPER_UNAVAILABLE")):
+            mcp_gate.main()
+        reply=json.loads(output.getvalue())
+        self.assertIn("NESTING_HELPER_UNAVAILABLE",reply["error"]["message"])
+        self.assertNotIn("TRUST_OR_WORKLOAD_KEY_GATE",reply["error"]["message"])
+
+    def test_created_box_survives_nesting_helper_gap_without_recreation(self):
+        request={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_container",
+                    "arguments":{"username":"work","enable_nesting":True}}}
+        observed={"name":"work-container","createdAt":"123","username":"work"}
+        plan={"target":{"name":"work-container","created":"123"},"expected":{"identity":"pinned"}}
+        upstream=[{"jsonrpc":"2.0","id":1,"result":{"content":[]}},
+                  {"jsonrpc":"2.0","id":"boxweave-nesting-1","result":{"content":[{"type":"text","text":json.dumps({"container":observed})}]}}]
+        process=self.peer(upstream)
+        output=io.StringIO()
+        with patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=process),patch.object(mcp_gate,"managed_public_key",return_value="ssh-ed25519 AAAA"),patch.object(mcp_gate,"nesting_invoke",side_effect=[plan,ValueError("NESTING_HELPER_UNAVAILABLE")]):
+            mcp_gate.main()
+        forwarded=[json.loads(line) for line in process.stdin.getvalue().splitlines()]
+        self.assertEqual(sum(message.get("method")=="tools/call" and message["params"]["name"]=="create_container"
+                             for message in forwarded),1)
+        reply=json.loads(output.getvalue())
+        self.assertIn("BOXWEAVE_NESTING_NOT_APPLIED",reply["error"]["message"])
+        self.assertIn("must not be repeated",reply["error"]["message"])
+        self.assertIn("NESTING_HELPER_UNAVAILABLE",reply["error"]["message"])

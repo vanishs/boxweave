@@ -104,7 +104,12 @@ def privileged_main():
     print(json.dumps(handle(json.loads(raw))), flush=True)
 
 def invoke(request):
-    p = subprocess.run(SUDO, input=json.dumps(request), capture_output=True, text=True, timeout=50)
+    try:
+        p = subprocess.run(SUDO, input=json.dumps(request), capture_output=True, text=True, timeout=50)
+    except (OSError, subprocess.SubprocessError):
+        # Missing sudo/helper or a timed-out helper is a deployment gap, not a
+        # trust failure; name it so operators can repair the gate host.
+        raise ValueError("NESTING_HELPER_UNAVAILABLE") from None
     if p.returncode or len(p.stdout) > 65536:
         raise ValueError("NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE")
     return json.loads(p.stdout)
