@@ -49,7 +49,9 @@ if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secr
   done
   [[ "$EUID" -eq 0 ]] || die 'DEFAULT_INSTALL_REQUIRES_ROOT: run the reviewed installer with sudo bash'
   command -v python3 >/dev/null || die 'Python 3 is required'
-  python3 - "0.23.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  # Stream only the latest separately verified published stable release.
+  # This pin intentionally differs from an unreleased main source version.
+  python3 - "0.22.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"

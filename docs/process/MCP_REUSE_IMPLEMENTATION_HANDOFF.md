@@ -50,3 +50,7 @@ At this checkpoint the last observed GitHub release is **v0.22.0**, with 13 publ
 Read AGENTS.md, the current source main, this handoff, the MCP master, policy and acceptance plans. Pin source/installed/running versions and all actor/Provider/Box identities. First run focused fixtures, then only specifically authorized real tests. Record normal and negative cases, tool discovery and scope, original unknown operations, command/exit/evidence classes (S/D/T/U), unresolved blockers and exact handoff before considering each phase complete.
 
 **Do not mark M0–M5 as fully delivered based on this partial source implementation.**
+
+## Post-merge installer safety correction
+
+After code PR #7 merge (main 56bb425), the source candidate remained 0.23.0, while GitHub published stable v0.22.0 was confirmed with 13 assets and a commit tag. The streamed default installer previously targeted absent 0.23.0 assets, a prospective fresh-install regression. The follow-on source fix introduces PUBLISHED_RELEASE = 0.22.0, preserves the explicit published pin in install.sh, and tests its relation to VERSION. It **does not** make the new 0.23.0 MCP features available to a user who installs the stable v0.22.0 release. Only a separately reviewed and published 0.23.0 release plus an explicit stable-pin update can do that. Never silently fall back from a failed signature/digest check; a valid pin must be changed in reviewed source.
