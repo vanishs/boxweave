@@ -32,17 +32,20 @@ class GatePolicyTests(unittest.TestCase):
         import io
         from contextlib import redirect_stdout
         from bwmini import mcp_gate
+        class KeepOpen(io.BytesIO):
+            def close(self):
+                pass
         class FakeProcess:
             def __init__(self):
-                self.stdin=io.BytesIO()
-                self.stdout=io.BytesIO()
+                self.stdin=KeepOpen()
+                self.stdout=KeepOpen()
             def poll(self):return 0
         fake=FakeProcess()
         request={"jsonrpc":"2.0","id":1,"method":"tools/call",
                  "params":{"name":"get_secret","arguments":{"name":"private"}}}
         with (patch.object(mcp_gate,"tool_policy",return_value=frozenset({"list_containers"})),
               patch.object(mcp_gate.subprocess,"Popen",return_value=fake),
-              patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\\n")),
+              patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),
               redirect_stdout(io.StringIO()) as out):
             mcp_gate.main()
         self.assertEqual(fake.stdin.getvalue(),b"")
