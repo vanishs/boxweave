@@ -194,7 +194,8 @@ class SelftestTests(unittest.TestCase):
                                     "--memory", "2GB"]):
                 code = main()
             self.assertEqual(code, 2)  # argparse accepted resize; the fixture lifecycle refused the name
-            self.assertEqual(json_module.loads(out.getvalue())["code"], "TARGET_NOT_ALLOWED")
+            self.assertEqual(json_module.loads(out.getvalue().strip().splitlines()[-1])["code"],
+                             "TARGET_NOT_ALLOWED")
 
 
 if __name__ == "__main__":
