@@ -241,3 +241,7 @@ Each linked document is a **design/specification only; NOT IMPLEMENTED**. All fi
 | **E4** | [Clone current Box / clone snapshot](BOX_ENV_E4_CLONE.md) | E2; E1 optional metadata | provider-managed new identity and rekey, no exposed duplicate |
 
 **Backward cross-references:** [diagnostic proposal (D0-D2, NOT IMPLEMENTED)](DIAGNOSTICS_PROPOSAL.md) and [diagnostic source audit (S/D research, NOT a feature implementation)](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). The linked diagnostics documents must reciprocally label this independent area as **NOT IMPLEMENTED**; no completed Phase/ADR/REQ state is asserted by these links.
+
+## Related capability-led MCP reuse audit — research only (2026-10-31)
+
+The independently proposed [BoxWeave MCP capability integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [source gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare **current BoxWeave functions** with Containarium Platform and agent-box MCP tools, including proposed security boundaries and M0–M5 handoffs. This is **S/D RESEARCH ONLY; NOT IMPLEMENTED**, does not change or approve D0–D2 diagnostics or E0–E4 Box environment plans, and does not establish authenticated runtime MCP capabilities. Current existing diagnostic/environment specifications retain their independent implementation gates.

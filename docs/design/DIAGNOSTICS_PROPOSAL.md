@@ -385,3 +385,7 @@ Questions for the owner (tracked in
 
 No decisions are implied by publishing this proposal. The authoritative
 scope/REQ/AC, ADR index and release version remain unchanged.
+
+## Related capability-led MCP reuse audit — research only (2026-10-31)
+
+The independently proposed [BoxWeave MCP capability integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [source gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare **current BoxWeave functions** with Containarium Platform and agent-box MCP tools, including proposed security boundaries and M0–M5 handoffs. This is **S/D RESEARCH ONLY; NOT IMPLEMENTED**, does not change or approve D0–D2 diagnostics or E0–E4 Box environment plans, and does not establish authenticated runtime MCP capabilities. Current existing diagnostic/environment specifications retain their independent implementation gates.
