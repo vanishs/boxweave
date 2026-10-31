@@ -150,4 +150,26 @@ class InstallCompletionTextTests(unittest.TestCase):
         self.assertNotRegex(summary, r"(?m)^\\s*[1-9]\\.\\s")
 
 
+class InstallProvenanceTests(unittest.TestCase):
+    def test_provenance_is_public_shape_without_secrets(self):
+        old = {"source": "a" * 40, "version": "0.21.0", "provider_mode": "standalone",
+               "managed_files": {"/usr/local/bin/boxweave": "d" * 64},
+               "phase_history": [{"name": "release_download", "started_utc": "2026-10-31T01:02:03+00:00"},
+                                  {"name": "local_provider", "started_utc": "2026-10-31T01:03:04+00:00"}]}
+        descriptor = {"version": "0.21.0", "host": "10.0.0.5", "port": 22, "web_port": 18640,
+                      "application_user": "boxweave"}
+        record = online.build_provenance(old, descriptor, "2026-10-31T01:09:09+00:00")
+        self.assertEqual(record["schema_version"], 1)
+        self.assertEqual(record["source"], "a" * 40)
+        self.assertEqual(record["managed_files"], 1)
+        self.assertEqual([p["name"] for p in record["phases"]], ["release_download", "local_provider"])
+        self.assertEqual(record["installed_utc"], "2026-10-31T01:09:09+00:00")
+        self.assertEqual(set(record), {"schema_version", "version", "source", "installed_utc",
+                                       "provider_mode", "host", "port", "web_port",
+                                       "application_user", "managed_files", "phases"})
+        blob = json.dumps(record)
+        self.assertNotIn("secret", blob)
+        self.assertNotIn("password", blob)
+
+
 if __name__=="__main__":unittest.main()

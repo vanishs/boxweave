@@ -110,6 +110,44 @@ class HostCliTests(unittest.TestCase):
         self.assertEqual(result["app_health"], "not_checked")
         self.assertFalse(result["web"]["authenticated"])
 
+    def provenance(self):
+        return {"schema_version": 1, "version": "0.21.0", "source": "a" * 40,
+                "installed_utc": "2026-10-31T00:00:00+00:00", "provider_mode": "standalone",
+                "host": "10.0.0.5", "port": 22, "web_port": 18640,
+                "application_user": "boxweave", "managed_files": 12,
+                "phases": [{"name": "ready", "started_utc": "2026-10-31T00:00:00+00:00"}]}
+
+    def test_provenance_validator_accepts_only_the_published_shape(self):
+        good = self.provenance()
+        host_cli.check_provenance(good)
+        for change in ({"source": "short"}, {"source": "Z" * 40}, {"version": "bad"},
+                       {"provider_mode": "fixture"}, {"managed_files": -1},
+                       {"phases": [{"name": "Ready", "started_utc": "x"}]},
+                       {"phases": [{"name": "ready"}]}, {"extra": 1}, {"port": 70000},
+                       {"host": "bad host"}, {"installed_utc": "x" * 65}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                host_cli.check_provenance({**good, **change})
+        with self.assertRaises(ValueError):
+            host_cli.check_provenance({k: v for k, v in good.items() if k != "phases"})
+
+    def test_provenance_command_prints_descriptor_or_refusal(self):
+        with patch.object(host_cli, "provenance_state", return_value=self.provenance()), \
+             patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(host_cli.main(["provenance"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["version"], "0.21.0")
+        with patch.object(host_cli, "provenance_state", side_effect=ValueError("INVALID_PROVENANCE_DESCRIPTOR")), \
+             patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(host_cli.main(["provenance"]), 2)
+        self.assertIn("INVALID_PROVENANCE_DESCRIPTOR", err.getvalue())
+
+    def test_provenance_refuses_world_writable_descriptor_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "provenance.json"
+            path.write_text(json.dumps(self.provenance()))
+            path.chmod(0o666)
+            with patch.object(host_cli, "PROVENANCE_STATE", path), self.assertRaises(ValueError):
+                host_cli.provenance_state()
+
 
 if __name__ == "__main__":
     unittest.main()

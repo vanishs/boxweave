@@ -263,6 +263,17 @@ def install_missing_incus(deadline, log, env):
         deadline, log, env)
 
 
+def build_provenance(old, descriptor, installed_utc):
+    """Public, non-secret installation record; never includes credentials or digests of private files."""
+    return {"schema_version": 1, "version": descriptor["version"], "source": old.get("source"),
+            "installed_utc": installed_utc, "provider_mode": old.get("provider_mode"),
+            "host": descriptor["host"], "port": descriptor["port"], "web_port": descriptor["web_port"],
+            "application_user": descriptor["application_user"],
+            "managed_files": len(old.get("managed_files", {})),
+            "phases": [{"name": p["name"], "started_utc": p["started_utc"]}
+                       for p in old.get("phase_history", [])][-64:]}
+
+
 def installation_summary(web_port, version):
     """Human-facing last screen; use the verified installed release version."""
     require(isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version),
@@ -367,6 +378,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         def phase(name):
             old.update(phase=name, phase_started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                        phase_deadline_seconds=600, source=m["source"], version=version)
+            old.setdefault("phase_history", []).append({"name": name, "started_utc": old["phase_started_utc"]})
             atomic(marker, json.dumps(old, sort_keys=True, indent=2).encode())
             print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
             return time.monotonic()+600
@@ -597,6 +609,11 @@ store.admin(generate_password_hash(password))
         public_payload = (json.dumps(descriptor,sort_keys=True,indent=2)+"\n").encode()
         atomic(public_path,public_payload,0o644)
         old["managed_files"][str(public_path)] = sha(public_payload)
+        provenance_path = PUBLIC / "provenance.json"
+        provenance_payload = (json.dumps(build_provenance(old, descriptor, datetime.datetime.now(datetime.timezone.utc).isoformat()),sort_keys=True,indent=2)+"\n").encode()
+        require(not provenance_path.exists() or str(provenance_path) in old["managed_files"], "FOREIGN_PROVENANCE_FILE")
+        atomic(provenance_path,provenance_payload,0o644)
+        old["managed_files"][str(provenance_path)] = sha(provenance_payload)
         old.update(phase="ready",host=host,port=port,server_key=key,managed_public_key=managed_public_key,
                    credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())

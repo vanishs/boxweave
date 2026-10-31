@@ -18,6 +18,7 @@ from urllib.parse import quote
 from urllib.request import build_opener, ProxyHandler
 
 PUBLIC_STATE = Path("/usr/local/lib/boxweave/default/client-public.json")
+PROVENANCE_STATE = Path("/usr/local/lib/boxweave/default/provenance.json")
 IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}\Z")
 
 
@@ -55,28 +56,60 @@ def trusted_helper(name):
         sys.path.remove(location)
 
 
-def public_state():
-    path = PUBLIC_STATE
+def published_descriptor(path, validator):
+    """Shared trust gate for root-published 0644 JSON: owned, isolated, bounded."""
     try:
         meta = path.lstat()
         if not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0 or meta.st_mode & 0o022 or meta.st_size > 16384:
             raise ValueError("UNTRUSTED_PUBLIC_DESCRIPTOR")
-        # Never follow links through a writable installation namespace.
         for parent in path.parents:
             info = parent.lstat()
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
                 raise ValueError("UNTRUSTED_PUBLIC_DESCRIPTOR_DIRECTORY")
         d = json.loads(path.read_text(encoding="utf-8"))
-        if (not isinstance(d, dict) or d.get("schema_version") != 1 or d.get("phase") != "ready"
-                or d.get("application_user") != "boxweave"
-                or d.get("app_prefix") != "/home/boxweave/boxweave"
-                or not isinstance(d.get("version"), str)
-                or not re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
-                or type(d.get("web_port")) is not int or not 1024 <= d["web_port"] <= 65535):
-            raise ValueError("INVALID_PUBLIC_DESCRIPTOR")
+        validator(d)
         return d
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as exc:
         raise ValueError("PUBLIC_DESCRIPTOR_NOT_AVAILABLE") from exc
+
+
+def check_public_state(d):
+    if (not isinstance(d, dict) or d.get("schema_version") != 1 or d.get("phase") != "ready"
+            or d.get("application_user") != "boxweave"
+            or d.get("app_prefix") != "/home/boxweave/boxweave"
+            or not isinstance(d.get("version"), str)
+            or not re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+            or type(d.get("web_port")) is not int or not 1024 <= d["web_port"] <= 65535):
+        raise ValueError("INVALID_PUBLIC_DESCRIPTOR")
+
+
+def check_provenance(d):
+    if (not isinstance(d, dict) or set(d) != {"schema_version", "version", "source", "installed_utc",
+                                              "provider_mode", "host", "port", "web_port",
+                                              "application_user", "managed_files", "phases"}
+            or d["schema_version"] != 1 or not re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+            or not isinstance(d["source"], str) or not re.fullmatch(r"[a-f0-9]{40}", d["source"])
+            or not isinstance(d["installed_utc"], str) or len(d["installed_utc"]) > 64
+            or d["provider_mode"] not in ("external", "standalone")
+            or not isinstance(d["host"], str) or not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", d["host"])
+            or type(d["port"]) is not int or not 1 <= d["port"] <= 65535
+            or type(d["web_port"]) is not int or not 1024 <= d["web_port"] <= 65535
+            or d["application_user"] != "boxweave" or type(d["managed_files"]) is not int
+            or not 0 <= d["managed_files"] <= 4096
+            or not isinstance(d["phases"], list) or len(d["phases"]) > 64
+            or any(not isinstance(p, dict) or set(p) != {"name", "started_utc"}
+                   or not isinstance(p["name"], str) or not re.fullmatch(r"[a-z_]{1,64}", p["name"])
+                   or not isinstance(p["started_utc"], str) or len(p["started_utc"]) > 64
+                   for p in d["phases"])):
+        raise ValueError("INVALID_PROVENANCE_DESCRIPTOR")
+
+
+def public_state():
+    return published_descriptor(PUBLIC_STATE, check_public_state)
+
+
+def provenance_state():
+    return published_descriptor(PROVENANCE_STATE, check_provenance)
 
 
 def observe(argv, timeout=8, limit=16384, cwd=None):
@@ -220,6 +253,7 @@ def main(argv=None):
     sub.add_parser("status", help="Public Web reachability and published installation metadata")
     doctor = sub.add_parser("doctor", help="Host/systemd observations (no repair)")
     doctor.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
+    sub.add_parser("provenance", help="Published installation provenance (no secrets)")
     box = sub.add_parser("box", help="Exact-name Incus read-only inspection (Incus permission required)")
     box_sub = box.add_subparsers(dest="box_action")
     for action in ("inspect", "diagnose"):
@@ -236,6 +270,13 @@ def main(argv=None):
             return 2
         return 0
     args = parser.parse_args(argv)
+    if args.action == "provenance":
+        try:
+            print(json.dumps(provenance_state(), sort_keys=True))
+            return 0
+        except ValueError as exc:
+            print(json.dumps({"state": "unavailable", "code": str(exc)}), file=sys.stderr)
+            return 2
     if args.action is None:
         parser.print_help()
         return 0
