@@ -9,6 +9,16 @@ Related accepted requirements (do not silently extend): REQ-002/003/004/005/006/
 [ADR-007](ADR/0007-host-install-boundary.md) and
 [ADR-008](ADR/0008-independent-nesting.md) remain authoritative.
 
+## Developer implementation handoff — D0, D1 and D2 (research-only)
+
+This proposal has three **separate, source-reviewed implementation specifications** for programmers. They give explicit file touchpoints, interfaces, negative tests, packaging/rollback constraints and acceptance gates. All are proposals, not shipped capabilities or permission to perform live resource changes.
+
+1. **[D0 — diagnostic correctness and truthful exits](DIAGNOSTICS_D0_IMPLEMENTATION.md)**: fix installed CLI/app health/client diagnose false-success paths; zero new MCP tools or DB schema changes. Tests D0-T01–D0-T16.
+2. **[D1 — structured events and safe trace correlation](DIAGNOSTICS_D1_IMPLEMENTATION.md)**: private schema-v9 evidence, atomic link to existing durable operations, classified error shapes, strict no-replay/no-secret behavior. Tests D1-T01–D1-T17. Gate-host capture is separately gated.
+3. **[D2 — private support reports, nested attribution and durable selftest](DIAGNOSTICS_D2_IMPLEMENTATION.md)**: host-safe read-only export and missing-evidence handling (D2-a), optionally persistent mutating selftest steps (D2-b, schema-v10 only if needed). Tests D2-T01–D2-T20.
+
+**Implementation order:** D0 -> D1 app-side -> D2-a -> D2-b only after approval. The optional existing-MCP diagnostic lookup (D3) and generic user-project debugging (D4) remain deferred. Before any coding, reconcile the specs with the then-current main HEAD and maintainer decisions in [OPEN_QUESTIONS](../knowledge/OPEN_QUESTIONS.md). Source-only documentation is S/D evidence, not CI, deployment or live health proof.
+
 ## 1. Design choice
 
 Implement **one evidence model** behind separate, appropriately authorized
