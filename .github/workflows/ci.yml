@@ -154,3 +154,175 @@ jobs:
           else
             gh release create "v$version" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."
           fi
+
+  e2e-ssh-mcp:
+    name: Disposable Ubuntu host + real SSH MCP read
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Record environment
+        shell: bash
+        run: |
+          mkdir -p ci-evidence
+          { date -u; uname -a; cat /etc/os-release; df -h /; free -h; } > ci-evidence/runner.txt
+      - name: Install official Containarium with Incus
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout --signal=TERM --kill-after=30s 14m bash -o pipefail -c \
+            'curl -fsSL https://containarium.dev/install.sh | sudo bash' \
+            2>&1 | tee ci-evidence/containarium-install.log
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "$code" > ci-evidence/containarium-exit.txt
+          echo "Containarium install: $code" >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+      - name: Prepare local SSH daemon and pinned host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server
+          sudo ssh-keygen -A
+          sudo install -d -m 755 /etc/ssh/sshd_config.d
+          printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin no\nAllowUsers boxweave\n' \
+            | sudo tee /etc/ssh/sshd_config.d/90-boxweave-ci.conf >/dev/null
+          sudo install -d -m 755 /run/sshd
+          sudo /usr/sbin/sshd -t
+          sudo systemctl enable --now ssh
+          sudo systemctl is-active --quiet ssh
+          echo "sshd active with key-only BoxWeave login" | tee ci-evidence/sshd.txt
+      - name: Wait for Provider API (10 attempts x 10s, then 10 x 60s)
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$(date +%s)
+          ready=0
+          for attempt in $(seq 1 20); do
+            code=$(curl --max-time 5 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/containers || true)
+            elapsed=$(( $(date +%s) - started ))
+            printf '%s Attempt %02d/20 after %ss: HTTP %s\n' "$(date -u +%FT%TZ)" "$attempt" "$elapsed" "$code" | tee -a ci-evidence/provider-http.txt
+            if [[ "$code" == '200' || "$code" == '401' ]]; then
+              ready=1
+              break
+            fi
+            if (( attempt < 20 )); then
+              if (( attempt <= 10 )); then sleep 10; else sleep 60; fi
+            fi
+          done
+          echo "Provider API ready: $ready" | tee -a ci-evidence/provider-http.txt
+          echo "Provider API readiness: $ready (HTTP $code, elapsed ${elapsed}s)" >> "$GITHUB_STEP_SUMMARY"
+          if (( ready == 0 )); then
+            echo "Provider API still not ready after 20 checks; keeping installer as authoritative final check."
+          fi
+      - name: Install published BoxWeave into existing Containarium
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout --signal=TERM --kill-after=30s 16m bash -o pipefail -c \
+            'curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash' \
+            2>&1 | tee ci-evidence/boxweave-install.log
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "$code" > ci-evidence/boxweave-exit.txt
+          echo "BoxWeave install: $code" >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+      - name: Verify generated client and actual SSH MCP read
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_MCP'
+          import json, pathlib, subprocess, tempfile, sys
+          out=pathlib.Path('ci-evidence/mcp-result.json')
+          report={'state':'running','client_generator':'not_run','ssh':'not_run',
+                  'initialize':'not_run','tools_list':'not_run','list_containers':'not_run'}
+          online='/usr/local/lib/boxweave/default/online.py'
+          def save(): out.write_text(json.dumps(report,indent=2)+'\n')
+          def cmd(*args, **kwargs): return subprocess.run(args,check=True,timeout=90,**kwargs)
+          save()
+          try:
+              with tempfile.TemporaryDirectory(prefix='boxweave-mcp-ci-') as folder:
+                  directory=pathlib.Path(folder)
+                  script=directory/'client-setup.ps1'
+                  with script.open('w') as handle:
+                      cmd('boxweave','client','--agent','codex','--transport','wsl',
+                          '--admin-user','runner','--no-replace',stdout=handle,stderr=subprocess.PIPE,text=True)
+                  assert 'McpServer' in script.read_text(), 'Windows client generator produced unexpected output'
+                  report['client_generator']='passed'
+                  save()
+                  key=directory/'id_ed25519'
+                  cmd('ssh-keygen','-q','-t','ed25519','-N','','-f',str(key),
+                      stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+                  public=(directory/'id_ed25519.pub').read_text().strip()
+                  cmd('sudo','python3',online,'enroll','--public-key',public,
+                      stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+                  result=cmd('sudo','python3',online,'client-config','--identity',str(key),
+                             '--known-hosts',str(directory/'known_hosts'),
+                             stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                  config=json.loads(result.stdout)
+                  (directory/'known_hosts').write_text(config['known_hosts_line']+'\n')
+                  dest=config['mcpServers']['boxweave']
+                  requests=[
+                    {'jsonrpc':'2.0','id':1,'method':'initialize','params':{
+                       'protocolVersion':'2024-11-05','capabilities':{},
+                       'clientInfo':{'name':'ga-e2e-test','version':'1.0'}}},
+                    {'jsonrpc':'2.0','method':'notifications/initialized'},
+                    {'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}},
+                    {'jsonrpc':'2.0','id':3,'method':'tools/call',
+                     'params':{'name':'list_containers','arguments':{}}}
+                  ]
+                  payload=''.join(json.dumps(x)+'\n' for x in requests)
+                  probe=subprocess.run([dest['command'],*dest['args']],input=payload,
+                                       capture_output=True,text=True,timeout=100)
+                  report['ssh_exit_code']=probe.returncode
+                  if probe.returncode:
+                      report['ssh_error_tail']=probe.stderr[-1200:]
+                      raise RuntimeError('SSH/MCP process failed')
+                  report['ssh']='passed'
+                  messages=[json.loads(x) for x in probe.stdout.splitlines() if x.strip()]
+                  replies={x.get('id'):x for x in messages if isinstance(x,dict) and 'id' in x}
+                  assert replies.get(1,{}).get('result',{}).get('protocolVersion')=='2024-11-05', 'MCP initialize error'
+                  report['initialize']='passed'
+                  save()
+                  tools=replies.get(2,{}).get('result',{}).get('tools',[])
+                  assert any(t.get('name')=='list_containers' for t in tools), 'MCP list_containers missing'
+                  report['tools_list']='passed'; report['tools_count']=len(tools)
+                  save()
+                  read=replies.get(3,{}).get('result',{})
+                  assert read.get('content') and not read.get('isError'), 'MCP list_containers call returned error'
+                  report['list_containers']='passed'
+                  report['state']='passed'
+                  save()
+          except Exception as error:
+              report['state']='failed'; report['error']=str(error)[:350]
+              save()
+              print(json.dumps(report))
+              raise
+          print(json.dumps(report))
+          PY_MCP
+      - name: Summarize service health and evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            for unit in ssh.service incus.service containarium.service; do
+              printf '%s: %s\n' "$unit" "$(systemctl is-active "$unit" 2>/dev/null || true)"
+            done
+            if command -v boxweave >/dev/null; then echo 'BoxWeave CLI: present'; else echo 'BoxWeave CLI: missing'; fi
+            if test -f ci-evidence/mcp-result.json; then cat ci-evidence/mcp-result.json; fi
+          } | tee ci-evidence/service-summary.txt
+          echo "Read detailed step statuses and retained evidence; install alone is not MCP proof." >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain diagnostic outputs, no private client keys
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-mcp-e2e-evidence
+          path: ci-evidence/
+          if-no-files-found: warn
+          retention-days: 3
+
