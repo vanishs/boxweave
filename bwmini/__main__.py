@@ -31,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
+    p.add_argument("action",choices=["capabilities","init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -99,6 +99,13 @@ def main():
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
     try:
+        if a.action=="capabilities":
+            from .capabilities import snapshot
+            c=read_config(a.config)
+            provider=Provider(c) if c.get("mode")=="mcp" else Fixture(Target(**c["target"])) if c.get("mode")=="fixture" else None
+            if provider is None:raise Fault("EXPLICIT_MODE_REQUIRED",422)
+            print(json.dumps(snapshot(provider),indent=2,sort_keys=True))
+            return 0
         if a.action=="diagnose":
             c=read_config(a.config)
             if c.get("mode")!="mcp":raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP",422)

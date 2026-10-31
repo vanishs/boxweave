@@ -112,6 +112,11 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         response=jsonify(code="OK")
         response.delete_cookie("bw_session")
         return response
+    @app.get("/api/mcp-capabilities")
+    def mcp_capabilities():
+        from .capabilities import snapshot
+        return jsonify(snapshot(service.provider))
+
     @app.get("/api/resources")
     def resources():
         # Only the explicit operator-reviewed allowlist, not arbitrary provider inventory.
