@@ -31,9 +31,17 @@ class BoxActions:
         self.clock=service.clock
 
     def plan(self,logical,action,args,actor="operator"):
-        if action not in WRITE_TOOLS:raise Fault("ACTION_NOT_ALLOWED",403)
-        adapter=BoxAgent(self.service,logical)
-        adapter.validate(action,args)
+        if action not in WRITE_TOOLS | {"toggle_auto_sleep"}:
+            raise Fault("ACTION_NOT_ALLOWED",403)
+        if action=="toggle_auto_sleep":
+            from .auto_sleep import validate
+            validate(args)
+            target=self.service.observe_target(logical)
+            if self.service.provider.mode!="mcp":raise Fault("LIVE_PROVIDER_REQUIRED")
+        else:
+            adapter=BoxAgent(self.service,logical)
+            adapter.validate(action,args)
+            target=adapter.target
         serialized=json.dumps(args,sort_keys=True,separators=(",",":"))
         if len(serialized.encode())>16384:raise Fault("REQUEST_TOO_LARGE",413)
         now=self.clock()
@@ -43,7 +51,7 @@ class BoxActions:
             db.execute("""INSERT INTO box_action_plans
                 (id,actor,logical,target_digest,action,arguments,created,expires)
                 VALUES (?,?,?,?,?,?,?,?)""",
-                (pid,actor,logical,adapter.target.digest(),action,serialized,now,now+120))
+                (pid,actor,logical,target.digest(),action,serialized,now,now+120))
         # Never return the command or file content in a plan response.
         return {"id":pid,"logical":logical,"action":action,"expires":now+120,
                 "confirmation_required":True,"state":"planned"}
@@ -55,11 +63,16 @@ class BoxActions:
                              (pid,actor)).fetchone()
         if prior is None:raise Fault("NOT_FOUND",404)
         if logical!=prior["logical"]:raise Fault("TARGET_CHANGED")
-        adapter=BoxAgent(self.service,logical)
-        if adapter.target.digest()!=prior["target_digest"]:
+        if prior["action"]=="toggle_auto_sleep":
+            target=self.service.observe_target(logical)
+            if self.service.provider.mode!="mcp":raise Fault("LIVE_PROVIDER_REQUIRED")
+        else:
+            adapter=BoxAgent(self.service,logical)
+            target=adapter.target
+            if prior["action"] not in adapter.allowed:
+                raise Fault("AGENT_BOX_TOOL_DENIED",403)
+        if target.digest()!=prior["target_digest"]:
             raise Fault("TARGET_CHANGED")
-        if prior["action"] not in adapter.allowed:
-            raise Fault("AGENT_BOX_TOOL_DENIED",403)
         now=self.clock()
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -117,11 +130,17 @@ class BoxActions:
                        (self.clock(),op["id"]))
         # Validation failures occur without upstream tool invocation.
         try:
-            adapter=BoxAgent(self.service,op["logical"])
-            if adapter.target.digest()!=op["target_digest"]:
-                raise Fault("TARGET_CHANGED")
             args=json.loads(op["arguments"])
-            adapter.validate(op["action"],args)
+            if op["action"]=="toggle_auto_sleep":
+                from .auto_sleep import validate
+                validate(args)
+                target=self.service.observe_target(op["logical"])
+            else:
+                adapter=BoxAgent(self.service,op["logical"])
+                target=adapter.target
+                adapter.validate(op["action"],args)
+            if target.digest()!=op["target_digest"]:
+                raise Fault("TARGET_CHANGED")
         except Fault as error:
             with self.store.db() as db:
                 db.execute("UPDATE box_action_receipts SET state='failed',code=?,updated=? WHERE id=?",
@@ -137,7 +156,11 @@ class BoxActions:
             db.execute("UPDATE box_action_receipts SET state='dispatching',code='DISPATCH_INTENT',updated=? WHERE id=?",
                        (self.clock(),op["id"]))
         try:
-            adapter.execute(op["action"],args,timeout=30)
+            if op["action"]=="toggle_auto_sleep":
+                from .auto_sleep import execute
+                execute(self.service,target,args)
+            else:
+                adapter.execute(op["action"],args,timeout=30)
             state,code="succeeded","OK"
         except Exception:
             # Lost response is not proof of failure. Never replay.
