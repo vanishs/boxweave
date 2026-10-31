@@ -356,10 +356,12 @@ succeeded online with verification=observed. `--diagnose` from a
 separate client box printed 8/8 ok with registration=registered.
 Acceptance surfaced and fixed three release-blocking defects (0.21.1
 wrapper cwd, 0.21.2 argparse guards, 0.21.3 resize choice) and two
-open findings: (1) a streamed update rewrites runtime.json and drops
-operator-added blocks such as `lifecycle` — re-add the block and
-restart the user worker after updates; the installer should merge or
-explicitly preserve operator keys; (2) the long-running user worker
+open findings: (1) corrected on review: `runtime.json` is a generated
+artifact rebuilt from `config.json` on every install, and operator
+keys belong in `config.json` (the byte-checked input). An update
+refuses with OPERATOR_RUNTIME_KEYS_REQUIRE_CONFIG_JSON and names the
+keys when a previous runtime.json would lose any key (0.21.4), instead
+of silently dropping them; (2) the long-running user worker
 freezes lifecycle configuration at startup, so config changes need a
 worker restart. Client-side, a stale SSH MCP transport in the agent
 chain wedged every MCP call until it was killed — transport
