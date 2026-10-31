@@ -196,16 +196,29 @@ jobs:
           sudo systemctl enable --now ssh
           sudo systemctl is-active --quiet ssh
           echo "sshd active with key-only BoxWeave login" | tee ci-evidence/sshd.txt
-      - name: Wait briefly for existing Provider API readiness (no credentials)
+      - name: Wait for Provider API (10 attempts x 10s, then 10 x 60s)
         shell: bash
         run: |
-          for attempt in $(seq 1 18); do
+          set -euo pipefail
+          started=$(date +%s)
+          ready=0
+          for attempt in $(seq 1 20); do
             code=$(curl --max-time 5 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/containers || true)
-            printf 'Attempt %02d: HTTP %s\n' "$attempt" "$code" | tee -a ci-evidence/provider-http.txt
-            if [[ "$code" == '200' || "$code" == '401' ]]; then break; fi
-            sleep 3
+            elapsed=$(( $(date +%s) - started ))
+            printf '%s Attempt %02d/20 after %ss: HTTP %s\n' "$(date -u +%FT%TZ)" "$attempt" "$elapsed" "$code" | tee -a ci-evidence/provider-http.txt
+            if [[ "$code" == '200' || "$code" == '401' ]]; then
+              ready=1
+              break
+            fi
+            if (( attempt < 20 )); then
+              if (( attempt <= 10 )); then sleep 10; else sleep 60; fi
+            fi
           done
-          echo "Readiness wait completed; the next installer still performs its own strict API checks."
+          echo "Provider API ready: $ready" | tee -a ci-evidence/provider-http.txt
+          echo "Provider API readiness: $ready (HTTP $code, elapsed ${elapsed}s)" >> "$GITHUB_STEP_SUMMARY"
+          if (( ready == 0 )); then
+            echo "Provider API still not ready after 20 checks; keeping installer as authoritative final check."
+          fi
       - name: Install published BoxWeave into existing Containarium
         shell: bash
         run: |
