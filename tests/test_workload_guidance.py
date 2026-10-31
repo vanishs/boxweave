@@ -17,10 +17,11 @@ def key(letter):
 class WorkloadIdentityTests(unittest.TestCase):
     def test_generated_client_leaves_codex_agents_untouched(self):
         script=client_setup.render(ready_state(),"example-admin")
-        for forbidden in ("AGENTS.md", "AGENTS.override.md", "WslGuidance",
+        for forbidden in ("AGENTS.override.md", "WslGuidance",
                           "ManagedWorkloadPublicKey", "Merge-BoxWeaveGuidance"):
             self.assertNotIn(forbidden,script)
         self.assertTrue(script.startswith("#!/usr/bin/env python3\n# ==="))
+        self.assertIn("# No BoxWeave project AGENTS.md files are created or modified.",script)
         self.assertIn('HOST = SETTINGS["host"]',script)
         self.assertIn('PORT = SETTINGS["port"]',script)
         self.assertIn("StrictHostKeyChecking=yes",script)

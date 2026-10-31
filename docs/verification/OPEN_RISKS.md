@@ -82,3 +82,11 @@ registration paths does not prove real long-idle reliability on any
 network. Existing client config needs operator-approved re-registration;
 the installer does not alter running SSH sessions or server sshd config.
 Keepalive detects dead transports; it cannot automatically reconnect MCP.
+
+
+**0.20.0 unified client generator note:** All new installed
+`boxweave client` outputs are now Python 3.11+ including Codex/WSL.
+This removes the old PowerShell-only Windows path from the installed
+generator but does not install Python on clients or migrate old
+`.ps1` registrations. Manual Windows PowerShell helpers remain
+separate, and real cross-platform Python+SSH App acceptance is open.

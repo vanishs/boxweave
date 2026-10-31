@@ -59,12 +59,14 @@ host administrator may read the private first-password file
 
 ```sh
 boxweave client --app codex --os windows --transport wsl \
-  --admin-user YOUR_HOST_ADMIN --no-replace > boxweave-setup.ps1
+  --admin-user YOUR_HOST_ADMIN --no-replace > boxweave-setup.py
 ```
 
-Transfer Codex/WSL PowerShell setup to Windows through an authenticated
-channel. Other Apps/OS combinations generate client-side Python 3.11+
-setup scripts. For App-specific paths, see [client setup](../clients/README.md). Enrollment uses that **human SSH administrator**
+Transfer the generated Python 3.11+ script to the selected client
+through an authenticated channel and review it before executing.
+All App/OS combinations use the same Python runtime, including
+Windows Codex/WSL; `boxweave client` never emits PowerShell. For App-specific paths and the `--distro` option, see
+[client setup](../clients/README.md). Enrollment uses that **human SSH administrator**
 to authorize a newly generated *public* transport key (with explicit
 `sudo` at enrollment), then tests real MCP initialize/discovery/read.
 The `boxweave` Linux account is the isolated application identity; it

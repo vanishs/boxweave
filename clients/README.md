@@ -30,7 +30,7 @@ boxweave client --app antigravity --os linux --transport native --admin-user YOU
 boxweave client --app cursor --os macos --transport native --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
 boxweave client --app copilot --os windows --transport native --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
 boxweave client --app zcode --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
-boxweave client --app codex --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.ps1
+boxweave client --app codex --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
 ```
 
 `--agent` remains an alias for `--app`. By default, the generated script
@@ -42,18 +42,24 @@ change **after** a real MCP read, with a backup.
 
 ## Run on the selected client
 
-The existing Windows **Codex + WSL** profile retains its independently
-reviewed **PowerShell 5.1** script, supporting `-Distro Ubuntu`,
-`-NoEnroll`/`-AlreadyEnrolled`, optional administrator SSH public-key
-auth and safe scoped Codex TOML updates. This path does **not**
-require Windows Python.
+**One runtime for every profile:** the installed generator emits a
+self-contained **Python 3.11+** client program for every App, Linux,
+macOS and Windows, including **Windows Codex + WSL**. PowerShell is
+no longer the output format of `boxweave client`. Run the reviewed
+file with `python3 boxweave-setup.py` on Linux/macOS, or
+`py -3 boxweave-setup.py` on Windows (after installing Python 3.11+
+and Windows OpenSSH). Windows WSL transport additionally requires
+an installed WSL distribution with Python3/OpenSSH; specify
+`--distro Ubuntu` when there is more than one distro.
 
-Every other profile generates self-contained **Python 3.11+** source
-(needs OpenSSH and `ssh-keygen`). Run `python3 boxweave-setup.py` on
-Linux/macOS, or `py -3 boxweave-setup.py` on Windows **with**
-Python 3.11+ and Windows OpenSSH installed. For Windows WSL transport,
-also install WSL Python3/OpenSSH and optionally specify
-`--distro Ubuntu` when more than one distro exists.
+The generated `.py` starts **exactly** with
+`#!/usr/bin/env python3` on the first line. The `# =====`
+banner and all documentation comments come **after** that line, so
+direct POSIX execution with executable permission still recognizes
+the shebang. The wizard writes `#`-prefixed prompts and status to
+stderr; stdout contains only Python source. Use shell redirection,
+or `--output NEW_FILE` to safely write a new script without overwriting
+an existing file. Avoid copying your own terminal input into the script.
 
 Review the generated `HOST`/`PORT` EDIT ME values for the actual
 client-reachable IP/port. Independently verify `SERVER_KEY` before
@@ -64,7 +70,7 @@ authorized Linux SSH/sudo enrollment of **only the public key**, and
 tests real initialize/tools/list/list_containers before App registration.
 For split administration use `--no-enroll` to print the server-side
 approval command, then `--already-enrolled` after approval.
-The legacy PowerShell switches are `-NoEnroll`/`-AlreadyEnrolled`.
+All profiles now use the Python `--no-enroll`/`--already-enrolled` options.
 
 **Long-running MCP SSH keepalive:** Every generated and legacy client
 registration uses `-o ServerAliveInterval=15 -o ServerAliveCountMax=4`,
@@ -72,8 +78,8 @@ matching the archived client implementation. This reduces idle network
 connection loss and detects an unresponsive SSH peer, but it does not
 automatically reconnect a terminated MCP session. A server upgrade does
 not silently change existing client MCP settings. To adopt the flags,
-regenerate the registration with explicit `--replace` (or `-Replace`
-for the legacy PowerShell script), then restart the App.
+regenerate the registration with explicit `--replace`, then restart
+the App.
 
 Client-only setup never changes host Incus/Provider/sshd or Codex
 `AGENTS.md`. Existing unrelated MCP servers survive scoped JSON/TOML
@@ -102,5 +108,7 @@ Official MCP configuration references:
 [TRAE](https://docs.trae.cn/ide_add-mcp-servers),
 [ZCode](https://zcode.z.ai/en/docs/mcp-services).
 
-Earlier Windows native and WSL profile descriptors and scoped scripts remain
-in `clients/profile_client.py` and `clients/windows/` for compatibility.
+Older standalone Windows enrollment utilities remain in
+`clients/profile_client.py` and `clients/windows/` for compatibility,
+but the installed `boxweave client` command does not emit PowerShell.
+They are not automatically run or migrated by the unified generator.

@@ -219,3 +219,30 @@ Record exact commit CI completion before declaring pass. **U:** live
 long-idle MCP behavior behind NAT/firewalls on Windows, Linux and macOS.
 The client must restart/reconnect if SSH dies; no silent migration of
 existing client registrations is performed by a server upgrade.
+
+
+## 0.20.0 Unified Python client output and copyability
+
+Owner requested that `boxweave client` stop making Windows Codex/WSL
+a PowerShell-only exception. The installed wizard/noninteractive generator
+now emits exactly the same self-contained Python 3.11+ source for all 36
+app/OS/transport combinations. The shebang is **the first line**;
+decorative `# =====` banners and usage notes appear afterwards.
+Interactive prompts/status use `#`-prefixed stderr so the copied
+script and redirected stdout are not polluted with un-commented wizard
+text. The generator preserves `--no-replace` as the default, never
+overwrites `--output`, retains strict SSH host-key pins and keepalive,
+and verifies actual MCP reads before a scoped App registration. Updated
+Codex TOML merge carries forward unrelated root options, comments and
+nested tables (including per-tool approvals) rather than overwriting
+them wholesale. The previous PowerShell generator and its regression
+suite are no longer part of the installed CLI; manually maintained
+legacy Windows scripts in clients/windows/ remain separate.
+
+**S:** source review of generator/template, CLI stderr/stdout boundary
+and the executable shebang. **T:** CI unit tests compile every generated
+profile, inspect stdout/stderr and --output behavior, check replacement
+policy, TOML preservation and keepalive; exact result must be checked.
+**U:** real Windows native/WSL Python3.11+ setup, real macOS/Linux
+clients, App tool injection and long-idle MCP connectivity. Python
+availability and Windows OpenSSH ACL requirements are operator prerequisites.

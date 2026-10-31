@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.19.1.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.20.0.** This is a preview, not a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -101,8 +101,8 @@ administrator and must **not** be used as an everyday login.
 
 Run `boxweave client` to choose the MCP App, client OS (Windows, Linux or
 macOS) and SSH transport (native or Windows WSL). It prints a reviewed
-client-side script on stdout: the preserved Windows Codex/WSL path emits
-PowerShell, while other profiles emit self-contained Python 3.11+.
+self-contained Python 3.11+ client-side source on stdout for **every**
+App, operating system and SSH transport, including Windows Codex/WSL.
 An authorized administrator must enroll only the client public SSH key.
 After a real authenticated MCP read, the script updates only the selected
 App's MCP configuration (or prints official import JSON for Qoder/TRAE).
@@ -121,7 +121,7 @@ Use `boxweave client` (interactive) or select a supported profile:
 
 ```bash
 boxweave client --app cursor --os linux --transport native --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
-boxweave client --app codex --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.ps1
+boxweave client --app codex --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
 ```
 
 Supported Apps (**alphabetical**): **Antigravity, Claude (Code), Codex,
@@ -135,13 +135,17 @@ import rather than edits to undocumented user configuration paths.
 | Linux | All nine supported Apps | Native SSH | Generator/fixture; live App verification pending |
 | macOS | All nine supported Apps | Native SSH | Generator/fixture; live App verification pending |
 | Windows | All nine supported Apps | Native OpenSSH | Generator/fixture; Python 3.11+ required |
-| Windows | All nine supported Apps | WSL SSH | Generator/fixture; Codex WSL also supports PowerShell-only |
+| Windows | All nine supported Apps | WSL SSH | Unified Python generator/fixture; WSL distro required |
 | WSL-hosted Agent | Any | Independent Linux runtime | Not implicitly configured by Windows generator |
 
 The Web Client Setup form retains its four earlier approved local
 descriptor profiles; the installed `boxweave client` CLI supports the
 expanded catalog. Generating a script or passing its isolated MCP probe
 does not prove the App has actually loaded or granted MCP tools.
+The generated stdout starts exactly with `#!/usr/bin/env python3`;
+all decorative separators are Python comments **after** the shebang.
+Interactive prompts/summary messages are comment-prefixed on stderr, so
+redirect stdout or use `--output NEW_FILE` for a clean, executable `.py`.
 See [client setup](clients/README.md) for the individual App destinations
 and prerequisites.
 
