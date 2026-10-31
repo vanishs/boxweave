@@ -21,6 +21,7 @@ class GatePolicyTests(unittest.TestCase):
             path=Path(folder)/"policy.json"
             policy={"version":1,"allowed_tools":["get_container"]}
             path.write_text(json.dumps(policy))
+            path.chmod(0o600)
             # Tests don't run as root; patch the policy's owner's UID.
             from bwmini import mcp_gate
             with patch.object(mcp_gate.os,"geteuid",return_value=0):
