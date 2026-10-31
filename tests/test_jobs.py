@@ -68,8 +68,8 @@ class JobsTests(unittest.TestCase):
         import io
         info = {"application_user": "boxweave", "app_prefix": "/home/boxweave/boxweave"}
         captured = {}
-        def fake_observe(argv, timeout, limit):
-            captured["argv"], captured["timeout"] = argv, timeout
+        def fake_observe(argv, timeout, limit, cwd=None):
+            captured["argv"], captured["timeout"], captured["cwd"] = argv, timeout, cwd
             return json.dumps({"state": "succeeded", "id": "r1"})
         with (patch.object(host_cli, "public_state", return_value=info),
               patch.object(host_cli.os, "geteuid", return_value=0),
@@ -82,6 +82,7 @@ class JobsTests(unittest.TestCase):
         self.assertEqual(captured["timeout"], 150)
         self.assertIn("-m", captured["argv"])
         self.assertIn("job-run", captured["argv"])
+        self.assertEqual(captured["cwd"], "/home/boxweave/boxweave/current")
         with (patch.object(host_cli, "public_state", return_value=info),
               patch.object(host_cli.os, "geteuid", return_value=0),
               patch.object(host_cli.pwd, "getpwnam",

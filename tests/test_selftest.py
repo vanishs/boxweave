@@ -130,8 +130,8 @@ class SelftestTests(unittest.TestCase):
              patch("sys.stderr", new_callable=io.StringIO):
             self.assertEqual(host_cli.selftest_command(["plan"]), 2)
         captured = {}
-        def fake_observe(argv, timeout, limit):
-            captured["argv"] = argv
+        def fake_observe(argv, timeout, limit, cwd=None):
+            captured["argv"], captured["cwd"] = argv, cwd
             return json.dumps({"plan": {}, "confirmation": "a" * 64})
         with patch.object(host_cli, "public_state", return_value=info), \
              patch.object(host_cli.os, "geteuid", return_value=0), \
@@ -141,6 +141,7 @@ class SelftestTests(unittest.TestCase):
              patch("sys.stdout", new_callable=io.StringIO):
             self.assertEqual(host_cli.selftest_command(["plan", "--budget", "120"]), 0)
         self.assertIn("selftest-plan", captured["argv"])
+        self.assertEqual(captured["cwd"], "/home/boxweave/boxweave/current")
         self.assertIn("--budget", captured["argv"])
         with patch.object(host_cli, "public_state", return_value=info), \
              patch.object(host_cli.os, "geteuid", return_value=0), \

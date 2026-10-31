@@ -265,7 +265,7 @@ def job_command(options):
             str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "job-run",
             "--config", str(prefix / "runtime.json"), "--argv", json.dumps(options[1:]),
             "--budget", str(budget)]
-    result = observe(argv, timeout=budget + 60, limit=65536)
+    result = observe(argv, timeout=budget + 60, limit=65536, cwd=str(prefix / "current"))
     if result is None:
         print(json.dumps({"state": "error", "code": "JOB_RUN_FAILED_INSPECT_RECEIPTS"}), file=sys.stderr)
         return 2
@@ -314,7 +314,7 @@ def selftest_command(options):
             "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
             str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "selftest-" + mode,
             "--config", str(prefix / "runtime.json")] + passthrough + ["--budget", str(budget)]
-    result = observe(argv, timeout=budget + 120, limit=65536)
+    result = observe(argv, timeout=budget + 120, limit=65536, cwd=str(prefix / "current"))
     if result is None:
         print(json.dumps({"state": "error", "code": "SELFTEST_FAILED_INSPECT_STEPS"}), file=sys.stderr)
         return 2
