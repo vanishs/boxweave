@@ -89,7 +89,7 @@ class ClientGeneratorTests(unittest.TestCase):
                 self.assertEqual(rc,0)
                 self.assertEqual(out.getvalue(),"")
                 self.assertTrue(output.read_text().startswith("#!/usr/bin/env python3\n"))
-                self.assertIn("REPLACE = False",output.read_text())
+                self.assertIn("'replace': False",output.read_text())
                 self.assertNotIn("PowerShell",output.read_text())
                 self.assertEqual(client_setup.main(["--admin-user","example-admin",
                     "--output",str(Path(tmp)/"missing.py")]),2)
@@ -135,7 +135,7 @@ class ClientGeneratorTests(unittest.TestCase):
                              ["boxweave-setup.py"])
             script=out.getvalue()
             self.assertTrue(script.startswith("#!/usr/bin/env python3\n# ==="))
-            self.assertIn("REPLACE = True",script)
+            self.assertIn("'replace': True",script)
             self.assertIn("# Registration policy: replace",script)
             self.assertNotIn("Select number:",script)
             self.assertNotIn("copy the complete",script)
@@ -155,7 +155,7 @@ class ClientGeneratorTests(unittest.TestCase):
                                   "--admin-user","example-admin"])
         self.assertEqual(rc,0)
         self.assertTrue(out.getvalue().startswith("#!/usr/bin/env python3\n"))
-        self.assertIn("REPLACE = False",out.getvalue())
+        self.assertIn("'replace': False",out.getvalue())
         self.assertIn("# Registration policy: preserve",out.getvalue())
         self.assertIn("# Generation changed no Linux",err.getvalue())
 
@@ -167,7 +167,7 @@ class ClientGeneratorTests(unittest.TestCase):
               patch("sys.stderr",new_callable=io.StringIO) as err):
             rc=client_setup.main(["--admin-user","example-admin"])
         self.assertEqual(rc,0)
-        self.assertIn("REPLACE = False",out.getvalue())
+        self.assertIn("'replace': False",out.getvalue())
         self.assertIn("# Replace an existing conflicting BoxWeave MCP",err.getvalue())
         with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
               patch("sys.stdin.isatty",return_value=True),
@@ -189,11 +189,11 @@ class ClientGeneratorTests(unittest.TestCase):
                                       "--admin-user","example-admin","--replace",
                                       "--output",str(path)])
                 self.assertEqual(rc,0)
-                self.assertIn("REPLACE = True",path.read_text())
+                self.assertIn("'replace': True",path.read_text())
                 self.assertEqual(client_setup.main(["--agent","codex","--transport","wsl",
                     "--admin-user","example-admin","--replace",
                     "--output",str(path)]),2)
-                self.assertIn("REPLACE = True",path.read_text())
+                self.assertIn("'replace': True",path.read_text())
 
     def test_nonroot_uses_public_metadata_and_refuses_untrusted_descriptor(self):
         with tempfile.TemporaryDirectory() as tmp:

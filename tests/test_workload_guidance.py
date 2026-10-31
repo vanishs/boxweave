@@ -20,8 +20,9 @@ class WorkloadIdentityTests(unittest.TestCase):
         for forbidden in ("AGENTS.md", "AGENTS.override.md", "WslGuidance",
                           "ManagedWorkloadPublicKey", "Merge-BoxWeaveGuidance"):
             self.assertNotIn(forbidden,script)
-        self.assertIn("$ServerHost =",script)
-        self.assertIn("$ServerPort =",script)
+        self.assertTrue(script.startswith("#!/usr/bin/env python3\n# ==="))
+        self.assertIn('HOST = SETTINGS["host"]',script)
+        self.assertIn('PORT = SETTINGS["port"]',script)
         self.assertIn("StrictHostKeyChecking=yes",script)
 
     def test_managed_key_is_host_specific_and_idempotent(self):
