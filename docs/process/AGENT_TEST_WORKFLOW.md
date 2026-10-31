@@ -68,10 +68,40 @@ After an **authorized** update to the inner installation, verify both release ma
 | Pure state/domain/schema | Targeted tests; crash/unknown fixture | Real upgrade/migration if claimed |
 | Web/client setup | Fixture, generated-script syntax, preservation | Actual client transport/registration if claimed |
 | Host install/update | Package/installer no-side-effect preflight | Clean install/update on separate approved Box |
+| Installed CLI/diagnosis contracts | Focused fixtures incl. negative and leak tests | Live reused-Box checkpoint (see next section) |
 | MCP/lifecycle/SSH | Contract/error tests | Authenticated external operation on approved target |
 | Nested Incus | Observed parent policy and scoped preflight | Actual nested guest create + verified Python result |
 
 Do not confuse fixture passing, historical evidence, source-only review or CI completion with a current real host pass.
+
+### Installed-surface slices: a live Box checkpoint is part of Done
+
+**Owner decision, 2026-10-31:** a slice that changes an *installed surface* must pass a real-Box
+checkpoint before it is reported Done, even when every fixture and unit test is green. Fixture
+evidence is necessary but not sufficient for these slices, because their dominant failure mode is
+integration drift (unit names, runuser/`XDG_RUNTIME_DIR` transactions, isolated-interpreter entry
+paths, installed file layouts) that only exists on a real host.
+
+A slice is **installed-surface** when any of the following holds:
+
+- it changes the installed host CLI or a published host helper (`host_cli.py`, `online.py`,
+  `client_setup.py`/`client_profiles.py`, `mcp_gate.py`, `nesting.py`) or its printed/exit contract;
+- it changes app-side diagnosis or health claims (`distribution.health`, `deploy_check`, the
+  generated client `--diagnose`) that operators rely on to decide host state;
+- its acceptance criteria assert behavior of a real service boundary: systemd units, the
+  root/app-user transaction, an authenticated MCP read, or the isolated `python3 -I` entry;
+- it changes installer/publisher file or packaging module allowlists.
+
+The checkpoint is deliberately **minimal** and reuses the same iteration-closing rules as any other
+lane: one authorized reused test Box, one upgrade/install of a built package, then read-only
+verification that exercises at least (a) the changed command's promised pass path and (b) one
+definite-failure or explicit-incomplete path, with actual commands, exit codes and observed states
+recorded in the [remediation test queue](../verification/REMEDIATION_TEST_QUEUE.md) under
+PASS/FAIL/PARTIAL/UNKNOWN. The upgrade lane's own backup/rollback behavior applies. Do not claim
+fresh-install, nested or cross-version behavior the checkpoint did not exercise; those remain
+separately authorized lanes. If the owner defers the checkpoint, the slice stays explicitly
+labelled "installed behavior unverified" and later slices built on its contract inherit that
+unverified label.
 
 ## Minimal test session note
 
