@@ -52,6 +52,39 @@ class AgentBoxTests(unittest.TestCase):
         with self.assertRaises(Fault):a.validate("delete_file",{"path":"/home/testuser/work/x"})
         self.entry["target_digest"]="wrong"
         with self.assertRaises(Fault):BoxAgent(self.service,"a-box")
+    def test_read_tools_and_resources_use_only_scoped_mcp(self):
+        a=BoxAgent(self.service,"a-box")
+        events=[]
+        class Client:
+            def __enter__(self):return self
+            def __exit__(self,*_):return None
+            def discover(self):return {"read_file":{"name":"read_file"}}
+            def tool(self,name,args):
+                events.append(("tool",name,args))
+                return {"content":[{"type":"text","text":"fixture read"}]}
+            def list_resources(self):return [{"uri":"containarium://ci-context"}]
+            def read_resource(self,uri):
+                events.append(("resource",uri))
+                return '{"available":false}'
+        from unittest.mock import patch
+        with patch.object(a,"_open",return_value=Client()):
+            self.assertEqual(a.read("read_file",{"path":"/home/testuser/work/a"})["content"],
+                             "fixture read")
+            self.assertEqual(a.resource("containarium://ci-context")["content"],
+                             '{"available":false}')
+            with self.assertRaises(Fault):a.resource("file:///etc/passwd")
+        self.assertEqual([e[0] for e in events],["tool","resource"])
+
+    def test_tail_log_and_compose_paths_cannot_escape_root(self):
+        self.entry["allowed_tools"].extend(["tail_log","compose_discover","compose_autostart_disable"])
+        a=BoxAgent(self.service,"a-box")
+        for tool,args in (
+            ("tail_log",{"path":"/etc/shadow","follow_seconds":1}),
+            ("compose_discover",{"root":"/tmp"}),
+            ("compose_autostart_disable",{"dir":"/home/testuser/work/../escape"}),
+        ):
+            with self.subTest(tool=tool),self.assertRaises(Fault):a.validate(tool,args)
+
     def test_denies_unsafe_launcher(self):
         self.launcher.chmod(0o777)
         with self.assertRaises(Fault):BoxAgent(self.service,"a-box")
