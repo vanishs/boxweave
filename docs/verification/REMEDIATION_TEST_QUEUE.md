@@ -340,3 +340,27 @@ fresh streamed v0.21.0 install (selftest live run, resize against a
 real box, job via sudo, provenance after install, --diagnose from a
 client box), web resize through a browser, and update/repair rerun of
 install.sh from 0.20.x.
+
+**T follow-up (real-host acceptance 2026-10-31):** all five features
+passed against a fresh box (`boxweave-test-ser2`, shared tenant):
+streamed install of v0.21.0, then streamed update reruns to v0.21.1,
+v0.21.2 and v0.21.3 (the previously untested update/repair path, run
+three times). `boxweave provenance` reports version, source commit,
+endpoint and the merged phase history across installs. `sudo boxweave
+selftest plan/run` passed end to end (create 42.7s, identity+hello
+0.4s, stop, delete, cleanup not_needed). `sudo boxweave job` recorded
+durable receipts for a succeeding and a failing command, surviving
+process exit. The full lifecycle create of `demo-1` (identity_verified)
+followed by `environment-plan --environment-action resize --memory 2GB`
+succeeded online with verification=observed. `--diagnose` from a
+separate client box printed 8/8 ok with registration=registered.
+Acceptance surfaced and fixed three release-blocking defects (0.21.1
+wrapper cwd, 0.21.2 argparse guards, 0.21.3 resize choice) and two
+open findings: (1) a streamed update rewrites runtime.json and drops
+operator-added blocks such as `lifecycle` — re-add the block and
+restart the user worker after updates; the installer should merge or
+explicitly preserve operator keys; (2) the long-running user worker
+freezes lifecycle configuration at startup, so config changes need a
+worker restart. Client-side, a stale SSH MCP transport in the agent
+chain wedged every MCP call until it was killed — transport
+housekeeping, not a BoxWeave defect.
