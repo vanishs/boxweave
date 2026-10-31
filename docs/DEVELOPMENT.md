@@ -2,6 +2,8 @@
 
 This guide is for synthetic local development and does not validate a real Provider, external SSH access, network isolation, or model inference.
 
+For Agent-driven iterations on existing or truly clean nested test Boxes, see the [Agent development/test workflow](process/AGENT_TEST_WORKFLOW.md). It covers auto-within-authorization and plan-first modes, evidence, failure preservation and escalation from fixtures to approved live validation. This fixture guide does not grant permission to modify a live environment.
+
 ## Isolated fixture
 
 This is the local developer/demo and regression-test mode, **not a real installation**. It exercises the Web UI, project binding, and operation receipts using synthetic infrastructure without contacting or changing a real Incus/Containarium Provider.

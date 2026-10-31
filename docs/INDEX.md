@@ -11,6 +11,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 | Actual runtime / module design | [ARCHITECTURE](design/ARCHITECTURE.md), [ADR index and status](design/ADR/INDEX.md) |
 | Task dependencies | [IMPLEMENTATION_PLAN](process/IMPLEMENTATION_PLAN.md) |
 | REQ/AC → code/tests/evidence | [FEATURE_MATRIX](verification/FEATURE_MATRIX.md) |
+| Agent-driven rapid development/test workflow | [AGENT_TEST_WORKFLOW](process/AGENT_TEST_WORKFLOW.md) (developer practice) |
 | How to run and verify | [INSTALL](INSTALL.md), [test strategy](verification/TEST_STRATEGY.md), [validation runner](../scripts/validate.py) |
 | Current unresolved risks | [OPEN_RISKS](verification/OPEN_RISKS.md) |
 | New questions/proposals | [OPEN_QUESTIONS](knowledge/OPEN_QUESTIONS.md) |

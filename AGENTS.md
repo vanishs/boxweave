@@ -17,6 +17,20 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 - Maintain `REQ/AC -> ADR/TASK -> code/tests/evidence` traceability. Follow [MAINTENANCE](docs/process/MAINTENANCE.md). Update the authoritative scope/requirements if an approved outcome changes, and keep [historical comparison](docs/verification/ARCHIVE_051_TO_MAIN_AUDIT.md), [risks](docs/verification/OPEN_RISKS.md), source register and handoff aligned. Preserve old reports as historical evidence.
 - For every slice record *what changed*, *what was actually tested* (command, environment, exit code and evidence), *what remains untested*, *blockers*, and next Agent's executable checks in [remediation verification queue](docs/verification/REMEDIATION_TEST_QUEUE.md). A static code review is **S**, historical documentation **D**, genuinely run tests **T**, and untested properties **U**. Never report source code, fixture or CI as a successful real-host install.
 
+## Fast BoxWeave development and Agent-driven validation
+
+Use [Agent development/test workflow](docs/process/AGENT_TEST_WORKFLOW.md) for both reused and genuinely clean test Boxes. These are **developer working rules**, not a new BoxWeave testing product or authorization for any real host.
+
+- **Fastest honest evidence first:** map each change to a specific success condition. Run affected source/unit/fixture tests before a separately approved live nested test; do not rerun a complete installer, every suite or create a new Box after each small edit.
+- **Pin exact identities:** record source commit/reviewed diff, installed release and *running* app/worker version, outer Provider/project and exact test Box identity, and whether the Box is reused or genuinely clean. A preinstalled or future cloned Box does **not** prove a fresh install.
+- **Keep layers separate:** the usual test Box contains inner BoxWeave + Containarium + Incus, with an optional *different* nested workload. The outer BoxWeave remains the independent controller; do not rely on a broken inner stack to preserve or recover the failure scene.
+- **Support both execution modes:** (a) Agent self-selects/adapts steps **within an existing specifically authorized scope**, or (b) Agent proposes a plan and obtains approval before environment writes. Missing/ambiguous grants mean repo-only safe checks or plan drafting. Either mode requires renewed specific approval for new target, privileged/destructive action or expanded scope.
+- **Distinguish proof levels:** passing fixture/CI is not real Provider acceptance. A claimed live nesting/MCP success requires authenticated observation, verified target identity, actual Python `hello world` stdout **and exit 0**, with resource cleanup/retention recorded independently.
+- **Preserve failures:** timeout/lost Provider response means **UNKNOWN**, not proven failure. Observe the *original* operation and Box; never automatically retry an uncertain write, reset a reused Box, repair SSH trust or destroy a fault scene.
+- **Handoff in one short record:** changed revision, exact check/target/exit, PASS/FAIL/PARTIAL/UNKNOWN by proved scope, source/fixture/live evidence class, retained resources, and smallest next action. Append actual checks and untested claims to [verification queue](docs/verification/REMEDIATION_TEST_QUEUE.md).
+
+Proposed [D0-D2 diagnostics](docs/design/DIAGNOSTICS_PROPOSAL.md) and [E0-E4 snapshots/clones/fingerprints](docs/design/BOX_ENVIRONMENT_PROPOSAL.md) are **NOT IMPLEMENTED** and must not be treated as available test tooling.
+
 ## User-facing documentation conventions
 
 - Describe the current product as **BoxWeave**, using its `0.X.X` release version. Keep obsolete archived-release and numbered development-stage narratives out of current user-facing prose, especially README; retain historical evidence in the historical records.
