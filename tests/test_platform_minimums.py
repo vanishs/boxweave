@@ -62,8 +62,16 @@ class MinimumVersionTests(unittest.TestCase):
 
     def test_streamed_entry_tracks_release_without_distro_name_gate(self):
         script = (ROOT / "install.sh").read_text()
-        version = (ROOT / "VERSION").read_text().strip()
-        self.assertIn('python3 - "' + version + '"', script)
+        source_version = (ROOT / "VERSION").read_text().strip()
+        published_version = (ROOT / "PUBLISHED_RELEASE").read_text().strip()
+        self.assertRegex(published_version, r"^0\.[0-9]+\.[0-9]+$")
+        self.assertLessEqual(tuple(map(int, published_version.split("."))),
+                             tuple(map(int, source_version.split("."))))
+        self.assertIn('python3 - "' + published_version + '"', script)
+        # Unreleased source must not switch streamed installs to missing assets.
+        if published_version != source_version:
+            self.assertNotIn('python3 - "' + source_version + '"', script)
+
         self.assertIn("Recommended: Ubuntu >= 24.04", script)
         self.assertNotIn('"$ID" == ubuntu', script)
         self.assertNotIn("Provider provisioning requires Ubuntu", script)
