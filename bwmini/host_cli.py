@@ -276,6 +276,57 @@ def job_command(options):
         return 2
 
 
+def selftest_command(options):
+    """Confirmed live smoke through the application: plan, then run with the plan hash."""
+    try:
+        info = public_state()
+    except ValueError as exc:
+        print(json.dumps({"state": "unavailable", "code": str(exc)}), file=sys.stderr)
+        return 2
+    if os.geteuid() != 0:
+        print(json.dumps({"state": "error", "code": "SELFTEST_REQUIRES_ROOT",
+                          "next": "sudo boxweave selftest plan | sudo boxweave selftest run --plan FILE --confirmation HEX"}), file=sys.stderr)
+        return 2
+    if not options or options[0] not in ("plan", "run"):
+        print("# Usage: boxweave selftest plan [--budget SECONDS]\n"
+              "#        boxweave selftest run --plan FILE --confirmation HEX [--budget SECONDS]", file=sys.stderr)
+        return 2
+    mode, options = options[0], options[1:]
+    budget = 900
+    passthrough = []
+    while options:
+        if options[0] == "--budget":
+            if len(options) < 2 or not options[1].isdigit():
+                print(json.dumps({"state": "error", "code": "SELFTEST_BUDGET_INVALID"}), file=sys.stderr)
+                return 2
+            budget = int(options[1])
+            options = options[2:]
+        else:
+            passthrough.append(options[0])
+            options = options[1:]
+    if mode == "run" and ("--plan" not in passthrough or "--confirmation" not in passthrough):
+        print("# Usage: boxweave selftest run --plan FILE --confirmation HEX [--budget SECONDS]", file=sys.stderr)
+        return 2
+    budget = min(1800, max(60, budget))
+    account = pwd.getpwnam(info["application_user"])
+    prefix = Path(info["app_prefix"])
+    argv = ["runuser", "-u", account.pw_name, "--", "env",
+            "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
+            str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "selftest-" + mode,
+            "--config", str(prefix / "runtime.json")] + passthrough + ["--budget", str(budget)]
+    result = observe(argv, timeout=budget + 120, limit=65536)
+    if result is None:
+        print(json.dumps({"state": "error", "code": "SELFTEST_FAILED_INSPECT_STEPS"}), file=sys.stderr)
+        return 2
+    print(result)
+    if mode == "plan":
+        return 0
+    try:
+        return 0 if json.loads(result).get("state") == "passed" else 1
+    except ValueError:
+        return 2
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "client":
@@ -292,6 +343,14 @@ def main(argv=None):
         except (OSError, ValueError, KeyError) as exc:
             print(json.dumps({"state": "error", "code": "JOB_UNAVAILABLE",
                               "reason": str(exc) if isinstance(exc, ValueError) else "JOB_CONTEXT_INVALID"}),
+                  file=sys.stderr)
+            return 2
+    if argv and argv[0] == "selftest":
+        try:
+            return selftest_command(argv[1:])
+        except (OSError, ValueError, KeyError) as exc:
+            print(json.dumps({"state": "error", "code": "SELFTEST_UNAVAILABLE",
+                              "reason": str(exc) if isinstance(exc, ValueError) else "SELFTEST_CONTEXT_INVALID"}),
                   file=sys.stderr)
             return 2
     parser = argparse.ArgumentParser(description=__doc__,

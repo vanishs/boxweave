@@ -117,6 +117,25 @@ def main():
             else:
                 print(json.dumps(jobs.receipts(store),indent=2,sort_keys=True))
             return 0
+        if a.action=="selftest-plan":
+            from .selftest import build_plan
+            plan,checksum=build_plan()
+            print(json.dumps({"plan":plan,"confirmation":checksum,
+                  "next":"Save the plan object to a file, review it, then run selftest-run with --plan FILE --confirmation HEX"} ,indent=2,sort_keys=True))
+            return 0
+        if a.action=="selftest-run":
+            from .selftest import load_plan,run as run_selftest
+            if not isinstance(a.plan,str) or not isinstance(a.confirmation,str):
+                raise Fault("SELFTEST_PLAN_REQUIRED",422)
+            try:
+                raw=json.loads(Path(a.plan).read_text(encoding="utf-8"))
+            except (OSError,ValueError):
+                raise Fault("SELFTEST_PLAN_INVALID",422) from None
+            plan=load_plan(raw,a.confirmation)
+            c,s=load(a.config)
+            result=run_selftest(s.provider,plan,budget=a.budget)
+            print(json.dumps(result,indent=2,sort_keys=True))
+            return 0 if result["state"]=="passed" else 2
         if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):
             c=read_config(a.config);model_store=Store(c["database"])
         else:
