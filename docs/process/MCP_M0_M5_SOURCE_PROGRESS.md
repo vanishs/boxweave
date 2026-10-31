@@ -1,6 +1,6 @@
 # BoxWeave M0–M5 MCP source implementation and deferred live acceptance
 
-**2026-10-31 status: SOURCE CANDIDATE; LIVE PROVIDER/BOX NOT TESTED.**
+**2026-10-31 status: M0–M5 SOURCE MERGED TO MAIN; LIVE PROVIDER/BOX NOT TESTED.**
 User authorized completing source code and fixture/CI tests without entering a real Box.
 This is not a certified working agent-box deployment, installer release, or per-client RBAC.
 Parent: [MCP capability master](../design/MCP_CAPABILITY_INTEGRATION_MASTER.md),
@@ -69,3 +69,26 @@ The accepted validation boundary for this task is **source tests + GitHub fixtur
 **Open:** whether to make allowlist mandatory for future restricted clients while retaining a legacy operator profile; separate actor-specific RBAC; agent-box launcher format/install; verified OS sandbox and root enforcement; real auto-sleep recovery, long-running process persistence and approvals; any official release/publication. None is silently granted here.
 
 **Repository changes only:** this work does not modify hosts, Provider, Box credentials, SSH keys, routes or live services.
+
+## Final merge and CI acceptance record
+
+**Source implementation merged:** [PR #9](https://github.com/vanishs/boxweave/pull/9) into `main` at **8038afcd0931f2e2696587e3c056225438d0aa0c** on 2026-10-31. All phase code in this record has therefore been submitted; see the caveats for what remains runtime-unverified or outside the selected product scope.
+
+**Successful CI:** [GitHub Actions run 41191096024](https://github.com/vanishs/boxweave/actions/runs/41191096024) for PR head `9d01fafad7823b1c7b8e346f74a3c31ee1b6324f`:
+
+- 401 Python 3.12 fixture/contract tests;
+- 57 Python 3.14 tests and verified offline wheel smoke;
+- knowledge/document/traceability checks, safe shell syntax, TypeScript/frontend build, seven browser fixture workflows and packaging candidate build.
+
+This is **S/T source and fixture evidence**, NOT live Box evidence. No installed Containarium, real agent-box transport, host-key pin, Box file operation, actual auto-sleep/resume, process persistence, SSH credential, network route, host service or production deployment was exercised or modified by this development. The owner explicitly deferred these tests.
+
+### Subsequent decisions and engineering corrections
+
+1. **M1:** require an explicit operator migration decision before turning on the fixed host-wide gateway tool allowlist. Missing file preserves the existing trusted-operator passthrough. Fine-grained per-client/tenant RBAC remains a **separate, unimplemented expansion**, not solved by this code.
+2. **M3/M4:** create a separately approved, pinned-SSH launcher for each exact Box and verify remote `AGENTBOX_ROOT`/non-root OS confinement; the configuration example is not installation guidance. No live file, shell, process or Compose guarantee until these tests pass.
+3. **M2:** an auto-sleep acknowledgement is recorded as `acknowledged`, **not** a demonstrated sleep or automatic recovery. A running task start is likewise not job completion.
+4. **M4:** SQLite v11 was introduced additively. Prior v10 migration fixtures were refreshed, but a deployed v10→v11 database upgrade and rollback are **untested** on real data. Queued plans now expire before execution; dispatching states recover as `unknown` and never auto-replay.
+5. **M5:** the Web tab is a selected safe-management surface, not a generic 109-tool admin GUI or universal Agent testing/scheduler system. Existing developer Agent testing rules remain in [AGENT_TEST_WORKFLOW](AGENT_TEST_WORKFLOW.md).
+6. **Release:** main is source v0.23.0 and the verified stable streamed install remains v0.22.0 through `PUBLISHED_RELEASE`. Publishing and independently verifying v0.23.0 artifacts before moving the stable pin remains an explicit next step.
+
+**Next accepted work when real Box testing is authorized:** check exact installed versions and caller JWT/tool scopes; verify direct-Agent legacy and allowlist profiles separately; verify preconfigured agent-box SSH identity and sandbox boundaries; execute scoped read-only trials before any file/process/Shell mutation; test auto-sleep state observation and recovery; run v10→v11 upgrade/rollback on a copy of nonproduction state; record all positive and negative evidence. If the environment fails, diagnose and fix the original Box without recreating it or concealing `unknown` outcomes.
