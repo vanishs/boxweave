@@ -72,3 +72,13 @@ bootstrap. Confirm upstream loopback/no-firewall support, immutable installer
 identity, complete same-release MCP assets, exact provider compatibility,
 owned-state separation, and real clean-host/update acceptance first. See
 [the source-backed review](CONTAINARIUM_INSTALLER_BOUNDARY.md).
+
+
+**RISK-619 (MCP SSH keepalive, 0.19.1):** Legacy `archive/0.5.1`
+client SSH transports used `ServerAliveInterval=15` and
+`ServerAliveCountMax=4` to mitigate idle session loss. Source-level
+restoration of those flags in Windows Codex/WSL and legacy native/WSL
+registration paths does not prove real long-idle reliability on any
+network. Existing client config needs operator-approved re-registration;
+the installer does not alter running SSH sessions or server sshd config.
+Keepalive detects dead transports; it cannot automatically reconnect MCP.

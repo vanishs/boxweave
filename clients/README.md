@@ -66,6 +66,15 @@ For split administration use `--no-enroll` to print the server-side
 approval command, then `--already-enrolled` after approval.
 The legacy PowerShell switches are `-NoEnroll`/`-AlreadyEnrolled`.
 
+**Long-running MCP SSH keepalive:** Every generated and legacy client
+registration uses `-o ServerAliveInterval=15 -o ServerAliveCountMax=4`,
+matching the archived client implementation. This reduces idle network
+connection loss and detects an unresponsive SSH peer, but it does not
+automatically reconnect a terminated MCP session. A server upgrade does
+not silently change existing client MCP settings. To adopt the flags,
+regenerate the registration with explicit `--replace` (or `-Replace`
+for the legacy PowerShell script), then restart the App.
+
 Client-only setup never changes host Incus/Provider/sshd or Codex
 `AGENTS.md`. Existing unrelated MCP servers survive scoped JSON/TOML
 updates; replaced configs are backed up. Any ambiguous file/symlink or

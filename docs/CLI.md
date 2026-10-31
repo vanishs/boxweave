@@ -70,6 +70,11 @@ to authorize a newly generated *public* transport key (with explicit
 The `boxweave` Linux account is the isolated application identity; it
 must not be silently substituted for the host SSH administrator.
 Client generation exports no private keys and does not change the Provider.
+Registered long-lived MCP-over-SSH commands use `ServerAliveInterval=15`
+and `ServerAliveCountMax=4`, including Windows native and WSL SSH.
+Setup and diagnostic probes use the same options. Existing client MCP
+registrations are not rewritten by a server update: regenerate with
+explicit replacement consent and restart the client App.
 
 ## Privilege/ownership audit
 

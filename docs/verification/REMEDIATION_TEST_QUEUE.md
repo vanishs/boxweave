@@ -198,3 +198,24 @@ helper inventory. Historic Web four-profile descriptors remain independent.
 Windows (native and WSL), Linux and macOS; SSH key ACLs and enrollment
 approval; Copilot CLI vs VS Code discovery; OpenCode JSONC variants;
 Qoder/TRAE import and client app restart. No live proof claimed.
+
+
+## 0.19.1 Long-running MCP SSH keepalive restoration
+
+The archived `archive/0.5.1` POSIX and Windows client installers used
+`ServerAliveInterval=15` and `ServerAliveCountMax=4` in persistent
+MCP SSH registrations and in probes. The 0.19.0 portable Python profile
+generator already had these values. The separate Windows Codex+WSL
+PowerShell template, Windows native/WSL descriptor helper, and Windows
+native registration/diagnostic scripts were missing them.
+
+**S:** restore the same options to every missing registered MCP SSH argv
+and its matching verification probes; retain host-key pinning and
+restricted-key enrollment. **T:** tests assert generated PowerShell
+probe and persisted registration, evaluated PowerShell argv, WSL/native
+profile argv and saved Codex TOML, all 36 portable App/OS/transport
+combinations, and consistent native registration/diagnostic source.
+Record exact commit CI completion before declaring pass. **U:** live
+long-idle MCP behavior behind NAT/firewalls on Windows, Linux and macOS.
+The client must restart/reconnect if SSH dies; no silent migration of
+existing client registrations is performed by a server upgrade.
