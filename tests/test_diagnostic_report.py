@@ -211,8 +211,8 @@ class ReportCommandTests(unittest.TestCase):
                       json.loads((report / "omissions.json").read_text())["omissions"])
         self.assertIn("not_verified", (report / "layers.json").read_text())
         argv = execute.call_args.args[0]
-        self.assertIn("read-report", argv)
         self.assertIn("bwmini.diagnostics", argv)
+        self.assertIn("--selector", argv)
         self.assertEqual(json.loads(out)["state"], "exported")
 
     def test_unprivileged_report_is_partial_without_reader(self):

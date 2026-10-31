@@ -302,7 +302,7 @@ def report_app_reader(info, selector):
     argv = ["runuser", "-u", account.pw_name, "--", "env",
             "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
             str(prefix / "current/.venv/bin/python"), "-m", "bwmini.diagnostics",
-            "read-report", "--config", str(prefix / "config.json"),
+            "--config", str(prefix / "config.json"),
             "--selector", json.dumps(selector, sort_keys=True)]
     raw = run_bounded(argv, timeout=40, limit=1048576, cwd=str(prefix / "current"))
     if raw is None:
