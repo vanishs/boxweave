@@ -115,6 +115,40 @@ class MCP:
             params = {"cursor":cursor}
         raise diagnostics.attach(Fault("OUTPUT_LIMIT"), "OUTPUT_LIMIT")
 
+    def list_resources(self):
+        """Bounded resource listing. Caller must initialize with discover first."""
+        output, seen, cursor = [], set(), {}
+        for _ in range(16):
+            result = self.call("resources/list", cursor)
+            if not isinstance(result.get("resources"), list):
+                raise Fault("MCP_INVALID")
+            for item in result["resources"]:
+                if (not isinstance(item, dict) or not isinstance(item.get("uri"),str)
+                        or len(item["uri"]) > 512 or not item["uri"]):
+                    raise Fault("MCP_INVALID")
+                output.append({"uri":item["uri"],"name":item.get("name","") if
+                               isinstance(item.get("name",""),str) else ""})
+                if len(output)>256:raise Fault("OUTPUT_LIMIT")
+            token=result.get("nextCursor")
+            if token is None:return output
+            if not isinstance(token,str) or not token or token in seen:
+                raise Fault("MCP_INVALID")
+            seen.add(token);cursor={"cursor":token}
+        raise Fault("OUTPUT_LIMIT")
+
+    def read_resource(self, uri):
+        if not isinstance(uri,str) or not uri.startswith("containarium://") or len(uri)>512:
+            raise Fault("RESOURCE_URI_NOT_ALLOWED",422)
+        result=self.call("resources/read",{"uri":uri})
+        entries=result.get("contents")
+        if not isinstance(entries,list) or len(entries)!=1:raise Fault("MCP_INVALID")
+        entry=entries[0]
+        if (not isinstance(entry,dict) or entry.get("uri")!=uri or
+                not isinstance(entry.get("text"),str) or
+                len(entry["text"].encode("utf-8"))>65536):
+            raise Fault("MCP_INVALID")
+        return entry["text"]
+
     def tool(self, tool, args):
         r = self.call("tools/call", {"name":tool, "arguments":args})
         if "isError" in r and type(r["isError"]) is not bool:
