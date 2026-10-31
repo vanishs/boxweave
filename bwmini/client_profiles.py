@@ -29,11 +29,17 @@ assert tuple(sorted(APPS, key=str.casefold)) == APPS
 
 # This is emitted as client-side Python 3.11+ and never run as root.
 PORTABLE = r'''#!/usr/bin/env python3
+# =====================================================================
 # BoxWeave MCP setup: __LABEL__.
+# This file is a complete Python program; the shebang must stay first.
+# =====================================================================
 # Requires local Python 3.11+, OpenSSH client and ssh-keygen.
 # Windows WSL transport also needs a selected WSL distribution and Python3 inside it.
 # Review the EDIT ME fields. Run: python3 boxweave-setup.py [--already-enrolled | --no-enroll]
 # On Windows use: py -3 boxweave-setup.py [--already-enrolled | --no-enroll]
+# Registration policy: __POLICY__.
+# SSH host-key pinning and MCP read validation are required before writes.
+# =====================================================================
 # No BoxWeave project AGENTS.md files are created or modified.
 import argparse, base64, json, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, uuid
 SETTINGS = __SETTINGS__
@@ -362,5 +368,7 @@ def render(settings):
         or type(settings["replace"]) is not bool):
         raise ValueError("PUBLIC_CLIENT_IDENTITY_INVALID")
     value=repr(dict(settings))
-    return PORTABLE.replace("__SETTINGS__",value).replace(
-        "__LABEL__",settings["app"]+" / "+settings["os"]+" / "+settings["transport"])
+    return (PORTABLE.replace("__SETTINGS__",value)
+            .replace("__LABEL__",settings["app"]+" / "+settings["os"]+" / "+settings["transport"])
+            .replace("__POLICY__", "replace only conflicting BoxWeave MCP after verified read; backup kept"
+                     if settings["replace"] else "preserve conflicting BoxWeave MCP entry"))

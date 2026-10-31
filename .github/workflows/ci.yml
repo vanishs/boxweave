@@ -29,17 +29,22 @@ jobs:
         run: python -m pip install --require-hashes -r requirements-dev.lock
       - name: Python unit and contract tests (fixtures only)
         run: python -m unittest discover -s tests -v
-      - name: Generated Windows Codex WSL PowerShell grammar
+      - name: Unified Python client generator grammar and first-line shebang
         run: |
           python - <<'PY_CLIENT'
           import base64, struct
           from pathlib import Path
           from bwmini.client_setup import render
           key = base64.b64encode(struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"x"*32).decode()
-          Path("boxweave-fixture-client.ps1").write_text(render({"host":"192.168.2.233","port":22,"server_key":"ssh-ed25519 "+key,"managed_public_key":"ssh-ed25519 "+key},"example-admin"))
+          state = {"host":"192.168.2.233","port":22,"server_key":"ssh-ed25519 "+key}
+          for app in ("codex", "zcode"):
+              for transport in ("native", "wsl"):
+                  output = render(state, "example-admin", app=app, system="windows", transport=transport)
+                  assert output.startswith("#!/usr/bin/env python3\n# ===")
+                  compile(output, "boxweave-fixture-client.py", "exec")
+                  assert "ServerAliveInterval=15" in output
+                  assert "ServerAliveCountMax=4" in output
           PY_CLIENT
-          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("boxweave-fixture-client.ps1", [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { $errors | Format-List | Out-String | Write-Error; exit 1 }'
-          rm -f boxweave-fixture-client.ps1
       - name: Frontend typecheck and build
         run: |
           npm --prefix web ci --ignore-scripts --no-audit --no-fund
