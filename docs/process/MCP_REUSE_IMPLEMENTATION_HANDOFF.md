@@ -64,3 +64,8 @@ After code PR #7 merge (main 56bb425), the source candidate remained 0.23.0, whi
 - **Remaining status:** M1 trust-policy and router NOT IMPLEMENTED; M2 auto-sleep NOT IMPLEMENTED; M3 per-Box agent-box read NOT IMPLEMENTED; M4 controlled writes/exec NOT IMPLEMENTED; M5 selected workflows/GUI still NOT IMPLEMENTED. M0 runtime capability verification incomplete. Environment E0–E4 remain unimplemented. Full owner request is therefore **NOT COMPLETED**, despite the reviewed partial source merge.
 
 **Future developer decision:** The immediate gating work is authenticated per-tool policy for the separate direct Agent gateway (M1), followed by an approved actual installed Provider/agent-box capability probe (M0/M3). Do not widen tool access before actor-to-Box scope and negative authorization tests exist. A separately reviewed 0.23.0 release/publication is required to distribute these merged source features; update the stable install pin only after verifying its published assets. All commits above were repository-only.
+
+
+## Continued M0–M5 source development (owner deferred real Box testing)
+
+See [M0–M5 source progress and security handoff](MCP_M0_M5_SOURCE_PROGRESS.md) for added modules, API routes, SQLite v11 migrations, optional gateway allowlist and the preconfigured per-Box launcher. Source/fixture acceptance is independent of and cannot replace real Box/SSH/Containarium verification. Source v0.23.0 remains an unpublished candidate and streamed installs remain pinned to published v0.22.0 until a reviewed release. Prior "M1–M5 not implemented" statements in this historical handoff refer to the earlier main baseline; they should not be used as current branch source status.
