@@ -112,6 +112,13 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         response=jsonify(code="OK")
         response.delete_cookie("bw_session")
         return response
+    @app.get("/api/boxes/<logical>/debug-summary")
+    def box_debug_summary(logical):
+        # Service owns the allowlist and exact incarnation check.
+        target = service.observe_target(logical)
+        from .box_debug import summary
+        return jsonify(summary(service.provider, target))
+
     @app.get("/api/mcp-capabilities")
     def mcp_capabilities():
         from .capabilities import snapshot
