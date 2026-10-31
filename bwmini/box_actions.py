@@ -120,12 +120,16 @@ class BoxActions:
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row=db.execute("""SELECT r.id, r.logical, r.target_digest, r.action,
-                                     p.arguments
+                                     p.arguments, p.expires
                               FROM box_action_receipts r
                               JOIN box_action_plans p ON p.id=r.plan
                               WHERE r.state='queued' ORDER BY r.created LIMIT 1""").fetchone()
             if row is None:return False
             op=dict(row)
+            if self.clock()>=op["expires"]:
+                db.execute("UPDATE box_action_receipts SET state='failed',code='PLAN_EXPIRED_BEFORE_DISPATCH',updated=? WHERE id=?",
+                           (self.clock(),op["id"]))
+                return True
             db.execute("UPDATE box_action_receipts SET state='validating',code='VALIDATING',updated=? WHERE id=?",
                        (self.clock(),op["id"]))
         # Validation failures occur without upstream tool invocation.
