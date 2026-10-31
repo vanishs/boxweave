@@ -38,7 +38,7 @@ try {
   if($entries.Count -eq 0){$registration='missing'}else{
     if($entries.Count -ne 1){throw 'ambiguous registration'}
     $entry=$entries[0];$c=$d.connection
-    $expected=@('-F','NUL','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o',('UserKnownHostsFile='+[IO.Path]::GetFullPath($c.known_hosts)),'-i',[IO.Path]::GetFullPath($c.identity_file),'-p',[string]$c.port,($c.user+'@'+$c.host),'/usr/local/bin/boxweave-mcp')
+    $expected=@('-F','NUL','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o',('UserKnownHostsFile='+[IO.Path]::GetFullPath($c.known_hosts)),'-i',[IO.Path]::GetFullPath($c.identity_file),'-p',[string]$c.port,($c.user+'@'+$c.host),'/usr/local/bin/boxweave-mcp')
     $same=$entry.transport.command -ceq (Get-Command ssh.exe).Source
     $same=$same -and ((ConvertTo-Json -InputObject @($entry.transport.args) -Compress) -ceq (ConvertTo-Json -InputObject $expected -Compress))
     $same=$same -and (-not $entry.transport.env) -and (-not $entry.transport.cwd)

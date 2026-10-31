@@ -168,7 +168,7 @@ def ssh_argv(d,preflight=True):
         if preflight and os.name=='nt':private_windows(c['identity_file'])
         if preflight and Path(c['known_hosts']).read_text(encoding='utf-8-sig').strip()!=expected:fail('PIN_FILE_MISMATCH')
         prefix=[c['executable']];null='NUL'
-    return prefix+['-F',null,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o','UserKnownHostsFile='+c['known_hosts'],'-i',c['identity_file'],'-p',str(c['port']),c['user']+'@'+c['host'],'/usr/local/bin/boxweave-mcp']
+    return prefix+['-F',null,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o','UserKnownHostsFile='+c['known_hosts'],'-i',c['identity_file'],'-p',str(c['port']),c['user']+'@'+c['host'],'/usr/local/bin/boxweave-mcp']
 
 def probe(argv):
     with RPC(argv) as m:

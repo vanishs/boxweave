@@ -88,7 +88,8 @@ try {
   $code='RUNTIME_MISSING'
   $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
   $sshArgs=@('-F','NUL','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes',
-    '-o','ConnectTimeout=15','-o',('UserKnownHostsFile='+$known.FullName),'-i',$identity.FullName,
+    '-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
+    '-o',('UserKnownHostsFile='+$known.FullName),'-i',$identity.FullName,
     '-p',[string]$d.port,($d.user+'@'+$d.host),'/usr/local/bin/boxweave-mcp')
   $start=New-Object Diagnostics.ProcessStartInfo
   $start.FileName=$ssh

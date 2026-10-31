@@ -186,7 +186,9 @@ import json, subprocess, sys
 host,port,key,pin = sys.argv[1:]
 ssh=['/usr/bin/ssh','-F','/dev/null','-T','-o','BatchMode=yes',
      '-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes',
-     '-o','ConnectTimeout=15','-o','UserKnownHostsFile='+pin,
+     '-o','ConnectTimeout=15',
+     '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
+     '-o','UserKnownHostsFile='+pin,
      '-i',key,'-p',port,'boxweave@'+host,
      '/usr/bin/python3 /usr/local/lib/boxweave/default/mcp_gate.py']
 commands=[
@@ -219,7 +221,9 @@ $sshArgs = @('--distribution',$Distro,'--exec','/usr/bin/ssh',
              '-F','/dev/null','-T',
              '-o','BatchMode=yes','-o','IdentitiesOnly=yes',
              '-o','StrictHostKeyChecking=yes',
-             '-o','ConnectTimeout=15','-o',('UserKnownHostsFile=' + $identity.known_hosts),
+             '-o','ConnectTimeout=15',
+              '-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4',
+              '-o',('UserKnownHostsFile=' + $identity.known_hosts),
              '-i',$identity.key,'-p',"$ServerPort",$sshTarget,$RemoteMcp)
 $homeDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
 if (-not [IO.Path]::IsPathRooted($homeDir)) { throw 'Codex home must be an absolute Windows path' }

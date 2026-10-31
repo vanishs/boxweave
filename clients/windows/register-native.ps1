@@ -74,7 +74,7 @@ try {
   $stageConfig=Join-Path $stage 'config.toml';[IO.File]::WriteAllText($stageConfig,$original,[Text.UTF8Encoding]::new($false))
   $servers=ValidateConfig $stage;$existing=@($servers|Where-Object {$_.name -eq 'boxweave'})
   $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
-  $sshArgs=@('-F','NUL','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o',('UserKnownHostsFile='+[IO.Path]::GetFullPath($connection.known_hosts)),'-i',[IO.Path]::GetFullPath($connection.identity_file),'-p',[string]$connection.port,($connection.user+'@'+$connection.host),'/usr/local/bin/boxweave-mcp')
+  $sshArgs=@('-F','NUL','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','IdentitiesOnly=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o',('UserKnownHostsFile='+[IO.Path]::GetFullPath($connection.known_hosts)),'-i',[IO.Path]::GetFullPath($connection.identity_file),'-p',[string]$connection.port,($connection.user+'@'+$connection.host),'/usr/local/bin/boxweave-mcp')
   $commandLine='command = '+(ConvertTo-Json -InputObject $ssh -Compress)
   $argsLine='args = '+(ConvertTo-Json -InputObject $sshArgs -Compress)
   $lines=$original -split '\r?\n';$mainCount=0;$quoted=$false
