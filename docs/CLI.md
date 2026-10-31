@@ -15,7 +15,7 @@ boxweave --help          # Display the complete installed host CLI
 boxweave version         # Published release identity only
 boxweave status          # Loopback Web reachability; NOT authenticated login/MCP
 boxweave doctor          # Read-only host/systemd state; no sudo
-boxweave client          # First step: client PowerShell setup; prints script on stdout
+boxweave client          # Choose App/OS/SSH transport; prints setup source on stdout
 boxweave client --help   # More client setup options
 boxweave box             # Show inspect/diagnose help
 boxweave box inspect NAME --project default
@@ -58,12 +58,13 @@ host administrator may read the private first-password file
 `/home/boxweave/boxweave/initial-admin-password`; it is never printed.
 
 ```sh
-boxweave client --agent codex --transport wsl \
+boxweave client --app codex --os windows --transport wsl \
   --admin-user YOUR_HOST_ADMIN --no-replace > boxweave-setup.ps1
 ```
 
-Transfer the script to Windows through an authenticated channel; review and
-run it in PowerShell. Enrollment uses that **human SSH administrator**
+Transfer Codex/WSL PowerShell setup to Windows through an authenticated
+channel. Other Apps/OS combinations generate client-side Python 3.11+
+setup scripts. For App-specific paths, see [client setup](../clients/README.md). Enrollment uses that **human SSH administrator**
 to authorize a newly generated *public* transport key (with explicit
 `sudo` at enrollment), then tests real MCP initialize/discovery/read.
 The `boxweave` Linux account is the isolated application identity; it

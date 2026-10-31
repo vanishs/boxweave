@@ -171,3 +171,30 @@ A disposable GitHub Actions Ubuntu 24.04 install against v0.17.12 failed in `sig
 The managed fresh-host path now passes `incus`, `incus-client`, and `incus-extra` without partial exact-version pins, runs an identical-package `apt-get -s install --no-upgrade` first, then installs only if the simulation succeeds. Incus and Provider are never upgraded on an existing complete deployment; the minimum runtime Incus version check remains. Successful streamed installation now prints `BoxWeave vX.Y.Z installed successfully` with the manifest-verified installed version above the client setup commands.
 
 **S:** source review of the new package solver call, ownership boundary and completion output. **T:** unit tests mock APT resolution order and refusal; CI validation pending on this exact commit. **U:** rerun the original disposable Ubuntu 24.04 real install, inspect APT simulation/selected packages and any subsequent failures, then verify Incus, Containarium, app, Web and authenticated MCP. No complete fresh-host success is claimed. Long-term design debt: Containarium should own its own dependency provisioning, but its current upstream installer can uninstall/reinstall Incus and modify system configuration. Do not delegate to it blindly or silently change external Incus/PostgreSQL.
+
+
+## 0.19.0 Multi-App cross-platform client generator
+
+The owner-approved alphabetic App list is Antigravity, Claude Code, Codex,
+Copilot CLI, Cursor, OpenCode, Qoder IDE, TRAE IDE and ZCode. Native
+client OpenSSH is supported on Windows, Linux and macOS; Windows-hosted
+Apps may use explicitly selected WSL SSH. The previous Windows Codex+WSL
+PowerShell generator remains compatible, and all other profiles emit
+self-contained client-side Python 3.11+ source.
+
+New client installer creates/pins a client-owned SSH identity, uses
+administrator-authorized public-key enrollment, verifies an actual MCP
+initialize/tools/list/list_containers read before scoped JSON/TOML updates,
+backs up existing files, refuses conflicting entries without explicit
+replacement and does not edit Codex AGENTS files. Qoder and TRAE use
+official JSON manual import; no undocumented global path is guessed.
+`AGENTS.md` enforces alphabetic App ordering in code/docs/UI. The new
+helper is included in the release manifest and installed root-owned
+helper inventory. Historic Web four-profile descriptors remain independent.
+
+**S:** source/design and vendor MCP config reference inspection.
+**T:** Python profile matrix/merge/refusal fixtures and exact commit CI
+(verify workflow result). **U:** actual App-specific MCP injection on
+Windows (native and WSL), Linux and macOS; SSH key ACLs and enrollment
+approval; Copilot CLI vs VS Code discovery; OpenCode JSONC variants;
+Qoder/TRAE import and client app restart. No live proof claimed.

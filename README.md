@@ -94,15 +94,15 @@ administrator can read it locally; the installer never prints the password.
 The service account `boxweave` is deliberately different from your SSH
 administrator and must **not** be used as an everyday login.
 
-Run `boxweave client` to print a copyable **Windows PowerShell** setup script;
-the wizard's last question controls whether a conflicting *Windows BoxWeave MCP
-registration* may be replaced after verified MCP communication (backup kept).
-It does not manage Linux script files. You may redirect stdout to a new file,
-for example `boxweave client > boxweave-setup.ps1` (shell redirection overwrites
-an existing file). Review, transfer, and execute it on the Windows client,
-**not in a Linux shell**. Only the actual client-key enrollment requires
-administrative authorization. Finish by verifying MCP discovery and a real
-read-only call; simply generating a script does not prove a connected Agent.
+Run `boxweave client` to choose the MCP App, client OS (Windows, Linux or
+macOS) and SSH transport (native or Windows WSL). It prints a reviewed
+client-side script on stdout: the preserved Windows Codex/WSL path emits
+PowerShell, while other profiles emit self-contained Python 3.11+.
+An authorized administrator must enroll only the client public SSH key.
+After a real authenticated MCP read, the script updates only the selected
+App's MCP configuration (or prints official import JSON for Qoder/TRAE).
+It never rewrites the client's AGENTS files. See
+[alphabetically sorted client App support](clients/README.md).
 
 If an installation fails, inspect its original log/phase and repair that
 specific issue before retrying. Do not relax `/home/boxweave` from mode 0700
@@ -112,28 +112,33 @@ or grant the human login broad Incus privileges just to run the CLI.
 
 ## Connect an AI coding agent
 
-For **Windows Codex using WSL SSH**, the installed server now offers a unified client generator with an interactive terminal wizard or explicit non-interactive flags:
+Use `boxweave client` (interactive) or select a supported profile:
 
 ```bash
-boxweave client
-boxweave client --agent codex --transport wsl --admin-user YOUR_HOST_ADMIN --no-replace > boxweave-setup.ps1
+boxweave client --app cursor --os linux --transport native --admin-user YOUR_HOST_ADMIN > boxweave-setup.py
+boxweave client --app codex --os windows --transport wsl --admin-user YOUR_HOST_ADMIN > boxweave-setup.ps1
 ```
 
-Transfer the generated script to Windows over an authenticated channel, review it, then run from PowerShell: `powershell.exe -NoProfile -File .\\boxweave-setup.ps1 -Distro Ubuntu`. It generates a dedicated key **inside WSL**, pins the server host key, obtains administrator approval through the existing SSH/sudo account, probes actual MCP initialize/tools/read, then safely updates the Windows ChatGPT/Codex desktop configuration at `%USERPROFILE%\\.codex\\config.toml` (or `CODEX_HOME`), without requiring any Codex CLI command on PATH. For separate administrator approval use `-NoEnroll`, perform the printed server-side enrollment command, and rerun with `-AlreadyEnrolled`. Existing Codex BoxWeave registrations require `-Replace`. The Linux MCP gateway automatically supplies its validated server-managed workload public key for new create_container requests. The client setup script no longer writes Codex AGENTS files; optional additional user-supplied public keys remain validated. The Windows-to-server SSH key is distinct and must not be reused as the workload key. No installed Provider, Incus or storage settings are changed by client generation.
-
-The Web Client Setup page also generates public descriptors and local client enrollment scripts for selected profiles. Actual SSH credentials, server trust and Agent registration must be reviewed on the client. Generating a script does not prove live registration or model inference.
+Supported Apps (**alphabetical**): **Antigravity, Claude (Code), Codex,
+Copilot (CLI), Cursor, OpenCode, Qoder (IDE), TRAE (IDE), ZCode**.
+Linux and macOS use native OpenSSH. Windows supports native OpenSSH or a
+Windows-hosted App using WSL OpenSSH. Qoder and TRAE use official IDE JSON
+import rather than edits to undocumented user configuration paths.
 
 | Client platform | Agent | Transport | Support |
 | --- | --- | --- | --- |
-| Windows | Codex | Native OpenSSH | Selected |
-| Windows | Codex | Explicit WSL SSH | Selected |
-| Windows | ZCode | Native OpenSSH | Selected |
-| Windows | ZCode | Explicit WSL SSH | Selected |
-| macOS | Codex / ZCode | Native SSH | Not currently supported |
-| Windows / macOS | Cursor / Claude Code | Any | Not currently supported |
-| WSL-hosted Agent | Codex / ZCode | Agent runs inside WSL | Not currently supported |
+| Linux | All nine supported Apps | Native SSH | Generator/fixture; live App verification pending |
+| macOS | All nine supported Apps | Native SSH | Generator/fixture; live App verification pending |
+| Windows | All nine supported Apps | Native OpenSSH | Generator/fixture; Python 3.11+ required |
+| Windows | All nine supported Apps | WSL SSH | Generator/fixture; Codex WSL also supports PowerShell-only |
+| WSL-hosted Agent | Any | Independent Linux runtime | Not implicitly configured by Windows generator |
 
-WSL refers only to the SSH transport used by an Agent running on Windows. See [client setup](clients/README.md).
+The Web Client Setup form retains its four earlier approved local
+descriptor profiles; the installed `boxweave client` CLI supports the
+expanded catalog. Generating a script or passing its isolated MCP probe
+does not prove the App has actually loaded or granted MCP tools.
+See [client setup](clients/README.md) for the individual App destinations
+and prerequisites.
 
 ## Web console
 
