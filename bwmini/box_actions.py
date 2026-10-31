@@ -49,24 +49,33 @@ class BoxActions:
                 "confirmation_required":True,"state":"planned"}
 
     def confirm(self,pid,logical,actor="operator"):
+        # Remote identity observation happens OUTSIDE the SQLite write lock.
+        with self.store.db() as db:
+            prior=db.execute("SELECT * FROM box_action_plans WHERE id=? AND actor=?",
+                             (pid,actor)).fetchone()
+        if prior is None:raise Fault("NOT_FOUND",404)
+        if logical!=prior["logical"]:raise Fault("TARGET_CHANGED")
+        adapter=BoxAgent(self.service,logical)
+        if adapter.target.digest()!=prior["target_digest"]:
+            raise Fault("TARGET_CHANGED")
+        if prior["action"] not in adapter.allowed:
+            raise Fault("AGENT_BOX_TOOL_DENIED",403)
         now=self.clock()
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row=db.execute("SELECT * FROM box_action_plans WHERE id=? AND actor=?",
                            (pid,actor)).fetchone()
             if row is None:raise Fault("NOT_FOUND",404)
-            if logical!=row["logical"]:raise Fault("TARGET_CHANGED")
+            if (logical!=row["logical"] or row["target_digest"]!=prior["target_digest"]
+                    or row["action"]!=prior["action"]):
+                raise Fault("TARGET_CHANGED")
             if row["used"] or now<row["created"] or now>=row["expires"]:
                 raise Fault("PLAN_STALE")
-            # This check is intentionally before enqueue/dispatch.
-            target=BoxAgent(self.service,logical)
-            if target.target.digest()!=row["target_digest"]:raise Fault("TARGET_CHANGED")
-            if row["action"] not in target.allowed:raise Fault("AGENT_BOX_TOOL_DENIED",403)
             receipt=new_id()
             db.execute("UPDATE box_action_plans SET used=1 WHERE id=? AND used=0",(pid,))
             db.execute("""INSERT INTO box_action_receipts
                (id,plan,actor,logical,target_digest,action,state,created,updated,code)
-               VALUES (?,?,?,?,? ,?,'queued',?,?,'QUEUED')""",
+               VALUES (?,?,?,?,?,?,'queued',?,?,'QUEUED')""",
                (receipt,pid,actor,logical,row["target_digest"],row["action"],now,now))
         return {"id":receipt,"logical":logical,"action":row["action"],
                 "state":"queued","code":"QUEUED"}
