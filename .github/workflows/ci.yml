@@ -154,3 +154,58 @@ jobs:
           else
             gh release create "v$version" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."
           fi
+
+  install-smoke:
+    name: Disposable Ubuntu 24.04 Containarium install diagnostic
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Record runner environment
+        shell: bash
+        run: |
+          mkdir -p install-smoke-evidence
+          {
+            date -u
+            uname -a
+            cat /etc/os-release
+            df -h /
+            free -h
+            sudo -n true && echo 'Passwordless sudo available'
+          } | tee install-smoke-evidence/runner.txt
+      - name: Run official Containarium streamed installer
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout --signal=TERM --kill-after=30s 25m bash -o pipefail -c \
+            'curl -fsSL https://containarium.dev/install.sh | sudo bash' \
+            2>&1 | tee install-smoke-evidence/install.log
+          install_rc=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$install_rc" > install-smoke-evidence/exit-code.txt
+          printf '{"installer_exit_code":%s,"test":"containarium.dev/install.sh","runner":"ubuntu-24.04"}\n' "$install_rc" > install-smoke-evidence/result.json
+          printf 'Containarium installer exit code: %s\n' "$install_rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$install_rc"
+      - name: Inspect installed commands and service status
+        if: always()
+        shell: bash
+        run: |
+          {
+            for cmd in incus containarium containariumd; do
+              if command -v "$cmd" >/dev/null; then echo "$cmd: present"; else echo "$cmd: missing"; fi
+            done
+            for unit in incus.service containarium.service containariumd.service; do
+              echo "$unit: $(systemctl is-active "$unit" 2>/dev/null || true)"
+            done
+          } | tee install-smoke-evidence/services.txt
+      - name: Preserve diagnostics even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: containarium-install-smoke-evidence
+          path: install-smoke-evidence/
+          if-no-files-found: warn
+          retention-days: 3
