@@ -19,7 +19,24 @@ WRITE_TOOLS = frozenset(("write_file", "move_file", "delete_file", "shell_exec",
                          "compose_autostart_disable"))
 RESOURCE_URIS = frozenset(("containarium://ci-context", "containarium://ci-prompt"))
 PATH_KEYS = {"read_file":("path",), "list_directory":("path",),
-             "write_file":("path",), "move_file":("source","destination")}
+             "tail_log":("path",), "write_file":("path",),
+             "move_file":("source","destination"), "delete_file":("path",),
+             "compose_discover":("root",), "compose_autostart_enable":("dir",),
+             "compose_autostart_disable":("dir",),
+             "compose_autostart_status":("dir",)}
+ARG_KEYS = {
+    "read_file":{"path","offset","limit","head","tail"},
+    "list_directory":{"path","include_hidden"},
+    "tail_log":{"path","start_offset","follow_seconds"},
+    "process_list":set(), "compose_discover":{"root","max_depth","no_skip"},
+    "compose_autostart_status":{"dir"},
+    "write_file":{"path","content","mode"},
+    "move_file":{"source","destination"}, "delete_file":{"path"},
+    "shell_exec":{"command","cwd","timeout_seconds"},
+    "process_start":{"command","name","cwd","capture_mode"},
+    "process_kill":{"name","force"}, "compose_autostart_enable":{"dir","force"},
+    "compose_autostart_disable":{"dir"},
+}
 
 class BoxAgent:
     def __init__(self, service, logical):
@@ -70,8 +87,20 @@ class BoxAgent:
     def validate(self, name, args):
         if name not in self.allowed:
             raise Fault("AGENT_BOX_TOOL_DENIED",403)
-        if not isinstance(args,dict) or len(args)>12:
+        if not isinstance(args,dict) or set(args)-ARG_KEYS[name]:
             raise Fault("INVALID_INPUT",422)
+        if name=="tail_log":
+            follow=args.get("follow_seconds",1)
+            if type(follow) not in (int,float) or not 0<=follow<=3:
+                raise Fault("BOX_LOG_WINDOW_DENIED",422)
+        if name=="shell_exec":
+            seconds=args.get("timeout_seconds",30)
+            if type(seconds) not in (int,float) or not 1<=seconds<=30:
+                raise Fault("BOX_TIMEOUT_DENIED",422)
+        if name in ("process_kill","process_start") and "name" in args:
+            if (not isinstance(args["name"],str) or
+                    not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,60}",args["name"])):
+                raise Fault("BOX_PROCESS_NAME_DENIED",422)
         if name in PATH_KEYS:
             for key in PATH_KEYS[name]:
                 if key not in args:raise Fault("BOX_PATH_DENIED",422)
@@ -86,9 +115,7 @@ class BoxAgent:
         if name=="write_file":
             if not isinstance(args.get("content"),str) or len(args["content"].encode())>16384:
                 raise Fault("BOX_WRITE_LIMIT",422)
-        if name in ("delete_file","process_kill","compose_autostart_disable"):
-            # All destructive calls are dispatched only through the plan API.
-            pass
+        # No action is dispatched from validate: the durable plan owns execution.
         return args
 
     def _open(self, timeout=20):
