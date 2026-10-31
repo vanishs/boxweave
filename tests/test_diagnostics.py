@@ -111,12 +111,14 @@ class MigrationTests(unittest.TestCase):
             store = Store(path)
             with store.db() as check:
                 version = check.execute("PRAGMA user_version").fetchone()[0]
-                self.assertEqual(version, 9)
+                self.assertEqual(version, 10)
                 self.assertEqual(check.execute("SELECT count(*) FROM operations").fetchone()[0], 1)
                 self.assertIsNotNone(check.execute(
                     "SELECT sql FROM sqlite_master WHERE name='diagnostic_trace_links'").fetchone())
                 self.assertIsNotNone(check.execute(
                     "SELECT sql FROM sqlite_master WHERE name='diagnostic_events_time_order'").fetchone())
+                self.assertIsNotNone(check.execute(
+                    "SELECT sql FROM sqlite_master WHERE name='selftest_runs'").fetchone())
             self.assertEqual(diagnostics.trace_for_operation(store, "operator", "hello", "op-old"), None)
 
     def test_d1_t02_unsupported_future_schema_is_refused(self):
@@ -124,7 +126,7 @@ class MigrationTests(unittest.TestCase):
             path = Path(tmp) / "state.sqlite3"
             db = sqlite3.connect(path)
             db.execute("CREATE TABLE forward(value TEXT)")
-            db.execute("PRAGMA user_version=10")
+            db.execute("PRAGMA user_version=11")
             db.commit()
             db.close()
             os.chmod(path, 0o600)

@@ -1,6 +1,8 @@
 """Confirmed selftest regressions: plan hash gate, live-only, full cleanup."""
 import io
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -199,3 +201,97 @@ class SelftestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JournalTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from bwmini.store import Store
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = Store(Path(self.tmp.name) / "state" / "state.sqlite3")
+        self.plan, self.checksum = selftest.build_plan(now="2026-10-31T00:00:00+00:00")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def journal(self):
+        return selftest.Journal(self.store, clock=lambda: 1000.0)
+
+    def test_run_records_durable_step_boundaries(self):
+        provider = Live()
+        journal = self.journal()
+        result = selftest.run(provider, self.plan, key=KEY, clock=Clock(), sleep=Clock().sleep,
+                              journal=journal)
+        self.assertEqual(result["state"], "passed")
+        with self.store.db() as db:
+            rows = [dict(r) for r in db.execute("SELECT * FROM selftest_runs")]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["state"], "completed")
+        self.assertEqual(row["exact_test_box"], self.plan["box"])
+        self.assertEqual(row["plan_digest"], self.checksum)
+        self.assertEqual(row["cleanup_state"], "not_needed")
+        self.assertTrue(row["last_step"].startswith("delete:"))
+        self.assertNotIn("ssh-ed25519", json.dumps(row))
+
+    def test_failed_step_is_journaled_and_cleanup_recorded(self):
+        provider = Live()
+        provider.hello_failures = 3
+        journal = self.journal()
+        result = selftest.run(provider, self.plan, key=KEY, budget=60, clock=Clock(),
+                              sleep=Clock().sleep, journal=journal)
+        self.assertEqual(result["state"], "failed")
+        with self.store.db() as db:
+            row = dict(db.execute("SELECT * FROM selftest_runs").fetchone())
+        self.assertEqual(row["state"], "failed")
+        self.assertIn(row["cleanup_state"], ("performed", "best_effort_failed", "best_effort"))
+
+    def test_kill_between_start_and_outcome_leaves_unreconciled_row(self):
+        journal = self.journal()
+        run_id = journal.start(self.plan, 1999.0)
+        journal.step_started("create")
+        # Simulate a killed process: no step_done, no finish.
+        stale = selftest.Journal.unreconciled(self.store)
+        self.assertEqual(len(stale), 1)
+        self.assertEqual(stale[0]["id"], run_id)
+        self.assertEqual(stale[0]["exact_test_box"], self.plan["box"])
+        self.assertEqual(stale[0]["last_step"], "create:started")
+        with self.assertRaisesRegex(Fault, "SELFTEST_RUN_UNRECONCILED"):
+            selftest.run(Live(), self.plan, key=KEY, clock=Clock(), sleep=Clock().sleep,
+                         journal=self.journal())
+        provider = Live()
+        self.assertEqual(provider.writes, [])  # refusal happened before any remote effect
+
+    def test_resolve_is_bookkeeping_only_and_unblocks_new_runs(self):
+        journal = self.journal()
+        run_id = journal.start(self.plan, 1999.0)
+        journal.step_started("create")
+        selftest.Journal.resolve(self.store, run_id, actor="operator")
+        with self.store.db() as db:
+            row = dict(db.execute("SELECT * FROM selftest_runs").fetchone())
+        self.assertEqual(row["state"], "resolved")
+        self.assertEqual(row["cleanup_state"], "operator_resolved")
+        self.assertEqual(selftest.Journal.unreconciled(self.store), [])
+        provider = Live()
+        result = selftest.run(provider, self.plan, key=KEY, clock=Clock(), sleep=Clock().sleep,
+                              journal=self.journal())
+        self.assertEqual(result["state"], "passed")
+
+    def test_double_resolve_is_refused(self):
+        journal = self.journal()
+        run_id = journal.start(self.plan, 1999.0)
+        journal.finish("failed", "best_effort")
+        with self.assertRaisesRegex(Fault, "SELFTEST_RUN_NOT_RUNNING"):
+            selftest.Journal.resolve(self.store, run_id)
+
+    def test_journal_write_failure_refuses_the_run_before_mutation(self):
+        class BrokenStore:
+            def db(self):
+                raise Fault("STATE_UNAVAILABLE", 503)
+
+        provider = Live()
+        broken = selftest.Journal(BrokenStore())
+        with self.assertRaises(Exception):
+            selftest.run(provider, self.plan, key=KEY, clock=Clock(), sleep=Clock().sleep,
+                         journal=broken)
+        self.assertEqual(provider.writes, [])

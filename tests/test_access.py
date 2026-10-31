@@ -181,12 +181,12 @@ class AccessTests(Base):
         from bwmini.models import Models
         project=self.bind();Models(self.store).save({'client_version':'3.16.3','provider':'zai','model':'GLM-5.3','access_mode':'native-existing'},0)
         with self.store.db() as db:
-            for table in TABLES+('diagnostic_events','diagnostic_trace_links'):db.execute('DROP TABLE '+table)
+            for table in TABLES+('diagnostic_events','diagnostic_trace_links','selftest_runs'):db.execute('DROP TABLE '+table)
             db.execute('DROP TABLE project_unbindings');db.execute('DROP TABLE job_runs');db.execute('PRAGMA user_version=5')
         upgraded=Store(self.store.path)
         self.assertEqual(upgraded.project(project['id'])['revision'],1)
         self.assertEqual(Models(upgraded).read()['selection']['model'],'GLM-5.3')
-        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],9)
+        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],10)
     def test_membership_read_keeps_account_and_network_identity_distinct(self):
         rows=self.a.memberships()['memberships'];self.assertEqual(rows[0]['account_user'],TARGET.user);self.assertEqual(rows[0]['network_tenant'],'tenant-a')
 

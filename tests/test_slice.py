@@ -152,7 +152,7 @@ class ApplicationTests(Base):
                 self.s.worker(once=True)
 
     def test_unknown_schema_is_not_repaired(self):
-        with self.store.db() as db: db.execute("PRAGMA user_version=10")
+        with self.store.db() as db: db.execute("PRAGMA user_version=11")
         with self.assertRaisesRegex(Fault,"SCHEMA_UNSUPPORTED"):
             Store(self.store.path)
 

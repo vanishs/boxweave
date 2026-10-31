@@ -47,6 +47,14 @@ CREATE INDEX diagnostic_events_trace_order ON diagnostic_events(trace_id, seq);
 CREATE INDEX diagnostic_events_time_order ON diagnostic_events(time_utc, seq);
 """
 
+SELFTEST_SCHEMA = """
+CREATE TABLE selftest_runs (
+ id TEXT PRIMARY KEY, actor TEXT NOT NULL, plan_digest TEXT NOT NULL,
+ exact_test_box TEXT NOT NULL, state TEXT NOT NULL,
+ created_utc TEXT NOT NULL, deadline_utc TEXT NOT NULL,
+ last_step TEXT, cleanup_state TEXT NOT NULL);
+"""
+
 class Store:
     def __init__(self, path):
         self.path = Path(path).absolute()
@@ -61,7 +69,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9):
+            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -96,6 +104,9 @@ class Store:
                 for statement in DIAGNOSTIC_SCHEMA.split(";"):
                     if statement.strip():db.execute(statement)
                 db.execute("PRAGMA user_version=9")
+            if version < 10:
+                db.execute(SELFTEST_SCHEMA)
+                db.execute("PRAGMA user_version=10")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager
