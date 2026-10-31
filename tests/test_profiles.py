@@ -52,7 +52,8 @@ class Profiles(unittest.TestCase):
             self.assertEqual(argv.count('ServerAliveCountMax=4'),1)
             config=p.tomllib.loads(p.codex_merge('',argv))
             saved=config['mcp_servers']['boxweave']['args']
-            self.assertEqual(saved,argv)
+            self.assertEqual(config['mcp_servers']['boxweave']['command'],argv[0])
+            self.assertEqual(saved,argv[1:])
             self.assertEqual(saved.count('ServerAliveInterval=15'),1)
             self.assertEqual(saved.count('ServerAliveCountMax=4'),1)
 
