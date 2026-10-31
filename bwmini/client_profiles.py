@@ -292,7 +292,15 @@ def update_codex(command,args):
     block="[mcp_servers.boxweave]\n"+"".join(
         k+" = "+json.dumps(v)+"\n" for k,v in expected.items())
     if matches:
-        m=matches[0];updated=original[:m.start()]+block+original[m.end():]
+        m=matches[0]
+        # Preserve unrelated options, comments and nested tables from a
+        # pre-existing client configuration, including tool approvals.
+        # Only the known transport/timing keys are replaced.
+        old_body=m.group().split("\n",1)[1]
+        for line in old_body.splitlines(keepends=True):
+            if not re.match(r"^[ \t]*(command|args|startup_timeout_sec|tool_timeout_sec)[ \t]*=", line):
+                block+=line
+        updated=original[:m.start()]+block+original[m.end():]
     else:
         updated=original.rstrip()+"\n\n"+block
     require(tomllib.loads(updated)["mcp_servers"]["boxweave"]["args"]==args,

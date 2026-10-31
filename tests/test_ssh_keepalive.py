@@ -40,15 +40,21 @@ class PersistentMcpKeepaliveTests(unittest.TestCase):
                         count+=1
         self.assertEqual(count,36)
 
-    def test_windows_codex_wsl_probe_and_registration_both_protected(self):
-        source=client_setup.POWERSHELL
-        probe=source.split("$probeScript = @'",1)[1].split("'@",1)[0]
-        registration=source.split("$sshArgs = @(",1)[1].split("$homeDir =",1)[0]
-        for setting in ALIVE:
-            self.assertEqual(probe.count(setting),1)
-            self.assertEqual(registration.count(setting),1)
-        self.assertIn("StrictHostKeyChecking=yes",probe)
-        self.assertIn("StrictHostKeyChecking=yes",registration)
+    def test_windows_codex_wsl_uses_same_unified_python_transport_as_other_apps(self):
+        source=client_setup.render({
+            "host":"example.test","port":22,"server_key":host_key()},
+            "hostadmin",app="codex",system="windows",transport="wsl")
+        self.assertTrue(source.startswith("#!/usr/bin/env python3\n# ==="))
+        self.assertNotIn("POWERSHELL",source)
+        scope={"__name__":"fixture"}
+        exec(compile(source,"setup.py","exec"),scope)
+        command,args=scope["transport_command"](
+            {"key":"/home/user/key","known_hosts":"/home/user/known"},"Ubuntu")
+        self.assertEqual(command,"wsl.exe")
+        self.assertEqual(args[:4],["--distribution","Ubuntu","--exec","/usr/bin/ssh"])
+        self.check_ssh(args)
+        self.assertEqual(args[-2],"boxweave@example.test")
+        self.assertEqual(args[-1],"/usr/bin/python3 /usr/local/lib/boxweave/default/mcp_gate.py")
 
     def test_native_windows_registration_and_diagnostic_scripts(self):
         for filename in ("clients/windows/register-native.ps1",
