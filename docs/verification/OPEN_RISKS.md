@@ -90,3 +90,19 @@ This removes the old PowerShell-only Windows path from the installed
 generator but does not install Python on clients or migrate old
 `.ps1` registrations. Manual Windows PowerShell helpers remain
 separate, and real cross-platform Python+SSH App acceptance is open.
+
+
+**RISK-620 (gate-host nesting helper dependency, 0.20.1):** The
+`enable_nesting` create extension and the `boxweave_nesting` tool run
+`sudo .../nesting.py` on the host that hosts the MCP gate and require
+that host to carry a complete BoxWeave server state
+(`/var/lib/boxweave-default/state.json`, public helpers, sudoers). On
+split deployments where the gate runs away from the Provider host —
+observed on the 2026-10-30 dev backend — every nesting call fails with
+`NESTING_HELPER_UNAVAILABLE` after the gate fix; before the fix the
+failure was masked as a trust-gate error and the create response
+suggested the box had not been created. Platform-created boxes were
+empirically nested-capable, so workload creation was unaffected, but
+the nesting tool contract remains non-functional until the gate host is
+repaired or nesting is delegated to the daemon. Operators must not
+delete and recreate boxes in response to `BOXWEAVE_NESTING_NOT_APPLIED`.

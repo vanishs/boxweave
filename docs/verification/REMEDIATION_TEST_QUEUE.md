@@ -246,3 +246,48 @@ policy, TOML preservation and keepalive; exact result must be checked.
 **U:** real Windows native/WSL Python3.11+ setup, real macOS/Linux
 clients, App tool injection and long-idle MCP connectivity. Python
 availability and Windows OpenSSH ACL requirements are operator prerequisites.
+
+
+## 0.20.1 Agent-channel client setup hang and nesting gate error clarity
+
+A 2026-10-30 end-to-end test of the streamed installer, `boxweave client`
+and the full MCP chain on fresh LXC boxes (server `boxweave-test-ser`,
+client `boxweave-test-cli`, workload `hello-py`, shared network tenant)
+succeeded overall but exposed two agent-facing defects, both fixed here.
+
+`boxweave client` treated any TTY stdin as interactive. Agent/exec
+channels expose a TTY stdin while capturing stdout, so generation
+without explicit `--replace`/`--no-replace` blocked on the replace
+prompt until the caller timed out, producing no output. Interactive
+mode now additionally requires a TTY stdout and is disabled by a
+non-empty `BOXWEAVE_BATCH` environment variable; the install summary,
+host onboarding text and generator help state the automation rules.
+The unattended enrollment recipe (`--no-enroll`, root
+`online.py enroll --public-key` on the host, rerun with
+`--already-enrolled`) is now printed by the installer instead of being
+undiscoverable.
+
+On a gate host without the BoxWeave server helper chain,
+`create_container` with `enable_nesting` reported
+`NESTING_CONFIGURATION_UNVERIFIED...; creation must not be repeated`
+after the box was already created, and every `boxweave_nesting` or
+nesting failure was masked as `TRUST_OR_WORKLOAD_KEY_GATE`. A missing
+sudo/helper/timeout in `nesting.invoke` now raises
+`NESTING_HELPER_UNAVAILABLE`, the gate surfaces the fixed nesting and
+target-identity codes verbatim, and the post-create failure message is
+`BOXWEAVE_NESTING_NOT_APPLIED; box creation itself succeeded and must
+not be repeated; <code>`.
+
+**S:** source review of `client_setup.py`, `nesting.py`, `mcp_gate.py`,
+`online.py`, `host_cli.py`. **T:** unit tests cover captured-output
+exec channels, `BOXWEAVE_BATCH`, helper-gap naming, created-box
+survival, and the new summary text; run in WSL Python 3.10 plus
+`scripts/check_knowledge.py` and `bash -n` locally. The pre-fix
+behavior was reproduced on real boxes with release 0.20.0; the fixed
+helpers require release 0.20.1 assets and have not been re-run on a
+real host yet. **U:** gate-host repair (install the helper chain or
+delegate nesting to the daemon), real Windows/macOS client profiles,
+server reboot persistence, install.sh update/repair rerun. The
+"PROVISIONING TAKES MINUTES / poll get_container" create text is
+emitted by the upstream Containarium MCP server binary, not this
+repository; clarification belongs upstream.
