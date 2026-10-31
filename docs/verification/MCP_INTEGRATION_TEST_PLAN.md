@@ -65,3 +65,7 @@
 An automated Agent may choose test steps within an **already specifically authorized** disposable environment or draft a plan-first sequence. Neither mode authorizes privileged host mutation, uncontrolled new Box creation, Provider install or cleanup without scope approval; see [active developer test workflow](../process/AGENT_TEST_WORKFLOW.md).
 
 **Backlinks:** [master](../design/MCP_CAPABILITY_INTEGRATION_MASTER.md), [audit](MCP_CAPABILITY_SOURCE_AUDIT.md), [security](../design/MCP_INTEGRATION_SECURITY.md), [delivery](../design/MCP_INTEGRATION_DELIVERY_PLAN.md), [diagnostic D0–D2](../design/DIAGNOSTICS_PROPOSAL.md), [environment E0–E4](../design/BOX_ENVIRONMENT_PROPOSAL.md).
+
+## Implementation evidence checkpoint (2026-10-31)
+
+See [handoff](../process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md): PR #7 has source-only partial M0/M2 with fixture CI run [41188227613](https://github.com/vanishs/boxweave/actions/runs/41188227613) successful. None of the installed Provider/agent-box/live Box checks in this matrix were actually run. **M1/M3/M4/M5 acceptance is pending.**

@@ -80,3 +80,7 @@ These environment features are **design-only**; D0–D2 diagnostics are source-i
 - [M0–M5 delivery handoff](design/MCP_INTEGRATION_DELIVERY_PLAN.md) and [acceptance](verification/MCP_INTEGRATION_TEST_PLAN.md)
 
 MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment proposals. PR #6 is research/design and must not be reported as runtime feature completion.
+
+## MCP integration implementation checkpoint
+
+- [Actual source completion, CI evidence, open decisions and next developer handoff](process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md) (partial M0/M2 only; M1/M3/M4 and most M5 NOT IMPLEMENTED)
