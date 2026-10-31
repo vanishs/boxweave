@@ -9,7 +9,7 @@ STATE = Path("/var/lib/boxweave-default")
 PUBLIC = Path("/usr/local/lib/boxweave/default")
 APP = "boxweave"
 PROVIDER_VERSION = "0.120.1"
-INCUS_PACKAGE = "1:7.5.1-ubuntu24.04-202610270033"
+INCUS_PACKAGES = ("incus", "incus-client", "incus-extra")
 KEY_SHA256 = "f1adb44fdf82083f983a392b5b406d34e473dce3d66a51de3118cdc1f51d3f87"
 PROVIDER_ASSETS = {
     "containariumd": "7d992e5df41d7070c187e8b11d516d61e8b89b4b7be677f7a0880b9cfed5d4bd",
@@ -248,13 +248,30 @@ def verify_existing_provider(provider):
 
 
 
-def installation_summary(web_port):
-    """Human-facing last screen. Only client setup is the prominent next step."""
+def install_missing_incus(deadline, log, env):
+    """Let APT resolve one coherent dependency set without upgrading existing packages.
+
+    A fresh host needs Incus before the managed Provider can start. In
+    particular, do not pin only some Incus packages: incus-base must match
+    the selected incus build. APT simulation checks the exact transaction
+    before applying it. Hosts with Incus already installed skip this path.
+    """
+    packages = list(INCUS_PACKAGES)
+    run(["apt-get", "-s", "install", "-y", "--no-upgrade", *packages],
+        deadline, log, env)
+    run(["apt-get", "install", "-y", "-qq", "--no-upgrade", *packages],
+        deadline, log, env)
+
+
+def installation_summary(web_port, version):
+    """Human-facing last screen; use the verified installed release version."""
+    require(isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version),
+            "INSTALLED_VERSION_INVALID")
     port = str(web_port)
     web_url = "http://127.0.0.1:" + port
     return "\n".join((
         "",
-        "[boxweave] Installation complete",
+        "[boxweave] BoxWeave v" + version + " installed successfully",
         "",
         "==============================================================",
         "  Configure your client",
@@ -398,18 +415,13 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                     old["managed_files"].update({str(keyring):sha(keyring.read_bytes()), str(source):sha(source.read_bytes())})
                     atomic(marker, json.dumps(old, sort_keys=True).encode())
                     run(["apt-get", "update", "-qq"], deadline, log, env)
-                    packages = (["incus="+INCUS_PACKAGE, "incus-client="+INCUS_PACKAGE,
-                                 "incus-extra="+INCUS_PACKAGE] if (system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04")
-                                else ["incus", "incus-client", "incus-extra"])
-                    run(["apt-get", "install", "-y", "-qq", *packages], deadline, log, env)
+                    install_missing_incus(deadline, log, env)
             deadline = phase("local_provider")
             observed = subprocess.run(["incus", "--version"], capture_output=True, text=True, timeout=10)
             require(observed.returncode == 0 and re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", observed.stdout.strip()),
                     "INCUS_VERSION_UNKNOWN")
             incus_version = tuple(int(n) for n in observed.stdout.strip().split("."))
             require(incus_version >= (7, 5, 1), "INCUS_MIN_VERSION_REQUIRED")
-            if not old.get("preexisting_incus") and system.get("ID") == "ubuntu" and system.get("VERSION_ID") == "24.04":
-                require(observed.stdout.strip() == "7.5.1", "INCUS_PIN_CHANGED_REVIEW_REQUIRED")
             # Initialize only an inspected empty local daemon; never replace an existing pool/profile.
             pools=subprocess.run(["incus","--force-local","storage","list","--format","json"],capture_output=True,text=True,timeout=20)
             require(pools.returncode==0,"LOCAL_INCUS_NOT_READY")
@@ -599,7 +611,7 @@ store.admin(generate_password_hash(password))
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
         # Human-facing last screen; JSON above remains machine-readable.
-        print(installation_summary(web_port), flush=True)
+        print(installation_summary(web_port, version), flush=True)
 
     finally: os.close(lock)
 

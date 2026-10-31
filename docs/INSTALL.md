@@ -79,7 +79,16 @@ On an independently prepared Provider, the explicit [application bootstrap](HOST
 
 The README command selects the source-bound release's `online.py` coordinator. It stages/validates all artifacts, provisions only an inspected empty local host, then delegates app installation to the dedicated non-root account. Repeat the same command for managed app update/repair after inspecting a failed phase and any original package processes; existing Provider binary/version mismatches remain refused. No old data migration or arbitrary environment adoption occurs.
 
-After a ready result, generate a client identity on the **client** machine, enroll only its public half with the printed root helper command, and run that helper's `client-config --identity ABSOLUTE_CLIENT_KEY --known-hosts ABSOLUTE_CLIENT_KNOWN_HOSTS`. Deliver the resulting public JSON through the authenticated administrative channel. Put the returned pin line in the selected known_hosts file and configure the returned `mcpServers.boxweave` entry. Start a standard MCP client and verify initialize/initialized, tools/list and an actual read before creating workloads. Supply the returned managed workload public key explicitly in create_container.ssh_keys; it belongs to this nesting layer.
+The successful completion screen shows the verified BoxWeave release version.
+For a new standalone deployment without Incus, BoxWeave uses `apt-get -s`
+to check a coherent, unpinned `incus`/`incus-client`/`incus-extra`
+dependency transaction before installation, with `--no-upgrade` to avoid
+upgrading installed packages. Existing complete Containarium+Incus is untouched.
+This is an incremental fix, not a transfer of Incus and PostgreSQL ownership
+to Containarium. The upstream installer can modify installed Incus and network
+settings; do not invoke it automatically without a reviewed provisioning plan.
+
+After a ready result, generate a client identity on the **client** machine, enroll only its public half with the printed root helper command, and run that helper's `client-config --identity ABSOLUTE_CLIENT_KEY --known-hosts ABSOLUTE_CLIENT_KNOWN_HOSTS`. Deliver the resulting public JSON through the authenticated administrative channel. Put the returned pin line in the selected known_hosts file and configure the returned `mcpServers.boxweave` entry. Start a standard MCP client and verify initialize/initialized, tools/list and an actual read before creating workloads. The Linux MCP gateway supplies its own managed workload public key automatically for new create_container calls; extra validated public keys are optional.
 
 Installation's app health/MCP read is separate from a later client's actual creation/connect/Python test. See [current test progress and exact outcomes](verification/STREAMED_INSTALL_TEST.md).
 

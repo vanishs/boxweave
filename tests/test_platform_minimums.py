@@ -70,6 +70,8 @@ class MinimumVersionTests(unittest.TestCase):
         code = (ROOT / "bwmini/online.py").read_text()
         self.assertNotIn('AUTOMATIC_HOST_PROVISIONING_REQUIRES_UBUNTU', code)
         self.assertNotIn('host_can_use_provider(', code)
+        self.assertNotIn('INCUS_PACKAGE =', code)
+        self.assertNotIn('INCUS_PIN_CHANGED_REVIEW_REQUIRED', code)
 
 
 if __name__ == "__main__":

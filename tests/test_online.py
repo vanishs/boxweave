@@ -107,10 +107,34 @@ class StreamedInstallTests(unittest.TestCase):
             with self.assertRaisesRegex(online.Failure,"ROOT_REQUIRED"):online.install(Path("/unused"),"0.15.0")
             mutate.assert_not_called()
 
+class IncusPackageResolutionTests(unittest.TestCase):
+    def test_new_incus_uses_apt_solver_without_partial_version_pins(self):
+        calls=[]
+        with patch.object(online, "run", side_effect=lambda args,*_rest: calls.append(args)):
+            online.install_missing_incus(1234, None, {"DEBIAN_FRONTEND":"noninteractive"})
+        self.assertEqual(len(calls),2)
+        self.assertEqual(calls[0],["apt-get","-s","install","-y","--no-upgrade",
+                                   "incus","incus-client","incus-extra"])
+        self.assertEqual(calls[1],["apt-get","install","-y","-qq","--no-upgrade",
+                                   "incus","incus-client","incus-extra"])
+        self.assertNotIn("incus-base", online.INCUS_PACKAGES)
+
+    def test_failed_apt_simulation_prevents_package_installation(self):
+        calls=[]
+        def fail_first(args,*_rest):
+            calls.append(args)
+            raise online.Failure("APT_RESOLUTION_FAILED")
+        with patch.object(online,"run",side_effect=fail_first):
+            with self.assertRaisesRegex(online.Failure,"APT_RESOLUTION_FAILED"):
+                online.install_missing_incus(1234,None,{})
+        self.assertEqual(len(calls),1)
+        self.assertIn("-s",calls[0])
+
+
 class InstallCompletionTextTests(unittest.TestCase):
     def test_first_time_client_is_prominent_other_steps_are_optional(self):
-        summary = online.installation_summary(18640)
-        self.assertIn("Installation complete", summary)
+        summary = online.installation_summary(18640, "0.18.2")
+        self.assertIn("BoxWeave v0.18.2 installed successfully", summary)
         self.assertIn("Configure your client", summary)
         self.assertRegex(summary, r"(?m)^  boxweave client$")
         self.assertRegex(summary, r"(?m)^  boxweave client --help  # More options$")

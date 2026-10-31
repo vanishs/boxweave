@@ -1,6 +1,6 @@
 # BoxWeave client enrollment
 
-## Windows ChatGPT/Codex desktop + WSL SSH (v0.18.1)
+## Windows ChatGPT/Codex desktop + WSL SSH (v0.18.2)
 
 The installed server supports the same generation implementation through a **terminal wizard** or **explicit non-interactive arguments**:
 

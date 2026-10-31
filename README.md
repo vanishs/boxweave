@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.18.1.** This is a preview, not a certified clean-host deployment.
+**Current source version: 0.18.2.** This is a preview, not a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -15,6 +15,13 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | 
 ```
 
 **Ubuntu 24.04 or newer is the recommended host**, not a required distribution. The installer checks Linux x86_64, CPython >= 3.12, systemd, Provider/Incus availability and needed package tooling directly. On hosts without APT, prepare reviewed dependencies and Provider yourself; BoxWeave does not invoke an alternative package manager. Other distributions require separate live acceptance. It verifies source-bound release assets, provisions missing infrastructure on a clean host, **preserves an already configured Incus storage pool**, and **reuses an existing complete Containarium** without installing or upgrading it. Existing Provider identity, configuration, network and storage remain external. Partial installations are refused. See [existing Provider instructions](docs/verification/EXISTING_PROVIDER_INSTALL.md) and [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md). The released offline wheelhouse includes CPython 3.12–3.15 x86_64 wheels; Ubuntu 26.04 requires live host acceptance. Selected Agent clients: Windows Codex and ZCode via native SSH or WSL SSH; macOS clients are not currently supported.
+
+A successful streamed install prints the verified installed BoxWeave version and
+prominently shows `boxweave client`. For a fresh host without Incus, the
+managed-Provider path runs an APT dependency simulation and selects a coherent
+Incus package set without the old partial `7.5.1` pins; it never upgrades
+an already-installed Incus. This does not yet mean that Incus/PostgreSQL
+provisioning has been moved into an independently owned Containarium installer.
 
 The Provider API and Web application stay on loopback; the MCP client uses the existing SSH service with an explicitly enrolled client public key and a verified server pin. No public route, firewall change or SSH host-key replacement is performed. The initial Web administrator password is saved only in a private file whose location is printed; it is never printed by the installer.
 The explicit `bootstrap-plan` / `bootstrap` workflow can now prepare a dedicated application account, systemd user bus, independent scoped MCP launcher and rotating credential on an already reviewed Provider. It requires independently reviewed artifact digests and explicit root-change acknowledgment; see [application bootstrap](docs/HOST_BOOTSTRAP.md#independent-application-bootstrap).

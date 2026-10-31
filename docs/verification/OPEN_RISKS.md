@@ -57,3 +57,6 @@ Current SRC-100 experiment: source0.15.1 streamed reinstall and separate peer cr
 
 
 **0.18.0 RISK-617 update:** The new Linux MCP gateway adds its own validated public key to each new create request, so Codex no longer needs BoxWeave-managed AGENTS guidance. The original `hello-world-test-container` still needs authorized investigation and live SSH/Python verification; neither the old block nor guest authorized keys are changed by installing this release.
+
+
+**RISK-615/610 update (0.18.2):** The Ubuntu 24.04 GA run 41141400914 failed during APT resolution because a fixed Incus 7.5.1 subset conflicted with the Incus-base 7.6 candidate. The new managed fresh-host path removes partial pins and simulates the APT transaction before installation, but the exact revision still needs a complete isolated live install. The long-term owner-requested provider-only dependency boundary remains unresolved; the upstream Containarium installer itself changes Incus and host settings and is not silently executed.
