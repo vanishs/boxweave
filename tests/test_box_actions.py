@@ -53,6 +53,29 @@ class ActionTests(Base):
             self.assertFalse(self.s.box_actions.work_one())
             self.assertFalse(MockAdapter.calls)
 
+    def test_expired_queued_plan_is_never_dispatched(self):
+        MockAdapter.calls=[]
+        with patch("bwmini.box_actions.BoxAgent",MockAdapter):
+            plan=self.s.box_actions.plan(TARGET.logical,"shell_exec",{"command":"true"})
+            rec=self.s.box_actions.confirm(plan["id"],TARGET.logical)
+            self.now[0]+=121
+            self.assertTrue(self.s.box_actions.work_one())
+            saved=self.s.box_actions.receipt(rec["id"])
+            self.assertEqual(saved["state"],"failed")
+            self.assertEqual(saved["code"],"PLAN_EXPIRED_BEFORE_DISPATCH")
+            self.assertFalse(MockAdapter.calls)
+
+    def test_sleep_acknowledgement_is_not_claimed_as_completed_sleep(self):
+        self.s.provider.mode="mcp"
+        with patch("bwmini.auto_sleep.execute",return_value={"result":"upstream_acknowledged"}):
+            plan=self.s.box_actions.plan(TARGET.logical,"toggle_auto_sleep",
+                 {"enabled":True,"idleThresholdMinutes":30})
+            rec=self.s.box_actions.confirm(plan["id"],TARGET.logical)
+            self.assertTrue(self.s.box_actions.work_one())
+            saved=self.s.box_actions.receipt(rec["id"])
+            self.assertEqual(saved["state"],"acknowledged")
+            self.assertEqual(saved["code"],"AUTO_SLEEP_ACCEPTED_NOT_OBSERVED")
+
     def test_v11_schema_and_bad_sleep_params(self):
         with self.store.db() as db:
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],11)
