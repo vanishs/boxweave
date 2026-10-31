@@ -315,64 +315,114 @@ def update_codex(command,args):
     temp.replace(path)
     print("BoxWeave MCP configured: "+str(path))
 
-def diagnose_check(name,state,detail=None):
-    item={"check":name,"state":state}
+def dcheck(cid,state,code,scope,required=True,detail=None):
+    item={"id":cid,"state":state,"code":code,"scope":scope,"required":required}
     if detail: item["detail"]=detail
     return item
 
+def overall_state(checks):
+    required=[c for c in checks if c["required"]]
+    if any(c["state"]=="failed" for c in required): return "failed"
+    if required and all(c["state"]=="passed" for c in required): return "passed"
+    return "incomplete"
+
+CONNECTION_STAGES=("python","client_tools","identity","ssh_transport","mcp_initialize","mcp_tools","mcp_read")
+
+def blocked(cid,stage):
+    return dcheck(cid,"not_verified",stage.upper()+"_NOT_RUN","client_connection",detail="blocked_by="+stage)
+
 def run_diagnose(distro):
-    """Read-only self-check: tools, pinned identity, live MCP stages, registration. Writes nothing."""
-    checks=[]
-    if sys.version_info[:2]>=(3,11): checks.append(diagnose_check("python","ok"))
-    else: checks.append(diagnose_check("python","failed","Python 3.11+ required"))
+    """Read-only stage-graph self-check. Writes nothing; never discloses raw SSH output."""
+    checks=[dcheck("python","passed" if sys.version_info[:2]>=(3,11) else "failed","PYTHON_VERSION","client_runtime")]
     missing=[t for t in ("ssh","ssh-keygen") if shutil.which(t) is None]
-    checks.append(diagnose_check("client_tools","failed" if missing else "ok",
-                                 "missing "+",".join(missing) if missing else None))
+    checks.append(dcheck("client_tools","failed" if missing else "passed",
+                         "MISSING_CLIENT_TOOLS" if missing else "CLIENT_TOOLS_PRESENT","client_runtime",
+                         detail="missing "+",".join(missing) if missing else None))
     root=pathlib.Path.home()/".config"/"boxweave"
     key,pin=root/"id_ed25519",root/"known_hosts"
     token=HOST if PORT==22 else "["+HOST+"]:"+str(PORT)
     expected=token+" "+SERVER_KEY+"\n"
-    identity=None
+    identity_ready=False
     if key.is_file() and pin.is_file() and not key.is_symlink() and not pin.is_symlink():
         if pin.read_text()==expected:
-            identity={"key":str(key),"known_hosts":str(pin)}
-            checks.append(diagnose_check("identity","ok"))
+            identity_ready=True
+            checks.append(dcheck("identity","passed","PINNED_IDENTITY_PRESENT","client_identity"))
         else:
-            checks.append(diagnose_check("identity","mismatch","pinned host key differs; review out of band"))
+            checks.append(dcheck("identity","failed","PIN_MISMATCH","client_identity",
+                                 detail="pinned host key differs; review out of band"))
     elif not key.exists() and not pin.exists():
-        checks.append(diagnose_check("identity","missing","run without --diagnose to enroll"))
+        checks.append(dcheck("identity","not_verified","IDENTITY_MISSING","client_identity",
+                             detail="run without --diagnose to enroll"))
     else:
-        checks.append(diagnose_check("identity","missing","partial keypair or pin"))
-    if identity is not None:
+        checks.append(dcheck("identity","not_verified","IDENTITY_PARTIAL","client_identity",
+                             detail="partial keypair or pin"))
+    if not identity_ready:
+        for stage in ("ssh_transport","mcp_initialize","mcp_tools","mcp_read"):
+            checks.append(blocked(stage,"identity"))
+    else:
+        identity={"key":str(key),"known_hosts":str(pin)}
         command,args=transport_command(identity,distro)
-        completed=subprocess.run([command]+args,
-            input="".join(json.dumps(x)+"\n" for x in [
-                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"boxweave-diagnose","version":"1.0"}}},
-                {"jsonrpc":"2.0","method":"notifications/initialized"},
-                {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
-                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_containers","arguments":{}}}]),
-            text=True,capture_output=True,timeout=90)
-        if completed.returncode!=0:
-            detail=(completed.stderr or "").strip().splitlines()[-1][:200] if (completed.stderr or "").strip() else "ssh exited "+str(completed.returncode)
-            checks.append(diagnose_check("mcp","failed",detail))
-        else:
-            checks.append(diagnose_check("ssh_transport","ok"))
-            try:
-                messages=[json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
-                by_id={m.get("id"):m for m in messages if isinstance(m,dict) and "id" in m}
-                ok_init=by_id.get(1,{}).get("result",{}).get("protocolVersion")=="2024-11-05"
-                checks.append(diagnose_check("mcp_initialize","ok" if ok_init else "failed"))
-                tools=[t.get("name") for t in by_id.get(2,{}).get("result",{}).get("tools",[])]
-                checks.append(diagnose_check("mcp_tools","ok" if "list_containers" in tools else "failed"))
-                read=by_id.get(3,{}).get("result",{})
-                checks.append(diagnose_check("mcp_read","ok" if not read.get("isError") and bool(read.get("content")) else "failed"))
-            except (ValueError,AttributeError,TypeError):
-                checks.append(diagnose_check("mcp_initialize","failed","unparsable MCP stream"))
+        try:
+            completed=subprocess.run([command]+args,
+                input="".join(json.dumps(x)+"\n" for x in [
+                    {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"boxweave-diagnose","version":"1.0"}}},
+                    {"jsonrpc":"2.0","method":"notifications/initialized"},
+                    {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
+                    {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_containers","arguments":{}}}]),
+                text=True,capture_output=True,timeout=90)
+        except subprocess.TimeoutExpired:
+            completed=None
+            checks.append(dcheck("ssh_transport","failed","SSH_TRANSPORT_TIMEOUT","client_connection",
+                                 detail="no transport response within deadline"))
+        except OSError:
+            completed=None
+            checks.append(dcheck("ssh_transport","failed","SSH_CLIENT_UNAVAILABLE","client_connection",
+                                 detail="ssh client could not be started"))
+        if completed is not None:
+            if completed.returncode!=0:
+                checks.append(dcheck("ssh_transport","failed","SSH_TRANSPORT_FAILED","client_connection",
+                                     detail="ssh exit class "+str(completed.returncode)))
+                for stage in ("mcp_initialize","mcp_tools","mcp_read"):
+                    checks.append(blocked(stage,"ssh_transport"))
+            else:
+                checks.append(dcheck("ssh_transport","passed","SSH_TRANSPORT_ESTABLISHED","client_connection"))
+                try:
+                    if len(completed.stdout)>1048576: raise ValueError("OUTPUT_LIMIT")
+                    messages=[json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+                    if len(messages)>256: raise ValueError("OUTPUT_LIMIT")
+                    by_id={m.get("id"):m for m in messages if isinstance(m,dict) and "id" in m}
+                    init=by_id.get(1,{}).get("result",{})
+                    ok_init=isinstance(init,dict) and init.get("protocolVersion")=="2024-11-05"
+                    checks.append(dcheck("mcp_initialize","passed" if ok_init else "failed",
+                                         "MCP_INITIALIZED" if ok_init else "MCP_HANDSHAKE_INVALID","client_connection"))
+                    if ok_init:
+                        tools=[t.get("name") for t in by_id.get(2,{}).get("result",{}).get("tools",[])
+                               if isinstance(t,dict)]
+                        ok_tools="list_containers" in tools
+                        checks.append(dcheck("mcp_tools","passed" if ok_tools else "failed",
+                                             "MCP_TOOL_DISCOVERED" if ok_tools else "MCP_READ_TOOL_MISSING",
+                                             "client_connection"))
+                        if ok_tools:
+                            read=by_id.get(3,{}).get("result",{})
+                            ok_read=isinstance(read,dict) and not read.get("isError") and bool(read.get("content"))
+                            checks.append(dcheck("mcp_read","passed" if ok_read else "failed",
+                                                 "MCP_READ_PASSED" if ok_read else "MCP_READ_FAILED",
+                                                 "client_connection"))
+                        else:
+                            checks.append(blocked("mcp_read","mcp_tools"))
+                    else:
+                        for later in ("mcp_tools","mcp_read"): checks.append(blocked(later,"mcp_initialize"))
+                except (ValueError,AttributeError,TypeError):
+                    checks=[c for c in checks if c["id"] not in ("mcp_initialize","mcp_tools","mcp_read")]
+                    checks.append(dcheck("mcp_initialize","failed","MCP_HANDSHAKE_INVALID","client_connection",
+                                         detail="unparsable or oversized MCP stream"))
+                    for later in ("mcp_tools","mcp_read"): checks.append(blocked(later,"mcp_initialize"))
     if APP in ("qoder","trae"):
-        checks.append(diagnose_check("registration","manual"))
+        checks.append(dcheck("registration","not_verified","REGISTRATION_MANUAL","client_registration",
+                             detail="user-mediated import required"))
     else:
         path,keys=app_location()
-        entry=None
+        entry=config_error=None
         if path.exists():
             try:
                 node=json.loads(path.read_text(encoding="utf-8"))
@@ -380,15 +430,32 @@ def run_diagnose(distro):
                     node=node.get(part) if isinstance(node,dict) else None
                 entry=node.get("boxweave") if isinstance(node,dict) else None
             except (OSError,ValueError):
-                entry=None
-        state="absent"
-        if entry is not None:
-            state="differs"
-            if identity is not None:
-                command,args=transport_command(identity,distro)
-                if entry==app_entry(command,args): state="registered"
-        checks.append(diagnose_check("registration",state,str(path)))
-    return (2 if any(c["state"] in ("failed","mismatch") for c in checks) else 0),checks
+                entry,config_error=None,True
+        if entry is None:
+            checks.append(dcheck("registration","not_verified" if config_error else "failed",
+                                 "REGISTRATION_CONFIG_UNREADABLE" if config_error else "REGISTRATION_ABSENT",
+                                 "client_registration",detail=str(path)))
+        elif not identity_ready:
+            checks.append(dcheck("registration","not_verified","REGISTRATION_UNVERIFIED_IDENTITY",
+                                 "client_registration",detail=str(path)))
+        else:
+            identity={"key":str(key),"known_hosts":str(pin)}
+            command,args=transport_command(identity,distro)
+            if entry==app_entry(command,args):
+                checks.append(dcheck("registration","passed","REGISTRATION_MATCHES","client_registration",
+                                     detail=str(path)))
+            else:
+                checks.append(dcheck("registration","failed","REGISTRATION_DIFFERS","client_registration",
+                                     detail=str(path)))
+    checks.append(dcheck("agent_ui","not_verified","AGENT_UI_NOT_OBSERVED","agent_runtime",required=False))
+    checks.append(dcheck("model_inference","not_verified","MODEL_INFERENCE_NOT_OBSERVED","agent_runtime",required=False))
+    overall=overall_state(checks)
+    connection_overall=overall_state([c for c in checks if c["id"] in CONNECTION_STAGES])
+    summary={"diagnostic_schema":1,"state":overall,"overall":overall,"connection_overall":connection_overall,
+             "app":APP,"os":SYSTEM,"transport":TRANSPORT,"host":HOST,"port":PORT,"checks":checks,
+             "coverage":{"workload_execute":"not_verified","effective_nesting":"not_verified",
+                         "host_server_health":"not_verified","model_inference":"not_verified"}}
+    return (0 if overall=="passed" else 1 if overall=="failed" else 2),summary
 
 def main():
     parser=argparse.ArgumentParser(description="Verified BoxWeave MCP client setup")
@@ -416,13 +483,11 @@ def main():
             distro=names[0]
         require(re.fullmatch(r"[A-Za-z0-9_.-]{1,80}",distro),"Invalid WSL distro")
     if options.diagnose:
-        code,checks=run_diagnose(distro)
-        summary={"state":"pass" if code==0 else "fail","app":APP,"os":SYSTEM,"transport":TRANSPORT,
-                 "host":HOST,"port":PORT,"checks":checks}
+        code,summary=run_diagnose(distro)
         print(json.dumps(summary,indent=2))
-        for c in checks:
-            print("# "+c["check"]+": "+c["state"]+((" - "+c["detail"]) if c.get("detail") else ""),file=sys.stderr)
-        print("# Diagnosis: "+summary["state"],file=sys.stderr)
+        for c in summary["checks"]:
+            print("# "+c["id"]+": "+c["state"]+" "+c["code"]+((" - "+c["detail"]) if c.get("detail") else ""),file=sys.stderr)
+        print("# Diagnosis: "+summary["overall"]+" (connection: "+summary["connection_overall"]+")",file=sys.stderr)
         raise SystemExit(code)
     identity=client_identity(distro)
     if options.no_enroll:
