@@ -212,3 +212,8 @@ Primary code refs at reviewed commit:
 
 A distinct [Box checkpoints, clone and environment fingerprint proposal](../design/BOX_ENVIRONMENT_PROPOSAL.md) now documents phased [E0-E4 implementation handoffs](../design/BOX_ENVIRONMENT_PROPOSAL.md#12-development-batches--source-of-implementation-handoffs) for the owner's reused-box and fresh-box development workflow. **NOT IMPLEMENTED**. These proposed features do not change the reviewed `main@0fcfa6a` behavior or the evidentiary classification of this audit. Similarly, [D0-D2 diagnostics](../design/DIAGNOSTICS_PROPOSAL.md) remain design-only; snapshot or cloning support is not established for the deployed Containarium MCP by native Incus capabilities alone.
 
+
+
+## Related MCP capability reuse (SRC-109, research baseline)
+
+[Capability-led integration master](../design/MCP_CAPABILITY_INTEGRATION_MASTER.md) and [gap audit](MCP_CAPABILITY_SOURCE_AUDIT.md) compare existing BoxWeave features with the Platform/agent-box MCP source catalogs. This is separate from the v0.22.0 **implemented D0–D2** diagnostic work (SRC-108) and the **unimplemented** Box Environment E0–E4 proposal. The optional direct-gateway diagnostic D3 remains deferred. Tool inventories are static and do not establish installed Provider permissions or production readiness.

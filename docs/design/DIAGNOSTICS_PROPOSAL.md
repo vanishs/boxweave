@@ -384,3 +384,8 @@ Questions for the owner (tracked in
 
 No decisions are implied by publishing this proposal. The authoritative
 scope/REQ/AC, ADR index and release version remain unchanged.
+
+
+## Related MCP capability reuse (SRC-109, research baseline)
+
+[Capability-led integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare existing BoxWeave features with the Platform/agent-box MCP source catalogs. This is separate from the v0.22.0 **implemented D0–D2** diagnostic work (SRC-108) and the **unimplemented** Box Environment E0–E4 proposal. The optional direct-gateway diagnostic D3 remains deferred. Tool inventories are static and do not establish installed Provider permissions or production readiness.
