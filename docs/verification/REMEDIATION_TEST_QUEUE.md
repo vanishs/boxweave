@@ -386,3 +386,7 @@ through the registered config executed `hello world` inside the
 pre-existing `hello-py` box. One operator-facing note: `--replace` is a
 generator flag baked into the emitted script; the generated script
 itself only accepts --already-enrolled/--no-enroll/--diagnose/--distro.
+## SRC-104 diagnostics design research — no implementation / no live test
+
+Research-only documents: [source audit](DIAGNOSTICS_SOURCE_AUDIT.md) and [implementation proposal](../design/DIAGNOSTICS_PROPOSAL.md). Reviewed 0.21.4 source main@0fcfa6a3ea0f3d86cc929a5d7646bbc06c1b952b through the GitHub connector, plus published MCP protocol contract. **S/D only**, no package/code changes, fixture test, host/Provider connection, deployment, live Box change or CI execution. This source-only edit requires a new CI check before any future implementation confidence. Implementation is *not authorized* by the documentation commit. Before acting, owner must dispose Q-DIAG-001. After approval, validate DG-01..DG-14 in the proposal with actual exits and private-data safety review; preserve original unknown operations and nested targets.
+

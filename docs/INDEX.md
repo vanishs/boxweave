@@ -48,3 +48,9 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [Streamed installer and two-box MCP acceptance](verification/STREAMED_INSTALL_TEST.md)
 
 - [Container nesting](NESTING.md) and [measured verification](verification/NESTING_VERIFICATION.md)
+
+## Diagnostics research (proposal; not yet approved for implementation)
+
+- [Current source/behavior audit](verification/DIAGNOSTICS_SOURCE_AUDIT.md)
+- [Evidence-first CLI and existing-MCP implementation proposal](design/DIAGNOSTICS_PROPOSAL.md)
+
