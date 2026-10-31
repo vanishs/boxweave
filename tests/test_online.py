@@ -143,6 +143,10 @@ class InstallCompletionTextTests(unittest.TestCase):
         self.assertIn("ssh -N -L 18640:127.0.0.1:18640", summary)
         self.assertIn("/home/boxweave/boxweave/initial-admin-password", summary)
         self.assertIn("administrator approval", summary)
+        self.assertIn("BOXWEAVE_BATCH", summary)
+        self.assertIn("--no-enroll", summary)
+        self.assertIn("--already-enrolled", summary)
+        self.assertIn("online.py enroll --public-key KEY", summary)
         self.assertNotRegex(summary, r"(?m)^\\s*[1-9]\\.\\s")
 
 

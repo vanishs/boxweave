@@ -52,6 +52,9 @@ class HostCliTests(unittest.TestCase):
         self.assertIn("127.0.0.1:18640", text)
         self.assertIn("ssh -N -L", text)
         self.assertIn("not the boxweave service account", text)
+        self.assertIn("BOXWEAVE_BATCH", text)
+        self.assertIn("--no-enroll", text)
+        self.assertIn("--already-enrolled", text)
         self.assertNotRegex(text, r"(?m)^\\s*[1-9]\\.\\s")
 
     def test_box_root_shows_help_without_inspecting(self):
