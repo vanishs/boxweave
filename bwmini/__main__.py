@@ -69,7 +69,9 @@ def main():
     groups={"access-network-plan":[a.source_tenant,a.destination_tenant,a.network_action],"access-port-plan":[a.port_profile,a.port_action],"access-confirm":[a.access_plan,a.confirmation],"tenant-label":[a.tenant,a.label,a.label_revision]}
     for action,values in groups.items():
         if a.action==action and any(v is None for v in values):p.error(action+" requires its complete action-specific arguments")
-        if a.action!=action and any(v is not None for v in values):p.error(action+" arguments are not supported by this action")
+        if a.action not in (action,"selftest-run") and any(v is not None for v in values):p.error(action+" arguments are not supported by this action")
+    if a.action=="selftest-run" and not (isinstance(a.plan,str) and isinstance(a.confirmation,str)):
+        p.error("selftest-run requires --plan and --confirmation")
     if (a.both_directions and a.action!="access-network-plan"):p.error("--both-directions requires access-network-plan")
     if any(v is not None for v in (a.cpu,a.memory,a.disk)) and a.action!="environment-plan":
         p.error("resource choices are only supported by environment-plan")
@@ -89,8 +91,8 @@ def main():
         p.error("--logical is only supported for environment plans/confirmation")
     if a.environment_action is not None and a.action!="environment-plan":
         p.error("--environment-action is only supported for environment-plan")
-    if a.plan is not None and a.action!="environment-confirm":
-        p.error("--plan is only supported for environment-confirm")
+    if a.plan is not None and a.action not in ("environment-confirm","selftest-run"):
+        p.error("--plan is only supported for environment-confirm and selftest-run")
     if (a.action in ("reconcile","environment-receipt","environment-observe")) != (a.operation is not None):
         p.error("reconcile requires --operation; other actions do not accept it")
     if a.action != "history" and (a.cursor is not None or a.limit != 20):

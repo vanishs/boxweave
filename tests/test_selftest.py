@@ -151,5 +151,44 @@ class SelftestTests(unittest.TestCase):
             self.assertEqual(host_cli.selftest_command(["run", "--plan", "/tmp/p.json"]), 2)
 
 
+    def test_cli_argparse_guards_allow_selftest_plan_arguments(self):
+        import io
+        import json as json_module
+        import tempfile
+        from pathlib import Path as FSPath
+        from bwmini.__main__ import main
+        plan, checksum = selftest.build_plan(now="T")
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_file = FSPath(tmp) / "plan.json"
+            plan_file.write_text(json_module.dumps(plan))
+            config = FSPath(tmp) / "fixture.json"
+            config.write_text(json_module.dumps({"mode": "fixture", "database": str(FSPath(tmp) / "db.sqlite3"),
+                                                 "target": {"provider": "containarium", "backend": "dev",
+                                                            "project": "default", "logical": "v2-lifecycle-e2e",
+                                                            "instance": "v2-lifecycle-e2e-container", "created": "1",
+                                                            "user": "v2-lifecycle-e2e", "hostname": "v2-lifecycle-e2e-container"},
+                                                 "fixture_counter": None}))
+            out, err = io.StringIO(), io.StringIO()
+            argv = ["__main__.py", "selftest-run", "--config", str(config), "--plan", str(plan_file),
+                    "--confirmation", checksum, "--budget", "60"]
+            with patch("sys.stdout", out), patch("sys.stderr", err), patch("sys.argv", argv):
+                code = main()
+            self.assertEqual(code, 2)  # reached the live-only refusal, past every argparse guard
+            self.assertEqual(json_module.loads(out.getvalue())["code"], "SELFTEST_LIVE_REQUIRED")
+            with patch("sys.stdout", out), patch("sys.stderr", err), \
+                 patch("sys.argv", ["__main__.py", "selftest-run", "--config", str(config), "--plan", str(plan_file)]):
+                with self.assertRaises(SystemExit) as refused:
+                    main()
+            self.assertEqual(refused.exception.code, 2)
+            with patch("sys.stdout", out), patch("sys.stderr", err), \
+                 patch("sys.argv", ["__main__.py", "environment-confirm", "--config", str(config), "--plan", "x"]):
+                with self.assertRaises(SystemExit):
+                    main()
+            with patch("sys.stdout", out), patch("sys.stderr", err), \
+                 patch("sys.argv", ["__main__.py", "job-run", "--config", str(config), "--confirmation", "x"]):
+                with self.assertRaises(SystemExit):
+                    main()
+
+
 if __name__ == "__main__":
     unittest.main()
