@@ -31,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose"])
+    p.add_argument("action",choices=["init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -60,6 +60,8 @@ def main():
     p.add_argument("--tenant")
     p.add_argument("--label")
     p.add_argument("--label-revision",type=int)
+    p.add_argument("--argv")
+    p.add_argument("--budget",type=int,default=60)
     a=p.parse_args()
     groups={"access-network-plan":[a.source_tenant,a.destination_tenant,a.network_action],"access-port-plan":[a.port_profile,a.port_action],"access-confirm":[a.access_plan,a.confirmation],"tenant-label":[a.tenant,a.label,a.label_revision]}
     for action,values in groups.items():
@@ -95,6 +97,20 @@ def main():
             from .deploy_check import read_provider
             connection=read_provider(c);provider=Provider(c)
             print(json.dumps({"mode":"mcp","connection":connection,"targets":[provider.observe(x).data() for x in c.get("targets",{})]}))
+            return 0
+        if a.action in ("job-run","job-receipts"):
+            from . import jobs
+            c=read_config(a.config);store=Store(c["database"])
+            if a.action=="job-run":
+                try:
+                    argv=json.loads(a.argv) if isinstance(a.argv,str) else None
+                except ValueError:
+                    argv=None
+                if not isinstance(argv,list):
+                    raise Fault("JOB_ARGV_INVALID",422)
+                print(json.dumps(jobs.run(store,argv,budget=a.budget),indent=2,sort_keys=True))
+            else:
+                print(json.dumps(jobs.receipts(store),indent=2,sort_keys=True))
             return 0
         if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):
             c=read_config(a.config);model_store=Store(c["database"])

@@ -236,6 +236,46 @@ def onboarding(info):
     print("  This overview does not verify authenticated MCP access.")
 
 
+def job_command(options):
+    """Run one explicitly requested local command as the app user; never scheduled, never root."""
+    budget = 60
+    if options and options[0] == "--budget":
+        if len(options) < 2 or not options[1].isdigit():
+            print(json.dumps({"state": "error", "code": "JOB_BUDGET_INVALID"}), file=sys.stderr)
+            return 2
+        budget = int(options[1])
+        options = options[2:]
+    if len(options) < 2 or options[0] != "--":
+        print("# Usage: boxweave job [--budget SECONDS] -- COMMAND [ARGS...]", file=sys.stderr)
+        return 2
+    try:
+        info = public_state()
+    except ValueError as exc:
+        print(json.dumps({"state": "unavailable", "code": str(exc)}), file=sys.stderr)
+        return 2
+    if os.geteuid() != 0:
+        print(json.dumps({"state": "error", "code": "JOB_REQUIRES_ROOT",
+                          "next": "sudo boxweave job [--budget SECONDS] -- COMMAND [ARGS...]"}), file=sys.stderr)
+        return 2
+    budget = min(600, max(1, budget))
+    account = pwd.getpwnam(info["application_user"])
+    prefix = Path(info["app_prefix"])
+    argv = ["runuser", "-u", account.pw_name, "--", "env",
+            "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
+            str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "job-run",
+            "--config", str(prefix / "runtime.json"), "--argv", json.dumps(options[1:]),
+            "--budget", str(budget)]
+    result = observe(argv, timeout=budget + 60, limit=65536)
+    if result is None:
+        print(json.dumps({"state": "error", "code": "JOB_RUN_FAILED_INSPECT_RECEIPTS"}), file=sys.stderr)
+        return 2
+    print(result)
+    try:
+        return 0 if json.loads(result).get("state") == "succeeded" else 1
+    except ValueError:
+        return 2
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "client":
@@ -244,6 +284,14 @@ def main(argv=None):
         except (ImportError, OSError, ValueError) as exc:
             print(json.dumps({"state": "error", "code": "CLIENT_HELPER_UNAVAILABLE",
                               "reason": str(exc) if isinstance(exc, ValueError) else "IMPORT_FAILED"}),
+                  file=sys.stderr)
+            return 2
+    if argv and argv[0] == "job":
+        try:
+            return job_command(argv[1:])
+        except (OSError, ValueError, KeyError) as exc:
+            print(json.dumps({"state": "error", "code": "JOB_UNAVAILABLE",
+                              "reason": str(exc) if isinstance(exc, ValueError) else "JOB_CONTEXT_INVALID"}),
                   file=sys.stderr)
             return 2
     parser = argparse.ArgumentParser(description=__doc__,
