@@ -23,6 +23,10 @@ CREATE TABLE environment_events (operation TEXT NOT NULL REFERENCES environment_
  at REAL NOT NULL, state TEXT NOT NULL, phase TEXT NOT NULL, code TEXT NOT NULL);
 """
 
+RESIZE = {"cpu": ("1", "2", "3", "4", "5", "6", "7", "8"),
+          "memory": ("1GB", "2GB", "4GB", "8GB"),
+          "disk": ("8GB", "10GB", "20GB", "25GB", "30GB", "40GB", "50GB", "100GB")}
+
 def uid():
     return uuid.uuid4().hex
 
@@ -42,9 +46,9 @@ class Lifecycle:
                            or n.startswith("containarium-core-") or n in protected for n in names)
                     or len(set(names)) != len(names)):
                 raise Fault("LIFECYCLE_CONFIG_INVALID",422)
-            if (c["cpu"] not in ("1","2","3","4","5","6","7","8")
-                    or c["memory"] not in ("1GB","2GB","4GB","8GB")
-                    or c["disk"] not in ("8GB","10GB","20GB","25GB","30GB","40GB","50GB","100GB")
+            if (c["cpu"] not in RESIZE["cpu"]
+                    or c["memory"] not in RESIZE["memory"]
+                    or c["disk"] not in RESIZE["disk"]
                     or type(c["readiness_timeout"]) is not int or not 1 <= c["readiness_timeout"] <= 1800):
                 raise Fault("LIFECYCLE_CONFIG_INVALID",422)
             try:
@@ -80,7 +84,7 @@ class Lifecycle:
         return {**self.config,"_scope":self.scope()}
 
     def matches_spec(self,spec):
-        return {k:v for k,v in spec.items() if k not in ("_network_tenant","_nesting")}==self.spec()
+        return {k:v for k,v in spec.items() if k not in ("_network_tenant","_nesting","_resize")}==self.spec()
 
     def network_check(self,spec):
         if "_nesting" in spec:
@@ -99,6 +103,7 @@ class Lifecycle:
             rows = [dict(r) for r in db.execute("SELECT logical,target,deleted FROM managed_environments ORDER BY logical")]
         return {"enabled":True,"allowed_names":self.config["allowed_names"],
                 "resources":{k:self.config[k] for k in ("cpu","memory","disk")},
+                "resize":{k:list(v) for k,v in RESIZE.items()},
                 "readiness_timeout":self.config["readiness_timeout"],
                 "shared_network_tenants":(vars(self).get("network").config or {}).get("tenants",[]) if vars(self).get("network") else [],
                 "environments":[{"logical":r["logical"],"target":json.loads(r["target"]),"deleted":bool(r["deleted"])} for r in rows]}
@@ -133,10 +138,12 @@ class Lifecycle:
             if observed["state"] != expected_state:
                 raise Fault("STALE_RESOURCE_STATE")
 
-    def plan(self, action, logical, actor="operator", network_tenant=None, nesting=None):
+    def plan(self, action, logical, actor="operator", network_tenant=None, nesting=None, resize=None):
         self.check_name(logical)
-        if action not in ("create","start","stop","delete"):
+        if action not in ("create","start","stop","delete","resize"):
             raise Fault("ACTION_NOT_ALLOWED",400)
+        if resize is not None and action!="resize":
+            raise Fault("RESIZE_RESIZE_ONLY",422)
         target, state = None, None
         if action != "create":
             target = self.managed(logical)
@@ -144,11 +151,19 @@ class Lifecycle:
             if value is None or value["target"] != target:
                 raise Fault("TARGET_CHANGED")
             state = value["state"]
-            wanted = "CONTAINER_STATE_RUNNING" if action=="stop" else "CONTAINER_STATE_STOPPED"
-            if state != wanted:
-                raise Fault("RESOURCE_STATE_NOT_ALLOWED")
+            if action == "resize":
+                pass  # a running or stopped managed box is both resizable
+            else:
+                wanted = "CONTAINER_STATE_RUNNING" if action=="stop" else "CONTAINER_STATE_STOPPED"
+                if state != wanted:
+                    raise Fault("RESOURCE_STATE_NOT_ALLOWED")
         self.preflight(action,logical,target,state)
         spec = self.spec()
+        if action == "resize":
+            if (not isinstance(resize,dict) or not resize
+                    or set(resize)-set(RESIZE) or any(resize.get(k) not in RESIZE[k] for k in resize)):
+                raise Fault("RESIZE_SPEC_INVALID",422)
+            spec["_resize"]=dict(resize)
         if network_tenant is not None:
             if action!="create":raise Fault("NETWORK_TENANT_CREATE_ONLY",422)
             spec["_network_tenant"]=network_tenant
@@ -163,6 +178,7 @@ class Lifecycle:
                        (ident,actor,action,logical,json.dumps(spec),json.dumps(target.data()) if target else None,state,self.clock()+300))
         return {"id":ident,"action":action,"logical":logical,"target":target.data() if target else None,
                 "expected_state":state,"resources":{k:spec[k] for k in ("cpu","memory","disk")},
+                "resize":spec.get("_resize"),
                 "readiness_timeout":spec["readiness_timeout"],"network_tenant":spec.get("_network_tenant"),"nesting":spec.get("_nesting"),"force":False,"scope":{k:vars(self.provider).get("config",{}).get(k) for k in ("provider","backend","project")}}
 
     def confirm(self, plan, logical, actor="operator"):
@@ -270,6 +286,22 @@ class Lifecycle:
                     self.save(job,"observing","deleting","WAITING_FOR_ABSENCE",target=target)
             elif value is None:
                 self.save(job,"observing","submitted","WAITING_FOR_RESOURCE",target=target)
+            elif job["action"]=="resize":
+                requested=json.loads(job["spec"]).get("_resize") or {}
+                observed=value.get("resources")
+                if not requested or observed is None:
+                    self.save(job,"succeeded","resized","OK",target=target,result={
+                        "resources_requested":requested,"resources_observed":None,
+                        "verification":"not_available","resource_state":value["state"],
+                        "outcome":"observed_desired_state"})
+                elif all(observed.get(k)==v for k,v in requested.items()):
+                    self.save(job,"succeeded","resized","OK",target=target,result={
+                        "resources_requested":requested,
+                        "resources_observed":{k:observed.get(k) for k in requested},
+                        "verification":"observed","resource_state":value["state"],
+                        "outcome":"observed_desired_state"})
+                else:
+                    self.save(job,"observing","resizing","WAITING_FOR_RESIZE",target=target)
             elif job["action"]=="stop":
                 state = "succeeded" if value["state"]=="CONTAINER_STATE_STOPPED" else "observing"
                 self.save(job,state,"stopped" if state=="succeeded" else "stopping","OK" if state=="succeeded" else "WAITING_FOR_STOP",target=target,
@@ -328,7 +360,7 @@ class Lifecycle:
             except Fault as error:
                 if error.code=="STATE_UNAVAILABLE":
                     raise
-                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY"}
+                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED"}
                 self.save(job,"failed" if error.code in known else "unknown","not_submitted" if error.code in known else "submitted",
                           error.code if error.code in known else "OUTCOME_UNKNOWN")
                 return True

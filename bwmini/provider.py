@@ -145,14 +145,15 @@ class Provider:
             state=c["state"]
             if not isinstance(state,str):
                 raise ValueError()
-            return {"target":target,"state":state,"network_tenant":c.get("networkTenant"),"membership_source":c.get("networkTenantSource"),"account_user":c["username"],"podman_enabled":c.get("podmanEnabled") if type(c.get("podmanEnabled")) is bool else None}
+            resources=c.get("resources")
+            return {"target":target,"state":state,"network_tenant":c.get("networkTenant"),"membership_source":c.get("networkTenantSource"),"account_user":c["username"],"podman_enabled":c.get("podmanEnabled") if type(c.get("podmanEnabled")) is bool else None,"resources":resources if isinstance(resources,dict) else None}
         except (KeyError,ValueError,TypeError):
             raise Fault("TARGET_FORMAT_UNSUPPORTED") from None
 
     def lifecycle_mutate(self, action, logical, spec, timeout):
         if timeout<=0:
             raise Fault("DEADLINE_EXCEEDED")
-        tool={"create":"create_container","start":"start_container","stop":"stop_container","delete":"delete_container"}.get(action)
+        tool={"create":"create_container","start":"start_container","stop":"stop_container","delete":"delete_container","resize":"resize_container"}.get(action)
         if tool is None:
             raise Fault("ACTION_NOT_ALLOWED")
         with MCP(self.argv,min(1800,timeout)) as m:
@@ -161,7 +162,11 @@ class Provider:
             if "username" not in props:
                 raise Fault("CONTRACT_UNSUPPORTED")
             args={"username":logical}
-            if action=="create":
+            if action=="resize":
+                if not {"cpu","memory","disk"}.issubset(props):
+                    raise Fault("CONTRACT_UNSUPPORTED")
+                args.update(spec.get("_resize") or {})
+            elif action=="create":
                 required={"cpu","memory","disk","image","ssh_keys","enable_podman"}
                 if not required.issubset(props):
                     raise Fault("CONTRACT_UNSUPPORTED")

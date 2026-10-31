@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 type Api=(path:string,method?:string,data?:unknown)=>Promise<any>;
-type Settings={enabled:boolean,shared_network_tenants?:string[],allowed_names?:string[],resources?:Record<string,string>,readiness_timeout?:number,environments:{logical:string,target:unknown,deleted:boolean}[]};
-type Plan={nesting?:boolean|null,network_tenant?:string|null,id:string,action:string,logical:string,target:unknown,resources:unknown,scope:unknown,expected_state:string|null,readiness_timeout:number};
+type Settings={enabled:boolean,shared_network_tenants?:string[],allowed_names?:string[],resources?:Record<string,string>,resize?:Record<string,string[]>,readiness_timeout?:number,environments:{logical:string,target:unknown,deleted:boolean}[]};
+type Plan={nesting?:boolean|null,network_tenant?:string|null,resize?:unknown,id:string,action:string,logical:string,target:unknown,resources:unknown,scope:unknown,expected_state:string|null,readiness_timeout:number};
 type Receipt={id:string,action:string,logical:string,state:string,phase:string,code:string|null,deadline:number,acknowledged:boolean,evidence:string,target:unknown,result:unknown};
 export function Environments({api}:{api:Api}){
   const [settings,setSettings]=useState<Settings|null>(null),[logical,setLogical]=useState('');
@@ -9,6 +9,7 @@ export function Environments({api}:{api:Api}){
   const [receipt,setReceipt]=useState<Receipt|null>(null),[history,setHistory]=useState<Receipt[]>([]);
   const [networkTenant,setNetworkTenant]=useState('');
   const [nesting,setNesting]=useState('');
+  const [resize,setResize]=useState<Record<string,string>>({cpu:'1',memory:'1GB',disk:'8GB'});
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   async function refresh(){
     const s=await api('environments');setSettings(s);
@@ -35,14 +36,26 @@ export function Environments({api}:{api:Api}){
       <label>Allow containers inside the new box<select aria-label="New box nesting" value={nesting} onChange={e=>{setNesting(e.target.value);setPlan(null);setConfirmation('');}}>
         <option value="">Provider default</option><option value="true">Enabled — for a BoxWeave server</option><option value="false">Disabled</option>
       </select><small>Independent of Podman. Preview checks Provider support. A changed setting may require restarting this box before child execution works; no automatic restart.</small></label>
+      <div className="graph-toolbar" aria-label="Resize resources">
+        <label>CPU<select aria-label="Resize CPU" value={resize.cpu} onChange={e=>{setResize({...resize,cpu:e.target.value});setPlan(null);}}>
+          {(settings.resize?.cpu??['1','2','3','4','5','6','7','8']).map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Memory<select aria-label="Resize memory" value={resize.memory} onChange={e=>{setResize({...resize,memory:e.target.value});setPlan(null);}}>
+          {(settings.resize?.memory??['1GB','2GB','4GB','8GB']).map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Disk<select aria-label="Resize disk" value={resize.disk} onChange={e=>{setResize({...resize,disk:e.target.value});setPlan(null);}}>
+          {(settings.resize?.disk??['8GB','10GB','20GB','25GB','30GB','40GB','50GB','100GB']).map(v=><option key={v}>{v}</option>)}</select></label>
+        <small>Resize applies to the selected existing box; disk never shrinks. CPU and memory resize online.</small>
+      </div>
       <p>New environment profile: {JSON.stringify(settings.resources)}. Readiness budget: {settings.readiness_timeout}s.</p>
-      <div className="graph-toolbar">{['create','start','stop','delete'].map(action=><button key={action} disabled={busy||!logical} onClick={()=>void run(async()=>{
-        setPlan(await api('environment-plans','POST',{action,logical,...(action==='create'&&networkTenant?{network_tenant:networkTenant}:{}),...(action==='create'&&nesting!==''?{nesting:nesting==='true'}:{})}));setConfirmation('');
+      <div className="graph-toolbar">{['create','start','stop','resize','delete'].map(action=><button key={action} disabled={busy||!logical} onClick={()=>void run(async()=>{
+        setPlan(await api('environment-plans','POST',{action,logical,
+          ...(action==='create'&&networkTenant?{network_tenant:networkTenant}:{}),
+          ...(action==='create'&&nesting!==''?{nesting:nesting==='true'}:{}),
+          ...(action==='resize'?{cpu:resize.cpu,memory:resize.memory,disk:resize.disk}:{})}));setConfirmation('');
       })}>Preview {action}</button>)}</div>
       <p>Stop, start and delete require an identity recorded from a successful app-managed creation. Delete requires the target to be stopped. No force fallback.</p>
       {plan&&<div className="review">
         <h3>Review {plan.action}: {plan.logical}</h3>
-        <pre>{JSON.stringify({scope:plan.scope,nesting:plan.nesting,network_tenant:plan.network_tenant,target:plan.target,resources:plan.resources,expected_state:plan.expected_state},null,2)}</pre>
+        <pre>{JSON.stringify({scope:plan.scope,nesting:plan.nesting,network_tenant:plan.network_tenant,resize:plan.resize,target:plan.target,resources:plan.resources,expected_state:plan.expected_state},null,2)}</pre>
         <label>Type the exact environment name<input value={confirmation} onChange={e=>setConfirmation(e.target.value)}/></label>
         <button disabled={busy||confirmation!==plan.logical} onClick={()=>void run(async()=>{
           setReceipt(await api('environment-plans/'+plan.id+'/confirm','POST',{confirm:true,logical:confirmation}));setPlan(null);setConfirmation('');

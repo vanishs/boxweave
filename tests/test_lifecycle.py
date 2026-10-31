@@ -24,19 +24,29 @@ class LifecycleFixture(Fixture):
         self.generation=1000
         self.lose_create=False
         self.inspect_count=0
+        self.lazy_resize=False
+        self.no_resources=False
     def lifecycle_inspect(self,logical):
         self.inspect_count+=1
-        return self.resources.get(logical)
+        entry=self.resources.get(logical)
+        if entry is not None and self.no_resources:
+            entry={k:v for k,v in entry.items() if k!="resources"}
+        return entry
     def lifecycle_mutate(self,action,logical,spec,timeout):
         self.writes.append((action,logical))
         if action=="create":
             self.generation+=1
             t=Target("containarium","dev","default",logical,logical+"-container",str(self.generation),logical,logical+"-container")
-            self.resources[logical]={"target":t,"state":"CONTAINER_STATE_RUNNING","podman_enabled":False}
+            self.resources[logical]={"target":t,"state":"CONTAINER_STATE_RUNNING","podman_enabled":False,
+                                     "resources":{"cpu":"1","memory":"1GB","disk":"8GB"}}
             if self.lose_create:
                 raise OSError("synthetic lost response")
         elif action=="start":self.resources[logical]["state"]="CONTAINER_STATE_RUNNING"
         elif action=="stop":self.resources[logical]["state"]="CONTAINER_STATE_STOPPED"
+        elif action=="resize":
+            if not self.lazy_resize:
+                entry=self.resources[logical]
+                entry["resources"]={**entry.get("resources",{}),**spec.get("_resize",{})}
         elif action=="delete":del self.resources[logical]
     def lifecycle_identity(self,target,timeout):
         if self.ready_failures:
@@ -106,6 +116,51 @@ class LifecycleTests(Base):
         self.assertEqual(self.life.settings()["environments"],[])
         p=self.life.plan("create",NAME)
         with self.assertRaisesRegex(Fault,"OPERATION_PENDING"):self.life.confirm(p["id"],NAME)
+
+    def test_resize_plan_confirm_and_observed_resources(self):
+        self.ready()
+        plan=self.life.plan("resize",NAME,resize={"memory":"2GB"})
+        self.assertEqual(plan["resize"],{"memory":"2GB"})
+        op=self.life.confirm(plan["id"],NAME)
+        self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["phase"],row["code"]),("succeeded","resized","OK"))
+        self.assertEqual(row["result"]["verification"],"observed")
+        self.assertEqual(row["result"]["resources_observed"],{"memory":"2GB"})
+        self.assertIn(("resize",NAME),self.provider.writes)
+
+    def test_resize_rejects_bad_spec_and_wrong_action(self):
+        self.ready()
+        for spec in ({},{"cpu":"9"},{"disk":"3GB"},{"bogus":"1"},None):
+            with self.subTest(spec=spec),self.assertRaisesRegex(Fault,"RESIZE_SPEC_INVALID"):
+                self.life.plan("resize",NAME,resize=spec)
+        with self.assertRaisesRegex(Fault,"RESIZE_RESIZE_ONLY"):
+            self.life.plan("create",NAME,resize={"cpu":"2"})
+        with self.assertRaisesRegex(Fault,"ACTION_NOT_ALLOWED"):
+            self.life.plan("pause",NAME)
+
+    def test_resize_mismatch_keeps_observing_until_deadline(self):
+        self.ready()
+        self.provider.lazy_resize=True
+        plan=self.life.plan("resize",NAME,resize={"cpu":"4"})
+        op=self.life.confirm(plan["id"],NAME)
+        self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["phase"]),("observing","resizing"))
+        self.now[0]+=61
+        self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["code"]),("unknown","DEADLINE_EXCEEDED"))
+
+    def test_resize_without_observed_resources_succeeds_unverified(self):
+        self.ready()
+        self.provider.no_resources=True
+        plan=self.life.plan("resize",NAME,resize={"disk":"20GB"})
+        op=self.life.confirm(plan["id"],NAME)
+        self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["code"]),("succeeded","OK"))
+        self.assertEqual(row["result"]["verification"],"not_available")
     def test_used_wrong_actor_and_wrong_confirmation(self):
         p=self.life.plan("create",NAME)
         with self.assertRaisesRegex(Fault,"NOT_FOUND"):self.life.confirm(p["id"],NAME,"other")

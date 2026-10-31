@@ -62,12 +62,17 @@ def main():
     p.add_argument("--label-revision",type=int)
     p.add_argument("--argv")
     p.add_argument("--budget",type=int,default=60)
+    p.add_argument("--cpu",choices=["1","2","3","4","5","6","7","8"])
+    p.add_argument("--memory",choices=["1GB","2GB","4GB","8GB"])
+    p.add_argument("--disk",choices=["8GB","10GB","20GB","25GB","30GB","40GB","50GB","100GB"])
     a=p.parse_args()
     groups={"access-network-plan":[a.source_tenant,a.destination_tenant,a.network_action],"access-port-plan":[a.port_profile,a.port_action],"access-confirm":[a.access_plan,a.confirmation],"tenant-label":[a.tenant,a.label,a.label_revision]}
     for action,values in groups.items():
         if a.action==action and any(v is None for v in values):p.error(action+" requires its complete action-specific arguments")
         if a.action!=action and any(v is not None for v in values):p.error(action+" arguments are not supported by this action")
-    if a.both_directions and a.action!="access-network-plan":p.error("--both-directions requires access-network-plan")
+    if (a.both_directions and a.action!="access-network-plan"):p.error("--both-directions requires access-network-plan")
+    if any(v is not None for v in (a.cpu,a.memory,a.disk)) and a.action!="environment-plan":
+        p.error("resource choices are only supported by environment-plan")
     if (a.action in ("access-receipt","access-observe"))!=(a.access_operation is not None):p.error("access receipt/observation requires --access-operation")
     if a.network_tenant is not None and (a.action!="environment-plan" or a.environment_action!="create"):p.error("--network-tenant requires environment-plan --environment-action create")
     model_values=[a.model_provider,a.model_id,a.access_mode,a.client_version]
@@ -150,7 +155,8 @@ def main():
         elif a.action=="environments":
             print(json.dumps(s.lifecycle.settings(),indent=2))
         elif a.action=="environment-plan":
-            print(json.dumps(s.lifecycle.plan(a.environment_action,a.logical,network_tenant=a.network_tenant),indent=2))
+            resize={k:v for k,v in (("cpu",a.cpu),("memory",a.memory),("disk",a.disk)) if v is not None} or None
+            print(json.dumps(s.lifecycle.plan(a.environment_action,a.logical,network_tenant=a.network_tenant,resize=resize),indent=2))
         elif a.action=="environment-confirm":
             print(json.dumps(s.lifecycle.confirm(a.plan,a.logical),indent=2))
         elif a.action=="environment-receipts":
