@@ -146,6 +146,86 @@ def service_observation(name):
     return {key: entries.get(key) for key in ("LoadState", "ActiveState", "UnitFileState")}
 
 
+DIAGNOSTIC_SCHEMA = 1
+
+
+def check(cid, state, code, scope, required=True, detail=None):
+    """One bounded diagnostic check: fixed states, fixed codes, fixed scope."""
+    item = {"id": cid, "state": state, "code": code, "scope": scope, "required": required}
+    if detail:
+        item["detail"] = detail
+    return item
+
+
+def overall_state(checks):
+    """failed beats incomplete; only every required check passed is passed."""
+    required = [c for c in checks if c["required"]]
+    if any(c["state"] == "failed" for c in required):
+        return "failed"
+    if required and all(c["state"] == "passed" for c in required):
+        return "passed"
+    return "incomplete"
+
+
+def exit_code_for(overall):
+    return {"passed": 0, "failed": 1}.get(overall, 2)
+
+
+def classify_unit(observed, expect_enabled):
+    """Definite failure only from an observed inactive/failed unit; never from a launch failure."""
+    if not isinstance(observed, dict) or observed.get("state") == "unavailable" or not observed.get("ActiveState"):
+        return "not_verified", "UNIT_STATE_UNAVAILABLE"
+    if observed.get("ActiveState") == "failed":
+        return "failed", "UNIT_OBSERVED_FAILED"
+    if observed.get("ActiveState") == "inactive":
+        return "failed", "UNIT_OBSERVED_INACTIVE"
+    if observed.get("ActiveState") == "active" and (not expect_enabled or observed.get("UnitFileState") == "enabled"):
+        return "passed", "UNIT_OBSERVED"
+    return "not_verified", "UNIT_STATE_UNEXPECTED"
+
+
+def run_bounded(argv, timeout, limit, cwd):
+    """Bounded observation that also accepts the reader's typed exit-2 result output."""
+    try:
+        result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, timeout=timeout, check=False, cwd=cwd)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode not in (0, 2) or len(result.stdout) > limit:
+        return None
+    return result.stdout.decode("utf-8", "replace")
+
+
+def app_health(info, mcp):
+    """One app-user health transaction (bwmini.distribution health); never app code as root.
+
+    Returns the parsed strict result dict, or a typed not_verified refusal.
+    """
+    if os.geteuid() != 0:
+        return {"state": "not_verified", "code": "APP_HEALTH_REQUIRES_ADMIN",
+                "next": "sudo boxweave doctor" + (" --mcp" if mcp else "")}
+    account = pwd.getpwnam(info["application_user"])
+    prefix = Path(info["app_prefix"])
+    argv = ["runuser", "-u", account.pw_name, "--", "env",
+            "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
+            str(prefix / "current/.venv/bin/python"), "-m", "bwmini.distribution", "health",
+            "--prefix", str(prefix)] + (["--mcp"] if mcp else [])
+    result = run_bounded(argv, timeout=140 if mcp else 40, limit=16384, cwd=str(prefix / "current"))
+    if result is None:
+        return {"state": "not_verified", "code": "APP_HEALTH_READER_UNAVAILABLE"}
+    try:
+        outcome = json.loads(result)
+    except ValueError:
+        return {"state": "not_verified", "code": "INVALID_APP_HEALTH_RESULT"}
+    if (not isinstance(outcome, dict) or outcome.get("diagnostic_schema") != DIAGNOSTIC_SCHEMA
+            or not isinstance(outcome.get("unit_states"), dict)):
+        return {"state": "not_verified", "code": "INVALID_APP_HEALTH_RESULT"}
+    installed = outcome.get("installed")
+    if isinstance(installed, dict) and installed.get("version") != info["version"]:
+        return {"state": "not_verified", "code": "APP_RELEASE_DESCRIPTOR_MISMATCH"}
+    return outcome
+
+
 def status(info):
     return {"state": "installed_public_descriptor", "version": info["version"],
             "application_user": info["application_user"],
@@ -155,25 +235,86 @@ def status(info):
             "mcp": "not_checked", "app_health": "not_checked"}
 
 
-def mcp_probe(info):
-    if os.geteuid() != 0:
-        return {"state": "not_checked", "reason": "APP_USER_PROBE_REQUIRES_ADMIN",
-                "next": "sudo boxweave doctor --mcp"}
-    account = pwd.getpwnam(info["application_user"])
-    prefix = Path(info["app_prefix"])
-    result = observe(["runuser", "-u", account.pw_name, "--", "env",
-                      "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
-                      str(prefix / "current/.venv/bin/python"), "-m", "bwmini.deploy_check",
-                      "--config", str(prefix / "runtime.json"), "--mcp"], timeout=110, limit=8192,
-                     cwd=str(prefix / "current"))
-    if result is None:
-        return {"state": "unavailable", "reason": "APP_USER_PROBE_FAILED"}
-    try:
-        outcome = json.loads(result)
-        return {"state": "observed", "mcp": outcome.get("mcp"),
-                "administrator_initialized": outcome.get("admin_initialized")}
-    except (TypeError, ValueError):
-        return {"state": "unavailable", "reason": "INVALID_PROBE_RESULT"}
+def doctor(info, mcp):
+    """Explicit-scope readiness: every promised check must pass; gaps are never success."""
+    web = web_observation(info["web_port"])
+    uid = pwd.getpwnam(info["application_user"]).pw_uid
+    cred = service_observation("boxweave-credential-" + info["application_user"] + ".timer")
+    trust = service_observation("boxweave-trust.timer")
+    manager = service_observation("user@" + str(uid) + ".service")
+    checks = [check("public_descriptor", "passed", "PUBLIC_DESCRIPTOR_VALID", "host_public")]
+    checks.append(check("web_loopback", "passed" if web.get("reachable") else "failed",
+                        "HTTP_REACHABLE" if web.get("reachable") else "WEB_LOOPBACK_UNREACHABLE",
+                        "host_loopback"))
+    for cid, observed, expect_enabled in (("host_credential_timer", cred, True),
+                                          ("host_trust_timer", trust, True),
+                                          ("host_user_manager", manager, False)):
+        state, code = classify_unit(observed, expect_enabled)
+        checks.append(check(cid, state, code, "host_systemd"))
+    health = app_health(info, mcp)
+    verified = health.get("state") not in ("not_verified",) if isinstance(health, dict) else False
+    if not verified:
+        checks.append(check("app_release_health", "not_verified", health["code"], "app_user_systemd",
+                            detail=health.get("next")))
+        for cid in ("app_serve_unit", "app_worker_unit"):
+            checks.append(check(cid, "not_verified", "APP_UNIT_VISIBILITY_UNAVAILABLE", "app_user_systemd"))
+        mcp_field = {"state": "not_checked", "reason": "APP_USER_PROBE_REQUIRES_ADMIN",
+                     "next": "sudo boxweave doctor --mcp"} if not mcp else \
+                    {"state": "unavailable", "reason": "APP_USER_PROBE_FAILED"}
+    else:
+        units = health.get("unit_states", {})
+        if health.get("state") == "ready" and units:
+            checks.append(check("app_release_health", "passed", "APP_HEALTH_READY", "app_user_systemd"))
+        elif health.get("state") == "failed":
+            checks.append(check("app_release_health", "failed", "APP_HEALTH_FAILED", "app_user_systemd",
+                                detail=health.get("code")))
+        elif not units:
+            checks.append(check("app_release_health", "not_verified", "APP_UNIT_LIST_EMPTY", "app_user_systemd"))
+        else:
+            checks.append(check("app_release_health", "not_verified", "APP_HEALTH_" +
+                                str(health.get("state", "unexpected")).upper(), "app_user_systemd"))
+        unit_codes = {"ready": ("passed", "APP_UNIT_READY"), "inactive": ("failed", "APP_UNIT_INACTIVE"),
+                      "failed": ("failed", "APP_UNIT_FAILED"), "unavailable": ("not_verified", "APP_UNIT_STATE_UNAVAILABLE"),
+                      "unknown": ("not_verified", "APP_UNIT_UNRECOGNIZED")}
+        for cid, role in (("app_serve_unit", "serve"), ("app_worker_unit", "worker")):
+            unit_state = units.get(role, "absent")
+            state, code = unit_codes.get(unit_state, ("not_verified", "APP_UNIT_ABSENT"))
+            checks.append(check(cid, state, code, "app_user_systemd"))
+        observed_mcp = health.get("mcp")
+        if mcp:
+            mcp_field = {"state": "observed", "mcp": observed_mcp,
+                         "administrator_initialized": health.get("administrator_initialized")}
+            if isinstance(observed_mcp, dict) and observed_mcp.get("state") == "authenticated_read_passed":
+                checks.append(check("authenticated_mcp", "passed", "MCP_READ_PASSED", "app_user_mcp"))
+            elif health.get("code") == "MCP_READ_FAILED":
+                checks.append(check("authenticated_mcp", "failed", "MCP_READ_FAILED", "app_user_mcp"))
+            else:
+                checks.append(check("authenticated_mcp", "not_verified", "AUTHENTICATED_MCP_UNVERIFIED", "app_user_mcp"))
+            initialized = health.get("administrator_initialized")
+            if initialized is True:
+                checks.append(check("admin_initialized", "passed", "ADMIN_INITIALIZED", "app_user_mcp"))
+            elif initialized is False:
+                checks.append(check("admin_initialized", "failed", "ADMIN_SETUP_REQUIRED", "app_user_mcp"))
+            else:
+                checks.append(check("admin_initialized", "not_verified", "ADMIN_INITIALIZATION_UNVERIFIED", "app_user_mcp"))
+        else:
+            mcp_field = {"state": "not_checked", "reason": "NOT_REQUESTED"}
+            checks.append(check("authenticated_mcp", "not_checked", "NOT_REQUESTED", "app_user_mcp", required=False))
+    overall = overall_state(checks)
+    return {"state": "installed_public_descriptor", "version": info["version"],
+            "application_user": info["application_user"],
+            "web": web, "web_on_server": "http://127.0.0.1:" + str(info["web_port"]),
+            "external_web_access": "not_configured_by_boxweave",
+            "mcp": mcp_field,
+            "services": {"credential_timer": cred, "trust_timer": trust}, "user_manager": manager,
+            "diagnostic_schema": DIAGNOSTIC_SCHEMA, "checks": checks, "overall": overall,
+            "coverage": {"app_authenticated_health": "observed" if verified else
+                         ("not_verified_requires_admin" if health.get("code") == "APP_HEALTH_REQUIRES_ADMIN"
+                          else "unavailable"),
+                         "authenticated_mcp": "observed" if mcp and verified else
+                         ("not_requested" if not mcp else "unavailable"),
+                         "workload_execute": "not_verified", "effective_nesting": "not_verified",
+                         "agent_ui": "not_verified", "model_inference": "not_verified"}}
 
 
 def inspect(name, project, diagnose=False):
@@ -358,8 +499,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="action")
     sub.add_parser("version", help="Installed public release version")
     sub.add_parser("status", help="Public Web reachability and published installation metadata")
-    doctor = sub.add_parser("doctor", help="Host/systemd observations (no repair)")
-    doctor.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
+    doctor_parser = sub.add_parser("doctor", help="Host/systemd and app readiness checks (no repair)")
+    doctor_parser.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
     sub.add_parser("provenance", help="Published installation provenance (no secrets)")
     box = sub.add_parser("box", help="Exact-name Incus read-only inspection (Incus permission required)")
     box_sub = box.add_subparsers(dest="box_action")
@@ -401,13 +542,8 @@ def main(argv=None):
     if args.action == "box":
         result, code = inspect(args.name, args.project, diagnose=args.box_action == "diagnose")
     elif args.action == "doctor":
-        result = status(info)
-        result["services"] = {"credential_timer": service_observation("boxweave-credential-"+info["application_user"]+".timer"),
-                              "trust_timer": service_observation("boxweave-trust.timer")}
-        result["user_manager"] = service_observation("user@" + str(pwd.getpwnam(info["application_user"]).pw_uid) + ".service")
-        if args.mcp:
-            result["mcp"] = mcp_probe(info)
-        code = 0
+        result = doctor(info, mcp=args.mcp)
+        code = exit_code_for(result["overall"])
     else:
         result = status(info)
         code = 0

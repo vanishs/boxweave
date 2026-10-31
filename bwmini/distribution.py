@@ -111,6 +111,18 @@ def health(prefix,mcp=False):
   require(release.name==state['archive_sha256'] and digest(regular(release/'manifest.json'))==state['manifest_sha256'],'PROVENANCE_CHANGED')
   raw,c=config_read(prefix/'config.json',prefix)
   for unit in state['units']:result['services'][unit]=properties(unit)
+  unit_states={}
+  for unit in state['units']:
+   props=result['services'].get(unit,{})
+   role='serve' if unit.endswith('-serve.service') else 'worker' if unit.endswith('-worker.service') else 'unknown'
+   if role in unit_states:role='unknown'
+   if not props:unit_states[role]='unavailable'
+   elif props.get('ActiveState')=='failed' or props.get('Result') in ('exit-code','signal','core-dump','start-limit-hit'):unit_states[role]='failed'
+   elif unit_ready(props):unit_states[role]='ready'
+   elif props.get('ActiveState')=='inactive':unit_states[role]='inactive'
+   else:unit_states[role]='unavailable'
+  result['unit_states']=unit_states
+  result['diagnostic_schema']=1
   try:
    urllib.request.urlopen('http://127.0.0.1:'+str(c['port'])+'/api/projects',timeout=3).close();result['web']={'reachable':True,'authenticated':False,'status':200}
   except urllib.error.HTTPError as e:result['web']={'reachable':True,'authenticated':False,'status':e.code}
