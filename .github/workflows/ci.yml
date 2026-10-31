@@ -138,89 +138,56 @@ jobs:
           fi
 
   install-smoke:
-    name: Disposable Ubuntu 24.04 streamed install (diagnostic)
+    name: Disposable Ubuntu 24.04 Containarium install diagnostic
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
     steps:
-      - name: Record clean runner environment
+      - name: Record runner environment
         shell: bash
         run: |
           mkdir -p install-smoke-evidence
           {
-            printf 'UTC: '; date -u
+            date -u
             uname -a
             cat /etc/os-release
             df -h /
             free -h
-            printf 'incus initially installed: '
-            if command -v incus >/dev/null; then echo yes; else echo no; fi
-            sudo -n true && echo 'passwordless sudo: yes'
+            sudo -n true && echo 'Passwordless sudo available'
           } | tee install-smoke-evidence/runner.txt
-      - name: Execute requested installer exactly as published on main
+      - name: Run official Containarium streamed installer
         shell: bash
         run: |
           set -uo pipefail
           set +e
           timeout --signal=TERM --kill-after=30s 25m bash -o pipefail -c \
-            'curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash' \
+            'curl -fsSL https://containarium.dev/install.sh | sudo bash' \
             2>&1 | tee install-smoke-evidence/install.log
           install_rc=${PIPESTATUS[0]}
           set -e
-          echo "$install_rc" > install-smoke-evidence/exit-code.txt
-          printf '{"installer_exit_code":%s,"test":"main streamed install","runner":"ubuntu-24.04"}\n' "$install_rc" > install-smoke-evidence/result.json
-          printf 'Installer exit code: %s\n' "$install_rc" | tee -a "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$install_rc" > install-smoke-evidence/exit-code.txt
+          printf '{"installer_exit_code":%s,"test":"containarium.dev/install.sh","runner":"ubuntu-24.04"}\n' "$install_rc" > install-smoke-evidence/result.json
+          printf 'Containarium installer exit code: %s\n' "$install_rc" >> "$GITHUB_STEP_SUMMARY"
           exit "$install_rc"
-      - name: Inspect installed services without exposing secrets
+      - name: Inspect installed commands and service status
         if: always()
         shell: bash
         run: |
           {
-            for cmd in incus containarium containariumd boxweave; do
+            for cmd in incus containarium containariumd; do
               if command -v "$cmd" >/dev/null; then echo "$cmd: present"; else echo "$cmd: missing"; fi
             done
-            for unit in incus.service postgresql.service boxweave-provider.service boxweave-trust.timer; do
+            for unit in incus.service containarium.service containariumd.service; do
               echo "$unit: $(systemctl is-active "$unit" 2>/dev/null || true)"
             done
           } | tee install-smoke-evidence/services.txt
-      - name: Capture installer APT failure diagnostics
-        if: always()
-        shell: bash
-        run: |
-          if sudo test -f /var/lib/boxweave-default/apt.log; then
-            echo 'Installer apt.log (last 120 lines):'
-            sudo tail -n 120 /var/lib/boxweave-default/apt.log \
-              | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\\1[credentials-redacted]@#g' \
-              | tee install-smoke-evidence/apt.log
-          else
-            echo 'No installer apt.log found'
-          fi
-      - name: Diagnose APT dependency resolver without making changes
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo 'Held packages:'
-            apt-mark showhold || true
-            echo 'APT simulation for exact requested prerequisites:'
-            sudo apt-get -s -o Debug::pkgProblemResolver=yes install \
-              ca-certificates curl gnupg openssh-client python3-venv \
-              dbus-user-session openssh-server iproute2 || true
-            echo 'Pinned Incus version availability:'
-            apt-cache policy incus incus-client incus-extra || true
-            echo 'Exact pinned Incus package resolver:'
-            sudo apt-get -s -o Debug::pkgProblemResolver=yes install \
-              'incus=1:7.5.1-ubuntu24.04-202610270033' \
-              'incus-client=1:7.5.1-ubuntu24.04-202610270033' \
-              'incus-extra=1:7.5.1-ubuntu24.04-202610270033' || true
-          } 2>&1 | tee install-smoke-evidence/apt-simulation.log
-      - name: Preserve installer stdout stderr and exit status
+      - name: Preserve diagnostics even after failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: streamed-install-smoke-evidence
+          name: containarium-install-smoke-evidence
           path: install-smoke-evidence/
           if-no-files-found: warn
           retention-days: 3
