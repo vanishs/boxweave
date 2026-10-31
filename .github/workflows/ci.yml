@@ -110,6 +110,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: application-candidate
@@ -125,7 +128,22 @@ jobs:
           test "$source" = "$GITHUB_SHA"
           if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --jq '.object.sha')
-            test "$existing" = "$GITHUB_SHA"
+            if [[ "$existing" != "$GITHUB_SHA" ]]; then
+              # A published version is immutable. Documentation-only and this
+              # CI-publishing fix need validation, but no replacement release.
+              # Any runnable-source or packaging change must bump VERSION.
+              git merge-base --is-ancestor "$existing" "$GITHUB_SHA"
+              files=$(git diff --name-only "$existing" "$GITHUB_SHA")
+              [[ -n "$files" ]] || { echo 'Changed source without release change'; exit 1; }
+              while IFS= read -r file; do
+                case "$file" in
+                  docs/*.md|README.md|AGENTS.md|clients/README.md|.github/workflows/ci.yml) ;;
+                  *) echo "Version bump required for source change: $file" >&2; exit 1 ;;
+                esac
+              done <<< "$files"
+              echo "Documentation/CI-only update validated; preserving immutable release v$version."
+              exit 0
+            fi
             gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$version" > release-state.json
             for file in release/*; do
               name=$(basename "$file")
