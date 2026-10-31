@@ -1,4 +1,4 @@
-"""Client setup generator safety: fixture only; no SSH, Codex or privileged writes."""
+"""Unified client generator fixture tests: every profile emits Python source."""
 import base64
 import io
 import json
@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from bwmini import client_setup, manage
+from bwmini import client_setup, client_profiles, manage
 
 
 def host_key():
@@ -24,239 +24,195 @@ def ready_state():
 
 
 class ClientGeneratorTests(unittest.TestCase):
-    def test_public_only_source_bound_script(self):
-        payload = client_setup.render(ready_state(), "example-admin")
-        for expected in ("192.168.2.233", host_key(), "'example-admin'", "online.py enroll",
-                         "Codex", "/usr/bin/ssh", "list_containers",
-                         "StrictHostKeyChecking=yes", "NoEnroll", "AlreadyEnrolled",
-                         "Windows ChatGPT/Codex MCP config:", "PubkeyAuthentication=no",
-                         "CODEX_HOME", "config.toml"):
-            self.assertIn(expected, payload)
-        self.assertNotIn("Get-Command codex", payload)
-        self.assertNotIn("Get-Command wsl.exe", payload)
-        self.assertIn("$wsl = Join-Path $env:SystemRoot 'System32\\wsl.exe'", payload)
-        self.assertIn("Test-Path -LiteralPath $wsl -PathType Leaf", payload)
-        self.assertNotIn("codex mcp add", payload)
-        self.assertNotIn("jwt.secret", payload)
-        self.assertNotIn("StrictHostKeyChecking=no", payload)
-        self.assertNotIn("ssh-keyscan", payload)
-        self.assertIn("enrollment not confirmed", payload.lower())
-        self.assertIn("MCP read verification failed", payload)
-        self.assertIn("$sshTarget = 'boxweave@' + $ServerHost", payload)
-        # Both the verification probe and persistent Codex transport need keepalive.
-        self.assertEqual(payload.count("ServerAliveInterval=15"),2)
-        self.assertEqual(payload.count("ServerAliveCountMax=4"),2)
-        self.assertIn("# EDIT ME: use the client-reachable host/IP and SSH port.", payload)
-        self.assertNotIn("$ManagedWorkloadPublicKey", payload)
-        self.assertNotIn("Merge-BoxWeaveGuidance", payload)
-        self.assertNotIn("AGENTS.md", payload)
-        self.assertNotIn("WslGuidance", payload)
-        self.assertIn('$sshTarget,$RemoteMcp)', payload)
-        self.assertIn("function Merge-BoxWeaveToml(", payload)
-        self.assertIn("Nested BoxWeave MCP table without explicit parent", payload)
-        self.assertNotIn("$Original -match '(?m)^[ \\t]*\\[mcp_servers\\.boxweave\\.' -or", payload)
+    def test_all_apps_share_one_executable_python_script(self):
+        for system in client_profiles.SYSTEMS:
+            transports=("native","wsl") if system=="windows" else ("native",)
+            for transport in transports:
+                for app in client_profiles.APPS:
+                    with self.subTest(app=app,system=system,transport=transport):
+                        script=client_setup.render(ready_state(),"example-admin",
+                                                   app=app,system=system,transport=transport)
+                        self.assertTrue(script.startswith(
+                            "#!/usr/bin/env python3\n# ==="),script[:90])
+                        self.assertIn("# BoxWeave MCP setup: ",script.splitlines()[2])
+                        self.assertIn("# Registration policy:",script)
+                        self.assertIn("# EDIT ME:",script)
+                        self.assertIn("ServerAliveInterval=15",script)
+                        self.assertIn("StrictHostKeyChecking=yes",script)
+                        self.assertIn("list_containers",script)
+                        self.assertNotIn("jwt.secret",script)
+                        self.assertNotIn("POWERSHELL",script)
+                        compile(script,"boxweave-setup.py","exec")
 
-    def test_rejects_invalid_public_metadata(self):
-        for change in ({"host": "127.0.0.1;rm -rf /"}, {"server_key": "ssh-ed25519 'malicious'"},
-                       {"port": -1}, {"port": "22"}):
+    def test_public_metadata_and_replace_type_validation(self):
+        for change in ({"host":"127.0.0.1;rm -rf /"},
+                       {"server_key":"ssh-ed25519 'malicious'"},
+                       {"port":-1},{"port":"22"}):
             with self.subTest(change=change), self.assertRaises(ValueError):
-                client_setup.render(ready_state() | change, "example-admin")
-        # The Linux MCP gateway supplies the server's workload key.
-        for value in (None, "", "SHA256:fingerprint"):
+                client_setup.render(ready_state()|change,"example-admin")
+        for value in (None,"","SHA256:fingerprint"):
             with self.subTest(value=value):
-                script = client_setup.render(ready_state() | {"managed_public_key":value}, "example-admin")
-                self.assertNotIn("ManagedWorkloadPublicKey", script)
-        for admin in ("root;whoami", "bob's", "", "../../tmp"):
-            with self.subTest(admin=admin), self.assertRaises(ValueError):
-                client_setup.render(ready_state(), admin)
+                script=client_setup.render(
+                    ready_state()|{"managed_public_key":value},"example-admin")
+                self.assertNotIn("ManagedWorkloadPublicKey",script)
+        for admin in ("root;whoami","bob's","","../../tmp"):
+            with self.subTest(admin=admin),self.assertRaises(ValueError):
+                client_setup.render(ready_state(),admin)
+        with self.assertRaisesRegex(ValueError,"CLIENT_REPLACE_POLICY_INVALID"):
+            client_setup.render(ready_state(),"example-admin",replace="yes")
 
-    def test_output_is_new_private_file_with_no_implicit_overwrite(self):
+    def test_output_is_new_private_file_never_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp)/"new.ps1"
-            with patch.dict(os.environ, {"SUDO_USER": "root"}):
-                self.assertEqual(client_setup.publish(dest, "public"), str(dest))
-            self.assertEqual(dest.read_text(), "public")
-            self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o600)
-            with self.assertRaisesRegex(ValueError, "NEW_REGULAR_FILE"):
-                client_setup.publish(dest, "overwritten")
-            self.assertEqual(dest.read_text(), "public")
-            path = Path(tmp)/"link.ps1"
-            path.symlink_to(dest)
+            dest=Path(tmp)/"setup.py"
+            with patch.dict(os.environ,{"SUDO_USER":"root"}):
+                self.assertEqual(client_setup.publish(dest,"public"),str(dest))
+            self.assertEqual(dest.read_text(),"public")
+            self.assertEqual(stat.S_IMODE(dest.stat().st_mode),0o600)
+            with self.assertRaisesRegex(ValueError,"NEW_REGULAR_FILE"):
+                client_setup.publish(dest,"tamper")
+            alias=Path(tmp)/"alias.py"
+            alias.symlink_to(dest)
             with self.assertRaises(ValueError):
-                client_setup.publish(path, "tamper")
-            self.assertEqual(dest.read_text(), "public")
+                client_setup.publish(alias,"tamper")
+            self.assertEqual(dest.read_text(),"public")
 
-    def test_noninteractive_requires_explicit_profile_and_generates(self):
+    def test_noninteractive_codex_wsl_uses_python_and_requires_explicit_selection(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp)/"setup.ps1"
-            with (patch.object(client_setup.os, "geteuid", return_value=0),
-                  patch.object(client_setup, "load_public_state", return_value=ready_state()),
-                  patch("sys.stdin.isatty", return_value=False),
-                  patch.dict(os.environ, {"SUDO_USER": "root"}),
-                  patch("sys.stdout", new_callable=io.StringIO) as stdout):
-                code = client_setup.main(["--agent","codex","--transport","wsl",
-                                          "--admin-user","example-admin","--output",str(out)])
-                self.assertEqual(code, 0)
-                self.assertEqual(stdout.getvalue(), "")
-                self.assertIn("$ServerHost", out.read_text())
-                missing = client_setup.main(["--admin-user","example-admin","--output",str(Path(tmp)/"missing.ps1")])
-                self.assertEqual(missing, 2)
-                self.assertFalse((Path(tmp)/"missing.ps1").exists())
+            output=Path(tmp)/"new.py"
+            with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+                  patch("sys.stdin.isatty",return_value=False),
+                  patch("sys.stdout",new_callable=io.StringIO) as out,
+                  patch("sys.stderr",new_callable=io.StringIO) as err):
+                rc=client_setup.main([
+                    "--agent","codex","--os","windows","--transport","wsl",
+                    "--admin-user","example-admin","--output",str(output)])
+                self.assertEqual(rc,0)
+                self.assertEqual(out.getvalue(),"")
+                self.assertTrue(output.read_text().startswith("#!/usr/bin/env python3\n"))
+                self.assertIn("REPLACE = False",output.read_text())
+                self.assertNotIn("PowerShell",output.read_text())
+                self.assertEqual(client_setup.main(["--admin-user","example-admin",
+                    "--output",str(Path(tmp)/"missing.py")]),2)
+                self.assertFalse((Path(tmp)/"missing.py").exists())
 
-    def test_interactive_and_noninteractive_share_generator(self):
+    def test_interactive_matches_noninteractive_for_codex_wsl(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp)/"wizard.ps1"
-            with (patch.object(client_setup.os,"geteuid",return_value=0),
-                  patch.object(client_setup,"load_public_state",return_value=ready_state()),
+            output=Path(tmp)/"wizard.py"
+            with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
                   patch("sys.stdin.isatty",return_value=True),
                   patch("builtins.input",side_effect=["3","3","2","1"]),
-                  patch.dict(os.environ,{"SUDO_USER":"root"}),
-                  patch("sys.stdout",new_callable=io.StringIO)):
-                code = manage.main(["client","--admin-user","example-admin","--output",str(out)])
-                self.assertEqual(code,0)
-                self.assertEqual(out.read_text(),client_setup.script_header(False) + client_setup.render(ready_state(),"example-admin"))
+                  patch("sys.stdout",new_callable=io.StringIO),
+                  patch("sys.stderr",new_callable=io.StringIO) as err):
+                rc=manage.main(["client","--admin-user","example-admin",
+                                "--output",str(output)])
+            self.assertEqual(rc,0)
+            self.assertEqual(output.read_text(),client_setup.render(
+                ready_state(),"example-admin",False,
+                app="codex",system="windows",transport="wsl"))
+            self.assertIn("# Choose MCP application",err.getvalue())
+            self.assertIn("# Select number: ",err.getvalue())
+            for line in err.getvalue().splitlines():
+                self.assertTrue(not line.strip() or line.startswith("# "),line)
 
-    def test_last_wizard_choice_is_mcp_registration_not_script_overwrite(self):
-        base = ready_state()
-        normal = client_setup.render(base, "example-admin")
-        replace = client_setup.render(base, "example-admin", replace=True)
-        marker = "if (-not $PSBoundParameters.ContainsKey('Replace')) { $Replace = $true }"
-        self.assertNotIn(marker, normal)
-        self.assertIn(marker, replace)
-        self.assertIn("[switch]$Replace", normal)
-        self.assertNotIn("__REPLACE_POLICY__", replace)
-        with self.assertRaisesRegex(ValueError, "CLIENT_REPLACE_POLICY_INVALID"):
-            client_setup.render(base, "example-admin", replace="yes")
-
-    def test_default_stdout_is_copyable_powershell_and_never_writes_local_script(self):
+    def test_stdout_is_only_python_even_during_interactive_yes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            existing = Path(tmp) / "boxweave-setup.ps1"
-            existing.write_text("old script")
-            original = os.getcwd()
+            previous=Path(tmp)/"boxweave-setup.py"
+            previous.write_text("old script")
+            old=os.getcwd()
             try:
                 os.chdir(tmp)
-                with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-                      patch("sys.stdin.isatty", return_value=True),
-                      patch("builtins.input", side_effect=["3", "3", "2", "2"]),
-                      patch("sys.stdout", new_callable=io.StringIO) as out,
-                      patch("sys.stderr", new_callable=io.StringIO) as err):
-                    result = client_setup.main(["--admin-user", "example-admin"])
+                with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+                      patch("sys.stdin.isatty",return_value=True),
+                      patch("builtins.input",side_effect=["3","3","2","2"]),
+                      patch("sys.stdout",new_callable=io.StringIO) as out,
+                      patch("sys.stderr",new_callable=io.StringIO) as err):
+                    rc=client_setup.main(["--admin-user","example-admin"])
             finally:
-                os.chdir(original)
-            self.assertEqual(result, 0)
-            self.assertEqual(existing.read_text(), "old script")
-            self.assertEqual([p.name for p in Path(tmp).iterdir()], ["boxweave-setup.ps1"])
-            ps = out.getvalue()
-            self.assertTrue(ps.startswith("# ==="))
-            self.assertIn("#requires -version 5.1", ps)
-            self.assertIn("$ServerHost", ps)
-            self.assertIn("Windows MCP policy: Update", ps)
-            self.assertNotIn("Select number:", ps)
-            self.assertNotIn('{"state": "generated"', ps)
-            self.assertNotIn("__REPLACE_POLICY__", ps)
-            self.assertIn("Select number:", err.getvalue())
-            self.assertIn("PowerShell (.ps1)", err.getvalue())
-            self.assertNotIn("Client script already exists", err.getvalue())
+                os.chdir(old)
+            self.assertEqual(rc,0)
+            self.assertEqual(previous.read_text(),"old script")
+            self.assertEqual([p.name for p in Path(tmp).iterdir()],
+                             ["boxweave-setup.py"])
+            script=out.getvalue()
+            self.assertTrue(script.startswith("#!/usr/bin/env python3\n# ==="))
+            self.assertIn("REPLACE = True",script)
+            self.assertIn("# Registration policy: replace",script)
+            self.assertNotIn("Select number:",script)
+            self.assertNotIn("copy the complete",script)
+            self.assertNotIn("PowerShell",script)
+            compile(script,"boxweave-setup.py","exec")
+            self.assertIn("# Select number:",err.getvalue())
+            self.assertIn("# BoxWeave codex / windows / wsl setup:",err.getvalue())
+            for line in err.getvalue().splitlines():
+                self.assertTrue(not line.strip() or line.startswith("# "),line)
 
-    def test_noninteractive_default_stdout_preserves_conflicts(self):
-        with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-              patch("sys.stdin.isatty", return_value=False),
-              patch("sys.stdout", new_callable=io.StringIO) as out,
-              patch("sys.stderr", new_callable=io.StringIO) as err):
-            result = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                        "--admin-user", "example-admin"])
-        self.assertEqual(result, 0)
-        self.assertIn("Windows MCP policy: Preserve", out.getvalue())
-        self.assertNotIn("$Replace = $true", out.getvalue())
-        self.assertIn("Generation changed no Linux", err.getvalue())
+    def test_noninteractive_default_preserves_registration(self):
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch("sys.stdin.isatty",return_value=False),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stderr",new_callable=io.StringIO) as err):
+            rc=client_setup.main(["--agent","codex","--transport","wsl",
+                                  "--admin-user","example-admin"])
+        self.assertEqual(rc,0)
+        self.assertTrue(out.getvalue().startswith("#!/usr/bin/env python3\n"))
+        self.assertIn("REPLACE = False",out.getvalue())
+        self.assertIn("# Registration policy: preserve",out.getvalue())
+        self.assertIn("# Generation changed no Linux",err.getvalue())
 
-    def test_interactive_choice_one_preserves_existing_mcp_registration(self):
-        with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-              patch("sys.stdin.isatty", return_value=True),
-              patch("builtins.input", side_effect=["3", "3", "2", "1"]),
-              patch("sys.stdout", new_callable=io.StringIO) as out,
-              patch("sys.stderr", new_callable=io.StringIO) as err):
-            result = client_setup.main(["--admin-user", "example-admin"])
-        self.assertEqual(result, 0)
-        self.assertIn("Windows MCP policy: Preserve", out.getvalue())
-        self.assertIn("Replace an existing conflicting BoxWeave MCP entry", err.getvalue())
-        self.assertNotIn("Client script already exists", err.getvalue())
+    def test_interactive_no_preserves_entry_and_cancel_writes_nothing(self):
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch("sys.stdin.isatty",return_value=True),
+              patch("builtins.input",side_effect=["3","3","2","1"]),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stderr",new_callable=io.StringIO) as err):
+            rc=client_setup.main(["--admin-user","example-admin"])
+        self.assertEqual(rc,0)
+        self.assertIn("REPLACE = False",out.getvalue())
+        self.assertIn("# Replace an existing conflicting BoxWeave MCP",err.getvalue())
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch("sys.stdin.isatty",return_value=True),
+              patch("builtins.input",side_effect=["3","3","2",EOFError]),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stderr",new_callable=io.StringIO) as err):
+            rc=client_setup.main(["--admin-user","example-admin"])
+        self.assertEqual(rc,130)
+        self.assertEqual(out.getvalue(),"")
+        self.assertIn('"state": "cancelled"',err.getvalue())
 
-    def test_interrupted_wizard_writes_no_partial_script(self):
-        with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-              patch("sys.stdin.isatty", return_value=True),
-              patch("builtins.input", side_effect=["3", "3", "2", EOFError]),
-              patch("sys.stdout", new_callable=io.StringIO) as out,
-              patch("sys.stderr", new_callable=io.StringIO) as err):
-            result = client_setup.main(["--admin-user", "example-admin"])
-        self.assertEqual(result, 130)
-        self.assertEqual(out.getvalue(), "")
-        self.assertIn('"state": "cancelled"', err.getvalue())
-
-    def test_explicit_output_refuses_existing_file(self):
+    def test_explicit_replace_backups_only_client_mcp_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / "boxweave-setup.ps1"
-            dest.write_text("old")
-            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-                  patch("sys.stdin.isatty", return_value=False),
-                  patch("sys.stderr", new_callable=io.StringIO) as err):
-                result = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                            "--admin-user", "example-admin",
-                                            "--output", str(dest)])
-            self.assertEqual(result, 2)
-            self.assertIn("CLIENT_OUTPUT_MUST_BE_NEW_REGULAR_FILE", err.getvalue())
-            self.assertEqual(dest.read_text(), "old")
+            path=Path(tmp)/"approved.py"
+            with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+                  patch("sys.stdin.isatty",return_value=False),
+                  patch("sys.stdout",new_callable=io.StringIO)):
+                rc=client_setup.main(["--agent","codex","--transport","wsl",
+                                      "--admin-user","example-admin","--replace",
+                                      "--output",str(path)])
+                self.assertEqual(rc,0)
+                self.assertIn("REPLACE = True",path.read_text())
+                self.assertEqual(client_setup.main(["--agent","codex","--transport","wsl",
+                    "--admin-user","example-admin","--replace",
+                    "--output",str(path)]),2)
+                self.assertIn("REPLACE = True",path.read_text())
 
-    def test_noninteractive_mcp_replace_is_explicit_and_cannot_overwrite_script(self):
+    def test_nonroot_uses_public_metadata_and_refuses_untrusted_descriptor(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "new.ps1"
-            with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
-                  patch("sys.stdin.isatty", return_value=False),
-                  patch("sys.stdout", new_callable=io.StringIO) as out):
-                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                          "--admin-user", "example-admin", "--replace",
-                                          "--output", str(path)])
-            self.assertEqual(code, 0)
-            self.assertEqual(out.getvalue(), "")
-            self.assertIn("$Replace = $true", path.read_text())
-            with patch("sys.stderr", new_callable=io.StringIO):
-                self.assertEqual(client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                                     "--admin-user", "example-admin", "--replace",
-                                                     "--output", str(path)]), 2)
-            self.assertIn("$Replace = $true", path.read_text())
-
-    def test_generator_refuses_missing_descriptor_before_output(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            target = str(Path(tmp) / "never.ps1")
-            with patch.object(client_setup, "load_public_state", side_effect=ValueError("PUBLIC_DESCRIPTOR_NOT_AVAILABLE")), \
-                 patch("sys.stderr", new_callable=io.StringIO):
-                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                          "--admin-user", "example-admin", "--output", target])
-            self.assertEqual(code, 2)
-            self.assertFalse(Path(target).exists())
-
-    def test_nonroot_generator_uses_public_descriptor_without_sudo(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            target = str(Path(tmp) / "normal.ps1")
-            with patch.object(client_setup.os, "geteuid", return_value=1001), \
-                 patch.object(client_setup, "load_public_state", return_value=ready_state()), \
-                 patch("sys.stdout", new_callable=io.StringIO):
-                code = client_setup.main(["--agent", "codex", "--transport", "wsl",
-                                          "--admin-user", "example-admin", "--output", target])
-            self.assertEqual(code, 0)
-            self.assertNotIn("ManagedWorkloadPublicKey", Path(target).read_text())
-
-    def test_rejects_untrusted_descriptor_not_even_symlink(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "public.json"
-            target.write_text(json.dumps(ready_state() | {"schema_version": 1}))
-            target.chmod(0o666)
-            with self.assertRaisesRegex(ValueError, "PUBLIC_DESCRIPTOR_UNTRUSTED"):
-                client_setup.load_public_state(target)
-            target.chmod(0o600)
-            link = Path(tmp) / "alias.json"
-            link.symlink_to(target)
-            with self.assertRaisesRegex(ValueError, "PUBLIC_DESCRIPTOR_UNTRUSTED"):
+            target=Path(tmp)/"normal.py"
+            with (patch.object(client_setup.os,"geteuid",return_value=1001),
+                  patch.object(client_setup,"load_public_state",return_value=ready_state()),
+                  patch("sys.stdout",new_callable=io.StringIO)):
+                self.assertEqual(client_setup.main(["--agent","codex","--transport","wsl",
+                    "--admin-user","example-admin","--output",str(target)]),0)
+            self.assertNotIn("ManagedWorkloadPublicKey",target.read_text())
+            descriptor=Path(tmp)/"public.json"
+            descriptor.write_text(json.dumps(ready_state()|{"schema_version":1}))
+            descriptor.chmod(0o666)
+            with self.assertRaisesRegex(ValueError,"PUBLIC_DESCRIPTOR_UNTRUSTED"):
+                client_setup.load_public_state(descriptor)
+            descriptor.chmod(0o600)
+            link=Path(tmp)/"alias.json"
+            link.symlink_to(descriptor)
+            with self.assertRaisesRegex(ValueError,"PUBLIC_DESCRIPTOR_UNTRUSTED"):
                 client_setup.load_public_state(link)
 
 
