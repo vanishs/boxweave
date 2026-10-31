@@ -366,3 +366,23 @@ freezes lifecycle configuration at startup, so config changes need a
 worker restart. Client-side, a stale SSH MCP transport in the agent
 chain wedged every MCP call until it was killed — transport
 housekeeping, not a BoxWeave defect.
+
+**T follow-up (0.21.4 live validation, 2026-10-31):** the runtime-key
+guard shipped in v0.21.4 and the operator channel was exercised on real
+boxes: on `boxweave-test-ser2` the `lifecycle` block was moved from
+runtime.json into config.json (the supported channel), after a worker
+restart `environments` reports enabled with the configured name. On
+`boxweave-test-ser` the streamed update v0.20.0 -> v0.21.4 succeeded
+across the major jump (doctor --mcp authenticated_read_passed,
+provenance reporting 7ae7de7). The client migration flow was walked end
+to end from `boxweave-test-cli`: `--diagnose` against the new server
+correctly reported identity=mismatch and registration=differs before
+migration; after the operator steps (out-of-band host-key review,
+known_hosts pin update, root enroll of the unchanged client key,
+regenerating the setup with --replace, running it with
+--already-enrolled) diagnose reports 8/8 ok with
+registration=registered against 10.100.0.3, and a real MCP connect
+through the registered config executed `hello world` inside the
+pre-existing `hello-py` box. One operator-facing note: `--replace` is a
+generator flag baked into the emitted script; the generated script
+itself only accepts --already-enrolled/--no-enroll/--diagnose/--distro.
