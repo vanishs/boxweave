@@ -43,7 +43,10 @@ bash install.sh apply --archive /reviewed/boxweave.zip
             (root / 'web').mkdir()
             (root / 'web/package.json').write_text(json.dumps({'version':'0.13.0'}))
             (root / 'web/package-lock.json').write_text(json.dumps({'version':'0.13.0','packages':{'':{'version':'0.13.0'}}}))
-            (root / 'README.md').write_text('0.13.0 Windows Codex ZCode WSL macOS')
+            (root / 'README.md').write_text(
+                '0.13.0\n## Connect an AI coding agent\n'
+                'Antigravity Claude Codex Copilot Cursor OpenCode Qoder TRAE ZCode\n'
+                'Linux macOS Windows Native OpenSSH WSL\n')
             self.assertEqual(release_errors(root),[])
             (root / 'web/package-lock.json').write_text(json.dumps({'version':'0.13.0','packages':{'':{'version':'0.12.0'}}}))
             self.assertTrue(any('version mismatch' in e for e in release_errors(root)))
@@ -56,7 +59,10 @@ bash install.sh apply --archive /reviewed/boxweave.zip
             (root / 'web').mkdir()
             (root / 'web/package.json').write_text('{"version":"0.13.0"}')
             (root / 'web/package-lock.json').write_text('{"version":"0.13.0","packages":{"":{"version":"0.13.0"}}}')
-            (root / 'README.md').write_text('0.13.0 Phase7 has not started Windows Codex ZCode WSL macOS')
+            (root / 'README.md').write_text(
+                '0.13.0 Phase7 has not started\n## Connect an AI coding agent\n'
+                'Antigravity Claude Codex Copilot Cursor OpenCode Qoder TRAE ZCode\n'
+                'Linux macOS Windows Native OpenSSH WSL\n')
             self.assertTrue(any('historical phase' in e for e in release_errors(root)))
 
 if __name__ == '__main__':

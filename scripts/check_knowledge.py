@@ -35,8 +35,16 @@ def release_errors(root):
   if version not in readme[:2000]:errors.append('README does not declare the current release version')
   if re.search(r'Phase\s*7.{0,70}(has not started|not started|eligible for)',readme[:3000],re.I):
    errors.append('README has obsolete historical phase claim')
-  if not all(word in readme[:4500] for word in ('Windows','Codex','ZCode','WSL','macOS')):
-   errors.append('README current selected client matrix/boundaries missing')
+  # Validate the actual supported App and OS matrix, not legacy four-profile
+  # wording in the first screenful of README.
+  sections=readme.split('## Connect an AI coding agent',1)
+  apps=('Antigravity','Claude','Codex','Copilot','Cursor',
+        'OpenCode','Qoder','TRAE','ZCode')
+  platforms=('Linux','macOS','Windows','Native OpenSSH','WSL')
+  if (len(sections)!=2 or
+      not all(app in sections[1] for app in apps) or
+      not all(platform in sections[1] for platform in platforms)):
+   errors.append('README current App catalog/OS/transport matrix missing')
  except (OSError,KeyError,ValueError,TypeError) as error:
   errors.append('Release metadata missing or malformed')
  return errors
