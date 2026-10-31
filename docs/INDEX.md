@@ -69,3 +69,15 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 
 These are **design-only** and complement, but do not implement, the D0-D2 diagnostic proposals.
 
+## MCP capability reuse research (proposal; NOT IMPLEMENTED)
+
+- [Capability-led MCP integration master](design/MCP_CAPABILITY_INTEGRATION_MASTER.md)
+- [Current functionality and source gap audit](verification/MCP_CAPABILITY_SOURCE_AUDIT.md)
+- [All registered Platform tools vs BoxWeave app use](design/MCP_PLATFORM_CAPABILITY_MATRIX.md)
+- [agent-box tools/resources and separate internal approvals](design/MCP_AGENT_BOX_CAPABILITY_MATRIX.md)
+- [MCP security and compatibility boundaries](design/MCP_INTEGRATION_SECURITY.md)
+- [Delivery dependencies and batches](design/MCP_INTEGRATION_DELIVERY_PLAN.md)
+- [MCP acceptance and evidence plan](verification/MCP_INTEGRATION_TEST_PLAN.md)
+- Programmer handoffs: [M0 capability audit](design/mcp-integration/M0_SOURCE_AND_RUNTIME_CAPABILITY.md), [M1 policy](design/mcp-integration/M1_ROUTING_AND_POLICY.md), [M2 Platform reuse](design/mcp-integration/M2_PLATFORM_REUSE.md), [M3 Box reads](design/mcp-integration/M3_AGENT_BOX_READONLY.md), [M4 Box execution](design/mcp-integration/M4_AGENT_BOX_EXECUTION.md), [M5 Web/workflows](design/mcp-integration/M5_WEB_AND_WORKFLOWS.md).
+
+This proposal complements, but does **not** implement or supersede, existing diagnostics D0–D2 or environment E0–E4 work. Source inventories do not prove installed or authorized MCP capabilities.
