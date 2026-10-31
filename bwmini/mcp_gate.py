@@ -127,7 +127,45 @@ def trusted(args, registry, container):
         raise ValueError("TARGET_OVERRIDE_REFUSED")
 
 
+POLICY = Path("/etc/boxweave/mcp-tool-policy.json")
+
+def tool_policy(path=POLICY):
+    """Host-wide optional allowlist, never a grant or per-user RBAC."""
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        if path == POLICY: return None  # Deliberate legacy compatibility.
+        raise ValueError("POLICY_NOT_INSTALLED") from None
+    folder = path.parent.lstat()
+    if (not stat.S_ISDIR(folder.st_mode) or folder.st_uid != 0 or
+        folder.st_mode & 0o022 or not stat.S_ISREG(metadata.st_mode) or
+        metadata.st_uid != 0 or metadata.st_mode & 0o077 or
+        metadata.st_nlink != 1 or metadata.st_size > 16384):
+        raise ValueError("POLICY_UNSAFE")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        raise ValueError("POLICY_INVALID") from None
+    if (not isinstance(value, dict) or set(value) != {"version", "allowed_tools"} or
+        type(value["version"]) is not int or value["version"] != 1 or
+        not isinstance(value["allowed_tools"], list) or len(value["allowed_tools"]) > 256 or
+        any(not isinstance(n, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,127}", n)
+            for n in value["allowed_tools"]) or
+        len(set(value["allowed_tools"])) != len(value["allowed_tools"])):
+        raise ValueError("POLICY_INVALID")
+    return frozenset(value["allowed_tools"])
+
+def filter_tools(message, allowed):
+    if allowed is None or "result" not in message: return message
+    result = message["result"]
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        raise ValueError("UPSTREAM_CATALOG_INVALID")
+    result["tools"] = [t for t in result["tools"] if
+                       isinstance(t, dict) and t.get("name") in allowed]
+    return message
+
 def main():
+    permitted = tool_policy()
     process = subprocess.Popen([LAUNCHER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     def send(message):
         process.stdin.write((json.dumps(message) + "\n").encode()); process.stdin.flush()
@@ -156,11 +194,16 @@ def main():
                 send(request)
                 message = reply(request["id"], False)
                 if not request.get("params", {}).get("cursor"): message = catalog(message)
+                message = filter_tools(message, permitted)
                 print(json.dumps(message), flush=True)
                 continue
             nesting = None
             if request.get("method") == "tools/call":
                 params = request.get("params", {}); args = params.get("arguments", {})
+                if permitted is not None and params.get("name") not in permitted:
+                    print(json.dumps({"jsonrpc":"2.0","id":request.get("id"),
+                        "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
+                    continue
                 try:
                     if params.get("name") == "boxweave_nesting":
                         observed = container(args.get("logical"), request["id"])
