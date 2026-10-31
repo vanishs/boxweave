@@ -191,6 +191,7 @@ jobs:
           sudo install -d -m 755 /etc/ssh/sshd_config.d
           printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin no\nAllowUsers boxweave\n' \
             | sudo tee /etc/ssh/sshd_config.d/90-boxweave-ci.conf >/dev/null
+          sudo install -d -m 755 /run/sshd
           sudo /usr/sbin/sshd -t
           sudo systemctl enable --now ssh
           sudo systemctl is-active --quiet ssh
