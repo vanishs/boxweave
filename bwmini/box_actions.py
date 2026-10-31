@@ -161,7 +161,12 @@ class BoxActions:
                 execute(self.service,target,args)
             else:
                 adapter.execute(op["action"],args,timeout=30)
-            state,code="succeeded","OK"
+            if op["action"]=="process_start":
+                state,code="acknowledged","PROCESS_STARTED_NOT_COMPLETED"
+            elif op["action"]=="toggle_auto_sleep":
+                state,code="acknowledged","AUTO_SLEEP_ACCEPTED_NOT_OBSERVED"
+            else:
+                state,code="succeeded","OK"
         except Exception:
             # Lost response is not proof of failure. Never replay.
             state,code="unknown","OUTCOME_UNKNOWN"
