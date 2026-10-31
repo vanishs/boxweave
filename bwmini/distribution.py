@@ -129,9 +129,14 @@ def health(prefix,mcp=False):
   except OSError:pass
   if mcp:
    probe=subprocess.run([str(release/'.venv/bin/python'),'-m','bwmini.deploy_check','--config',str(prefix/'runtime.json'),'--mcp'],cwd=release,capture_output=True,text=True,timeout=100)
-   require(probe.returncode==0,'MCP_READ_FAILED');checked=json.loads(probe.stdout);result['mcp']=checked['mcp'];result['administrator_initialized']=checked['admin_initialized']
+   require(probe.returncode==0,'MCP_READ_FAILED')
+   try:checked=json.loads(probe.stdout)
+   except ValueError:raise InstallError('MCP_PROBE_INVALID')
+   if not isinstance(checked,dict) or not isinstance(checked.get('mcp'),dict) or not isinstance(checked.get('admin_initialized'),bool):raise InstallError('MCP_PROBE_INVALID')
+   result['mcp']=checked['mcp'];result['administrator_initialized']=checked['admin_initialized']
    require(checked['admin_initialized'],'ADMIN_SETUP_REQUIRED')
-  ready=all(unit_ready(p) for p in result['services'].values()) and bool(state['units']) and result['web']['reachable']
+  mcp_ok=(not mcp) or result.get('mcp',{}).get('state')=='authenticated_read_passed'
+  ready=all(unit_ready(p) for p in result['services'].values()) and bool(state['units']) and result['web']['reachable'] and mcp_ok
   failed=any(p.get('ActiveState')=='failed' or p.get('Result') in ('exit-code','signal','core-dump','start-limit-hit') for p in result['services'].values())
   result['state']='incomplete' if result['incomplete'] else 'failed' if failed else 'ready' if ready else 'starting'
  except (InstallError,OSError,ValueError,subprocess.SubprocessError) as e:result['state']='failed';result['code']=str(e) if isinstance(e,InstallError) else 'HEALTH_UNAVAILABLE'

@@ -125,6 +125,12 @@ def main(argv=None):
                 "effective_confinement": "not_verified"}
             from .nesting import environment
             outcome["host_observations"]["nesting"] = environment()
+            outcome["diagnostic_schema"] = 1
+            outcome["overall"] = outcome.get("state")
+            outcome["coverage"] = {"workload_execute": "not_verified",
+                                   "parent_host_policy": "not_verified",
+                                   "agent_ui": "not_verified",
+                                   "model_inference": "not_verified"}
         exit_code = 0 if outcome.get("state") == "ready" else 1 if outcome.get("state") == "failed" else 2
     print(json.dumps(outcome, sort_keys=True))
     return exit_code
