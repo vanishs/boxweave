@@ -35,7 +35,7 @@ PORTABLE = r'''#!/usr/bin/env python3
 # =====================================================================
 # Requires local Python 3.11+, OpenSSH client and ssh-keygen.
 # Windows WSL transport also needs a selected WSL distribution and Python3 inside it.
-# Review the EDIT ME fields. Run: python3 boxweave-setup.py [--already-enrolled | --no-enroll]
+# Review the EDIT ME fields. Run: python3 boxweave-setup.py [--already-enrolled | --no-enroll | --diagnose]
 # On Windows use: py -3 boxweave-setup.py [--already-enrolled | --no-enroll]
 # Registration policy: __POLICY__.
 # SSH host-key pinning and MCP read validation are required before writes.
@@ -315,11 +315,88 @@ def update_codex(command,args):
     temp.replace(path)
     print("BoxWeave MCP configured: "+str(path))
 
+def diagnose_check(name,state,detail=None):
+    item={"check":name,"state":state}
+    if detail: item["detail"]=detail
+    return item
+
+def run_diagnose(distro):
+    """Read-only self-check: tools, pinned identity, live MCP stages, registration. Writes nothing."""
+    checks=[]
+    if sys.version_info[:2]>=(3,11): checks.append(diagnose_check("python","ok"))
+    else: checks.append(diagnose_check("python","failed","Python 3.11+ required"))
+    missing=[t for t in ("ssh","ssh-keygen") if shutil.which(t) is None]
+    checks.append(diagnose_check("client_tools","failed" if missing else "ok",
+                                 "missing "+",".join(missing) if missing else None))
+    root=pathlib.Path.home()/".config"/"boxweave"
+    key,pin=root/"id_ed25519",root/"known_hosts"
+    token=HOST if PORT==22 else "["+HOST+"]:"+str(PORT)
+    expected=token+" "+SERVER_KEY+"\n"
+    identity=None
+    if key.is_file() and pin.is_file() and not key.is_symlink() and not pin.is_symlink():
+        if pin.read_text()==expected:
+            identity={"key":str(key),"known_hosts":str(pin)}
+            checks.append(diagnose_check("identity","ok"))
+        else:
+            checks.append(diagnose_check("identity","mismatch","pinned host key differs; review out of band"))
+    elif not key.exists() and not pin.exists():
+        checks.append(diagnose_check("identity","missing","run without --diagnose to enroll"))
+    else:
+        checks.append(diagnose_check("identity","missing","partial keypair or pin"))
+    if identity is not None:
+        command,args=transport_command(identity,distro)
+        completed=subprocess.run([command]+args,
+            input="".join(json.dumps(x)+"\n" for x in [
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"boxweave-diagnose","version":"1.0"}}},
+                {"jsonrpc":"2.0","method":"notifications/initialized"},
+                {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
+                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_containers","arguments":{}}}]),
+            text=True,capture_output=True,timeout=90)
+        if completed.returncode!=0:
+            detail=(completed.stderr or "").strip().splitlines()[-1][:200] if (completed.stderr or "").strip() else "ssh exited "+str(completed.returncode)
+            checks.append(diagnose_check("mcp","failed",detail))
+        else:
+            checks.append(diagnose_check("ssh_transport","ok"))
+            try:
+                messages=[json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+                by_id={m.get("id"):m for m in messages if isinstance(m,dict) and "id" in m}
+                ok_init=by_id.get(1,{}).get("result",{}).get("protocolVersion")=="2024-11-05"
+                checks.append(diagnose_check("mcp_initialize","ok" if ok_init else "failed"))
+                tools=[t.get("name") for t in by_id.get(2,{}).get("result",{}).get("tools",[])]
+                checks.append(diagnose_check("mcp_tools","ok" if "list_containers" in tools else "failed"))
+                read=by_id.get(3,{}).get("result",{})
+                checks.append(diagnose_check("mcp_read","ok" if not read.get("isError") and bool(read.get("content")) else "failed"))
+            except (ValueError,AttributeError,TypeError):
+                checks.append(diagnose_check("mcp_initialize","failed","unparsable MCP stream"))
+    if APP in ("qoder","trae"):
+        checks.append(diagnose_check("registration","manual"))
+    else:
+        path,keys=app_location()
+        entry=None
+        if path.exists():
+            try:
+                node=json.loads(path.read_text(encoding="utf-8"))
+                for part in keys:
+                    node=node.get(part) if isinstance(node,dict) else None
+                entry=node.get("boxweave") if isinstance(node,dict) else None
+            except (OSError,ValueError):
+                entry=None
+        state="absent"
+        if entry is not None:
+            state="differs"
+            if identity is not None:
+                command,args=transport_command(identity,distro)
+                if entry==app_entry(command,args): state="registered"
+        checks.append(diagnose_check("registration",state,str(path)))
+    return (2 if any(c["state"] in ("failed","mismatch") for c in checks) else 0),checks
+
 def main():
     parser=argparse.ArgumentParser(description="Verified BoxWeave MCP client setup")
     flags=parser.add_mutually_exclusive_group()
     flags.add_argument("--already-enrolled",action="store_true")
     flags.add_argument("--no-enroll",action="store_true")
+    parser.add_argument("--diagnose",action="store_true",
+                        help="Read-only self-check of tools, pinned identity, live MCP and registration")
     parser.add_argument("--distro",default="",help="Required when multiple Windows WSL distros exist")
     options=parser.parse_args()
     require(SYSTEM in ("linux","macos","windows"),"Unsupported OS")
@@ -338,6 +415,15 @@ def main():
             require(len(names)==1,"Choose an installed WSL distro with --distro NAME")
             distro=names[0]
         require(re.fullmatch(r"[A-Za-z0-9_.-]{1,80}",distro),"Invalid WSL distro")
+    if options.diagnose:
+        code,checks=run_diagnose(distro)
+        summary={"state":"pass" if code==0 else "fail","app":APP,"os":SYSTEM,"transport":TRANSPORT,
+                 "host":HOST,"port":PORT,"checks":checks}
+        print(json.dumps(summary,indent=2))
+        for c in checks:
+            print("# "+c["check"]+": "+c["state"]+((" - "+c["detail"]) if c.get("detail") else ""),file=sys.stderr)
+        print("# Diagnosis: "+summary["state"],file=sys.stderr)
+        raise SystemExit(code)
     identity=client_identity(distro)
     if options.no_enroll:
         print("On the Linux BoxWeave host, authorize the following public key:")

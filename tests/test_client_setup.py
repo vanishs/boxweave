@@ -331,6 +331,83 @@ class ClientGeneratorTests(unittest.TestCase):
                     self.assertIn('"mcpServers"',output.getvalue())
                     self.assertEqual(list(Path(tmp).iterdir()),[])
 
+    def zcode_script(self):
+        from bwmini import client_profiles
+        script=client_profiles.render({
+            "app":"zcode","os":"linux","transport":"native",
+            "host":"192.168.2.233","port":22,"server_key":host_key(),
+            "admin_user":"example-admin","replace":False})
+        ns={"__name__":"fixture"}
+        exec(compile(script,"diagnose.py","exec"),ns)
+        return ns
+
+    def test_diagnose_reports_missing_identity_without_changes(self):
+        import sys
+        ns=self.zcode_script()
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(Path,"home",return_value=Path(tmp)), \
+             patch.object(sys,"argv",["boxweave-setup.py","--diagnose"]), \
+             patch("sys.stdout",new_callable=io.StringIO) as out, \
+             patch("sys.stderr",new_callable=io.StringIO) as err:
+            try:
+                ns["main"]()
+                raised,refused=0,None
+            except SystemExit as exit_error:
+                raised,refused=exit_error.code,None
+            except ValueError as error:
+                raised,refused=None,str(error)
+            leftovers=list(Path(tmp).iterdir())
+        py_ok=sys.version_info[:2]>=(3,11)
+        if refused is not None:
+            # Interpreters below the client floor are refused before diagnosis.
+            self.assertFalse(py_ok)
+            self.assertIn("3.11",refused)
+            self.assertEqual(leftovers,[])
+            return
+        self.assertEqual(raised,0 if py_ok else 2)
+        summary=json.loads(out.getvalue())
+        self.assertEqual(summary["state"],"pass" if py_ok else "fail")
+        states={c["check"]:c["state"] for c in summary["checks"]}
+        self.assertEqual(states["python"],"ok" if py_ok else "failed")
+        self.assertEqual(states["identity"],"missing")
+        self.assertEqual(states["registration"],"absent")
+        self.assertNotIn("ssh-ed25519 ",out.getvalue())
+        self.assertIn("# identity: missing",err.getvalue())
+        self.assertEqual(leftovers,[])
+
+    def test_diagnose_live_stages_and_pin_mismatch(self):
+        import subprocess as real_subprocess
+        import sys
+        ns=self.zcode_script()
+        py_ok=sys.version_info[:2]>=(3,11)
+        responses="".join(json.dumps(m)+"\n" for m in (
+            {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}}}},
+            {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"list_containers"}]}},
+            {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Found 0 container(s):"}]}}))
+        completed=real_subprocess.CompletedProcess([],0,stdout=responses,stderr="")
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp)
+            root=home/".config"/"boxweave"
+            root.mkdir(parents=True,mode=0o700)
+            (root/"id_ed25519").write_text("PRIVATE")
+            (root/"known_hosts").write_text("192.168.2.233 "+host_key()+"\n")
+            with patch.object(Path,"home",return_value=home), \
+                 patch("subprocess.run",return_value=completed):
+                code,checks=ns["run_diagnose"]("")
+            self.assertEqual(code,0 if py_ok else 2)
+            states={c["check"]:c["state"] for c in checks}
+            self.assertEqual(states["identity"],"ok")
+            self.assertEqual(states["ssh_transport"],"ok")
+            self.assertEqual(states["mcp_initialize"],"ok")
+            self.assertEqual(states["mcp_tools"],"ok")
+            self.assertEqual(states["mcp_read"],"ok")
+            self.assertEqual(states["registration"],"absent")
+            (root/"known_hosts").write_text("192.168.2.233 WRONG\n")
+            with patch.object(Path,"home",return_value=home):
+                code,checks=ns["run_diagnose"]("")
+            self.assertEqual(code,2)
+            self.assertEqual({c["check"]:c["state"] for c in checks}["identity"],"mismatch")
+
 
 if __name__ == "__main__":
     unittest.main()
