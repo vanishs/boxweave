@@ -84,3 +84,7 @@ MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment pro
 ## MCP integration implementation checkpoint
 
 - [Actual source completion, CI evidence, open decisions and next developer handoff](process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md) (partial M0/M2 only; M1/M3/M4 and most M5 NOT IMPLEMENTED)
+
+## M0–M5 MCP source implementation (live Box acceptance deferred)
+
+- [M0–M5 source state, operator configuration, Web API and remaining live acceptance](process/MCP_M0_M5_SOURCE_PROGRESS.md). Direct-gateway tool policy is optional host-wide enforcement, **not per-user RBAC**; agent-box requires a separately reviewed fixed launcher and live Box testing.

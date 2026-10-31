@@ -23,6 +23,8 @@ class Service:
         from .access import Access
         self.access = Access(self)
         self.lifecycle.network = self.access
+        from .box_actions import BoxActions
+        self.box_actions = BoxActions(self)
 
     def observe_target(self, logical):
         if self.lifecycle.config is not None and logical in self.lifecycle.config["allowed_names"]:
@@ -210,6 +212,8 @@ class Service:
             return True
         if self.lifecycle.work_one():
             return True
+        if self.box_actions.work_one():
+            return True
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM operations WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
@@ -292,6 +296,7 @@ class Service:
             self.recover()
             self.lifecycle.recover()
             self.access.recover()
+            self.box_actions.recover()
             while True:
                 worked = self.work_one()
                 if once:

@@ -124,6 +124,43 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         from .capabilities import snapshot
         return jsonify(snapshot(service.provider))
 
+    @app.get("/api/boxes/<logical>/agent-box")
+    def box_agent_capabilities(logical):
+        from .agent_box import BoxAgent
+        return jsonify(BoxAgent(service,logical).capabilities())
+
+    @app.post("/api/boxes/<logical>/agent-box/read")
+    def box_agent_read(logical):
+        from .agent_box import BoxAgent
+        d=body(["tool","arguments"])
+        return jsonify(BoxAgent(service,logical).read(d["tool"],d["arguments"]))
+
+    @app.get("/api/boxes/<logical>/agent-box/resource")
+    def box_agent_resource(logical):
+        from .agent_box import BoxAgent
+        if set(request.args)!={"uri"} or len(request.args.getlist("uri"))!=1:
+            raise Fault("INVALID_QUERY",400)
+        return jsonify(BoxAgent(service,logical).resource(request.args["uri"]))
+
+    @app.post("/api/box-action-plans")
+    def box_action_plan():
+        d=body(["logical","action","arguments"])
+        return jsonify(service.box_actions.plan(d["logical"],d["action"],d["arguments"])),201
+
+    @app.post("/api/box-action-plans/<pid>/confirm")
+    def box_action_confirm(pid):
+        d=body(["logical","confirm"])
+        if d["confirm"] is not True:raise Fault("CONFIRMATION_REQUIRED",400)
+        return jsonify(service.box_actions.confirm(pid,d["logical"])),202
+
+    @app.get("/api/box-action-receipts")
+    def box_action_receipts():
+        return jsonify(operations=service.box_actions.list())
+
+    @app.get("/api/box-action-receipts/<rid>")
+    def box_action_receipt(rid):
+        return jsonify(service.box_actions.receipt(rid))
+
     @app.get("/api/resources")
     def resources():
         # Only the explicit operator-reviewed allowlist, not arbitrary provider inventory.

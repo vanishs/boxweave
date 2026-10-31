@@ -69,7 +69,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -107,6 +107,11 @@ class Store:
             if version < 10:
                 db.execute(SELFTEST_SCHEMA)
                 db.execute("PRAGMA user_version=10")
+            if version < 11:
+                from .box_actions import SCHEMA as box_actions_schema
+                for statement in box_actions_schema.split(";"):
+                    if statement.strip():db.execute(statement)
+                db.execute("PRAGMA user_version=11")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager
