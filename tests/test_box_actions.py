@@ -66,7 +66,7 @@ class ActionTests(Base):
 class ActionWebTests(WebTests):
     def test_new_api_denies_unenrolled_fixture_and_requires_login(self):
         path="/api/box-action-plans"
-        self.assertEqual(self.client.post(path,json={}).status_code,401)
+        self.assertEqual(self.client.post(path,json={},headers={"Origin":"http://localhost"}).status_code,401)
         self.login()
         response=self.client.post(path,headers=self.headers,json={
             "logical":TARGET.logical,"action":"shell_exec","arguments":{"command":"true"}})
