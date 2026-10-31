@@ -43,6 +43,9 @@ class ClientGeneratorTests(unittest.TestCase):
         self.assertIn("enrollment not confirmed", payload.lower())
         self.assertIn("MCP read verification failed", payload)
         self.assertIn("$sshTarget = 'boxweave@' + $ServerHost", payload)
+        # Both the verification probe and persistent Codex transport need keepalive.
+        self.assertEqual(payload.count("ServerAliveInterval=15"),2)
+        self.assertEqual(payload.count("ServerAliveCountMax=4"),2)
         self.assertIn("# EDIT ME: use the client-reachable host/IP and SSH port.", payload)
         self.assertNotIn("$ManagedWorkloadPublicKey", payload)
         self.assertNotIn("Merge-BoxWeaveGuidance", payload)

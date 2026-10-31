@@ -34,8 +34,28 @@ class Profiles(unittest.TestCase):
         a=p.ssh_argv(d,False)
         self.assertEqual(a[1:5],['--distribution','Ubuntu','--exec','/usr/bin/ssh'])
         self.assertIn('/dev/null',a);self.assertNotIn('sh',a);self.assertIn('/home/me/���� folder/key',a)
+        self.assertEqual(a.count('ServerAliveInterval=15'),1)
+        self.assertEqual(a.count('ServerAliveCountMax=4'),1)
+        self.assertEqual(a.index('ServerAliveInterval=15')+2,a.index('ServerAliveCountMax=4'))
         del d['connection']['distribution']
         with self.assertRaises(p.Refused):p.ssh_argv(d,False)
+    def test_native_registration_argv_preserves_keepalive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'key').touch();(root/'known').write_text('pin')
+            d={'profile':'codex/windows/native','connection':{
+                'host':'server.example','port':22,'user':'trusted',
+                'identity_file':str(root/'key'),'known_hosts':str(root/'known'),
+                'server_key':'ssh-ed25519 AAAA',
+                'executable':str(Path(sys.executable).resolve())}}
+            argv=p.ssh_argv(d,False)
+            self.assertEqual(argv.count('ServerAliveInterval=15'),1)
+            self.assertEqual(argv.count('ServerAliveCountMax=4'),1)
+            config=p.tomllib.loads(p.codex_merge('',argv))
+            saved=config['mcp_servers']['boxweave']['args']
+            self.assertEqual(saved,argv)
+            self.assertEqual(saved.count('ServerAliveInterval=15'),1)
+            self.assertEqual(saved.count('ServerAliveCountMax=4'),1)
+
     def test_pin_mismatch_fails_before_launch(self):
         with tempfile.TemporaryDirectory() as folder:
             f=Path(folder);(f/'key').touch();(f/'known').write_text('wrong')

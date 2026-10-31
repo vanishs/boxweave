@@ -54,6 +54,10 @@ ConvertTo-Json -InputObject @($sshArgs) -Compress
             self.assertEqual(argv.count("boxweave@192.168.2.233"), 1)
             self.assertNotIn("boxweave@", argv)
             self.assertNotIn("192.168.2.233", argv)
+            self.assertEqual(argv.count("ServerAliveInterval=15"), 1)
+            self.assertEqual(argv.count("ServerAliveCountMax=4"), 1)
+            self.assertEqual(argv.index("ServerAliveInterval=15")+2,
+                             argv.index("ServerAliveCountMax=4"))
 
     def test_nested_boxweave_tables_preserved_and_replace_explicit(self):
         original = '''# Codex desktop config
