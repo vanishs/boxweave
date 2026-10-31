@@ -75,6 +75,12 @@ Host coordinator 0.13.4 requires `--distribution-sha256` as an additional indepe
 On an independently prepared Provider, the explicit [application bootstrap](HOST_BOOTSTRAP.md#independent-application-bootstrap) can now create the separate app user/bus, launcher and scoped credential rotation. It retains the same non-root package installer, first-admin, backup and repair checks. It does not publish a release, provision the Provider or replace existing accounts/deployments.
 
 
+**Upstream ownership review:** The official Containarium installer has its own Incus,
+APT, storage, systemd, firewall and JWT lifecycle, but is not yet a safe
+drop-in for BoxWeave's loopback-only fresh-host bootstrap. See
+[upstream installer boundary review](verification/CONTAINARIUM_INSTALLER_BOUNDARY.md)
+before changing Provider ownership or enabling automatic upstream execution.
+
 ## Fresh-host streamed entry
 
 The README command selects the source-bound release's `online.py` coordinator. It stages/validates all artifacts, provisions only an inspected empty local host, then delegates app installation to the dedicated non-root account. Repeat the same command for managed app update/repair after inspecting a failed phase and any original package processes; existing Provider binary/version mismatches remain refused. No old data migration or arbitrary environment adoption occurs.

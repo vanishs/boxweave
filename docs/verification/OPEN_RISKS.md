@@ -60,3 +60,15 @@ Current SRC-100 experiment: source0.15.1 streamed reinstall and separate peer cr
 
 
 **RISK-615/610 update (0.18.2):** The Ubuntu 24.04 GA run 41141400914 failed during APT resolution because a fixed Incus 7.5.1 subset conflicted with the Incus-base 7.6 candidate. The new managed fresh-host path removes partial pins and simulates the APT transaction before installation, but the exact revision still needs a complete isolated live install. The long-term owner-requested provider-only dependency boundary remains unresolved; the upstream Containarium installer itself changes Incus and host settings and is not silently executed.
+
+
+**RISK-618 (P1, upstream installer integration, 2026-10-30):** Directly
+executing the mutable upstream Containarium manual installer during a fresh
+BoxWeave installation would open the REST listener on `0.0.0.0:8080` and
+potentially UFW 8080, uninstall older Incus packages (including `apt-get
+autoremove`), and install only the daemon, not the separate `mcp-server`.
+Do not silently substitute it for the current reviewed managed Provider
+bootstrap. Confirm upstream loopback/no-firewall support, immutable installer
+identity, complete same-release MCP assets, exact provider compatibility,
+owned-state separation, and real clean-host/update acceptance first. See
+[the source-backed review](CONTAINARIUM_INSTALLER_BOUNDARY.md).
