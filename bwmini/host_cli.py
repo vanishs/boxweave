@@ -40,7 +40,7 @@ def trusted_helper(name):
             info = path.lstat()
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
                 raise ValueError("HOST_HELPER_DIRECTORY_UNTRUSTED")
-        for filename in ("host_cli.py", "client_setup.py", "online.py", "nesting.py"):
+        for filename in ("host_cli.py", "client_setup.py", "client_profiles.py", "online.py", "nesting.py"):
             info = (directory / filename).lstat()
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
                     or info.st_mode & 0o022 or info.st_nlink != 1):
@@ -221,7 +221,7 @@ def main(argv=None):
         p = box_sub.add_parser(action, help="Inspect exact instance" if action == "inspect" else "Classify exact instance logs")
         p.add_argument("name")
         p.add_argument("--project", default="default")
-    sub.add_parser("client", help="Generate a user-owned Windows Codex/WSL enrollment script (no sudo)")
+    sub.add_parser("client", help="Generate reviewed MCP client setup for Windows, Linux or macOS (no sudo)")
     if not argv:
         try:
             onboarding(public_state())

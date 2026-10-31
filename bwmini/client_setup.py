@@ -1,9 +1,8 @@
-"""Source-bound, public-only client enrollment generator for Windows Codex + WSL SSH.
+"""Public-only client setup generator for alphabetically ordered cross-platform apps.
 
-Both terminal wizard and non-interactive invocation share validate/render/publish.
-The generated script requires an existing, reviewed SSH administrator login
-for the root-authorized BoxWeave public-key enrollment. No signer, private key,
-or Provider credential is ever exported.
+The previously reviewed Windows Codex/WSL PowerShell path is preserved.
+Other profiles emit a self-contained Python client script, executed only on
+the intended client OS, never on the Linux BoxWeave server.
 """
 import argparse
 import json
@@ -36,9 +35,10 @@ def load_public_state(path=None):
 
 
 try:
-    from . import online
+    from . import online, client_profiles
 except ImportError:
     import online
+    import client_profiles
 
 HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}\Z")
 USER = re.compile(r"[a-z_][a-z0-9_-]{0,30}\Z")
@@ -432,18 +432,26 @@ def script_header(replace_mcp):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="BoxWeave reviewed Windows Codex/WSL setup script generator")
-    parser.add_argument("--agent", choices=("codex",))
-    parser.add_argument("--transport", choices=("wsl",))
-    parser.add_argument("--admin-user", help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
+    parser = argparse.ArgumentParser(
+        description="BoxWeave reviewed cross-platform MCP client setup generator",
+        epilog="Apps are listed alphabetically; generated scripts require review and client-side execution.")
+    parser.add_argument("--agent", "--app", dest="app", choices=client_profiles.APPS,
+                        help="Target MCP application (alphabetical)")
+    parser.add_argument("--os", dest="system", choices=client_profiles.SYSTEMS,
+                        help="Operating system where the client app runs")
+    parser.add_argument("--transport", choices=client_profiles.TRANSPORTS,
+                        help="Native OpenSSH or Windows-to-WSL OpenSSH")
+    parser.add_argument("--admin-user",
+                        help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
     destination = parser.add_mutually_exclusive_group()
-    destination.add_argument("--output", help="Optional NEW .ps1 file; refuses to overwrite (stdout is the default)")
-    destination.add_argument("--stdout", action="store_true", help="Explicit stdout output (the default)")
+    destination.add_argument("--output", help="Optional NEW setup script; refuses overwriting existing files")
+    destination.add_argument("--stdout", action="store_true",
+                             help="Print a copyable script to stdout (the default)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--replace", dest="mcp_replace", action="store_const", const=True,
-                       help="Bake consent to replace only the Windows BoxWeave MCP transport entry after authenticated verification; backup retained")
+                       help="Replace a conflicting BoxWeave MCP entry only after read verification; backup")
     group.add_argument("--no-replace", dest="mcp_replace", action="store_const", const=False,
-                       help="Preserve conflicting Windows BoxWeave MCP entries (default for noninteractive runs)")
+                       help="Refuse conflicting BoxWeave MCP entries (noninteractive default)")
     parser.set_defaults(mcp_replace=None)
     args = parser.parse_args(argv)
     try:
@@ -451,11 +459,18 @@ def main(argv=None):
         if state.get("phase") != "ready":
             raise ValueError("READY_INSTALL_REQUIRED")
         interactive = sys.stdin.isatty()
-        select(args.agent, ("codex",), "Choose agent", interactive)
-        select(args.transport, ("wsl",), "Choose SSH transport", interactive)
-        # This is a human host administrator for explicit key enrollment,
-        # never the dedicated boxweave service account.
-        admin = args.admin_user or os.environ.get("SUDO_USER", "") or (pwd.getpwuid(os.getuid()).pw_name if os.geteuid() != 0 else "")
+        app = select(args.app, client_profiles.APPS, "Choose MCP application (alphabetical)",
+                     interactive)
+        # A noninteractive old --transport wsl invocation remains Windows by default.
+        system = select(args.system or ("windows" if args.transport == "wsl" else None),
+                        client_profiles.SYSTEMS, "Choose client operating system", interactive)
+        valid_transports = ("native", "wsl") if system == "windows" else ("native",)
+        transport = select(args.transport, valid_transports,
+                           "Choose SSH transport", interactive)
+        if not client_profiles.profile_valid(app, system, transport):
+            raise ValueError("UNSUPPORTED_CLIENT_PROFILE")
+        admin = args.admin_user or os.environ.get("SUDO_USER", "") or (
+            pwd.getpwuid(os.getuid()).pw_name if os.geteuid() != 0 else "")
         if not USER.fullmatch(admin or ""):
             if not interactive:
                 raise ValueError("ADMIN_USER_REQUIRED")
@@ -463,33 +478,42 @@ def main(argv=None):
             admin = input().strip()
         if not USER.fullmatch(admin):
             raise ValueError("ADMIN_USER_INVALID")
-
-        # Match archive/0.5.1: the LAST interactive choice is about the
-        # *client MCP registration*, never the already generated script file.
         if args.mcp_replace is not None:
             replace_mcp = args.mcp_replace
         elif interactive:
             replace_mcp = choose(
-                "On Windows, replace an existing BoxWeave MCP registration if its transport differs?",
-                [("No: preserve a conflicting registration; ask for review", False),
-                 ("Yes: replace only BoxWeave transport fields after a real MCP read; backup existing config", True)])
+                "Replace an existing conflicting BoxWeave MCP entry on the client?",
+                [("No: preserve the existing registration and stop for review", False),
+                 ("Yes: replace only BoxWeave after authenticated MCP read; keep backup", True)])
         else:
             replace_mcp = False
 
-        script = script_header(replace_mcp) + render(state, admin, replace=replace_mcp)
+        legacy = app == "codex" and system == "windows" and transport == "wsl"
+        if legacy:
+            script = script_header(replace_mcp) + render(state, admin, replace=replace_mcp)
+            shell = "Windows PowerShell (.ps1)"
+            filename = "boxweave-setup.ps1"
+        else:
+            public = {key: state[key] for key in ("host", "port", "server_key")}
+            script = client_profiles.render(public | {
+                "app": app, "os": system, "transport": transport,
+                "admin_user": admin, "replace": replace_mcp})
+            shell = "Python 3.11+ (.py)"
+            filename = "boxweave-setup.py"
         if args.output:
             published = publish(args.output, script)
-            print("PowerShell script saved to: " + published, file=sys.stderr)
+            print(shell + " setup saved to: " + published, file=sys.stderr)
         else:
-            print("BoxWeave Windows Codex/WSL script generated. Copy the PowerShell block below,", file=sys.stderr)
-            print("or redirect stdout to a .ps1 file and transfer it to Windows.", file=sys.stderr)
-            print("Run in Windows PowerShell, not Linux Bash. Generation changed no server or client settings.", file=sys.stderr)
+            print("BoxWeave " + app + " / " + system + " / " + transport +
+                  " setup; copy the complete " + shell + " script below.", file=sys.stderr)
+            print("Or redirect stdout to " + filename + " and transfer it to the client.", file=sys.stderr)
+            print("Generation changed no Linux or client settings.", file=sys.stderr)
             sys.stdout.write(script)
         return 0
     except (ClientCancelled, KeyboardInterrupt, EOFError):
         print(json.dumps({"state": "cancelled", "changed": False}), file=sys.stderr)
         return 130
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, KeyError) as exc:
         print(json.dumps({"state": "error", "code": str(exc)}), file=sys.stderr)
         return 2
 

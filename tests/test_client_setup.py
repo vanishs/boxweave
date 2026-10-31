@@ -106,7 +106,7 @@ class ClientGeneratorTests(unittest.TestCase):
             with (patch.object(client_setup.os,"geteuid",return_value=0),
                   patch.object(client_setup,"load_public_state",return_value=ready_state()),
                   patch("sys.stdin.isatty",return_value=True),
-                  patch("builtins.input",side_effect=["1","1","1"]),
+                  patch("builtins.input",side_effect=["3","3","2","1"]),
                   patch.dict(os.environ,{"SUDO_USER":"root"}),
                   patch("sys.stdout",new_callable=io.StringIO)):
                 code = manage.main(["client","--admin-user","example-admin","--output",str(out)])
@@ -134,7 +134,7 @@ class ClientGeneratorTests(unittest.TestCase):
                 os.chdir(tmp)
                 with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
                       patch("sys.stdin.isatty", return_value=True),
-                      patch("builtins.input", side_effect=["1", "1", "2"]),
+                      patch("builtins.input", side_effect=["3", "3", "2", "2"]),
                       patch("sys.stdout", new_callable=io.StringIO) as out,
                       patch("sys.stderr", new_callable=io.StringIO) as err):
                     result = client_setup.main(["--admin-user", "example-admin"])
@@ -152,7 +152,7 @@ class ClientGeneratorTests(unittest.TestCase):
             self.assertNotIn('{"state": "generated"', ps)
             self.assertNotIn("__REPLACE_POLICY__", ps)
             self.assertIn("Select number:", err.getvalue())
-            self.assertIn("PowerShell block", err.getvalue())
+            self.assertIn("PowerShell (.ps1)", err.getvalue())
             self.assertNotIn("Client script already exists", err.getvalue())
 
     def test_noninteractive_default_stdout_preserves_conflicts(self):
@@ -165,24 +165,24 @@ class ClientGeneratorTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn("Windows MCP policy: Preserve", out.getvalue())
         self.assertNotIn("$Replace = $true", out.getvalue())
-        self.assertIn("not Linux Bash", err.getvalue())
+        self.assertIn("Generation changed no Linux", err.getvalue())
 
     def test_interactive_choice_one_preserves_existing_mcp_registration(self):
         with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
               patch("sys.stdin.isatty", return_value=True),
-              patch("builtins.input", side_effect=["1", "1", "1"]),
+              patch("builtins.input", side_effect=["3", "3", "2", "1"]),
               patch("sys.stdout", new_callable=io.StringIO) as out,
               patch("sys.stderr", new_callable=io.StringIO) as err):
             result = client_setup.main(["--admin-user", "example-admin"])
         self.assertEqual(result, 0)
         self.assertIn("Windows MCP policy: Preserve", out.getvalue())
-        self.assertIn("On Windows, replace an existing BoxWeave MCP registration", err.getvalue())
+        self.assertIn("Replace an existing conflicting BoxWeave MCP entry", err.getvalue())
         self.assertNotIn("Client script already exists", err.getvalue())
 
     def test_interrupted_wizard_writes_no_partial_script(self):
         with (patch.object(client_setup, "load_public_state", return_value=ready_state()),
               patch("sys.stdin.isatty", return_value=True),
-              patch("builtins.input", side_effect=["1", "1", EOFError]),
+              patch("builtins.input", side_effect=["3", "3", "2", EOFError]),
               patch("sys.stdout", new_callable=io.StringIO) as out,
               patch("sys.stderr", new_callable=io.StringIO) as err):
             result = client_setup.main(["--admin-user", "example-admin"])
