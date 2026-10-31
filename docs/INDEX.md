@@ -50,7 +50,7 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 
 - [Container nesting](NESTING.md) and [measured verification](verification/NESTING_VERIFICATION.md)
 
-## Diagnostics research (proposal; not yet approved for implementation)
+## Diagnostics implementation (D0–D2 source-implemented in 0.22.0; D3 not implemented)
 
 - [Current source/behavior audit](verification/DIAGNOSTICS_SOURCE_AUDIT.md)
 - [Evidence-first CLI and existing-MCP implementation proposal](design/DIAGNOSTICS_PROPOSAL.md)
@@ -67,17 +67,16 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [E3 — Snapshot restore](design/BOX_ENV_E3_RESTORE.md)
 - [E4 — Independent Box cloning](design/BOX_ENV_E4_CLONE.md)
 
-These are **design-only** and complement, but do not implement, the D0-D2 diagnostic proposals.
+These environment features are **design-only**; D0–D2 diagnostics are source-implemented in 0.22.0, while D3 remains unimplemented.
 
-## MCP capability reuse research (proposal; NOT IMPLEMENTED)
 
-- [Capability-led MCP integration master](design/MCP_CAPABILITY_INTEGRATION_MASTER.md)
-- [Current functionality and source gap audit](verification/MCP_CAPABILITY_SOURCE_AUDIT.md)
-- [All registered Platform tools vs BoxWeave app use](design/MCP_PLATFORM_CAPABILITY_MATRIX.md)
-- [agent-box tools/resources and separate internal approvals](design/MCP_AGENT_BOX_CAPABILITY_MATRIX.md)
-- [MCP security and compatibility boundaries](design/MCP_INTEGRATION_SECURITY.md)
-- [Delivery dependencies and batches](design/MCP_INTEGRATION_DELIVERY_PLAN.md)
-- [MCP acceptance and evidence plan](verification/MCP_INTEGRATION_TEST_PLAN.md)
-- Programmer handoffs: [M0 capability audit](design/mcp-integration/M0_SOURCE_AND_RUNTIME_CAPABILITY.md), [M1 policy](design/mcp-integration/M1_ROUTING_AND_POLICY.md), [M2 Platform reuse](design/mcp-integration/M2_PLATFORM_REUSE.md), [M3 Box reads](design/mcp-integration/M3_AGENT_BOX_READONLY.md), [M4 Box execution](design/mcp-integration/M4_AGENT_BOX_EXECUTION.md), [M5 Web/workflows](design/mcp-integration/M5_WEB_AND_WORKFLOWS.md).
+## MCP capability integration (source inventory and staged implementation)
 
-This proposal complements, but does **not** implement or supersede, existing diagnostics D0–D2 or environment E0–E4 work. Source inventories do not prove installed or authorized MCP capabilities.
+- [Master design and updated main status](design/MCP_CAPABILITY_INTEGRATION_MASTER.md)
+- [Existing feature gap audit](verification/MCP_CAPABILITY_SOURCE_AUDIT.md)
+- [Platform tool matrix](design/MCP_PLATFORM_CAPABILITY_MATRIX.md)
+- [agent-box tool/resource matrix](design/MCP_AGENT_BOX_CAPABILITY_MATRIX.md)
+- [Trust boundaries](design/MCP_INTEGRATION_SECURITY.md)
+- [M0–M5 delivery handoff](design/MCP_INTEGRATION_DELIVERY_PLAN.md) and [acceptance](verification/MCP_INTEGRATION_TEST_PLAN.md)
+
+MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment proposals. PR #6 is research/design and must not be reported as runtime feature completion.

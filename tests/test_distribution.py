@@ -112,6 +112,39 @@ class DistributionTests(unittest.TestCase):
    state=json.loads((self.prefix/'installed.json').read_text());state['units']=['owned.service'];(self.prefix/'installed.json').write_text(json.dumps(state))
    with patch.object(d,'properties',return_value={'ActiveState':'failed','Result':'exit-code'}):self.assertEqual(d.health(self.prefix)['state'],'failed')
    (self.prefix/'update-in-progress.json').write_text('{}');self.assertEqual(d.health(self.prefix)['state'],'incomplete')
+ def test_health_emits_typed_unit_states_and_schema(self):
+  import urllib.error
+  self.install()
+  state=json.loads((self.prefix/'installed.json').read_text())
+  state['units']=['boxweave-v2-fixture01-serve.service','boxweave-v2-fixture01-worker.service']
+  (self.prefix/'installed.json').write_text(json.dumps(state))
+  with patch.object(d,'properties',return_value={'ActiveState':'active','SubState':'running','UnitFileState':'enabled'}), \
+       patch.object(d.urllib.request,'urlopen',side_effect=OSError('fixture: no listener')):
+   value=d.health(self.prefix)
+  self.assertEqual(value['diagnostic_schema'],1)
+  self.assertEqual(value['unit_states'],{'serve':'ready','worker':'ready'})
+  self.assertEqual(value['state'],'starting')
+  with patch.object(d,'properties',return_value={'ActiveState':'inactive'}), \
+       patch.object(d.urllib.request,'urlopen',side_effect=OSError('fixture: no listener')):
+   value=d.health(self.prefix)
+  self.assertEqual(value['unit_states']['worker'],'inactive')
+  self.assertEqual(value['state'],'starting')
+ def test_health_mcp_request_never_ready_on_probe_or_admin_failure(self):
+  self.install()
+  for outcome in (('not json',''),
+                  (json.dumps({'mcp':{'state':'authenticated_read_passed'}}),''),
+                  (json.dumps({'mcp':'broken','admin_initialized':True}),''),
+                  (json.dumps({'mcp':{'state':'authenticated_read_passed'},'admin_initialized':False}),'')):
+   with self.subTest(outcome=outcome[0][:24]):
+    with patch.object(d.subprocess,'run',return_value=subprocess.CompletedProcess([],0,outcome[0],outcome[1])):
+     value=d.health(self.prefix,mcp=True)
+    self.assertEqual(value['state'],'failed')
+    self.assertIn(value.get('code'),('MCP_PROBE_INVALID','ADMIN_SETUP_REQUIRED'))
+ def test_health_malformed_mcp_output_is_typed_not_generic(self):
+  self.install()
+  with patch.object(d.subprocess,'run',side_effect=subprocess.TimeoutExpired([],5)):
+   value=d.health(self.prefix,mcp=True)
+  self.assertEqual(value['state'],'failed');self.assertEqual(value['code'],'HEALTH_UNAVAILABLE')
  def test_origin_credentials_paths_and_insecure_cookie_are_rejected(self):
   for changed in [{'origin':'https://user:password@example.test'},{'origin':'https://example.test/path'},{'origin':'http://example.test','secure_cookie':False},{'secure_cookie':False}]:
    self.config.write_text(json.dumps(self.settings|changed))

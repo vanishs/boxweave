@@ -56,7 +56,72 @@ def _wait_absent(provider, box, deadline, clock, sleep):
         sleep(2)
 
 
-def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None):
+class Journal:
+    """Durable per-step evidence for one confirmed selftest run.
+
+    Rows record intent before each remote effect and the observed outcome
+    after it; a killed process therefore leaves an explicit running row with
+    the last step. Recording never acts on resources, and a journal write
+    failure refuses the run before mutation rather than mutating unjournaled.
+    """
+
+    def __init__(self, store, actor="operator", clock=time.time):
+        self.store, self.actor, self.clock = store, actor, clock
+        self.run_id = None
+
+    def start(self, plan, deadline_epoch):
+        self.run_id = "st-" + secrets.token_hex(8)
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("INSERT INTO selftest_runs VALUES(?,?,?,?,?,?,?,?,?)",
+                       (self.run_id, self.actor, confirmation(plan), plan["box"], "running",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                        datetime.datetime.fromtimestamp(deadline_epoch, datetime.timezone.utc)
+                        .isoformat(timespec="seconds"), None, "pending"))
+        return self.run_id
+
+    def _mark(self, value):
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute("UPDATE selftest_runs SET last_step=? WHERE id=? AND state='running'",
+                                 (value[:64], self.run_id)).rowcount
+        if changed != 1:
+            raise Fault("SELFTEST_JOURNAL_LOST", 503)
+
+    def step_started(self, name):
+        self._mark(name + ":started")
+
+    def step_done(self, name, code):
+        self._mark(name + ":" + code)
+
+    def finish(self, state, cleanup):
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE selftest_runs SET state=?,cleanup_state=? WHERE id=? AND state='running'",
+                       (state, cleanup, self.run_id))
+
+    @staticmethod
+    def unreconciled(store):
+        with store.db() as db:
+            return [dict(row) for row in db.execute(
+                "SELECT id,actor,plan_digest,exact_test_box,state,created_utc,deadline_utc,last_step,"
+                "cleanup_state FROM selftest_runs WHERE state='running' ORDER BY created_utc")]
+
+    @staticmethod
+    def resolve(store, run_id, actor="operator"):
+        """Operator-confirmed bookkeeping only; never touches the original box."""
+        with store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT id FROM selftest_runs WHERE id=? AND state='running'",
+                             (run_id,)).fetchone()
+            if row is None:
+                raise Fault("SELFTEST_RUN_NOT_RUNNING", 404)
+            db.execute("UPDATE selftest_runs SET state='resolved',cleanup_state='operator_resolved',"
+                       "last_step=? WHERE id=?",
+                       ("resolved:" + actor[:48], run_id))
+
+
+def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None, journal=None):
     if getattr(provider, "mode", "") != "mcp":
         raise Fault("SELFTEST_LIVE_REQUIRED", 409)
     budget = min(1800, max(60, int(budget)))
@@ -66,19 +131,31 @@ def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None)
     if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/]+={0,2}(?: [A-Za-z0-9@._-]{1,80})?", key):
         raise Fault("MANAGED_PUBLIC_KEY_REQUIRED", 422)
     deadline = clock() + budget
+    if journal is not None:
+        if Journal.unreconciled(journal.store):
+            raise Fault("SELFTEST_RUN_UNRECONCILED")
+        journal.start(plan, deadline)
     steps = []
 
     def step(name, action):
         started = clock()
+        if journal is not None:
+            journal.step_started(name)
         try:
             action()
+            if journal is not None:
+                journal.step_done(name, "OK")
             steps.append({"step": name, "state": "succeeded", "code": "OK",
                           "seconds": round(clock() - started, 3)})
             return True
         except Fault as error:
+            if journal is not None:
+                journal.step_done(name, error.code)
             steps.append({"step": name, "state": "failed", "code": error.code,
                           "seconds": round(clock() - started, 3)})
         except Exception:
+            if journal is not None:
+                journal.step_done(name, "OUTCOME_UNKNOWN")
             steps.append({"step": name, "state": "failed", "code": "OUTCOME_UNKNOWN",
                           "seconds": round(clock() - started, 3)})
         return False
@@ -125,5 +202,7 @@ def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None)
             cleanup = "performed"
         except Exception:
             cleanup = "best_effort_failed"
+    if journal is not None:
+        journal.finish("completed" if ok else "failed", cleanup)
     return {"state": "passed" if ok else "failed", "box": box, "confirmation": confirmation(plan),
             "evidence": "live_mcp", "cleanup": cleanup, "steps": steps}

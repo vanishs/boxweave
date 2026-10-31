@@ -2,6 +2,8 @@
 
 Status: **implementation-ready architectural design; unimplemented and not a grant to run live tests**. Reviewed source `main@817273d98d8823fcd8489eb0d3f329a67929b91d` (BoxWeave 0.21.4). Depends on [D0](DIAGNOSTICS_D0_IMPLEMENTATION.md) (truthful health states) and [D1](DIAGNOSTICS_D1_IMPLEMENTATION.md) (versioned private trace/event storage). Parent [proposal](DIAGNOSTICS_PROPOSAL.md), [source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). Permission and sharing settings require maintainer approval.
 
+**Implementation status:** D2-a and D2-b implemented in 0.22.0 (8373277, b7033dc, schema v10); live host export and confirmed live selftest belong to the 0.22.0 checkpoint.
+
 ## 0. End-user target and non-goals
 
 Desired operator workflow for a failure:

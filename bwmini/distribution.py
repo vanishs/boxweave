@@ -45,7 +45,7 @@ def verify(archive,sha):
   return manifest
 def build(root,wheels,output,commit,source_state):
  root=Path(root).resolve();files={}
- modules=('__init__','__main__','bootstrap','online','client_setup','hostkeys','mcp_gate','nesting','manage','access','access_provider','deploy_check','distribution','domain','graphs','jobs','lifecycle','mcp','models','profiles','provider','selftest','service','store','web')
+ modules=('__init__','__main__','bootstrap','online','client_setup','hostkeys','mcp_gate','nesting','manage','access','access_provider','deploy_check','diagnostics','distribution','domain','graphs','jobs','lifecycle','mcp','models','profiles','provider','selftest','service','store','web')
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
  public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
  for p in public:
@@ -111,15 +111,32 @@ def health(prefix,mcp=False):
   require(release.name==state['archive_sha256'] and digest(regular(release/'manifest.json'))==state['manifest_sha256'],'PROVENANCE_CHANGED')
   raw,c=config_read(prefix/'config.json',prefix)
   for unit in state['units']:result['services'][unit]=properties(unit)
+  unit_states={}
+  for unit in state['units']:
+   props=result['services'].get(unit,{})
+   role='serve' if unit.endswith('-serve.service') else 'worker' if unit.endswith('-worker.service') else 'unknown'
+   if role in unit_states:role='unknown'
+   if not props:unit_states[role]='unavailable'
+   elif props.get('ActiveState')=='failed' or props.get('Result') in ('exit-code','signal','core-dump','start-limit-hit'):unit_states[role]='failed'
+   elif unit_ready(props):unit_states[role]='ready'
+   elif props.get('ActiveState')=='inactive':unit_states[role]='inactive'
+   else:unit_states[role]='unavailable'
+  result['unit_states']=unit_states
+  result['diagnostic_schema']=1
   try:
    urllib.request.urlopen('http://127.0.0.1:'+str(c['port'])+'/api/projects',timeout=3).close();result['web']={'reachable':True,'authenticated':False,'status':200}
   except urllib.error.HTTPError as e:result['web']={'reachable':True,'authenticated':False,'status':e.code}
   except OSError:pass
   if mcp:
    probe=subprocess.run([str(release/'.venv/bin/python'),'-m','bwmini.deploy_check','--config',str(prefix/'runtime.json'),'--mcp'],cwd=release,capture_output=True,text=True,timeout=100)
-   require(probe.returncode==0,'MCP_READ_FAILED');checked=json.loads(probe.stdout);result['mcp']=checked['mcp'];result['administrator_initialized']=checked['admin_initialized']
+   require(probe.returncode==0,'MCP_READ_FAILED')
+   try:checked=json.loads(probe.stdout)
+   except ValueError:raise InstallError('MCP_PROBE_INVALID')
+   if not isinstance(checked,dict) or not isinstance(checked.get('mcp'),dict) or not isinstance(checked.get('admin_initialized'),bool):raise InstallError('MCP_PROBE_INVALID')
+   result['mcp']=checked['mcp'];result['administrator_initialized']=checked['admin_initialized']
    require(checked['admin_initialized'],'ADMIN_SETUP_REQUIRED')
-  ready=all(unit_ready(p) for p in result['services'].values()) and bool(state['units']) and result['web']['reachable']
+  mcp_ok=(not mcp) or result.get('mcp',{}).get('state')=='authenticated_read_passed'
+  ready=all(unit_ready(p) for p in result['services'].values()) and bool(state['units']) and result['web']['reachable'] and mcp_ok
   failed=any(p.get('ActiveState')=='failed' or p.get('Result') in ('exit-code','signal','core-dump','start-limit-hit') for p in result['services'].values())
   result['state']='incomplete' if result['incomplete'] else 'failed' if failed else 'ready' if ready else 'starting'
  except (InstallError,OSError,ValueError,subprocess.SubprocessError) as e:result['state']='failed';result['code']=str(e) if isinstance(e,InstallError) else 'HEALTH_UNAVAILABLE'

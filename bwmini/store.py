@@ -32,6 +32,29 @@ CREATE TABLE operation_observations (id TEXT PRIMARY KEY, operation TEXT NOT NUL
  actor TEXT NOT NULL, at REAL NOT NULL, target_status TEXT NOT NULL, code TEXT NOT NULL);
 """
 
+DIAGNOSTIC_SCHEMA = """
+CREATE TABLE diagnostic_trace_links (
+ actor TEXT NOT NULL, operation_kind TEXT NOT NULL, operation_id TEXT NOT NULL,
+ trace_id TEXT NOT NULL, created_utc TEXT NOT NULL,
+ PRIMARY KEY (actor, operation_kind, operation_id), UNIQUE (trace_id));
+CREATE TABLE diagnostic_events (
+ seq INTEGER PRIMARY KEY, event_id TEXT NOT NULL UNIQUE, trace_id TEXT NOT NULL,
+ span_id TEXT NOT NULL, parent_span_id TEXT, actor_scope TEXT NOT NULL,
+ operation_kind TEXT, operation_id TEXT, time_utc TEXT NOT NULL, elapsed_ms INTEGER,
+ component TEXT NOT NULL, phase TEXT NOT NULL, event_type TEXT NOT NULL,
+ outcome TEXT NOT NULL, code TEXT NOT NULL, capture TEXT NOT NULL, target_ref TEXT);
+CREATE INDEX diagnostic_events_trace_order ON diagnostic_events(trace_id, seq);
+CREATE INDEX diagnostic_events_time_order ON diagnostic_events(time_utc, seq);
+"""
+
+SELFTEST_SCHEMA = """
+CREATE TABLE selftest_runs (
+ id TEXT PRIMARY KEY, actor TEXT NOT NULL, plan_digest TEXT NOT NULL,
+ exact_test_box TEXT NOT NULL, state TEXT NOT NULL,
+ created_utc TEXT NOT NULL, deadline_utc TEXT NOT NULL,
+ last_step TEXT, cleanup_state TEXT NOT NULL);
+"""
+
 class Store:
     def __init__(self, path):
         self.path = Path(path).absolute()
@@ -46,7 +69,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8):
+            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -77,6 +100,13 @@ class Store:
                 from .jobs import SCHEMA as job_schema
                 db.execute(job_schema)
                 db.execute("PRAGMA user_version=8")
+            if version < 9:
+                for statement in DIAGNOSTIC_SCHEMA.split(";"):
+                    if statement.strip():db.execute(statement)
+                db.execute("PRAGMA user_version=9")
+            if version < 10:
+                db.execute(SELFTEST_SCHEMA)
+                db.execute("PRAGMA user_version=10")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager

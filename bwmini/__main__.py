@@ -40,6 +40,7 @@ def main():
     p.add_argument("--logical")
     p.add_argument("--environment-action",choices=["create","start","stop","delete","resize"])
     p.add_argument("--plan")
+    p.add_argument("--resolve", help="selftest-run only: mark a reconciled run resolved (bookkeeping only)")
     p.add_argument("--model-provider")
     p.add_argument("--model-id")
     p.add_argument("--access-mode")
@@ -126,7 +127,18 @@ def main():
                   "next":"Save the plan object to a file, review it, then run selftest-run with --plan FILE --confirmation HEX"} ,indent=2,sort_keys=True))
             return 0
         if a.action=="selftest-run":
-            from .selftest import load_plan,run as run_selftest
+            from .selftest import Journal,load_plan,run as run_selftest
+            c,s=load(a.config)
+            if a.resolve is not None:
+                Journal.resolve(s.store,a.resolve)
+                print(json.dumps({"state":"resolved","run":a.resolve,
+                      "note":"Bookkeeping only; the original box was never touched by this command."},sort_keys=True))
+                return 0
+            stale=Journal.unreconciled(s.store)
+            if stale:
+                print(json.dumps({"state":"unreconciled","runs":stale,
+                      "next":"Inspect each original exact box out of band; outcome is UNKNOWN until observed. Then rerun with --resolve RUN_ID (bookkeeping only). Never recreate the box or auto-delete."},indent=2,sort_keys=True))
+                return 2
             if not isinstance(a.plan,str) or not isinstance(a.confirmation,str):
                 raise Fault("SELFTEST_PLAN_REQUIRED",422)
             try:
@@ -134,8 +146,7 @@ def main():
             except (OSError,ValueError):
                 raise Fault("SELFTEST_PLAN_INVALID",422) from None
             plan=load_plan(raw,a.confirmation)
-            c,s=load(a.config)
-            result=run_selftest(s.provider,plan,budget=a.budget)
+            result=run_selftest(s.provider,plan,budget=a.budget,journal=Journal(s.store))
             print(json.dumps(result,indent=2,sort_keys=True))
             return 0 if result["state"]=="passed" else 2
         if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):

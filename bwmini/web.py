@@ -56,6 +56,10 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         return jsonify(code="REQUEST_TOO_LARGE"),413
     @app.errorhandler(Exception)
     def internal(_):
+        from . import diagnostics
+        diagnostics.emit(store, component="web", phase="request", event_type="rejected",
+                         outcome="failed", code="UNCLASSIFIED_EXCEPTION",
+                         trace_id=diagnostics.new_trace_id(), actor_scope="web")
         return jsonify(code="INTERNAL_ERROR"),500
     @app.post("/api/client-profile")
     def public_client_profile():

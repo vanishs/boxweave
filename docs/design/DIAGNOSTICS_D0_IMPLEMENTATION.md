@@ -2,6 +2,8 @@
 
 Status: **implementation-ready proposal; documentation only, not deployed**. Research baseline: `main@817273d98d8823fcd8489eb0d3f329a67929b91d` (BoxWeave 0.21.4). Proposal origin: [DIAGNOSTICS_PROPOSAL](DIAGNOSTICS_PROPOSAL.md) and [source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). Precedes [D1](DIAGNOSTICS_D1_IMPLEMENTATION.md) and [D2](DIAGNOSTICS_D2_IMPLEMENTATION.md). The maintainer must approve code changes before implementation. Use current code and `AGENTS.md` if main advances.
 
+**Implementation status:** Implemented in 0.21.5 (f57598a, c9fc1cd, 1aeafe1) and live-checkpointed on boxweave-test-ser; see REMEDIATION_TEST_QUEUE.
+
 ## 0. Acceptance objective and non-goals
 
 **Objective:** no command says that its selected diagnosis **passed** when a required check was skipped, unavailable, or inconclusive. Define and test the exact difference between *reachable*, *healthy*, *authenticated-read-passed*, *workload-ready* and *unverified*. Preserve the existing restricted SSH, upstream MCP and installed CLI interfaces.

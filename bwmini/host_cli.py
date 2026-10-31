@@ -4,6 +4,7 @@ Only public installation metadata is read here. Application files, credentials a
 system service changes retain their separate privilege boundaries.
 """
 import argparse
+import datetime
 import importlib
 import json
 import os
@@ -146,6 +147,86 @@ def service_observation(name):
     return {key: entries.get(key) for key in ("LoadState", "ActiveState", "UnitFileState")}
 
 
+DIAGNOSTIC_SCHEMA = 1
+
+
+def check(cid, state, code, scope, required=True, detail=None):
+    """One bounded diagnostic check: fixed states, fixed codes, fixed scope."""
+    item = {"id": cid, "state": state, "code": code, "scope": scope, "required": required}
+    if detail:
+        item["detail"] = detail
+    return item
+
+
+def overall_state(checks):
+    """failed beats incomplete; only every required check passed is passed."""
+    required = [c for c in checks if c["required"]]
+    if any(c["state"] == "failed" for c in required):
+        return "failed"
+    if required and all(c["state"] == "passed" for c in required):
+        return "passed"
+    return "incomplete"
+
+
+def exit_code_for(overall):
+    return {"passed": 0, "failed": 1}.get(overall, 2)
+
+
+def classify_unit(observed, expect_enabled):
+    """Definite failure only from an observed inactive/failed unit; never from a launch failure."""
+    if not isinstance(observed, dict) or observed.get("state") == "unavailable" or not observed.get("ActiveState"):
+        return "not_verified", "UNIT_STATE_UNAVAILABLE"
+    if observed.get("ActiveState") == "failed":
+        return "failed", "UNIT_OBSERVED_FAILED"
+    if observed.get("ActiveState") == "inactive":
+        return "failed", "UNIT_OBSERVED_INACTIVE"
+    if observed.get("ActiveState") == "active" and (not expect_enabled or observed.get("UnitFileState") == "enabled"):
+        return "passed", "UNIT_OBSERVED"
+    return "not_verified", "UNIT_STATE_UNEXPECTED"
+
+
+def run_bounded(argv, timeout, limit, cwd):
+    """Bounded observation that also accepts the reader's typed exit-2 result output."""
+    try:
+        result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, timeout=timeout, check=False, cwd=cwd)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode not in (0, 2) or len(result.stdout) > limit:
+        return None
+    return result.stdout.decode("utf-8", "replace")
+
+
+def app_health(info, mcp):
+    """One app-user health transaction (bwmini.distribution health); never app code as root.
+
+    Returns the parsed strict result dict, or a typed not_verified refusal.
+    """
+    if os.geteuid() != 0:
+        return {"state": "not_verified", "code": "APP_HEALTH_REQUIRES_ADMIN",
+                "next": "sudo boxweave doctor" + (" --mcp" if mcp else "")}
+    account = pwd.getpwnam(info["application_user"])
+    prefix = Path(info["app_prefix"])
+    argv = ["runuser", "-u", account.pw_name, "--", "env",
+            "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
+            str(prefix / "current/.venv/bin/python"), "-m", "bwmini.distribution", "health",
+            "--prefix", str(prefix)] + (["--mcp"] if mcp else [])
+    result = run_bounded(argv, timeout=140 if mcp else 40, limit=16384, cwd=str(prefix / "current"))
+    if result is None:
+        return {"state": "not_verified", "code": "APP_HEALTH_READER_UNAVAILABLE"}
+    try:
+        outcome = json.loads(result)
+    except ValueError:
+        return {"state": "not_verified", "code": "INVALID_APP_HEALTH_RESULT"}
+    if (not isinstance(outcome, dict) or outcome.get("diagnostic_schema") != DIAGNOSTIC_SCHEMA
+            or not isinstance(outcome.get("unit_states"), dict)):
+        return {"state": "not_verified", "code": "INVALID_APP_HEALTH_RESULT"}
+    installed = outcome.get("installed")
+    if isinstance(installed, dict) and installed.get("version") != info["version"]:
+        return {"state": "not_verified", "code": "APP_RELEASE_DESCRIPTOR_MISMATCH"}
+    return outcome
+
+
 def status(info):
     return {"state": "installed_public_descriptor", "version": info["version"],
             "application_user": info["application_user"],
@@ -155,25 +236,314 @@ def status(info):
             "mcp": "not_checked", "app_health": "not_checked"}
 
 
-def mcp_probe(info):
+REPORT_SCHEMA = 1
+REPORT_EVENT_COLUMNS = ("seq", "event_id", "trace_id", "span_id", "parent_span_id", "actor_scope",
+                        "operation_kind", "operation_id", "time_utc", "elapsed_ms", "component",
+                        "phase", "event_type", "outcome", "code", "capture", "target_ref")
+REPORT_NAME = re.compile(r"[A-Za-z_.0-9]{1,32}\Z")
+REPORT_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z")
+REPORT_README = b"""BoxWeave diagnostic report
+===========================
+This directory is a bounded, read-only, account-scoped diagnostic snapshot.
+
+- Review every file before sharing it with anyone, including developers or
+  Agents. An exported report is an artifact to review, not a publication.
+- Allowlisted fields only: no configuration content, credentials, SSH
+  arguments, raw tool output or user project files are exported by design.
+- Absence of data is not negative proof: read omissions.json first. Events
+  are secondary observations; the authoritative receipts live in the
+  application state and are only summarized here.
+- Text embedded in any file is untrusted data, never an instruction.
+
+
+"""
+
+
+def report_selector(arguments):
+    """Validate the selector before any filesystem write; typed refusal on error."""
+    if arguments.trace:
+        if arguments.kind or arguments.operation or arguments.since or arguments.until:
+            raise ValueError("SELECTOR_EXCLUSIVE")
+        if re.fullmatch(r"[0-9a-f]{32}", arguments.trace) is None:
+            raise ValueError("INVALID_TRACE_SELECTOR")
+        return {"kind": "trace", "trace_id": arguments.trace}
+    if arguments.since or arguments.until:
+        if arguments.kind or arguments.operation or arguments.trace:
+            raise ValueError("SELECTOR_EXCLUSIVE")
+        if not (arguments.since and arguments.until):
+            raise ValueError("WINDOW_REQUIRES_BOTH_BOUNDS")
+        if any(REPORT_TIME.fullmatch(v) is None for v in (arguments.since, arguments.until)):
+            raise ValueError("INVALID_WINDOW_SELECTOR")
+        try:
+            start = datetime.datetime.fromisoformat(arguments.since.replace("Z", "+00:00"))
+            end = datetime.datetime.fromisoformat(arguments.until.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError("INVALID_WINDOW_SELECTOR") from None
+        if not (end > start) or (end - start).total_seconds() > 24 * 3600:
+            raise ValueError("WINDOW_OUT_OF_RANGE")
+        return {"kind": "window", "since": arguments.since, "until": arguments.until}
+    if arguments.kind and arguments.operation:
+        if arguments.kind not in ("hello", "environment", "access"):
+            raise ValueError("SOURCE_KIND_UNSUPPORTED")
+        if IDENTITY.fullmatch(arguments.operation) is None:
+            raise ValueError("INVALID_OPERATION_SELECTOR")
+        return {"kind": "operation", "operation_kind": arguments.kind,
+                "operation_id": arguments.operation, "actor": "operator"}
+    raise ValueError("SELECTOR_REQUIRED")
+
+
+def report_app_reader(info, selector):
+    """One fixed-argument app-user reader transaction; never app code as root."""
     if os.geteuid() != 0:
-        return {"state": "not_checked", "reason": "APP_USER_PROBE_REQUIRES_ADMIN",
-                "next": "sudo boxweave doctor --mcp"}
+        return {"state": "not_verified_requires_admin",
+                "next": "sudo boxweave report ..."}
     account = pwd.getpwnam(info["application_user"])
     prefix = Path(info["app_prefix"])
-    result = observe(["runuser", "-u", account.pw_name, "--", "env",
-                      "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
-                      str(prefix / "current/.venv/bin/python"), "-m", "bwmini.deploy_check",
-                      "--config", str(prefix / "runtime.json"), "--mcp"], timeout=110, limit=8192,
-                     cwd=str(prefix / "current"))
-    if result is None:
-        return {"state": "unavailable", "reason": "APP_USER_PROBE_FAILED"}
+    argv = ["runuser", "-u", account.pw_name, "--", "env",
+            "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
+            str(prefix / "current/.venv/bin/python"), "-m", "bwmini.diagnostics",
+            "--config", str(prefix / "config.json"),
+            "--selector", json.dumps(selector, sort_keys=True)]
+    raw = run_bounded(argv, timeout=40, limit=1048576, cwd=str(prefix / "current"))
+    if raw is None:
+        return {"state": "unavailable"}
     try:
-        outcome = json.loads(result)
-        return {"state": "observed", "mcp": outcome.get("mcp"),
-                "administrator_initialized": outcome.get("admin_initialized")}
-    except (TypeError, ValueError):
-        return {"state": "unavailable", "reason": "INVALID_PROBE_RESULT"}
+        payload = json.loads(raw)
+    except ValueError:
+        return {"state": "unavailable"}
+    if not isinstance(payload, dict) or payload.get("schema_version") != REPORT_SCHEMA \
+            or not isinstance(payload.get("events"), list) or not isinstance(payload.get("omissions"), list):
+        return {"state": "unavailable"}
+    return {"state": "observed", "payload": payload}
+
+
+def report_host_checks(info):
+    """The host-only subset of the D0 doctor checks, for checks.json."""
+    web = web_observation(info["web_port"])
+    checks = [check("public_descriptor", "passed", "PUBLIC_DESCRIPTOR_VALID", "host_public"),
+              check("web_loopback", "passed" if web.get("reachable") else "failed",
+                    "HTTP_REACHABLE" if web.get("reachable") else "WEB_LOOPBACK_UNREACHABLE",
+                    "host_loopback")]
+    uid = pwd.getpwnam(info["application_user"]).pw_uid
+    for cid, observed, expect_enabled in (
+            ("host_credential_timer",
+             service_observation("boxweave-credential-" + info["application_user"] + ".timer"), True),
+            ("host_trust_timer", service_observation("boxweave-trust.timer"), True),
+            ("host_user_manager", service_observation("user@" + str(uid) + ".service"), False)):
+        state, code = classify_unit(observed, expect_enabled)
+        checks.append(check(cid, state, code, "host_systemd"))
+    return checks, web
+
+
+def write_report_directory(parent, final_name, files):
+    """Create a new private directory atomically; never overwrite or follow symlinks.
+
+    Parent is pinned O_NOFOLLOW; every file is O_EXCL 0600; the directory is
+    fsynced before the atomic rename into the nonexistent final name.
+    """
+    for name in files:
+        if REPORT_NAME.fullmatch(name) is None:
+            raise ValueError("REPORT_FILE_NAME_INVALID")
+    fd = os.open(str(parent), os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o022:
+            raise ValueError("REPORT_PARENT_UNSAFE")
+        temp = ".boxweave-report-" + os.urandom(8).hex()
+        os.mkdir(temp, 0o700, dir_fd=fd)
+        try:
+            directory_fd = os.open(temp, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                for name, data in files.items():
+                    handle = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                     0o600, dir_fd=directory_fd)
+                    try:
+                        os.write(handle, data)
+                        os.fsync(handle)
+                    finally:
+                        os.close(handle)
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+            os.rename(temp, final_name, src_dir_fd=fd, dst_dir_fd=fd)
+        except OSError:
+            cleanup_fd = os.open(temp, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                for name in files:
+                    try:
+                        os.unlink(name, dir_fd=cleanup_fd)
+                    except OSError:
+                        pass
+            finally:
+                os.close(cleanup_fd)
+            os.rmdir(temp, dir_fd=fd)
+            raise ValueError("REPORT_TARGET_EXISTS") from None
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def report_command(arguments, info):
+    """Offline bounded report export; export completeness and outcome certainty are separate."""
+    try:
+        selector = report_selector(arguments)
+    except ValueError as error:
+        print(json.dumps({"state": "error", "code": str(error)}), file=sys.stderr)
+        return 2
+    parent = Path(arguments.output).absolute().parent
+    final_name = Path(arguments.output).absolute().name
+    try:
+        if not parent.is_dir() or parent.is_symlink() or not stat.S_ISDIR(parent.lstat().st_mode):
+            raise ValueError("REPORT_PARENT_UNSAFE")
+    except (OSError, ValueError) as error:
+        code = str(error) if isinstance(error, ValueError) else "REPORT_PARENT_UNAVAILABLE"
+        print(json.dumps({"state": "error", "code": code}), file=sys.stderr)
+        return 2
+    checks, web = report_host_checks(info)
+    reader = report_app_reader(info, selector)
+    omissions = []
+    app_payload = None
+    if reader["state"] == "observed":
+        app_payload = reader["payload"]
+        if not app_payload.get("found"):
+            print(json.dumps({"state": "error", "code": "REPORT_SOURCE_NOT_FOUND"}), file=sys.stderr)
+            return 1
+        omissions.extend(str(item) for item in app_payload.get("omissions", []))
+    elif reader["state"] == "not_verified_requires_admin":
+        omissions.append("app_reader_requires_admin")
+    else:
+        omissions.append("app_reader_unavailable")
+    omissions.extend(["mcp_gate_capture_not_installed", "provider_capture_not_installed",
+                      "parent_host_not_verified", "running_process_release_not_attested"])
+    events = [dict((column, event.get(column)) for column in REPORT_EVENT_COLUMNS)
+              for event in (app_payload or {}).get("events", [])]
+    generated = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    files = {
+        "manifest.json": (json.dumps({
+            "schema_version": REPORT_SCHEMA, "collection_id": os.urandom(16).hex(),
+            "selector": selector, "generated_utc": generated,
+            "host": {"descriptor_version": info["version"],
+                     "application_user": info["application_user"],
+                     "app_prefix": info["app_prefix"]},
+            "app_reader": reader["state"],
+            "collection_status": "complete" if reader["state"] == "observed" else "partial",
+            "diagnostic_conclusion": "not_verified",
+            "scope": ["host_public", "app_user_sqlite"] if reader["state"] == "observed"
+                     else ["host_public"]},
+            sort_keys=True, indent=2) + "\n").encode(),
+        "timeline.jsonl": ("".join(json.dumps(event, sort_keys=True) + "\n" for event in events)).encode(),
+        "checks.json": (json.dumps({"checks": checks, "web": web}, sort_keys=True, indent=2) + "\n").encode(),
+        "operation.json": (json.dumps({"selector": selector,
+                                       "receipt": (app_payload or {}).get("receipt"),
+                                       "trace_id": (app_payload or {}).get("trace_id")},
+                                      sort_keys=True, indent=2) + "\n").encode(),
+        "layers.json": (json.dumps({
+            "app": {"identity_source": "locally_observed" if reader["state"] == "observed" else "not_verified",
+                    "descriptor_version": info["version"]},
+            "mcp_gate": {"identity_source": "not_verified"},
+            "provider": {"identity_source": "not_verified"},
+            "parent_host": {"identity_source": "not_verified"},
+            "rule": "edges require evidence; hostname, address or time proximity never infer a layer link"},
+            sort_keys=True, indent=2) + "\n").encode(),
+        "omissions.json": (json.dumps({"omissions": sorted(set(omissions)),
+                                       "rule": "absence of data is not negative proof"},
+                                      sort_keys=True, indent=2) + "\n").encode(),
+        "README.txt": REPORT_README,
+    }
+    try:
+        write_report_directory(parent, final_name, files)
+    except ValueError as error:
+        print(json.dumps({"state": "error", "code": str(error)}), file=sys.stderr)
+        return 1
+    except OSError:
+        print(json.dumps({"state": "error", "code": "REPORT_WRITE_FAILED"}), file=sys.stderr)
+        return 1
+    print(json.dumps({"state": "exported", "report": str(parent / final_name),
+                      "collection_status": "complete" if reader["state"] == "observed" else "partial",
+                      "events": len(events), "app_reader": reader["state"]}, sort_keys=True))
+    return 0 if reader["state"] == "observed" else 2
+
+
+def doctor(info, mcp):
+    """Explicit-scope readiness: every promised check must pass; gaps are never success."""
+    web = web_observation(info["web_port"])
+    uid = pwd.getpwnam(info["application_user"]).pw_uid
+    cred = service_observation("boxweave-credential-" + info["application_user"] + ".timer")
+    trust = service_observation("boxweave-trust.timer")
+    manager = service_observation("user@" + str(uid) + ".service")
+    checks = [check("public_descriptor", "passed", "PUBLIC_DESCRIPTOR_VALID", "host_public")]
+    checks.append(check("web_loopback", "passed" if web.get("reachable") else "failed",
+                        "HTTP_REACHABLE" if web.get("reachable") else "WEB_LOOPBACK_UNREACHABLE",
+                        "host_loopback"))
+    for cid, observed, expect_enabled in (("host_credential_timer", cred, True),
+                                          ("host_trust_timer", trust, True),
+                                          ("host_user_manager", manager, False)):
+        state, code = classify_unit(observed, expect_enabled)
+        checks.append(check(cid, state, code, "host_systemd"))
+    health = app_health(info, mcp)
+    verified = health.get("state") not in ("not_verified",) if isinstance(health, dict) else False
+    if not verified:
+        checks.append(check("app_release_health", "not_verified", health["code"], "app_user_systemd",
+                            detail=health.get("next")))
+        for cid in ("app_serve_unit", "app_worker_unit"):
+            checks.append(check(cid, "not_verified", "APP_UNIT_VISIBILITY_UNAVAILABLE", "app_user_systemd"))
+        mcp_field = {"state": "not_checked", "reason": "APP_USER_PROBE_REQUIRES_ADMIN",
+                     "next": "sudo boxweave doctor --mcp"} if not mcp else \
+                    {"state": "unavailable", "reason": "APP_USER_PROBE_FAILED"}
+    else:
+        units = health.get("unit_states", {})
+        if health.get("state") == "ready" and units:
+            checks.append(check("app_release_health", "passed", "APP_HEALTH_READY", "app_user_systemd"))
+        elif health.get("state") == "failed":
+            checks.append(check("app_release_health", "failed", "APP_HEALTH_FAILED", "app_user_systemd",
+                                detail=health.get("code")))
+        elif not units:
+            checks.append(check("app_release_health", "not_verified", "APP_UNIT_LIST_EMPTY", "app_user_systemd"))
+        else:
+            checks.append(check("app_release_health", "not_verified", "APP_HEALTH_" +
+                                str(health.get("state", "unexpected")).upper(), "app_user_systemd"))
+        unit_codes = {"ready": ("passed", "APP_UNIT_READY"), "inactive": ("failed", "APP_UNIT_INACTIVE"),
+                      "failed": ("failed", "APP_UNIT_FAILED"), "unavailable": ("not_verified", "APP_UNIT_STATE_UNAVAILABLE"),
+                      "unknown": ("not_verified", "APP_UNIT_UNRECOGNIZED")}
+        for cid, role in (("app_serve_unit", "serve"), ("app_worker_unit", "worker")):
+            unit_state = units.get(role, "absent")
+            state, code = unit_codes.get(unit_state, ("not_verified", "APP_UNIT_ABSENT"))
+            checks.append(check(cid, state, code, "app_user_systemd"))
+        observed_mcp = health.get("mcp")
+        if mcp:
+            mcp_field = {"state": "observed", "mcp": observed_mcp,
+                         "administrator_initialized": health.get("administrator_initialized")}
+            if isinstance(observed_mcp, dict) and observed_mcp.get("state") == "authenticated_read_passed":
+                checks.append(check("authenticated_mcp", "passed", "MCP_READ_PASSED", "app_user_mcp"))
+            elif health.get("code") == "MCP_READ_FAILED":
+                checks.append(check("authenticated_mcp", "failed", "MCP_READ_FAILED", "app_user_mcp"))
+            else:
+                checks.append(check("authenticated_mcp", "not_verified", "AUTHENTICATED_MCP_UNVERIFIED", "app_user_mcp"))
+            initialized = health.get("administrator_initialized")
+            if initialized is True:
+                checks.append(check("admin_initialized", "passed", "ADMIN_INITIALIZED", "app_user_mcp"))
+            elif initialized is False:
+                checks.append(check("admin_initialized", "failed", "ADMIN_SETUP_REQUIRED", "app_user_mcp"))
+            else:
+                checks.append(check("admin_initialized", "not_verified", "ADMIN_INITIALIZATION_UNVERIFIED", "app_user_mcp"))
+        else:
+            mcp_field = {"state": "not_checked", "reason": "NOT_REQUESTED"}
+            checks.append(check("authenticated_mcp", "not_checked", "NOT_REQUESTED", "app_user_mcp", required=False))
+    overall = overall_state(checks)
+    return {"state": "installed_public_descriptor", "version": info["version"],
+            "application_user": info["application_user"],
+            "web": web, "web_on_server": "http://127.0.0.1:" + str(info["web_port"]),
+            "external_web_access": "not_configured_by_boxweave",
+            "mcp": mcp_field,
+            "services": {"credential_timer": cred, "trust_timer": trust}, "user_manager": manager,
+            "diagnostic_schema": DIAGNOSTIC_SCHEMA, "checks": checks, "overall": overall,
+            "coverage": {"app_authenticated_health": "observed" if verified else
+                         ("not_verified_requires_admin" if health.get("code") == "APP_HEALTH_REQUIRES_ADMIN"
+                          else "unavailable"),
+                         "authenticated_mcp": "observed" if mcp and verified else
+                         ("not_requested" if not mcp else "unavailable"),
+                         "workload_execute": "not_verified", "effective_nesting": "not_verified",
+                         "agent_ui": "not_verified", "model_inference": "not_verified"}}
 
 
 def inspect(name, project, diagnose=False):
@@ -358,8 +728,15 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="action")
     sub.add_parser("version", help="Installed public release version")
     sub.add_parser("status", help="Public Web reachability and published installation metadata")
-    doctor = sub.add_parser("doctor", help="Host/systemd observations (no repair)")
-    doctor.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
+    doctor_parser = sub.add_parser("doctor", help="Host/systemd and app readiness checks (no repair)")
+    doctor_parser.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
+    report = sub.add_parser("report", help="Export a bounded read-only diagnostic report directory")
+    report.add_argument("--kind", choices=("hello", "environment", "access", "job", "selftest"))
+    report.add_argument("--operation", help="Exact operation receipt ID (with --kind)")
+    report.add_argument("--trace", help="Opaque 32-hex diagnostic trace ID")
+    report.add_argument("--since", help="UTC RFC3339 window start (with --until, max 24h)")
+    report.add_argument("--until", help="UTC RFC3339 window end (with --since, max 24h)")
+    report.add_argument("--output", required=True, help="New private directory to create (never overwritten)")
     sub.add_parser("provenance", help="Published installation provenance (no secrets)")
     box = sub.add_parser("box", help="Exact-name Incus read-only inspection (Incus permission required)")
     box_sub = box.add_subparsers(dest="box_action")
@@ -400,14 +777,11 @@ def main(argv=None):
         return 0
     if args.action == "box":
         result, code = inspect(args.name, args.project, diagnose=args.box_action == "diagnose")
+    elif args.action == "report":
+        return report_command(args, info)
     elif args.action == "doctor":
-        result = status(info)
-        result["services"] = {"credential_timer": service_observation("boxweave-credential-"+info["application_user"]+".timer"),
-                              "trust_timer": service_observation("boxweave-trust.timer")}
-        result["user_manager"] = service_observation("user@" + str(pwd.getpwnam(info["application_user"]).pw_uid) + ".service")
-        if args.mcp:
-            result["mcp"] = mcp_probe(info)
-        code = 0
+        result = doctor(info, mcp=args.mcp)
+        code = exit_code_for(result["overall"])
     else:
         result = status(info)
         code = 0

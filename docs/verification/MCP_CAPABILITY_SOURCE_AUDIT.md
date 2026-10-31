@@ -1,5 +1,8 @@
 # Current BoxWeave functionality vs upstream MCP — static gap audit
 
+**2026-10-31 main reconciliation:** This original inventory was compiled at BoxWeave v0.21.4; latest reviewed main is v0.22.0 (`aaa8362decd55110eadf8c5caa7ff1b3d1d80ac5`). D0–D2 diagnostics were implemented in main (SRC-108), with remaining live/coverage limits; optional D3 direct-gateway diagnostic lookup remains unimplemented. E0–E4 environment features remain unimplemented. All M0–M5 MCP capability reuse stages are proposal-only here (separately tracked implementation must cite exact source/CI evidence). Previously written statements that D0–D2 are unimplemented are superseded by this notice. Source inventory does not establish installed tool availability.
+
+
 **Status: RESEARCH / PROPOSAL ONLY — NOT APPROVED FOR IMPLEMENTATION; NOT DEPLOYED.**
 
 **Evidence:** static inspection (S) of BoxWeave `main@a55926fcea55fdd3e2219900c787b90e49cb5e19` (VERSION 0.21.4) and Containarium `main@f37358e631282ad90bd534796667af8d0a56b72c` on 2026-10-31. Prior runtime documents (D) are historical, not retested. No live MCP, Box, client, Provider or CI execution was performed for this research.
@@ -29,7 +32,7 @@ Observed source total at upstream pinned commit: **109 Platform tool definitions
 | Lifecycle | `lifecycle.py`, `store.py`: exact managed identity, plan/confirm, one pending action, unknown result reconciliation | Auto-sleep state, actual instance snapshot/clone/restore support | M2 auto-sleep study; E0–E4 separate |
 | Tenant/access | `access.py`, `access_provider.py`: native network capability/Guard/policy, scoped access and port route operations | General network policy admin surface or unrestricted `list_routes` | Keep typed app interface; no extra MCP for core access |
 | Web | `web.py`, `service.py`, graphs/models/client setup | Dynamic 109-tool Web editor, fine-grained team RBAC, Agent orchestration scheduler | Only useful domain-specific screens after service contract |
-| Diagnostics | `host_cli.py`, `deploy_check.py`, `selftest.py`, `jobs.py`: local doctor, read-only probe, fixed selftest, bounded job receipts | Full cross-component trace, truthful full health proof, durable crash-step timeline (see separate D0–D2 research) | `debug_container`, `tail_log` may improve evidence, not replace D0 |
+| Diagnostics | `host_cli.py`, `deploy_check.py`, `selftest.py`, `jobs.py`, `diagnostics.py`: D0–D2 source-implemented in 0.22.0 with bounded reports, typed events and journal; D3 existing-gateway diagnostic read remains deferred | Full live report/selftest evidence and direct-gateway diagnostic read not established by this source audit | `debug_container`, `tail_log` may add evidence after independent scope checks |
 | Nesting | `nesting.py`, `mcp_gate.py`, `NESTING.md` | Effective nesting without host/child verification; split helper reliability | Preserve current tested contract, do not clone/change hosts |
 | Secrets/security | Upstream forwarded tools exist, BoxWeave own SSH/credentials protected | Product secrets/KMS admin contract, permission UI or safe sensitive return policy | Deny/defer by default pending explicit scope |
 
@@ -42,7 +45,7 @@ Observed source total at upstream pinned commit: **109 Platform tool definitions
 | GAP-MCP-03 | No reviewed general agent-box adapter or per-Box target selector | Cannot promise file/log/process APIs over BoxWeave | P2 | M3/M4 |
 | GAP-MCP-04 | BoxWeave MCP client only implements tools discovery/call and text replies | agent-box Resources and future message forms require protocol verification | P0 before M3 | M0/M3 |
 | GAP-MCP-05 | No managed auto-sleep integration/state contract | Idle-stop semantics may conflict with lifecycle receipts/readiness | P1 candidate | M2 |
-| GAP-MCP-06 | SSH/health findings insufficiently classified | Real errors may be collapsed to generic Provider errors; sensitive output risk | P1 | M2 + D0–D2 |
+| GAP-MCP-06 | D0–D2 diagnostics now source-implemented; upstream `debug_container`/`tail_log` enrichment and direct Agent D3 lookup remain unverified | Avoid duplicate diagnostic engine; first reconcile running versions and safe disclosure | P1 candidate | M2, D0–D2 implementation |
 | GAP-MCP-07 | Existing selftest is not a general Agent-chosen testing/approval product | Cannot conflate `code_answer` with approval for arbitrary new workflow | P3 | M5 |
 | GAP-MCP-08 | Native snapshot/clone capabilities are unverified at the app MCP boundary | A database backup or an Incus CLI existence is not instance checkpoint | Separate E0–E4 | Existing environment design |
 | GAP-MCP-09 | Platform and agent-box Compose operations overlap under different scopes | Duplicated controls can race or act on different subjects | P3 | M5 |

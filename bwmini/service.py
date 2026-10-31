@@ -1,6 +1,7 @@
 """The same application operations serve HTTP and CLI adapters."""
 import base64
 import binascii
+from . import diagnostics
 import fcntl
 import json
 import math
@@ -107,6 +108,7 @@ class Service:
             if p["revision"] != row["revision"] or p["digest"] != row["digest"]:
                 raise Fault("REVISION_CONFLICT")
             op = ident()
+            diagnostics.link(db, actor, "hello", op)
             db.execute("UPDATE plans SET used=1 WHERE id=?", (plan,))
             db.execute("INSERT INTO operations VALUES(?,?,?,?,?,?,?,?,?,?)",
                        (op,p["id"],p["revision"],p["digest"],actor,"queued",now,now+self.budget,None,None))
@@ -193,7 +195,15 @@ class Service:
     def recover(self):
         # Caller holds the process-scoped worker lock. Another live worker cannot be recovered.
         with self.store.db() as db:
+            rows = [dict(r) for r in db.execute(
+                "SELECT id,actor FROM operations WHERE state='dispatching'")]
             db.execute("UPDATE operations SET state='unknown',code='WORKER_LOST',result=NULL WHERE state='dispatching'")
+        for op in rows:
+            trace = diagnostics.trace_for_operation(self.store, op["actor"], "hello", op["id"]) \
+                or diagnostics.new_trace_id()
+            diagnostics.emit(self.store, component="worker", phase="recovered", event_type="recovered",
+                             outcome="unknown", code="WORKER_LOST", trace_id=trace,
+                             actor_scope=op["actor"], operation_kind="hello", operation_id=op["id"])
 
     def work_one(self):
         if self.access.work_one():
@@ -211,9 +221,23 @@ class Service:
             now = self.clock()
             if now < op["created"] or now >= op["deadline"]:
                 db.execute("UPDATE operations SET state='failed',code='DEADLINE_EXCEEDED' WHERE id=?",(op["id"],))
-                return True
-            db.execute("UPDATE operations SET state='dispatching' WHERE id=?",(op["id"],))
+                expired = True
+            else:
+                db.execute("UPDATE operations SET state='dispatching' WHERE id=?",(op["id"],))
+                expired = False
+        trace = diagnostics.trace_for_operation(self.store, op["actor"], "hello", op["id"]) \
+            or diagnostics.new_trace_id()
+        if expired:
+            diagnostics.emit(self.store, component="worker", phase="deadline", event_type="observed",
+                             outcome="failed", code="DEADLINE_EXCEEDED", trace_id=trace,
+                             actor_scope=op["actor"], operation_kind="hello", operation_id=op["id"])
+            return True
+        started = time.monotonic()
+        diagnostics.emit(self.store, component="worker", phase="claimed", event_type="claimed",
+                         outcome="passed", code="CLAIMED", trace_id=trace,
+                         actor_scope=op["actor"], operation_kind="hello", operation_id=op["id"])
         state, code, result = "unknown", "OUTCOME_UNKNOWN", None
+        detail_code = "OUTCOME_UNKNOWN"
         try:
             p = self.store.project(op["project"])
             if p["revision"] != op["revision"] or p["digest"] != op["digest"]:
@@ -237,17 +261,25 @@ class Service:
                       "remote_cleanup":"not_applicable" if self.provider.mode=="fixture" else "not_verified"}
             state = "succeeded" if valid else "failed"
             code = "OK" if valid else ("COMMAND_FAILED" if candidate["exit_code"] != 0 else "COMMAND_RESULT_UNEXPECTED")
+            detail_code = code
         except Fault as error:
             code = error.code
+            detail_code = getattr(error, "error_class", None) or code
             # These fail before the hello side effect, not a claim all remote requests were cancelled.
             if code in {"TARGET_CHANGED","REVISION_CONFLICT","IDENTITY_MISMATCH","TARGET_NOT_ALLOWED","NOT_FOUND"}:
                 state = "failed"
         except Exception:
+            detail_code = "UNCLASSIFIED_EXCEPTION"
             pass  # Untrusted transport/OS details never enter the receipt.
         with self.store.db() as db:
             db.execute("UPDATE operations SET state=?,code=?,result=? WHERE id=?",
                        (state,code,json.dumps(result) if result is not None else None,op["id"]))
             db.execute("INSERT INTO audit VALUES(?,?,?,?)",(self.clock(),"hello",op["project"],code))
+        diagnostics.emit(self.store, component="worker", phase="observed", event_type="observed",
+                         outcome={"succeeded":"passed","failed":"failed"}.get(state,"unknown"),
+                         code=detail_code, trace_id=trace, actor_scope=op["actor"],
+                         operation_kind="hello", operation_id=op["id"],
+                         elapsed_ms=int((time.monotonic()-started)*1000))
         return True
 
     def worker(self, once=False):

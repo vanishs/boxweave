@@ -5,6 +5,7 @@ import selectors
 import signal
 import subprocess
 import time
+from . import diagnostics
 from .domain import Fault
 
 class MCP:
@@ -21,11 +22,11 @@ class MCP:
     def wait(self, stream, event):
         left = self.deadline - time.monotonic()
         if left <= 0:
-            raise Fault("DEADLINE_EXCEEDED")
+            raise diagnostics.attach(Fault("DEADLINE_EXCEEDED"), "TIMEOUT")
         with selectors.DefaultSelector() as s:
             s.register(stream, event)
             if not s.select(left):
-                raise Fault("DEADLINE_EXCEEDED")
+                raise diagnostics.attach(Fault("DEADLINE_EXCEEDED"), "TIMEOUT")
 
     def send(self, obj):
         data = (json.dumps(obj) + "\n").encode()
@@ -48,31 +49,31 @@ class MCP:
                 except BlockingIOError:
                     continue
                 if not chunk:
-                    raise Fault("MCP_STREAM_CLOSED")
+                    raise diagnostics.attach(Fault("MCP_STREAM_CLOSED"), "TRANSPORT_EOF")
                 self.total += len(chunk)
                 self.buffer += chunk
                 if self.total > 8388608 or len(self.buffer) > 2097152:
-                    raise Fault("OUTPUT_LIMIT")
+                    raise diagnostics.attach(Fault("OUTPUT_LIMIT"), "OUTPUT_LIMIT")
             line, self.buffer = self.buffer.split(b"\n", 1)
             try:
                 msg = json.loads(line)
             except (ValueError, UnicodeError):
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             if "method" in msg:
                 if "id" in msg:
                     self.send({"jsonrpc":"2.0", "id":msg["id"],
                                "error":{"code":-32601, "message":"Unsupported request"}})
                 continue
             if type(msg.get("id")) is not int or msg["id"] != self.ident:
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             if ("result" in msg) == ("error" in msg):
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             if "error" in msg:
                 message = str(msg["error"].get("message", "")).lower() if isinstance(msg["error"], dict) else ""
                 if any(marker in message for marker in ("knownhosts: key mismatch", "host key verification failed", "remote host identification has changed")):
-                    raise Fault("TRUST_FAILED")
+                    raise diagnostics.attach(Fault("TRUST_FAILED"), "UPSTREAM_JSONRPC_REJECTION")
                 if method=="tools/call" and params.get("name")=="get_network_policy":
                     prefix="Tool execution failed: API error (status 404): "
                     original=msg["error"].get("message","") if isinstance(msg["error"],dict) else ""
@@ -80,51 +81,51 @@ class MCP:
                         try:
                             detail=json.loads(original[len(prefix):])
                             expected='rpc error: code = NotFound desc = no network policy for tenant "'+params["arguments"]["tenant"]+'"'
-                            if detail=={"code":404,"error":expected}:raise Fault("POLICY_ABSENT",404)
+                            if detail=={"code":404,"error":expected}:raise diagnostics.attach(Fault("POLICY_ABSENT",404), "UPSTREAM_JSONRPC_REJECTION")
                         except (ValueError,KeyError,TypeError):pass
-                raise Fault("PROVIDER_REJECTED")
+                raise diagnostics.attach(Fault("PROVIDER_REJECTED"), "UPSTREAM_JSONRPC_REJECTION")
             if not isinstance(msg["result"], dict):
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             return msg["result"]
-        raise Fault("OUTPUT_LIMIT")
+        raise diagnostics.attach(Fault("OUTPUT_LIMIT"), "OUTPUT_LIMIT")
 
     def discover(self):
         r = self.call("initialize", {"protocolVersion":"2024-11-05", "capabilities":{},
                       "clientInfo":{"name":"boxweave-mini", "version":"0.2.1"}})
         if r.get("protocolVersion") != "2024-11-05":
-            raise Fault("PROTOCOL_UNSUPPORTED")
+            raise diagnostics.attach(Fault("PROTOCOL_UNSUPPORTED"), "MALFORMED_PROTOCOL")
         if not isinstance(r.get("capabilities", {}).get("tools"), dict):
-            raise Fault("MCP_INVALID")
+            raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
         self.send({"jsonrpc":"2.0", "method":"notifications/initialized"})
         tools, seen, params = {}, set(), {}
         for _ in range(16):
             r = self.call("tools/list", params)
             if not isinstance(r.get("tools"), list):
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             for t in r["tools"]:
                 if not isinstance(t, dict) or not isinstance(t.get("name"), str):
-                    raise Fault("MCP_INVALID")
+                    raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
                 tools[t["name"]] = t
             cursor = r.get("nextCursor")
             if cursor is None:
                 return tools
             if not isinstance(cursor, str) or not cursor or cursor in seen:
-                raise Fault("MCP_INVALID")
+                raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
             seen.add(cursor)
             params = {"cursor":cursor}
-        raise Fault("OUTPUT_LIMIT")
+        raise diagnostics.attach(Fault("OUTPUT_LIMIT"), "OUTPUT_LIMIT")
 
     def tool(self, tool, args):
         r = self.call("tools/call", {"name":tool, "arguments":args})
         if "isError" in r and type(r["isError"]) is not bool:
-            raise Fault("MCP_INVALID")
+            raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
         if r.get("isError"):
-            raise Fault("PROVIDER_REJECTED")
+            raise diagnostics.attach(Fault("PROVIDER_REJECTED"), "TOOL_IS_ERROR")
         if not isinstance(r.get("content"), list):
-            raise Fault("MCP_INVALID")
+            raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
         if any(not isinstance(b, dict) or b.get("type") != "text" or not isinstance(b.get("text"), str)
                for b in r["content"]):
-            raise Fault("MCP_INVALID")
+            raise diagnostics.attach(Fault("MCP_INVALID"), "MALFORMED_PROTOCOL")
         return r
 
     def close(self):

@@ -1,7 +1,6 @@
 # Proposal: evidence-first diagnostics for the existing BoxWeave MCP and CLI
 
-**Proposal, not accepted ADR or implementation authorization.** SRC-104;
-reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4.
+**Implemented** in BoxWeave 0.22.0 (D0-D2; see [SOURCE_REGISTER](../knowledge/SOURCE_REGISTER.md) SRC-108 and the D0/D1/D2 implementation documents). Original status: proposal under SRC-104; reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4. The conditional D3 existing-MCP read remains unapproved and unimplemented; D4 user-project debugging remains out of scope.
 Source findings: [diagnostics source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md).
 Related accepted requirements (do not silently extend): REQ-002/003/004/005/006/007/
 008/009/016/017/018/019/020 and their corresponding AC. Existing
@@ -386,6 +385,7 @@ Questions for the owner (tracked in
 No decisions are implied by publishing this proposal. The authoritative
 scope/REQ/AC, ADR index and release version remain unchanged.
 
-## Related capability-led MCP reuse audit — research only (2026-10-31)
 
-The independently proposed [BoxWeave MCP capability integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [source gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare **current BoxWeave functions** with Containarium Platform and agent-box MCP tools, including proposed security boundaries and M0–M5 handoffs. This is **S/D RESEARCH ONLY; NOT IMPLEMENTED**, does not change or approve D0–D2 diagnostics or E0–E4 Box environment plans, and does not establish authenticated runtime MCP capabilities. Current existing diagnostic/environment specifications retain their independent implementation gates.
+## Related MCP capability reuse (SRC-109, research baseline)
+
+[Capability-led integration master](MCP_CAPABILITY_INTEGRATION_MASTER.md) and [gap audit](../verification/MCP_CAPABILITY_SOURCE_AUDIT.md) compare existing BoxWeave features with the Platform/agent-box MCP source catalogs. This is separate from the v0.22.0 **implemented D0–D2** diagnostic work (SRC-108) and the **unimplemented** Box Environment E0–E4 proposal. The optional direct-gateway diagnostic D3 remains deferred. Tool inventories are static and do not establish installed Provider permissions or production readiness.

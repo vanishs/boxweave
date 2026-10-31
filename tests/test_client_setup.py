@@ -364,18 +364,30 @@ class ClientGeneratorTests(unittest.TestCase):
             self.assertIn("3.11",refused)
             self.assertEqual(leftovers,[])
             return
-        self.assertEqual(raised,0 if py_ok else 2)
+        self.assertEqual(raised,1)  # registration absent is a definite negative
         summary=json.loads(out.getvalue())
-        self.assertEqual(summary["state"],"pass" if py_ok else "fail")
-        states={c["check"]:c["state"] for c in summary["checks"]}
-        self.assertEqual(states["python"],"ok" if py_ok else "failed")
-        self.assertEqual(states["identity"],"missing")
-        self.assertEqual(states["registration"],"absent")
+        self.assertEqual(summary["diagnostic_schema"],1)
+        self.assertEqual(summary["overall"],"failed")
+        self.assertEqual(summary["state"],"failed")
+        self.assertEqual(summary["connection_overall"],"incomplete")
+        by_id={c["id"]:c for c in summary["checks"]}
+        self.assertEqual(by_id["python"]["state"],"passed" if py_ok else "failed")
+        self.assertEqual(by_id["identity"]["state"],"not_verified")
+        self.assertEqual(by_id["identity"]["code"],"IDENTITY_MISSING")
+        self.assertEqual(by_id["ssh_transport"]["state"],"not_verified")
+        self.assertEqual(by_id["ssh_transport"]["detail"],"blocked_by=identity")
+        self.assertEqual(by_id["mcp_read"]["state"],"not_verified")
+        self.assertEqual(by_id["registration"]["state"],"failed")
+        self.assertEqual(by_id["registration"]["code"],"REGISTRATION_ABSENT")
+        self.assertEqual(by_id["agent_ui"]["state"],"not_verified")
+        self.assertFalse(by_id["agent_ui"]["required"])
+        self.assertEqual(summary["coverage"]["model_inference"],"not_verified")
         self.assertNotIn("ssh-ed25519 ",out.getvalue())
-        self.assertIn("# identity: missing",err.getvalue())
+        self.assertIn("# identity: not_verified IDENTITY_MISSING",err.getvalue())
+        self.assertIn("# Diagnosis: failed (connection: incomplete)",err.getvalue())
         self.assertEqual(leftovers,[])
 
-    def test_diagnose_live_stages_and_pin_mismatch(self):
+    def test_diagnose_live_stages_registration_and_pin_mismatch(self):
         import subprocess as real_subprocess
         import sys
         ns=self.zcode_script()
@@ -384,29 +396,97 @@ class ClientGeneratorTests(unittest.TestCase):
             {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}}}},
             {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"list_containers"}]}},
             {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Found 0 container(s):"}]}}))
-        completed=real_subprocess.CompletedProcess([],0,stdout=responses,stderr="")
+        ok=real_subprocess.CompletedProcess([],0,stdout=responses,stderr="")
+        leaked=real_subprocess.CompletedProcess([],255,stdout="",
+                                                stderr="Warning: identity file SECRET-TOKEN not accessible")
         with tempfile.TemporaryDirectory() as tmp:
             home=Path(tmp)
             root=home/".config"/"boxweave"
             root.mkdir(parents=True,mode=0o700)
             (root/"id_ed25519").write_text("PRIVATE")
             (root/"known_hosts").write_text("192.168.2.233 "+host_key()+"\n")
+            identity={"key":str(root/"id_ed25519"),"known_hosts":str(root/"known_hosts")}
+            command,args=ns["transport_command"](identity,"")
+            config=home/".zcode"/"cli"
+            config.mkdir(parents=True)
+            entry=ns["app_entry"](command,args)
+            (config/"config.json").write_text(json.dumps({"mcp":{"servers":{"boxweave":entry}}}))
             with patch.object(Path,"home",return_value=home), \
-                 patch("subprocess.run",return_value=completed):
-                code,checks=ns["run_diagnose"]("")
+                 patch("subprocess.run",return_value=ok):
+                code,summary=ns["run_diagnose"]("")
             self.assertEqual(code,0 if py_ok else 2)
-            states={c["check"]:c["state"] for c in checks}
-            self.assertEqual(states["identity"],"ok")
-            self.assertEqual(states["ssh_transport"],"ok")
-            self.assertEqual(states["mcp_initialize"],"ok")
-            self.assertEqual(states["mcp_tools"],"ok")
-            self.assertEqual(states["mcp_read"],"ok")
-            self.assertEqual(states["registration"],"absent")
+            by_id={c["id"]:c for c in summary["checks"]}
+            self.assertEqual(by_id["identity"]["state"],"passed")
+            self.assertEqual(by_id["ssh_transport"]["state"],"passed")
+            self.assertEqual(by_id["mcp_initialize"]["state"],"passed")
+            self.assertEqual(by_id["mcp_tools"]["state"],"passed")
+            self.assertEqual(by_id["mcp_read"]["state"],"passed")
+            self.assertEqual(by_id["registration"]["state"],"passed")
+            self.assertEqual(summary["overall"],"passed")
+            self.assertEqual(summary["connection_overall"],"passed")
+            (config/"config.json").write_text(json.dumps({"mcp":{"servers":{"boxweave":"stale"}}}))
+            with patch.object(Path,"home",return_value=home), \
+                 patch("subprocess.run",return_value=ok):
+                code,summary=ns["run_diagnose"]("")
+            by_id={c["id"]:c for c in summary["checks"]}
+            self.assertEqual(by_id["registration"]["state"],"failed")
+            self.assertEqual(by_id["registration"]["code"],"REGISTRATION_DIFFERS")
+            self.assertEqual(summary["overall"],"failed")
+            with patch.object(Path,"home",return_value=home), \
+                 patch("subprocess.run",return_value=leaked), \
+                 patch("sys.stderr",new_callable=io.StringIO) as err:
+                code,summary=ns["run_diagnose"]("")
+            by_id={c["id"]:c for c in summary["checks"]}
+            self.assertEqual(summary["overall"],"failed")
+            self.assertEqual(by_id["ssh_transport"]["code"],"SSH_TRANSPORT_FAILED")
+            self.assertEqual(by_id["ssh_transport"]["detail"],"ssh exit class 255")
+            self.assertEqual(by_id["mcp_initialize"]["state"],"not_verified")
+            self.assertEqual(by_id["mcp_initialize"]["detail"],"blocked_by=ssh_transport")
+            rendered=json.dumps(summary)+err.getvalue()
+            self.assertNotIn("SECRET-TOKEN",rendered)
             (root/"known_hosts").write_text("192.168.2.233 WRONG\n")
             with patch.object(Path,"home",return_value=home):
-                code,checks=ns["run_diagnose"]("")
-            self.assertEqual(code,2)
-            self.assertEqual({c["check"]:c["state"] for c in checks}["identity"],"mismatch")
+                code,summary=ns["run_diagnose"]("")
+            by_id={c["id"]:c for c in summary["checks"]}
+            self.assertEqual(code,1)
+            self.assertEqual(by_id["identity"],{"id":"identity","state":"failed","code":"PIN_MISMATCH",
+                                                "scope":"client_identity","required":True,
+                                                "detail":"pinned host key differs; review out of band"})
+            self.assertEqual(by_id["ssh_transport"]["state"],"not_verified")
+
+    def test_diagnose_malformed_stream_fails_handshake_never_leaks(self):
+        import subprocess as real_subprocess
+        ns=self.zcode_script()
+        valid_init=json.dumps({"jsonrpc":"2.0","id":1,
+                               "result":{"protocolVersion":"2024-11-05","capabilities":{}}})+"\n"
+        cases=(("garbage","not json at all\n","failed","not_verified","not_verified"),
+               ("init_only",valid_init,"passed","failed","not_verified"),
+               ("secret_noise","SECRET-STREAM-DATA\n"*10,"failed","not_verified","not_verified"),
+               ("empty","","failed","not_verified","not_verified"))
+        for name,broken,init_state,tools_state,read_state in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
+                home=Path(tmp)
+                root=home/".config"/"boxweave"
+                root.mkdir(parents=True,mode=0o700)
+                (root/"id_ed25519").write_text("PRIVATE")
+                (root/"known_hosts").write_text("192.168.2.233 "+host_key()+"\n")
+                completed=real_subprocess.CompletedProcess([],0,stdout=broken,stderr="SECRET-ERR")
+                with patch.object(Path,"home",return_value=home), \
+                     patch("subprocess.run",return_value=completed):
+                    code,summary=ns["run_diagnose"]("")
+                by_id={c["id"]:c for c in summary["checks"]}
+                self.assertEqual(by_id["ssh_transport"]["state"],"passed")
+                self.assertEqual(by_id["mcp_initialize"]["state"],init_state)
+                self.assertEqual(by_id["mcp_tools"]["state"],tools_state)
+                self.assertEqual(by_id["mcp_read"]["state"],read_state)
+                if init_state=="failed":
+                    self.assertEqual(by_id["mcp_initialize"]["code"],"MCP_HANDSHAKE_INVALID")
+                    self.assertEqual(by_id["mcp_read"]["detail"],"blocked_by=mcp_initialize")
+                else:
+                    self.assertEqual(by_id["mcp_tools"]["code"],"MCP_READ_TOOL_MISSING")
+                    self.assertEqual(by_id["mcp_read"]["detail"],"blocked_by=mcp_tools")
+                self.assertEqual(summary["connection_overall"],"failed")
+                self.assertNotIn("SECRET",json.dumps(summary))
 
 
 if __name__ == "__main__":
