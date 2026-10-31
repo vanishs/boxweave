@@ -188,6 +188,13 @@ class SelftestTests(unittest.TestCase):
                  patch("sys.argv", ["__main__.py", "job-run", "--config", str(config), "--confirmation", "x"]):
                 with self.assertRaises(SystemExit):
                     main()
+            with patch("sys.stdout", out), patch("sys.stderr", err), \
+                 patch("sys.argv", ["__main__.py", "environment-plan", "--config", str(config),
+                                    "--logical", "demo-1", "--environment-action", "resize",
+                                    "--memory", "2GB"]):
+                code = main()
+            self.assertEqual(code, 2)  # argparse accepted resize; the fixture lifecycle refused the name
+            self.assertEqual(json_module.loads(out.getvalue())["code"], "TARGET_NOT_ALLOWED")
 
 
 if __name__ == "__main__":

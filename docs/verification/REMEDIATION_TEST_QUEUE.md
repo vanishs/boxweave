@@ -316,11 +316,15 @@ user_version 8). `boxweave provenance` reads the installer-published
 root-owned provenance.json (version, source, provider mode, endpoint,
 phase history, managed-file count).
 
-**U follow-up (found in real-host acceptance):** the host wrappers for
+**U follow-ups (found in real-host acceptance):** the host wrappers for
 `job` and `selftest` invoked `python -m bwmini` without the application
 directory as the working directory, so the installed venv could not
-import bwmini; both now pass cwd=app_prefix/current like the doctor MCP
-probe, released as 0.21.1.
+import bwmini (0.21.1); the shared argparse guards rejected
+selftest-run's --plan/--confirmation pair (0.21.2); and the CLI
+--environment-action choices omitted resize (0.21.3). The long-running
+user worker freezes lifecycle config at startup, so adding the
+lifecycle block requires restarting the worker service before plans
+dispatch.
 
 **S:** source review of selftest.py, jobs.py, client_profiles.py,
 lifecycle.py/provider.py, online.py/host_cli.py and Environments.tsx.

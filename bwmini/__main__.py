@@ -38,7 +38,7 @@ def main():
     p.add_argument("--cursor")
     p.add_argument("--operation")
     p.add_argument("--logical")
-    p.add_argument("--environment-action",choices=["create","start","stop","delete"])
+    p.add_argument("--environment-action",choices=["create","start","stop","delete","resize"])
     p.add_argument("--plan")
     p.add_argument("--model-provider")
     p.add_argument("--model-id")
