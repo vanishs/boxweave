@@ -22,13 +22,9 @@ class GatePolicyTests(unittest.TestCase):
             policy={"version":1,"allowed_tools":["get_container"]}
             path.write_text(json.dumps(policy))
             path.chmod(0o600)
-            # Tests don't run as root; patch the policy's owner's UID.
-            from bwmini import mcp_gate
-            with patch.object(mcp_gate.os,"geteuid",return_value=0):
-                # Parent/fixed owner remains authoritative; test metadata with
-                # the root test fixture only if running as root.
-                if os.geteuid()==0:
-                    self.assertEqual(tool_policy(path),frozenset({"get_container"}))
+            # A temporary user-owned directory is deliberately not accepted
+            # as an operator-owned system policy directory.
+            with self.assertRaises(ValueError):tool_policy(path)
             path.write_text(json.dumps({"version":1,"allowed_tools":["x","x"]}))
             with self.assertRaises(ValueError):tool_policy(path)
 
