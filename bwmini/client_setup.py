@@ -107,10 +107,18 @@ def select(name, available, prompt, interactive):
     return choose(prompt, [(item, item) for item in available])
 
 
+def interactive_terminal():
+    """A wizard needs a full terminal; captured-output exec channels wait forever."""
+    return (sys.stdin.isatty() and sys.stdout.isatty()
+            and not os.environ.get("BOXWEAVE_BATCH", ""))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="BoxWeave reviewed cross-platform MCP client setup generator",
-        epilog="Apps are listed alphabetically; generated scripts require review and client-side execution.")
+        epilog="Apps are listed alphabetically; generated scripts require review and client-side execution. "
+               "Interactive prompts require a full terminal; automation must pass every selection explicitly, "
+               "including --replace or --no-replace (or set BOXWEAVE_BATCH).")
     parser.add_argument("--agent", "--app", dest="app", choices=client_profiles.APPS,
                         help="Target MCP application (alphabetical)")
     parser.add_argument("--os", dest="system", choices=client_profiles.SYSTEMS,
@@ -134,7 +142,7 @@ def main(argv=None):
         state = load_public_state()
         if state.get("phase") != "ready":
             raise ValueError("READY_INSTALL_REQUIRED")
-        interactive = sys.stdin.isatty()
+        interactive = interactive_terminal()
         app = select(args.app, client_profiles.APPS, "Choose MCP application (alphabetical)",
                      interactive)
         # A noninteractive old --transport wsl invocation remains Windows by default.

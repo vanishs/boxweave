@@ -102,6 +102,7 @@ class ClientGeneratorTests(unittest.TestCase):
                   patch("sys.stdin.isatty",return_value=True),
                   patch("builtins.input",side_effect=["3","3","2","1"]),
                   patch("sys.stdout",new_callable=io.StringIO),
+                  patch("sys.stdout.isatty",return_value=True),
                   patch("sys.stderr",new_callable=io.StringIO) as err):
                 rc=manage.main(["client","--admin-user","example-admin",
                                 "--output",str(output)])
@@ -125,6 +126,7 @@ class ClientGeneratorTests(unittest.TestCase):
                       patch("sys.stdin.isatty",return_value=True),
                       patch("builtins.input",side_effect=["3","3","2","2"]),
                       patch("sys.stdout",new_callable=io.StringIO) as out,
+                      patch("sys.stdout.isatty",return_value=True),
                       patch("sys.stderr",new_callable=io.StringIO) as err):
                     rc=client_setup.main(["--admin-user","example-admin"])
             finally:
@@ -164,6 +166,7 @@ class ClientGeneratorTests(unittest.TestCase):
               patch("sys.stdin.isatty",return_value=True),
               patch("builtins.input",side_effect=["3","3","2","1"]),
               patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stdout.isatty",return_value=True),
               patch("sys.stderr",new_callable=io.StringIO) as err):
             rc=client_setup.main(["--admin-user","example-admin"])
         self.assertEqual(rc,0)
@@ -173,11 +176,39 @@ class ClientGeneratorTests(unittest.TestCase):
               patch("sys.stdin.isatty",return_value=True),
               patch("builtins.input",side_effect=["3","3","2",EOFError]),
               patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stdout.isatty",return_value=True),
               patch("sys.stderr",new_callable=io.StringIO) as err):
             rc=client_setup.main(["--admin-user","example-admin"])
         self.assertEqual(rc,130)
         self.assertEqual(out.getvalue(),"")
         self.assertIn('"state": "cancelled"',err.getvalue())
+
+    def test_captured_output_exec_channel_never_prompts(self):
+        # Agent/exec channels expose a TTY stdin but capture stdout; the
+        # wizard must treat them as noninteractive instead of waiting forever.
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch("sys.stdin.isatty",return_value=True),
+              patch("builtins.input",side_effect=AssertionError("prompted")),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stderr",new_callable=io.StringIO)):
+            rc=client_setup.main(["--agent","codex","--transport","wsl",
+                                  "--admin-user","example-admin"])
+        self.assertEqual(rc,0)
+        self.assertTrue(out.getvalue().startswith("#!/usr/bin/env python3\n"))
+        self.assertIn("'replace': False",out.getvalue())
+
+    def test_boxweave_batch_forces_noninteractive_despite_full_terminal(self):
+        with (patch.object(client_setup,"load_public_state",return_value=ready_state()),
+              patch.dict(os.environ,{"BOXWEAVE_BATCH":"1"}),
+              patch("sys.stdin.isatty",return_value=True),
+              patch("builtins.input",side_effect=AssertionError("prompted")),
+              patch("sys.stdout",new_callable=io.StringIO) as out,
+              patch("sys.stdout.isatty",return_value=True),
+              patch("sys.stderr",new_callable=io.StringIO)):
+            rc=client_setup.main(["--agent","codex","--transport","wsl",
+                                  "--admin-user","example-admin"])
+        self.assertEqual(rc,0)
+        self.assertIn("'replace': False",out.getvalue())
 
     def test_explicit_replace_backups_only_client_mcp_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
