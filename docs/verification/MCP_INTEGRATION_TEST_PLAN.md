@@ -1,5 +1,8 @@
 # MCP reuse — acceptance and evidence matrix
 
+**Update 2026-10-31 — source integrated (PR #9 merged):** M0–M5 selected source code is in `main` (merge `8038afc`), with fixture CI [41191096024](https://github.com/vanishs/boxweave/actions/runs/41191096024) passing. **Real Box/Provider/SSH/agent-box tests were explicitly deferred**; no full per-client RBAC, production authorization/deployment or release publication is claimed. For exact implemented scope, remaining decisions and release boundaries, see [M0–M5 merged-source handoff](../process/MCP_M0_M5_SOURCE_PROGRESS.md). Earlier “proposal-only/not implemented” status statements below refer to the original research baseline, not this merged source status.
+
+
 **2026-10-31 main reconciliation:** This original inventory was compiled at BoxWeave v0.21.4; latest reviewed main is v0.22.0 (`aaa8362decd55110eadf8c5caa7ff1b3d1d80ac5`). D0–D2 diagnostics were implemented in main (SRC-108), with remaining live/coverage limits; optional D3 direct-gateway diagnostic lookup remains unimplemented. E0–E4 environment features remain unimplemented. All M0–M5 MCP capability reuse stages are proposal-only here (separately tracked implementation must cite exact source/CI evidence). Previously written statements that D0–D2 are unimplemented are superseded by this notice. Source inventory does not establish installed tool availability.
 
 
