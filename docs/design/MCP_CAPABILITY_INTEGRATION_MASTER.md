@@ -1,5 +1,8 @@
 # BoxWeave capability-led MCP reuse — master plan
 
+**Update 2026-10-31 — source integrated (PR #9 merged):** M0–M5 selected source code is in `main` (merge `8038afc`), with fixture CI [41191096024](https://github.com/vanishs/boxweave/actions/runs/41191096024) passing. **Real Box/Provider/SSH/agent-box tests were explicitly deferred**; no full per-client RBAC, production authorization/deployment or release publication is claimed. For exact implemented scope, remaining decisions and release boundaries, see [M0–M5 merged-source handoff](../process/MCP_M0_M5_SOURCE_PROGRESS.md). Earlier “proposal-only/not implemented” status statements below refer to the original research baseline, not this merged source status.
+
+
 **M0–M5 source candidate update (2026-10-31):** [current implementation and deferred live acceptance](../process/MCP_M0_M5_SOURCE_PROGRESS.md). The current branch adds the MCP Resources protocol, host-wide opt-in gate allowlist, typed auto-sleep action, exact-Box agent-box adapter, durable v11 action plans/Worker and a selected Web panel. This does **not** provide full per-enrolled-actor RBAC or prove real host/SSH/Box interoperability. Earlier proposal-only and partial-stage status references below are historical.
 
 **Implementation checkpoint 2026-10-31:** partial M0 app-side tool discovery and M2 bounded debug summary added in implementation PR #7 with fixture CI evidence; **M1/M3/M4 and most M5 NOT IMPLEMENTED**. See [implementation handoff](../process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md) for actual status, tests, release limitations and remaining decisions.
