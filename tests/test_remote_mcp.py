@@ -81,6 +81,7 @@ class RemoteTests(unittest.TestCase):
     def test_bad_headers_origin_and_version_fail_before_dispatch(self):
         token = self.auth.issue("api", "fixture")
         self.assertEqual(self.call(token, headers={"Origin": "https://evil.test"}).status_code, 403)
+        self.assertEqual(self.call(token, headers={"Host": "evil.example.test"}).status_code, 403)
         self.assertEqual(self.call(token, headers={"Accept": "application/json"}).status_code, 406)
         self.assertEqual(self.call(token, headers={"MCP-Protocol-Version": "1900"}).status_code, 400)
         self.assertEqual(self.client.get("/mcp", headers={"Authorization": "Bearer " + token}).status_code, 405)
