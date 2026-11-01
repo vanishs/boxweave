@@ -264,7 +264,7 @@ def managed_create_arguments(args):
 def trusted_registry():
     """Fail closed with bounded deployment-readiness codes, never raw key data."""
     try:
-        value = json.loads(REGISTRY.read_text(encoding="utf-8"))
+        value = json.loads(REGISTRY.read_text())
         if not isinstance(value, dict):
             raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
         return value
