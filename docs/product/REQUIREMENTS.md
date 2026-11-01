@@ -37,3 +37,16 @@ Developer confirmation is recorded in SRC-026; all rows remain first-release obl
 Normative outcomes remain unchanged in phase7. [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) owns implementation/test/evidence links; [MAINTENANCE](../process/MAINTENANCE.md) defines how a newly authorized outcome changes these IDs. Historical reports do not redefine acceptance.
 
 REQ-003/008/009/011/018/019 elaboration (SRC-103): independently select nesting without enabling Podman; preserve omitted legacy behavior, reject unsupported explicit selection. Inspect/plan/confirm exact owned instances with stale identity/config rejection. Installer/doctor distinguish unknown parent policy, configured value and verified execution; no silent parent escalation or restart.
+
+## Approved remote MCP transport requirements (2026-10-31; implementation pending)
+
+These requirements add behavior **without changing** current REQ-001–020 completion evidence. Source is the owner Q1–Q8 remote-MCP planning decisions, [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md); do not mark a new requirement implemented from documentation alone.
+
+| ID | Selected requirement | Priority / status | Dependencies | Acceptance |
+| --- | --- | --- | --- | --- |
+| REQ-021 | Preserve working SSH/stdio MCP client transports and add interoperable, independently managed Streamable HTTP MCP with a shared safe gateway dispatch, truthful capability discovery, protocol negotiation, Origin validation and no implicit public listener | P1 / approved design, not implemented | REQ-001/002/003/018, REMOTE-R0/R1 | AC-021 |
+| REQ-022 | Allow HTTP MCP access with local-admin-consented OAuth Authorization Code + PKCE and separately minted API Bearer credentials, without accepting Web sessions or upstream credentials as cross-boundary authority, with minimum validation and revocation | P1 / approved design, not implemented | REQ-011/016/018, REMOTE-R2 | AC-022 |
+| REQ-023 | Offer an optional one-field credential-bearing URL as a distinct revocable opaque **path** capability, not an OAuth access token in a query parameter; verify each request and actual client compatibility, disclose operator-wide authority, no new special lifetime/RBAC tiers | P1 / approved design, not implemented | REQ-016/018/022, REMOTE-R2 | AC-023 |
+| REQ-024 | Support opt-in automatically managed HTTPS and an existing operator-managed HTTPS reverse proxy/external tunnel through one configured public origin; preserve existing services on failure and provide safe Web connection/diagnostic instructions | P1 / approved design, not implemented | REQ-008/009/011/018/021–023, REMOTE-R3/R4 | AC-024 |
+
+Future unified **SSH+HTTP** Agent identity, fine-grained tool/Box policy and shared authorization is explicitly deferred; the above must **not** be described as individual-agent least privilege. No team cloud/multiuser SaaS is selected. No provider-specific Tunnel integration is included. [Implementation phases](../design/REMOTE_MCP_MASTER.md), [verification plan](../verification/REMOTE_MCP_TEST_PLAN.md).
