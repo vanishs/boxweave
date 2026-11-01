@@ -158,3 +158,8 @@ The owner's 2026-10-31 eight decisions select **REMOTE-R0–R4**, independently 
 | REMOTE-R4 | R2–R3 | Web connection UI, diagnostics and SSH compatibility preservation | AC-024 / actual client use and revocation |
 
 Master [REMOTE_MCP_MASTER](../design/REMOTE_MCP_MASTER.md), [test plan](../verification/REMOTE_MCP_TEST_PLAN.md), [Agent handoff](REMOTE_MCP_HANDOFF.md). None are currently passed from this document-only work.
+
+
+## TASK-DIAG-D3/D4 — owner-selected agent diagnostic extension (2026-11-01)
+
+[Master](../design/DIAGNOSTICS_D3_D4_MASTER.md), [staged implementation plan](../design/DIAGNOSTICS_D3_D4_IMPLEMENTATION.md), REQ-025/026 and AC-025/026. Work packages: (0) freeze D0–D2 and gateway baseline, (1) private 7-day bounded classified gateway journal/tool, (2) fixed app-user D2 reader, (3) default-deny exact-Box guest project summary, (4) Agent privacy/issue guidance and SSH/HTTP compatibility, (5) source CI, published source-bound release, and separately authorized installed-host checkpoint. App/project/Provider tests remain distinct; no source-only CI report certifies real Box acceptance.
