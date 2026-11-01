@@ -92,11 +92,13 @@ class AgentSourceBundleTests(unittest.TestCase):
         self.assertEqual(self.pack().returncode, 2)
         self.assertEqual(self.helper("verify", "--archive", str(self.output),
                                      "--sha256", "0" * 64).returncode, 2)
-        data = bytearray(self.output.read_bytes())
-        data[-1] ^= 1
-        self.output.write_bytes(data)
+        # Even a freshly computed whole-archive hash cannot bless an extra
+        # file absent from the embedded per-member source manifest.
+        with zipfile.ZipFile(self.output, "a") as archive:
+            archive.writestr("source/unlisted.py", b"unreviewed\\n")
+        recomputed = hashlib.sha256(self.output.read_bytes()).hexdigest()
         self.assertEqual(self.helper("verify", "--archive", str(self.output),
-                                     "--sha256", hashlib.sha256(bytes(data)).hexdigest()).returncode, 2)
+                                     "--sha256", recomputed).returncode, 2)
 
     def test_output_inside_worktree_is_refused(self):
         target = self.repo / "inside.zip"
