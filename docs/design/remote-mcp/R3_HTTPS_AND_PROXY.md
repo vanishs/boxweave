@@ -1,6 +1,6 @@
 # R3 — Public HTTPS, reverse proxies and external tunnels
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **PARTIAL SOURCE IMPLEMENTATION / NO HOST TLS TEST**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md). Next: [R4](R4_WEB_CLIENT_EXPERIENCE.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / LOOPBACK TLS TESTED; PUBLIC MANAGED TLS UNVERIFIED**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md). Next: [R4](R4_WEB_CLIENT_EXPERIENCE.md).
 
 ## Accepted deployment choices
 
@@ -21,6 +21,10 @@ Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **PARTIAL SOURCE I
 - Credential-bearing URL paths must be stripped/redacted from proxy request logs. Reject unsafe proxy configurations where masking is not enforceable; documentation must warn that third-party ingress may retain path logs outside BoxWeave's control.
 - Never claim Cloudflare Tunnel `Healthy` proves origin MCP or OAuth is working: only a real external initialize/authorization exchange demonstrates readiness.
 - No automatic public endpoint by merely setting a URL; exposure has explicit service-ownership, listener and rollback steps.
+
+## v0.24.3 browser callback proxy correction
+
+The opt-in Caddy generator must preserve the upstream `Referrer-Policy` header. A blanket Caddy `header Referrer-Policy no-referrer` silently overrode the OAuth authorization page's `same-origin` and reproduced `Origin: null` failures. This regression is covered by `tests/test_remote_mcp.py`. External managed-Caddy DNS/certificate/port conflicts and recovery are not verified by that fixture.
 
 ## HTTP/TLS acceptance and rollback
 
