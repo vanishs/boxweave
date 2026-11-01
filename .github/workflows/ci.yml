@@ -74,6 +74,23 @@ jobs:
           done
           python bwmini/distribution.py build --root . --wheels .runtime/release-wheels --output .runtime/release/boxweave.zip --source-commit "$GITHUB_SHA" --source-state clean
           python scripts/build_release_manifest.py --root . --output .runtime/release --source "$GITHUB_SHA"
+      - name: Verify release ZIP includes every Python module and digest
+        run: |
+          python - <<'PY_PACKAGED_MODULES'
+          import hashlib, json, zipfile
+          from pathlib import Path
+          modules = {p.as_posix() for p in Path('bwmini').glob('*.py')}
+          with zipfile.ZipFile('.runtime/release/boxweave.zip') as archive:
+              members = set(archive.namelist())
+              missing = modules - members
+              assert not missing, f'Missing Python modules from release ZIP: {sorted(missing)}'
+              manifest = json.loads(archive.read('manifest.json'))
+              assert modules <= set(manifest['files']), 'Missing Python modules from ZIP manifest'
+              for name in sorted(modules):
+                  assert hashlib.sha256(archive.read(name)).hexdigest() == manifest['files'][name], f'Digest mismatch: {name}'
+              assert {'bwmini/remote_auth.py', 'bwmini/remote_mcp.py'} <= members
+          print(f'Package contains {len(modules)} verified Python modules')
+          PY_PACKAGED_MODULES
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
@@ -143,6 +160,24 @@ jobs:
               while IFS= read -r file; do
                 case "$file" in
                   docs/*.md|README.md|AGENTS.md|clients/README.md|.github/workflows/ci.yml) ;;
+                  PUBLISHED_RELEASE)
+                    [[ "$(cat PUBLISHED_RELEASE)" == "$version" ]] || { echo 'Stable pin must match the already published source version' >&2; exit 1; } ;;
+                  install.sh)
+                    # Only a change to the embedded default release pin is permitted.
+                    # All executable installer logic must stay byte-identical to the published tag.
+                    OLD_RELEASE_REF="$existing" RELEASE_VERSION="$version" python3 - <<'PY_RELEASE_PIN'
+          import os, re, subprocess
+          from pathlib import Path
+          baseline = subprocess.check_output(['git', 'show', os.environ['OLD_RELEASE_REF'] + ':install.sh'], text=True)
+          pattern = r'python3 - "(0\.[0-9]+\.[0-9]+)" "\$\{streamed_options\[@\]\}" <<\x27PY_DEFAULT_RELEASE\x27'
+          match = re.search(pattern, baseline)
+          if match is None:
+              raise SystemExit('Published installer release pin not found')
+          expected = baseline[:match.start(1)] + os.environ['RELEASE_VERSION'] + baseline[match.end(1):]
+          if Path('install.sh').read_text() != expected:
+              raise SystemExit('Installer changed beyond the published stable version pin')
+          PY_RELEASE_PIN
+                    ;;
                   *) echo "Version bump required for source change: $file" >&2; exit 1 ;;
                 esac
               done <<< "$files"
