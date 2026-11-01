@@ -1,6 +1,6 @@
 # Remote MCP implementation handoff — Agent execution contract
 
-**Status: v0.24.0 source implementation committed to PR #10; no public endpoint, live Box, client OAuth or TLS deployment tested.** Design owner: [master](../design/REMOTE_MCP_MASTER.md), decisions [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md), verification owner [remote MCP test plan](../verification/REMOTE_MCP_TEST_PLAN.md).
+**Status: v0.24.3 source implementation with live loopback TLS and owner-operated hosted ChatGPT OAuth read evidence at prior installed revisions; v0.24.3 deployed/runtime acceptance remains pending.** Design owner: [master](../design/REMOTE_MCP_MASTER.md), decisions [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md), verification owner [remote MCP test plan](../verification/REMOTE_MCP_TEST_PLAN.md).
 
 ## Confirmed baseline
 
@@ -54,3 +54,7 @@ R0 reused the unchanged SSH Gateway through a fixed subprocess per remote HTTP M
 ## Live loopback/proxy acceptance and release fixes (2026-11-01, owner-approved)
 
 Owner-authorized live testing on the reused Box found and fixed two release blockers before publication: f98c192 (offline archives missed seven new modules, so a 0.24.0 install failed at deploy_check and left services stopped until repair) and 2de4920 (the remote relay's `python -I` gateway spawn broke the gateway import, making every authenticated remote call 503). After the fixes, the loopback R1 protocol battery, the full R2 OAuth PKCE/DCR/Bearer/link lifecycle with revocation and hash-at-rest, an independent local TLS proxy run of the same flow, R4 Web persistence and the enrolled SSH-client 8/8 diagnose parity all passed on the reused Box with a real nested Box executing reads through the configured agent-box launcher. Real public HTTPS and real external clients remain unverified (E=U). Evidence: [test plan](../verification/REMOTE_MCP_TEST_PLAN.md), [queue](../verification/REMEDIATION_TEST_QUEUE.md).
+
+## v0.24.3 acceptance and release boundary (2026-11-01)
+
+The OAuth browser headers introduced in v0.24.2 are now preserved by the generated managed-Caddy proxy (no global Referrer-Policy rewrite). The Web Remote MCP panel adds a loopback-only TCP port probe with an explicit warning that TCP is not MCP/HTTP/TLS/Box acceptance. Targeted negative tests exercise policy scoping, Caddy configuration, status probe, revoked credentials, and SSH fixture parity via the normal CI lane. Operator-managed Caddy/public DNS/443 and the exact v0.24.3 installation are not independently verified; no production deployment is performed by source or GitHub release publication. Published version and main commit must be confirmed from the actual CI release job rather than inferred from VERSION.
