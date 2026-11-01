@@ -305,8 +305,7 @@ class ReportCommandTests(unittest.TestCase):
                  [["--trace", "a" * 32], ["--kind", "hello"]],
                  [["--since", "2026-10-31T00:00:00Z"]],
                  [["--since", "bad"], ["--until", "2026-10-31T01:00:00Z"]],
-                 [["--since", "2026-10-31T00:00:00Z"], ["--until", "2026-11-01T00:00:01Z"]],
-                 [["--kind", "selftest"], ["--operation", "x"]])
+                 [["--since", "2026-10-31T00:00:00Z"], ["--until", "2026-11-01T00:00:01Z"]])
         for extra in cases:
             with self.subTest(extra=extra), \
                  patch.object(host_cli, "write_report_directory") as writer:
@@ -324,6 +323,13 @@ class ReportCommandTests(unittest.TestCase):
         self.assertIn("{hello,environment,access}", output.getvalue())
         self.assertNotIn("selftest", output.getvalue())
         self.assertNotIn("job,selftest", output.getvalue())
+        with patch.object(host_cli, "write_report_directory") as writer:
+            with patch("sys.stderr", new_callable=io.StringIO):
+                with self.assertRaises(SystemExit) as bad:
+                    host_cli.main(["report", "--kind", "selftest",
+                                   "--operation", "x", "--output", "/tmp/invalid"])
+        self.assertEqual(bad.exception.code, 2)
+        writer.assert_not_called()
 
     def test_missing_selector_is_refused(self):
         with patch.object(host_cli.os, "geteuid", return_value=1000), \
