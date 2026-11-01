@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash
 
 from bwmini.remote_auth import RemoteCredentials, RemoteError, valid_url
 from bwmini.remote_mcp import create_remote_app, relay, validate_remote_config
+from bwmini.remote_tls import caddyfile
 from bwmini.store import Store
 
 ORIGIN = "https://mcp.example.test"
@@ -192,6 +193,21 @@ class RemoteTests(unittest.TestCase):
         reply = relay({"jsonrpc": "2.0", "id": 3, "method": "tools/list", "params": {}},
                       str(gate))
         self.assertEqual(reply["result"]["marker"], "fixture-sibling")
+
+    def test_caddyfile_requires_installed_caddy_and_canonical_host(self):
+        remote = {"enabled": True, "public_url": ORIGIN, "port": 18740}
+        with self.assertRaises(ValueError):
+            caddyfile(remote, caddy=str(Path(self.tmp.name) / "missing-caddy"))
+        with self.assertRaises(ValueError):
+            caddyfile({"enabled": True, "public_url": "https://localhost", "port": 18740},
+                      caddy=str(Path(self.tmp.name) / "missing-caddy"))
+        fake = Path(self.tmp.name) / "caddy"
+        fake.write_text("#!/bin/sh\n")
+        fake.chmod(0o755)
+        config = caddyfile(remote, caddy=str(fake))
+        self.assertIn("mcp.example.test {\n", config)
+        self.assertIn("reverse_proxy 127.0.0.1:18740", config)
+        self.assertNotIn("tls ", config)
 
 
 class RemoteWebTests(unittest.TestCase):
