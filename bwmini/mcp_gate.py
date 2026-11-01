@@ -200,6 +200,8 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
     "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
     "PROJECT_COMMAND_UNAVAILABLE",
+    "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
+    "TRUST_NOT_READY", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
 ))
 
 
@@ -257,6 +259,51 @@ def managed_create_arguments(args):
             raise ValueError("TOO_MANY_PUBLIC_KEYS")
         normalized.append(host_key)
     return {**args, "ssh_keys": normalized}
+
+
+def trusted_registry():
+    """Fail closed with bounded deployment-readiness codes, never raw key data."""
+    try:
+        value = json.loads(REGISTRY.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
+        return value
+    except (OSError, ValueError, UnicodeError):
+        raise ValueError("TRUST_REGISTRY_UNAVAILABLE") from None
+
+
+def validated_resize_arguments(args):
+    """Reject malformed CPU syntax before any remote Provider mutation.
+
+    Preserve CPU counts, decimal/millicpu quotas, and Incus CPU sets.
+    The Provider remains authoritative for capacity and host constraints.
+    """
+    if not isinstance(args, dict):
+        raise ValueError("RESOURCE_CPU_INVALID")
+    cpu = args.get("cpu")
+    if cpu is None or cpu == "":
+        return args
+    if not isinstance(cpu, str) or len(cpu) > 64:
+        raise ValueError("RESOURCE_CPU_INVALID")
+    value = cpu.strip()
+    numeric = re.fullmatch(r"(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+|[0-9]+m)", value)
+    cpuset = re.fullmatch(r"[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*", value)
+    if not numeric and not cpuset:
+        raise ValueError("RESOURCE_CPU_INVALID")
+    if numeric:
+        count = value[:-1] if value.endswith("m") else value
+        try:
+            if not (0 < float(count) < 1000000):
+                raise ValueError("RESOURCE_CPU_INVALID")
+        except (ValueError, OverflowError):
+            raise ValueError("RESOURCE_CPU_INVALID") from None
+    if cpuset and ("-" in value or "," in value):
+        for part in value.split(","):
+            if "-" in part:
+                lo, hi = map(int, part.split("-"))
+                if hi < lo:
+                    raise ValueError("RESOURCE_CPU_INVALID")
+    return args
 
 
 def trusted(args, registry, container):
@@ -373,7 +420,7 @@ def main():
                         gd.preauthorize_project(args)
                         observed = container(args["box"], request["id"])
                         gd.project_grant(args, observed)
-                        registry = json.loads(REGISTRY.read_text())
+                        registry = trusted_registry()
                         trusted({"box": args["box"]}, registry, observed)
                         internal = "boxweave-d4-" + secrets.token_hex(8)
                         send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
@@ -418,8 +465,10 @@ def main():
                                 raise ValueError("LOCAL_UBUNTU_NESTING_ONLY")
                             nesting = args.pop("enable_nesting")
                             if type(nesting) is not bool: raise ValueError("NESTING_BOOLEAN_REQUIRED")
+                    if params.get("name") == "resize_container":
+                        validated_resize_arguments(args)
                     if params.get("name") == "connect":
-                        registry = json.loads(REGISTRY.read_text())
+                        registry = trusted_registry()
                         internal = "boxweave-trust-" + str(request["id"])
                         send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
                               "params": {"name": "get_container", "arguments": {"username": args.get("box")}}})
