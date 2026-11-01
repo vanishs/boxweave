@@ -59,6 +59,24 @@ class NestingBoundaryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     nesting.handle({"action":"plan","logical":"work","nesting":value})
 
+
+    def test_nesting_helper_safe_failure_code_survives_sudo_boundary(self):
+        from types import SimpleNamespace
+        for code in ("OWNED_PROVIDER_REQUIRED","MANAGED_INSTANCE_IDENTITY_REQUIRED",
+                     "LOCAL_INCUS_OBSERVATION_OR_CHANGE_FAILED"):
+            result=SimpleNamespace(returncode=2,stdout=json.dumps({"state":"failed","code":code}))
+            with patch.object(nesting.subprocess,"run",return_value=result):
+                with self.assertRaisesRegex(ValueError,"^"+code+"$"):
+                    nesting.invoke({"action":"inspect","logical":"work"})
+
+    def test_nesting_helper_unknown_failure_is_redacted(self):
+        from types import SimpleNamespace
+        for raw in ('not-json',json.dumps({"state":"failed","code":"KEY_MATERIAL"})):
+            result=SimpleNamespace(returncode=2,stdout=raw)
+            with patch.object(nesting.subprocess,"run",return_value=result):
+                with self.assertRaisesRegex(ValueError,"NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE"):
+                    nesting.invoke({"action":"inspect","logical":"work"})
+
     def test_mount_error_is_diagnosis_not_assertion_of_parent_config(self):
         result=nesting.diagnostic('Operation not permitted - Failed to mount "proc" onto /rootfs/proc')
         self.assertTrue(result["nested_proc_mount_denied"])
