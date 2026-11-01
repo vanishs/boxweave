@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source and published stable version: 0.25.2.** The default installer targets the `v0.25.2` Release assets. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.26.0.** The default installer initially remains pinned to the previously published `v0.25.2` Release assets until the new immutable release is verified and the stable pointer is separately promoted. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -19,6 +19,8 @@ To install or update to an exact published version, including a historical relea
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.25.2
 ```
+
+The developer-only [Agent deployment/test workflow v1.0](docs/process/AGENT_TEST_DEPLOYMENT.md) uses existing authorized BoxWeave transports, local worktree snapshots and verified artifacts; it does not add MCP tools or treat a source snapshot as a Release installer.
 
 The optional `--version 0.X.Y` selects a GitHub Release verified against its published metadata, source tag, and SHA-256 digests; an unknown, unpublished, malformed or mismatched release fails closed before running the downloaded helper. Omit `--version` to use the separately promoted stable installer pin. The command can include the existing `--provider-url`, `--provider-secret-file`, and `--provider-cli` options. The version selector is for the streamed installer, not `plan`, `apply` or `bootstrap` modes.
 

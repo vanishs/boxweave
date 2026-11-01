@@ -1,6 +1,6 @@
 # Agent-led BoxWeave development and test workflow
 
-**Status: active developer working practice, not a shipped product feature.** Owner decision SRC-107 (2026-10-30). Follow [AGENTS.md](../../AGENTS.md), [maintenance](MAINTENANCE.md), [test strategy](../verification/TEST_STRATEGY.md) and [current scope](../product/SCOPE.md). This document **does not grant authorization** to modify a particular host, Box, Provider, SSH identity, tenant, network, credential or deployment.
+**Status: active developer working practice, not a shipped product feature.** Owner decision SRC-107 (2026-10-30), supplemented by owner-approved [Agent deployment and testing v1.0](AGENT_TEST_DEPLOYMENT.md) (2026-11-01). Follow [AGENTS.md](../../AGENTS.md), [maintenance](MAINTENANCE.md), [test strategy](../verification/TEST_STRATEGY.md) and [current scope](../product/SCOPE.md). This document **does not grant authorization** to modify a particular host, Box, Provider, SSH identity, tenant, network, credential or deployment.
 
 ## Goal and actual environment
 
@@ -18,11 +18,11 @@ The outer and inner BoxWeave are **separate controllers and trust domains**. If 
 
 | Test lane | Use for | Limit |
 | --- | --- | --- |
-| **Reused test Box** | Fix, upgrade, config, restart and regression against existing state | Cannot prove clean installation |
-| **Genuinely clean test Box** | Fresh installation, first-time bootstrap, SSH/MCP enrollment and initial nesting | Must begin with verified clean OS/installer state |
+| **Genuinely clean new Box (default for live deployment)** | Ordinary changes, fresh installation, first-time bootstrap, SSH/MCP enrollment and initial nesting; seed an older release for upgrade checks | Must begin with verified clean OS/installer state |
+| **Reused historical Box (evidence-gated)** | Fix or regress an issue *proven* to depend on existing configuration/data/dependency/history | Record concrete environmental dependence before reuse; cannot prove clean installation |
 | Future cloned baseline | Consistent preinstalled environment comparison | **NOT IMPLEMENTED** in BoxWeave; not a fresh install |
 
-Do **not** create a new Box for every small edit. Do **not** reuse an old Box to declare that a fresh installer works.
+Do **not** create a new Box for every small edit; use focused local tests first. For real deployment the default is a **new disposable Box**. Do **not** reuse an existing historical Box without evidence of an environment-specific requirement, or declare that it proves a fresh installer. Source availability (local, target Box, remote) is independent of transfer and exec capability; see [source/transport decision table](AGENT_TEST_DEPLOYMENT.md).
 
 ## Execution modes
 
@@ -39,11 +39,11 @@ Neither mode authorizes unapproved Provider/Incus/storage/network/SSH/identity c
 
 1. **Pin what changed.** Record actual source commit SHA (or reviewed working-tree diff), change intent, exact acceptance criteria and nearest test. Identify any existing non-committed changes by other Agents; don't overwrite them.
 2. **Select the smallest honest first check.** Documentation: source and link check. Domain code: focused unit/fixture. Web/client: affected browser or client registration fixture. Installer/SSH/Provider/nesting: focused mocks/preflight first, then relevant **authorized** real integration. Don't run all suites reflexively after each edit.
-3. **Select the correct lane.** Reuse an owned test Box for rapid upgrade or regression; use a genuinely clean Box only when initial-state behavior is the claim. Confirm actual outer controller/project, exact test Box identity, installed BoxWeave version, **running** app/worker version, Provider/Incus version if observed, and nested guest identity if needed. Source checkout, release package, installed manifest and running process may differ.
+3. **Select the correct lane.** For live deployment default to an authorized new test Box; reuse a historical Box only when specific observed environmental differences are necessary. For typical upgrade regressions, seed an older release in a new Box. Confirm actual outer controller/project, exact test Box identity, installed BoxWeave version, **running** app/worker version, Provider/Incus version if observed, and nested guest identity if needed. Source checkout, release package, installed manifest and running process may differ.
 4. **Reproduce before rewriting.** Run one small verification. When it fails, preserve the first failing step, actual exit and observed state; classify whether source, packaging, config, startup, MCP transport, Provider or nested execution failed. Do not immediately wipe/reinstall the Box to make an error disappear.
 5. **Escalate only where evidence requires it.** With separate live authorization: check actual running app/worker, authenticated MCP initialize/discovery/read, then **if required** create the approved nested Box, verify exact target identity, run Python and observe `hello world` stdout **plus exit 0**. A green CLI response, MCP tool listing or HTTP 401 does **not** prove inner workload execution. Record cleanup/retention separately.
 6. **Avoid unknown-result replay.** After a timeout or transport interruption on create/delete/restore, outcome is **UNKNOWN** until the *original* target and receipt are safely inspected. Do not issue another write based on guessing. Do not auto-reset parent nesting, re-enroll SSH, change operator config, stop unrelated processes or delete failure evidence.
-7. **Close a small iteration.** State what's verified and what's not, add any executable follow-up to the [remediation test queue](../verification/REMEDIATION_TEST_QUEUE.md), then commit/push only in the separately authorized repository scope. A short evidence-bearing handoff is more useful than a giant transcript.
+7. **Close a small iteration.** On confirmed success, remove only approved test-owned Boxes and temporary delivery resources and independently verify cleanup; on failure/unknown retain necessary evidence and report its identity. State what's verified and what's not, add any executable follow-up to the [remediation test queue](../verification/REMEDIATION_TEST_QUEUE.md), then commit/push only in the separately authorized repository scope. A short evidence-bearing handoff is more useful than a giant transcript.
 
 ### Existing routine checks (select based on change)
 
@@ -93,7 +93,7 @@ A slice is **installed-surface** when any of the following holds:
 - it changes installer/publisher file or packaging module allowlists.
 
 The checkpoint is deliberately **minimal** and reuses the same iteration-closing rules as any other
-lane: one authorized reused test Box, one upgrade/install of a built package, then read-only
+lane: one authorized test Box (new by default and seeded with a previous version when needed), one upgrade/install of a built package, then read-only
 verification that exercises at least (a) the changed command's promised pass path and (b) one
 definite-failure or explicit-incomplete path, with actual commands, exit codes and observed states
 recorded in the [remediation test queue](../verification/REMEDIATION_TEST_QUEUE.md) under
@@ -111,18 +111,18 @@ No new database, Web feature or formal test manager is required. Add a compact n
 Goal / success criterion:
 Execution mode: auto-within-scope | plan-first
 Authorization: scope reference, allowed exact targets/actions (no secrets)
-Source: commit SHA or reviewed diff; installed version; running version
-Lane: reused | genuinely-clean
+Source: local-modified | target-verified | existing-public-remote; commit SHA; bundle SHA-256; installed/running version
+Lane: new-disposable (default) | new-seeded-upgrade | historical-existing (evidence)
 Target: outer controller / owned test Box / inner app+Provider / nested child if relevant
 Checks: named steps, actual commands, exit/result, deadline
 Evidence class: S source | D historical documentation | T executed | U untested
-Outcome: PASS | FAIL | PARTIAL | UNKNOWN, limited to supported claim
+Outcome: PASS | FAIL | PARTIAL | BLOCKED | UNKNOWN, limited to supported claim
 Resources: original retained | authorized cleanup independently verified | unknown
 Next step / blocker:
 ```
 
 - **PASS** only for the observed exact criterion, including exit/output/identity where relevant.
-- **FAIL** for a confirmed failed criterion; **PARTIAL** for a subset completed; **UNKNOWN** for ambiguous remote effects, missing observation or interrupted execution.
+- **FAIL** for a confirmed failed criterion; **PARTIAL** for a subset completed; **BLOCKED** when transport, permission or prerequisites are unavailable without executing the criterion; **UNKNOWN** for ambiguous remote effects, missing observation or interrupted execution.
 - Sanitize outputs; don't paste credentials, private keys, JWTs, full raw SSH stderr, secret-bearing environment/config or private DB dumps into source reports.
 
 Illustrative **non-executed** example:
@@ -145,4 +145,4 @@ Stop mutations on exact-target mismatch, missing grant, a pending/unknown remote
 
 End each task with **changed source, exact tested revision/environment, verified evidence, remaining unknowns, original resource disposition and next smallest test**. Existing [AGENTS.md](../../AGENTS.md) source-control, secrets, maintenance and evidence conventions still govern.
 
-**Related designs, NOT IMPLEMENTED:** [D0-D2 diagnostic reports/traces](../design/DIAGNOSTICS_PROPOSAL.md) and [E0-E4 snapshots, clones and environment fingerprints](../design/BOX_ENVIRONMENT_PROPOSAL.md). This document does not introduce a product Agent Test Session feature, snapshot API, automatic execution engine or scheduled test task.
+**V1.0 developer workflow:** [source selection, local offline bundle, delivery, bounded repair and cleanup](AGENT_TEST_DEPLOYMENT.md), using [developer-only bundle helper](../../scripts/agent_source_bundle.py). The Agent orchestrates authorized existing tools; this is not a new upload/deployment MCP. **Related product designs, NOT IMPLEMENTED:** [D0-D2 diagnostic reports/traces](../design/DIAGNOSTICS_PROPOSAL.md) and [E0-E4 snapshots, clones and environment fingerprints](../design/BOX_ENVIRONMENT_PROPOSAL.md). This document does not introduce a product Agent Test Session feature, snapshot API, automatic execution engine or scheduled test task.
