@@ -62,4 +62,9 @@ Return to [master](../design/REMOTE_MCP_MASTER.md), [handoff](../process/REMOTE_
 
 GitHub Actions [run 41263506822](https://github.com/vanishs/boxweave/actions/runs/41263506822) on source commit `206a946e203ea59cf9819f668baee2107969d47f`: documentation/traceability checks, Python unit and contract tests (including remote OAuth/API/link/CSRF cases), frontend typecheck/build, seven existing fixture browser workflows and candidate build **all reported success**. The publish job was skipped. Follow-up commits (documentation and Host validation) require their own final CI evidence.
 
-No external TLS domain, login callback in a real hosted ChatGPT/Claude/Cursor account, real Provider/Box tool execution, installed copy upgrade or public Caddy service was exercised. These remain E/L/I=U. R0 gateway process overhead and third-party URL path handling remain open acceptance areas.
+## Live loopback/proxy acceptance on the reused test Box (2026-11-01, owner-approved)
+
+**T/I** on boxweave-test-ser at 0.24.0 (main 58ab5bc after live-found fixes f98c192 and 2de4920): loopback R1 positives/negatives (401/403 origin+host/405/406/400/202 with protocol 2025-11-25), R2 OAuth PKCE+DCR full flow with replay/verifier/redirect/state negatives, API Bearer and link credentials with hash-at-rest and revocation, R3 independent local TLS proxy with preserved public Host, R4 Web issuance/revocation persistence and 8/8 enrolled SSH-client diagnose parity. Two release blockers were found live and fixed: offline archives missing new modules (f98c192) and the relay's `python -I` spawn breaking the gateway import (2de4920). Full command/evidence record: [remediation queue](REMEDIATION_TEST_QUEUE.md).
+
+No external TLS domain, login callback in a real hosted ChatGPT/Claude/Cursor account, or public Caddy service was exercised. These remain E/L=U (real public HTTPS and external clients); Caddy on a host without it fails closed (`CADDY_NOT_INSTALLED`); the R3 proxy evidence is loopback TLS, not a public origin. R0 gateway process overhead and third-party URL path handling remain open acceptance areas.
+
