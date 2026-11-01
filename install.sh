@@ -6,7 +6,8 @@ umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
-Usage: sudo bash install.sh [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE]
+Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE]
+  --version selects an exact published, digest-verified release (default: stable pin).
   Streamed install/update/repair. Reuse an existing Containarium + Incus
   without changing its binaries, service, storage or signing secret.
   Existing Provider defaults: http://127.0.0.1:8080,
@@ -37,10 +38,16 @@ working user systemd bus are prerequisites. Rerun apply for app update/repair.
 USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
-if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli ]]; then
+if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli ]]; then
   streamed_options=()
+  selected_version=''
   while (( $# )); do
     case "$1" in
+      --version)
+        (( $# >= 2 )) || die "Missing value for --version"
+        [[ -z "$selected_version" ]] || die 'Duplicate --version is not allowed'
+        [[ "$2" =~ ^0\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || die 'Invalid --version: use 0.X.Y (no leading v)'
+        selected_version=$2; shift 2;;
       --provider-url|--provider-secret-file|--provider-cli)
         (( $# >= 2 )) || die "Missing value for $1"
         streamed_options+=("$1" "$2"); shift 2;;
@@ -52,9 +59,9 @@ if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secr
   # Stream only the latest separately verified published stable release.
   # PUBLISHED_RELEASE is intentionally distinct from unreleased source VERSION.
   # This pin must reference release assets that exist and verify upstream.
-  python3 - "0.25.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  BOXWEAVE_REQUESTED_VERSION="$selected_version" python3 - "0.25.1" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
-version=sys.argv[1]
+version=os.environ.get("BOXWEAVE_REQUESTED_VERSION") or sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
 prefix="https://github.com/vanishs/boxweave/releases/download/v"+version+"/"
 def get(url,limit=1048576):
@@ -63,6 +70,7 @@ def get(url,limit=1048576):
     if len(data)>limit:raise ValueError("release metadata limit")
     return data
 try:
+    if not re.fullmatch(r"0\.[0-9]{1,4}\.[0-9]{1,4}",version):raise ValueError("invalid release version")
     release=json.loads(get(api+"/releases/tags/v"+version))
     assert release.get("tag_name")=="v"+version and not release.get("draft") and not release.get("prerelease")
     assets={a["name"]:a for a in release["assets"]}
