@@ -57,3 +57,7 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 ## Code-first source coverage and acceptance state (2026-11-01)
 
 [The current code-derived implementation, endpoint, module, and test inventory](CODE_FIRST_ACCEPTANCE_2026-11-01.md) enumerates source surfaces even when missing from older feature prose, maps them to CI and known real evidence, and preserves PARTIAL/BLOCKED/UNVERIFIED for current runtime checks. An implemented endpoint is not itself accepted.
+
+## Current 2026-11-01 code-first live acceptance supersession
+
+The historical REQ/AC matrix above is not a blanket acceptance of current installed services. The [whole-project A01–A30 ledger](CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) crosswalks all source-backed features, includes implementation not described in earlier feature narratives (`boxweave job`, developer source bundling, MCP self-info, CLI report kind/instance failure semantics), records actual new-Box and historical-Box execution, and preserves **PASS/PARTIAL/FAIL/BLOCKED/UNKNOWN/UNVERIFIED** per exact layer. Real v0.26.1 install and upgrade evidence does not by itself certify an installed v0.26.2. Neither upstream Containerium Provider tools nor future E0–E4 proposal-only capabilities should be represented as BoxWeave product acceptance.
