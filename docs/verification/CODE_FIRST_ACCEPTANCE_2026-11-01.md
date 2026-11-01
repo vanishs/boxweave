@@ -89,11 +89,12 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/web.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (40)
+### Python unittest files (41)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
 - `tests/test_agent_box_adapter.py`
+- `tests/test_agent_source_bundle.py`
 - `tests/test_bindings.py`
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
@@ -146,10 +147,11 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `clients/wsl/prepare_identity.py`
 <!-- inventory:client-scripts:end -->
 
-### Project scripts and live-test drivers (22)
+### Project scripts and live-test drivers (23)
 
 <!-- inventory:support-scripts:start -->
 - `scripts/access_browser_check.py`
+- `scripts/agent_source_bundle.py`
 - `scripts/authorize_native_key.py`
 - `scripts/binding_browser_check.py`
 - `scripts/browser_check.py`
