@@ -1,6 +1,6 @@
 # R3 — Public HTTPS, reverse proxies and external tunnels
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **DESIGN ONLY / NOT IMPLEMENTED**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md). Next: [R4](R4_WEB_CLIENT_EXPERIENCE.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **PARTIAL SOURCE IMPLEMENTATION / NO HOST TLS TEST**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md). Next: [R4](R4_WEB_CLIENT_EXPERIENCE.md).
 
 ## Accepted deployment choices
 
