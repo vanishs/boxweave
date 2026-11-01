@@ -51,7 +51,7 @@ if (( $# == 0 )) || [[ "${1:-}" == --provider-url || "${1:-}" == --provider-secr
   command -v python3 >/dev/null || die 'Python 3 is required'
   # Stream only the latest separately verified published stable release.
   # This pin must reference release assets that exist and verify upstream.
-  python3 - "0.24.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  python3 - "0.24.1" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
