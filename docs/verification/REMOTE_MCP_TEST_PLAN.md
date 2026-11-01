@@ -57,3 +57,9 @@ Perform tests in order R0 then R1 then R2 then R3 then R4. At each phase:
 - [REQ-024 / AC-024](../product/ACCEPTANCE.md): direct/public/proxy modes, independent Web onboarding and truthful readiness.
 
 Return to [master](../design/REMOTE_MCP_MASTER.md), [handoff](../process/REMOTE_MCP_HANDOFF.md), [index](../INDEX.md).
+
+## Executed source/fixture evidence, not real Box acceptance
+
+GitHub Actions [run 41263506822](https://github.com/vanishs/boxweave/actions/runs/41263506822) on source commit `206a946e203ea59cf9819f668baee2107969d47f`: documentation/traceability checks, Python unit and contract tests (including remote OAuth/API/link/CSRF cases), frontend typecheck/build, seven existing fixture browser workflows and candidate build **all reported success**. The publish job was skipped. Follow-up commits (documentation and Host validation) require their own final CI evidence.
+
+No external TLS domain, login callback in a real hosted ChatGPT/Claude/Cursor account, real Provider/Box tool execution, installed copy upgrade or public Caddy service was exercised. These remain E/L/I=U. R0 gateway process overhead and third-party URL path handling remain open acceptance areas.
