@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Source v0.24.0, not yet verified on a real Box or public network.** The default streamed release is still pinned to v0.22.0 until a separate release is approved. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source v0.24.2 (OAuth browser callback fix).** The current default published release is pinned separately in `PUBLISHED_RELEASE`; merging source does not deploy it. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 
@@ -50,8 +50,14 @@ Caddy requires DNS control, permission to bind 80/443, and an absence of port co
 
 All authorized clients have the existing trusted-operator MCP gateway authority, subject to the existing optional host-wide allowlist. No new per-Agent RBAC, Box policy or custom expiry tiers are included. Tokens and links can be revoked in the Web tab. OAuth access tokens retain protocol-required expiry.
 
+## Browser OAuth callback compatibility
+
+The successful `GET /authorize` page uses `Referrer-Policy: same-origin` rather than `no-referrer`, because browsers may otherwise send `Origin: null` when the password form is submitted. Only that valid, already-registered client's callback **origin** is added to the authorization page's `form-action` CSP so browsers can follow the OAuth 302 back to the client. All other pages retain `no-referrer` and `form-action 'self'`. The `POST /authorize` Origin check is not weakened; do not add `null` to `allowed_origins`.
+
+A browser may display `access_denied` after a second click if the first, successful authorization consumed the one-time request but the callback redirect was blocked by CSP. Restart OAuth from the client instead of replaying the old form. On a temporary Cloudflare Quick Tunnel, `public_url` must match the *current* HTTPS hostname; a URL change requires updating configuration and restarting the remote MCP process.
+
 ## Verification and exclusions
 
-Check authorized initialize/tools/list, wrong-Origin rejection, OAuth authorization, actual HTTPS/TLS and revocation with a standalone real client before claiming external readiness. A tunnel's Healthy label is not MCP proof. No actual public TLS, ChatGPT/Claude/Cursor account, SSH enrollment or live Provider/Box was tested by this source implementation. Network/host installation or public port changes require separate explicit approval. For a timed-out mutating MCP tool call, completion is UNKNOWN; never automatically retry.
+Check authorized initialize/tools/list, wrong-Origin rejection, OAuth authorization, actual HTTPS/TLS and revocation with a standalone real client before claiming external readiness. A tunnel's Healthy label is not MCP proof. A 2026-11-01 owner-operated Cloudflare Quick Tunnel and ChatGPT OAuth workflow reached real `list_containers` results (four running boxes); this does not validate a production TLS deployment, a complete Box tool workflow, or all other client apps. The v0.24.2 browser header change is subject to its own CI fixture tests and requires a separately installed release for source-to-runtime parity. Network/host installation or public port changes require separate explicit approval. For a timed-out mutating MCP tool call, completion is UNKNOWN; never automatically retry.
 
 See [architecture](design/REMOTE_MCP_MASTER.md), [development phases](process/REMOTE_MCP_HANDOFF.md), [verification](verification/REMOTE_MCP_TEST_PLAN.md).
