@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Source v0.24.3 (OAuth browser compatibility and readiness fixes).** The current default published release is pinned separately in `PUBLISHED_RELEASE`; merging source does not deploy it. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source and published stable v0.24.4 (OAuth compatibility, readiness and Agent self-information).** The default streamed installer targets this published release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 
