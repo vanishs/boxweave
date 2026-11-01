@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.24.2; published stable version: 0.24.1.** The default installer targets the verified `v0.24.1` release assets. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.24.3; published stable version: 0.24.1.** The default installer targets the verified `v0.24.1` release assets. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -175,6 +175,6 @@ These commands do not automatically install missing components or modify the hos
 
 Container-host setup: see [nesting configuration and restart guidance](docs/NESTING.md).
 
-## Remote HTTP(S) MCP (v0.24.2 source)
+## Remote HTTP(S) MCP (v0.24.3 source)
 
-The opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded. On 2026-11-01, an owner-operated Cloudflare Quick Tunnel and hosted ChatGPT OAuth reached real MCP container listings after a process-local browser-header hotfix; v0.24.2 makes that fix permanent in source. The v0.24.2 package has not been deployed/tested on that live host; production HTTPS and other clients still require separate acceptance.
+The opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded. On 2026-11-01, an owner-operated Cloudflare Quick Tunnel and hosted ChatGPT OAuth reached real MCP container listings after a process-local browser-header hotfix; v0.24.2 makes that fix permanent in source; v0.24.3 additionally preserves those headers through managed Caddy and reports bounded local TCP status in Web. The v0.24.3 package has not been deployed/tested on that live host; production HTTPS and other clients still require separate acceptance.

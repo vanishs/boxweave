@@ -24,12 +24,14 @@ def caddyfile(remote, caddy=CADDY):
     if not Path(caddy).is_file() or not os.access(caddy, os.X_OK):
         raise ValueError("CADDY_NOT_INSTALLED")
     # The server only binds loopback. HTTPS is a separately managed process.
+    # Do not override Referrer-Policy here: the authorized OAuth form must
+    # retain same-origin, while other paths use the application's no-referrer.
+    # Rewriting all responses to no-referrer breaks browser OAuth consent.
     return (host + " {\n"
             "  encode gzip\n"
             "  reverse_proxy 127.0.0.1:" + str(remote["port"]) + " {\n"
             "    flush_interval -1\n"
             "  }\n"
-            "  header Referrer-Policy no-referrer\n"
             "  log {\n    output discard\n  }\n"
             "}\n")
 

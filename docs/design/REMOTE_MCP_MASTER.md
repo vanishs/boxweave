@@ -1,6 +1,6 @@
 # Remote MCP over HTTP(S): master design and implementation decisions
 
-**Status: v0.24.0 SOURCE IMPLEMENTATION (PR #10); real public/client/Box acceptance UNVERIFIED.** Owner decisions recorded in the eight-question design discussion on 2026-10-31. This document is the single design parent; implementation/acceptance evidence lives in the linked phase and test documents. No deployment, public listener, DNS, proxy, key, token, firewall or host change is authorized by these documents.
+**Status: v0.24.3 SOURCE; loopback TLS and an owner-operated hosted ChatGPT read were observed at prior installed revisions, but v0.24.3 public managed-Caddy/client/Box acceptance is UNVERIFIED.** Owner decisions recorded in the eight-question design discussion on 2026-10-31. This document is the single design parent; implementation/acceptance evidence lives in the linked phase and test documents. No deployment, public listener, DNS, proxy, key, token, firewall or host change is authorized by these documents.
 
 ## Product decision
 
@@ -91,12 +91,14 @@ Normative outcomes: [REQ-021–024](../product/REQUIREMENTS.md), [AC-021–024](
 
 Return to [knowledge index](../INDEX.md).
 
-## v0.24.0 source implementation reconciliation (PR #10)
+## Initial v0.24.0 implementation reconciliation (PR #10)
 
 - R0 **reused** the existing privileged mcp_gate.py via a fixed per-request subprocess instead of extracting an in-process dispatcher. Existing SSH behavior remains unchanged; the cost/performance and non-resumable stream limits are explicit.
 - R1 implements stateless Streamable HTTP with JSON responses, loopback-only listener, protocol negotiation and method/Origin/Host guards. Unsupported GET SSE returns 405, and no session resumption is claimed.
 - R2 implements local-admin OAuth Authorization Code + PKCE S256 and DCR, plus API Bearer and opaque URL path credentials (hash-at-rest, revoke and one-time reveal). No extra per-Agent RBAC.
 - R3 provides operator-invoked managed Caddy and manual reverse-proxy/external tunnel compatibility. The installer does **not** install Caddy or automatically publish DNS/TLS/firewall; these remain explicit owner operations.
 - R4 provides authenticated Web issuance/revocation, connection guidance and safe status. Actual ChatGPT/Cursor/Claude client compatibility, installed app and real Box execution remain **unverified** per the owner's no-Box-test directive.
+
+v0.24.2 fixed browser OAuth consent/callback response headers after hosted ChatGPT integration found `Origin: null` and CSP callback blocking. v0.24.3 preserves those headers in the optional generated Caddy proxy and reports bounded local TCP readiness in Web, without implying external TLS verification. Remaining deliberate deviations: R0 fixed gate subprocess instead of extracted in-process dispatcher; R1 stateless HTTP with JSON responses and GET SSE 405; R3 Caddy is an opt-in runner, not automatic host installation. These remain accurately labeled as such rather than falsely declared finished production deployment.
 
 See [setup](../REMOTE_MCP.md), [verification](../verification/REMOTE_MCP_TEST_PLAN.md) and [open risks](../verification/OPEN_RISKS.md).

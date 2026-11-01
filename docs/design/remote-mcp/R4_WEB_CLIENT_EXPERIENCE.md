@@ -1,6 +1,6 @@
 # R4 — Web onboarding, connection management and compatibility
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / REAL CLIENT AND BROWSER ACCEPTANCE PENDING**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md), [R3](R3_HTTPS_AND_PROXY.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / HOSTED CHATGPT READ OBSERVED; v0.24.3 RUNTIME PENDING**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md), [R3](R3_HTTPS_AND_PROXY.md).
 
 ## Goal
 
@@ -37,6 +37,10 @@ Any “copy URL” UI must correspond to an actual tested ready endpoint. Withou
 - Keep user-owned services/private file permissions and reviewed publication manifest rules. No secrets in downloadable generated source, screenshot-friendly output or diagnostics.
 - No implicit default credential, OAuth bypass, certificate overwrite, re-enrollment or mass disconnect. Record changes independently and make recovery visible.
 - Mark docs/client setup “source complete” separately from release build, installed service and real external/browser use.
+
+## v0.24.3 local listener signal
+
+The Web panel now reports a 200 ms loopback TCP probe of its configured MCP port; this proves only local TCP availability. It never accesses public HTTPS or uses a credential and cannot establish identity, successful OAuth login, MCP tool dispatch, SSH parity or production readiness. External reachability remains explicitly unverified. The 2026-11-01 operator-owned ChatGPT OAuth connection and authenticated `list_containers` read were observed on the temporarily patched installed process, not on the v0.24.3 release.
 
 ## Completion
 
