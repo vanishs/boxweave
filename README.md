@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.24.0 (unreleased candidate).** The independently verified **published stable install target remains v0.22.0**. The default streamed installer deliberately installs that published release until a reviewed v0.24.0 release exists; new source-only MCP additions are not available from a v0.22.0 installation. Neither channel is a certified clean-host deployment.
+**Current source version: 0.24.1 (unreleased).** The **published stable install target is v0.24.0**. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -177,4 +177,4 @@ Container-host setup: see [nesting configuration and restart guidance](docs/NEST
 
 ## Remote HTTP(S) MCP (v0.24.0 source feature)
 
-The new opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md); **no live Box, TLS or actual hosted-client connection has been verified**. The published stable installer remains v0.22.0 until a reviewed release is completed.
+The v0.24.0 opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded, but real public HTTPS and hosted-client connections remain unverified.
