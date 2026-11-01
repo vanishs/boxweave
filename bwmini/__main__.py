@@ -203,7 +203,7 @@ def main():
             if host!="127.0.0.1" and not c.get("allow_private_http"):
                 raise Fault("LISTENER_NOT_APPROVED",422)
             port=c.get("port",18640)
-            serve(create_app(s,c["origin"],Path(c["dist"]).absolute(),secure=c.get("secure_cookie",True)),
+            serve(create_app(s,c["origin"],Path(c["dist"]).absolute(),secure=c.get("secure_cookie",True),remote_config=c.get("remote_mcp")),
                   host=host,port=port,threads=4,max_request_body_size=16384,
                   clear_untrusted_proxy_headers=True)
         elif a.action=="projects":
