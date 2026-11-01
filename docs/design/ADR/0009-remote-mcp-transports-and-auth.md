@@ -1,6 +1,6 @@
 # ADR-009 — Add remote HTTP MCP without coupling to third-party tunnels
 
-**Status: Accepted design direction; NOT IMPLEMENTED** (2026-10-31 owner Q1–Q8). The [master specification](../REMOTE_MCP_MASTER.md) owns task decomposition; existing [ADR-003](0003-transport-and-trust.md) continues to describe the implemented SSH trust path.
+**Status: Accepted; source implemented in v0.24.0 (PR #10), external acceptance unverified** (2026-10-31 owner Q1–Q8). The [master specification](../REMOTE_MCP_MASTER.md) owns task decomposition; existing [ADR-003](0003-transport-and-trust.md) continues to describe the implemented SSH trust path.
 
 ## Context
 
