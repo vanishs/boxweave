@@ -122,7 +122,7 @@ def create_remote_app(store, config, dispatch=None, clock=None):
                 callback_origin = parsed.scheme + "://" + parsed.netloc
                 # CSP source syntax is deliberately narrower than OAuth's
                 # redirect URI parser; never interpolate unsafe header bytes.
-                if re.fullmatch(r"https?://[A-Za-z0-9.\\-:\\[\\]]+", callback_origin):
+                if re.fullmatch(r"https?://[A-Za-z0-9.\-:\[\]]+", callback_origin):
                     form_action += " " + callback_origin
                     # no-referrer can turn a browser's POST Origin into null.
                     # same-origin keeps the OAuth callback's referrer private.
