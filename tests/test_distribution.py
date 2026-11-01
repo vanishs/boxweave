@@ -33,6 +33,11 @@ class DistributionTests(unittest.TestCase):
   p=self.root/'link.zip';i=zipfile.ZipInfo('bwmini/escape');i.external_attr=(0o120777<<16)
   with zipfile.ZipFile(p,'w') as z:z.writestr(i,'/etc/passwd');z.writestr('manifest.json',b'{}')
   with self.assertRaisesRegex(d.InstallError,'PATH'):d.verify(p,d.digest(p.read_bytes()))
+ def test_build_packages_every_bwmini_source_module(self):
+  (self.source/'bwmini'/'remote_auth.py').write_text('fixture')
+  out=self.root/'complete.zip';d.build(self.source,self.wheels,out,'f'*40,'modified')
+  packaged=set(zipfile.ZipFile(out).namelist())
+  self.assertTrue({f'bwmini/{p.name}' for p in (self.source/'bwmini').glob('*.py')}<=packaged)
  def test_install_rerun_preserves_settings_and_consistent_database_backup(self):
   first=self.install();current=(self.prefix/'current').resolve();second=self.install()
   self.assertEqual((self.prefix/'current').resolve(),current);self.assertEqual((self.prefix/'config.json').read_bytes(),self.raw)

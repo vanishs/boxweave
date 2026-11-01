@@ -45,9 +45,10 @@ def verify(archive,sha):
   return manifest
 def build(root,wheels,output,commit,source_state):
  root=Path(root).resolve();files={}
- modules=('__init__','__main__','bootstrap','online','client_setup','hostkeys','mcp_gate','nesting','manage','access','access_provider','agent_box','auto_sleep','box_actions','deploy_check','diagnostics','distribution','domain','graphs','jobs','lifecycle','mcp','models','profiles','provider','selftest','service','store','web')
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
- public=[root/'bwmini'/(n+'.py') for n in modules]+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
+ # Package every bwmini source module: a curated list previously omitted new
+ # schema/remote modules and produced archives whose Store imports failed.
+ public=sorted((root/'bwmini').glob('*.py'))+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
  for p in public:
   if p.is_file():
    require(not p.is_symlink(),'SYMLINK_SOURCE');files[p.relative_to(root).as_posix()]=p.read_bytes()
