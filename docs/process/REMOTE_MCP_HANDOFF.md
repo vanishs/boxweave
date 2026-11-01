@@ -46,3 +46,7 @@ Follow [R0](../design/remote-mcp/R0_PROTOCOL_AND_DISPATCH.md) → [R1](../design
 - Real public-host deployment and privileged firewall/DNS changes until specifically approved.
 
 Upon completion, update [master status](../design/REMOTE_MCP_MASTER.md), [architecture authority](../design/ARCHITECTURE.md), [phase status](PHASE_STATUS.md), and [OPEN_RISKS](../verification/OPEN_RISKS.md) with precise tested vs untested boundaries.
+
+## PR #10 source implementation and explicit deviations
+
+R0 reused the unchanged SSH Gateway through a fixed subprocess per remote HTTP MCP request rather than refactoring privileged upstream transforms. R1 is stateless Streamable HTTP with JSON responses and 405 for unsupported SSE GET. R2 includes OAuth PKCE S256 and public-client DCR, API Bearer, opaque URL capability with hash-at-rest and revoke. R3 supplies an operator-invoked existing Caddy runner and documented independent proxy/tunnel mapping, not automatic Caddy installation or DNS/firewall management. R4 adds protected Web connection management. Store schema v12 and version v0.24.0 are implemented in source; published stable remains v0.22.0. No live Box, external OAuth client or public TLS deployment has been performed. [Setup](../REMOTE_MCP.md), [risks](../verification/OPEN_RISKS.md).
