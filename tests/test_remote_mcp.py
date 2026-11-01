@@ -191,7 +191,8 @@ class RemoteWebTests(unittest.TestCase):
         app.testing = True
         self.client = app.test_client()
         self.assertEqual(self.client.post("/api/login",
-            json={"password": "web-fixture-password"}).status_code, 200)
+            json={"password": "web-fixture-password"},
+            headers={"Origin": "http://127.0.0.1:18640"}).status_code, 200)
         self.csrf = self.client.get("/api/session").json["csrf"]
         self.headers = {"Origin": "http://127.0.0.1:18640",
                         "X-CSRF-Token": self.csrf}
