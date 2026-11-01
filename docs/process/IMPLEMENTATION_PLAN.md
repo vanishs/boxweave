@@ -144,3 +144,17 @@ TASK-015: dedicated application user/bus, independent scoped launcher and token 
 ## TASK-017 — Independent nesting (SRC-103)
 
 REQ-003/008/009/011/018/019 -> ADR-008 -> nesting.py/mcp_gate.py/lifecycle/Provider/Web/install/doctor -> test_nesting.py and [verification](../verification/NESTING_VERIFICATION.md). Dependencies: reviewed streamed root boundary, authenticated MCP. Privileged live acceptance remains separate from CI; preserve failed instances.
+
+## Future work package: remote MCP HTTP(S) and OAuth (approved design, not executed)
+
+The owner's 2026-10-31 eight decisions select **REMOTE-R0–R4**, independently of the historical TASK-001–020 implementation progress. They require a separate implementation authorization, reviewed release and environment-specific approval before public listeners or live Provider/Box changes.
+
+| Work item | Dependencies | Expected source deliverable | Acceptance |
+| --- | --- | --- | --- |
+| REMOTE-R0 | existing SSH suite | Common transport-neutral MCP gateway dispatch; SSH behavior preserved | AC-021 / fixture + installed SSH parity |
+| REMOTE-R1 | R0 | Loopback Streamable HTTP endpoint, protocol/session/Origin rules | AC-021 / real Inspector plus negatives |
+| REMOTE-R2 | R1 | Local-admin OAuth + API Bearer + credential URL, isolated token store | AC-022–023 / PKCE/token/path negatives, real client |
+| REMOTE-R3 | R1–R2 | Opt-in managed HTTPS and external proxy/public origin compatibility | AC-024 / independent HTTPS proof and rollback |
+| REMOTE-R4 | R2–R3 | Web connection UI, diagnostics and SSH compatibility preservation | AC-024 / actual client use and revocation |
+
+Master [REMOTE_MCP_MASTER](../design/REMOTE_MCP_MASTER.md), [test plan](../verification/REMOTE_MCP_TEST_PLAN.md), [Agent handoff](REMOTE_MCP_HANDOFF.md). None are currently passed from this document-only work.
