@@ -1,6 +1,6 @@
 # R2 — OAuth, API Token and credential-bearing URL
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **DESIGN ONLY / NOT IMPLEMENTED**. Dependencies: [R0](R0_PROTOCOL_AND_DISPATCH.md), [R1](R1_STREAMABLE_HTTP.md). Next: [R3](R3_HTTPS_AND_PROXY.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / REAL OAUTH CLIENT NOT TESTED**. Dependencies: [R0](R0_PROTOCOL_AND_DISPATCH.md), [R1](R1_STREAMABLE_HTTP.md). Next: [R3](R3_HTTPS_AND_PROXY.md).
 
 ## Decision boundary
 
