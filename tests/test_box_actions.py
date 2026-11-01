@@ -78,7 +78,7 @@ class ActionTests(Base):
 
     def test_v11_schema_and_bad_sleep_params(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],11)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],12)
         for args in ({"enabled":1,"idleThresholdMinutes":30},
                      {"enabled":True,"idleThresholdMinutes":0},
                      {"enabled":True,"idleThresholdMinutes":999999}):
