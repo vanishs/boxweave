@@ -125,12 +125,28 @@ class RemoteTests(unittest.TestCase):
                   "scope": "mcp:operator", "resource": RESOURCE}
         page = self.client.get("/authorize", query_string=params)
         self.assertEqual(page.status_code, 200)
+        # Browser form submits to this origin then follows a 302 to the
+        # registered OAuth callback. Without both headers Chrome either
+        # sends Origin: null or blocks the cross-origin callback via CSP.
+        self.assertEqual(page.headers["Referrer-Policy"], "same-origin")
+        self.assertIn("form-action 'self' https://chatgpt.example.test;",
+                      page.headers["Content-Security-Policy"])
+        self.assertNotIn("chatgpt.example.test/callback",
+                         page.headers["Content-Security-Policy"])
+        self.assertIn("frame-ancestors 'none'",
+                      page.headers["Content-Security-Policy"])
         pending = re.search('name="pending" value="([^"]+)"', page.get_data(as_text=True)).group(1)
-        self.assertEqual(self.client.post("/authorize", data={"pending": pending,
-            "password": "fixture-admin-password", "approve": "yes"}).status_code, 403)
-        approved = self.client.post("/authorize", headers={"Origin": ORIGIN},
-             data={"pending": pending, "password": "fixture-admin-password", "approve": "yes"})
+        form = {"pending": pending, "password": "fixture-admin-password", "approve": "yes"}
+        self.assertEqual(self.client.post("/authorize", data=form).status_code, 403)
+        # The browser fix must not authorize opaque/null Origin or replay.
+        self.assertEqual(self.client.post("/authorize", data=form,
+                         headers={"Origin": "null"}).status_code, 403)
+        self.assertEqual(self.client.post("/authorize", data=form,
+                         headers={"Origin": "https://evil.example.test"}).status_code, 403)
+        approved = self.client.post("/authorize", headers={"Origin": ORIGIN}, data=form)
         self.assertEqual(approved.status_code, 302)
+        self.assertEqual(self.client.post("/authorize", headers={"Origin": ORIGIN},
+                         data=form).status_code, 403)
         self.assertTrue(approved.headers["Location"].startswith(params["redirect_uri"]))
         code = parse_qs(urlsplit(approved.headers["Location"]).query)["code"][0]
         form = {"client_id": client_id, "redirect_uri": params["redirect_uri"],
@@ -152,6 +168,27 @@ class RemoteTests(unittest.TestCase):
         self.store.reset_admin(generate_password_hash("new-password-after-reset"))
         self.assertEqual(self.call(result.json["access_token"]).status_code, 401)
         self.assertEqual(self.call(refresh.json["access_token"]).status_code, 401)
+
+    def test_authorization_headers_never_expand_for_rejected_redirect(self):
+        metadata = self.client.get("/.well-known/oauth-authorization-server")
+        self.assertEqual(metadata.headers["Referrer-Policy"], "no-referrer")
+        self.assertIn("form-action 'self';", metadata.headers["Content-Security-Policy"])
+        registered = self.client.post("/register", json={
+            "client_name": "Browser CSP test",
+            "redirect_uris": ["https://chatgpt.example.test/callback"]})
+        self.assertEqual(registered.status_code, 201)
+        params = {"client_id": registered.json["client_id"],
+                  "redirect_uri": "https://unregistered.example.test/callback",
+                  "response_type": "code", "code_challenge_method": "S256",
+                  "code_challenge": "A" * 43, "state": "valid-state-1",
+                  "scope": "mcp:operator", "resource": RESOURCE}
+        rejected = self.client.get("/authorize", query_string=params)
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(rejected.headers["Referrer-Policy"], "no-referrer")
+        self.assertIn("form-action 'self';",
+                      rejected.headers["Content-Security-Policy"])
+        self.assertNotIn("unregistered.example.test",
+                         rejected.headers["Content-Security-Policy"])
 
     def test_redirect_dcr_and_bad_resource_rejected(self):
         for redirect in ("http://attacker.example/cb", "http://169.254.169.254/cb",

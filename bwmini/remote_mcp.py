@@ -107,12 +107,32 @@ def create_remote_app(store, config, dispatch=None, clock=None):
 
     @app.after_request
     def security_headers(response):
+        # A browser form POST to /authorize returns a cross-origin OAuth
+        # callback redirect. Chrome applies the form page's form-action CSP
+        # to that redirect too. Restrict the extra destination to the exact
+        # registered client's callback origin, and only on a valid auth page.
+        form_action = "form-action 'self'"
+        referrer_policy = "no-referrer"
+        if (request.method == "GET" and request.path == "/authorize"
+                and response.status_code == 200):
+            callback = request.args.get("redirect_uri")
+            client = request.args.get("client_id")
+            if valid_url(callback) and credentials.registered(client, callback):
+                parsed = urlsplit(callback)
+                callback_origin = parsed.scheme + "://" + parsed.netloc
+                # CSP source syntax is deliberately narrower than OAuth's
+                # redirect URI parser; never interpolate unsafe header bytes.
+                if re.fullmatch(r"https?://[A-Za-z0-9.\-:\[\]]+", callback_origin):
+                    form_action += " " + callback_origin
+                    # no-referrer can turn a browser's POST Origin into null.
+                    # same-origin keeps the OAuth callback's referrer private.
+                    referrer_policy = "same-origin"
         response.headers["Cache-Control"] = "no-store"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Referrer-Policy"] = referrer_policy
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; style-src 'unsafe-inline'; "
-            "form-action 'self'; frame-ancestors 'none'")
+            + form_action + "; frame-ancestors 'none'")
         return response
 
     @app.errorhandler(RemoteError)
@@ -283,7 +303,7 @@ I authorize this client to use BoxWeave MCP tools.</label>
                         "result": {"protocolVersion": PROTOCOL,
                                    "capabilities": {"tools": {"listChanged": False},
                                                     "resources": {"listChanged": False}},
-                                   "serverInfo": {"name": "boxweave", "version": "0.24.0"}}},
+                                   "serverInfo": {"name": "boxweave", "version": "0.24.2"}}},
                        headers={"MCP-Protocol-Version": PROTOCOL})
         if method == "notifications/initialized":
             return Response(status=202, headers={"Cache-Control": "no-store"})
