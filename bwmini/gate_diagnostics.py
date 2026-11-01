@@ -307,7 +307,7 @@ def preauthorize_project(args, *, policy_path=PROJECT_POLICY, policy=None):
 def project_grant(args, observed, *, policy_path=PROJECT_POLICY, policy=None):
     policy = preauthorize_project(args, policy_path=policy_path, policy=policy)
     grant = policy["boxes"][args["box"]]
-    if (not isinstance(observed, dict) or observed.get("username") != box
+    if (not isinstance(observed, dict) or observed.get("username") != args["box"]
             or observed.get("name") != grant["instance_name"]
             or str(observed.get("createdAt")) != grant["created"]
             or observed.get("state") != "CONTAINER_STATE_RUNNING"):
