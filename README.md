@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.25.2.** The default installer initially remains pinned to the published `v0.25.1` release until the new source-bound `v0.25.2` Release is verified and promoted. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source and published stable version: 0.25.2.** The default installer targets the `v0.25.2` Release assets. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -17,10 +17,10 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | 
 To install or update to an exact published version, including a historical release, use:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.25.1
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.25.2
 ```
 
-The optional `--version 0.X.Y` selects a signed-upstream metadata and SHA-256-verified GitHub Release; an unknown, unpublished, malformed or mismatched release fails closed before running the downloaded helper. Omit `--version` to use the separately promoted stable installer pin. The command can include the existing `--provider-url`, `--provider-secret-file`, and `--provider-cli` options. The version selector is for the streamed installer, not `plan`, `apply` or `bootstrap` modes.
+The optional `--version 0.X.Y` selects a GitHub Release verified against its published metadata, source tag, and SHA-256 digests; an unknown, unpublished, malformed or mismatched release fails closed before running the downloaded helper. Omit `--version` to use the separately promoted stable installer pin. The command can include the existing `--provider-url`, `--provider-secret-file`, and `--provider-cli` options. The version selector is for the streamed installer, not `plan`, `apply` or `bootstrap` modes.
 
 
 **Ubuntu 24.04 or newer is the recommended host**, not a required distribution. The installer checks Linux x86_64, CPython >= 3.12, systemd, Provider/Incus availability and needed package tooling directly. On hosts without APT, prepare reviewed dependencies and Provider yourself; BoxWeave does not invoke an alternative package manager. Other distributions require separate live acceptance. It verifies source-bound release assets, provisions missing infrastructure on a clean host, **preserves an already configured Incus storage pool**, and **reuses an existing complete Containarium** without installing or upgrading it. Existing Provider identity, configuration, network and storage remain external. Partial installations are refused. See [existing Provider instructions](docs/verification/EXISTING_PROVIDER_INSTALL.md) and [two-box MCP test](docs/verification/STREAMED_INSTALL_TEST.md). The released offline wheelhouse includes CPython 3.12–3.15 x86_64 wheels; Ubuntu 26.04 requires live host acceptance. The supported client catalog covers Linux/macOS native SSH and Windows native/WSL SSH; real App acceptance remains pending.
