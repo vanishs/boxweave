@@ -17,7 +17,7 @@ import time
 
 SETTINGS_PATH = Path("/etc/boxweave/diagnostics.json")
 PROJECT_POLICY = Path("/etc/boxweave/project-diagnostics.json")
-JOURNAL = Path("/home/boxweave/.local/state/boxweave-gateway/diagnostics.sqlite3")
+JOURNAL = Path("/home/boxweave/boxweave/.diagnostics/mcp.sqlite3")
 APP_PREFIX = Path("/home/boxweave/boxweave")
 DEFAULTS = {"enabled": True, "auto_diagnose": True,
             "retention_days": 7, "max_storage_mb": 50}
@@ -29,6 +29,31 @@ CHECKS = frozenset(("processes", "ports", "service", "logs"))
 KINDS = frozenset(("hello", "environment", "access"))
 EVENT_LIMIT = 25
 
+
+DIAG_TOOL = {
+    "name": "boxweave_diagnose",
+    "description": "Read classified bounded operator-scoped gateway or application diagnostics. Gateway: source=gateway plus recent (1..25) or trace_id. App: source=app plus trace_id or operation_kind and operation_id. Does not repair, replay writes, return raw logs, or grant new authority. Use after errors or uncertain outcomes.",
+    "inputSchema": {
+        "type": "object", "additionalProperties": False,
+        "properties": {"source": {"type": "string", "enum": ["gateway", "app"]},
+                       "recent": {"type": "integer", "minimum": 1, "maximum": 25},
+                       "trace_id": {"type": "string"},
+                       "operation_kind": {"type": "string", "enum": ["hello", "environment", "access"]},
+                       "operation_id": {"type": "string"}},
+        "required": ["source"]},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True, "openWorldHint": False}}
+PROJECT_TOOL = {
+    "name": "boxweave_project_diagnose",
+    "description": "Read bounded categorized process, port, service or log status for a server-preauthorized exact managed Box; defaults DENY and never returns raw logs. No arbitrary command, path, privilege or remediation. Admin must explicitly allowlist Box incarnation and checks.",
+    "inputSchema": {
+        "type": "object", "additionalProperties": False,
+        "properties": {"box": {"type": "string"},
+                       "check": {"type": "string", "enum": ["processes", "ports", "service", "logs"]},
+                       "service": {"type": "string"}},
+        "required": ["box", "check"]},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True, "openWorldHint": False}}
 
 def _owner_file(path, *, owner=0, private=False):
     info = path.lstat()
@@ -61,7 +86,7 @@ def _journal_parent(path, *, create):
     """Only create a private leaf under an existing owner-only home directory."""
     parent = path.parent
     if create:
-        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        parent.mkdir(mode=0o700, parents=False, exist_ok=True)
     for folder in (parent, parent.parent):
         data = folder.lstat()
         if not stat.S_ISDIR(data.st_mode) or data.st_uid != os.geteuid() or data.st_mode & 0o077:
@@ -82,6 +107,7 @@ def _open(path, *, write):
         if not path.exists():
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             os.close(fd)
+        _journal_parent(path, create=False)
         db = sqlite3.connect(str(path), timeout=0.5)
         db.execute("PRAGMA busy_timeout=500")
         db.execute("CREATE TABLE IF NOT EXISTS events ("
@@ -254,7 +280,7 @@ def validate_project_policy(value):
     return boxes
 
 
-def project_grant(args, observed, *, policy_path=PROJECT_POLICY, policy=None):
+def preauthorize_project(args, *, policy_path=PROJECT_POLICY, policy=None):
     if (not isinstance(args, dict) or set(args) - {"box", "check", "service"}
             or not isinstance(args.get("box"), str) or not LOGICAL.fullmatch(args["box"])
             or args.get("check") not in CHECKS):
@@ -275,6 +301,12 @@ def project_grant(args, observed, *, policy_path=PROJECT_POLICY, policy=None):
     if grant is None or check not in grant["checks"] or (
             check in ("service", "logs") and args["service"] not in grant["services"]):
         raise ValueError("PROJECT_DIAG_NOT_AUTHORIZED")
+    return policy
+
+
+def project_grant(args, observed, *, policy_path=PROJECT_POLICY, policy=None):
+    policy = preauthorize_project(args, policy_path=policy_path, policy=policy)
+    grant = policy["boxes"][args["box"]]
     if (not isinstance(observed, dict) or observed.get("username") != box
             or observed.get("name") != grant["instance_name"]
             or str(observed.get("createdAt")) != grant["created"]
