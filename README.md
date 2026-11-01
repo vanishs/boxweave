@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source and published stable version: 0.24.5.** The default installer targets the verified `v0.24.5` release assets. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.25.0.** The default installer targets the verified `v0.24.5` release assets until 0.25.0 publication and stable pin promotion. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -193,3 +193,8 @@ Container-host setup: see [nesting configuration and restart guidance](docs/NEST
 ## Remote HTTP(S) MCP (v0.24.4)
 
 The opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded. On 2026-11-01, an owner-operated Cloudflare Quick Tunnel and hosted ChatGPT OAuth reached real MCP container listings after a process-local browser-header hotfix; v0.24.2 makes that fix permanent in source; v0.24.3 additionally preserves those headers through managed Caddy and reports bounded local TCP status in Web. The v0.24.5 package has not been deployed/tested on that live host; production HTTPS and other clients still require separate acceptance.
+
+
+## D3/D4 agent diagnostics (0.25.0 source)
+
+The existing SSH/stdio and optional authenticated HTTP MCP support `boxweave_diagnose` for classified gateway/app evidence, and `boxweave_project_diagnose` for restricted exact-Box project checks. Gateway recording is enabled by default (7 days and 50 MiB, configurable); original tool result bodies are unchanged. **D4 project inspection defaults DENY** until a server administrator allowlists a specific Box incarnation, checks and service names. See [operator configuration](docs/DIAGNOSTICS.md), [D3/D4 master](docs/design/DIAGNOSTICS_D3_D4_MASTER.md), and [implementation batches](docs/design/DIAGNOSTICS_D3_D4_IMPLEMENTATION.md). Never share reports or submit external issues before the user personally reviews sensitive data and separately approves the final submission. CI is not real-host acceptance.

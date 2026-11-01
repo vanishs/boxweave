@@ -50,3 +50,13 @@ These requirements add behavior **without changing** current REQ-001–020 compl
 | REQ-024 | Support opt-in automatically managed HTTPS and an existing operator-managed HTTPS reverse proxy/external tunnel through one configured public origin; preserve existing services on failure and provide safe Web connection/diagnostic instructions | P1 / source implemented, live unverified | REQ-008/009/011/018/021–023, REMOTE-R3/R4 | AC-024 |
 
 Future unified **SSH+HTTP** Agent identity, fine-grained tool/Box policy and shared authorization is explicitly deferred; the above must **not** be described as individual-agent least privilege. No team cloud/multiuser SaaS is selected. No provider-specific Tunnel integration is included. [Implementation phases](../design/REMOTE_MCP_MASTER.md), [verification plan](../verification/REMOTE_MCP_TEST_PLAN.md).
+
+
+## D3/D4 agent diagnostics (owner-selected 2026-11-01)
+
+| ID | Selected requirement | Priority / source | Dependencies | Acceptance |
+| --- | --- | --- | --- | --- |
+| REQ-025 | Provide one operator-scoped read-only MCP diagnostic interface for app receipts and gateway traces, with bounded classified evidence captured automatically for owned MCP calls, private configurable retention (default 7 days, 50 MiB), preserved Provider response behavior, explicit missing coverage and no automatic repair or ambiguous-write replay | P1 / SRC-116 | REQ-003/009/018/020/021; D0–D2 | AC-025 |
+| REQ-026 | Provide a bounded read-only project diagnostic interface for an explicitly configured **exact managed Box incarnation**; default deny deep inspection everywhere, require server-admin allowlisted check/service and fresh target trust, summarize guest observations without raw logs, and prohibit automatic external Issue disclosure absent user's personal content review and separate final approval | P1 / SRC-116 | REQ-004/016/018/025 | AC-026 |
+
+The Agent may diagnose automatically when supported by its client, but MCP guidance alone cannot enforce a model's behavior or attest human conversation approval. Shared operator permissions remain broad outside the new D4 interface; no global RBAC is implied.

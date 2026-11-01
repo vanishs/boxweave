@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Source and published stable v0.24.5 (D2 actor-scoped report patch; existing OAuth compatibility, readiness and Agent self-information).** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source v0.25.0 adds operator-scoped D3/D4 diagnostic tools; previously published stable v0.24.5 until new release pin promotion.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 
@@ -76,3 +76,4 @@ tools and Box state. An enabled gateway allowlist must permit
 Check authorized initialize/tools/list, wrong-Origin rejection, OAuth authorization, actual HTTPS/TLS and revocation with a standalone real client before claiming external readiness. A tunnel's Healthy label is not MCP proof. A 2026-11-01 owner-operated Cloudflare Quick Tunnel and ChatGPT OAuth workflow reached real `list_containers` results (four running boxes); this does not validate a production TLS deployment, a complete Box tool workflow, or all other client apps. The v0.24.2 browser header change was verified by fixture CI; v0.24.3 adds the managed-Caddy header and local-status regression tests. Both require a separately installed release for source-to-runtime parity. Network/host installation or public port changes require separate explicit approval. For a timed-out mutating MCP tool call, completion is UNKNOWN; never automatically retry.
 
 See [architecture](design/REMOTE_MCP_MASTER.md), [development phases](process/REMOTE_MCP_HANDOFF.md), [verification](verification/REMOTE_MCP_TEST_PLAN.md).
+\n\n## D3/D4 gateway diagnostics (0.25.0)\n\nBoth transport profiles share the same classified gateway evidence journal and default-deny D4 project policy. Allowlist the new tools explicitly if the optional host tool policy is enabled. See [exact-Box operator setup](DIAGNOSTICS.md). No client is guaranteed to use automatic error diagnosis; no upstream response body is rewritten or automatically uploaded.\n

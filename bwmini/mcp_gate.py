@@ -1,5 +1,5 @@
 """MCP stdio relay: inject a server-owned workload key and enforce SSH trust."""
-import base64, json, os, re, stat, subprocess, sys, time
+import base64, json, os, re, stat, subprocess, sys, time, secrets
 from pathlib import Path
 
 try:
@@ -7,8 +7,13 @@ try:
 except ImportError:
     from nesting import invoke as nesting_invoke
 
+try:
+    from . import gate_diagnostics as gd
+except ImportError:
+    import gate_diagnostics as gd
+
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.24.5"
+SERVER_INFO_VERSION = "0.25.0"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -24,7 +29,14 @@ SERVER_INSTRUCTIONS = (
     "manages workload SSH public keys; never request or expose private keys. "
     "Diagnose SSH failures with debug_container. Obtain approval for destructive "
     "or network exposure changes. Timed-out writes have UNKNOWN outcomes: "
-    "inspect real state before retrying, never blindly replay mutations."
+    "inspect real state before retrying, never blindly replay mutations. "
+    "On errors, use boxweave_diagnose to inspect classified evidence; use "
+    "boxweave_project_diagnose only within the server-authorized Box scope. "
+    "A diagnosis is not a verified cause or permission to repair. For ordinary "
+    "users explain/prepare a private issue draft; for authorized developers "
+    "investigate source and tests. Never upload reports or open an external "
+    "issue before the user personally reviews its contents and separately "
+    "approves final submission."
 )
 INFO_TOPICS = {
     "overview": {
@@ -57,6 +69,11 @@ INFO_TOPICS = {
                      "start_container", "stop_container", "delete_container",
                      "get_metrics", "boxweave_nesting"],
         "limits": "Provider tools vary by version/scope. Application-side agent-box support is separate from direct Agent tools; no guarantee of general snapshot/clone or automatic Agent test orchestration.",
+    },
+    "diagnostics": {
+        "gateway": "boxweave_diagnose reads bounded gateway and app evidence; gateway capture defaults to 7 days/50 MiB and is configurable by the host operator.",
+        "projects": "boxweave_project_diagnose is read-only and defaults deny until root-owned exact Box incarnation and check allowlist is installed.",
+        "agent_workflow": "On failure or unknown result diagnose first, never blindly retry writes. For disclosure draft privately, user reviews sensitive data, then separately approves final external submission."
     },
     "security": {
         "authority": "Single trusted-operator MCP authority, optionally restricted by a root-owned host-wide tool allowlist; not per-Agent/per-Box RBAC.",
@@ -152,7 +169,7 @@ def catalog(message):
                 "explicit authorization and verify target; after a timeout "
                 "inspect state instead of blindly retrying."
             )
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL))
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -178,6 +195,11 @@ GATE_ERROR_CODES = frozenset((
     "NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE",
     "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED", "INFO_TOPIC_INVALID",
     "CHANGE_OUTCOME_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE",
+    "DIAGNOSTIC_SELECTOR_INVALID", "DIAGNOSTIC_SETTINGS_INVALID",
+    "PROJECT_SELECTOR_INVALID", "PROJECT_POLICY_INVALID",
+    "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
+    "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
+    "PROJECT_COMMAND_UNAVAILABLE",
 ))
 
 
@@ -302,6 +324,11 @@ def main():
                 return message
             print(json.dumps(message), flush=True)
         raise ValueError("UPSTREAM_MESSAGE_LIMIT")
+    def emit_result(ident, value):
+        print(json.dumps({"jsonrpc": "2.0", "id": ident, "result": {
+            "content": [{"type": "text", "text": json.dumps(value, sort_keys=True)}],
+            "isError": False}}), flush=True)
+
     def container(logical, ident):
         internal = "boxweave-nesting-" + str(ident)
         send({"jsonrpc":"2.0","id":internal,"method":"tools/call",
@@ -321,6 +348,8 @@ def main():
                 print(json.dumps(message), flush=True)
                 continue
             nesting = None
+            started = time.monotonic()
+            trace = secrets.token_hex(16)
             if request.get("method") == "tools/call":
                 params = request.get("params", {}); args = params.get("arguments", {})
                 if permitted is not None and params.get("name") not in permitted:
@@ -328,6 +357,34 @@ def main():
                         "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
                     continue
                 try:
+                    if params.get("name") == "boxweave_diagnose":
+                        if not isinstance(args, dict):
+                            raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")
+                        if args.get("source") == "gateway":
+                            value = gd.query_gateway(args)
+                        elif args.get("source") == "app":
+                            value = gd.query_app(args)
+                        else:
+                            raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")
+                        emit_result(request["id"], value)
+                        continue
+                    if params.get("name") == "boxweave_project_diagnose":
+                        # Root-owned policy is checked BEFORE any Provider read.
+                        gd.preauthorize_project(args)
+                        observed = container(args["box"], request["id"])
+                        gd.project_grant(args, observed)
+                        registry = json.loads(REGISTRY.read_text())
+                        trusted({"box": args["box"]}, registry, observed)
+                        internal = "boxweave-d4-" + secrets.token_hex(8)
+                        send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
+                              "params": {"name": "connect",
+                                         "arguments": {"box": args["box"],
+                                                       "exec": gd.command_for_check(args)}}})
+                        response = reply(internal, False)
+                        value = gd.project_summary(args, response.get("result", {}))
+                        value.update(source="project", box=args["box"])
+                        emit_result(request["id"], value)
+                        continue
                     if params.get("name") == "boxweave_info":
                         value = boxweave_info(args)
                         print(json.dumps({"jsonrpc":"2.0","id":request["id"],
@@ -374,8 +431,12 @@ def main():
                 except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
-                    print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
-                                      "error": {"code": -32602, "message": reason}}), flush=True)
+                    error_result = {"jsonrpc": "2.0", "id": request.get("id"),
+                                    "error": {"code": -32602, "message": reason}}
+                    if params.get("name") not in ("boxweave_diagnose", "boxweave_project_diagnose"):
+                        gd.record(params.get("name", ""), error_result,
+                                  (time.monotonic() - started) * 1000, trace=trace)
+                    print(json.dumps(error_result), flush=True)
                     continue
             send(request)
             if "id" in request:
@@ -389,7 +450,20 @@ def main():
                         result["instructions"] = SERVER_INSTRUCTIONS
                     print(json.dumps(message), flush=True)
                 elif nesting is None:
-                    reply(request["id"])
+                    try:
+                        message = reply(request["id"], False)
+                    except (ValueError, OSError):
+                        # Record an uncertain upstream response; never replay
+                        # the operation or replace its original failure.
+                        if request.get("method") == "tools/call":
+                            gd.record(request.get("params", {}).get("name", ""),
+                                      {"error": {"code": -32603}},
+                                      (time.monotonic() - started) * 1000, trace=trace)
+                        raise
+                    if request.get("method") == "tools/call":
+                        gd.record(request.get("params", {}).get("name", ""), message,
+                                  (time.monotonic() - started) * 1000, trace=trace)
+                    print(json.dumps(message), flush=True)
                 else:
                     message = reply(request["id"], False)
                     if "error" not in message and not message.get("result", {}).get("isError"):
@@ -403,6 +477,8 @@ def main():
                             detail = str(error) if str(error) in GATE_ERROR_CODES else "NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE"
                             message = {"jsonrpc":"2.0","id":request["id"],"error":{
                                 "code":-32603,"message":"BOXWEAVE_NESTING_NOT_APPLIED; box creation itself succeeded and must not be repeated; "+detail}}
+                    gd.record(request.get("params", {}).get("name", ""), message,
+                              (time.monotonic() - started) * 1000, trace=trace)
                     print(json.dumps(message), flush=True)
     finally:
         if process.poll() is None:
