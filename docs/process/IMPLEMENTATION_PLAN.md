@@ -145,7 +145,7 @@ TASK-015: dedicated application user/bus, independent scoped launcher and token 
 
 REQ-003/008/009/011/018/019 -> ADR-008 -> nesting.py/mcp_gate.py/lifecycle/Provider/Web/install/doctor -> test_nesting.py and [verification](../verification/NESTING_VERIFICATION.md). Dependencies: reviewed streamed root boundary, authenticated MCP. Privileged live acceptance remains separate from CI; preserve failed instances.
 
-## Future work package: remote MCP HTTP(S) and OAuth (approved design, not executed)
+## Remote MCP HTTP(S) and OAuth work package (source implemented in PR #10, live unverified)
 
 The owner's 2026-10-31 eight decisions select **REMOTE-R0–R4**, independently of the historical TASK-001–020 implementation progress. They require a separate implementation authorization, reviewed release and environment-specific approval before public listeners or live Provider/Box changes.
 
