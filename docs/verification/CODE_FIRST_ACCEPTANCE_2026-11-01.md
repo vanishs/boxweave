@@ -2,7 +2,7 @@
 
 **Source baseline:** [main@`ca4898c26496`](https://github.com/vanishs/boxweave/commit/ca4898c26496a2618ac28bf0318175791307b564), v0.25.0. Code, not historical feature prose, determines what is inventory-listed. This is a dated baseline; an inventory token does not prove that a route works.
 
-**Current acceptance supersession:** This document preserves a historical source/CI inventory and earlier scoped run. Read [the full A01–A30 live acceptance ledger](CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) for the 2026-11-01 new Box v0.26.0 fresh install, 0.24.0 and 0.26.0 upgrades to v0.26.1, real nested failure, network packet test, client generation, source-only fixes and explicit blocked/pending categories. Do not treat the historical claim "SSH blocked" as universal after direct guest-IP execution was verified.
+**Current acceptance supersession:** See the [post-v0.26.2 A01–A33 reacceptance](REACCEPTANCE_0262_TO_0264_2026-11-01.md) for the latest observed real Box evidence.  This document preserves a historical source/CI inventory and earlier scoped run. Read [the full A01–A30 live acceptance ledger](CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) for the 2026-11-01 new Box v0.26.0 fresh install, 0.24.0 and 0.26.0 upgrades to v0.26.1, real nested failure, network packet test, client generation, source-only fixes and explicit blocked/pending categories. Do not treat the historical claim "SSH blocked" as universal after direct guest-IP execution was verified.
 
 ## Actually executed evidence
 

@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Source and published stable v0.25.0 include operator-scoped D3/D4 diagnostic tools.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source and published stable v0.26.4 include operator-scoped D3/D4 diagnostic tools.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 

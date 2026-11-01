@@ -61,3 +61,7 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 ## Current 2026-11-01 code-first live acceptance supersession
 
 The historical REQ/AC matrix above is not a blanket acceptance of current installed services. The [whole-project A01–A30 ledger](CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) crosswalks all source-backed features, includes implementation not described in earlier feature narratives (`boxweave job`, developer source bundling, MCP self-info, CLI report kind/instance failure semantics), records actual new-Box and historical-Box execution, and preserves **PASS/PARTIAL/FAIL/BLOCKED/UNKNOWN/UNVERIFIED** per exact layer. Real v0.26.1 install and upgrade evidence does not by itself certify an installed v0.26.2. Neither upstream Containerium Provider tools nor future E0–E4 proposal-only capabilities should be represented as BoxWeave product acceptance.
+
+## Post-host-v0.26.2 installed-feature reacceptance (2026-11-01)
+
+The [A01–A33 live reacceptance](REACCEPTANCE_0262_TO_0264_2026-11-01.md) covers the original source matrix and the newly discovered (A31) Incus `query` project-selector failure, (A32) Web HTTP 404/405 incorrectly reclassified as 500, and (A33) partial success of nesting-enabled Box creation with opaque client error. Source fixes for A31/A32 were published in v0.26.3/v0.26.4; A33 and outer-host nesting execution remain OPEN and must not be promoted to PASS from fixture or from guest-local helper evidence.

@@ -1,5 +1,7 @@
 # Whole-project code-first acceptance ledger — 2026-11-01
 
+**Newer verification:** The owner subsequently updated the outer gateway to v0.26.2, enabling another complete code-first sweep with true v0.26.4 upgrades, 453 guest-local non-root tests, exact HTTP corrections, direct Incus query diagnosis and disposal cleanup. See the [A01–A33 post-host-update acceptance report](REACCEPTANCE_0262_TO_0264_2026-11-01.md). The original findings below remain historical evidence; do not apply their earlier status to the updated host.
+
 **Status:** current implementation inventory reconciled against source, CI and actual isolated Boxes; **not** a blanket product certification. This supplements the dated [code-first baseline](CODE_FIRST_ACCEPTANCE_2026-11-01.md), [feature matrix](FEATURE_MATRIX.md), [test strategy](TEST_STRATEGY.md) and [remediation queue](REMEDIATION_TEST_QUEUE.md). Do not turn an earlier historical PASS into a current-version PASS without a corresponding execution record.
 
 ## Scope, inventory and evidence classes

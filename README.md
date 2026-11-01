@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.26.4.** The default installer remains pinned to the previously published `v0.26.0` Release pending separately verified stable promotion. The nesting-query and HTTP 404/405 fixes have source regressions; installed-surface and host-specific nesting acceptance are reported separately. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source and published stable version: 0.26.4.** The default installer selects the source-bound verified `v0.26.4` Release. Real Box testing confirmed the v0.26.2-to-v0.26.4 and v0.21.3-to-v0.26.4 upgrade paths and corrected HTTP 404/405; outer-host nesting and external clients are still individually unverified. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | 
 To install or update to an exact published version, including a historical release, use:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.26.0
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.26.4
 ```
 
 The developer-only [Agent deployment/test workflow v1.0](docs/process/AGENT_TEST_DEPLOYMENT.md) uses existing authorized BoxWeave transports, local worktree snapshots and verified artifacts; it does not add MCP tools or treat a source snapshot as a Release installer.
