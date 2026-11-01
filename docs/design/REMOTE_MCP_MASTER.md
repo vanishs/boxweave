@@ -90,3 +90,13 @@ Normative outcomes: [REQ-021–024](../product/REQUIREMENTS.md), [AC-021–024](
 - [Cloudflare published-hostname-to-local-service mapping](https://developers.cloudflare.com/tunnel/get-started/)
 
 Return to [knowledge index](../INDEX.md).
+
+## v0.24.0 source implementation reconciliation (PR #10)
+
+- R0 **reused** the existing privileged mcp_gate.py via a fixed per-request subprocess instead of extracting an in-process dispatcher. Existing SSH behavior remains unchanged; the cost/performance and non-resumable stream limits are explicit.
+- R1 implements stateless Streamable HTTP with JSON responses, loopback-only listener, protocol negotiation and method/Origin/Host guards. Unsupported GET SSE returns 405, and no session resumption is claimed.
+- R2 implements local-admin OAuth Authorization Code + PKCE S256 and DCR, plus API Bearer and opaque URL path credentials (hash-at-rest, revoke and one-time reveal). No extra per-Agent RBAC.
+- R3 provides operator-invoked managed Caddy and manual reverse-proxy/external tunnel compatibility. The installer does **not** install Caddy or automatically publish DNS/TLS/firewall; these remain explicit owner operations.
+- R4 provides authenticated Web issuance/revocation, connection guidance and safe status. Actual ChatGPT/Cursor/Claude client compatibility, installed app and real Box execution remain **unverified** per the owner's no-Box-test directive.
+
+See [setup](../REMOTE_MCP.md), [verification](../verification/REMOTE_MCP_TEST_PLAN.md) and [open risks](../verification/OPEN_RISKS.md).
