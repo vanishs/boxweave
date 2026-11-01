@@ -1,6 +1,6 @@
 # R1 — Streamable HTTP MCP server
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **DESIGN ONLY / NOT IMPLEMENTED**. Dependency: [R0](R0_PROTOCOL_AND_DISPATCH.md). Next: [R2](R2_AUTH_AND_CREDENTIALS.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / LIVE CLIENT NOT TESTED**. Dependency: [R0](R0_PROTOCOL_AND_DISPATCH.md). Next: [R2](R2_AUTH_AND_CREDENTIALS.md).
 
 ## Goal
 
