@@ -450,7 +450,16 @@ def main():
                         result["instructions"] = SERVER_INSTRUCTIONS
                     print(json.dumps(message), flush=True)
                 elif nesting is None:
-                    message = reply(request["id"], False)
+                    try:
+                        message = reply(request["id"], False)
+                    except (ValueError, OSError):
+                        # Record an uncertain upstream response; never replay
+                        # the operation or replace its original failure.
+                        if request.get("method") == "tools/call":
+                            gd.record(request.get("params", {}).get("name", ""),
+                                      {"error": {"code": -32603}},
+                                      (time.monotonic() - started) * 1000, trace=trace)
+                        raise
                     if request.get("method") == "tools/call":
                         gd.record(request.get("params", {}).get("name", ""), message,
                                   (time.monotonic() - started) * 1000, trace=trace)

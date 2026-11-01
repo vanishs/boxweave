@@ -127,6 +127,7 @@ class GatewayDiagnosticsTests(unittest.TestCase):
         for bad in ({"box": "other", "check": "ports"},
                     {"box": "testbox", "check": "logs", "service": "other.service"},
                     {"box": "testbox", "check": "service", "service": "a;cat /etc/shadow"},
+                    {"box": "testbox", "check": "logs", "service": "-n"},
                     {"box": "testbox", "check": "ports", "service": "app.service"}):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 d.preauthorize_project(bad, policy=policy)

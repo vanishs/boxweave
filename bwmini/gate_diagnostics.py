@@ -24,7 +24,7 @@ DEFAULTS = {"enabled": True, "auto_diagnose": True,
 TOOL = re.compile(r"[a-z][a-z0-9_]{0,127}\Z")
 TRACE = re.compile(r"[0-9a-f]{32}\Z")
 LOGICAL = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
-SERVICE = re.compile(r"[A-Za-z0-9_.@-]{1,80}\Z")
+SERVICE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.@-]{0,79}\Z")
 CHECKS = frozenset(("processes", "ports", "service", "logs"))
 KINDS = frozenset(("hello", "environment", "access"))
 EVENT_LIMIT = 25
@@ -152,6 +152,10 @@ def record(tool, message, elapsed_ms, *, path=JOURNAL, config=None, trace=None, 
 
 def _record_row(path, policy, trace, tool, outcome, code, elapsed, now):
     with contextlib.closing(_open(path, write=True)) as db:
+        # Enforce a hard SQLite page budget; journal capture is optional.
+        cap = policy["max_storage_mb"] * 1024 * 1024
+        page_size = db.execute("PRAGMA page_size").fetchone()[0]
+        db.execute("PRAGMA max_page_count=" + str(max(1, cap // page_size)))
         # Journal is short-lived support metadata, not an operation receipt.
         with db:
             db.execute("INSERT INTO events(trace,utc,tool,outcome,code,elapsed_ms)"
