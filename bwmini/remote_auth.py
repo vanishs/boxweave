@@ -14,27 +14,27 @@ from urllib.parse import urlsplit
 from werkzeug.security import check_password_hash
 
 SCHEMA = """
-CREATE TABLE remote_clients(
+CREATE TABLE IF NOT EXISTS remote_clients(
  id TEXT PRIMARY KEY, label TEXT NOT NULL, redirects TEXT NOT NULL, created REAL NOT NULL
 );
-CREATE TABLE remote_pending(
+CREATE TABLE IF NOT EXISTS remote_pending(
  id TEXT PRIMARY KEY, client TEXT NOT NULL, redirect TEXT NOT NULL,
  challenge TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL,
  expires REAL NOT NULL
 );
-CREATE TABLE remote_codes(
+CREATE TABLE IF NOT EXISTS remote_codes(
  digest TEXT PRIMARY KEY, client TEXT NOT NULL, redirect TEXT NOT NULL,
  challenge TEXT NOT NULL, resource TEXT NOT NULL, expires REAL NOT NULL
 );
-CREATE TABLE remote_credentials(
+CREATE TABLE IF NOT EXISTS remote_credentials(
  digest TEXT PRIMARY KEY, kind TEXT NOT NULL, label TEXT NOT NULL,
  client TEXT, resource TEXT, created REAL NOT NULL, expires REAL,
  revoked INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE remote_attempts(
+CREATE TABLE IF NOT EXISTS remote_attempts(
  at REAL NOT NULL, category TEXT NOT NULL
 );
-CREATE INDEX remote_attempt_time ON remote_attempts(at);
+CREATE INDEX IF NOT EXISTS remote_attempt_time ON remote_attempts(at);
 """
 
 TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{40,160}$")
