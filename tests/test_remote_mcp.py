@@ -172,5 +172,54 @@ class RemoteTests(unittest.TestCase):
                                     "port": 18740, "host": "0.0.0.0"})
 
 
+class RemoteWebTests(unittest.TestCase):
+    def setUp(self):
+        from bwmini.domain import Target
+        from bwmini.provider import Fixture
+        from bwmini.service import Service
+        from bwmini.web import create_app
+        self.tmp = tempfile.TemporaryDirectory()
+        store = Store(Path(self.tmp.name) / "state" / "db.sqlite3")
+        store.admin(generate_password_hash("web-fixture-password"))
+        target = Target("containarium", "dev", "default", "fixture-box",
+                        "fixture-box-container", "123", "fixture-box",
+                        "fixture-box-container")
+        service = Service(store, Fixture(target))
+        app = create_app(service, "http://127.0.0.1:18640", self.tmp.name,
+                         secure=False, remote_config={"enabled": True,
+                         "public_url": ORIGIN, "port": 18844})
+        app.testing = True
+        self.client = app.test_client()
+        self.assertEqual(self.client.post("/api/login",
+            json={"password": "web-fixture-password"}).status_code, 200)
+        self.csrf = self.client.get("/api/session").json["csrf"]
+        self.headers = {"Origin": "http://127.0.0.1:18640",
+                        "X-CSRF-Token": self.csrf}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_web_issue_revoke_and_secret_not_listed(self):
+        response = self.client.post("/api/remote-mcp/credentials",
+            json={"kind": "link", "label": "test coder"}, headers=self.headers)
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("/mcp/link/", response.json["connection_url"])
+        token = response.json["secret"]
+        listing = self.client.get("/api/remote-mcp").json
+        self.assertTrue(listing["enabled"])
+        self.assertNotIn(token, str(listing))
+        ident = listing["credentials"][0]["id"]
+        result = self.client.delete("/api/remote-mcp/credentials/" + ident,
+                                    json={}, headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(self.client.get("/api/remote-mcp").json["credentials"][0]["revoked"], 1)
+
+    def test_web_token_cannot_be_created_without_csrf(self):
+        result = self.client.post("/api/remote-mcp/credentials",
+            json={"kind": "api", "label": "test coder"},
+            headers={"Origin": "http://127.0.0.1:18640"})
+        self.assertEqual(result.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()
