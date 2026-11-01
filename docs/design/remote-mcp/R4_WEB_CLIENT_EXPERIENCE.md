@@ -1,6 +1,6 @@
 # R4 — Web onboarding, connection management and compatibility
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **DESIGN ONLY / NOT IMPLEMENTED**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md), [R3](R3_HTTPS_AND_PROXY.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED / REAL CLIENT AND BROWSER ACCEPTANCE PENDING**. Dependencies: [R1](R1_STREAMABLE_HTTP.md), [R2](R2_AUTH_AND_CREDENTIALS.md), [R3](R3_HTTPS_AND_PROXY.md).
 
 ## Goal
 
