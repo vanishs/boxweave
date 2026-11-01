@@ -2,6 +2,7 @@
 import base64
 import hashlib
 from pathlib import Path
+from unittest.mock import patch
 import re
 import tempfile
 import unittest
@@ -245,6 +246,10 @@ class RemoteTests(unittest.TestCase):
         self.assertIn("mcp.example.test {\n", config)
         self.assertIn("reverse_proxy 127.0.0.1:18740", config)
         self.assertNotIn("tls ", config)
+        # A globally overwritten Referrer-Policy causes Origin: null in
+        # ordinary browsers on the OAuth password form; upstream headers win.
+        self.assertNotIn("header Referrer-Policy", config)
+        self.assertIn("output discard", config)
 
 
 class RemoteWebTests(unittest.TestCase):
@@ -289,6 +294,21 @@ class RemoteWebTests(unittest.TestCase):
                                     json={}, headers=self.headers)
         self.assertEqual(result.status_code, 200)
         self.assertEqual(self.client.get("/api/remote-mcp").json["credentials"][0]["revoked"], 1)
+
+    def test_web_remote_listener_tcp_probe_is_bounded_and_not_public_proof(self):
+        # Probe is loopback-only and never reaches public_url or a Box.
+        with patch("socket.create_connection") as connect:
+            local = self.client.get("/api/remote-mcp")
+            self.assertEqual(local.status_code, 200)
+            self.assertTrue(local.json["local_tcp_reachable"])
+            self.assertFalse(local.json["externally_verified"])
+            connect.assert_called_once_with(("127.0.0.1", 18844), timeout=0.2)
+        with patch("socket.create_connection", side_effect=OSError("port closed")):
+            down = self.client.get("/api/remote-mcp")
+            self.assertEqual(down.status_code, 200)
+            self.assertFalse(down.json["local_tcp_reachable"])
+            self.assertFalse(down.json["externally_verified"])
+            self.assertEqual(down.json["mcp_url"], RESOURCE)
 
     def test_web_token_cannot_be_created_without_csrf(self):
         result = self.client.post("/api/remote-mcp/credentials",
