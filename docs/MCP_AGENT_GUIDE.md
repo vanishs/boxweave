@@ -1,6 +1,6 @@
 # BoxWeave MCP guide for AI coding agents
 
-This guide describes source version 0.24.4, not a live installation. Available
+This guide describes source version 0.24.5, not a live installation. Available
 tools depend on the installed Containarium Provider, authenticated scope,
 release version and any enabled host-wide MCP tool policy.
 

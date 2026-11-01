@@ -237,6 +237,9 @@ def _state_database(config_path):
 def read_report(config_path, selector):
     """Return one typed report payload, or a typed refusal; read-only throughout."""
     kind = selector.get("kind")
+    actor_scope = selector.get("actor")
+    if not isinstance(actor_scope, str) or not SCOPE_PATTERN.fullmatch(actor_scope):
+        raise Fault("INVALID_SELECTOR", 422)
     payload = {"schema_version": SCHEMA_VERSION, "reader": "app-owned-diagnostics",
                "found": False, "events": [], "omissions": []}
     database = _state_database(config_path)
@@ -264,8 +267,8 @@ def read_report(config_path, selector):
             else:
                 payload["trace_id"] = link["trace_id"]
                 payload["events"] = [dict(item) for item in connection.execute(
-                    "SELECT * FROM diagnostic_events WHERE trace_id=? ORDER BY seq LIMIT ?",
-                    (link["trace_id"], MAX_REPORT_EVENTS + 1))]
+                    "SELECT * FROM diagnostic_events WHERE trace_id=? AND actor_scope=? ORDER BY seq LIMIT ?",
+                    (link["trace_id"], actor_scope, MAX_REPORT_EVENTS + 1))]
             payload["omissions"].append("receipt_detail_fields_not_exported")
     elif kind == "trace":
         trace_id = selector.get("trace_id")
@@ -273,8 +276,8 @@ def read_report(config_path, selector):
             raise Fault("INVALID_SELECTOR", 422)
         with contextlib.closing(_read_only_connection(database)) as connection:
             link = connection.execute(
-                "SELECT actor,operation_kind,operation_id FROM diagnostic_trace_links WHERE trace_id=?",
-                (trace_id,)).fetchone()
+                "SELECT actor,operation_kind,operation_id FROM diagnostic_trace_links WHERE trace_id=? AND actor=?",
+                (trace_id, actor_scope)).fetchone()
             if link is None:
                 payload["omissions"].append("trace_not_found")
                 return payload
@@ -283,8 +286,8 @@ def read_report(config_path, selector):
             payload["receipt"] = {"actor": link["actor"], "operation_kind": link["operation_kind"],
                                   "operation_id": link["operation_id"]}
             payload["events"] = [dict(item) for item in connection.execute(
-                "SELECT * FROM diagnostic_events WHERE trace_id=? ORDER BY seq LIMIT ?",
-                (trace_id, MAX_REPORT_EVENTS + 1))]
+                "SELECT * FROM diagnostic_events WHERE trace_id=? AND actor_scope=? ORDER BY seq LIMIT ?",
+                (trace_id, actor_scope, MAX_REPORT_EVENTS + 1))]
     elif kind == "window":
         since, until = selector.get("since"), selector.get("until")
         for value in (since, until):
@@ -293,8 +296,8 @@ def read_report(config_path, selector):
         with contextlib.closing(_read_only_connection(database)) as connection:
             payload["found"] = True
             payload["events"] = [dict(item) for item in connection.execute(
-                "SELECT * FROM diagnostic_events WHERE time_utc>=? AND time_utc<=? ORDER BY seq LIMIT ?",
-                (since, until, MAX_REPORT_EVENTS + 1))]
+                "SELECT * FROM diagnostic_events WHERE actor_scope=? AND time_utc>=? AND time_utc<=? ORDER BY seq LIMIT ?",
+                (actor_scope, since, until, MAX_REPORT_EVENTS + 1))]
         payload["omissions"].append("window_receipts_not_joined")
     else:
         raise Fault("INVALID_SELECTOR", 422)

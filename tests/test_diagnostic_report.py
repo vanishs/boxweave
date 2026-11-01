@@ -66,23 +66,64 @@ class ReaderTests(Base):
         op = self.operation()
         self.s.work_one()
         trace = diagnostics.trace_for_operation(self.store, "operator", "hello", op["id"])
-        payload = diagnostics.read_report(self.config, {"kind": "trace", "trace_id": trace})
+        payload = diagnostics.read_report(self.config, {"kind": "trace", "trace_id": trace, "actor": "operator"})
         self.assertTrue(payload["found"])
         self.assertEqual(payload["receipt"]["operation_kind"], "hello")
         self.assertGreaterEqual(payload["event_count"], 2)
-        missing = diagnostics.read_report(self.config, {"kind": "trace", "trace_id": "b" * 32})
+        missing = diagnostics.read_report(self.config, {"kind": "trace", "trace_id": "b" * 32, "actor": "operator"})
         self.assertFalse(missing["found"])
+
+    def test_trace_and_window_cannot_read_another_actor(self):
+        op = self.operation()
+        self.s.work_one()
+        own_trace = diagnostics.trace_for_operation(
+            self.store, "operator", "hello", op["id"])
+        foreign_trace = "e" * 32
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "INSERT INTO diagnostic_trace_links VALUES(?,?,?,?,?)",
+                ("other-actor", "hello", "foreign-op", foreign_trace, "now"))
+            for event_id, trace_id in (("foreign-event", foreign_trace),
+                                       ("injected-event", own_trace)):
+                db.execute(
+                    "INSERT INTO diagnostic_events "
+                    "(event_id,trace_id,span_id,actor_scope,time_utc,component,"
+                    "phase,event_type,outcome,code,capture) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (event_id, trace_id, "foreign-span", "other-actor",
+                     "2026-10-31T00:00:00Z", "worker", "foreign",
+                     "observed", "passed", "OK", "captured"))
+        denied = diagnostics.read_report(self.config, {
+            "kind": "trace", "trace_id": foreign_trace, "actor": "operator"})
+        self.assertFalse(denied["found"])
+        self.assertEqual(denied["events"], [])
+        own = diagnostics.read_report(self.config, {
+            "kind": "trace", "trace_id": own_trace, "actor": "operator"})
+        self.assertTrue(own["found"])
+        self.assertNotIn("injected-event", [x["event_id"] for x in own["events"]])
+        window = diagnostics.read_report(self.config, {
+            "kind": "window", "actor": "operator",
+            "since": "1970-01-01T00:00:00Z",
+            "until": "9999-01-01T00:00:00Z"})
+        self.assertNotIn("foreign-event", [x["event_id"] for x in window["events"]])
+        self.assertNotIn("injected-event", [x["event_id"] for x in window["events"]])
+        for selector in ({"kind": "trace", "trace_id": own_trace},
+                         {"kind": "window", "since": "1970-01-01T00:00:00Z",
+                          "until": "9999-01-01T00:00:00Z"}):
+            with self.assertRaises(Fault):
+                diagnostics.read_report(self.config, selector)
 
     def test_window_selector_is_time_bounded(self):
         op = self.operation()
         self.s.work_one()
         payload = diagnostics.read_report(self.config, {
-            "kind": "window", "since": "1970-01-01T00:00:00Z", "until": "9999-01-01T00:00:00Z"})
+            "kind": "window", "actor": "operator", "since": "1970-01-01T00:00:00Z", "until": "9999-01-01T00:00:00Z"})
         self.assertTrue(payload["found"])
         self.assertGreaterEqual(payload["event_count"], 2)
         self.assertIn("window_receipts_not_joined", payload["omissions"])
         empty = diagnostics.read_report(self.config, {
-            "kind": "window", "since": "1970-01-01T00:00:00Z", "until": "1971-01-01T00:00:00Z"})
+            "kind": "window", "actor": "operator", "since": "1970-01-01T00:00:00Z", "until": "1971-01-01T00:00:00Z"})
         self.assertEqual(empty["event_count"], 0)
 
     def test_invalid_selectors_fail_closed(self):
@@ -138,7 +179,7 @@ class ReaderTests(Base):
         bad = self.root / "bad.json"
         bad.write_text(json.dumps({"mode": "mcp", "database": str(private)}))
         with self.assertRaisesRegex(Fault, "STATE_FILE_NOT_PRIVATE"):
-            diagnostics.read_report(bad, {"kind": "trace", "trace_id": "c" * 32})
+            diagnostics.read_report(bad, {"kind": "trace", "trace_id": "c" * 32, "actor": "operator"})
 
 
 class FakeRecord:
