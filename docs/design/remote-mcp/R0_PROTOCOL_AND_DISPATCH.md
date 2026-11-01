@@ -1,6 +1,6 @@
 # R0 — Protocol inventory and shared gateway dispatch
 
-Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **DESIGN ONLY / NOT IMPLEMENTED**. Dependencies: none. Next: [R1](R1_STREAMABLE_HTTP.md).
+Parent: [remote MCP master](../REMOTE_MCP_MASTER.md). Status: **SOURCE IMPLEMENTED WITH DEVIATION / LIVE NOT TESTED**. Dependencies: none. Next: [R1](R1_STREAMABLE_HTTP.md).
 
 ## Goal
 
