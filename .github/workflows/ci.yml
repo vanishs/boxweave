@@ -21,6 +21,78 @@ jobs:
           node-version: '20'
       - name: Documentation, release metadata, and traceability
         run: python scripts/check_knowledge.py
+      - name: Code-first source and acceptance inventory drift guard
+        run: |
+          python - <<'PY_CODE_FIRST'
+          from pathlib import Path
+          import ast
+          import re
+
+          doc = Path("docs/verification/CODE_FIRST_ACCEPTANCE_2026-11-01.md").read_text()
+          source = lambda name: Path(name).read_text()
+          names = lambda pattern: {p.as_posix() for p in Path(".").glob(pattern) if p.is_file()}
+          matches = lambda pattern, value: set(re.findall(pattern, value))
+
+          def recorded(key):
+              match = re.search(
+                  r"<!-- inventory:" + re.escape(key) + r":start -->\s*(.*?)\s*<!-- inventory:" +
+                  re.escape(key) + r":end -->", doc, re.S
+              )
+              if match is None:
+                  raise AssertionError("Inventory section missing: " + key)
+              return matches(r"`([^`]+)`", match.group(1))
+
+          def cli_choices():
+              for node in ast.walk(ast.parse(source("bwmini/__main__.py"))):
+                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument":
+                      if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value == "action":
+                          return set(ast.literal_eval(next(k.value for k in node.keywords if k.arg == "choices")))
+              raise AssertionError("Application action selector absent")
+
+          def host_actions():
+              return {
+                  node.args[0].value for node in ast.walk(ast.parse(source("bwmini/host_cli.py")))
+                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                  and node.func.attr == "add_parser" and node.args
+                  and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
+              }
+
+          def routes(path):
+              result = set()
+              for method, path_, methods in re.findall(
+                  r'@app\.(get|post|put|delete|route)\("([^"]+)"(?:,\s*methods=\[([^\]]+)\])?\)', source(path)
+              ):
+                  kind = ",".join(re.findall(r'"([^"]+)"', methods)) if method == "route" else method.upper()
+                  result.add(kind + " " + path_)
+              return result
+
+          app_source = source("bwmini/client_profiles.py")
+          catalog = re.search(r"APPS\s*=\s*\(([^)]+)\)", app_source)
+          assert catalog, "Client catalog missing"
+          owned_tools = source("bwmini/mcp_gate.py") + source("bwmini/gate_diagnostics.py")
+          expected = {
+              "python-modules": names("bwmini/*.py"),
+              "unit-tests": names("tests/test_*.py"),
+              "client-scripts": names("clients/**/*.py") | names("clients/**/*.ps1"),
+              "support-scripts": names("scripts/*.py"),
+              "web-sources": names("web/src/*"),
+              "app-cli": cli_choices(),
+              "host-cli": host_actions(),
+              "web-api": routes("bwmini/web.py"),
+              "remote-api": routes("bwmini/remote_mcp.py"),
+              "gateway-tools": matches(r'"name":\s*"(boxweave_[a-z_]+)"', owned_tools),
+              "client-apps": matches(r'"([^"]+)"', catalog.group(1)),
+              "web-views": matches(r"view==='([^']+)'", source("web/src/main.tsx")),
+          }
+          for section, discovered in expected.items():
+              listed = recorded(section)
+              if discovered != listed:
+                  raise AssertionError(
+                      section + ": undocumented=" + repr(sorted(discovered - listed)) +
+                      "; stale=" + repr(sorted(listed - discovered))
+                  )
+              print(section, len(listed), "recorded")
+          PY_CODE_FIRST
       - name: Safe shell syntax
         run: |
           bash -n install.sh
