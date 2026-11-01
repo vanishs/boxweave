@@ -552,3 +552,18 @@ See [code-first feature/endpoint/test register](CODE_FIRST_ACCEPTANCE_2026-11-01
 - **L / diagnostic read:** `boxweave_diagnose(source=gateway,recent=5)` classified the rejected resize as `UPSTREAM_JSONRPC_ERROR` / `unknown` even though a subsequent direct container read disproved a resource-change effect for inspected CPU/RAM/disk. Preserve the distinction between gateway message classification and reconciled Provider state; no silent retry or inaccurate success declaration.
 
 **Disposition:** Skip issues #19 and #20 while other independent acceptance proceeds. No host-level repair, runtime code patch, new release or upstream daemon upgrade has been executed or verified in this triage; this is a recorded live observation and documentation update only. Retain `bwaccept-20261101-container` RUNNING for later evidence.
+
+## Additional independent MCP read checks (2026-11-01, no guest shell required)
+
+Ran read-only checks after marking host-login/nesting gates as BLOCKED; no new Box, host change, daemon upgrade, route exposure or removal was performed.
+
+| Check | Actual observation | Acceptance classification |
+| --- | --- | --- |
+| `network_guard_status({})` | `GUARD_MODE_ENFORCE` for core and Tenant, nftables, supported, `lastError:""`, ACLs attached to all visible Boxes; four `boxweave-test` entries share the same ACL | **PASS** effective configuration attachment/readback only; actual packets **U** |
+| `get_network_policy({tenant:"boxweave-test"})` | API 404 `no network policy for tenant\"boxweave-test\"`; `list_network_policies({})` previously returned `{}` | **PASS** consistent absent explicit policy; **U** actual default packet isolation |
+| `list_routes({username:"bwaccept-20261101"})` | Empty `routes:[]`, `totalCount:0` | **PASS** read-only Web exposure inventory for the new test Box |
+| `list_passthrough_routes({})` | One still-active TCP passthrough, external port 39471 -> `10.100.0.3:39471`, target `boxweave-test-ser-container`; description claims it was already removed after delivery | **PARTIAL / follow-up:** actual route exists but historic description contradicts current state; inspect target/owner before any removal. No user-requested cleanup of this unrelated original route was inferred |
+| `security_sentry_status({})` | `DISABLED`, reason `CONTAINARIUM_THREAT_SENTRY is not set` | **PASS** truthful status reporting; monitoring efficacy **NOT ACTIVE/NOT CLAIMED** |
+| `get_metrics_export({})` | Cloud metrics export disabled | **PASS** status visibility; no export was enabled |
+
+These independent checks **do not need a host repair and must not be deferred** because SSH/Python/nesting tests are BLOCKED. See [host issue #19](https://github.com/vanishs/boxweave/issues/19) and [nesting issue #20](https://github.com/vanishs/boxweave/issues/20). With no authorized privileged host-shell or repair tool, there was no code or deployed host change to version-bump or publish as a new release in this round.
