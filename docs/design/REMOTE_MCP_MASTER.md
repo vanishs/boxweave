@@ -1,6 +1,6 @@
 # Remote MCP over HTTP(S): master design and implementation decisions
 
-**Status: APPROVED DESIGN ONLY — NOT IMPLEMENTED.** Owner decisions recorded in the eight-question design discussion on 2026-10-31. This document is the single design parent; implementation/acceptance evidence lives in the linked phase and test documents. No deployment, public listener, DNS, proxy, key, token, firewall or host change is authorized by these documents.
+**Status: v0.24.0 SOURCE IMPLEMENTATION (PR #10); real public/client/Box acceptance UNVERIFIED.** Owner decisions recorded in the eight-question design discussion on 2026-10-31. This document is the single design parent; implementation/acceptance evidence lives in the linked phase and test documents. No deployment, public listener, DNS, proxy, key, token, firewall or host change is authorized by these documents.
 
 ## Product decision
 
@@ -16,7 +16,7 @@ Decisions (Q1-Q8):
 7. Do not impose network-location restrictions on the administrator's explicit deployment choice. No public exposure by default; deliberate public availability may be configured.
 8. Do not design independent expiry/per-Agent permission tiers for credential-bearing URLs now. Preserve the operator's SSH-like trusted-client posture; their lifecycle/authorization hardening is postponed **together** with SSH. Basic credential validation, revocation/rotation, redaction and TLS remain mandatory to avoid an actually anonymous public endpoint.
 
-## Current code reality (main reviewed 2026-10-31)
+## Baseline before PR #10 (main reviewed 2026-10-31)
 
 - `bwmini/mcp_gate.py`: SSH-forced-command/stdio gateway relays the upstream Platform MCP; operator-owned, optional host-wide allowlist in `/etc/boxweave/mcp-tool-policy.json`. Missing file retains broad legacy forwarding; not per-client RBAC.
 - `bwmini/mcp.py`: bounded **client** of a configured stdio launcher, not a remotely addressable Streamable HTTP server.
