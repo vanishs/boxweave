@@ -37,6 +37,46 @@ class WorkloadIdentityTests(unittest.TestCase):
                 self.assertEqual(extra["ssh_keys"],[key(b"b"),key(b"a")])
                 self.assertEqual(mcp_gate.managed_create_arguments(extra),extra)
 
+    def test_invalid_resize_rejected_before_upstream_write(self):
+        import io, json
+        from types import SimpleNamespace
+        class KeepBytes(io.BytesIO):
+            def close(self): pass
+        request={"jsonrpc":"2.0","id":13,"method":"tools/call",
+                 "params":{"name":"resize_container","arguments":{"username":"fixture","cpu":"invalid-cpu"}}}
+        process=SimpleNamespace(stdin=KeepBytes(),stdout=io.BytesIO(),poll=lambda:0)
+        output=io.StringIO()
+        with (patch.object(mcp_gate.subprocess,"Popen",return_value=process),
+              patch.object(mcp_gate,"tool_policy",return_value=None),
+              patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),
+              patch.object(mcp_gate.sys,"stdout",output),
+              patch.object(mcp_gate.gd,"record")):
+            mcp_gate.main()
+        result=json.loads(output.getvalue())
+        self.assertEqual(result["error"]["code"],-32602)
+        self.assertEqual(result["error"]["message"],"RESOURCE_CPU_INVALID")
+        self.assertEqual(process.stdin.getvalue(),b"")
+
+    def test_resize_cpu_compatible_syntax_and_safe_registry_error(self):
+        for cpu in ("3","0.25","1.5","250m","0-3","0,2-4"):
+            self.assertEqual(mcp_gate.validated_resize_arguments({"cpu":cpu})["cpu"],cpu)
+        for cpu in ("invalid-cpu","0","0m","-1","2-1","0,3-2",{},True):
+            with self.subTest(cpu=cpu), self.assertRaisesRegex(ValueError,"RESOURCE_CPU_INVALID"):
+                mcp_gate.validated_resize_arguments({"cpu":cpu})
+        with tempfile.TemporaryDirectory() as tmp, patch.object(mcp_gate,"REGISTRY",Path(tmp)/"missing"):
+            with self.assertRaisesRegex(ValueError,"TRUST_REGISTRY_UNAVAILABLE"):
+                mcp_gate.trusted_registry()
+
+    def test_specific_safe_trust_codes(self):
+        registry={"observed_at":0,"targets":{}}
+        with patch.object(mcp_gate.time,"time",return_value=100):
+            with self.assertRaisesRegex(ValueError,"TRUST_OBSERVATION_STALE"):
+                mcp_gate.trusted({"box":"fixture"},registry,{})
+        registry={"observed_at":100,"targets":{}}
+        with patch.object(mcp_gate.time,"time",return_value=100):
+            with self.assertRaisesRegex(ValueError,"TRUST_NOT_READY"):
+                mcp_gate.trusted({"box":"fixture"},registry,{})
+
 
 if __name__ == "__main__":
     unittest.main()
