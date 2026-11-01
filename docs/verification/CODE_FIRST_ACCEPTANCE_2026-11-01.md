@@ -20,11 +20,11 @@
 | A02 | Packaging, wheelhouse, digest and DB upgrades | distribution/deploy_check; test_distribution, test_platform_minimums | CI PASS | PARTIAL: 0.25.0 immutable published artifacts; host upgrade U |
 | A03 | Host CLI health, status, doctor, report | host_cli/manage; test_host_cli, test_diagnostic_report | CI PASS | PARTIAL: older installed CLI; current 0.25.0 U |
 | A04 | Client script enrollment, nine Apps, OS/SSH transports | client_profiles/client_setup; test_client_setup, test_profiles, test_public_profiles | CI PASS | PARTIAL: old ZCode read; current 9-App/OS matrix U |
-| A05 | SSH pin, managed key, exact identity, Python execution | mcp_gate/hostkeys; test_mcp_gate_policy, test_workload_guidance | CI PASS | BLOCKED: actual connect trust failure; Python exit unavailable |
+| A05 | SSH pin, managed key, exact identity, Python execution | mcp_gate/hostkeys; test_mcp_gate_policy, test_workload_guidance | CI PASS | BLOCKED: real connect trust gate; backend login shell missing; Python exit unavailable |
 | A06 | MCP discovery, capability catalog, host-wide allowlist | mcp/mcp_gate/capabilities; test_mcp_info, test_mcp_gate_policy | CI PASS | PARTIAL: info tool read works; 0.25.0 authenticated SSH chain U |
-| A07 | Independent nesting helper and create extension | nesting/mcp_gate; test_nesting | CI PASS | BLOCKED: documented split-host helper boundary; privilege path U |
-| A08 | Box lifecycle and reviewed action plans | lifecycle/box_actions/provider; test_lifecycle, test_box_actions | CI PASS | PARTIAL: prior live evidence; current real create/receipt U |
-| A09 | Auto-sleep and resource/capability observation | auto_sleep/capabilities/box_debug; test_capabilities, test_box_debug | CI PASS | PARTIAL: older config readback; current effective idle stop U |
+| A07 | Independent nesting helper and create extension | nesting/mcp_gate; test_nesting | CI PASS | BLOCKED: live nesting inspect failed NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE; privilege path U |
+| A08 | Box lifecycle and reviewed action plans | lifecycle/box_actions/provider; test_lifecycle, test_box_actions | CI PASS | PARTIAL: direct Provider create/stop/start/resize proven 2026-11-01; application receipt path U |
+| A09 | Auto-sleep and resource/capability observation | auto_sleep/capabilities/box_debug; test_capabilities, test_box_debug | CI PASS | PARTIAL: direct 2026-11-01 enable/disable ack; current effective idle stop U |
 | A10 | Jobs/receipts/reconciliation/no replay | jobs/store/lifecycle; test_jobs, test_recovery, test_history | CI PASS | PARTIAL: fixture crash path; current live unknown recovery U |
 | A11 | Web auth, CSRF, operator session | web/access; test_access, test_slice | CI PASS | PARTIAL: browser fixture; current installed browser U |
 | A12 | Project binding, fixed hello, environment plans | service/lifecycle/web; test_bindings, test_slice, test_lifecycle | CI PASS | PARTIAL: fixture; actual SSH fixed hello blocked |
@@ -361,3 +361,11 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 **Excluded, not falsely passed:** E0–E4 Box snapshot/fingerprint/restore/clone proposal has not shipped; no arbitrary guest command/debugger, per-Agent RBAC, public Issue submission or universal provider/platform certification is implied.
 
 Related records: [feature matrix](FEATURE_MATRIX.md), [test queue](REMEDIATION_TEST_QUEUE.md), [risks](OPEN_RISKS.md), [acceptance requirements](../product/ACCEPTANCE.md).
+
+## Live MCP acceptance supplement — test Box created after baseline
+
+The owner subsequently authorized all BoxWeave MCP commands against test Boxes. See [executed command/response matrix in the queue](REMEDIATION_TEST_QUEUE.md) for the full record. **Direct Provider L PASS:** create `bwaccept-20261101-container` (creation ID `1793567247`) with CPU2/RAM2GB/20GB, verify RUNNING and native Tenant `boxweave-test`; resize CPU3/RAM3GB and verify readback; stop and verify STOPPED; start and verify RUNNING with original identity. `get_metrics` returned data. Auto-sleep enable and disable were acknowledged but effective idle stop remains U. Test Box retained RUNNING, auto-sleep disabled, for next SSH test.
+
+**Independent live negative observations:** D4 project ports request denied with `PROJECT_DIAG_NOT_AUTHORIZED`; nesting inspect failed `NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE`; connect/exec failed `TRUST_OR_WORKLOAD_KEY_GATE` and did not return Python output or exit. `debug_container` reported missing `/usr/local/bin/containarium-shell` for both old and new Box host users. Source `mcp_gate.trusted` also validates a fresh `targets.json` registration (45-second observation age), so the generic trust-gate code **does not prove which check rejected connect**; the missing backend login shell is a separately confirmed obstacle to ordinary SSH. No host shell, SSH trust, nesting helper, application installation, or unrelated Box was modified. Different inner BoxWeave versions cannot be compared until an actual guest execution path is established.
+
+This live Provider evidence upgrades only the **direct API operation slice**, not the application-side BoxWeave v0.25.0 lifecycle/receipts, reboot persistence, network Guard enforcement, nested child execution or universal user-facing acceptance.
