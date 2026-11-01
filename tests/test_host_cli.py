@@ -284,6 +284,26 @@ class HostCliTests(unittest.TestCase):
         self.assertEqual(query.call_args.args[0],
                          ["incus", "--force-local", "query", "/1.0/instances/box1?project=default"])
 
+    def test_missing_exact_target_distinct_from_incus_permission_failure(self):
+        with patch.object(host_cli, "observe",
+                          side_effect=[None, json.dumps([{"name": "other"}])]) as reader:
+            result, code = host_cli.inspect("missing", "review")
+        self.assertEqual(code, 2)
+        self.assertEqual(result["code"], "EXACT_INSTANCE_NOT_FOUND")
+        self.assertEqual(result["state"], "not_found")
+        self.assertEqual(reader.call_args_list[1].args[0],
+                         ["incus", "--force-local", "--project", "review",
+                          "list", "--format", "json"])
+
+    def test_failed_exact_query_with_no_complete_inventory_stays_unavailable(self):
+        for inventory in (None, "not json", '{"bad":"list"}',
+                          json.dumps([{"name": "actual"}])):
+            with self.subTest(inventory=inventory):
+                with patch.object(host_cli, "observe", side_effect=[None, inventory]):
+                    result, code = host_cli.inspect("actual", "default")
+            self.assertEqual(code, 2)
+            self.assertEqual(result["code"], "LOCAL_INCUS_ACCESS_UNAVAILABLE")
+
     def test_unprivileged_app_health_never_runs_app_code(self):
         with patch.object(host_cli.os, "geteuid", return_value=1000), \
              patch.object(host_cli, "run_bounded") as execute:

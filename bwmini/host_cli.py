@@ -553,6 +553,21 @@ def inspect(name, project, diagnose=False):
     path = "/1.0/instances/" + quote(name, safe="") + "?project=" + quote(project, safe="")
     data = observe(["incus", "--force-local", "query", path], timeout=12, limit=262144)
     if data is None:
+        # A failed exact-instance read may mean 404 or missing Incus access.
+        # Only a complete same-project inventory can prove actual absence.
+        inventory = observe(["incus", "--force-local", "--project", project,
+                             "list", "--format", "json"], timeout=12, limit=262144)
+        if inventory is not None:
+            try:
+                instances = json.loads(inventory)
+                if (isinstance(instances, list)
+                        and all(isinstance(item, dict) and isinstance(item.get("name"), str)
+                                for item in instances)
+                        and not any(item["name"] == name for item in instances)):
+                    return {"state": "not_found", "code": "EXACT_INSTANCE_NOT_FOUND",
+                            "name": name, "project": project}, 2
+            except (ValueError, TypeError):
+                pass
         return {"state": "unavailable", "code": "LOCAL_INCUS_ACCESS_UNAVAILABLE",
                 "hint": "Incus administration is privileged. An authorized operator may use sudo boxweave box inspect NAME."}, 2
     try:

@@ -13,7 +13,7 @@ except ImportError:
     import gate_diagnostics as gd
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.25.0"
+SERVER_INFO_VERSION = "0.26.1"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -23,9 +23,13 @@ SERVER_DESCRIPTION = (
 SERVER_INSTRUCTIONS = (
     "Use the read-only boxweave_info tool for architecture and developer "
     "guidance when using or developing BoxWeave. Use tools/list for currently "
-    "authorized tools, then list_containers before creating a Box. Prefer "
-    "a suitable existing Box. Execute builds/tests with connect(exec) when "
-    "permitted, and verify exit codes and outputs. The BoxWeave gateway "
+    "authorized tools, then list_containers before creating a Box. For "
+    "ordinary user work consider an existing suitable Box; for testing "
+    "BoxWeave itself, prefer a new disposable Box after local checks and "
+    "use historical Boxes only with evidence of environment dependence. "
+    "Do not assume SCP/upload or host shell from an SSH/HTTP MCP connection. "
+    "Execute builds/tests with connect(exec) when permitted, and verify "
+    "exit codes and outputs. The BoxWeave gateway "
     "manages workload SSH public keys; never request or expose private keys. "
     "Diagnose SSH failures with debug_container. Obtain approval for destructive "
     "or network exposure changes. Timed-out writes have UNKNOWN outcomes: "
@@ -55,8 +59,9 @@ INFO_TOPICS = {
     },
     "development": {
         "steps": [
-            "Read AGENTS.md, docs/DEVELOPMENT.md and docs/process/AGENT_TEST_WORKFLOW.md at the intended source revision.",
-            "Discover live Boxes and target identity; use an authorized isolated test Box, not a production Box by default.",
+            "Read AGENTS.md, docs/DEVELOPMENT.md, docs/process/AGENT_TEST_WORKFLOW.md and docs/process/AGENT_TEST_DEPLOYMENT.md at the intended source revision.",
+            "Run focused local checks first; for real BoxWeave deployment tests default to a new authorized disposable Box; use a historical Box only when the old environment is demonstrably required.",
+            "Prefer exact local modified source; verify bundle hash and transport ability independently of SSH/HTTP MCP, and do not publish uncommitted code to a public GitHub branch.",
             "Run focused unit tests, then python scripts/check_knowledge.py and python scripts/validate.py on a prepared checkout.",
             "Browser fixtures: python scripts/validate.py --browser; fixtures cannot prove live Provider, SSH or network behavior.",
             "Record commit, environment, commands, exit codes, failures and independently verified behavior.",
@@ -84,7 +89,8 @@ INFO_TOPICS = {
     "documentation": {
         "repository": "https://github.com/vanishs/boxweave",
         "entrypoints": ["README.md", "AGENTS.md", "docs/DEVELOPMENT.md",
-                        "docs/process/AGENT_TEST_WORKFLOW.md", "docs/REMOTE_MCP.md",
+                        "docs/process/AGENT_TEST_WORKFLOW.md",
+                         "docs/process/AGENT_TEST_DEPLOYMENT.md", "docs/REMOTE_MCP.md",
                         "docs/verification/OPEN_RISKS.md",
                         "docs/verification/REMEDIATION_TEST_QUEUE.md"],
         "rule": "Use documentation matching deployed version; old proposals/source inventories are not runtime evidence.",

@@ -2,6 +2,7 @@
 import io
 import json
 import unittest
+from pathlib import Path
 from contextlib import redirect_stdout
 from unittest.mock import patch
 from bwmini import mcp_gate
@@ -16,6 +17,12 @@ class GuideTests(unittest.TestCase):
         self.assertIn("docs/DEVELOPMENT.md",
                       data["sections"]["documentation"]["entrypoints"])
         self.assertIn("not live runtime", data["scope"])
+        self.assertEqual(data["source_version"],
+                         (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip())
+        self.assertIn("docs/process/AGENT_TEST_DEPLOYMENT.md",
+                      data["sections"]["documentation"]["entrypoints"])
+        self.assertIn("new authorized disposable Box",
+                      data["sections"]["development"]["steps"][1])
         for args in (None, [], {"topic": "bad"}, {"topic": 5},
                      {"topic": "all", "host": "localhost"}):
             with self.assertRaises(ValueError):
