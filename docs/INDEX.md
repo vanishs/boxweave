@@ -10,7 +10,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 | Required outcomes and acceptance | [REQUIREMENTS](product/REQUIREMENTS.md), [ACCEPTANCE](product/ACCEPTANCE.md) |
 | Actual runtime / module design | [ARCHITECTURE](design/ARCHITECTURE.md), [ADR index and status](design/ADR/INDEX.md) |
 | Task dependencies | [IMPLEMENTATION_PLAN](process/IMPLEMENTATION_PLAN.md) |
-| REQ/AC → code/tests/evidence | [FEATURE_MATRIX](verification/FEATURE_MATRIX.md) |
+| REQ/AC → code/tests/evidence | [FEATURE_MATRIX](verification/FEATURE_MATRIX.md), [code-first acceptance](verification/CODE_FIRST_ACCEPTANCE_2026-11-01.md) |
 | Agent-driven rapid development/test workflow | [AGENT_TEST_WORKFLOW](process/AGENT_TEST_WORKFLOW.md) (developer practice) |
 | How to run and verify | [INSTALL](INSTALL.md), [test strategy](verification/TEST_STRATEGY.md), [validation runner](../scripts/validate.py) |
 | Current unresolved risks | [OPEN_RISKS](verification/OPEN_RISKS.md) |
@@ -86,19 +86,19 @@ MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment pro
 
 ## MCP integration implementation checkpoint
 
-- [Actual source completion, CI evidence, open decisions and next developer handoff](process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md) (partial M0/M2 only; M1/M3/M4 and most M5 NOT IMPLEMENTED)
+- [Actual source completion, CI evidence, open decisions and next developer handoff](process/MCP_REUSE_IMPLEMENTATION_HANDOFF.md) (historical checkpoint; see later 0.24.0 live M0–M5 evidence and current code-first register)
 
 ## M0–M5 MCP source implementation (live Box acceptance deferred)
 
 - [M0–M5 source state, operator configuration, Web API and remaining live acceptance](process/MCP_M0_M5_SOURCE_PROGRESS.md). Direct-gateway tool policy is optional host-wide enforcement, **not per-user RBAC**; agent-box requires a separately reviewed fixed launcher and live Box testing.
 
-## Remote MCP HTTP(S) and OAuth (approved design; NOT IMPLEMENTED)
+## Remote MCP HTTP(S) and OAuth (implemented; public deployment acceptance is separate)
 
 - [Master design, eight owner decisions and phase map](design/REMOTE_MCP_MASTER.md)
 - [ADR-009: keep SSH, add remote Streamable HTTP with no vendor tunnel dependency](design/ADR/0009-remote-mcp-transports-and-auth.md)
 - Phased implementation: [R0 shared dispatcher](design/remote-mcp/R0_PROTOCOL_AND_DISPATCH.md), [R1 HTTP](design/remote-mcp/R1_STREAMABLE_HTTP.md), [R2 OAuth/API Token/credential URL](design/remote-mcp/R2_AUTH_AND_CREDENTIALS.md), [R3 HTTPS/proxies](design/remote-mcp/R3_HTTPS_AND_PROXY.md), [R4 Web onboarding](design/remote-mcp/R4_WEB_CLIENT_EXPERIENCE.md)
 - [Negative and positive acceptance matrix](verification/REMOTE_MCP_TEST_PLAN.md), [Agent implementation handoff](process/REMOTE_MCP_HANDOFF.md)
 
-**Planning only.** Source `main` still uses SSH/stdio for direct Agent MCP; Web cookie sessions are not OAuth and the optional SSH gateway allowlist is not per-Agent RBAC. No new public URL is active because these documents exist.
+**Code implemented:** v0.24.0 introduced remote HTTP MCP/OAuth and the capability remains in v0.25.0. Historical loopback HTTP/OAuth and local TLS-proxy tests are recorded; real public TLS, all external clients and current installed v0.25.0 require distinct acceptance. SSH/stdio remains supported, Web cookies are not OAuth MCP credentials, and the host-wide allowlist is not per-Agent RBAC.
 
 - [Remote HTTP MCP source setup, CLI and safety limits](REMOTE_MCP.md) (v0.24.0 source only; real public/TLS acceptance pending)
