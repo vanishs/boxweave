@@ -316,6 +316,15 @@ class ReportCommandTests(unittest.TestCase):
             writer.assert_not_called()
             self.assertFalse((self.parent / "unused").exists())
 
+    def test_report_help_advertises_only_reader_supported_kinds(self):
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
+            with self.assertRaises(SystemExit) as stop:
+                host_cli.main(["report", "--help"])
+        self.assertEqual(stop.exception.code, 0)
+        self.assertIn("{hello,environment,access}", output.getvalue())
+        self.assertNotIn("selftest", output.getvalue())
+        self.assertNotIn("job,selftest", output.getvalue())
+
     def test_missing_selector_is_refused(self):
         with patch.object(host_cli.os, "geteuid", return_value=1000), \
              patch.object(host_cli, "public_state", return_value=descriptor()), \

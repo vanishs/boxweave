@@ -747,7 +747,7 @@ def main(argv=None):
     doctor_parser = sub.add_parser("doctor", help="Host/systemd and app readiness checks (no repair)")
     doctor_parser.add_argument("--mcp", action="store_true", help="Authenticated MCP read as app user; requires sudo")
     report = sub.add_parser("report", help="Export a bounded read-only diagnostic report directory")
-    report.add_argument("--kind", choices=("hello", "environment", "access", "job", "selftest"))
+    report.add_argument("--kind", choices=("hello", "environment", "access"))
     report.add_argument("--operation", help="Exact operation receipt ID (with --kind)")
     report.add_argument("--trace", help="Opaque 32-hex diagnostic trace ID")
     report.add_argument("--since", help="UTC RFC3339 window start (with --until, max 24h)")
