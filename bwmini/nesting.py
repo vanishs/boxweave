@@ -103,6 +103,16 @@ def privileged_main():
         raise ValueError("REQUEST_LIMIT")
     print(json.dumps(handle(json.loads(raw))), flush=True)
 
+# Only static, non-sensitive helper classifications may cross the sudo boundary.
+SAFE_HELPER_FAILURES = frozenset((
+    "OWNED_PROVIDER_REQUIRED", "LOCAL_INCUS_OBSERVATION_OR_CHANGE_FAILED",
+    "MANAGED_INSTANCE_IDENTITY_REQUIRED", "EXACT_MANAGED_TARGET_REQUIRED",
+    "NESTING_CONFIG_INVALID", "NESTING_REQUEST_INVALID",
+    "NESTING_BOOLEAN_REQUIRED", "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED",
+    "CHANGE_OUTCOME_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE", "REQUEST_LIMIT",
+))
+
+
 def invoke(request):
     try:
         p = subprocess.run(SUDO, input=json.dumps(request), capture_output=True, text=True, timeout=50)
@@ -111,6 +121,14 @@ def invoke(request):
         # trust failure; name it so operators can repair the gate host.
         raise ValueError("NESTING_HELPER_UNAVAILABLE") from None
     if p.returncode or len(p.stdout) > 65536:
+        if len(p.stdout) <= 65536:
+            try:
+                failure = json.loads(p.stdout)
+                if (isinstance(failure, dict) and failure.get("state") == "failed"
+                        and failure.get("code") in SAFE_HELPER_FAILURES):
+                    raise ValueError(failure["code"])
+            except (TypeError, json.JSONDecodeError):
+                pass
         raise ValueError("NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE")
     return json.loads(p.stdout)
 
@@ -124,6 +142,7 @@ def diagnostic(log_text):
 if __name__ == "__main__":
     try:
         privileged_main()
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
-        print(json.dumps({"state": "failed", "code": "NESTING_REQUEST_REJECTED_OR_OUTCOME_UNVERIFIED"}), flush=True)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        code = str(error) if isinstance(error, ValueError) and str(error) in SAFE_HELPER_FAILURES else "NESTING_REQUEST_REJECTED_OR_OUTCOME_UNVERIFIED"
+        print(json.dumps({"state": "failed", "code": code}), flush=True)
         raise SystemExit(2)
