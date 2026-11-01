@@ -1,6 +1,6 @@
 # Remote MCP implementation handoff — Agent execution contract
 
-**Status: DESIGN ONLY; no R0–R4 code is implemented or deployed in this planning change.** Design owner: [master](../design/REMOTE_MCP_MASTER.md), decisions [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md), verification owner [remote MCP test plan](../verification/REMOTE_MCP_TEST_PLAN.md).
+**Status: v0.24.0 source implementation committed to PR #10; no public endpoint, live Box, client OAuth or TLS deployment tested.** Design owner: [master](../design/REMOTE_MCP_MASTER.md), decisions [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md), verification owner [remote MCP test plan](../verification/REMOTE_MCP_TEST_PLAN.md).
 
 ## Confirmed baseline
 
