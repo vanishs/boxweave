@@ -303,7 +303,7 @@ I authorize this client to use BoxWeave MCP tools.</label>
                         "result": {"protocolVersion": PROTOCOL,
                                    "capabilities": {"tools": {"listChanged": False},
                                                     "resources": {"listChanged": False}},
-                                   "serverInfo": {"name": "boxweave", "version": "0.24.2"}}},
+                                   "serverInfo": {"name": "boxweave", "version": "0.24.3"}}},
                        headers={"MCP-Protocol-Version": PROTOCOL})
         if method == "notifications/initialized":
             return Response(status=202, headers={"Cache-Control": "no-store"})
