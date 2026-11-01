@@ -37,14 +37,14 @@ Historical matrices: [preserved snapshot](FEATURE_MATRIX_HISTORY.md).
 
 REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, mcp_gate.py, online.py, manage.py, provider.py, lifecycle.py, Environments.tsx -> test_nesting.py contract checks; [same-child actual comparison and U new-helper boundary](NESTING_VERIFICATION.md). Prior0.15.1 execution is T for that exact version only.
 
-## Remote MCP HTTP(S) / OAuth (source/fixture only until verified)
+## Remote MCP HTTP(S) / OAuth (implemented; fixture plus earlier loopback acceptance)
 
 | REQ / AC | TASK and implementation | Executed normal / abnormal / authority / boundary / state checks | Evidence and remaining boundary |
 | --- | --- | --- | --- |
-| REQ-021 / AC-021 | REMOTE-R0/R1; remote_mcp.py, existing mcp_gate.py | Planned stateless HTTP initialize, tool relay, Origin and protocol negatives, SSH regression | Source implementation in PR #10; fixture CI and installed acceptance pending |
-| REQ-022 / AC-022 | REMOTE-R2; remote_auth.py, Store v12 | Planned OAuth PKCE, DCR, Bearer credentials and revocation negatives | Source implementation in PR #10; real client OAuth acceptance pending |
-| REQ-023 / AC-023 | REMOTE-R2; opaque path capability | Planned single-field URL, guessing/stripping/revoke tests | Source implementation in PR #10; per-client compatibility pending |
-| REQ-024 / AC-024 | REMOTE-R3/R4; CLI, remote_tls.py, Web RemoteMCP | Planned managed Caddy, manual proxy and optional external tunnel checks | Source implementation in PR #10; no public TLS or Box test authorized |
+| REQ-021 / AC-021 | REMOTE-R0/R1; remote_mcp.py, existing mcp_gate.py | Fixture suite plus 0.24.0 local HTTP initialize/list/call, Origin/protocol negatives and SSH parity | 0.24.0 loopback acceptance; 0.25.0 installed/external U |
+| REQ-022 / AC-022 | REMOTE-R2; remote_auth.py, Store v12 | Fixture suite plus 0.24.0 DCR/PKCE/Bearer, replay/wrong-verifier denial and revocation | 0.24.0 loopback accepted; v0.25.0 public client U |
+| REQ-023 / AC-023 | REMOTE-R2; opaque path capability | Fixture suite plus 0.24.0 opaque-link authorization, guessed/revoked link denial | Older loopback accepted; each live client/current version U |
+| REQ-024 / AC-024 | REMOTE-R3/R4; CLI, remote_tls.py, Web RemoteMCP | Fixture suite plus 0.24.0 loopback TLS proxy OAuth and Caddy negative | Real public TLS/current external clients U |
 
 
 ## D3/D4 agent diagnostics (source implemented; installed test gate open)
@@ -53,3 +53,7 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 | --- | --- | --- | --- |
 | REQ-025 / AC-025 | D3: `bwmini/gate_diagnostics.py`, `mcp_gate.py`, D2 app reader, `online.py`, installer helper manifest; [master](../design/DIAGNOSTICS_D3_D4_MASTER.md) | `tests/test_gate_diagnostics.py`, upstream passthrough, bounded journal/redaction, actor/trace selectors, retention and catalog; record exact CI run in [queue](REMEDIATION_TEST_QUEUE.md) | Authenticated live SSH/HTTP, installed app-user report, split-host and true Provider fault recovery not yet confirmed |
 | REQ-026 / AC-026 | D4: exact Box incarnation root-owned allowlist, fixed guest probes, summarized output and privacy contract | Default DENY before Provider, policy/identity rejection, no raw stdout, synthetic Provider read | A specifically approved real Box with correct trust, negative unauthorized case and actual service/log read required; no deployment or mutation authority implied |
+
+## Code-first source coverage and acceptance state (2026-11-01)
+
+[The current code-derived implementation, endpoint, module, and test inventory](CODE_FIRST_ACCEPTANCE_2026-11-01.md) enumerates source surfaces even when missing from older feature prose, maps them to CI and known real evidence, and preserves PARTIAL/BLOCKED/UNVERIFIED for current runtime checks. An implemented endpoint is not itself accepted.
