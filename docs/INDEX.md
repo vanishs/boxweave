@@ -97,3 +97,5 @@ MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment pro
 - [Negative and positive acceptance matrix](verification/REMOTE_MCP_TEST_PLAN.md), [Agent implementation handoff](process/REMOTE_MCP_HANDOFF.md)
 
 **Planning only.** Source `main` still uses SSH/stdio for direct Agent MCP; Web cookie sessions are not OAuth and the optional SSH gateway allowlist is not per-Agent RBAC. No new public URL is active because these documents exist.
+
+- [Remote HTTP MCP source setup, CLI and safety limits](REMOTE_MCP.md) (v0.24.0 source only; real public/TLS acceptance pending)
