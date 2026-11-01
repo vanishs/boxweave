@@ -3,7 +3,7 @@ import React, {useEffect, useState} from 'react';
 type API=(path:string, method?:string, data?:unknown)=>Promise<any>;
 type Entry={id:string;kind:string;label:string;created:number;expires:number|null;revoked:number};
 type Summary={enabled:boolean;public_url?:string;mcp_url?:string;port?:number;
-  listener?:string;externally_verified?:boolean;credentials?:Entry[];notice?:string};
+  listener?:string;local_tcp_reachable?:boolean;externally_verified?:boolean;credentials?:Entry[];notice?:string};
 export function RemoteMCP({api}:{api:API}){
   const [info,setInfo]=useState<Summary|null>(null);
   const [kind,setKind]=useState<'api'|'link'>('api');
@@ -33,9 +33,12 @@ export function RemoteMCP({api}:{api:API}){
         separately start the loopback remote-mcp service. No public endpoint was created.</p>:<>
       <p><strong>Configured endpoint:</strong> <code>{info.mcp_url}</code></p>
       <button className="quiet" onClick={()=>void run(()=>copy(info.mcp_url||''))}>Copy OAuth MCP URL</button>
-      <p>Local listener: {info.listener}:{info.port}. External connectivity has
-        <strong> not been verified</strong> by this Web page. Confirm DNS, TLS and
-        an actual MCP initialize call through your reverse proxy or tunnel.</p>
+      <p>Local TCP listener at {info.listener}:{info.port}:
+        <strong> {info.local_tcp_reachable?'reachable':'not reachable'}</strong>.
+        This TCP check cannot confirm the service identity, MCP tools or OAuth.
+        External HTTPS connectivity has <strong>not been verified</strong> by
+        this page. Confirm DNS, TLS and an authenticated MCP initialize call
+        through your reverse proxy or tunnel.</p>
       <p><strong>OAuth:</strong> In your MCP client, register the above URL,
         choose OAuth, then sign in using the existing BoxWeave administrator password
         and explicitly authorize the connection.</p>
