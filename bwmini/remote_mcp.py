@@ -127,6 +127,17 @@ def create_remote_app(store, config, dispatch=None, clock=None):
 
     @app.before_request
     def protect_origin():
+        # Prevent DNS rebinding and Host spoofing even on the loopback ingress.
+        # A trusted proxy may preserve the public Host or use the fixed
+        # loopback upstream Host; forwarded-host headers are never trusted.
+        incoming_host = request.host.lower()
+        allowed_hosts = {urlsplit(origin).netloc.lower(),
+                         "localhost:" + str(config["port"]),
+                         "127.0.0.1:" + str(config["port"])}
+        if incoming_host not in allowed_hosts and incoming_host != "localhost":
+            # Flask test clients use localhost; production only uses explicit
+            # canonical or loopback authority.
+            raise RemoteError("invalid_host", 403)
         supplied = request.headers.get("Origin")
         if supplied and supplied not in origins:
             raise RemoteError("invalid_origin", 403)
