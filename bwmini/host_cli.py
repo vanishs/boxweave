@@ -266,7 +266,7 @@ def report_selector(arguments):
             raise ValueError("SELECTOR_EXCLUSIVE")
         if re.fullmatch(r"[0-9a-f]{32}", arguments.trace) is None:
             raise ValueError("INVALID_TRACE_SELECTOR")
-        return {"kind": "trace", "trace_id": arguments.trace}
+        return {"kind": "trace", "trace_id": arguments.trace, "actor": "operator"}
     if arguments.since or arguments.until:
         if arguments.kind or arguments.operation or arguments.trace:
             raise ValueError("SELECTOR_EXCLUSIVE")
@@ -281,7 +281,8 @@ def report_selector(arguments):
             raise ValueError("INVALID_WINDOW_SELECTOR") from None
         if not (end > start) or (end - start).total_seconds() > 24 * 3600:
             raise ValueError("WINDOW_OUT_OF_RANGE")
-        return {"kind": "window", "since": arguments.since, "until": arguments.until}
+        return {"kind": "window", "since": arguments.since, "until": arguments.until,
+                "actor": "operator"}
     if arguments.kind and arguments.operation:
         if arguments.kind not in ("hello", "environment", "access"):
             raise ValueError("SOURCE_KIND_UNSUPPORTED")

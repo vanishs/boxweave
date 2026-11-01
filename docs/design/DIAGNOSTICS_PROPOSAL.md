@@ -20,7 +20,7 @@ This proposal has three **separate, source-reviewed implementation specification
 
 ## Related environment-management proposal (independent; NOT IMPLEMENTED)
 
-The proposed [Box checkpoints, clone and fingerprint architecture](BOX_ENVIRONMENT_PROPOSAL.md) and its [E0 capability](BOX_ENV_E0_CAPABILITIES.md), [E1 fingerprint](BOX_ENV_E1_FINGERPRINTS.md), [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md), [E3 restore](BOX_ENV_E3_RESTORE.md), [E4 clone](BOX_ENV_E4_CLONE.md) coding handoffs complement D0-D2 but **are NOT IMPLEMENTED**. Their primary use is a dual-mode development workflow (reuse an existing nested Box, or create a new test Box); the capabilities are designed as general BoxWeave product features. D0/D1/D2 diagnostics are also proposals, not already shipped. Environment capture/checkpoint features must not require working diagnostics, and diagnostics must not imply that an Incus native operation is authenticated via deployed Containarium MCP. No additional MCP, host privilege, DB schema or runtime capability was added by this document link.
+The proposed [Box checkpoints, clone and fingerprint architecture](BOX_ENVIRONMENT_PROPOSAL.md) and its [E0 capability](BOX_ENV_E0_CAPABILITIES.md), [E1 fingerprint](BOX_ENV_E1_FINGERPRINTS.md), [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md), [E3 restore](BOX_ENV_E3_RESTORE.md), [E4 clone](BOX_ENV_E4_CLONE.md) coding handoffs complement D0-D2 but **are NOT IMPLEMENTED**. Their primary use is a dual-mode development workflow (reuse an existing nested Box, or create a new test Box); the capabilities are designed as general BoxWeave product features. D0/D1/D2 diagnostics were implemented in 0.22.0; this section preserves the original design rationale and does not certify the currently running installation. Environment capture/checkpoint features must not require working diagnostics, and diagnostics must not imply that an Incus native operation is authenticated via deployed Containarium MCP. No additional MCP, host privilege, DB schema or runtime capability was added by this document link.
 
 ## 1. Design choice
 
@@ -53,7 +53,7 @@ promise cancellation, grant more authority or cause an automatic retry.
 If user research later finds terminal/report sufficient, **do not** ship
 an MCP diagnostic tool merely to complete a roadmap.
 
-## 3. Proposed interfaces (not implemented)
+## 3. Originally proposed interfaces (D0-D2 implemented; D3 deferred)
 
 ### CLI
 
