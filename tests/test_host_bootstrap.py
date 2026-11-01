@@ -70,11 +70,11 @@ class BootstrapSafetyTests(unittest.TestCase):
 
     def test_streamed_version_is_bound_to_exact_verified_release_offline(self):
         source=SCRIPT.read_text()
-        body=re.search(r"<<'PY_DEFAULT_RELEASE'\\n(.*?)\\nPY_DEFAULT_RELEASE",source,re.S)
+        body=re.search(r"<<'PY_DEFAULT_RELEASE'\n(.*?)\nPY_DEFAULT_RELEASE",source,re.S)
         self.assertIsNotNone(body)
         code=compile(body.group(1),str(SCRIPT)+':streamed','exec')
         published=(ROOT/'PUBLISHED_RELEASE').read_text().strip()
-        pin=re.search(r'python3 - "(0\\.[0-9]+\\.[0-9]+)" "\\$\\{streamed_options\\[@\\]\\}"',source)
+        pin=re.search(r'python3 - "(0\.[0-9]+\.[0-9]+)" "\$\{streamed_options\[@\]\}"',source)
         self.assertIsNotNone(pin)
         self.assertEqual(pin.group(1),published)
 
@@ -118,7 +118,7 @@ class BootstrapSafetyTests(unittest.TestCase):
 
     def test_streamed_version_mismatch_fails_without_launch(self):
         source=SCRIPT.read_text()
-        body=re.search(r"<<'PY_DEFAULT_RELEASE'\\n(.*?)\\nPY_DEFAULT_RELEASE",source,re.S)
+        body=re.search(r"<<'PY_DEFAULT_RELEASE'\n(.*?)\nPY_DEFAULT_RELEASE",source,re.S)
         self.assertIsNotNone(body)
         code=compile(body.group(1),'streamed','exec')
         manifest={'format':1,'version':'0.25.1','source':'a'*40,
