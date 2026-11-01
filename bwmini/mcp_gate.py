@@ -286,7 +286,7 @@ def validated_resize_arguments(args):
     if not isinstance(cpu, str) or len(cpu) > 64:
         raise ValueError("RESOURCE_CPU_INVALID")
     value = cpu.strip()
-    numeric = re.fullmatch(r"(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+|[0-9]+m)", value)
+    numeric = re.fullmatch(r"(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+|[0-9]+m)", value)
     cpuset = re.fullmatch(r"[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*", value)
     if not numeric and not cpuset:
         raise ValueError("RESOURCE_CPU_INVALID")
