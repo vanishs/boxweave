@@ -53,7 +53,10 @@ def relay(message, gate=GATE):
     if len(payload) > 65536:
         raise RemoteError("request_too_large", 413)
     try:
-        completed = subprocess.run([sys.executable, "-I", gate], input=payload,
+        # -E -s ignore the environment and user site without -P: the gateway
+        # imports its sibling `nesting` module, and isolated mode (-I) strips
+        # the script directory from sys.path, so every relay would fail.
+        completed = subprocess.run([sys.executable, "-E", "-s", gate], input=payload,
                                    text=True, stdout=subprocess.PIPE,
                                    stderr=subprocess.DEVNULL, timeout=45, check=False)
     except (OSError, subprocess.TimeoutExpired):

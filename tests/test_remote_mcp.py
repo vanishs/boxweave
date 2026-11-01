@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 from werkzeug.security import generate_password_hash
 
 from bwmini.remote_auth import RemoteCredentials, RemoteError, valid_url
-from bwmini.remote_mcp import create_remote_app, validate_remote_config
+from bwmini.remote_mcp import create_remote_app, relay, validate_remote_config
 from bwmini.store import Store
 
 ORIGIN = "https://mcp.example.test"
@@ -171,6 +171,27 @@ class RemoteTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_remote_config({"enabled": True, "public_url": ORIGIN,
                                     "port": 18740, "host": "0.0.0.0"})
+
+    def test_relay_spawns_gateway_with_importable_script_directory(self):
+        # A real gateway process must import its sibling modules under the
+        # exact spawn argv relay() uses; isolated mode (-I) once stripped the
+        # script directory from sys.path and made every relay return 503.
+        folder = Path(self.tmp.name) / "gatehome"
+        folder.mkdir()
+        (folder / "nesting.py").write_text("MARKER = 'fixture-sibling'\n")
+        gate = folder / "gate.py"
+        gate.write_text(
+            "import json, sys\n"
+            "from nesting import MARKER\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    if 'id' not in request:\n"
+            "        continue\n"
+            "    print(json.dumps({'jsonrpc': '2.0', 'id': request['id'],\n"
+            "                      'result': {'marker': MARKER}}), flush=True)\n")
+        reply = relay({"jsonrpc": "2.0", "id": 3, "method": "tools/list", "params": {}},
+                      str(gate))
+        self.assertEqual(reply["result"]["marker"], "fixture-sibling")
 
 
 class RemoteWebTests(unittest.TestCase):
