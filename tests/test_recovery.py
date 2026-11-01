@@ -178,7 +178,7 @@ class RecoveryTests(Base):
         self.assertEqual(upgraded.receipt(op["id"]), op)
         with upgraded.db() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM graphs").fetchone()[0], 1)
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 11)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 12)
 
     def test_restart_keeps_expired_deadline_and_blocks_dispatch(self):
         op = self.operation()

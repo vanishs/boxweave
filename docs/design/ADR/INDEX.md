@@ -15,3 +15,5 @@ This index owns decision status/navigation, not copied decision bodies. Runtime 
 Keep rationale/consequences in each ADR. A changed decision needs its source, old decision link, new choice, implications and regression plan; mark superseded records rather than silently deleting them.
 
 [ADR-008 independent nesting](0008-independent-nesting.md): accepted SRC-103, implemented source0.16.0; privileged live acceptance pending.
+
+[ADR-009 remote MCP HTTP(S), authentication and no tunnel-vendor coupling](0009-remote-mcp-transports-and-auth.md): **accepted, v0.24.0 source implemented; live acceptance pending** (2026-10-31). Keeps ADR-003 SSH runtime intact; HTTPS/OAuth/API Token/opaque URL credential are new future transport plans, and unified SSH+HTTP identity/RBAC remains deferred. [Master](../REMOTE_MCP_MASTER.md).

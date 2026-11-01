@@ -10,7 +10,7 @@ from .domain import Fault
 from .graphs import Graphs
 from .models import Models
 
-def create_app(service, origin, dist, secure=True, clock=time.time):
+def create_app(service, origin, dist, secure=True, clock=time.time, remote_config=None):
     app = Flask(__name__, static_folder=None)
     app.config.update(MAX_CONTENT_LENGTH=16384)
     store = service.store
@@ -118,6 +118,57 @@ def create_app(service, origin, dist, secure=True, clock=time.time):
         target = service.observe_target(logical)
         from .box_debug import summary
         return jsonify(summary(service.provider, target))
+
+    @app.get("/api/remote-mcp")
+    def remote_mcp_info():
+        if not remote_config or remote_config.get("enabled") is not True:
+            return jsonify(enabled=False, externally_verified=False,
+                           note="Remote MCP is disabled; SSH/stdin remains available.")
+        from .remote_mcp import validate_remote_config
+        remote = validate_remote_config(remote_config)
+        from .remote_auth import RemoteCredentials
+        registry = RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock)
+        return jsonify(enabled=True, public_url=remote["public_url"],
+                       mcp_url=remote["public_url"].rstrip("/") + "/mcp",
+                       port=remote["port"], listener="127.0.0.1",
+                       externally_verified=False, credentials=registry.list(),
+                       notice="Each credential has current trusted-operator MCP authority. "
+                              "External TLS/OAuth/Box functionality is not verified by this page.")
+
+    @app.post("/api/remote-mcp/credentials")
+    def remote_mcp_issue():
+        if not remote_config or remote_config.get("enabled") is not True:
+            raise Fault("REMOTE_NOT_ENABLED", 409)
+        from .remote_auth import RemoteCredentials, RemoteError
+        from .remote_mcp import validate_remote_config
+        remote = validate_remote_config(remote_config)
+        d = body(["kind", "label"])
+        if d["kind"] not in ("api", "link"):
+            raise Fault("INVALID_CREDENTIAL_KIND", 422)
+        try:
+            registry = RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock)
+            value = registry.issue(d["kind"], d["label"])
+        except RemoteError:
+            raise Fault("INVALID_CREDENTIAL", 422) from None
+        return jsonify(kind=d["kind"], secret=value,
+                       connection_url=(remote["public_url"].rstrip("/") + "/mcp/link/" + value)
+                           if d["kind"] == "link" else remote["public_url"].rstrip("/") + "/mcp",
+                       warning="This credential grants broad trusted-operator MCP access. "
+                               "Copy it once; anyone holding it may operate your Boxes."), 201
+
+    @app.delete("/api/remote-mcp/credentials/<ident>")
+    def remote_mcp_revoke(ident):
+        if not remote_config or remote_config.get("enabled") is not True:
+            raise Fault("REMOTE_NOT_ENABLED", 409)
+        from .remote_auth import RemoteCredentials, RemoteError
+        from .remote_mcp import validate_remote_config
+        remote = validate_remote_config(remote_config)
+        try:
+            RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock).revoke(ident)
+        except RemoteError as error:
+            raise Fault("CREDENTIAL_NOT_FOUND" if error.status == 404 else "INVALID_CREDENTIAL",
+                        error.status) from None
+        return jsonify(code="REVOKED")
 
     @app.get("/api/mcp-capabilities")
     def mcp_capabilities():

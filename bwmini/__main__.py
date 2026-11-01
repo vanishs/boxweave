@@ -31,7 +31,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["capabilities","init-admin","reset-admin","serve","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
+    p.add_argument("action",choices=["capabilities","init-admin","reset-admin","serve","remote-mcp","remote-https","remote-caddyfile","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -156,6 +156,29 @@ def main():
             result=run_selftest(s.provider,plan,budget=a.budget,journal=Journal(s.store))
             print(json.dumps(result,indent=2,sort_keys=True))
             return 0 if result["state"]=="passed" else 2
+        if a.action in ("remote-mcp", "remote-https", "remote-caddyfile"):
+            from .remote_mcp import validate_remote_config, create_remote_app
+            from .remote_tls import caddyfile, run_caddy
+            c = read_config(a.config)
+            if c.get("mode") != "mcp":
+                raise Fault("REMOTE_REQUIRES_LIVE_MCP", 422)
+            remote = validate_remote_config(c.get("remote_mcp"))
+            if remote["port"] == c.get("port", 18640):
+                raise Fault("REMOTE_PORT_CONFLICT", 422)
+            if a.action == "remote-caddyfile":
+                print(caddyfile(remote))
+            elif a.action == "remote-https":
+                return run_caddy(remote)
+            else:
+                from waitress import serve
+                local_store = Store(c["database"])
+                # Security property: direct listener always loopback; the
+                # operator separately provisions HTTPS via a proxy or tunnel.
+                serve(create_remote_app(local_store, remote),
+                      host="127.0.0.1", port=remote["port"], threads=8,
+                      max_request_body_size=65536,
+                      clear_untrusted_proxy_headers=True)
+            return 0
         if a.action.startswith("model-") or a.action in ("init-admin","reset-admin"):
             c=read_config(a.config);model_store=Store(c["database"])
         else:
@@ -180,7 +203,7 @@ def main():
             if host!="127.0.0.1" and not c.get("allow_private_http"):
                 raise Fault("LISTENER_NOT_APPROVED",422)
             port=c.get("port",18640)
-            serve(create_app(s,c["origin"],Path(c["dist"]).absolute(),secure=c.get("secure_cookie",True)),
+            serve(create_app(s,c["origin"],Path(c["dist"]).absolute(),secure=c.get("secure_cookie",True),remote_config=c.get("remote_mcp")),
                   host=host,port=port,threads=4,max_request_body_size=16384,
                   clear_untrusted_proxy_headers=True)
         elif a.action=="projects":

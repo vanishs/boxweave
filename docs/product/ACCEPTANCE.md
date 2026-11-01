@@ -94,3 +94,23 @@ On an approved clean Ubuntu 24.04 x86_64 host, inspect source artifact provenanc
 Verify local version/provenance, optional CLI versions, app status with missing/foreign user service, and exact Incus read-only inspection under invalid/ambiguous names, inaccessible socket, timed-out subprocess and filtered secret metadata. Real MCP diagnosis is an independent opt-in authorized read; HTTP alone must not imply authentication. Exit 0 only for a completed observation in that command's limited scope, 1 for confirmed failure and 2 for invalid/incomplete. No host key/credential read or repair. **Current implementation has only isolated unit tests, not full real-host acceptance.**
 
 AC-003/008/009/011/018/019 nesting cases (SRC-103): independent boolean/omitted legacy dispatch, unsupported endpoint, protected/unmanaged targets, stale UUID/config and exact confirmation. Preserve unrelated config/Podman; no restart. Validate changes using the same child and actual MCP. [Evidence and U integration](../verification/NESTING_VERIFICATION.md).
+
+## Remote MCP HTTP(S) / OAuth acceptance — future delivery gates
+
+These ACs are approved **tests to be implemented**; all are **UNVERIFIED** as of the planning change. The owner did not authorize production listener/firewall/TLS/Box mutation with this planning request. The detailed positive/negative test matrix is [REMOTE_MCP_TEST_PLAN](../verification/REMOTE_MCP_TEST_PLAN.md).
+
+## AC-021 — Dual MCP transport and compatibility (REQ-021)
+
+Given the existing verified SSH/stdio gateway and an explicitly enabled local Streamable HTTP endpoint: both negotiate and serve supported MCP initialization, paginated tools/resources and approved read/tool calls from their own authenticated transport boundary. HTTP rejects malformed JSON-RPC, unsupported versions, wrong Origin/media type, cross-client session confusion and timeout; existing SSH host pin/forced command/tool transformations remain unchanged. Source-only fixtures cannot be called deployed listener acceptance.
+
+## AC-022 — OAuth and API Token boundaries (REQ-022)
+
+Given a configured stable external HTTPS origin and one existing BoxWeave local admin: a compatible client discovers resource/authorization-server metadata, signs in and separately grants consent, exchanges one-use Authorization Code with PKCE S256 and uses properly audience-bound, unexpired Bearer access tokens; an API-token-capable client can use a manually minted independent Bearer token. Reject redirect/client metadata spoofing and SSRF, missing/wrong PKCE/state, unapproved grant, issuer/resource mismatch, expired/revoked/guessed token, Web cookie or MCP session as authentication, fallback to unauthenticated mode and credential leakage. Real client and server observations are distinct from fixture success.
+
+## AC-023 — Non-OAuth one-field URL credential (REQ-023)
+
+Given an administrator-issued high-entropy opaque credential path, a specifically tested compatible client can paste only the URL, initialize and call existing operator-authorized MCP tools, then fail after revocation. A guessed/removed/altered path fails; no OAuth access token appears in a URI query; normal application logs/exports/diagnostics must not expose raw capability strings. Unsupported client URL/path behavior remains *unsupported*, not falsely passed. No new URL expiry/per-Agent RBAC tiers are required.
+
+## AC-024 — Optional HTTPS deployment, Web UX and rollback (REQ-024)
+
+Given explicit owner approval and preflight for public exposure: both managed TLS and existing HTTPS proxy can present the correct canonical MCP and OAuth endpoints and preserve headers/streaming, while optional external Tunnel works without any BoxWeave tunnel integration. No silent host changes, listener-publication, proxy adoption or Web/SSH outages occur; invalid cert, poisoned forwarded headers, missing OAuth discovery, proxy failure or revoked credentials are diagnosed distinctly. Web copy/setup reflects actual reachable, tested endpoints and does not overwrite existing SSH profiles. Report real external evidence before claiming operational readiness.

@@ -106,3 +106,11 @@ empirically nested-capable, so workload creation was unaffected, but
 the nesting tool contract remains non-functional until the gate host is
 repaired or nesting is delegated to the daemon. Operators must not
 delete and recreate boxes in response to `BOXWEAVE_NESTING_NOT_APPLIED`.
+
+## Remote MCP v0.24.0 acceptance risks (explicitly deferred by owner)
+
+**RISK-620 (P1 OPEN — public OAuth/client interoperability):** Source/fixture validation cannot certify real ChatGPT, Cursor, Claude, TLS/proxy authorization callback, certificate renewal, listener service ownership or actual Provider/Box execution. Verify against an approved real external client before production claims. No real Box tests were authorized.
+
+**RISK-621 (P1 OPEN — broad trusted operator):** Legacy SSH and new authenticated remote MCP clients both have the existing broad operator-equivalent upstream tool authority; finer per-client/Box policy is deferred to a separate unified SSH+HTTP redesign. Credential-bearing URL is a bearer secret vulnerable to third-party proxy path logging; BoxWeave stores only a digest and permits revoke but cannot control external provider logs.
+
+**RISK-622 (P2 OPEN — stateless Gateway performance):** The HTTP adapter spawns the existing trusted MCP gate per request rather than introducing a second long-lived privileged dispatcher. This preserves gate tool transforms but adds startup latency, does not offer resumable streams and cannot prove remote cancellation; lost mutating requests remain UNKNOWN and must not replay automatically.

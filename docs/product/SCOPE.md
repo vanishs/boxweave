@@ -51,3 +51,11 @@ Owner approved restoring the **user-visible first-host `install.sh` and `boxweav
 ## Independent nesting (SRC-103)
 
 Include separate nesting choice in reviewed creation and exact managed-instance inspect/plan/apply through parent BoxWeave MCP. Preserve omitted legacy behavior; explicit unsupported selection fails before dispatch. Guest installer never changes parent policy. No automatic restart or privileged-container fallback. Configuration and effective child execution remain distinct. [Decision](../design/ADR/0008-independent-nesting.md).
+
+## Remote MCP HTTP(S)/OAuth extension — owner-selected design, not shipped (2026-10-31)
+
+The owner selected a **single-operator** Streamable HTTP MCP addition compatible with existing SSH/stdio, with optional direct public HTTPS, optional self-managed HTTPS, user-operated reverse proxies and externally configured tunnels. No specific tunnel provider (including OpenAI or Cloudflare) becomes a BoxWeave dependency. OAuth uses the existing local admin login for human consent, alongside API Bearer Token and a separately verified opaque credential-bearing connection URL. The latter is a credential, **not anonymous access**; OAuth access tokens must never be placed in URL query parameters.
+
+**Do not build** team/multiuser support, extra per-Agent/per-Box tool privilege tiers, separate URL lifetime tiers or a new unified SSH+HTTP identity/policy system in this slice. Those rights changes, if approved later, will be designed jointly for SSH and HTTP. Preserve current trusted-operator authority, explicitly disclose its breadth, implement mandatory transport authentication/credential hygiene, and keep all public exposure opt-in. The owner imposes no special public-vs-private network restrictions for explicitly enabled, properly secured HTTPS service.
+
+Normative [REQ-021–024](REQUIREMENTS.md) and [AC-021–024](ACCEPTANCE.md); architecture/planned packages [REMOTE_MCP_MASTER](../design/REMOTE_MCP_MASTER.md), acceptance [REMOTE_MCP_TEST_PLAN](../verification/REMOTE_MCP_TEST_PLAN.md). **Status: v0.24.0 SOURCE IMPLEMENTED in PR #10; no live Box, public TLS or client compatibility evidence.**

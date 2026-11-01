@@ -69,7 +69,7 @@ class Store:
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+            if version not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
                 raise Fault("SCHEMA_UNSUPPORTED", 422)
             if version == 0:
                 if db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]:
@@ -112,6 +112,11 @@ class Store:
                 for statement in box_actions_schema.split(";"):
                     if statement.strip():db.execute(statement)
                 db.execute("PRAGMA user_version=11")
+            if version < 12:
+                from .remote_auth import SCHEMA as remote_schema
+                for statement in remote_schema.split(";"):
+                    if statement.strip(): db.execute(statement)
+                db.execute("PRAGMA user_version=12")
         os.chmod(self.path, 0o600)
 
     @contextlib.contextmanager
@@ -150,6 +155,10 @@ class Store:
             db.execute("UPDATE admin SET password=? WHERE id=1",(hashed,))
             db.execute("DELETE FROM sessions")
             db.execute("DELETE FROM attempts")
+            # Reset all remote grants, URL credentials and registered clients.
+            db.execute("DELETE FROM remote_credentials")
+            db.execute("DELETE FROM remote_codes")
+            db.execute("DELETE FROM remote_pending")
 
     def project(self, ident):
         with self.db() as db:

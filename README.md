@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.23.0 (unreleased candidate).** The independently verified **published stable install target remains v0.22.0**. The default streamed installer deliberately installs that published release until a reviewed v0.23.0 release exists; new source-only MCP additions are not available from a v0.22.0 installation. Neither channel is a certified clean-host deployment.
+**Current source version: 0.24.0 (unreleased candidate).** The independently verified **published stable install target remains v0.22.0**. The default streamed installer deliberately installs that published release until a reviewed v0.24.0 release exists; new source-only MCP additions are not available from a v0.22.0 installation. Neither channel is a certified clean-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -174,3 +174,7 @@ These commands do not automatically install missing components or modify the hos
 [Install and update](docs/INSTALL.md) · [Host prerequisites](docs/HOST_BOOTSTRAP.md) · [Client setup](clients/README.md) · [CLI reference](docs/CLI.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Supported scope](docs/product/SCOPE.md) · [Development and tests](docs/DEVELOPMENT.md) · [Open risks](docs/verification/OPEN_RISKS.md)
 
 Container-host setup: see [nesting configuration and restart guidance](docs/NESTING.md).
+
+## Remote HTTP(S) MCP (v0.24.0 source feature)
+
+The new opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md); **no live Box, TLS or actual hosted-client connection has been verified**. The published stable installer remains v0.22.0 until a reviewed release is completed.

@@ -36,3 +36,12 @@ Historical matrices: [preserved snapshot](FEATURE_MATRIX_HISTORY.md).
 | REQ-020 / AC-020 | TASK-016; `boxweave.sh`, `manage.py`, `deploy_check.py` | Current unit regressions plus installed version/status/doctor, actual exact local Incus reads, invalid/missing targets, scoped authenticated MCP and failure/repair. [Current evidence](MAIN_014_REVIEW.md) | **Accepted within selected CLI scope**; wider host/network claims remain separate. [queue](REMEDIATION_TEST_QUEUE.md), RISK-611 |
 
 REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, mcp_gate.py, online.py, manage.py, provider.py, lifecycle.py, Environments.tsx -> test_nesting.py contract checks; [same-child actual comparison and U new-helper boundary](NESTING_VERIFICATION.md). Prior0.15.1 execution is T for that exact version only.
+
+## Remote MCP HTTP(S) / OAuth (source/fixture only until verified)
+
+| REQ / AC | TASK and implementation | Executed normal / abnormal / authority / boundary / state checks | Evidence and remaining boundary |
+| --- | --- | --- | --- |
+| REQ-021 / AC-021 | REMOTE-R0/R1; remote_mcp.py, existing mcp_gate.py | Planned stateless HTTP initialize, tool relay, Origin and protocol negatives, SSH regression | Source implementation in PR #10; fixture CI and installed acceptance pending |
+| REQ-022 / AC-022 | REMOTE-R2; remote_auth.py, Store v12 | Planned OAuth PKCE, DCR, Bearer credentials and revocation negatives | Source implementation in PR #10; real client OAuth acceptance pending |
+| REQ-023 / AC-023 | REMOTE-R2; opaque path capability | Planned single-field URL, guessing/stripping/revoke tests | Source implementation in PR #10; per-client compatibility pending |
+| REQ-024 / AC-024 | REMOTE-R3/R4; CLI, remote_tls.py, Web RemoteMCP | Planned managed Caddy, manual proxy and optional external tunnel checks | Source implementation in PR #10; no public TLS or Box test authorized |
