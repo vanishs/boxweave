@@ -168,11 +168,11 @@ class GatewayDiagnosticsTests(unittest.TestCase):
                    "params": {"name": "list_containers", "arguments": {}}}
         upstream = {"jsonrpc": "2.0", "id": 8, "result": {"content": [
             {"type": "text", "text": "EXAMPLE_PRIVATE_BODY"}]}}
-        fake = Fake((json.dumps(upstream) + "\\n").encode())
+        fake = Fake((json.dumps(upstream) + "\n").encode())
         recorded = []
         with (patch.object(mcp_gate, "tool_policy", return_value=None),
               patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
-              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\n")),
               patch.object(mcp_gate.gd, "record", side_effect=lambda *a, **kw: recorded.append((a, kw))),
               redirect_stdout(io.StringIO()) as output):
             mcp_gate.main()
@@ -198,7 +198,7 @@ class GatewayDiagnosticsTests(unittest.TestCase):
         fake = Fake(b"")
         with (patch.object(mcp_gate, "tool_policy", return_value=None),
               patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
-              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\n")),
               patch.object(mcp_gate.gd, "preauthorize_project",
                            side_effect=ValueError("PROJECT_DIAG_NOT_AUTHORIZED")),
               redirect_stdout(io.StringIO()) as output):
@@ -213,12 +213,12 @@ class GatewayDiagnosticsTests(unittest.TestCase):
                                                  "text": json.dumps({"container": observed})}]}}
         exec_reply = {"jsonrpc": "2.0", "id": "boxweave-d4-" + "a" * 16,
                       "result": {"structuredContent": {
-                          "exit_code": 0, "stdout": "LISTEN private_token\\n"}}}
-        fake = Fake((json.dumps(container_reply) + "\\n" +
-                     json.dumps(exec_reply) + "\\n").encode())
+                          "exit_code": 0, "stdout": "LISTEN private_token\n"}}}
+        fake = Fake((json.dumps(container_reply) + "\n" +
+                     json.dumps(exec_reply) + "\n").encode())
         with (patch.object(mcp_gate, "tool_policy", return_value=None),
               patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
-              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\n")),
               patch.object(mcp_gate.secrets, "token_hex", side_effect=lambda n: "a" * (2 * n)),
               patch.object(mcp_gate.gd, "preauthorize_project", return_value={}),
               patch.object(mcp_gate.gd, "project_grant", return_value={}),
