@@ -50,13 +50,16 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 
 - [Container nesting](NESTING.md) and [measured verification](verification/NESTING_VERIFICATION.md)
 
-## Diagnostics implementation (D0–D2 source-implemented in 0.22.0; D3 not implemented)
+## Diagnostics implementation (D0–D2 in 0.22.0; D3/D4 source in 0.25.0)
 
 - [Current source/behavior audit](verification/DIAGNOSTICS_SOURCE_AUDIT.md)
 - [Evidence-first CLI and existing-MCP implementation proposal](design/DIAGNOSTICS_PROPOSAL.md)
 - [D0 implementation specification — diagnostic correctness](design/DIAGNOSTICS_D0_IMPLEMENTATION.md)
 - [D1 implementation specification — trace and evidence](design/DIAGNOSTICS_D1_IMPLEMENTATION.md)
 - [D2 implementation specification — reports and nested diagnosis](design/DIAGNOSTICS_D2_IMPLEMENTATION.md)
+- [D3+D4 owner-approved master](design/DIAGNOSTICS_D3_D4_MASTER.md)
+- [D3+D4 implementation and tests](design/DIAGNOSTICS_D3_D4_IMPLEMENTATION.md)
+- [D3/D4 operator guide](DIAGNOSTICS.md)
 
 ## Box environment management research (proposal; NOT IMPLEMENTED)
 
@@ -67,7 +70,7 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 - [E3 — Snapshot restore](design/BOX_ENV_E3_RESTORE.md)
 - [E4 — Independent Box cloning](design/BOX_ENV_E4_CLONE.md)
 
-These environment features are **design-only**; D0–D2 diagnostics are source-implemented in 0.22.0, while D3 remains unimplemented.
+These environment features are **design-only**; D0–D2 shipped in 0.22.0, while D3/D4 are source-implemented in 0.25.0 with live acceptance separate.
 
 
 ## MCP capability integration (source inventory and staged implementation)

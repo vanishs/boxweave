@@ -1,6 +1,6 @@
 # Proposal: evidence-first diagnostics for the existing BoxWeave MCP and CLI
 
-**Implemented** in BoxWeave 0.22.0 (D0-D2; see [SOURCE_REGISTER](../knowledge/SOURCE_REGISTER.md) SRC-108 and the D0/D1/D2 implementation documents). Original status: proposal under SRC-104; reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4. The conditional D3 existing-MCP read remains unapproved and unimplemented; D4 user-project debugging remains out of scope.
+**Implemented** in BoxWeave 0.22.0 (D0-D2; see [SOURCE_REGISTER](../knowledge/SOURCE_REGISTER.md) SRC-108 and the D0/D1/D2 implementation documents). Original status: proposal under SRC-104; reviewed baseline `main@0fcfa6a` / BoxWeave 0.21.4. The owner approved bounded D3/D4 on 2026-11-01 and source implementation starts in 0.25.0; live host acceptance is separate. The [new master](DIAGNOSTICS_D3_D4_MASTER.md) and [implementation batches](DIAGNOSTICS_D3_D4_IMPLEMENTATION.md) supersede the older deferred scope for D3/D4. Historical conditions below remain recorded.
 Source findings: [diagnostics source audit](../verification/DIAGNOSTICS_SOURCE_AUDIT.md).
 Related accepted requirements (do not silently extend): REQ-002/003/004/005/006/007/
 008/009/016/017/018/019/020 and their corresponding AC. Existing
@@ -269,6 +269,8 @@ oversized logs and unknown schema. An exported report is an artifact to
 review before sharing, not automatically safe to publish.
 
 ## 8. Implementation slices and affected files
+
+**2026-11-01 owner approval:** D3 and strictly default-deny D4 now have an [approved master](DIAGNOSTICS_D3_D4_MASTER.md). The older conditional/deferred text below predates the new decision.
 
 ### Slice D0 — correctness, no added MCP tool (P0)
 
