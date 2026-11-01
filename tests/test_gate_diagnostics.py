@@ -154,6 +154,86 @@ class GatewayDiagnosticsTests(unittest.TestCase):
                          {"structuredContent": {"exit_code": 0, "stdout": "x" * 9999}})["state"],
                          "not_verified")
 
+    def test_mcp_gateway_passthrough_records_without_rewriting_provider(self):
+        import io
+        from contextlib import redirect_stdout
+        from unittest.mock import patch
+        class Fake:
+            def __init__(self, source):
+                self.stdin = io.BytesIO()
+                self.stdout = io.BytesIO(source)
+            def poll(self):
+                return 0
+        request = {"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                   "params": {"name": "list_containers", "arguments": {}}}
+        upstream = {"jsonrpc": "2.0", "id": 8, "result": {"content": [
+            {"type": "text", "text": "EXAMPLE_PRIVATE_BODY"}]}}
+        fake = Fake((json.dumps(upstream) + "\\n").encode())
+        recorded = []
+        with (patch.object(mcp_gate, "tool_policy", return_value=None),
+              patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.gd, "record", side_effect=lambda *a, **kw: recorded.append((a, kw))),
+              redirect_stdout(io.StringIO()) as output):
+            mcp_gate.main()
+        self.assertEqual(json.loads(output.getvalue()), upstream)
+        self.assertEqual([entry[0][0] for entry in recorded], ["list_containers"])
+
+    def test_d4_denies_before_upstream_and_returns_no_raw_log_on_success(self):
+        import io
+        from contextlib import redirect_stdout
+        from unittest.mock import patch
+        class KeepOpen(io.BytesIO):
+            def close(self):
+                pass
+        class Fake:
+            def __init__(self, source):
+                self.stdin = KeepOpen()
+                self.stdout = io.BytesIO(source)
+            def poll(self):
+                return 0
+        request = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                   "params": {"name": "boxweave_project_diagnose",
+                              "arguments": {"box": "devbox", "check": "ports"}}}
+        fake = Fake(b"")
+        with (patch.object(mcp_gate, "tool_policy", return_value=None),
+              patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.gd, "preauthorize_project",
+                           side_effect=ValueError("PROJECT_DIAG_NOT_AUTHORIZED")),
+              redirect_stdout(io.StringIO()) as output):
+            mcp_gate.main()
+        self.assertIn("PROJECT_DIAG_NOT_AUTHORIZED", output.getvalue())
+        self.assertEqual(fake.stdin.getvalue(), b"")
+
+        observed = {"username": "devbox", "name": "devbox-container",
+                    "createdAt": "123", "state": "CONTAINER_STATE_RUNNING"}
+        container_reply = {"jsonrpc": "2.0", "id": "boxweave-nesting-7",
+                           "result": {"content": [{"type": "text",
+                                                 "text": json.dumps({"container": observed})}]}}
+        exec_reply = {"jsonrpc": "2.0", "id": "boxweave-d4-" + "a" * 16,
+                      "result": {"structuredContent": {
+                          "exit_code": 0, "stdout": "LISTEN private_token\\n"}}}
+        fake = Fake((json.dumps(container_reply) + "\\n" +
+                     json.dumps(exec_reply) + "\\n").encode())
+        with (patch.object(mcp_gate, "tool_policy", return_value=None),
+              patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\\n")),
+              patch.object(mcp_gate.secrets, "token_hex", side_effect=lambda n: "a" * (2 * n)),
+              patch.object(mcp_gate.gd, "preauthorize_project", return_value={}),
+              patch.object(mcp_gate.gd, "project_grant", return_value={}),
+              patch.object(mcp_gate, "trusted", return_value=None),
+              patch.object(mcp_gate.REGISTRY, "read_text", return_value="{}"),
+              redirect_stdout(io.StringIO()) as output):
+            mcp_gate.main()
+        result = json.loads(output.getvalue())
+        summary = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(summary["sample_listening_tcp_count"], 1)
+        self.assertNotIn("private_token", json.dumps(summary))
+        sent = fake.stdin.getvalue().decode()
+        self.assertIn('"name": "get_container"', sent)
+        self.assertIn('"name": "connect"', sent)
+
 
 if __name__ == "__main__":
     unittest.main()
