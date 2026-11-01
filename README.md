@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.26.2.** The default installer remains pinned to the verified `v0.26.0` Release until this patch's source-bound assets are published and promoted separately. Live Box acceptance is recorded per tested version. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.26.3.** The default installer remains pinned to the previously published `v0.26.0` Release until the new release is verified and promoted separately. The corrected Incus nesting-query path still requires independent real host acceptance; a nesting-enabled create can have created the Box before a post-create nesting failure. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 

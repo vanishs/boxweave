@@ -13,7 +13,7 @@ except ImportError:
     import gate_diagnostics as gd
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.26.2"
+SERVER_INFO_VERSION = "0.26.3"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -197,6 +197,7 @@ GATE_ERROR_CODES = frozenset((
     "EXACT_MANAGED_TARGET_REQUIRED", "MANAGED_INSTANCE_IDENTITY_REQUIRED",
     "LOCAL_INCUS_OBSERVATION_OR_CHANGE_FAILED", "NESTING_BOOLEAN_REQUIRED",
     "NESTING_CONFIG_INVALID", "NESTING_REQUEST_INVALID", "REQUEST_LIMIT",
+    "LOCAL_UBUNTU_NESTING_ONLY",
     "OWNED_PROVIDER_REQUIRED", "NESTING_HELPER_UNAVAILABLE",
     "NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE",
     "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED", "INFO_TOPIC_INVALID",

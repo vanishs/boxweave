@@ -26,12 +26,27 @@ class NestingBoundaryTests(unittest.TestCase):
         with patch.object(nesting,"run",side_effect=run):
             plan=nesting.handle({"action":"plan","logical":"work","nesting":True})
             self.assertEqual(len(calls),1)
+            self.assertEqual(calls[0], [nesting.INCUS, "--force-local", "query",
+                                         "/1.0/instances/work-container?project=default"])
             result=nesting.handle({"action":"apply","logical":"work","nesting":True,"expected":plan["expected"],"confirm":"work-container"})
         self.assertTrue(result["changed"]);self.assertFalse(result["restart_performed"])
         self.assertEqual(result["effective_nested_execution"],"not_verified")
         self.assertEqual(item["expanded_config"]["security.privileged"],"false")
         self.assertEqual(sum("set" in c for c in calls),1)
         self.assertFalse(any(any(v in c for v in ("start","stop","restart","delete")) for c in calls))
+
+    def test_incus_query_rejects_global_project_but_accepts_rest_project(self):
+        calls=[]
+        def fake_run(argv):
+            calls.append(argv)
+            if "--project" in argv and "query" in argv:
+                raise ValueError("LOCAL_INCUS_OBSERVATION_OR_CHANGE_FAILED")
+            return json.dumps(self.target())
+        with patch.object(nesting, "run", side_effect=fake_run):
+            observed=nesting.handle({"action":"inspect","logical":"work"})
+        self.assertEqual(observed["target"]["name"],"work-container")
+        self.assertEqual(calls,[[nesting.INCUS,"--force-local","query",
+                                 "/1.0/instances/work-container?project=default"]])
 
     def test_stale_incarnation_or_config_and_wrong_confirmation_cannot_write(self):
         for change in ("uuid","config","confirmation"):

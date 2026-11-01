@@ -35,7 +35,7 @@ def observe(logical):
             or logical.startswith("containarium-core-")):
         raise ValueError("EXACT_MANAGED_TARGET_REQUIRED")
     name = logical + "-container"
-    item = json.loads(run([INCUS, "--force-local", "--project", "default", "query", "/1.0/instances/" + name]))
+    item = json.loads(run([INCUS, "--force-local", "query", "/1.0/instances/" + name + "?project=default"]))
     config = item.get("expanded_config", {})
     own = item.get("config", {})
     if (item.get("name") != name or item.get("type") != "container"
