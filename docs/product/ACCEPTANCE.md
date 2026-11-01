@@ -118,10 +118,10 @@ Given explicit owner approval and preflight for public exposure: both managed TL
 
 ## D3/D4 diagnostic acceptance (REQ-025/REQ-026)
 
-### AC-025 — Classified gateway/app MCP observations
+## AC-025 — Classified gateway/app MCP observations
 
 Given authorized SSH and authenticated HTTP gateway clients, discover a single `boxweave_diagnose` tool; query fresh/restarted gateway records by trace or bounded recent selector, and app-owned receipts by verified operator trace/typed operation. Capture tool result classifications, elapsed time and opaque correlation IDs without storing raw args/responses, credentials or project data; preserve upstream results and do not retry uncertain writes. Verify default seven-day retention, configurable limits, unavailable/disabled/corrupt journal modes, concurrent access and no diagnostic writer-induced business failures. Record historical limitations for split gateway/app/Provider hosts. Real installed client, Provider and read-only app-user boundary tests remain required before claiming full acceptance. [Implementation](../design/DIAGNOSTICS_D3_D4_IMPLEMENTATION.md).
 
-### AC-026 — Default-deny exact-Box D4 guest diagnosis
+## AC-026 — Default-deny exact-Box D4 guest diagnosis
 
 Without server-root-owned allowlist, `boxweave_project_diagnose` refuses *before* contacting Provider. With a specific reviewed allowlisted Box incarnation and selected check/service, require fresh authenticated Provider identity and existing managed trust before issuing only a fixed bounded read, return classified service/port/process/log summaries without raw project data. Replaced Box, stale trust, wrong service, oversized output, unsafe policy and unsupported guest tools must fail safely. No generic Shell, per-Agent RBAC, automatic repair or issue submission. Verify one authorized real Box test and denial; all external issue drafts require personal sensitive-data review and a separate explicit final submission approval.
