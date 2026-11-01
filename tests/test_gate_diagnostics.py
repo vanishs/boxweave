@@ -223,7 +223,7 @@ class GatewayDiagnosticsTests(unittest.TestCase):
               patch.object(mcp_gate.gd, "preauthorize_project", return_value={}),
               patch.object(mcp_gate.gd, "project_grant", return_value={}),
               patch.object(mcp_gate, "trusted", return_value=None),
-              patch.object(mcp_gate.REGISTRY, "read_text", return_value="{}"),
+              patch.object(mcp_gate, "REGISTRY", type("RegistryFixture", (), {"read_text": lambda self: "{}"})()),
               redirect_stdout(io.StringIO()) as output):
             mcp_gate.main()
         result = json.loads(output.getvalue())
