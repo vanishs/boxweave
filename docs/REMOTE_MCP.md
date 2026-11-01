@@ -60,6 +60,17 @@ The successful `GET /authorize` page uses `Referrer-Policy: same-origin` rather 
 
 A browser may display `access_denied` after a second click if the first, successful authorization consumed the one-time request but the callback redirect was blocked by CSP. Restart OAuth from the client instead of replaying the old form. On a temporary Cloudflare Quick Tunnel, `public_url` must match the *current* HTTPS hostname; a URL change requires updating configuration and restarting the remote MCP process.
 
+## Agent self-information (0.24.4 source)
+
+Both SSH/stdio and authenticated HTTP MCP initialization now include a
+BoxWeave identity, descriptive metadata and safe-use instructions. The
+read-only **boxweave_info** tool supports topic-specific overview,
+architecture, development, capabilities, security and documentation
+guidance; it does not expose host secrets, live status or credentials.
+Use tools/list and Provider read tools to discover actual authorized
+tools and Box state. An enabled gateway allowlist must permit
+**boxweave_info** explicitly. See [MCP Agent guide](MCP_AGENT_GUIDE.md).
+
 ## Verification and exclusions
 
 Check authorized initialize/tools/list, wrong-Origin rejection, OAuth authorization, actual HTTPS/TLS and revocation with a standalone real client before claiming external readiness. A tunnel's Healthy label is not MCP proof. A 2026-11-01 owner-operated Cloudflare Quick Tunnel and ChatGPT OAuth workflow reached real `list_containers` results (four running boxes); this does not validate a production TLS deployment, a complete Box tool workflow, or all other client apps. The v0.24.2 browser header change was verified by fixture CI; v0.24.3 adds the managed-Caddy header and local-status regression tests. Both require a separately installed release for source-to-runtime parity. Network/host installation or public port changes require separate explicit approval. For a timed-out mutating MCP tool call, completion is UNKNOWN; never automatically retry.

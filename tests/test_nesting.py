@@ -71,7 +71,8 @@ class NestingBoundaryTests(unittest.TestCase):
         out=mcp_gate.catalog(copy.deepcopy(original))
         props=out["result"]["tools"][0]["inputSchema"]["properties"]
         self.assertIn("enable_nesting",props);self.assertIn("enable_podman",props)
-        self.assertEqual(out["result"]["tools"][-1]["name"],"boxweave_nesting")
+        self.assertIn("boxweave_nesting", {t["name"] for t in out["result"]["tools"]})
+        self.assertIn("boxweave_info", {t["name"] for t in out["result"]["tools"]})
         self.assertNotIn("enable_nesting",original["result"]["tools"][0]["inputSchema"]["properties"])
 
     def test_provider_never_substitutes_podman_for_missing_nesting_capability(self):

@@ -76,6 +76,9 @@ class RemoteTests(unittest.TestCase):
                                          "method": "initialize",
                                          "params": {"protocolVersion": "2025-11-25"}})
         self.assertEqual(init.json["result"]["protocolVersion"], "2025-11-25")
+        self.assertEqual(init.json["result"]["serverInfo"]["name"], "boxweave")
+        self.assertIn("isolated Linux Boxes", init.json["result"]["serverInfo"]["description"])
+        self.assertIn("boxweave_info", init.json["result"]["instructions"])
         self.assertEqual(self.call(token, payload={"jsonrpc": "2.0",
                          "method": "notifications/initialized"}).status_code, 202)
         self.assertEqual(len(self.calls), 1)

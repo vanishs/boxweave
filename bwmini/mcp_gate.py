@@ -7,6 +7,101 @@ try:
 except ImportError:
     from nesting import invoke as nesting_invoke
 
+# Source-backed, read-only MCP self-information; tools/list is runtime truth.
+SERVER_INFO_VERSION = "0.24.4"
+SERVER_DESCRIPTION = (
+    "BoxWeave is a self-hosted environment control plane for AI coding agents. "
+    "Use isolated Linux Boxes to execute code, build and test projects, manage "
+    "services, and diagnose workloads. Tool availability depends on the "
+    "Containarium backend, authenticated scope and operator tool policy."
+)
+SERVER_INSTRUCTIONS = (
+    "Use the read-only boxweave_info tool for architecture and developer "
+    "guidance when using or developing BoxWeave. Use tools/list for currently "
+    "authorized tools, then list_containers before creating a Box. Prefer "
+    "a suitable existing Box. Execute builds/tests with connect(exec) when "
+    "permitted, and verify exit codes and outputs. The BoxWeave gateway "
+    "manages workload SSH public keys; never request or expose private keys. "
+    "Diagnose SSH failures with debug_container. Obtain approval for destructive "
+    "or network exposure changes. Timed-out writes have UNKNOWN outcomes: "
+    "inspect real state before retrying, never blindly replay mutations."
+)
+INFO_TOPICS = {
+    "overview": {
+        "purpose": "Self-hosted control plane for AI-agent development, persistent isolated Linux environments, testing, and application management.",
+        "components": ["BoxWeave Python application and Web UI",
+                       "SSH/stdio MCP gateway", "optional authenticated HTTP MCP",
+                       "Containarium Provider", "Incus/LXC Boxes"],
+        "limitation": "This guide is descriptive, not a live runtime, version or permission probe.",
+    },
+    "architecture": {
+        "direct_agent": "Authorized MCP client -> BoxWeave gateway -> Containarium Provider -> Box. Gateway manages workload public SSH key and selected tool rewrites.",
+        "web": "Authenticated local Web -> BoxWeave application service and typed Provider adapter -> separately configured upstream MCP launcher and action receipts.",
+        "remote": "Authenticated opt-in Streamable HTTP MCP -> loopback listener behind independently configured TLS/tunnel -> same gateway.",
+        "exec": "connect(exec) executes inside a managed Box, not in the Web application host.",
+        "source": "https://github.com/vanishs/boxweave",
+    },
+    "development": {
+        "steps": [
+            "Read AGENTS.md, docs/DEVELOPMENT.md and docs/process/AGENT_TEST_WORKFLOW.md at the intended source revision.",
+            "Discover live Boxes and target identity; use an authorized isolated test Box, not a production Box by default.",
+            "Run focused unit tests, then python scripts/check_knowledge.py and python scripts/validate.py on a prepared checkout.",
+            "Browser fixtures: python scripts/validate.py --browser; fixtures cannot prove live Provider, SSH or network behavior.",
+            "Record commit, environment, commands, exit codes, failures and independently verified behavior.",
+            "Only publish source-bound artifacts after CI; promote the stable installer pin separately after release verification.",
+        ],
+    },
+    "capabilities": {
+        "runtime_discovery": "Call tools/list for the actual authorized tool names and input schemas. For current state use get_system_info, list_backends, list_containers, get_container, get_metrics.",
+        "examples": ["list_containers", "create_container", "connect", "debug_container",
+                     "start_container", "stop_container", "delete_container",
+                     "get_metrics", "boxweave_nesting"],
+        "limits": "Provider tools vary by version/scope. Application-side agent-box support is separate from direct Agent tools; no guarantee of general snapshot/clone or automatic Agent test orchestration.",
+    },
+    "security": {
+        "authority": "Single trusted-operator MCP authority, optionally restricted by a root-owned host-wide tool allowlist; not per-Agent/per-Box RBAC.",
+        "ssh": "Gateway injects its own managed workload Ed25519 public key. No private/client transport keys should be passed. connect checks registered target identity and rejects conflicting host/user overrides.",
+        "mutations": "Require authorization for destructive, trust or externally exposed changes; timeouts imply UNKNOWN outcome and must not trigger blind retry.",
+        "http": "Remote HTTP MCP is optional, authenticated and loopback-only; HTTPS/tunnel exposure is configured separately.",
+    },
+    "documentation": {
+        "repository": "https://github.com/vanishs/boxweave",
+        "entrypoints": ["README.md", "AGENTS.md", "docs/DEVELOPMENT.md",
+                        "docs/process/AGENT_TEST_WORKFLOW.md", "docs/REMOTE_MCP.md",
+                        "docs/verification/OPEN_RISKS.md",
+                        "docs/verification/REMEDIATION_TEST_QUEUE.md"],
+        "rule": "Use documentation matching deployed version; old proposals/source inventories are not runtime evidence.",
+    },
+}
+INFO_TOOL = {
+    "name": "boxweave_info",
+    "description": (
+        "Read-only BoxWeave self-description for coding agents working with or "
+        "developing BoxWeave: architecture, developer workflow, capabilities, "
+        "security and documentation. Optional topic selects a section; omit "
+        "for all. No host state or secrets. Use tools/list and Provider read "
+        "tools for actual live capabilities and current environments."
+    ),
+    "inputSchema": {"type": "object", "additionalProperties": False,
+                    "properties": {"topic": {"type": "string",
+                         "enum": ["all", *INFO_TOPICS],
+                         "description": "Section to read, defaults to all."}},
+                    "required": []},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True, "openWorldHint": False},
+}
+
+def boxweave_info(arguments):
+    if not isinstance(arguments, dict) or set(arguments) - {"topic"}:
+        raise ValueError("INFO_TOPIC_INVALID")
+    topic = arguments.get("topic", "all")
+    if not isinstance(topic, str) or topic not in ("all", *INFO_TOPICS):
+        raise ValueError("INFO_TOPIC_INVALID")
+    return {"name": "boxweave", "guide_version": 1,
+            "source_version": SERVER_INFO_VERSION,
+            "scope": "static source guidance, not live runtime evidence",
+            "sections": INFO_TOPICS if topic == "all" else {topic: INFO_TOPICS[topic]}}
+
 NESTING_TOOL = {
     "name": "boxweave_nesting",
     "description": "Inspect or preview/confirm one managed box nesting setting. Runs on its parent host; never restarts. Capability remains unverified until child MCP execution.",
@@ -20,6 +115,15 @@ def catalog(message):
     if "result" not in message: return message
     for tool in message["result"].get("tools", []):
         if tool.get("name") == "create_container":
+            tool["description"] = (
+                "Create an isolated Linux development Box for coding and testing. "
+                "BoxWeave injects its own managed workload SSH public key; "
+                "ssh_keys is optional and accepts only additional authorized Ed25519 "
+                "public keys. Never supply client transport keys, fingerprints or "
+                "private keys. Check existing Boxes first. After creation use "
+                "connect(exec) for commands. If creation times out, check state "
+                "before retry; diagnose connection failures with debug_container."
+            )
             schema = tool["inputSchema"]
             schema["required"] = [field for field in schema.get("required", []) if field != "ssh_keys"]
             schema["properties"].setdefault("ssh_keys", {})["description"] = (
@@ -29,7 +133,26 @@ def catalog(message):
             tool["inputSchema"]["properties"]["enable_nesting"] = {
                 "type":"boolean",
                 "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
-    message["result"].setdefault("tools", []).append(NESTING_TOOL)
+        elif tool.get("name") == "connect":
+            tool["description"] = (
+                "Connect to a managed Box with BoxWeave exact-target SSH trust. "
+                "Optional exec runs one command inside the Box and returns "
+                "stdout/stderr/exit_code; omit exec for human SSH instructions. "
+                "Commands may mutate the Box. Host/user overrides inconsistent "
+                "with the registered target are rejected."
+            )
+        elif tool.get("name") == "list_containers":
+            tool["description"] = (
+                "Read-only list of existing Boxes, state, IP and resources. "
+                "Check before creating a development/test Box."
+            )
+        elif tool.get("name") == "delete_container":
+            tool["description"] = (
+                "Permanently delete a Box and its data. Destructive: obtain "
+                "explicit authorization and verify target; after a timeout "
+                "inspect state instead of blindly retrying."
+            )
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -53,7 +176,7 @@ GATE_ERROR_CODES = frozenset((
     "NESTING_CONFIG_INVALID", "NESTING_REQUEST_INVALID", "REQUEST_LIMIT",
     "OWNED_PROVIDER_REQUIRED", "NESTING_HELPER_UNAVAILABLE",
     "NESTING_HELPER_FAILED_INSPECT_ORIGINAL_INSTANCE",
-    "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED",
+    "STALE_PLAN_OR_EXACT_CONFIRMATION_REQUIRED", "INFO_TOPIC_INVALID",
     "CHANGE_OUTCOME_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE",
 ))
 
@@ -205,6 +328,12 @@ def main():
                         "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
                     continue
                 try:
+                    if params.get("name") == "boxweave_info":
+                        value = boxweave_info(args)
+                        print(json.dumps({"jsonrpc":"2.0","id":request["id"],
+                            "result":{"content":[{"type":"text","text":json.dumps(value)}],
+                                      "isError":False}}), flush=True)
+                        continue
                     if params.get("name") == "boxweave_nesting":
                         observed = container(args.get("logical"), request["id"])
                         action = args.get("action")
@@ -250,7 +379,16 @@ def main():
                     continue
             send(request)
             if "id" in request:
-                if nesting is None:
+                if nesting is None and request.get("method") == "initialize":
+                    message = reply(request["id"], False)
+                    result = message.get("result")
+                    if isinstance(result, dict):
+                        info = result.setdefault("serverInfo", {})
+                        info.update({"name":"boxweave","version":SERVER_INFO_VERSION,
+                                     "description":SERVER_DESCRIPTION})
+                        result["instructions"] = SERVER_INSTRUCTIONS
+                    print(json.dumps(message), flush=True)
+                elif nesting is None:
                     reply(request["id"])
                 else:
                     message = reply(request["id"], False)
