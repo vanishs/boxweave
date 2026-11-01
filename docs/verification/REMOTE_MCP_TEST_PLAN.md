@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) / OAuth verification and acceptance plan
 
-**Status: PLANNED TESTS; ZERO NEW TESTS EXECUTED BY THIS DOCUMENT.** Owner decisions: [master](../design/REMOTE_MCP_MASTER.md); [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md). This document defines the acceptance matrix for REMOTE-R0..R4 and AC-021..024. Real public hostname/TLS/Provider/Box/SSH/client actions require separately granted environment authority.
+**Status: source fixtures added in tests/test_remote_mcp.py; external/public acceptance remains UNVERIFIED.** Owner decisions: [master](../design/REMOTE_MCP_MASTER.md); [ADR-009](../design/ADR/0009-remote-mcp-transports-and-auth.md). This document defines the acceptance matrix for REMOTE-R0..R4 and AC-021..024. Real public hostname/TLS/Provider/Box/SSH/client actions require separately granted environment authority.
 
 ## Evidence labels
 
