@@ -205,6 +205,18 @@ class WebTests(Base):
         self.assertEqual(self.client.post("/api/projects",json={},headers={"Origin":"http://localhost"}).status_code,403)
         self.assertEqual(self.client.get("/api/session").json["mode"],"fixture")
 
+    def test_framework_404_and_405_are_bounded_not_internal_errors(self):
+        # Auth-gated /api/* keeps its existing 401 contract; the public
+        # login endpoint has only POST and must not turn GET into HTTP 500.
+        login_get=self.client.get("/api/login")
+        self.assertEqual(login_get.status_code,405)
+        self.assertEqual(login_get.json,{"code":"METHOD_NOT_ALLOWED"})
+        self.assertEqual(login_get.headers["Cache-Control"],"no-store")
+        missing=self.client.get("/definitely-unimplemented-path")
+        self.assertEqual(missing.status_code,404)
+        self.assertEqual(missing.json,{"code":"NOT_FOUND"})
+        self.assertEqual(self.client.get("/api/projects").status_code,401)
+
     def test_http_binding_preview_confirm_query_logout(self):
         self.login()
         p=self.client.post("/api/projects",json={"name":"UI","logical":TARGET.logical,"workspace":"/home/fixture-box"},headers=self.headers)

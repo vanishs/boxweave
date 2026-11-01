@@ -6,6 +6,7 @@ import secrets
 import time
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.security import check_password_hash
+from werkzeug.exceptions import HTTPException
 from .domain import Fault
 from .graphs import Graphs
 from .models import Models
@@ -55,7 +56,13 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
     def oversized(_):
         return jsonify(code="REQUEST_TOO_LARGE"),413
     @app.errorhandler(Exception)
-    def internal(_):
+    def internal(error):
+        # Werkzeug's normal 404/405 and other HTTP protocol failures are
+        # not application crashes. Never expose its path/description in JSON.
+        if isinstance(error, HTTPException):
+            code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(
+                error.code, "HTTP_REQUEST_REJECTED")
+            return jsonify(code=code), error.code or 500
         from . import diagnostics
         diagnostics.emit(store, component="web", phase="request", event_type="rejected",
                          outcome="failed", code="UNCLASSIFIED_EXCEPTION",
