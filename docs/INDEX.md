@@ -88,3 +88,12 @@ MCP integration is distinct from D0–D2 diagnostics and E0–E4 environment pro
 ## M0–M5 MCP source implementation (live Box acceptance deferred)
 
 - [M0–M5 source state, operator configuration, Web API and remaining live acceptance](process/MCP_M0_M5_SOURCE_PROGRESS.md). Direct-gateway tool policy is optional host-wide enforcement, **not per-user RBAC**; agent-box requires a separately reviewed fixed launcher and live Box testing.
+
+## Remote MCP HTTP(S) and OAuth (approved design; NOT IMPLEMENTED)
+
+- [Master design, eight owner decisions and phase map](design/REMOTE_MCP_MASTER.md)
+- [ADR-009: keep SSH, add remote Streamable HTTP with no vendor tunnel dependency](design/ADR/0009-remote-mcp-transports-and-auth.md)
+- Phased implementation: [R0 shared dispatcher](design/remote-mcp/R0_PROTOCOL_AND_DISPATCH.md), [R1 HTTP](design/remote-mcp/R1_STREAMABLE_HTTP.md), [R2 OAuth/API Token/credential URL](design/remote-mcp/R2_AUTH_AND_CREDENTIALS.md), [R3 HTTPS/proxies](design/remote-mcp/R3_HTTPS_AND_PROXY.md), [R4 Web onboarding](design/remote-mcp/R4_WEB_CLIENT_EXPERIENCE.md)
+- [Negative and positive acceptance matrix](verification/REMOTE_MCP_TEST_PLAN.md), [Agent implementation handoff](process/REMOTE_MCP_HANDOFF.md)
+
+**Planning only.** Source `main` still uses SSH/stdio for direct Agent MCP; Web cookie sessions are not OAuth and the optional SSH gateway allowlist is not per-Agent RBAC. No new public URL is active because these documents exist.
