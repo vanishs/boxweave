@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source and published stable version: 0.24.3.** The default installer targets the verified `v0.24.3` release assets. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.24.4; published stable installer: v0.24.3 until the new release is verified and promoted.** The default installer targets the verified `v0.24.3` release assets. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -149,9 +149,24 @@ redirect stdout or use `--output NEW_FILE` for a clean, executable `.py`.
 See [client setup](clients/README.md) for the individual App destinations
 and prerequisites.
 
+## MCP discovery and BoxWeave self-information
+
+The 0.24.4 source adds a read-only `boxweave_info` MCP tool.
+Its optional `topic` argument accepts `all` (default), `overview`,
+`architecture`, `development`, `capabilities`, `security`, and
+`documentation`. This source-backed guide helps Agents understand and
+develop BoxWeave using isolated test Boxes, but never reads host secrets
+or claims to be a live availability probe. SSH/stdio and HTTP MCP
+`initialize` advertise BoxWeave identity and safe-use instructions.
+The gateway also corrects inherited `create_container`, `connect`
+and deletion descriptions to reflect managed SSH identity and exact-target
+trust. For live capabilities use `tools/list`, and for actual Box state use
+`list_containers`. An optional MCP allowlist must include `boxweave_info`
+to expose it. See [MCP Agent guide](docs/MCP_AGENT_GUIDE.md).
+
 ## Web console
 
-The Web UI includes project and environment binding, reviewed lifecycle plans and durable receipts, Tenant membership and controlled network access, TCP/UDP port publication, Prompt Graph, model setup guidance for ZCode, and supported client setup downloads. Graphs do not execute commands and an HTTP response is not proof of authenticated MCP or effective network isolation.
+The Web UI includes project and environment binding, reviewed lifecycle plans and durable receipts, Tenant membership and controlled network access, TCP/UDP port publication, Prompt Graph, model setup guidance for ZCode, supported client setup downloads, an MCP integrations panel, and optional Remote MCP credential management. Graphs do not execute commands and an HTTP response is not proof of authenticated MCP or effective network isolation.
 
 ## Common management commands
 
@@ -175,6 +190,6 @@ These commands do not automatically install missing components or modify the hos
 
 Container-host setup: see [nesting configuration and restart guidance](docs/NESTING.md).
 
-## Remote HTTP(S) MCP (v0.24.3 source)
+## Remote HTTP(S) MCP (v0.24.4 source; v0.24.3 stable installer until promotion)
 
 The opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded. On 2026-11-01, an owner-operated Cloudflare Quick Tunnel and hosted ChatGPT OAuth reached real MCP container listings after a process-local browser-header hotfix; v0.24.2 makes that fix permanent in source; v0.24.3 additionally preserves those headers through managed Caddy and reports bounded local TCP status in Web. The v0.24.3 package has not been deployed/tested on that live host; production HTTPS and other clients still require separate acceptance.
