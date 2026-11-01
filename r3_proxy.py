@@ -1,4 +1,4 @@
-import base64, hashlib, http.client, json, secrets, ssl, subprocess, sys, threading, time, urllib.parse
+import base64, hashlib, json, secrets, ssl, threading, time, urllib.error, urllib.parse, urllib.request
 
 # --- TLS proxy: terminate TLS on 127.0.0.1:18901, forward raw to 18844 ---
 import socketserver, socket
@@ -37,7 +37,7 @@ print("proxy up on 127.0.0.1:18901 (TLS, self-signed)")
 ORIGIN="https://mcp.ser.boxweave-test.internal"; RESOURCE=ORIGIN+"/mcp"
 PW=open("/home/boxweave/boxweave/initial-admin-password").read().strip()
 cctx=ssl.create_default_context(); cctx.check_hostname=False; cctx.verify_mode=ssl.CERT_NONE
-class NoRedirect(http.client.HTTPRedirectHandler):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*a,**k): return None
 op=urllib.request.build_opener(NoRedirect,urllib.request.HTTPSHandler(context=cctx))
 def req(method,path,headers=None,json_body=None,form=None,follow=True):
@@ -52,7 +52,7 @@ def req(method,path,headers=None,json_body=None,form=None,follow=True):
     try:
         with o.open(r,timeout=60) as resp: return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as e: return e.code, dict(e.headers), e.read()
-import urllib.error, urllib.request
+
 
 s,h,b=req("GET","/.well-known/oauth-protected-resource/mcp")
 print("proxy: resource metadata:", s, json.loads(b).get("resource"))
