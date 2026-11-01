@@ -15,6 +15,7 @@ from urllib.parse import urlencode, urlsplit
 from flask import Flask, Response, jsonify, redirect, request
 
 from .remote_auth import RemoteCredentials, RemoteError, TOKEN_PATTERN, valid_url
+from .mcp_gate import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS, SERVER_INFO_VERSION
 
 PROTOCOL = "2025-11-25"
 GATE = "/usr/local/lib/boxweave/default/mcp_gate.py"
@@ -303,7 +304,9 @@ I authorize this client to use BoxWeave MCP tools.</label>
                         "result": {"protocolVersion": PROTOCOL,
                                    "capabilities": {"tools": {"listChanged": False},
                                                     "resources": {"listChanged": False}},
-                                   "serverInfo": {"name": "boxweave", "version": "0.24.3"}}},
+                                   "serverInfo": {"name": "boxweave", "version": SERVER_INFO_VERSION,
+                                                  "description": SERVER_DESCRIPTION},
+                                   "instructions": SERVER_INSTRUCTIONS}},
                        headers={"MCP-Protocol-Version": PROTOCOL})
         if method == "notifications/initialized":
             return Response(status=202, headers={"Cache-Control": "no-store"})
