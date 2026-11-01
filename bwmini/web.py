@@ -128,12 +128,22 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         remote = validate_remote_config(remote_config)
         from .remote_auth import RemoteCredentials
         registry = RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock)
+        # A bounded loopback TCP connect is an observation, not an MCP
+        # handshake, OAuth proof, or public HTTPS reachability check.
+        import socket
+        try:
+            with socket.create_connection(("127.0.0.1", remote["port"]), timeout=0.2):
+                local_tcp_reachable = True
+        except OSError:
+            local_tcp_reachable = False
         return jsonify(enabled=True, public_url=remote["public_url"],
                        mcp_url=remote["public_url"].rstrip("/") + "/mcp",
                        port=remote["port"], listener="127.0.0.1",
+                       local_tcp_reachable=local_tcp_reachable,
                        externally_verified=False, credentials=registry.list(),
-                       notice="Each credential has current trusted-operator MCP authority. "
-                              "External TLS/OAuth/Box functionality is not verified by this page.")
+                       notice="Local TCP reachability does not prove the MCP listener, OAuth, "
+                              "public TLS or real Box functionality. Each credential grants "
+                              "the current trusted-operator MCP authority.")
 
     @app.post("/api/remote-mcp/credentials")
     def remote_mcp_issue():
