@@ -115,3 +115,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## Real host update to v0.42.3: Gateway R-01 reacceptance (2026-11-02)
 
 [Exact host MCP read and denial evidence](HOST_0423_GATEWAY_REACCEPTANCE_2026-11-02.md) independently proves the upgraded host's `BOX_PATH_INVALID` classification, full binary window/EOF/SHA-256, symlink and intermediate symlink refusal, pagination, exact SSH host override denial and compatibility reads on three old Boxes. L/PASS scoped; test-owned files removed. This is not a host-local CLI/Web version probe or a complete authorization of D4/R-02/R-04. The D3 Gateway journal still classifies local known refusals as generic unknown (P3).
+
+
+## D3 deterministic classification source repair — v0.42.4 (2026-11-02)
+
+[Exact source and source-only acceptance](D3_CLASSIFICATION_FIX_0424_2026-11-02.md): known fixed local R-01 read/SSH target refusals may be journalled as failed with bounded reason code. Upstream JSON-RPC errors and potentially dispatched writes remain unknown. 644 Python, 4 architecture tests PASS in prepared Box; full installed upgrade/Gateway acceptance remains L=U until separately observed.

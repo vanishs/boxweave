@@ -21,7 +21,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.42.3"
+SERVER_INFO_VERSION = "0.42.4"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -691,8 +691,13 @@ def main():
                     error_result = {"jsonrpc": "2.0", "id": request.get("id"),
                                     "error": {"code": -32602, "message": reason}}
                     if params.get("name") not in ("boxweave_diagnose", "boxweave_project_diagnose"):
+                        # Only the gateway's own reviewed read/preflight
+                        # refusals are definitely FAILED. A Provider error,
+                        # dispatched write, or unreviewed exception stays
+                        # UNKNOWN and is never automatically replayed.
                         gd.record(params.get("name", ""), error_result,
-                                  (time.monotonic() - started) * 1000, trace=trace)
+                                  (time.monotonic() - started) * 1000,
+                                  trace=trace, local_denial=reason)
                     print(json.dumps(error_result), flush=True)
                     continue
             send(request)

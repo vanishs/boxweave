@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.42.3. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
+**Current source version: 0.42.4. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
 
 Optional multi-Agent shared coordination requires separate reviewed policy/SQLite provisioning and opt-in. Snapshot/restore/clone writes remain unsupported without verified Provider contracts. Source CI, published installer version, running service version and production-host acceptance are distinct. Historical rollout and unresolved risks are retained in [the risk register](docs/verification/OPEN_RISKS.md).
 

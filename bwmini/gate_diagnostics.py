@@ -29,6 +29,22 @@ CHECKS = frozenset(("processes", "ports", "service", "logs"))
 KINDS = frozenset(("hello", "environment", "access"))
 EVENT_LIMIT = 25
 
+# Only deterministic local refusals on read-only/pre-dispatch routes may be
+# labelled FAILED. Never infer a local refusal from an upstream error payload.
+# Mutating tools and ambiguous post-dispatch errors deliberately remain UNKNOWN.
+LOCAL_DENIAL_CODES = {
+    "boxweave_box_read_file": frozenset(("BOX_READ_INVALID", "BOX_PATH_INVALID",
+                                         "BOX_READ_UNVERIFIED")),
+    "boxweave_box_list_directory": frozenset(("BOX_READ_INVALID", "BOX_PATH_INVALID",
+                                               "BOX_READ_UNVERIFIED")),
+    "connect": frozenset(("TARGET_OVERRIDE_REFUSED",)),
+    "boxweave_task_get": frozenset(("TASK_TRACKING_UNAVAILABLE", "TASK_SELECTOR_INVALID",
+                                   "TASK_NOT_FOUND")),
+    "boxweave_task_list": frozenset(("TASK_TRACKING_UNAVAILABLE", "TASK_ARGUMENT_INVALID")),
+    "boxweave_info": frozenset(("INFO_TOPIC_INVALID",)),
+}
+
+
 
 DIAG_TOOL = {
     "name": "boxweave_diagnose",
@@ -121,11 +137,16 @@ def _open(path, *, write):
     return db
 
 
-def classify(message):
+def classify(message, *, tool=None, local_denial=None):
     """No unreviewed Provider response text or error payload enters the journal."""
     if not isinstance(message, dict):
         return "unknown", "UNVERIFIED"
     if "error" in message:
+        # The caller, not the Provider response, must explicitly supply a
+        # reviewed local denial for this exact tool. Payloads are untrusted.
+        if (isinstance(tool, str) and isinstance(local_denial, str)
+                and local_denial in LOCAL_DENIAL_CODES.get(tool, ())):
+            return "failed", local_denial
         return "unknown", "UPSTREAM_JSONRPC_ERROR"
     result = message.get("result")
     if not isinstance(result, dict):
@@ -135,14 +156,15 @@ def classify(message):
     return "succeeded", "MCP_RESPONSE_RECEIVED"
 
 
-def record(tool, message, elapsed_ms, *, path=JOURNAL, config=None, trace=None, clock=time.time):
+def record(tool, message, elapsed_ms, *, path=JOURNAL, config=None,
+           trace=None, clock=time.time, local_denial=None):
     """Best-effort, never throws. Caller handles original MCP outcome unchanged."""
     token = trace or secrets.token_hex(16)
     try:
         policy = validate_settings(config) if config is not None else settings()
         if not policy["enabled"] or not TOOL.fullmatch(tool):
             return token
-        outcome, code = classify(message)
+        outcome, code = classify(message, tool=tool, local_denial=local_denial)
         _record_row(path, policy, token, tool, outcome, code,
                     max(0, min(3_600_000, int(elapsed_ms))), clock())
     except (OSError, ValueError, TypeError, OverflowError, sqlite3.Error):

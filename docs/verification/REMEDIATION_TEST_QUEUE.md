@@ -894,3 +894,8 @@ remain U/BLOCKED; source/default/installed identities are distinct.
 ## v0.42.3 actually upgraded host recheck (2026-11-02)
 
 [Post-update Gateway acceptance ledger](HOST_0423_GATEWAY_REACCEPTANCE_2026-11-02.md): owner reports v0.42.3 and `boxweave_info` identifies 0.42.3 source; real connected MCP returns correct R-01 typed invalid-path errors, bounded binary windows/EOF/SHA-256, no-follow symlink negatives, directory paging, old Box reads and exact-target override refusal. D4 default deny and R-02 unavailable task store are L/PASS **negative only**. D3 journal has an open P3 classification concern (`UPSTREAM_JSONRPC_ERROR/unknown` for known safe refusals). Host CLI/Web/worker version, provisioned R-02, protected R-04, D4 positive and external OAuth remain U. No host settings changed; task-owned guest files were independently removed.
+
+
+## D3 v0.42.4 source fix and pending live acceptance (2026-11-02)
+
+[D3 fix source evidence and separate live gate](D3_CLASSIFICATION_FIX_0424_2026-11-02.md): 644/644 Python, 4/4 architecture and 166-document knowledge checks PASS; local fixed code classification, no-response-rewrite and no secret persistence regression. New pinned installed Gateway must produce one definite local rejection recorded as failed/fixed code, an unverified upstream error recorded as unknown, and one normal succeeded observation. Old host v0.42.3 retains old journal rows. Do not promote stable pin without separate acceptance.

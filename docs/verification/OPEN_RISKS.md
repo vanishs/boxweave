@@ -216,3 +216,8 @@ No historical risk is globally closed by this scoped release test.
 ## Updated real host v0.42.3 Gateway acceptance (2026-11-02)
 
 [Live observed host acceptance](HOST_0423_GATEWAY_REACCEPTANCE_2026-11-02.md) supersedes the v0.42.2 P3 generic-trust error caveat **within the tested R-01 scope**: absolute/traversal requests now return `BOX_PATH_INVALID`; file/directory symlinks fail closed with `BOX_READ_UNVERIFIED`; valid reads and old Box enumeration passed. **P3 still open, D3 observability only:** known denied JSON-RPC operations are stored as `UPSTREAM_JSONRPC_ERROR/unknown` in the Gateway event journal; avoid equating this label with an actually uncertain mutating Provider effect. Before addressing, preserve fault redaction and distinguish server-side deterministic denials from unknown dispatched writes in code/tests. Connector-discovered R-01 tool descriptions may remain stale until a fresh client connection; independent live catalog refresh is U. Root-authorized R-02/R-04/D4 positive and external client scenarios remain U/BLOCKED.
+
+
+## D3 classification source fix (v0.42.4 candidate, 2026-11-02)
+
+[Specific fixed-code classification and source tests](D3_CLASSIFICATION_FIX_0424_2026-11-02.md) resolve the v0.42.3 deterministic-refusal P3 issue at source level while preserving `unknown` on untrusted Provider JSON-RPC errors and potentially dispatched mutations. Existing historical rows are not rewritten. **Installed L/U** until exact release and pinned live Gateway journal observation; D4 positive, R-02 and R-04 remain separately unaccepted.

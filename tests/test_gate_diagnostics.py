@@ -48,6 +48,76 @@ class GatewayDiagnosticsTests(unittest.TestCase):
         self.assertEqual(d.classify({"result": {"isError": True}})[0], "failed")
         self.assertEqual(d.classify({})[0], "unknown")
 
+    def test_known_local_refusals_are_failed_but_upstream_errors_stay_unknown(self):
+        # A remote Provider error cannot masquerade as a local denial by
+        # supplying the same error.message: only the local caller sets the flag.
+        for tool, reason in (
+            ("boxweave_box_read_file", "BOX_PATH_INVALID"),
+            ("boxweave_box_list_directory", "BOX_READ_UNVERIFIED"),
+            ("connect", "TARGET_OVERRIDE_REFUSED"),
+            ("boxweave_task_list", "TASK_TRACKING_UNAVAILABLE"),
+        ):
+            with self.subTest(tool=tool):
+                message = {"error": {"code": -32602,
+                                     "message": reason + " EXAMPLE_SECRET"}}
+                trace = d.record(tool, message, 3, path=self.path,
+                                 config=self.config, local_denial=reason)
+                event = d.query_gateway({"source": "gateway", "trace_id": trace},
+                                        path=self.path, config=self.config)["events"][0]
+                self.assertEqual((event["outcome"], event["code"]),
+                                 ("failed", reason))
+                self.assertNotIn(b"EXAMPLE_SECRET", self.path.read_bytes())
+                self.assertEqual(d.classify(message), ("unknown", "UPSTREAM_JSONRPC_ERROR"))
+        for tool, reason in (
+            ("connect", "BOX_PATH_INVALID"),  # Incorrect tool/category.
+            ("boxweave_task_submit", "TASK_TRACKING_UNAVAILABLE"),  # Write path.
+            ("boxweave_nesting", "TARGET_CHANGED"),  # May follow a write.
+            ("connect", "EXAMPLE_SECRET"),  # Not reviewed.
+        ):
+            with self.subTest(tool=tool, reason=reason):
+                trace = d.record(tool, {"error": {"message": "EXAMPLE_SECRET"}}, 1,
+                                 path=self.path, config=self.config,
+                                 local_denial=reason)
+                event = d.query_gateway({"source": "gateway", "trace_id": trace},
+                                        path=self.path, config=self.config)["events"][0]
+                self.assertEqual((event["outcome"], event["code"]),
+                                 ("unknown", "UPSTREAM_JSONRPC_ERROR"))
+                self.assertNotIn(b"EXAMPLE_SECRET", self.path.read_bytes())
+
+    def test_gateway_records_real_local_invalid_path_without_upstream_dispatch(self):
+        import io
+        from contextlib import redirect_stdout
+        class KeepOpen(io.BytesIO):
+            def close(self):
+                pass
+        class Fake:
+            def __init__(self):
+                self.stdin = KeepOpen()
+                self.stdout = io.BytesIO()
+            def poll(self):
+                return 0
+        proc = Fake()
+        request = {"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                   "params": {"name": "boxweave_box_read_file",
+                              "arguments": {"box": "dev", "path": "../private"}}}
+        original_record = d.record
+        def record_owned(tool, message, elapsed, **kw):
+            return original_record(tool, message, elapsed, path=self.path,
+                                   config=self.config, **kw)
+        with (patch.object(mcp_gate, "tool_policy", return_value=None),
+              patch.object(mcp_gate.gateway_protection, "enabled", return_value=False),
+              patch.object(mcp_gate.subprocess, "Popen", return_value=proc),
+              patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request) + "\n")),
+              patch.object(mcp_gate.gd, "record", side_effect=record_owned),
+              redirect_stdout(io.StringIO()) as output):
+            mcp_gate.main()
+        self.assertEqual(json.loads(output.getvalue())["error"]["message"], "BOX_PATH_INVALID")
+        self.assertEqual(proc.stdin.getvalue(), b"")
+        events = d.query_gateway({"source": "gateway", "recent": 1},
+                                 path=self.path, config=self.config)["events"]
+        self.assertEqual((events[0]["tool"], events[0]["outcome"], events[0]["code"]),
+                         ("boxweave_box_read_file", "failed", "BOX_PATH_INVALID"))
+
     def test_disabled_missing_and_invalid_selectors(self):
         trace = d.record("create_container", {}, 1, path=self.path,
                          config={**self.config, "enabled": False})
