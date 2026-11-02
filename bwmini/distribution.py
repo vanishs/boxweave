@@ -200,7 +200,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
    old_manifest=json.loads(regular(current/'manifest.json'))
    require(tuple(map(int,manifest['version'].split('.')))>=tuple(map(int,old_manifest['version'].split('.'))),'DOWNGRADE_REQUIRES_BACKUP')
   identifier='boxweave-v2-'+digest(str(prefix).encode())[:12]
-   remote_setting=c.get('remote_mcp')
+  remote_setting=c.get('remote_mcp')
   remote_active=remote_setting is None or remote_setting.get('enabled',True)
   actions=('serve','worker','remote-mcp') if remote_active else ('serve','worker')
   units={identifier+'-'+action+'.service':unit_text(prefix,prefix/'runtime.json',action) for action in actions}
