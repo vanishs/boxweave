@@ -1,6 +1,6 @@
 # HTTP-first unified MCP client setup (v0.28.0)
 
-Status: owner-approved implementation design; source and acceptance are verified separately. Parent: [HTTP MCP quick-start](HTTP_MCP_QUICKSTART.md); [client compatibility](../../clients/README.md); [HTTP MCP verification](../verification/REMOTE_MCP_TEST_PLAN.md).
+Status: source v0.28.0 implemented; PR fixture CI passed and isolated Cursor/Codex/OpenCode generated-script checks passed. Real Agent App OAuth and installed-release acceptance remain UNVERIFIED. Parent: [HTTP MCP quick-start](HTTP_MCP_QUICKSTART.md); [client compatibility](../../clients/README.md); [HTTP MCP verification](../verification/REMOTE_MCP_TEST_PLAN.md).
 
 ## Intent and boundaries
 
