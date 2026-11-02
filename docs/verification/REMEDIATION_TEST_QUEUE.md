@@ -831,3 +831,20 @@ Task owner-approved: HFC-01..07 in [design](../design/HTTP_FIRST_CLIENT_SETUP.md
   old helper and external Provider bypass remain U. No host changed.
 - Preserve test Box and preexisting source; delete only task-owned
   ephemeral CAS proof. Never auto-retry UNKNOWN remote writes.
+
+
+## Phase 3 v0.42.0 E0/E1 supported read-only acceptance (2026-11-02)
+
+- Source: fail-closed catalog/schema, tampered fingerprint, nonfinite clock,
+  stored capture read-integrity, honest partial observability.
+- Live read INPUTS: authenticated outer `get_container` for
+  `bwphase2-1102` and `boxweave-test-ser`; local source fingerprint
+  reports generated, exact cross-Box comparison rejected. No Box writes.
+- Old fixture: actual v0.28.0 Python Store creates schema v12 exit 0;
+  new source upgrades schema v13 exit 0 preserving prior DB data;
+  old v0.28.0 reader returns SCHEMA_UNSUPPORTED exit 1, leaves v13 unchanged.
+  This is NOT a seamless downgrade or installed host migration.
+- E2/E3/E4 snapshot, restore and clone BLOCKED: no verified authenticated
+  Provider methods or volume/rekey contract. No fallback.
+- Full exact-SHA CI and installed versions remain a separate gate;
+  default stable installer v0.28.0; retain existing Boxes and failure data.
