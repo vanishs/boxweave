@@ -59,3 +59,7 @@ Metadata-only `gateway_tasks.py` uses private app-user SQLite, stable random req
 ## Phase 2 R-04 lease core (source candidate)
 
 Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite operation coordinator. Expired leases do not release UNKNOWN dispatched claims; independent Boxes remain concurrent. Source/fixture CI must pass before any tool exposure or installed/global coordination claim. Actual Web/SSH/HTTP guarded mutation routes are still NOT IMPLEMENTED.
+
+## Phase 2 staged source acceptance — 2026-11-02
+
+[Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
