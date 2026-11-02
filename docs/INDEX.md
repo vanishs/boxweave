@@ -73,6 +73,10 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 These environment features are **design-only**; D0–D2 shipped in 0.22.0, while D3/D4 are source-implemented in 0.25.0 with live acceptance separate.
 
 
+## MCP task reliability R1 (design only; not implemented)
+
+- [Reconnect-recoverable MCP task records, deduplication, bounded result retrieval and UNKNOWN safety](design/MCP_TASK_RELIABILITY_R1.md). Approved design objective: recover known task state/results after reconnect without guaranteeing remote process continuation; no feature implementation or deployment is claimed.
+
 ## Box operation interface v1 (design only; not implemented)
 
 - [External-first Box operation interface — capabilities, file operations, command results, safety, implementation batches and acceptance](design/BOX_OPERATION_INTERFACE_V1.md). Preserves clean Boxes and existing Provider/SSH architecture; this design does not authorize code or deployment changes.
