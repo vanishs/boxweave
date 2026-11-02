@@ -688,3 +688,7 @@ See the [A39 cross-layer failure-injection ledger](STATE_TRANSITION_AUDIT_0269_2
 ## HTTP MCP quick-start v0.27.0 implementation checkpoint
 
 Source scope: default authenticated loopback MCP 127.0.0.1:18844 with auto-managed user-systemd unit, explicit HTTPS setup via operator CLI, and Cloudflare Quick Tunnel guidance. Design: [HTTP MCP quick-start](../design/HTTP_MCP_QUICKSTART.md). Planned fixture checks: `python -m unittest discover -s tests -v`, `python scripts/check_knowledge.py`, full PR/main GitHub CI. No real host, firewall, tunnel process, Box or public TLS modified by source commits. **Record executed CI run/commit before marking fixture PASS**; real installed upgrade and Chrome OAuth callback remain U until independently observed.
+
+## 0.27.0 HTTP MCP quick-start source checks (2026-11-01)
+
+GitHub Actions PR [41390973974](https://github.com/vanishs/boxweave/actions/runs/41390973974) on source head `5540b85aaea42628982632717e75269431ad76ea`: completed success. Python unittest/contract, source inventory and authority, shell, frontend, seven browser fixture flows, release ZIP Python module/digest completeness and Python 3.14 offline wheel smoke passed. Merged into main as `f4e99d83c1e36393d13667f3cc8805b57298fcbc`. Evidence class T for fixtures and CI package; no newly executed installed systemd service, external Cloudflare callback or real Box write (I/E/L=U on 0.27.0). The published source tag and stable pin are checked separately; do not conflate promotion with real-host acceptance.
