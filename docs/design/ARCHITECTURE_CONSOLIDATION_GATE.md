@@ -84,6 +84,10 @@ while pure new internals move into reviewed subpackages. Avoid a new
 framework, universal service locator, broad `utils.py`, event bus or
 generic provider plugin system.
 
+## Execution ledger — owner-authorized staged development
+
+ARCH-0A boundary inventory: [executable-entry and mutator matrix](../verification/ARCH0_BOUNDARY_INVENTORY.md). Source S audited; fixture CI remains pending on the candidate SHA. ARCH-0B and ARCH-0C require independent commits and CI; no live/host acceptance is implied.
+
 ## 4. Proposed ARCH-0 implementation batches
 
 | Slice | Work | Acceptance before next slice |
