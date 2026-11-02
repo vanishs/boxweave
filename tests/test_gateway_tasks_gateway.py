@@ -70,6 +70,7 @@ class GatewayTaskIntegration(unittest.TestCase):
              patch.object(mcp_gate.subprocess,"Popen",return_value=provider), \
              patch.object(mcp_gate.gateway_tasks,"TaskStore",return_value=self.store), \
              patch.object(mcp_gate.coordination_bridge,"SharedClaims",return_value=self.claims), \
+             patch.object(mcp_gate.coordination_bridge,"published_scope",return_value=SCOPE), \
              patch.object(mcp_gate.gd,"record"), \
              patch.object(mcp_gate.sys,"stdin",inbox), redirect_stdout(out):
             mcp_gate.main()
