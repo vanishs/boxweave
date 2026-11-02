@@ -129,6 +129,7 @@ class SharedClaimsTests(unittest.TestCase):
                                        st_size=stat.st_size,st_nlink=stat.st_nlink)
             return stat
         scope_file.parent.chmod(0o755)
+        scope_file.chmod(0o644)
         with patch.object(Path,"lstat",root_owned):
             self.assertEqual(published_scope(scope_file,now=lambda:110.),SCOPE)
             self.assert_code("COORDINATION_SCOPE_UNVERIFIED",
