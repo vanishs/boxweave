@@ -48,6 +48,10 @@ The 2026-10-30 [environment master](BOX_ENVIRONMENT_PROPOSAL.md) and its five im
 
 Note that historical E0/E1 child prose may call D0–D2 "not implemented": those are frozen historical references. D0–D2 later shipped in source v0.22.0; D3/D4 have subsequent source implementation and separate live evidence. Preserve design provenance but rely on [current source/lived evidence](../verification/FEATURE_MATRIX.md).
 
+## Phase 3 environment implementation — supported Provider surface only (2026-11-02)
+
+The owner authorized development and real-Box acceptance. [E0/E1 implementation contract](BOX_ENV_E0_E1_IMPLEMENTATION.md) now supplies exact-target authenticated Provider read-only reports, conservative tool/schema capability classification, bounded stable/runtime fingerprint comparison, and immutable actor-scoped Web captures using app SQLite schema v13. New write actions E2/E3/E4 are **not implemented** where the connected Provider lacks verified snapshot/restore/clone/rekey and storage-volume coverage contracts. No direct-Incus fallback is authorized. Source CI and disposable real-Box read proof must be recorded separately from installed BoxWeave/Web acceptance. R-04 global coordinated mutations remain incomplete, so environment writes cannot be claimed safe yet.
+
 ## 4. Other previously proposed capabilities — current dispositions
 
 These are **not** additional automatic work packages. They are candidates or partial features noted in previous source audits, MCP M0–M5 research, historical parity matrices and user workflow discussions.
