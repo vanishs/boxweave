@@ -1,5 +1,7 @@
 # E1 implementation specification — capture, storage and environment diff
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E1 environment fingerprints. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **NOT IMPLEMENTED. DESIGN ONLY.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Dependency: [E0 capability/read-only boundaries](BOX_ENV_E0_CAPABILITIES.md). Independent of the unimplemented [D0-D2 diagnostics proposal](DIAGNOSTICS_PROPOSAL.md).
 
 ## User goal and source boundaries
