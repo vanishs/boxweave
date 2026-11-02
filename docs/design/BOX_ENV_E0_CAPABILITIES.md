@@ -36,7 +36,9 @@ Capability binding must be **source, authorization, and version aware**: values 
 
 Candidate immutable target identity tuple: `provider, backend, project, logical, native name, created timestamp` from `Target`, plus verified upstream instance UUID if independently provided. Do not trust arbitrary user-provided UUID. Refuse foreign/core entries, unbound source, pending/unknown conflicting lifecycle operations, pending original-instance create/delete/resize and source identity mismatches. Keep source `project` and `actor` scoped.
 
-Before any future operation reserve a typed **source lock** that covers checkpoint operations and existing lifecycle operations. The current `environment_one_pending` unique index only guards `environment_operations` by logical name; it does **not** guard a new table automatically. E0 must design a shared per-instance claim/serialization mechanism, with DB lock ordering and crash-recovery tests, before E2/E3/E4 introduce writes. A stale lock must not be dropped merely because an operation is `unknown`.
+Before any future operation reserve a typed **source claim** using the shared canonical resource and dispatch-intent scheme from [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md) if implemented, or an equivalently verified shared lifecycle/MCP guard. Do not create a separate checkpoint-only lock/UNKNOWN store that bypasses direct gateway writes. E0 remains read-only and is **not blocked** by delivery of R-04; E2/E3/E4 writes must prove actual claim coverage. See [roadmap INT-03](FEATURE_ROADMAP_MASTER.md#51-integration-decisions--conflict-register). The current `environment_one_pending` unique index alone is insufficient.
+
+Historical specification: Before any future operation reserve a typed **source lock** that covers checkpoint operations and existing lifecycle operations. The current `environment_one_pending` unique index only guards `environment_operations` by logical name; it does **not** guard a new table automatically. E0 must design a shared per-instance claim/serialization mechanism, with DB lock ordering and crash-recovery tests, before E2/E3/E4 introduce writes. A stale lock must not be dropped merely because an operation is `unknown`.
 
 ## Storage and quiescence decision
 
@@ -68,6 +70,9 @@ Do not assume nested Incus internal volumes live inside the outer Box root disk;
 | E0-10 | Read-only discovery invoked repeatedly | no host, DB schema, runtime, client registration or Provider mutation |
 
 ## Go/no-go and next batch
+
+**Dependency correction:** E0 is a read-only capability/identity audit, not an implementation of Box leases. E1 fingerprint work and the separately gated E2 snapshot write capability may both follow E0; E1 is optional metadata for E2. Direct E4 clone follows E0 only when the Provider separately proves clone/rekey and shared source/destination claims, while snapshot-source E4 additionally requires E2. No E0 probe alone grants write authority.
+
 
 E0 succeeds as **read-only contract design/implementation** if selected authenticated Provider version and local deployment can be classified without side effects, while unsupported capabilities fail closed. Do not ship snapshot actions until a real Provider-side contract is independently designed and verified. Next: [E1 fingerprints](BOX_ENV_E1_FINGERPRINTS.md) (read-only), then [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md) (requires approved write contract).
 
