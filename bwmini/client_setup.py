@@ -113,6 +113,27 @@ def interactive_terminal():
             and not os.environ.get("BOXWEAVE_BATCH", ""))
 
 
+def discover_http_public_url():
+    """Read only loopback metadata, not an external MCP endpoint or proxy headers."""
+    from urllib.request import build_opener, ProxyHandler
+    try:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open("http://127.0.0.1:18844/.well-known/oauth-protected-resource/mcp",
+                         timeout=1.5) as response:
+            if response.status != 200:
+                raise ValueError("HTTP_DISCOVERY_UNAVAILABLE")
+            payload = response.read(8193)
+        if len(payload) > 8192:
+            raise ValueError("HTTP_DISCOVERY_TOO_LARGE")
+        url = json.loads(payload).get("resource")
+        return client_profiles.validate_http_url(url)
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "HTTP_PUBLIC_URL_REQUIRED: configure HTTPS with sudo boxweave http "
+            "configure --public-url https://YOUR_HOST, or pass --url https://YOUR_HOST/mcp"
+        ) from exc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="BoxWeave reviewed cross-platform MCP client setup generator",
@@ -125,6 +146,9 @@ def main(argv=None):
                         help="Operating system where the client app runs")
     parser.add_argument("--transport", choices=client_profiles.TRANSPORTS,
                         help="Native OpenSSH or Windows-to-WSL OpenSSH")
+    parser.add_argument("--method", choices=("http", "ssh"),
+                        help="HTTP (recommended) or SSH (advanced); old SSH flags remain compatible")
+    parser.add_argument("--url", help="Public HTTPS URL ending in /mcp for HTTP; uses localhost discovery when omitted")
     parser.add_argument("--admin-user",
                         help="Existing Linux SSH administrator authorized to run sudo online.py enroll")
     destination = parser.add_mutually_exclusive_group()
@@ -143,6 +167,50 @@ def main(argv=None):
         if state.get("phase") != "ready":
             raise ValueError("READY_INSTALL_REQUIRED")
         interactive = interactive_terminal()
+        legacy_ssh = args.transport is not None or args.admin_user is not None
+        if args.method == "http" and legacy_ssh:
+            raise ValueError("HTTP_AND_LEGACY_SSH_FLAGS_CONFLICT")
+        if args.method == "ssh" and args.url:
+            raise ValueError("HTTP_URL_WITH_SSH_METHOD")
+        if args.method:
+            method = args.method
+        elif legacy_ssh:
+            method = "ssh"
+        elif interactive:
+            method = choose("Choose MCP connection method",
+                            [("HTTP MCP (recommended; OAuth in client)", "http"),
+                             ("SSH MCP (advanced; key enrollment)", "ssh")])
+        else:
+            raise ValueError("CLIENT_METHOD_REQUIRED: pass --method http or --method ssh")
+        if method == "http":
+            app = select(args.app, client_profiles.APPS,
+                         "Choose MCP application (alphabetical)", interactive)
+            system = select(args.system, client_profiles.SYSTEMS,
+                            "Choose client operating system", interactive)
+            url = client_profiles.validate_http_url(
+                args.url if args.url is not None else discover_http_public_url())
+            if args.mcp_replace is not None:
+                replace_mcp = args.mcp_replace
+            elif interactive:
+                replace_mcp = choose(
+                    "Replace a conflicting BoxWeave MCP client registration?",
+                    [("No: refuse replacement", False),
+                     ("Yes: replace only BoxWeave with a private backup", True)])
+            else:
+                replace_mcp = False
+            script = client_profiles.render_http(
+                {"app": app, "os": system, "url": url, "replace": replace_mcp})
+            if args.output:
+                published = publish(args.output, script)
+                print("# HTTP Python 3.11+ setup saved to: " + published,
+                      file=sys.stderr)
+            else:
+                print("# BoxWeave HTTP " + app + " / " + system + " setup: copy the complete Python script.",
+                      file=sys.stderr)
+                print("# Agent App owns OAuth consent and final MCP verification.",
+                      file=sys.stderr)
+                sys.stdout.write(script)
+            return 0
         app = select(args.app, client_profiles.APPS, "Choose MCP application (alphabetical)",
                      interactive)
         # A noninteractive old --transport wsl invocation remains Windows by default.
