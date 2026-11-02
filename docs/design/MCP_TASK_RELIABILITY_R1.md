@@ -1,5 +1,7 @@
 # MCP Task Reliability R1 — Recoverable Operation Records and Results
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — R-02 MCP task reliability. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **Status:** DESIGN / IMPLEMENTATION HANDOFF ONLY. This document does **not** authorize source implementation, host/Box modification, release or deployment.
 **Approved objective (2026-11-01):** Prioritize discovering a previously submitted MCP operation and its known result after timeout, disconnect or reconnect. Do **not** require every remote command to survive transport loss, gateway death, Box restart or host restart.
 **Source baseline:** BoxWeave main at `96f0094139de5bc21b91f0b1ab29d65b474a434d` (v0.26.9) immediately before this documentation change.
