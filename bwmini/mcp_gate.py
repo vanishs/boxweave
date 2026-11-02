@@ -9,11 +9,13 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
+    from . import box_reads
 except ImportError:
     import gate_diagnostics as gd
+    import box_reads
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.30.0"
+SERVER_INFO_VERSION = "0.31.0"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -175,7 +177,7 @@ def catalog(message):
                 "explicit authorization and verify target; after a timeout "
                 "inspect state instead of blindly retrying."
             )
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL))
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -444,6 +446,23 @@ def main():
                         print(json.dumps({"jsonrpc":"2.0","id":request["id"],
                             "result":{"content":[{"type":"text","text":json.dumps(value)}],
                                       "isError":False}}), flush=True)
+                        continue
+                    if params.get("name") in ("boxweave_box_read_file", "boxweave_box_list_directory"):
+                        # This is a narrowly reviewed, read-only façade over the
+                        # existing connect adapter. Never grant authority beyond
+                        # the original connect permission or trusted Box registry.
+                        if permitted is not None and "connect" not in permitted:
+                            raise ValueError("GATE_TOOL_NOT_ALLOWED")
+                        verified = box_reads.verified_args(params["name"], args)
+                        observed = container(verified["box"], request["id"])
+                        trusted({"box": verified["box"]}, trusted_registry(), observed)
+                        internal = "boxweave-box-read-" + secrets.token_hex(8)
+                        send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
+                              "params": {"name": "connect",
+                                         "arguments": {"box": verified["box"],
+                                                       "exec": box_reads.guest_command(verified)}}})
+                        outcome = reply(internal, False)
+                        emit_result(request["id"], box_reads.typed_output(outcome))
                         continue
                     if params.get("name") == "boxweave_nesting":
                         observed = container(args.get("logical"), request["id"])

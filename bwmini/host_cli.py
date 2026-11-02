@@ -735,6 +735,41 @@ def selftest_command(options):
     return 2
 
 
+
+def setup_guide(info, mode="https", check=False):
+    """Public first-use guidance: no enrollment, root operations or OAuth."""
+    if mode not in ("ssh", "https", "local"):
+        raise ValueError("SETUP_MODE_INVALID")
+    result = {"version": info["version"], "mode": mode,
+              "descriptor": "installed_public", "authenticated_mcp": "not_verified",
+              "external_reachability": "not_verified"}
+    if mode == "ssh":
+        result.update(ssh_host=info.get("host"), ssh_port=info.get("port"),
+                      service_user="boxweave", next_command="boxweave client",
+                      note="Verify external initialize, tools/list and list_containers; key enrollment requires administrator approval.")
+        if check:
+            result["ssh_external_handshake"] = "not_verified"
+    elif mode == "https":
+        result.update(loopback_mcp="http://127.0.0.1:18844/mcp",
+                      next_command="boxweave http status",
+                      admin_command="sudo boxweave http doctor",
+                      note="Hosted clients need a separately reviewed HTTPS origin and OAuth; loopback is not publicly reachable.")
+        if check:
+            try:
+                opener = build_opener(ProxyHandler({}))
+                with opener.open("http://127.0.0.1:18844/.well-known/oauth-protected-resource/mcp", timeout=2) as response:
+                    result["local_http_discovery"] = isinstance(json.loads(response.read(4096)), dict)
+            except (OSError, ValueError, HTTPError, URLError):
+                result["local_http_discovery"] = False
+    else:
+        result.update(local_web="http://127.0.0.1:" + str(info["web_port"]),
+                      next_command="boxweave status",
+                      note="Web is server loopback only; access from another computer requires an explicitly configured SSH tunnel.")
+        if check:
+            result["local_web_probe"] = web_observation(info["web_port"])
+    return result
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "client":
@@ -806,6 +841,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      epilog="Run 'boxweave' with no arguments for next-step Web and Agent guidance.")
     sub = parser.add_subparsers(dest="action")
+    setup = sub.add_parser("setup", help="Read-only first-use SSH/HTTPS/local guide")
+    setup.add_argument("--mode", choices=("ssh", "https", "local"), default="https")
+    setup.add_argument("--check", action="store_true")
+    setup.add_argument("--format", choices=("text", "json"), default="text")
     sub.add_parser("version", help="Installed public release version")
     sub.add_parser("status", help="Public Web reachability and published installation metadata")
     doctor_parser = sub.add_parser("doctor", help="Host/systemd and app readiness checks (no repair)")
@@ -852,6 +891,18 @@ def main(argv=None):
     except ValueError as exc:
         print(json.dumps({"state": "unavailable", "code": str(exc)}), file=sys.stderr)
         return 2
+    if args.action == "setup":
+        guide = setup_guide(info, args.mode, args.check)
+        if args.format == "json":
+            print(json.dumps(guide, sort_keys=True))
+        else:
+            print("BoxWeave " + guide["version"] + " — " + guide["mode"])
+            print("Next: " + guide["next_command"])
+            if guide.get("admin_command"):
+                print("Administrator: " + guide["admin_command"])
+            print(guide["note"])
+            print("Authenticated MCP and external access are NOT VERIFIED")
+        return 0
     if args.action == "version":
         print("BoxWeave " + info["version"])
         return 0

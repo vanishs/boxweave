@@ -49,7 +49,7 @@ Code-first additions not fully represented in the older F-001–F-015 narrative 
 
 The lists enumerate all Python app modules, Python unittest files, client helper scripts, support scripts, frontend sources, application/host CLI action names, Web and remote HTTP routes, gateway-owned MCP tools, client catalog and frontend views. Downstream Provider tool names are dynamic and are **not** mistaken for locally implemented BoxWeave tools. Each source-backed entry must be tested at the layer its acceptance claim requires.
 
-### Python application modules (43)
+### Python application modules (44)
 
 <!-- inventory:python-modules:start -->
 - `bwmini/__init__.py`
@@ -62,6 +62,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/bootstrap.py`
 - `bwmini/box_actions.py`
 - `bwmini/box_debug.py`
+- `bwmini/box_reads.py`
 - `bwmini/capabilities.py`
 - `bwmini/client_profiles.py`
 - `bwmini/client_setup.py`
@@ -97,7 +98,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (45)
+### Python unittest files (47)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -107,6 +108,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_bindings.py`
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
+- `tests/test_box_reads.py`
 - `tests/test_box_debug.py`
 - `tests/test_capabilities.py`
 - `tests/test_client_setup.py`
@@ -142,6 +144,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_release_metadata.py`
 - `tests/test_remote_mcp.py`
 - `tests/test_selftest.py`
+- `tests/test_setup_guide.py`
 - `tests/test_slice.py`
 - `tests/test_ssh_keepalive.py`
 - `tests/test_workload_guidance.py`
@@ -242,7 +245,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `worker`
 <!-- inventory:app-cli:end -->
 
-### Host CLI command identifiers (7)
+### Host CLI command identifiers (8)
 
 <!-- inventory:host-cli:start -->
 - `box`
@@ -250,6 +253,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `doctor`
 - `provenance`
 - `report`
+- `setup`
 - `status`
 - `version`
 <!-- inventory:host-cli:end -->
@@ -334,10 +338,12 @@ configuration and service control to the non-root application account.
 - `POST /token`
 <!-- inventory:remote-api:end -->
 
-### Gateway-owned MCP tools (4)
+### Gateway-owned MCP tools (6)
 
 <!-- inventory:gateway-tools:start -->
 - `boxweave_diagnose`
+- `boxweave_box_list_directory`
+- `boxweave_box_read_file`
 - `boxweave_info`
 - `boxweave_nesting`
 - `boxweave_project_diagnose`
