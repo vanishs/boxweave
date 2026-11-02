@@ -73,6 +73,10 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 These environment features are **design-only**; D0–D2 shipped in 0.22.0, while D3/D4 are source-implemented in 0.25.0 with live acceptance separate.
 
 
+## Box operation interface v1 (design only; not implemented)
+
+- [External-first Box operation interface — capabilities, file operations, command results, safety, implementation batches and acceptance](design/BOX_OPERATION_INTERFACE_V1.md). Preserves clean Boxes and existing Provider/SSH architecture; this design does not authorize code or deployment changes.
+
 ## MCP capability integration (source inventory and staged implementation)
 
 - [Master design and updated main status](design/MCP_CAPABILITY_INTEGRATION_MASTER.md)
