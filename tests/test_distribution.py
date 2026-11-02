@@ -38,11 +38,12 @@ class DistributionTests(unittest.TestCase):
                       'port':18844})['port'],18844)
   for invalid in ({'public_url':'http://mcp.example.test'},
                   {'allowed_origins':['null']},
-                  {'port':18640,'enabled':True}):
+                  {'port':18981,'enabled':True}):
    with self.subTest(invalid=invalid):
     config=self.settings|{'remote_mcp':invalid}
     self.config.write_text(json.dumps(config))
-    with self.assertRaises(d.InstallError):
+    # runpy creates an independent module and its own InstallError class.
+    with self.assertRaises(standalone['InstallError']):
      standalone['config_read'](self.config,self.prefix)
 
  def test_digest_rejected_before_prefix_or_state_change(self):
