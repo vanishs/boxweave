@@ -6,6 +6,9 @@
 
 ## Product contract
 
+**Integration INT-03/INT-04:** Direct cloning of an exact **stopped instance** needs E0 verified Provider clone/re-identification capabilities and shared source/destination operation claims; it does **not** depend on E2 snapshot management. Cloning **from a snapshot** additionally requires E2. E1 fingerprint remains optional, E3 restore unrelated. Claims must share the R-04 resource keys (or independently verified equivalent protection across all entrypoints); the proposal must not invent an isolated clone-only resource reservation, silently retry an uncertain create or grant a replacement Box the original identity. See [integrated roadmap](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+
+
 Given an authorized source, create a **new, independent, fully managed Box** from either:
 - the current **stopped instance**, or
 - an exact **observed snapshot** of that instance.
