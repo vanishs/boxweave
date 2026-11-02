@@ -102,3 +102,7 @@ Return to [knowledge index](../INDEX.md).
 v0.24.2 fixed browser OAuth consent/callback response headers after hosted ChatGPT integration found `Origin: null` and CSP callback blocking. v0.24.3 preserves those headers in the optional generated Caddy proxy and reports bounded local TCP readiness in Web, without implying external TLS verification. Remaining deliberate deviations: R0 fixed gate subprocess instead of extracted in-process dispatcher; R1 stateless HTTP with JSON responses and GET SSE 405; R3 Caddy is an opt-in runner, not automatic host installation. These remain accurately labeled as such rather than falsely declared finished production deployment.
 
 See [setup](../REMOTE_MCP.md), [verification](../verification/REMOTE_MCP_TEST_PLAN.md) and [open risks](../verification/OPEN_RISKS.md).
+
+## v0.27.0 default-loopback quick-start extension
+
+The owner-approved [HTTP MCP quick-start design](HTTP_MCP_QUICKSTART.md) supersedes the original opt-in *local listener* behavior: an activated install now manages an authenticated 127.0.0.1:18844 service by default; public HTTPS remains strictly opt-in. Explicit disable and preexisting public URL are retained. This is a deployment UX refinement, not approval to install cloudflared, publish DNS, modify firewall or change SSH authority. Source/CI evidence and real-host acceptance remain distinct. Return to [quick-start design](HTTP_MCP_QUICKSTART.md).
