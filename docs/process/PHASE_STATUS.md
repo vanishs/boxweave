@@ -47,3 +47,7 @@ ARCH-0C [CI 41409883731](https://github.com/vanishs/boxweave/actions/runs/414098
 full fixture CI PASS. [ARCH-0 source acceptance](../design/ARCHITECTURE_CONSOLIDATION_GATE.md).
 No installed service, Provider privilege, Box write or host migration is proved.
 P1-B2 and R-02/R-04 dispatch integration remain NOT IMPLEMENTED.
+
+## Phase 2 R-03 first-use guide (source candidate)
+
+Read-only `boxweave setup --mode ssh|https|local [--check] [--format json]` reuses the installed root-reviewed public descriptor; no connection secret, enrollment, public HTTPS assumption, app login, or host mutation. Independent fixture/CI verification pending; live SSH/HTTPS client handshake not yet tested. R-01/R-02/R-04 remain separate feature tracks.

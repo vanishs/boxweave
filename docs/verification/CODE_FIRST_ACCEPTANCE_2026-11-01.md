@@ -97,7 +97,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (45)
+### Python unittest files (46)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -142,6 +142,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_release_metadata.py`
 - `tests/test_remote_mcp.py`
 - `tests/test_selftest.py`
+- `tests/test_setup_guide.py`
 - `tests/test_slice.py`
 - `tests/test_ssh_keepalive.py`
 - `tests/test_workload_guidance.py`
@@ -242,7 +243,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `worker`
 <!-- inventory:app-cli:end -->
 
-### Host CLI command identifiers (7)
+### Host CLI command identifiers (8)
 
 <!-- inventory:host-cli:start -->
 - `box`
@@ -250,6 +251,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `doctor`
 - `provenance`
 - `report`
+- `setup`
 - `status`
 - `version`
 <!-- inventory:host-cli:end -->
