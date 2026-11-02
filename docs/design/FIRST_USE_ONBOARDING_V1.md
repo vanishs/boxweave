@@ -1,5 +1,7 @@
 # BoxWeave First-Use Onboarding v1 — Source Audit and Development Design
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — R-03 installation and first-use onboarding. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **Status:** DESIGN ONLY — not implemented, not tested, not deployed. This document does not authorize host changes, Box writes, new public listeners, token access, installations, release publication or source feature implementation.
 **Review date:** 2026-11-01. **Source baseline:** BoxWeave `main` v0.27.1, immediately before this documentation commit. The public default installer selects v0.27.1.
 **Owner direction:** Improve installation and first authenticated MCP connection without altering BoxWeave's existing architecture. Boxes must remain independent, clean and free of mandatory in-Box agents or services. Git worktrees are not part of this proposal.
