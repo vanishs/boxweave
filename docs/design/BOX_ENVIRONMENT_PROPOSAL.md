@@ -1,4 +1,6 @@
 
+
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E0-E4 Box environment proposals. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
 # Proposal: Box checkpoints, cloning and environment fingerprints
 
 **Status: NOT IMPLEMENTED / DESIGN ONLY.** The feature is **not part of the currently approved product scope**, is not an accepted ADR, and does not authorize host/Provider/storage/network changes. Research source baseline: BoxWeave §main@d72035837da1170d2fe5201ee4ea65075ea038ee§ (version 0.21.4). The owner uses **both reused test Boxes and fresh test Boxes**; a common development topology is outer BoxWeave -> one Box containing an inner BoxWeave, Containarium and Incus -> nested test Box. This is a priority use case, **not** a restriction to developer-only functionality.
