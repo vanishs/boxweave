@@ -1,5 +1,7 @@
 # E0 implementation specification — Provider capability and boundary contract
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E0 Provider capability audit. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **NOT IMPLEMENTED. DESIGN ONLY.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Source review: `main@d72035837da1170d2fe5201ee4ea65075ea038ee`; see [diagnostics research](../verification/DIAGNOSTICS_SOURCE_AUDIT.md) for related but separate failure analysis. **E0 performs read-only capability discovery and tests, no snapshot/restore/clone writes.**
 
 ## Objective
