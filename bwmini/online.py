@@ -276,7 +276,7 @@ def build_provenance(old, descriptor, installed_utc):
 
 def installation_summary(web_port, version, remote_config=None):
     """Human-facing last screen; addresses are configuration, not reachability proof."""
-    require(isinstance(version, str) and re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+", version),
+    require(isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version),
             "INSTALLED_VERSION_INVALID")
     port = str(web_port)
     web_url = "http://127.0.0.1:" + port
@@ -357,7 +357,7 @@ def installation_summary(web_port, version, remote_config=None):
         "  Diagnostics: boxweave status | boxweave doctor",
         "  After client setup: verify actual MCP initialize/tools/read",
     ]
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
