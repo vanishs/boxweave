@@ -82,6 +82,39 @@ def stop_owned_unit(name):
 def q(value):return '"'+str(value).replace('\\','\\\\').replace('"','\\"').replace('%','%%')+'"'
 def unit_text(prefix,config,action):
  return ('[Unit]\nDescription=BoxWeave '+action+'\n[Service]\nType=simple\nWorkingDirectory='+str(prefix/'current').replace('%','%%').replace(' ',r'\x20').replace(chr(34),r'\x22')+'\nExecStart='+q(prefix/'current/.venv/bin/python')+' -m bwmini '+action+' --config '+q(config)+'\nRestart=on-failure\nRestartSec=2\nUMask=0077\n[Install]\nWantedBy=default.target\n').encode()
+def validate_remote_config(config):
+ """Standalone installer copy of the strict remote listener config contract.
+
+ This module is also invoked as an independently downloaded script by
+ bootstrap.py, outside the bwmini package. Never use relative imports here.
+ The running HTTP service independently checks the same config.
+ """
+ if config is None:config={}
+ require(isinstance(config,dict) and not set(config)-{'enabled','public_url','port','allowed_origins'},'REMOTE_CONFIG_INVALID')
+ require(type(config.get('enabled',True)) is bool,'REMOTE_CONFIG_INVALID')
+ require(config.get('enabled',True) is True,'REMOTE_NOT_ENABLED')
+ port=config.get('port',18844)
+ require(type(port) is int and 1024<=port<=65535,'REMOTE_PORT_INVALID')
+ public=config.get('public_url')
+ if public is not None:
+  require(isinstance(public,str) and len(public)<=255,'REMOTE_PUBLIC_URL_INVALID')
+  try:p=urllib.parse.urlsplit(public)
+  except ValueError:raise InstallError('REMOTE_PUBLIC_URL_INVALID') from None
+  require(p.scheme=='https' and bool(p.hostname) and bool(p.netloc) and
+          p.username is None and p.password is None and p.path in ('','/') and
+          not p.query and not p.fragment,'REMOTE_PUBLIC_URL_INVALID')
+ origins=config.get('allowed_origins',[])
+ require(isinstance(origins,list),'REMOTE_ORIGIN_INVALID')
+ for url in origins:
+  require(isinstance(url,str) and 1<=len(url)<=1024,'REMOTE_ORIGIN_INVALID')
+  try:p=urllib.parse.urlsplit(url)
+  except ValueError:raise InstallError('REMOTE_ORIGIN_INVALID') from None
+  require(p.scheme=='https' and bool(p.hostname) and '.' in p.hostname and
+          p.username is None and p.password is None and p.fragment=='' and
+          url=='https://'+p.netloc,'REMOTE_ORIGIN_INVALID')
+ return {'enabled':True,'port':port,'allowed_origins':origins,
+         **({'public_url':public} if public is not None else {})}
+
 def config_read(path,prefix):
  raw=regular(Path(path));require(len(raw)<=65536,'CONFIG_TOO_LARGE');c=json.loads(raw)
  require(isinstance(c,dict) and c.get('mode')=='mcp' and c.get('host','127.0.0.1')=='127.0.0.1','CONFIG_INVALID')
@@ -91,7 +124,6 @@ def config_read(path,prefix):
  require(u.scheme=='https' or u.hostname in ('127.0.0.1','localhost'),'ORIGIN_INVALID')
  require(c.get('secure_cookie',True)==(u.scheme=='https'),'COOKIE_ORIGIN_INVALID')
  argv=c.get('launcher');require(isinstance(argv,list) and bool(argv) and all(isinstance(x,str) for x in argv) and Path(argv[0]).is_absolute(),'CONFIG_INVALID')
- from .remote_mcp import validate_remote_config
  remote=c.get('remote_mcp')
  require(remote is None or isinstance(remote,dict),'REMOTE_CONFIG_INVALID')
  if remote is None or remote.get('enabled',True):
@@ -168,8 +200,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
    old_manifest=json.loads(regular(current/'manifest.json'))
    require(tuple(map(int,manifest['version'].split('.')))>=tuple(map(int,old_manifest['version'].split('.'))),'DOWNGRADE_REQUIRES_BACKUP')
   identifier='boxweave-v2-'+digest(str(prefix).encode())[:12]
-  from .remote_mcp import validate_remote_config
-  remote_setting=c.get('remote_mcp')
+   remote_setting=c.get('remote_mcp')
   remote_active=remote_setting is None or remote_setting.get('enabled',True)
   actions=('serve','worker','remote-mcp') if remote_active else ('serve','worker')
   units={identifier+'-'+action+'.service':unit_text(prefix,prefix/'runtime.json',action) for action in actions}
