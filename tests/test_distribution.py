@@ -75,6 +75,22 @@ class DistributionTests(unittest.TestCase):
     self.install()
    self.assertFalse(self.prefix.exists())
 
+ def test_legacy_runtime_only_remote_url_is_not_silently_lost(self):
+  self.install()
+  prior=json.loads((self.prefix/'runtime.json').read_text())
+  prior['remote_mcp']['public_url']='https://custom.example.test'
+  (self.prefix/'runtime.json').write_text(json.dumps(prior))
+  with self.assertRaisesRegex(d.InstallError,'OPERATOR_REMOTE_SETTINGS_MOVE_TO_CONFIG_JSON'):
+   d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['remote_mcp']['public_url'],
+                   'https://custom.example.test')
+  saved=json.loads((self.prefix/'config.json').read_text())
+  saved['remote_mcp']=prior['remote_mcp']
+  (self.prefix/'config.json').write_text(json.dumps(saved))
+  d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['remote_mcp']['public_url'],
+                   'https://custom.example.test')
+
  def test_config_conflict_refuses_publication(self):
   self.install();before=os.readlink(self.prefix/'current');self.config.write_text(json.dumps(self.settings|{'port':18983}))
   with self.assertRaisesRegex(d.InstallError,'CONFIG_CONFLICT'):self.install()
