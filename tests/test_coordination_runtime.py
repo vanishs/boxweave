@@ -2,12 +2,15 @@
 import os
 from pathlib import Path
 import sqlite3
+import subprocess
+import shutil
+import sys
 import tempfile
 import unittest
 
 from bwmini.coordination_runtime import (
     app_target_identity, canonical_box_identity, gateway_target_identity,
-    private_connection,
+    private_connection, scope_digest,
 )
 from bwmini.domain import Target
 from bwmini.operation_coordination import CoordinationFault, OperationCoordinator
@@ -30,16 +33,81 @@ class CoordinationRuntimeTests(unittest.TestCase):
         target = Target("containarium", "local", "default",
                         "project-a", "instance-a", "123", "project-a", "instance-a")
         observed = {"username": "project-a", "name": "instance-a", "createdAt": 123}
-        self.assertEqual(app_target_identity(target), gateway_target_identity(observed))
+        verified = {"provider":"containarium", "backend":"local", "project":"default"}
+        self.assertEqual(app_target_identity(target), gateway_target_identity(
+            observed, scope=verified, logical="project-a"))
         observed["createdAt"] = 124
-        self.assertNotEqual(app_target_identity(target), gateway_target_identity(observed))
+        self.assertNotEqual(app_target_identity(target), gateway_target_identity(
+            observed, scope=verified, logical="project-a"))
 
     def test_missing_or_bad_identity_fails_closed(self):
-        self.assert_code("COORDINATION_IDENTITY_INVALID", lambda: gateway_target_identity({}))
+        self.assert_code("COORDINATION_IDENTITY_INVALID", lambda: gateway_target_identity({}, scope={}, logical="box"))
         self.assert_code("COORDINATION_IDENTITY_INVALID",
-                         lambda: canonical_box_identity("bad/box", "a", "123", "box"))
+                         lambda: canonical_box_identity("bad/box", "a", "123", "box",
+                                                       provider="containarium", backend="local", project="default"))
         self.assert_code("COORDINATION_IDENTITY_INVALID",
-                         lambda: canonical_box_identity("box", "\n", "123", "box"))
+                         lambda: canonical_box_identity("box", "\n", "123", "box",
+                                                       provider="containarium", backend="local", project="default"))
+
+    def test_cross_scope_and_recreation_are_distinct(self):
+        target = Target("containarium", "local", "default", "box", "box-container", "123", "box", "box-container")
+        base = app_target_identity(target)
+        for scope in (("other", "local", "default"), ("containarium", "remote", "default"),
+                      ("containarium", "local", "other")):
+            self.assertNotEqual(base, canonical_box_identity(
+                "box", "box-container", "123", "box", provider=scope[0],
+                backend=scope[1], project=scope[2]))
+        self.assertNotEqual(base, canonical_box_identity(
+            "box", "box-container", "124", "box", provider="containarium",
+            backend="local", project="default"))
+        self.assertEqual(len(scope_digest("containarium", "local", "default")), 64)
+
+    def test_gateway_requires_complete_verified_scope(self):
+        observed = {"username": "box", "name": "box-container", "createdAt": 123}
+        scope = {"provider":"containarium", "backend":"local", "project":"default"}
+        self.assert_code("COORDINATION_IDENTITY_INVALID",
+                         lambda: gateway_target_identity(observed, scope={}, logical="box"))
+        self.assert_code("COORDINATION_IDENTITY_INVALID",
+                         lambda: gateway_target_identity(observed, scope=scope, logical="other"))
+        self.assert_code("COORDINATION_IDENTITY_INVALID",
+                         lambda: gateway_target_identity(observed | {"createdAt":None},
+                                                         scope=scope, logical="box"))
+
+    def test_standalone_gateway_sibling_import(self):
+        with tempfile.TemporaryDirectory() as folder:
+            from bwmini import coordination_runtime, operation_coordination
+            for mod in (coordination_runtime, operation_coordination):
+                shutil.copyfile(Path(mod.__file__), Path(folder) / Path(mod.__file__).name)
+            script = Path(folder) / "probe.py"
+            script.write_text("from coordination_runtime import scope_digest, private_connection\n"
+                              "print(scope_digest('containarium', 'local', 'default'))\n")
+            result = subprocess.run([sys.executable, "-E", "-s", str(script)],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(result.stdout.strip()), 64)
+
+    def test_sqlite_schema_downgrade_or_app_db_refused(self):
+        with sqlite3.connect(self.path) as db:
+            db.execute("PRAGMA user_version=12")
+        self.assert_code("COORDINATION_SCHEMA_UNSUPPORTED",
+                         lambda: private_connection(self.path))
+        with sqlite3.connect(self.path) as db:
+            db.execute("PRAGMA user_version=0")
+            db.execute("CREATE TABLE app_secrets (id TEXT)")
+        self.assert_code("COORDINATION_SCHEMA_UNSUPPORTED",
+                         lambda: private_connection(self.path))
+
+    def test_unsafe_ancestor_or_sidecar(self):
+        sub = Path(self.tmp.name) / "nested"
+        sub.mkdir(mode=0o700)
+        other = sub / "coord.sqlite"
+        other.touch(mode=0o600)
+        Path(self.tmp.name).chmod(0o777)
+        self.assert_code("COORDINATION_STORAGE_UNSAFE", lambda: private_connection(other))
+        Path(self.tmp.name).chmod(0o700)
+        side = Path(str(other) + "-wal")
+        side.symlink_to(self.path)
+        self.assert_code("COORDINATION_STORAGE_UNSAFE", lambda: private_connection(other))
 
     def test_private_open_and_existing_db(self):
         store = OperationCoordinator(lambda: private_connection(self.path))

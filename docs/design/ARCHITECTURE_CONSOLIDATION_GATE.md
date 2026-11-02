@@ -86,7 +86,7 @@ generic provider plugin system.
 
 ## Execution ledger — owner-authorized staged development
 
-ARCH-0A boundary inventory: [executable-entry and mutator matrix](../verification/ARCH0_BOUNDARY_INVENTORY.md). Source S audited; fixture CI remains pending on the candidate SHA. ARCH-0B and ARCH-0C require independent commits and CI; no live/host acceptance is implied.
+ARCH-0A boundary inventory: [executable-entry and mutator matrix](../verification/ARCH0_BOUNDARY_INVENTORY.md). Source S audited; fixture CI remains pending on the candidate SHA. ARCH-0B source implementation targets full Provider/backend/project identity fingerprints, independently packaged standalone Gateway helper imports and pre-provisioned same-UID coordinator SQLite safety; there is no enabled dispatch path or installed provisioning. The design deliberately excludes a cross-UID database grant, separate daemon or implicit migration. ARCH-0C requires its own commit and CI; no live/host acceptance is implied.
 
 ## 4. Proposed ARCH-0 implementation batches
 
@@ -130,3 +130,12 @@ A5/A6 extraction may be partial when safe façades and dependency
 direction are documented. A7/A8 are later cleanup, not blockers.
 Record deferred work instead of turning architecture cleanup into an
 unbounded rewrite.
+
+## ARCH-0B source implementation contract (candidate; CI pending)
+
+- `coordination_runtime.canonical_box_identity` is now fail-closed without **verified Provider/backend/project scope**. The Web Target carries these fields; Gateway must receive them from a host-owned observation boundary, never MCP tool arguments. In v0.29.0 the root registry only proves default-project Incus target/name/creation; **do not claim general Provider identity parity until an installed gateway scope is proved**.
+- `private_connection` validates its private parent plus ancestor traversal, inode ownership/permissions, database schema, sidecars and no-symlink policy, and never auto-creates an active app/host DB. The default single `boxweave` Unix user is an intentional precondition, not a grant to other SSH users or a silent upgrade.
+- Both coordination files are added to the **reviewed immutable root-helper artifact set** and offline manifest as siblings, while preserving `mcp_gate.py`, `host_cli.py`, root `python3 -I`, HTTP `python -E -s` and legacy APIs.
+- New identity, missing scope, tamper/schema, unsafe parent/sidecar and standalone-sibling smoke fixtures must pass, alongside the legacy online manifest tests. Actual installer/user permissions and original guest writes **L=U**.
+
+**ARCH-0B acceptance:** source/fixture CI only. Do not enable mutating coordinator or promote stable installer as part of this internal contract.
