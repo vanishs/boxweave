@@ -59,7 +59,7 @@ if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "$
   # Stream only the latest separately verified published stable release.
   # PUBLISHED_RELEASE is intentionally distinct from unreleased source VERSION.
   # This pin must reference release assets that exist and verify upstream.
-  BOXWEAVE_REQUESTED_VERSION="$selected_version" python3 - "0.27.0" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
+  BOXWEAVE_REQUESTED_VERSION="$selected_version" python3 - "0.27.1" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
 import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
 version=os.environ.get("BOXWEAVE_REQUESTED_VERSION") or sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
