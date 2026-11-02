@@ -206,3 +206,8 @@ SSH/HTTP/Web races. Post-restart outer SSH could briefly report
 TRUST_NOT_READY independently of guest BoxWeave health; collect
 independent read recovery evidence, do not weaken host-key checks.
 No historical risk is globally closed by this scoped release test.
+
+
+## Current v0.42.2 deep reacceptance boundaries (2026-11-02)
+
+[Live and source evidence ledger](DEEP_REACCEPTANCE_0422_2026-11-02.md). Fresh v0.42.2 install, authenticated Provider read, real nested selftest, cold restart, and old v0.26.1/v0.26.4 read-only doctor checkpoints passed; the exact-source 640 tests and full GitHub CI passed. R-04 protected-mode same-Box races and Web/SSH/HTTP bypasses, R-02 provisioned request recovery, D4 authorized positive, public OAuth/TLS/desktop, E2-E4 snapshots/restore/clone, and current installed old-to-new migration remain explicitly UNVERIFIED or BLOCKED. Minor usability note: BOI-1 rejects absolute paths and symlink reads as intended but currently wraps those validation failures in a generic trust/workload gate error; clarify the relative-to-home input contract and consider typed non-disclosing validation codes in a separately versioned change. No new production outage or security bypass was demonstrated.

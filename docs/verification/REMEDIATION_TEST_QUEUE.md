@@ -875,3 +875,8 @@ Promote default stable pin only with exact-SHA CI+publication,
 confirmed post-restart authenticated read and task-owned Box cleanup. Installed
 multi-client R-04 / OAuth/TLS, E2/E3/E4 and production downgrade
 remain U/BLOCKED; source/default/installed identities are distinct.
+
+
+## Current v0.42.2 full-repository reacceptance (2026-11-02)
+
+[Detailed evidence and per-feature dispositions](DEEP_REACCEPTANCE_0422_2026-11-02.md): exact source `9bd65b3cc8b3fca4e1c144a7b484d940bb98b214`, 640/640 Python tests, 163 document knowledge audit, exact-SHA GitHub fixture/browser/package/publish CI 41525982292 PASS. Fresh Ubuntu 24.04 test Box installed v0.42.2, authenticated 58-tool Provider read and 10/10 doctor, nested create/hello/stop/delete selftest exit 0, cold restart and independent no-child read PASS. Relative guest file reads/list and symlink/path refusal passed; unprovisioned task store and nonallowlisted D4 fail closed. Three old v0.26.1/v0.26.4 hosts' read-only doctor checks passed. Test-created Box deleted and absence independently verified. Live optional multi-Agent cross-entry claims, positive task recovery, external OAuth/TLS/desktop, D4 approved-service read, E2-E4 and fresh old-version upgrade are NOT ACCEPTED; the stable pin remains 0.42.1. No executable-source fix made in this evidence-only checkpoint.

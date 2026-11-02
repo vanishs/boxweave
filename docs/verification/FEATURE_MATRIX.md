@@ -96,3 +96,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## Phase 2 staged source acceptance — 2026-11-02
 
 [Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
+
+
+## Fresh v0.42.2 source and Box reacceptance (2026-11-02)
+
+[Exact new-source/source-CI, real-Box, old-host comparisons and status ledger](DEEP_REACCEPTANCE_0422_2026-11-02.md) supersedes broad inferences from older version-specific entries. Python 640/640 and exact-head CI PASS; fresh v0.42.2 nested install + authenticated Provider read + real create/hello/stop/delete and post-restart doctor PASS. Actual cross-entry protected R-04 races, provisioned R-02 task recovery, D4 allowlisted positive, E2-E4, external OAuth/desktop, and newly installed old-to-new upgrade remain U/BLOCKED. This report records only observed evidence, not global acceptance.
