@@ -1,5 +1,10 @@
 # Remediation validation and next-Agent queue
 
+## Selftest CI flake identified after Phase 2 acceptance PR #39
+
+[Main CI 41422944355](https://github.com/vanishs/boxweave/actions/runs/41422944355) failed because the random SHA-256 fixture in `tests/test_selftest.py` sometimes contains no letter `a`; `checksum.replace("a","b")` then fails to corrupt the checksum. Fix uses an always-different valid first digit. The immutable v0.33.0 release is not modified; maintenance source version v0.34.0 needs its own independent CI/tag. No production selftest validator change or new Phase 2 write-operation acceptance is claimed.
+
+
 ## Phase 2 R-04 core-only lease source checkpoint
 
 Lease primitives, 10-minute duration, hashed tokens, exact-identity authorization, independent Box claims, continued UNKNOWN hold after lease expiry, and private explicit coordinator provision were fixture-tested. [Multi-Agent source design](../design/MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md). No operator lease tool, no Web/SSH/HTTP shared mutation interception, no other Provider access guard and no installed host test. **R-04/P1-B2 remain PARTIAL/UNVERIFIED.** Do not promote stable installer based on this core-only release.
