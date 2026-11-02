@@ -744,6 +744,41 @@ def main(argv=None):
                               "reason": str(exc) if isinstance(exc, ValueError) else "IMPORT_FAILED"}),
                   file=sys.stderr)
             return 2
+    if argv and argv[0] == "http":
+        p = argparse.ArgumentParser(prog="boxweave http",
+                                    description="Managed loopback HTTP MCP")
+        p.add_argument("action", choices=("status", "doctor", "configure", "restart"))
+        p.add_argument("--public-url")
+        p.add_argument("--local-only", action="store_true")
+        try:
+            args = p.parse_args(argv[1:])
+            if os.geteuid() != 0:
+                if args.action not in ("status", "doctor"):
+                    print("Configuration and restart require: sudo boxweave http " + args.action,
+                          file=sys.stderr)
+                    return 2
+                # Safe unprivileged default-port view; managed state needs sudo.
+                url = "http://127.0.0.1:18844/.well-known/oauth-protected-resource/mcp"
+                result = web_observation(18844)
+                print(json.dumps({"local_url": "http://127.0.0.1:18844/mcp",
+                                  "local_tcp_or_http": result["reachable"],
+                                  "external_verified": False,
+                                  "hint": "sudo boxweave http doctor for managed configuration"}))
+                return 0 if args.action == "status" or result["reachable"] else 2
+            user = pwd.getpwnam("boxweave")
+            python = "/home/boxweave/boxweave/current/.venv/bin/python"
+            command = ["runuser", "-u", "boxweave", "--", "env",
+                       "XDG_RUNTIME_DIR=/run/user/" + str(user.pw_uid), python,
+                       "-m", "bwmini.http_manage", args.action]
+            if args.public_url:
+                command.extend(["--public-url", args.public_url])
+            if args.local_only:
+                command.append("--local-only")
+            return subprocess.run(command, check=False, timeout=35).returncode
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            print(json.dumps({"state": "error", "code": "REMOTE_MANAGEMENT_UNAVAILABLE"}),
+                  file=sys.stderr)
+            return 2
     if argv and argv[0] == "job":
         try:
             return job_command(argv[1:])
