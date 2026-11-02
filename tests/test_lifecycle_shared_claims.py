@@ -67,6 +67,17 @@ class LifecycleClaimTests(Base):
         self.gateway_claim_name(NAME)
         self.assertEqual(self.provider.writes,[("create",NAME)])
 
+    def test_complete_lifecycle_releases_only_observed_original_receipts(self):
+        actions=("create","stop","start","stop","delete")
+        for action in actions:
+            with self.subTest(action=action):
+                oid,result=self.run_action(action)
+                self.assertEqual((result["state"],result["code"]),("succeeded","OK"))
+                self.assertEqual(self.gateway.coordinator.status(oid)["state"],
+                                 "observed_terminal")
+        self.assertEqual([item[0] for item in self.provider.writes],list(actions))
+        self.assertTrue(self.life.settings()["environments"][0]["deleted"])
+
     def test_existing_gateway_name_claim_denies_create_before_provider(self):
         self.gateway_claim_name(NAME)
         oid,result=self.run_action()
