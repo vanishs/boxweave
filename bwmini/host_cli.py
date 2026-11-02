@@ -779,7 +779,9 @@ def main(argv=None):
                 command.extend(["--public-url", args.public_url])
             if args.local_only:
                 command.append("--local-only")
-            return subprocess.run(command, check=False, timeout=35).returncode
+            return subprocess.run(
+                command, check=False, timeout=35,
+                cwd="/home/boxweave/boxweave/current").returncode
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
             print(json.dumps({"state": "error", "code": "REMOTE_MANAGEMENT_UNAVAILABLE"}),
                   file=sys.stderr)
