@@ -759,9 +759,14 @@ def main(argv=None):
                     return 2
                 # Safe unprivileged default-port view; managed state needs sudo.
                 url = "http://127.0.0.1:18844/.well-known/oauth-protected-resource/mcp"
-                result = web_observation(18844)
+                opener = build_opener(ProxyHandler({}))
+                try:
+                    with opener.open(url, timeout=2) as response:
+                        result = {"reachable": isinstance(json.loads(response.read(4096)), dict)}
+                except (OSError, ValueError, HTTPError, URLError):
+                    result = {"reachable": False}
                 print(json.dumps({"local_url": "http://127.0.0.1:18844/mcp",
-                                  "local_tcp_or_http": result["reachable"],
+                                  "local_discovery": result["reachable"],
                                   "external_verified": False,
                                   "hint": "sudo boxweave http doctor for managed configuration"}))
                 return 0 if args.action == "status" or result["reachable"] else 2
