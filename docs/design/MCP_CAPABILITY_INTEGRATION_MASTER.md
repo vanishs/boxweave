@@ -1,5 +1,7 @@
 # BoxWeave capability-led MCP reuse — master plan
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — P-04 per-client policy / P-06 metrics candidates. The roadmap summarizes selection and current status; this document retains detailed feature boundaries.
+
 **Update 2026-10-31 — source integrated (PR #9 merged):** M0–M5 selected source code is in `main` (merge `8038afc`), with fixture CI [41191096024](https://github.com/vanishs/boxweave/actions/runs/41191096024) passing. **Real Box/Provider/SSH/agent-box tests were explicitly deferred**; no full per-client RBAC, production authorization/deployment or release publication is claimed. For exact implemented scope, remaining decisions and release boundaries, see [M0–M5 merged-source handoff](../process/MCP_M0_M5_SOURCE_PROGRESS.md). Earlier “proposal-only/not implemented” status statements below refer to the original research baseline, not this merged source status.
 
 
