@@ -38,7 +38,7 @@ Candidate immutable target identity tuple: `provider, backend, project, logical,
 
 Before any future operation reserve a typed **source claim** using the shared canonical resource and dispatch-intent scheme from [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md) if implemented, or an equivalently verified shared lifecycle/MCP guard. Do not create a separate checkpoint-only lock/UNKNOWN store that bypasses direct gateway writes. E0 remains read-only and is **not blocked** by delivery of R-04; E2/E3/E4 writes must prove actual claim coverage. See [roadmap INT-03](FEATURE_ROADMAP_MASTER.md#51-integration-decisions--conflict-register). The current `environment_one_pending` unique index alone is insufficient.
 
-Historical specification: Before any future operation reserve a typed **source lock** that covers checkpoint operations and existing lifecycle operations. The current `environment_one_pending` unique index only guards `environment_operations` by logical name; it does **not** guard a new table automatically. E0 must design a shared per-instance claim/serialization mechanism, with DB lock ordering and crash-recovery tests, before E2/E3/E4 introduce writes. A stale lock must not be dropped merely because an operation is `unknown`.
+The existing `environment_one_pending` index guards only the lifecycle operations table, not future E2–E4 tables. Before a write-feature release, verify cross-entry claim acquisition, DB lock ordering, crash recovery and retention of `unknown` claims; never release an uncertain claim solely because its owner disappeared.
 
 ## Storage and quiescence decision
 
