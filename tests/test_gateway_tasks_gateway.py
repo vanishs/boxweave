@@ -104,6 +104,69 @@ class GatewayTaskIntegration(unittest.TestCase):
         self.assertEqual(result["state"],"completed")
 
 
+    def test_protected_lease_token_gate_and_expiry(self):
+        from bwmini.coordination_bridge import gateway_box
+        from bwmini.operation_coordination import CoordinationFault
+        call=lambda i,a:{"jsonrpc":"2.0","id":i,"method":"tools/call",
+              "params":{"name":"boxweave_box_lease","arguments":a}}
+        with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
+            provider,out=self.run_gateway([call(1,{"box":"box1","action":"acquire"})])
+            self.assertEqual([x["params"]["name"] for x in provider.sent],["get_container"])
+            data=json.loads(out[0]["result"]["content"][0]["text"])
+            self.assertEqual(data["state"],"leased")
+            self.assertEqual(len(data["lease_token"]),43)
+            q={"box":"box1","request_key":"b"*32,"exec":"echo with lease"}
+            provider,out=self.run_gateway([{"jsonrpc":"2.0","id":2,"method":"tools/call",
+                   "params":{"name":"boxweave_task_submit","arguments":q}}])
+            self.assertEqual(out[0]["error"]["message"],"RESOURCE_BUSY")
+            self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+            q["request_key"]="c"*32
+            q["lease_token"]=data["lease_token"]
+            provider,out=self.run_gateway([{"jsonrpc":"2.0","id":3,"method":"tools/call",
+                   "params":{"name":"boxweave_task_submit","arguments":q}}])
+            self.assertIn("result",out[0])
+            self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),1)
+            provider,out=self.run_gateway([call(4,{"box":"box1","action":"release",
+                                   "token":data["lease_token"]})])
+            self.assertEqual(json.loads(out[0]["result"]["content"][0]["text"])["state"],"released")
+
+    def test_protected_patch_uses_tracked_write_not_direct_forward(self):
+        args={"box":"box1","path":"main.py","new_text":"x=2\n",
+              "expected_sha256":"0"*64,"request_key":"f"*32}
+        call={"jsonrpc":"2.0","id":10,"method":"tools/call",
+              "params":{"name":"boxweave_box_patch","arguments":args}}
+        with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
+            provider,out=self.run_gateway([call])
+        self.assertEqual([x["params"]["name"] for x in provider.sent],
+                         ["get_container","connect"])
+        sent=provider.sent[-1]["params"]["arguments"]["exec"]
+        self.assertTrue(sent.startswith("python3 -c "))
+        self.assertNotIn("x=2\n",sent)
+        row=json.loads(out[0]["result"]["content"][0]["text"])
+        self.assertEqual((row["state"],row["exit_code"]),("completed",7))
+        self.assertEqual(self.claims.coordinator.status(row["task_id"])["state"],
+                         "observed_terminal")
+        with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
+            provider,out=self.run_gateway([call])
+        self.assertEqual(provider.sent[0]["params"]["name"],"get_container")
+        self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+        self.assertEqual(json.loads(out[0]["result"]["content"][0]["text"])["task_id"],row["task_id"])
+
+    def test_patch_without_protection_never_dispatches(self):
+        call={"jsonrpc":"2.0","id":15,"method":"tools/call",
+              "params":{"name":"boxweave_box_patch","arguments":{}}}
+        provider,out=self.run_gateway([call])
+        self.assertEqual(provider.sent,[])
+        self.assertEqual(out[0]["error"]["message"],"COORDINATION_PATCH_DISABLED")
+
+    def test_lease_hidden_when_protection_disabled(self):
+        call={"jsonrpc":"2.0","id":2,"method":"tools/call",
+              "params":{"name":"boxweave_box_lease",
+                        "arguments":{"box":"box1","action":"acquire"}}}
+        provider,out=self.run_gateway([call])
+        self.assertEqual(provider.sent,[])
+        self.assertEqual(out[0]["error"]["message"],"COORDINATION_LEASE_DISABLED")
+
     def test_web_mutation_claim_blocks_tracked_gateway_exec(self):
         identity,scope,logical=app_box(TARGET,SCOPE)
         self.claims.acquire("1"*32,"web_1",identity,scope,logical)

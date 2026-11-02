@@ -196,6 +196,23 @@ class Access:
             if state in ('succeeded','failed'):db.execute('DELETE FROM access_claims WHERE operation=?',(job['id'],))
             if state=='succeeded' and json.loads(job['payload'])['kind']=='port':
                 p=json.loads(job['payload']);db.execute('INSERT INTO access_routes VALUES(?,?,?,?) ON CONFLICT(resource) DO UPDATE SET route=excluded.route,target=excluded.target,deleted=excluded.deleted',(self.resource(p['route']),encode(p['route']),encode(p['target']),int(p['action']=='unpublish')))
+        claims = getattr(self.s, 'shared_claims', None)
+        if claims is not None and state in ('succeeded', 'failed', 'unknown'):
+            # Never release before original app receipt/observation is durable.
+            # Pre-dispatch failures have no shared claim; ignore that absence.
+            observed = (state == 'succeeded' and job.get('ack') is not None
+                        and isinstance(result, dict) and
+                        (result.get('guard_observed') is True
+                         if json.loads(job['payload'])['kind']=='network'
+                         else result.get('route_state') in ('present','absent')))
+            try:
+                if observed:
+                    claims.observed_terminal(job['id'], 'access_'+job['id'])
+                else:
+                    claims.unknown(job['id'])
+            except Exception:
+                # Inaccessible/uncertain coordination remains conservatively held.
+                pass
     def recover(self):
         with self.store.db() as db:
             rows=[dict(r) for r in db.execute("SELECT id,actor,ack FROM access_operations WHERE state='dispatching'")]
@@ -264,6 +281,21 @@ class Access:
         except Fault as e:
             if e.code=='STATE_UNAVAILABLE':raise
             self.save(job,'failed',e.code);return True
+        claims=getattr(self.s, 'shared_claims', None)
+        if claims is not None:
+            from .operation_coordination import CoordinationFault
+            try:
+                claims.acquire_access(job['id'], 'access_'+job['id'],
+                                      vars(self.provider).get('config', {}), p)
+                claims.dispatch_intent(job['id'])
+            except CoordinationFault as error:
+                try:
+                    claims.cancel_before_dispatch(job['id'])
+                except CoordinationFault:
+                    pass
+                # The Provider write has not been invoked at this point.
+                self.save(job, 'failed', error.code)
+                return True
         try:
             response=self.wire.patch(p['changes']) if p['kind']=='network' else self.wire.route_mutate(p['action'],p['route'])
             self.save(job,'observing','ACKNOWLEDGED',ack={'at':self.clock(),'response':response})

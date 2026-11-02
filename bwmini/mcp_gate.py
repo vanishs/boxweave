@@ -9,18 +9,19 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, gateway_tasks, coordination_bridge, gateway_protection
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
     import box_reads
+    import box_patch
     import gateway_tasks
     import coordination_bridge
     import gateway_protection
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.40.0"
+SERVER_INFO_VERSION = "0.41.0"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -141,6 +142,27 @@ NESTING_TOOL = {
                        "expected":{"type":"object"}, "confirm":{"type":"string"}},
         "required":["action","logical"]}}
 
+PATCH_TOOL = {
+    "name": "boxweave_box_patch",
+    "description": "Protected-mode tracked compare-and-swap replacement of <=1024 bytes in a trusted Box file; request_key deduplicates dispatch. Return includes metadata-only task receipt; read file for the observed content. UNKNOWN cannot be retried.",
+    "inputSchema": {"type":"object","additionalProperties":False,
+        "properties":{"box":{"type":"string"},"path":{"type":"string"},
+                      "expected_sha256":{"type":"string"},
+                      "new_text":{"type":"string"},"request_key":{"type":"string"},
+                      "lease_token":{"type":"string"}},
+        "required":["box","path","expected_sha256","new_text","request_key"]},
+}
+
+LEASE_TOOL = {
+    "name": "boxweave_box_lease",
+    "description": "Optional protected-mode exact Box lease (acquire/renew/release/status). Ten-minute maximum; not an authentication token. UNKNOWN dispatched claims outlive expiry.",
+    "inputSchema": {"type":"object","additionalProperties":False,
+        "properties":{"action":{"type":"string","enum":["acquire","renew","release","status"]},
+                      "box":{"type":"string"},"token":{"type":"string"},
+                      "seconds":{"type":"integer","minimum":1,"maximum":600}},
+        "required":["action","box"]},
+}
+
 def catalog(message):
     if "result" not in message: return message
     for tool in message["result"].get("tools", []):
@@ -182,7 +204,8 @@ def catalog(message):
                 "explicit authorization and verify target; after a timeout "
                 "inspect state instead of blindly retrying."
             )
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS))
+    extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -226,7 +249,9 @@ GATE_ERROR_CODES = frozenset((
     "RESOURCE_BUSY", "RECOVERY_REQUIRED",
     "COORDINATION_POLICY_UNAVAILABLE", "COORDINATION_POLICY_INVALID",
     "COORDINATION_POLICY_UNSAFE", "COORDINATION_TOOL_UNCLASSIFIED",
-    "COORDINATION_USE_TRACKED_TASK",
+    "COORDINATION_USE_TRACKED_TASK", "COORDINATION_LEASE_DISABLED",
+    "LEASE_ARGUMENT_INVALID", "LEASE_TOKEN_INVALID", "LEASE_EXPIRED",
+    "COORDINATION_PATCH_DISABLED", "BOX_PATCH_INVALID", "BOX_PATCH_TOO_LARGE",
 ))
 
 
@@ -498,14 +523,59 @@ def main():
                             value = {"tasks": store.list(args["box"], args.get("limit", 20))}
                         emit_result(request["id"], value)
                         continue
-                    if params.get("name") == "boxweave_task_submit":
+                    if params.get("name") == "boxweave_box_lease":
+                        # Only the reviewed protected gateway route may expose
+                        # leases; they coordinate trusted operators, never grant auth.
+                        if not gateway_protection.enabled():
+                            raise ValueError("COORDINATION_LEASE_DISABLED")
+                        if permitted is not None and "connect" not in permitted:
+                            raise ValueError("GATE_TOOL_NOT_ALLOWED")
+                        if not isinstance(args,dict) or set(args)-{"box","action","token","seconds"}:
+                            raise ValueError("LEASE_ARGUMENT_INVALID")
+                        action=args.get("action")
+                        if action not in ("acquire","renew","release","status"):
+                            raise ValueError("LEASE_ARGUMENT_INVALID")
+                        if action in ("acquire","status") and "token" in args:
+                            raise ValueError("LEASE_ARGUMENT_INVALID")
+                        if action in ("renew","release") and "token" not in args:
+                            raise ValueError("LEASE_TOKEN_INVALID")
+                        if action!="acquire" and "seconds" in args and action!="renew":
+                            raise ValueError("LEASE_ARGUMENT_INVALID")
+                        observed=container(args.get("box"),request["id"])
+                        registry=trusted_registry()
+                        trusted({"box":args.get("box")},registry,observed)
+                        identity, _, _=coordination_bridge.gateway_box(
+                            observed,registry.get("scope"),args["box"])
+                        value=coordination_bridge.SharedClaims().lease(
+                            action,identity,token=args.get("token"),
+                            seconds=args.get("seconds",600))
+                        emit_result(request["id"],value)
+                        continue
+                    if params.get("name") in ("boxweave_task_submit","boxweave_box_patch"):
                         # Preserve the original connect permission and target
                         # validation; request_key is NOT an authorization grant.
                         if permitted is not None and "connect" not in permitted:
                             raise ValueError("GATE_TOOL_NOT_ALLOWED")
-                        if not isinstance(args, dict) or set(args) != {"box", "request_key", "exec"}:
+                        is_patch=params["name"]=="boxweave_box_patch"
+                        if is_patch:
+                            if not gateway_protection.enabled():
+                                raise ValueError("COORDINATION_PATCH_DISABLED")
+                            if not isinstance(args,dict):
+                                raise ValueError("BOX_PATCH_INVALID")
+                            patch_input={k:v for k,v in args.items() if k!="lease_token"}
+                            checked=box_patch.verify_patch(patch_input)
+                            command=box_patch.guest_command(checked)
+                        else:
+                            if (not isinstance(args,dict)
+                                    or not {"box","request_key","exec"}<=set(args)
+                                    or set(args)-{"box","request_key","exec","lease_token"}):
+                                raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
+                            command=args["exec"]
+                        if "lease_token" in args and (
+                                not gateway_protection.enabled()
+                                or not isinstance(args["lease_token"],str)):
                             raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
-                        payload_digest = gateway_tasks.command_digest(args["box"], args["exec"])
+                        payload_digest=gateway_tasks.command_digest(args["box"],command)
                         registry = trusted_registry()
                         observed = container(args["box"], request["id"])
                         trusted({"box": args["box"]}, registry, observed)
@@ -523,7 +593,8 @@ def main():
                             # This atomic claim must succeed before any dispatch.
                             # A Box lease affects BOTH root-published gateways
                             # and the app's identical canonical resource keys.
-                            claims.acquire(receipt["task_id"], ref, identity, scope_id, logical)
+                            claims.acquire(receipt["task_id"], ref, identity, scope_id, logical,
+                                           lease_token=args.get("lease_token"))
                         except CoordinationFault:
                             store.advance(receipt["task_id"], "recorded",
                                           "failed_before_dispatch")
@@ -543,9 +614,15 @@ def main():
                             internal = "boxweave-task-" + secrets.token_hex(8)
                             send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
                                   "params": {"name": "connect",
-                                             "arguments": {"box": logical, "exec": args["exec"]}}})
+                                             "arguments": {"box": logical, "exec": command}}})
                             result = reply(internal, False)
                             code = gateway_tasks.observed_exit(result)
+                            if is_patch and code==0:
+                                verified_patch=box_patch.parse_receipt(result)
+                                if (verified_patch["sha256"] != hashlib.sha256(
+                                        args["new_text"].encode("utf-8")).hexdigest() or
+                                        verified_patch["bytes"] != len(args["new_text"].encode("utf-8"))):
+                                    raise ValueError("BOX_PATCH_RESULT_UNVERIFIED")
                             # Commit original receipt BEFORE releasing the
                             # separately stored resource claim. A failed release
                             # leaves a conservative claim, never a duplicate run.

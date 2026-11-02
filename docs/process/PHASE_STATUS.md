@@ -83,3 +83,13 @@ Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite
 ## Phase 2 opt-in Web lifecycle shared claims (v0.40.0 source candidate)
 
 [Lifecycle shared-claim contract](../design/PHASE2_LIFECYCLE_SHARED_CLAIMS.md): staged source integration of create/start/stop/delete/resize with the original Web/app lifecycle receipt and the existing optional common Box/name/tenant claim coordinator. The original application receipt must first record observed terminal success before a claim can be retired. UNKNOWN and uncertain resize/nesting outcomes retain claims. This does not activate the root-owned SSH/HTTP protected Gateway, grant new authority, or protect app Access/port/network actions or direct external SSH. Source fixtures on [PR #47](https://github.com/vanishs/boxweave/pull/47) passed [CI 41493238649](https://github.com/vanishs/boxweave/actions/runs/41493238649) at its pre-version-bump head; reverify the final commit before merge. Installed/real-Box evidence remains U, overall R-04 PARTIAL; stable installer remains v0.28.0.
+
+
+## Phase 2 v0.41.0 protected source slice — acceptance boundary
+
+[Source and negative gates](../design/PHASE2_CROSS_ENTRY_COMPLETION.md).
+Optional Web Access tenant/port claims, protected-only Box leases and tracked
+small-file compare-and-swap patch are added. Exact source/fixture results belong
+to CI and [Phase 2 acceptance](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md);
+installed Gateway, Web, old versions and independently authenticated dual-client
+results remain U. Default stable installer v0.28.0 remains unchanged.

@@ -80,6 +80,8 @@ class ProtectedGatewayTests(unittest.TestCase):
         names={t["name"] for t in replies[0]["result"]["tools"]}
         self.assertIn("get_container",names)
         self.assertIn("boxweave_task_submit",names)
+        self.assertIn("boxweave_box_lease",names)
+        self.assertIn("boxweave_box_patch",names)
         self.assertIn("boxweave_box_read_file",names)
         self.assertNotIn("connect",names)
         self.assertNotIn("create_container",names)

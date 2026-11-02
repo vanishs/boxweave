@@ -816,3 +816,18 @@ Task owner-approved: HFC-01..07 in [design](../design/HTTP_FIRST_CLIENT_SETUP.md
 ## Phase 2 staged source acceptance — 2026-11-02
 
 [Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
+
+## Phase 2 v0.41.0 cross-entry coordination source checkpoint (2026-11-02)
+
+- Source: Web Access Tenant/port shared claims, protected-only MCP Box leases,
+  tracked bounded CAS patch, updated standalone release helper inclusion.
+- Evidence: `bwphase2-1102` worktree from `780cdf3` + edits,
+  check_knowledge exit 0; 630 tests exit 0; guest CAS edit/readback exit 0,
+  stale original-SHA rerun exit 1 with no unintended change.
+- Unsupported here: Node/npm, so full `scripts/validate.py` exit 2;
+  require GitHub exact-SHA build/browser/packaging CI.
+- Installed Web/SSH/HTTP live multi-client race, root policy/DB
+  provisioning, 0.28.0->new-version upgrade and rollback, independent
+  old helper and external Provider bypass remain U. No host changed.
+- Preserve test Box and preexisting source; delete only task-owned
+  ephemeral CAS proof. Never auto-retry UNKNOWN remote writes.
