@@ -617,11 +617,21 @@ store.admin(generate_password_hash(password))
         old.update(phase="ready",host=host,port=port,server_key=key,managed_public_key=managed_public_key,
                    credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())
+        http_config=cfg.get("remote_mcp") or {}
+        http_enabled=http_config.get("enabled",True)
+        http_port=http_config.get("port",18844)
         print(json.dumps({"next_steps":{
             "client_setup":"boxweave client (no sudo)",
             "client_help":"boxweave client --help",
             "cli":"boxweave", "cli_help":"boxweave --help", "status":"boxweave status",
             "web_on_server":"http://127.0.0.1:"+str(web_port),
+            "http_mcp_local":("http://127.0.0.1:"+str(http_port)+"/mcp"
+                              if http_enabled else "disabled"),
+            "http_mcp_status":"boxweave http status",
+            "http_mcp_diagnostics":"sudo boxweave http doctor",
+            "http_mcp_public_config":"sudo boxweave http configure --public-url https://YOUR-TUNNEL-HOST",
+            "http_mcp_cloudflare_quick_tunnel":"cloudflared tunnel --url http://127.0.0.1:"+str(http_port),
+            "http_mcp_note":"Only loopback is enabled automatically. Public HTTPS is opt-in; configure the actual Quick Tunnel origin before connecting a hosted client.",
             "web_access":"Use a reviewed SSH tunnel; Web is loopback-only",
             "client_role":"Use your authorized Linux SSH/sudo login; not the boxweave service account",
             "admin_password_location":"/home/boxweave/boxweave/initial-admin-password",

@@ -402,5 +402,29 @@ class HostCliTests(unittest.TestCase):
                 host_cli.provenance_state()
 
 
+class RemoteHttpHostCommandTests(unittest.TestCase):
+    def test_root_configure_runs_non_root_in_installed_directory(self):
+        from types import SimpleNamespace
+        with patch.object(host_cli.os, "geteuid", return_value=0), \
+             patch.object(host_cli.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=1010)), \
+             patch.object(host_cli.subprocess, "run",
+                          return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertEqual(host_cli.main(
+                ["http", "configure", "--public-url",
+                 "https://test.example.com"]), 0)
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[:4], ["runuser", "-u", "boxweave", "--"])
+            self.assertIn("XDG_RUNTIME_DIR=/run/user/1010", argv)
+            self.assertIn("bwmini.http_manage", argv)
+            self.assertEqual(run.call_args.kwargs["cwd"],
+                             "/home/boxweave/boxweave/current")
+
+    def test_unprivileged_root_service_commands_are_not_executed(self):
+        with patch.object(host_cli.os, "geteuid", return_value=1000), \
+             patch.object(host_cli.subprocess, "run") as run:
+            self.assertEqual(host_cli.main(["http", "restart"]), 2)
+            run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

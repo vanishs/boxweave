@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source and published stable version: 0.26.9.** The default installer selects the source-bound `v0.26.9` Release after passing full CI and a real v0.26.8→v0.26.9 upgrade, 10/10 doctor checks and nested application-owned selftest after upgrade. v0.26.9 atomically rotates OAuth refresh credentials and exchanges one-time authorization codes so partial issuance cannot revoke or consume usable credentials without successfully committing the new token pair; this was independently reproduced and retested on installed v0.26.8 and v0.26.9. The 0.26.8 maintenance release fixes D4 service status reporting for systemctl nonzero state exits and makes public-key test fixtures independent of permissive developer umask; production SSH key validation is unchanged. This release includes durable OAuth administrator-denial rate limiting and bounded SSH trust-readiness retry for the fixed selftest hello (no lifecycle-write retry). OAuth authorization-denial attempts persist across failed transactions; selftest retries only classified transient SSH trust-readiness failures for its fixed hello check, never lifecycle writes. Real Box testing confirmed the v0.26.2-to-v0.26.4 and v0.21.3-to-v0.26.4 upgrade paths and corrected HTTP 404/405; outer-host nesting on the properly configured new Box passed a real Ubuntu child launch and Python execution; external clients and host-hop SSH remain separately unverified. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. Owner-authorized testing on host v0.26.4 demonstrated a new nesting-enabled Box creating an inner Ubuntu container and executing Python with exit code 0; the v0.26.5 change concerns **honest partial success reporting**, not changing Incus permissions. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
+**Current source version: 0.27.0; published stable version: 0.26.9.** The default installer selects the source-bound `v0.26.9` Release after passing full CI and a real v0.26.8→v0.26.9 upgrade, 10/10 doctor checks and nested application-owned selftest after upgrade. v0.26.9 atomically rotates OAuth refresh credentials and exchanges one-time authorization codes so partial issuance cannot revoke or consume usable credentials without successfully committing the new token pair; this was independently reproduced and retested on installed v0.26.8 and v0.26.9. The 0.26.8 maintenance release fixes D4 service status reporting for systemctl nonzero state exits and makes public-key test fixtures independent of permissive developer umask; production SSH key validation is unchanged. This release includes durable OAuth administrator-denial rate limiting and bounded SSH trust-readiness retry for the fixed selftest hello (no lifecycle-write retry). OAuth authorization-denial attempts persist across failed transactions; selftest retries only classified transient SSH trust-readiness failures for its fixed hello check, never lifecycle writes. Real Box testing confirmed the v0.26.2-to-v0.26.4 and v0.21.3-to-v0.26.4 upgrade paths and corrected HTTP 404/405; outer-host nesting on the properly configured new Box passed a real Ubuntu child launch and Python execution; external clients and host-hop SSH remain separately unverified. A successful GitHub CI/Release does not by itself certify installation on every host; real SSH and nesting acceptance remains tracked separately. Owner-authorized testing on host v0.26.4 demonstrated a new nesting-enabled Box creating an inner Ubuntu container and executing Python with exit code 0; the v0.26.5 change concerns **honest partial success reporting**, not changing Incus permissions. The default streamed installer verifies published Release metadata, the pinned source commit, and installation helper SHA-256 before execution. A published Release does not by itself certify every fresh-host deployment.
 
 ## Install (Ubuntu 24.04+ recommended)
 
@@ -201,7 +201,28 @@ These commands do not automatically install missing components or modify the hos
 
 Container-host setup: see [nesting configuration and restart guidance](docs/NESTING.md).
 
-## Remote HTTP(S) MCP (v0.24.4)
+## Remote HTTP(S) MCP (v0.27.0 quick-start source)
+
+The installed application now starts a **managed authenticated loopback-only HTTP MCP**
+service on `http://127.0.0.1:18844/mcp`, unless `remote_mcp.enabled=false`
+was explicitly configured. This is not an anonymous endpoint or a public listener.
+The local `http://127.0.0.1:18844/` page explains its purpose.
+
+```sh
+boxweave http status
+sudo boxweave http doctor
+# Install cloudflared separately; run the temporary tunnel yourself:
+cloudflared tunnel --url http://127.0.0.1:18844
+# After cloudflared prints an HTTPS hostname:
+sudo boxweave http configure --public-url https://YOUR-HOST.trycloudflare.com
+# Paste https://YOUR-HOST.trycloudflare.com/mcp into the ChatGPT MCP client.
+```
+
+Tunnel creation never runs automatically. An unchanging hostname is recommended
+for reliable ongoing OAuth connections; Quick Tunnel addresses can change.
+See [HTTP MCP quick-start design](docs/design/HTTP_MCP_QUICKSTART.md),
+[operator guide](docs/REMOTE_MCP.md), and [verification](docs/verification/REMOTE_MCP_TEST_PLAN.md).
+
 
 The opt-in Streamable HTTP MCP endpoint supports local-admin-consented OAuth, API Bearer Tokens, and one-field credential URLs while preserving SSH/stdio. The separate HTTP listener is **loopback-only**; choose an independently configured HTTPS reverse proxy, external Tunnel, or explicitly invoked Caddy runner. No SSH profiles are automatically migrated. See [remote MCP configuration and known limits](docs/REMOTE_MCP.md). Reused nested-Box and independent loopback TLS-proxy tests are recorded. On 2026-11-01, an owner-operated Cloudflare Quick Tunnel and hosted ChatGPT OAuth reached real MCP container listings after a process-local browser-header hotfix; v0.24.2 makes that fix permanent in source; v0.24.3 additionally preserves those headers through managed Caddy and reports bounded local TCP status in Web. The v0.24.5 package has not been deployed/tested on that live host; production HTTPS and other clients still require separate acceptance.
 

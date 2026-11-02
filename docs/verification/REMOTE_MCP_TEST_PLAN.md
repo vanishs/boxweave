@@ -84,3 +84,9 @@ No external TLS domain, login callback in a real hosted ChatGPT/Claude/Cursor ac
 **Fixture tests:** `tests/test_remote_mcp.py` checks absence of proxy header override, original OAuth valid/hostile/null Origin cases and redirect CSP, Web port success/failure with patched loopback socket, separate browser admin CSRF and credential revocation. GitHub Actions verify and candidate ZIP/offline-wheel smoke must run against the final commit before source acceptance is reported as T. Release job verification and later stable promotion are distinct gates.
 
 **Still unverified for 0.24.3:** Real Caddy TLS certificates/port ownership, public HTTPS origin via Caddy, source-to-installed upgrade, exact running process, newly installed ChatGPT browser consent and write access, independent Codex/Claude/Cursor OAuth clients, one-field capability URL compatibility, and a managed process auto-start/recovery. The 2026-11-01 temporary browser hotfix plus hosted ChatGPT list success is prior-process E/L evidence, not a 0.24.3 deployment result.
+
+## v0.27.0 default local service and explicit public configuration
+
+**Design**: [HTTP MCP quick-start](../design/HTTP_MCP_QUICKSTART.md), QH-01..QH-07. New tests cover default loopback resource, rejected anonymous/foreign Origin/Host, explicit disable, port conflict, user-systemd unit generation, private config+runtime transactional public URL update and restart rollback. Run the full GitHub PR/main check; record SHA and actual result. No tests involving Cloudflare credentials, real public TLS or production config are implicit.
+
+**Real installation gate still required**: a separately authorized installed v0.26.x → v0.27.0 upgrade, a fresh install, both HTTP and SSH authenticated tools/list, OAuth browser callback after configure, a failed port-conflict path, opt-out, reboot auto-start and update/recovery. A fixture/local TCP check is not real installed evidence. Keep status U until actually observed.

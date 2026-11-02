@@ -59,6 +59,38 @@ class RemoteTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 12)
         self.assertIsNotNone(Store(self.store.path))
 
+    def test_default_loopback_discovery_and_no_anonymous_access(self):
+        from bwmini.remote_mcp import validate_remote_config
+        config = validate_remote_config(None)
+        self.assertEqual(config["port"], 18844)
+        self.assertNotIn("public_url", config)
+        client = create_remote_app(self.store, config, dispatch=self.dispatch,
+                                   clock=lambda: self.now[0]).test_client()
+        metadata = client.get("/.well-known/oauth-protected-resource/mcp").json
+        self.assertEqual(metadata["resource"], "http://127.0.0.1:18844/mcp")
+        self.assertEqual(metadata["authorization_servers"], ["http://127.0.0.1:18844"])
+        self.assertEqual(client.get("/").status_code, 200)
+        self.assertEqual(client.post("/mcp", json=REQ,
+                         headers={"Accept": ACCEPT}).status_code, 401)
+        self.assertEqual(client.post("/mcp", json=REQ,
+                         headers={"Origin": "https://evil.test",
+                                  "Accept": ACCEPT}).status_code, 403)
+        self.assertEqual(client.get("/.well-known/oauth-protected-resource/mcp",
+                         headers={"Host": "evil.test"}).status_code, 403)
+
+    def test_default_remote_config_explicit_disable_and_bad_public_origin(self):
+        from bwmini.remote_mcp import validate_remote_config
+        self.assertEqual(validate_remote_config({"port": 18845})["port"], 18845)
+        with self.assertRaisesRegex(ValueError, "REMOTE_NOT_ENABLED"):
+            validate_remote_config({"enabled": False})
+        for config in ({"public_url": "http://mcp.example.test"},
+                       {"public_url": "https://example.test/mcp"},
+                       {"allowed_origins": ["null"]},
+                       {"allowed_origins": ["https://example.test/path"]},
+                       {"enabled": "true"}):
+            with self.subTest(config=config), self.assertRaises(ValueError):
+                validate_remote_config(config)
+
     def test_metadata_and_no_anonymous_tools(self):
         data = self.client.get("/.well-known/oauth-protected-resource/mcp").json
         self.assertEqual(data["resource"], RESOURCE)
@@ -342,6 +374,8 @@ class RemoteTests(unittest.TestCase):
 
     def test_caddyfile_requires_installed_caddy_and_canonical_host(self):
         remote = {"enabled": True, "public_url": ORIGIN, "port": 18740}
+        with self.assertRaisesRegex(ValueError, "REMOTE_PUBLIC_URL_REQUIRED_FOR_TLS"):
+            caddyfile({"enabled": True, "port": 18740})
         with self.assertRaises(ValueError):
             caddyfile(remote, caddy=str(Path(self.tmp.name) / "missing-caddy"))
         with self.assertRaises(ValueError):

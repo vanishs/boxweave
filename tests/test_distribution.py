@@ -54,6 +54,43 @@ class DistributionTests(unittest.TestCase):
   (self.prefix/'config.json').write_text(json.dumps(saved))
   d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
   self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['lifecycle'],{'allowed_names':['demo-1']})
+ def test_default_remote_runtime_is_loopback_and_explicit_opt_out(self):
+  self.install()
+  runtime=json.loads((self.prefix/'runtime.json').read_text())
+  self.assertEqual(runtime['remote_mcp'],{'enabled':True,'port':18844,'allowed_origins':[]})
+  self.assertNotIn('remote_mcp',json.loads((self.prefix/'config.json').read_text()))
+  self.assertEqual(d.unit_text(self.prefix,self.prefix/'runtime.json','remote-mcp').decode().count('127.0.0.1'),0)
+  # An explicit disable must not produce an enabled remote unit on activation.
+  self.assertEqual(d.config_read(self.config,self.prefix)[1].get('remote_mcp'),None)
+  c=self.settings|{'remote_mcp':{'enabled':False}}
+  self.config.write_text(json.dumps(c))
+  self.assertEqual(d.config_read(self.config,self.prefix)[1]['remote_mcp'],{'enabled':False})
+
+ def test_remote_port_conflict_and_insecure_public_url_fail_before_install(self):
+  for remote in ({'enabled':True,'port':18981},
+                 {'enabled':True,'port':18844,'public_url':'http://public.example.test'},
+                 {'enabled':True,'allowed_origins':['null']}):
+   self.config.write_text(json.dumps(self.settings|{'remote_mcp':remote}))
+   with self.subTest(remote=remote),self.assertRaises(d.InstallError):
+    self.install()
+   self.assertFalse(self.prefix.exists())
+
+ def test_legacy_runtime_only_remote_url_is_not_silently_lost(self):
+  self.install()
+  prior=json.loads((self.prefix/'runtime.json').read_text())
+  prior['remote_mcp']['public_url']='https://custom.example.test'
+  (self.prefix/'runtime.json').write_text(json.dumps(prior))
+  with self.assertRaisesRegex(d.InstallError,'OPERATOR_REMOTE_SETTINGS_MOVE_TO_CONFIG_JSON'):
+   d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['remote_mcp']['public_url'],
+                   'https://custom.example.test')
+  saved=json.loads((self.prefix/'config.json').read_text())
+  saved['remote_mcp']=prior['remote_mcp']
+  (self.prefix/'config.json').write_text(json.dumps(saved))
+  d.install(self.archive,self.info['sha256'],self.prefix,None,quiesced=True)
+  self.assertEqual(json.loads((self.prefix/'runtime.json').read_text())['remote_mcp']['public_url'],
+                   'https://custom.example.test')
+
  def test_config_conflict_refuses_publication(self):
   self.install();before=os.readlink(self.prefix/'current');self.config.write_text(json.dumps(self.settings|{'port':18983}))
   with self.assertRaisesRegex(d.InstallError,'CONFIG_CONFLICT'):self.install()
