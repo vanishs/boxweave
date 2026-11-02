@@ -39,6 +39,14 @@ export function RemoteMCP({api}:{api:API}){
         External HTTPS connectivity has <strong>not been verified</strong> by
         this page. Confirm DNS, TLS and an authenticated MCP initialize call
         through your reverse proxy or tunnel.</p>
+      {!info.public_url&&<div className="review">
+        <p><strong>Local-only HTTP MCP:</strong> the configured URL above is a
+          loopback address, not a usable hosted ChatGPT endpoint.</p>
+        <p>For temporary HTTPS access, run <code>cloudflared tunnel --url http://127.0.0.1:{info.port}</code>
+          {' '}on the server, then execute{' '}
+          <code>sudo boxweave http configure --public-url https://YOUR-HOST.trycloudflare.com</code>.
+          Public access remains disabled until you do this yourself.</p>
+      </div>}
       <p><strong>OAuth:</strong> In your MCP client, register the above URL,
         choose OAuth, then sign in using the existing BoxWeave administrator password
         and explicitly authorize the connection.</p>
