@@ -1,8 +1,8 @@
 # Architecture Consolidation Gate — source audit and insertion before Phase 2
 
-**Status:** DESIGN / source audit only; owner requested an intermediate
-architecture-review stage. No refactor, install, service, Provider or Box write
-has been performed. **Source baseline:** `main` `0a3c0b524cfb6ec33a3d03d81d6f29f1549cecac`,
+**Status:** ARCH-0A/B/C source and fixture tests PASS; owner requested an intermediate
+architecture-review stage. The narrow contract refactor is implemented and CI-tested;
+no installed host, Provider or Box write has been performed. **Source baseline:** `main` `0a3c0b524cfb6ec33a3d03d81d6f29f1549cecac`,
 v0.29.0. No claim of installed v0.29.0 validation.
 
 **Global plan:** [Feature roadmap](FEATURE_ROADMAP_MASTER.md), especially
@@ -84,6 +84,10 @@ while pure new internals move into reviewed subpackages. Avoid a new
 framework, universal service locator, broad `utils.py`, event bus or
 generic provider plugin system.
 
+## Execution ledger — owner-authorized staged development
+
+ARCH-0A boundary inventory: [executable-entry and mutator matrix](../verification/ARCH0_BOUNDARY_INVENTORY.md). Source S audited; fixture CI remains pending on the candidate SHA. ARCH-0B source implementation targets full Provider/backend/project identity fingerprints, independently packaged standalone Gateway helper imports and pre-provisioned same-UID coordinator SQLite safety; there is no enabled dispatch path or installed provisioning. The design deliberately excludes a cross-UID database grant, separate daemon or implicit migration. ARCH-0C requires its own commit and CI; no live/host acceptance is implied.
+
 ## 4. Proposed ARCH-0 implementation batches
 
 | Slice | Work | Acceptance before next slice |
@@ -126,3 +130,43 @@ A5/A6 extraction may be partial when safe façades and dependency
 direction are documented. A7/A8 are later cleanup, not blockers.
 Record deferred work instead of turning architecture cleanup into an
 unbounded rewrite.
+
+## ARCH-0B source implementation contract (candidate; CI pending)
+
+- `coordination_runtime.canonical_box_identity` is now fail-closed without **verified Provider/backend/project scope**. The Web Target carries these fields; Gateway must receive them from a host-owned observation boundary, never MCP tool arguments. In v0.29.0 the root registry only proves default-project Incus target/name/creation; **do not claim general Provider identity parity until an installed gateway scope is proved**.
+- `private_connection` validates its private parent plus ancestor traversal, inode ownership/permissions, database schema, sidecars and no-symlink policy, and never auto-creates an active app/host DB. The default single `boxweave` Unix user is an intentional precondition, not a grant to other SSH users or a silent upgrade.
+- Both coordination files are added to the **reviewed immutable root-helper artifact set** and offline manifest as siblings, while preserving `mcp_gate.py`, `host_cli.py`, root `python3 -I`, HTTP `python -E -s` and legacy APIs.
+- New identity, missing scope, tamper/schema, unsafe parent/sidecar and standalone-sibling smoke fixtures must pass, alongside the legacy online manifest tests. Actual installer/user permissions and original guest writes **L=U**.
+
+**ARCH-0B acceptance:** source/fixture CI only. Do not enable mutating coordinator or promote stable installer as part of this internal contract.
+
+## ARCH-0C scoped extraction and delivery gates
+
+- `wire_results.py` owns pure `text/execution` MCP envelopes;
+  `provider.text/execution` remain compatible public imports, with
+  `access_provider`, `agent_box`, `auto_sleep`, `box_debug` using pure parsing.
+- `access_contract.py` and `lifecycle_contract.py` own configuration
+  checks and resize vocabulary. Provider initialization no longer
+  imports Access or instantiates Lifecycle just to validate. Public
+  Access/Lifecycle imports continue to work.
+- App receipts, Store schema v12, Web routes, gateway tool calls,
+  root installer scripts and generated client templates are unchanged.
+- `tests/test_arch0_contracts.py` checks original aliases, malformed
+  and valid execution envelopes, options, validator rejections and
+  import-dependency direction.
+
+## Per-slice acceptance
+
+| Slice | CI evidence | Remaining scope |
+| --- | --- | --- |
+| ARCH-0A | [41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895) PASS at `107861cc` | Source map only |
+| ARCH-0B | [41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116) PASS at `d090477c` | No installed storage/provision |
+| ARCH-0C | [41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731) PASS at `3ad92b45` | No installed adapter migration |
+| Live test | U / not run | SSH+HTTP+Web real host/user/Box integration not claimed |
+
+**Source/fixture exit:** Full ARCH-0A/B/C CI is PASS. New immutable
+v0.30.0 publication evidence is recorded after main merge. Actual shared mutation dispatch,
+R-02 task recovery, R-04 lease integration and P1-B2 remain distinct
+feature work with real-host checkpoints.
+
+**Decision:** ARCH-0 contracts, module-boundary extraction and fixture regression are ACCEPTED at source level. ARCH-0 does not replace P1-B2; actual shared coordinator provisioning, app/Web/Gateway dispatch integration, live mixed-version upgrade and rollback remain separate U gates. The stable installer pin is unchanged.

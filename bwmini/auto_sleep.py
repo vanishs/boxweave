@@ -11,7 +11,7 @@ def validate(args):
 
 def execute(service, target, args):
     validate(args)
-    from .provider import text
+    from .wire_results import text
     provider=service.provider
     if provider.mode!="mcp":raise Fault("LIVE_PROVIDER_REQUIRED")
     with provider.session(timeout=30) as m:

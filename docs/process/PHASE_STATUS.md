@@ -37,3 +37,13 @@ added to the [roadmap](../design/FEATURE_ROADMAP_MASTER.md) after
 P1-A/P1-B1 and before P1-B2. This does not authorize an indiscriminate
 rewrite, host installation, Provider mutation or release promotion.
 ARCH-0 implementation and installed acceptance remain pending.
+
+## ARCH-0 A/B/C source delivery acceptance
+
+Owner explicitly authorized implementing ARCH-0 in staged tested commits.
+ARCH-0A [CI 41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895),
+ARCH-0B [CI 41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116),
+ARCH-0C [CI 41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731):
+full fixture CI PASS. [ARCH-0 source acceptance](../design/ARCHITECTURE_CONSOLIDATION_GATE.md).
+No installed service, Provider privilege, Box write or host migration is proved.
+P1-B2 and R-02/R-04 dispatch integration remain NOT IMPLEMENTED.
