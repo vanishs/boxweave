@@ -151,6 +151,58 @@ class InstallCompletionTextTests(unittest.TestCase):
         self.assertNotRegex(summary, r"(?m)^\\s*[1-9]\\.\\s")
 
 
+class HttpMcpInstallSummaryTests(unittest.TestCase):
+    def test_default_http_mcp_quickstart_is_in_human_success_screen(self):
+        text = online.installation_summary(18640, "0.27.2")
+        self.assertIn("HTTP MCP (authenticated, loopback only)", text)
+        self.assertIn("Local MCP URL: http://127.0.0.1:18844/mcp", text)
+        self.assertIn("Local info page: http://127.0.0.1:18844/", text)
+        self.assertIn("boxweave http status", text)
+        self.assertIn("sudo boxweave http doctor", text)
+        self.assertIn("cloudflared tunnel --url http://127.0.0.1:18844", text)
+        self.assertIn("sudo boxweave http configure --public-url", text)
+        self.assertIn("https://YOUR_HOST.trycloudflare.com/mcp", text)
+        self.assertIn("Finish OAuth", text)
+        self.assertIn("NOT enabled by default", text)
+        self.assertLess(text.index("HTTP MCP (authenticated"), text.index("Optional operations:"))
+        self.assertIn("Configure your client", text)
+        self.assertIn("Web dashboard (server-local only)", text)
+
+    def test_custom_local_port_propagates_into_tunnel_and_url(self):
+        text = online.installation_summary(18640, "0.27.2",
+                                           {"enabled": True, "port": 19984})
+        self.assertIn("http://127.0.0.1:19984/mcp", text)
+        self.assertIn("cloudflared tunnel --url http://127.0.0.1:19984", text)
+        self.assertNotIn("18844", text)
+
+    def test_preconfigured_https_displays_exact_client_mcp_url_without_tunnel_instructions(self):
+        text = online.installation_summary(18640, "0.27.2",
+                                           {"enabled": True, "port": 18844,
+                                            "public_url": "https://mcp.example.test"})
+        self.assertIn("Configured public MCP URL: https://mcp.example.test/mcp", text)
+        self.assertIn("Public HTTPS/Tunnel availability is NOT verified", text)
+        self.assertNotIn("cloudflared tunnel --url", text)
+        self.assertNotIn("YOUR_HOST.trycloudflare.com", text)
+        self.assertNotIn("https://mcp.example.test/mcp/mcp", text)
+
+    def test_explicitly_disabled_does_not_suggest_running_or_exposing_mcp(self):
+        text = online.installation_summary(18640, "0.27.2",
+                                           {"enabled": False, "port": 18844})
+        self.assertIn("Disabled by remote_mcp.enabled=false", text)
+        self.assertNotIn("Local MCP URL:", text)
+        self.assertNotIn("cloudflared tunnel", text)
+        self.assertNotIn("boxweave http restart", text)
+        self.assertNotIn("sudo boxweave http configure --public-url", text)
+
+    def test_version_validation_and_no_implied_live_success(self):
+        for version in ("0.27.2\\nTOKEN", "0.27.2-rc1", "invalid"):
+            with self.subTest(version=version), self.assertRaises(online.Failure):
+                online.installation_summary(18640, version)
+        output = online.installation_summary(18640, "0.27.2")
+        self.assertIn("installation does not prove live reachability", output)
+        self.assertNotIn("initial-admin-password:", output)
+
+
 class InstallProvenanceTests(unittest.TestCase):
     def test_provenance_is_public_shape_without_secrets(self):
         old = {"source": "a" * 40, "version": "0.21.0", "provider_mode": "standalone",
