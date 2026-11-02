@@ -284,6 +284,7 @@ configuration and service control to the non-root application account.
 - `GET /api/boxes/<logical>/agent-box`
 - `GET /api/boxes/<logical>/agent-box/resource`
 - `GET /api/boxes/<logical>/debug-summary`
+- `GET /api/boxes/<logical>/environment`
 - `GET /api/environment-operations`
 - `GET /api/environment-operations/<oid>`
 - `GET /api/environments`
