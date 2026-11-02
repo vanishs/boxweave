@@ -222,6 +222,25 @@ class Lifecycle:
                            (job["logical"],encoded,job["id"]))
             if state=="succeeded" and job["action"]=="delete":
                 db.execute("UPDATE managed_environments SET deleted=1 WHERE logical=? AND target=?",(job["logical"],encoded))
+        claims=getattr(self,"shared_claims",None)
+        if claims is not None and state in ("succeeded","failed","unknown"):
+            # Release only after the authoritative app receipt is durable
+            # AND its Provider observation proves the operation terminal.
+            verified=(state=="succeeded" and job["acknowledged"] and
+                      isinstance(result,dict) and
+                      result.get("outcome")=="observed_desired_state" and
+                      (job["action"]!="resize" or result.get("verification")=="observed") and
+                      not (job["action"]=="create" and
+                           "_nesting" in json.loads(job["spec"])))
+            try:
+                if verified:
+                    claims.observed_terminal(job["id"],"environment_"+job["id"])
+                else:
+                    claims.unknown(job["id"])
+            except Exception:
+                # A missing/mismatched receipt cannot release the original
+                # resource. UNKNOWN or an accepted claim remains held.
+                pass
 
     def recover(self):
         with self.store.db() as db:
@@ -348,9 +367,28 @@ class Lifecycle:
                 if not self.matches_spec(json.loads(job["spec"])):
                     raise Fault("CONFIG_CHANGED")
                 target=Target(**json.loads(job["target"])) if job["target"] else None
-                self.network_check(json.loads(job["spec"]))
+                current_spec=json.loads(job["spec"])
+                self.network_check(current_spec)
                 self.preflight(job["action"],job["logical"],target,job["expected_state"])
-                self.provider.lifecycle_mutate(job["action"],job["logical"],json.loads(job["spec"]),job["deadline"]-self.clock())
+                claims=getattr(self,"shared_claims",None)
+                if claims is not None:
+                    from .operation_coordination import CoordinationFault
+                    try:
+                        claims.acquire_environment(
+                            job["id"],"environment_"+job["id"],
+                            vars(self.provider).get("config",{}),
+                            job["action"],job["logical"],target,current_spec)
+                        claims.dispatch_intent(job["id"])
+                    except CoordinationFault as error:
+                        try:
+                            claims.cancel_before_dispatch(job["id"])
+                        except CoordinationFault:
+                            pass
+                        # No Provider operation was sent. Original action is
+                        # not retried; retain a conservative shared claim if
+                        # its dispatch intent was somehow already committed.
+                        raise Fault(error.code) from None
+                self.provider.lifecycle_mutate(job["action"],job["logical"],current_spec,job["deadline"]-self.clock())
                 self.save(job,"observing","submitted","ACKNOWLEDGED",acknowledged=1)
                 diagnostics.emit(self.store, component="lifecycle", phase="submitted", event_type="acknowledged",
                                  outcome="passed", code="ACKNOWLEDGED", trace_id=trace,
@@ -359,7 +397,12 @@ class Lifecycle:
             except Fault as error:
                 if error.code=="STATE_UNAVAILABLE":
                     raise
-                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED"}
+                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED",
+                       "COORDINATION_UNAVAILABLE","COORDINATION_STORAGE_UNSAFE",
+                       "COORDINATION_SCHEMA_UNSUPPORTED","COORDINATION_SCOPE_UNVERIFIED",
+                       "COORDINATION_SCOPE_MISMATCH","COORDINATION_IDENTITY_INVALID",
+                       "COORDINATION_RESOURCE_INVALID","RESOURCE_BUSY",
+                       "RECOVERY_REQUIRED","OPERATION_EXISTS"}
                 classified = error.code in known
                 self.save(job,"failed" if classified else "unknown","not_submitted" if classified else "submitted",
                           error.code if classified else "OUTCOME_UNKNOWN")

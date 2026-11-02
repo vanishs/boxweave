@@ -23,6 +23,7 @@ class Service:
         self.budget = min(600, max(1, budget))
         from .lifecycle import Lifecycle
         self.lifecycle = Lifecycle(store,provider,clock)
+        self.lifecycle.shared_claims = shared_claims
         from .access import Access
         self.access = Access(self)
         self.lifecycle.network = self.access
