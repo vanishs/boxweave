@@ -1,5 +1,7 @@
 # Multi-Agent Box Lease and Operation Conflict Protection v1
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — R-04 multi-Agent resource coordination. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **Status:** DESIGN ONLY / DEVELOPMENT HANDOFF — NOT IMPLEMENTED, NOT TESTED, NOT DEPLOYED.
 **Owner decision:** Multiple independent projects and Agents may use the same existing BoxWeave controller. Prefer **multiple Boxes** for concurrent development; no Git worktree management and no Agent runner/delegation feature. On an actual resource conflict, **reject immediately (no automatic queue)**. Keep the feature small because simultaneous conflicting Agents are uncommon.
 **Source inspection:** BoxWeave `main` v0.27.2 at `3fd31e19844ae88ff0a7f73218261584d5729415`, 2026-11-01. Runtime behavior and all proposed changes below require later implementation and exact-version acceptance.
