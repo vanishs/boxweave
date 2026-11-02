@@ -27,10 +27,10 @@ This master page owns the **overall relationship, provisional priority and navig
 | **R-04 Multi-Agent collision protection** — DESIGN, owner-selected | Multiple projects/Agents can share the controller; unrelated Boxes run in parallel; same-resource modifications fail fast | Optional 10-minute Box lease + heartbeat/renew, automatic expiry when safe, durable operation claim on uncertain dispatch; no queue or Agent runner | [Multi-Agent lease/conflict v1](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md) |
 
 **Cross-track design consistency:**
-- R-01 code changes and `connect(exec)` must not bypass R-04 mutation conflict checks once conflict protection is activated.
-- R-02's durable uncertainty contract should be reused by R-04 operation claims. Lease expiry is not proof that a remotely dispatched command ended; do not create two contradictory `UNKNOWN` systems.
-- R-03 needs a safe *read* milestone first; no automatic Box creation, lifecycle writes, privileged diagnostics or new public endpoint merely for onboarding.
-- Deliver and accept each slice independently; do not make all four features one large release gate.
+- R-01 *read-only* discovery/file reads can ship without R-02/R-04. Its **new mutating** operations must join the R-04 protection boundary when that boundary is enabled, and use the R-02 tracked path when offering reconnect recovery. Existing `connect(exec)` remains available but must not be falsely described as deduplicated.
+- R-02 provides idempotent tracked requests and known-result lookup. R-04 provides **resource coordination**, not another task-runner or result store. A thin shared operation claim/dispatch-intent contract links their records, while preserving separate app and gateway security principals.
+- R-03 is independent of all of them: first use proves a safe authenticated MCP read, not task persistence, file mutation, leasing or new public network infrastructure.
+- Deliver and accept small independent slices; no release must bundle all four projects.
 
 ## 3. Historical Box environment plan: E0–E4 (all DESIGN, candidate)
 
@@ -40,9 +40,9 @@ The 2026-10-30 [environment master](BOX_ENVIRONMENT_PROPOSAL.md) and its five im
 | --- | --- | --- | --- |
 | **E0** | Read-only authenticated Provider capability / authority / identity discovery for exact managed Box snapshots/clones | First prove the *deployed* Provider supports typed, authorized operations; no direct-Incus fallback | [E0 capability boundary](BOX_ENV_E0_CAPABILITIES.md) |
 | **E1** | Bounded immutable Box environment fingerprint and before/after difference, useful for old/new Box comparison | Prefer external observations; do not require a functioning in-Box diagnostic agent; E0 capability checks first | [E1 fingerprints](BOX_ENV_E1_FINGERPRINTS.md) |
-| **E2** | List, create and delete snapshots of stopped, managed Boxes, with exact source identity and quotas | Only if E0 proves an authenticated Provider snapshot contract; pending/unknown lifecycle conflicts must block | [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md) |
+| **E2** | List, create and delete snapshots of stopped, managed Boxes, with exact source identity and quotas | E0 authenticated Provider snapshot contract and shared conflict guard; E1 capture is **optional** metadata, not a prerequisite | [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md) |
 | **E3** | Explicitly planned and confirmed restore from an exact snapshot to the same stopped Box | Requires E2 and clear coverage of attached/custom volumes; never promise a whole-host rollback | [E3 restore](BOX_ENV_E3_RESTORE.md) |
-| **E4** | Clone an exact stopped Box or observed snapshot as a *new* independently registered managed Box | Requires verified Provider clone + new identity/rekey, network/SSH/tenant registration and safe quarantine of partial clones; not a raw `incus copy` shortcut | [E4 clone](BOX_ENV_E4_CLONE.md) |
+| **E4** | Clone an exact stopped Box or observed snapshot as a *new* independently registered managed Box | E0 verified Provider clone/rekey contract; E2 is required **only for snapshot-source clone**, not direct stopped-instance clone; new identity, network/SSH/tenant registration and quarantine still mandatory | [E4 clone](BOX_ENV_E4_CLONE.md) |
 
 **Owner decision still required:** whether to add E0–E4 to product scope. The sensible first step is a bounded E0 capability audit, *not* implementation of all five. E1 may be useful even when snapshot/clone is unsupported, provided only observed metadata is advertised. E2/E3/E4 must independently stop at `unsupported` when the upstream contract is missing.
 
@@ -69,27 +69,61 @@ These are **not** additional automatic work packages. They are candidates or par
 - D0–D2 and the selected D3/D4 implementation are not hypothetical proposals. Current exact-runtime D4 positive and full external transports remain separate acceptance questions. [Diagnostics master](DIAGNOSTICS_D3_D4_MASTER.md), [feature matrix](../verification/FEATURE_MATRIX.md).
 - Remote HTTP MCP, OAuth, bearer and credential-URL modes exist in source; user-facing guided first-use is the new R-03 design, and actual externally reachable client integration still needs version-specific evidence. [Remote master](REMOTE_MCP_MASTER.md), [R-03](FIRST_USE_ONBOARDING_V1.md).
 
-## 5. Proposed dependency/priority map (nonbinding)
+## 5. Integration review: conflicts, reuse and corrected dependencies (2026-11-01)
+
+This section resolves contradictions among the previously independent handoffs; it is **planning guidance, not a new approved implementation**. Implementing Agents must follow both the local child acceptance matrix and the shared gates below.
+
+### 5.1 Integration decisions / conflict register
+
+| ID | Overlap or conflict | Resolution (minimal shared contract) | Required child alignment |
+| --- | --- | --- | --- |
+| **INT-01 — R-02 vs R-04 persistence** | R-02 asks for gateway-owned task receipts and dispatch-intent; R-04 asks for cross-SSH/HTTP/Web shared operation claims/unknown recovery. Independent dispatch state machines could disagree after a crash. | **One authoritative, minimal resource-operation claim/dispatch-intent boundary** for mutations that are under conflict protection. R-02 retains its gateway-private request-key/result store; Web/app retains existing receipts; join using opaque operation ID and observed terminal evidence. Do not duplicate business receipts or share private outputs. | [R-02](MCP_TASK_RELIABILITY_R1.md), [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md) |
+| **INT-02 — R-01 vs R-02 execution API** | R-01 proposes `boxweave_box_exec` via `connect(exec)`; R-02 proposes `boxweave_task_submit(operation=exec)`. Two independently dispatched exec engines would create ambiguous tracking and security semantics. | One internal approved `connect(exec)` execution adapter. Keep legacy `connect`; first ship R-01 safe reads. Prefer **one tracked execution entry** from R-02 for durable replies; R-01 `boxweave_box_exec` is a possible *alias/facade only*, not a second executor. Defer/omit it if it adds no user benefit. | [R-01](BOX_OPERATION_INTERFACE_V1.md), [R-02](MCP_TASK_RELIABILITY_R1.md) |
+| **INT-03 — R-04 vs E0/E2/E3/E4 resource locks** | E0–E4 envisage separate source/destination locks, while R-04 already designs Box/name/Tenant/port claims. Parallel implementations could race or lock in opposite orders. | Use the same canonical Box-incarnation/name/shared-resource conflict vocabulary and one atomic claim-acquisition strategy **if R-04 is delivered**. E0 read-only discovery does not wait for it; E2/E3/E4 may not ship mutations without an equivalent cross-entry guard. Do not hold SQLite locks across remote calls. | [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md), [E0](BOX_ENV_E0_CAPABILITIES.md), [E2](BOX_ENV_E2_SNAPSHOTS.md), [environment parent](BOX_ENVIRONMENT_PROPOSAL.md) |
+| **INT-04 — E1/E2/E4 artificial sequencing** | Environment parent previously made E1 mandatory for E2 and E2 mandatory for all E4, although child designs make fingerprint optional and only snapshot-source clone requires E2. | E0 capability audit -> **E1 independent read-only capture** or **E2 stopped-instance snapshots**. E3 needs E2. E4 direct-instance clone needs E0 proven clone/rekey, whereas E4 snapshot-source clone also needs E2. All writes require shared claims or verified equivalent. | [E0–E4 parent](BOX_ENVIRONMENT_PROPOSAL.md), [E4](BOX_ENV_E4_CLONE.md) |
+| **INT-05 — R-03 vs feature readiness** | First-use guide could accidentally require R-01/R-02/R-04, auto-create a Box, or label a local HTTP listener as an external connected Agent. | The standalone installer/onboarding gate is **authenticated `initialize` + `tools/list` + safe `list_containers` in the actual chosen client**. Expose advanced capabilities only as optional next steps. | [R-03](FIRST_USE_ONBOARDING_V1.md) |
+| **INT-06 — P-05/P-03 overlap and M0–M5 history** | Source bundle/file transport and Agent test workflow overlap Box file tools and historical M3/M4, tempting duplicate transfer daemons and a new orchestration service. | R-01 owns small Box read/edit interfaces; P-05 requires a separately proven large/binary transfer gap. Keep P-03 developer workflow, not an automatic execution product. Reuse source-implemented app-side M3/M4 where actually authorized and installed. | [R-01](BOX_OPERATION_INTERFACE_V1.md), [Agent deployment](../process/AGENT_TEST_DEPLOYMENT.md), [M0–M5 status](../process/MCP_M0_M5_SOURCE_PROGRESS.md) |
+
+### 5.2 Ownership, transaction and privilege boundaries
+
+- **Cross-entry coordination is hard, not a new server:** R-04 needs a protected minimal claim authority reachable by **only** the already authorized app and gateway principals. R-02's gateway task-result storage must not become readable by the Web worker, and gateway must not be granted broad app SQLite access. A narrowly reviewed coordination SQLite store or an existing safe mediation boundary is acceptable; one mega-database/daemon is not the goal.
+- **Single dispatch truth:** for protected mutations, acquire a short resource claim and durably mark dispatch intent **before sending any remote write**; link the resulting operation ID to the original R-02 or Web/app receipt. If writing either prerequisite fails, do not dispatch. Commit transactions before Provider/SSH calls. On a known result, persist its evidence then retire the claim; if the steps are interrupted, reconcile by the original receipt/target without replaying. Do not claim atomic distributed transactions between stores and Provider.
+- **Unknown vs lease expiry:** a 10-minute lease may expire after Agent disappearance, but an unresolved dispatched operation claim stays until observed/reviewed. Expiry alone never proves a guest process ended. A lost standalone legacy/untracked `connect(exec)` has no invented R-02 receipt; R-04 must label its protection coverage exactly and retain conservative uncertainty when it can observe dispatch intent.
+- **Security scope:** an Agent label or lease token is not independent authentication. Current single trusted operator and optional host-wide allowlist remain. Do not install an Agent in the Box, grant host shell authority, silently widen HTTP OAuth or assume client-specific RBAC.
+- **Protect actual dispatch routes:** SSH direct MCP, isolated HTTP MCP and the Web/app paths covered by the feature must check the same claims. A subset may be developed/tested first, but **do not advertise global protection until every covered mutator and bypass path is audited**. Untyped forwarded mutators require an explicit block or a documented nonprotected compatibility boundary; they cannot silently evade an active lease.
+
+### 5.3 Revised build order: independent slices, not one mega-release
 
 ```text
-LOW-FRICTION AGENT EXPERIENCE
-  R-03 first connection ───────────────> real authenticated read
-  R-01 Box operation contracts ─────────┐
-  R-02 durable MCP receipts/UNKNOWN ────┼──> R-04 Box/host conflict coordination
-                                       └──> optional P-05 transfer
-ENVIRONMENT RELIABILITY
-  E0 authorized Provider capabilities ──> E1 environment fingerprints
-                                      └──> E2 snapshots ──> E3 restore
-                                                      └──> E4 clone + identity/rekey
-LATER ONLY IF NEEDED
-  P-01 actual sleep/wake; P-02 approvals; P-06 monitoring; P-04 client RBAC
+Standalone first use:       R-03 (SSH/HTTPS guidance + real safe read)
+Standalone read-only:       R-01 BOI-0/BOI-1 read/capabilities
+                           E0 (if environment features selected) -> E1 fingerprint
+Shared mutation groundwork: INT-01 shared claim/dispatch contract + migration/security tests
+                           -> R-02 tracked task receipts/known results
+                           -> R-04 cross-entry conflict claims -> optional Box lease
+                           -> R-01 guarded edits / any E2-E4 writes (if selected)
+Environment branches:      E0 -> E2 snapshot -> E3 restore
+                            E0 -> E4 direct clone (Provider clone/rekey proven)
+                            E0 + E2 -> E4 snapshot-source clone
+                           E1 fingerprint remains optional for E2/E3/E4
+Later, only if needed:      P-01 sleep/wake, P-02 approvals, P-05 transfer, P-06 metrics,
+                           P-03 orchestration and P-04 per-client RBAC remain deferred
 ```
 
-**Suggested direction, not an approved release sequence:**
+The shared claim boundary can initially serve only a **tested, explicitly listed tool set**. R-02 may deliver standalone read-only task lookup sooner, but no mutating action may be declared safely coordinated until its particular dispatch path uses the shared boundary. R-04's default single-Agent behavior must remain unchanged except for real conflicts, and it does not require explicit Box leases for ordinary operations.
 
-1. Prioritize R-03, R-02 and R-01 as independent slices that reduce everyday Agent friction and uncertainty; implement R-04 minimally where conflict risk appears. Do not block the ordinary single-Agent path on an unnecessary lease UI.
-2. If the owner selects environment features, start with **E0 read-only Provider capability check**. E1 is an independently useful follow-on; commit to E2/E3/E4 only after provider support and safe identity handling are demonstrated.
-3. Do not build a general scheduler, agent execution service, DB-backed mega-framework or complete monitoring Web console merely because the old proposal named them.
+### 5.4 Joint acceptance tests (in addition to child tests)
+
+| ID | Scenario | Done gate |
+| --- | --- | --- |
+| **INT-T01** | Same exact Box: direct SSH exec, HTTP tracked exec, Web/app action race | Conflicting dispatches cannot both proceed through a claimed protected route; different Boxes remain parallel |
+| **INT-T02** | Gateway dies after dispatch intent; task receipt absent/partial, lease expires | Preserve conservative `UNKNOWN` claim, no automatic replay or unsafe takeover |
+| **INT-T03** | Result persisted, gateway dies before resource claim release | Correlate original receipt and observed target; clean up only after evidence, without re-dispatch |
+| **INT-T04** | E2 snapshot/restore or E4 clone races with Box stop/delete or same-name creation | Common canonical source/destination claims block collision; no separate incompatible lock namespace |
+| **INT-T05** | First SSH/HTTPS client connecting before any new BOI/MTR/MAL tool installed | Existing `list_containers` succeeds; no lease/setup prerequisites or fake external ready status |
+| **INT-T06** | Protected tool disabled/version mismatch, unknown forwarding, cross-principal DB access | Honest `unsupported/blocked/not_covered`, no policy bypass or broad app/receipt database access |
+
+Evidence classes and installed/current revision must follow the [verification queue](../verification/REMEDIATION_TEST_QUEUE.md); successful fixture tests alone are not live cross-client acceptance.
 
 ## 6. Explicitly declined or excluded paths
 
