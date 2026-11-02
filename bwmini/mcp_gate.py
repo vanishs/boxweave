@@ -13,7 +13,7 @@ except ImportError:
     import gate_diagnostics as gd
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.27.1"
+SERVER_INFO_VERSION = "0.27.2"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
