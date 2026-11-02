@@ -238,9 +238,11 @@ Each linked document is a **design/specification only; NOT IMPLEMENTED**. All fi
 | --- | --- | --- | --- |
 | **E0** | [Provider capability contract, identity and security preflight](BOX_ENV_E0_CAPABILITIES.md) | existing architecture | No real mutation; pin upstream capability or block write |
 | **E1** | [Environment fingerprint capture and deterministic diff](BOX_ENV_E1_FINGERPRINTS.md) | E0 read-only contract | Stable/volatile schema, no secrets, honest unknown |
-| **E2** | [Stopped-Box snapshot/catalog/create/delete](BOX_ENV_E2_SNAPSHOTS.md) | E0+E1 | storage coverage, durable receipts and exact identity |
+| **E2** | [Stopped-Box snapshot/catalog/create/delete](BOX_ENV_E2_SNAPSHOTS.md) | E0; E1 is optional before/after fingerprint | Provider snapshot contract, storage coverage, **shared source claim**, durable receipts and exact identity |
 | **E3** | [Explicit snapshot restore and reconciliation](BOX_ENV_E3_RESTORE.md) | E2 | stop/quiescence, fresh plan, no unknown-result replay |
-| **E4** | [Clone current Box / clone snapshot](BOX_ENV_E4_CLONE.md) | E2; E1 optional metadata | provider-managed new identity and rekey, no exposed duplicate |
+| **E4** | [Clone current Box / clone snapshot](BOX_ENV_E4_CLONE.md) | E0 for direct-instance clone; E0+E2 for snapshot-source clone; E1 optional | provider-managed new identity and rekey, **shared source + destination claims**, no exposed duplicate |
+
+**Cross-feature integration (INT-03/INT-04):** [Roadmap integration review](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies) supersedes the historical all-linear dependency picture. E0 read-only capability probe and E1 read-only fingerprint may advance independently of mutable leases/receipts; E2/E3/E4 *writes* need one common canonical resource claim/dispatch-intent contract with R-04 if that coordination feature is selected, or an independently verified equivalent that blocks cross-entry lifecycle races. No separate snapshot-only lock that bypasses existing lifecycle/MCP paths. Do not require E1 for E2 or E2 for direct stopped-Box cloning. This paragraph modifies development dependencies only, not the original proposal's approval state.
 
 **Backward cross-references:** [diagnostic proposal (D0-D2, NOT IMPLEMENTED)](DIAGNOSTICS_PROPOSAL.md) and [diagnostic source audit (S/D research, NOT a feature implementation)](../verification/DIAGNOSTICS_SOURCE_AUDIT.md). The linked diagnostics documents must reciprocally label this independent area as **NOT IMPLEMENTED**; no completed Phase/ADR/REQ state is asserted by these links.
 
