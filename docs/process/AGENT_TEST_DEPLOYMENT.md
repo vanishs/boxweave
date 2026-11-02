@@ -1,5 +1,7 @@
 # Agent-driven BoxWeave source deployment and real-Box testing — v1.0
 
+**Global plan:** [BoxWeave feature roadmap](../design/FEATURE_ROADMAP_MASTER.md) — P-03 Agent test workflow / P-05 source transfer limitations. The roadmap summarizes selection and current status; this document retains detailed feature boundaries.
+
 **Status: active developer working practice; source/helper implementation only.** Owner choices, 2026-11-01: local current worktree first; temporary private delivery allowed within previously authorized infrastructure; public GitHub only for already-public revisions; default newly created Box; existing historical Box only on demonstrated environment dependence; 1A layered acceptance, 2A bounded autonomous diagnosis/fix, 3A success cleanup/failure retention, 4A in-scope automatic actions, 5A transport fallback. **This does not create a BoxWeave end-user product, modify MCP schemas, authorize any real host or claim a live deployment.** Complement [Agent test workflow](AGENT_TEST_WORKFLOW.md) and [AGENTS.md](../../AGENTS.md).
 
 ## 1. Separation of responsibility
