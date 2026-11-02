@@ -1,7 +1,7 @@
 """Deployment validation and independent authenticated read; diagnostic output is public metadata."""
 import argparse,json,sqlite3,sys
 from pathlib import Path
-from .__main__ import load,read_config
+from .app_runtime import load,read_config
 from .provider import Provider
 from .mcp import MCP
 from .domain import Fault

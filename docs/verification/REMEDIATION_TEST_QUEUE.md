@@ -848,3 +848,15 @@ Task owner-approved: HFC-01..07 in [design](../design/HTTP_FIRST_CLIENT_SETUP.md
   Provider methods or volume/rekey contract. No fallback.
 - Full exact-SHA CI and installed versions remain a separate gate;
   default stable installer v0.28.0; retain existing Boxes and failure data.
+
+
+## ARCH-0 v0.42.1 follow-up — source-only verified checkpoint
+
+[Detailed evidence](ARCH0_POST_INTEGRATION_AUDIT.md): isolated existing
+`bwphase2-1102` Box; 639 Python fixtures PASS, 4 new architecture
+guards PASS, CLI and deploy-check independent import/help PASS,
+knowledge links PASS. `scripts/validate.py` blocked by missing Node/npm,
+so exact-SHA GitHub full CI needed. New `app_runtime` package-only,
+no root helper copy or authority changed. Installed v0.42.1 upgrade,
+SSH/HTTP/Provider authority, cross-UID shared coordination and rollback
+remain L/U. Preserve existing Box and old failure scenes.

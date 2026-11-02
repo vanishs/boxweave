@@ -104,3 +104,14 @@ migration. New code strengthens failure behavior, no guest or host mutator.
 E2/E3/E4 remain BLOCKED by unexposed Provider contracts; installed
 service upgrade, client and rollback remain LIVE U. Stable installer
 unchanged.
+
+
+## ARCH-0 follow-up source recheck (v0.42.1 candidate)
+
+[Post-integration dependency and release helper audit](../verification/ARCH0_POST_INTEGRATION_AUDIT.md).
+A remaining CLI/deployment-check import cycle is removed behind
+compatibility aliases. Gateway source/installer helper manifest parity
+is guarded by executable tests. Existing ARCH-0A/B/C are historically
+source-complete. Real installed host cross-UID/SSH/HTTP/Web, version
+upgrade and rollback gates are still L=U. Default stable installer
+v0.28.0 is unchanged.
