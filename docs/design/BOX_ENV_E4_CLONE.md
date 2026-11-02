@@ -1,5 +1,7 @@
 # E4 implementation specification — clone Box / clone from snapshot
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E4 independent Box clone. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **NOT IMPLEMENTED. DESIGN ONLY.** Parent [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Requires [E0](BOX_ENV_E0_CAPABILITIES.md) and [E2](BOX_ENV_E2_SNAPSHOTS.md) for snapshot-source cloning. [E1 fingerprints](BOX_ENV_E1_FINGERPRINTS.md) optional for before/after drift. Restore E3 is **not** required to create a new Box; clone must not modify the source.
 
 ## Product contract
