@@ -54,6 +54,10 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 | REQ-025 / AC-025 | D3: `bwmini/gate_diagnostics.py`, `mcp_gate.py`, D2 app reader, `online.py`, installer helper manifest; [master](../design/DIAGNOSTICS_D3_D4_MASTER.md) | `tests/test_gate_diagnostics.py`, upstream passthrough, bounded journal/redaction, actor/trace selectors, retention and catalog; record exact CI run in [queue](REMEDIATION_TEST_QUEUE.md) | Authenticated live SSH/HTTP, installed app-user report, split-host and true Provider fault recovery not yet confirmed |
 | REQ-026 / AC-026 | D4: exact Box incarnation root-owned allowlist, fixed guest probes, summarized output and privacy contract | Default DENY before Provider, policy/identity rejection, no raw stdout, synthetic Provider read | A specifically approved real Box with correct trust, negative unauthorized case and actual service/log read required; no deployment or mutation authority implied |
 
+## Phase 1 unified operation base (owner authorized; source partial only)
+
+[Delivery ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) tracks P1-A source-only operation-claim primitives. The core adds no exposed MCP/Web mutation, no production SQLite migration, no task-result store and no deployed multi-Agent protection. Targeted source/fixture CI passed at `05a95aea` ([run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)); the final merged SHA and installed/live behavior require separate evidence. P1-B/P1-C adapter coverage, host permissions, historical receipt migration and live cross-transport tests remain pending.
+
 ## Code-first source coverage and acceptance state (2026-11-01)
 
 [The current code-derived implementation, endpoint, module, and test inventory](CODE_FIRST_ACCEPTANCE_2026-11-01.md) enumerates source surfaces even when missing from older feature prose, maps them to CI and known real evidence, and preserves PARTIAL/BLOCKED/UNVERIFIED for current runtime checks. An implemented endpoint is not itself accepted.
