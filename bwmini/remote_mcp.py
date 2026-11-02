@@ -78,12 +78,14 @@ def relay(message, gate=GATE):
 
 
 def create_remote_app(store, config, dispatch=None, clock=None):
-    """Bind this application to loopback with the dedicated remote-mcp CLI.
+    """A loopback-only transport; a public origin requires explicit HTTPS config.
 
-    config must contain a canonical HTTPS public_url; a reverse proxy is
-    responsible for TLS. No source/config option directly publishes a port.
+    No public origin means a local OAuth resource bound to loopback. The
+    network listener never binds a publicly reachable interface.
     """
-    origin = public_origin(config["public_url"])
+    config = validate_remote_config(config)
+    origin = (public_origin(config["public_url"]) if config.get("public_url")
+              else "http://127.0.0.1:" + str(config["port"]))
     resource = origin + "/mcp"
     if clock is None:
         import time
@@ -334,14 +336,27 @@ I authorize this client to use BoxWeave MCP tools.</label>
 
 
 def validate_remote_config(config):
+    """Default to authenticated loopback MCP, never to a public listener."""
+    if config is None:
+        config = {}
     if not isinstance(config, dict) or set(config) - {
             "enabled", "public_url", "port", "allowed_origins"}:
         raise ValueError("REMOTE_CONFIG_INVALID")
-    if config.get("enabled") is not True:
+    if type(config.get("enabled", True)) is not bool:
+        raise ValueError("REMOTE_CONFIG_INVALID")
+    if config.get("enabled", True) is not True:
         raise ValueError("REMOTE_NOT_ENABLED")
-    public_origin(config.get("public_url"))
-    if type(config.get("port")) is not int or not 1024 <= config["port"] <= 65535:
+    port = config.get("port", 18844)
+    if type(port) is not int or not 1024 <= port <= 65535:
         raise ValueError("REMOTE_PORT_INVALID")
-    if not isinstance(config.get("allowed_origins", []), list):
+    external = config.get("public_url")
+    if external is not None:
+        public_origin(external)
+    origins = config.get("allowed_origins", [])
+    if not isinstance(origins, list) or any(
+            not isinstance(u, str) or not valid_url(u) or
+            u != ("https://" + urlsplit(u).netloc)
+            for u in origins):
         raise ValueError("REMOTE_ORIGIN_INVALID")
-    return config
+    return {"enabled": True, "port": port, "allowed_origins": origins,
+            **({"public_url": external} if external is not None else {})}
