@@ -63,3 +63,7 @@ Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite
 ## Phase 2 staged source acceptance — 2026-11-02
 
 [Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
+
+## Phase 3 E0/E1 supported capability and fingerprint checkpoint (v0.36.0 candidate)
+
+[Source implementation and boundaries](../design/BOX_ENV_E0_E1_IMPLEMENTATION.md). Authenticated Provider get_container with exact pinned Target; conservative unsupported/not_verified snapshot/clone, stable bounded fingerprint, app SQLite v13 immutable operator-scoped captures and CSRF-protected Web capture/list/compare. Fixture CI pending final source SHA; installed Web and current daemon source version must be independently proved. E2/E3/E4 await verified Provider snapshot/restore/clone/rekey and custom-volume contracts. Cross-entry R-04 protection remains NOT IMPLEMENTED; the phase is PARTIAL, not complete.

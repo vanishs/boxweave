@@ -2,7 +2,7 @@
 
 **Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E1 environment fingerprints. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
 
-**NOT IMPLEMENTED. DESIGN ONLY.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Dependency: [E0 capability/read-only boundaries](BOX_ENV_E0_CAPABILITIES.md). Independent of the unimplemented [D0-D2 diagnostics proposal](DIAGNOSTICS_PROPOSAL.md).
+**PARTIAL SOURCE IMPLEMENTATION (bounded fingerprint, v13 immutable captures, Web API); installed live verification pending.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Dependency: [E0 capability/read-only boundaries](BOX_ENV_E0_CAPABILITIES.md). Independent of the unimplemented [D0-D2 diagnostics proposal](DIAGNOSTICS_PROPOSAL.md).
 
 ## User goal and source boundaries
 
@@ -97,3 +97,7 @@ No browser-only representation can be treated as enforcement. No need for D1 eve
 | E1-10 | Snapshot not yet implemented | capture/diff still works standalone |
 
 Completion gate: a real authorized read-only capture/diff of a managed outer Box yields useful stable and runtime differences without needing a healthy inner BoxWeave. Actual commands, exits, version and coverage must be recorded; fixture source tests are not live evidence. Next: [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md).
+
+## 2026-11-02 implementation update
+
+[Bounded Provider snapshot and actor-scoped SQLite v13 history](BOX_ENV_E0_E1_IMPLEMENTATION.md) are implemented with source tests. Existing trusted Web session, Origin and CSRF apply to capture/compare. Only allowlisted state, CPU/memory/disk, Tenant and immutable identity/scope digests are saved. No raw keys/IP/commands or arbitrary instance config. Real installed host, old-version rollback and all approved external environment cases remain separate acceptance gates.

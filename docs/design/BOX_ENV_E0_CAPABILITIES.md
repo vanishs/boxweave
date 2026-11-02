@@ -2,7 +2,7 @@
 
 **Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E0 Provider capability audit. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
 
-**NOT IMPLEMENTED. DESIGN ONLY.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Source review: `main@d72035837da1170d2fe5201ee4ea65075ea038ee`; see [diagnostics research](../verification/DIAGNOSTICS_SOURCE_AUDIT.md) for related but separate failure analysis. **E0 performs read-only capability discovery and tests, no snapshot/restore/clone writes.**
+**PARTIAL SOURCE IMPLEMENTATION (read-only E0 classifier); installed live verification pending.** Parent: [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Source review: `main@d72035837da1170d2fe5201ee4ea65075ea038ee`; see [diagnostics research](../verification/DIAGNOSTICS_SOURCE_AUDIT.md) for related but separate failure analysis. **E0 performs read-only capability discovery and tests, no snapshot/restore/clone writes.**
 
 ## Objective
 
@@ -77,3 +77,7 @@ Do not assume nested Incus internal volumes live inside the outer Box root disk;
 E0 succeeds as **read-only contract design/implementation** if selected authenticated Provider version and local deployment can be classified without side effects, while unsupported capabilities fail closed. Do not ship snapshot actions until a real Provider-side contract is independently designed and verified. Next: [E1 fingerprints](BOX_ENV_E1_FINGERPRINTS.md) (read-only), then [E2 snapshots](BOX_ENV_E2_SNAPSHOTS.md) (requires approved write contract).
 
 Related [D0–D2 diagnostics proposal](DIAGNOSTICS_PROPOSAL.md): all **NOT IMPLEMENTED**, not an E0 prerequisite.
+
+## 2026-11-02 implementation update
+
+[Exact-target Provider reader and conservative capability classifier](BOX_ENV_E0_E1_IMPLEMENTATION.md) implemented in `bwmini/environment_observe.py`. Absent snapshot/rekey tools report `unsupported`; even matching tool names remain `not_verified` without a verified schema/storage contract. E2-E4 write capability is NOT implemented. No unauthenticated API or Incus fallback. Source tests and live acceptance recorded independently.

@@ -1,5 +1,11 @@
 # Remediation validation and next-Agent queue
 
+## Phase 3 E0/E1 source + disposable Box acceptance queue
+
+[Implementation notes](../design/BOX_ENV_E0_E1_IMPLEMENTATION.md): exact-target Provider read-only E0 report, source fingerprint E1, app-owned SQLite schema v13 capture/list/diff, new CSRF-protected Web routes. Focused pure fixtures and DB migration, old v12 fixture upgrades and source-bound CI required. A separate real disposable Box `bwphase2-1102` was created and read with existing `get_container`; an authenticated installed v0.36.0 Web-to-Provider report is **still L/U**. The connected Provider MCP catalog exposes no verified create/list/delete snapshot, restore, clone or trust-rekey methods; keep E2/E3/E4 unsupported/not_verified, do not invoke root Incus. Old installed v0.28.0 stable remains unchanged.
+
+
+
 ## R-01 safe patch primitive candidate (v0.35.0)
 
 Internal `bwmini/box_patch.py` builds a fixed, bounded SHA256 compare-and-swap guest command. It is NOT in MCP tools/list and must not be represented as cross-agent conflict control. [Design/test boundary](../design/PHASE2_GUARDED_PATCH_IMPLEMENTATION.md). Fixture checks and actual Linux module tests are required; installed SSH/HTTP and claimed dispatch remain U. Stable `PUBLISHED_RELEASE` remains at v0.28.0.

@@ -53,7 +53,7 @@ class BindingTests(Base):
   with self.store.db() as db:
     db.execute('DROP TABLE project_unbindings');db.execute('DROP TABLE job_runs')
     for t in ('diagnostic_events','diagnostic_trace_links','selftest_runs'):db.execute('DROP TABLE '+t)
-    db.execute('DROP TABLE box_action_receipts');db.execute('DROP TABLE box_action_plans');db.execute('PRAGMA user_version=6')
+    db.execute('DROP TABLE box_action_receipts');db.execute('DROP TABLE box_action_plans');db.execute('DROP TABLE environment_captures');db.execute('PRAGMA user_version=6')
   updated=Store(self.store.path)
-  with updated.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],12)
+  with updated.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],13)
   self.assertEqual(updated.project(p['id'])['target'],json.dumps(TARGET.data()))
