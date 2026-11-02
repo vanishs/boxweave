@@ -118,9 +118,12 @@ If a task is still being handled synchronously, a query may return `in_progress`
 
 ## 5. Persistence, security and result handling
 
+**Integration INT-01/INT-02:** This feature owns the gateway-private request-key, deduplication and optional retained result. The shared **operation claim/dispatch-intent** for protected mutations belongs to the minimal controller coordination boundary in [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md), correlated by an opaque operation ID; it is not a second, independently interpreted remote-dispatch history. Do not give the Web/app actor access to gateway result storage or gateway access to the entire app SQLite DB. All tracked exec uses the same trusted `connect(exec)` adapter as [R-01](BOX_OPERATION_INTERFACE_V1.md); no second guest executor. See [integration decisions](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+
+
 ### 5.1 Store design
 
-- Prefer a **separate gateway-owned SQLite table/database** under an existing protected gateway-owned directory; do not cross app-Service ownership. Reuse vetted code patterns from `box_actions.py` for one-dispatch receipts and `gate_diagnostics.py` for file-owner/mode/size validation.
+- Prefer a **gateway-private task-key/result SQLite table/database** under a protected gateway-owned directory; do not cross app-Service ownership. A separate **minimal shared coordinator** may hold canonical protected resource claims and dispatch-intent linked by `operation_id`; the gateway task store must not independently override that claim state. Reuse vetted code patterns from `box_actions.py` for one-dispatch receipts and `gate_diagnostics.py` for file-owner/mode/size validation.
 - Restrict directory permissions to 0700 and database to 0600; no symlinks, unsafe hard links, group-writable parents or user-controlled storage paths. Define WAL/lock behavior for concurrent SSH/HTTP gateway processes and crash-safe transactions.
 - Store only immutable target reference/digest, operator scope, request-key fingerprint or vetted bounded identifier, operation type, stage, timestamps, duration, safe status/error code, output presence/size/hash and optional bounded data.
 - Do not persist SSH keys, tokens, OAuth codes, raw full commands, source file contents, prompts, environment secrets or arbitrary exception messages in diagnostics. Store only the private argument fingerprint necessary for deduplication; avoid printing it in ordinary logs.
@@ -161,6 +164,9 @@ If a task is still being handled synchronously, a query may return `in_progress`
 
 ### MTR-1 — Gateway durable receipt lookup (first useful release slice)
 
+- Coordinate transaction ordering with R-04's minimal operation claim authority before enabling any tracked **mutating** dispatch: persist accepted task key and required claims/dispatch intent before remote send, or refuse without dispatch. A task store alone does not make an operation collision-safe. If R-04 has not been activated, explicitly label the task as `tracked_only`, not globally coordinated.
+
+
 - Add safe gateway-owned database and `boxweave_task_get` / `boxweave_task_list`; preserve existing D3 event journal separately and link by safe trace identifiers.
 - Implement bounded pagination, actor scope, 0700/0600 storage, expiry/quotas, storage errors and tool allowlist enforcement.
 - Add a protected tracked `exec` submission path with write-ahead `dispatch_intent`, exact Box trust and atomic idempotency keys. Do not expose an endpoint that can pass arbitrary commands to the *host*.
@@ -180,6 +186,9 @@ If a task is still being handled synchronously, a query may return `in_progress`
 - Apply accepted documentation updates to normative requirements/scope/acceptance only after owner authorization; update agent guide, tool descriptors, packaging and test ledger. No version bump for design alone.
 
 ## 8. Acceptance matrix
+
+In addition to the tests below, cross-entry protected mutation tests **INT-T01–INT-T03/INT-T06** in the [master roadmap](FEATURE_ROADMAP_MASTER.md#54-joint-acceptance-tests-in-addition-to-child-tests) are the gate for claiming coordination. Preserve the narrower claim of R-02 when only reconnect lookup is accepted.
+
 
 | ID | Acceptance requirement | Evidence |
 | --- | --- | --- |
