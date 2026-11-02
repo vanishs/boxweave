@@ -13,6 +13,9 @@
 
 ## Goal and non-goals
 
+**Current roadmap reconciliation:** [Global feature roadmap](../FEATURE_ROADMAP_MASTER.md#4-other-previously-proposed-capabilities--current-dispositions) treats coding-run approvals as a separately scoped *candidate* (P-02), and autonomous Agent testing as a deferred *product* (P-03). Existing developer-led testing workflows and code-bundle helpers do not constitute a scheduler, and the user's selected multi-Agent work is resource-collision protection (R-04), **not** sub-Agent delegation or an Agent Runner. Do not bundle these candidate capabilities into R-01/R-02/R-04 or mark historical M5 as wholly unimplemented: selected M0–M5 source was later merged, with exact live evidence in [progress](../../process/MCP_M0_M5_SOURCE_PROGRESS.md).
+
+
 Only after the earlier adapter/security slices, integrate **selected** valuable outcomes into existing BoxWeave Web, CLI or Agent workflows. There is no requirement to build a generic administration UI for every Platform tool. Do not turn the existing prompt graph into an automatic scheduler without its own scoped proposal/approval.
 
 ## Candidate source touchpoints (no edits authorized)
