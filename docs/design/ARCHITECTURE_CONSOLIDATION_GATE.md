@@ -176,3 +176,17 @@ feature work with real-host checkpoints.
 **Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
 
 **Stage decision:** ARCH-0A/B/C COMPLETE at S/T/CI + source-release scope. The six logical ownership blocks are documented; pure contracts are extracted; Gateway helper packaging and identity/storage validation are implemented but NOT wired to shared dispatch. Required next installed checkpoint and P1-B2 are deferred as **U / NOT IMPLEMENTED**, not a failed or secretly skipped test.
+
+
+## Follow-up architecture recheck after v0.42.0 integration
+
+[Current source audit and test record](../verification/ARCH0_POST_INTEGRATION_AUDIT.md)
+documents a new post-integration dependency edge
+`deploy_check -> __main__ -> deploy_check`, now removed by an
+application-runtime composition factory with compatible public wrappers.
+Four new static boundary regressions protect the module DAG, Gateway
+publication helper inventory and app/standalone state separation.
+This is a bounded source cleanup, **not** a broad directory rewrite.
+ARCH-0A/B/C remain historically source-accepted; installed permissions,
+cross-transport rollout and old/new installation proof remain a separate
+L/U gate, as explicitly distinguished in this document.

@@ -212,3 +212,14 @@ authenticated upstream snapshot/restore/clone/rekey/storage contracts**;
 nothing bypasses Provider with direct Incus. Source/fixtures are independent
 of installed Web/SSH/HTTP and tested production upgrade/rollback. This
 partial status must not be replaced with an unqualified Phase 3 PASS.
+
+
+## ARCH-0 post-integration audit follow-up (v0.42.1 candidate)
+
+[Source dependency and delivery findings](../verification/ARCH0_POST_INTEGRATION_AUDIT.md)
+verify the original ARCH-0A/B/C source deliverables and close a
+remaining CLI/deploy-check import cycle. Static tests enforce standalone
+Gateway publication-parity and no app-private DB import into root
+helpers. Six groups remain logical contracts. Installed shared-UID
+coordination, independent old/new helper acceptance and cross-entry
+runtime validation remain unverified, not silently accepted.
