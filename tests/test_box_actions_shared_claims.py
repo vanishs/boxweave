@@ -126,6 +126,20 @@ class CoordinatedBoxActionTests(Base):
         self.assertEqual(self.s.box_actions.receipt(rid)["code"],"COORDINATION_SCOPE_MISMATCH")
         self.assertFalse(MockAdapter.calls)
 
+    def test_acknowledged_autosleep_retains_claim_for_explicit_resolution(self):
+        self.s.provider.mode = "mcp"
+        with patch("bwmini.auto_sleep.execute",
+                   return_value={"result":"upstream_acknowledged"}):
+            plan=self.s.box_actions.plan(TARGET.logical,"toggle_auto_sleep",
+                 {"enabled":True,"idleThresholdMinutes":30})
+            rid=self.s.box_actions.confirm(plan["id"],TARGET.logical)["id"]
+            self.s.box_actions.work_one()
+        self.assertEqual(self.s.box_actions.receipt(rid)["state"],"acknowledged")
+        self.assertEqual(self.gateway.coordinator.status(rid)["state"],"unknown")
+        ident,scope,logical=coordination_bridge.app_box(TARGET,SCOPE)
+        with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
+            self.gateway.acquire("e"*32,"gateway_e",ident,scope,logical)
+
     def test_opaque_task_receipt_does_not_expose_command(self):
         with patch("bwmini.box_actions.BoxAgent",MockAdapter):
             rid=self.submit("echo secret-should-not-surface")

@@ -1,5 +1,11 @@
 # Remediation validation and next-Agent queue
 
+## R-04 app BoxAction shared-claim source checkpoint (v0.38.0)
+
+[Source scope + opt-in contract](../design/PHASE2_APP_SHARED_ACTIONS.md). BoxAction worker writes can be explicitly protected with `coordination.enabled=true`: exact pinned Target and freshly published root Provider scope, durable app receipt then shared dispatch intent, fail-closed conflict before guest call, terminal release only after original receipt, UNKNOWN/acknowledged claim retention. Test in `tests/test_box_actions_shared_claims.py` with concurrent gateway claims and missing DB/scope. Needs a fresh installed Web-to-SSH/HTTP same-UID test, provision/upgrade, missing DB and legacy direct bypass inventory. Does NOT cover lifecycle/access writes or legacy gateway connect(exec) bypass, therefore NOT global R-04 acceptance.
+
+
+
 ## R-04 partial shared-claim dispatch source checkpoint v0.37.0
 
 [Exact shared-claim design and negative coverage](../design/PHASE2_SHARED_DISPATCH_INTEGRATION.md): both SSH/HTTP tracked Gateway execs now use one independently provisioned claim DB. Root-published scope must agree with immutable target identity; held/UNKNOWN same-Box claims deny dispatch; different Boxes parallel. Tests: `tests/test_shared_claims.py` and `tests/test_gateway_tasks_gateway.py`, plus all unit/source/package CI. Must still test installed SSH/HTTP duplicate keys, unknown restart, app Web worker concurrency, stale scope, old v0.36 helper, and missing DB. **No global R-04 acceptance:** Web/app and direct untracked mutators bypass the new claim boundary.
