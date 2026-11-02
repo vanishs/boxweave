@@ -215,19 +215,40 @@ class RemoteCredentials:
                 or row["client"] != client or row["redirect"] != redirect
                 or row["resource"] != resource):
                 raise RemoteError("invalid_grant")
+            # The one-use authorization code and BOTH credentials must
+            # commit together: partial issue must not burn the code or leave
+            # an orphan access token that the client never received.
             db.execute("DELETE FROM remote_codes WHERE digest=?", (digest(code),))
-        return self.issue_pair(client, resource)
+            return self._issue_pair(db, client, resource)
+
+    def _issue_pair(self, db, client, resource):
+        if resource != self.resource:
+            raise RemoteError("invalid_target")
+        # One BEGIN IMMEDIATE transaction owns both inserts. A crash,
+        # random-token failure, or SQLite constraint failure rolls them back.
+        now = self.clock()
+        access = secret()
+        db.execute("INSERT INTO remote_credentials "
+                   "(digest,kind,label,client,resource,created,expires) "
+                   "VALUES(?,?,?,?,?,?,?)",
+                   (digest(access), "access", "OAuth " + client[:40],
+                    client, resource, now, now + 3600))
+        refresh = secret()
+        db.execute("INSERT INTO remote_credentials "
+                   "(digest,kind,label,client,resource,created,expires) "
+                   "VALUES(?,?,?,?,?,?,?)",
+                   (digest(refresh), "refresh", "Refresh " + client[:40],
+                    client, resource, now, now + 30 * 86400))
+        return {"access_token": access, "token_type": "Bearer",
+                "expires_in": 3600, "refresh_token": refresh,
+                "scope": "mcp:operator"}
 
     def issue_pair(self, client, resource):
         if resource != self.resource:
             raise RemoteError("invalid_target")
-        access = self.issue("access", "OAuth " + client[:40], client, resource,
-                            self.clock() + 3600)
-        refresh = self.issue("refresh", "Refresh " + client[:40], client, resource,
-                             self.clock() + 30 * 86400)
-        return {"access_token": access, "token_type": "Bearer",
-                "expires_in": 3600, "refresh_token": refresh,
-                "scope": "mcp:operator"}
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            return self._issue_pair(db, client, resource)
 
     def refresh(self, value, client, resource):
         if not isinstance(value, str) or TOKEN_PATTERN.fullmatch(value) is None:
@@ -240,6 +261,8 @@ class RemoteCredentials:
                     or row["expires"] <= self.clock() or row["client"] != client
                     or row["resource"] != resource):
                 raise RemoteError("invalid_grant")
+            # Rotating an existing token is one atomic operation: do not
+            # revoke it if issuing the new pair cannot be committed.
             db.execute("UPDATE remote_credentials SET revoked=1 WHERE digest=?",
                        (digest(value),))
-        return self.issue_pair(client, resource)
+            return self._issue_pair(db, client, resource)

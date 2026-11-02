@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from werkzeug.security import generate_password_hash
 
+from bwmini.domain import Fault
 from bwmini.remote_auth import RemoteCredentials, RemoteError, valid_url
 from bwmini.remote_mcp import create_remote_app, relay, validate_remote_config
 from bwmini.remote_tls import caddyfile
@@ -137,6 +138,85 @@ class RemoteTests(unittest.TestCase):
         form["password"] = "fixture-admin-password"
         self.assertEqual(self.client.post("/authorize", data=form,
                                           headers={"Origin": ORIGIN}).status_code, 302)
+
+    def test_refresh_rotation_is_atomic_on_second_token_failure(self):
+        original = self.auth.issue("refresh", "original", "test-client", RESOURCE,
+                                   self.now[0] + 3600)
+        # The first new access credential has already been inserted when
+        # token generation for its refresh partner fails.
+        with patch("bwmini.remote_auth.secret", side_effect=["A" * 64, RuntimeError("injected")]):
+            with self.assertRaisesRegex(RuntimeError, "injected"):
+                self.auth.refresh(original, "test-client", RESOURCE)
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials").fetchone()[0], 1)
+        self.assertIsNotNone(self.auth.verify(original, ("refresh",)))
+        result = self.auth.refresh(original, "test-client", RESOURCE)
+        self.assertIsNone(self.auth.verify(original, ("refresh",)))
+        self.assertIsNotNone(self.auth.verify(result["access_token"], ("access",), RESOURCE))
+        self.assertIsNotNone(self.auth.verify(result["refresh_token"], ("refresh",)))
+        with self.assertRaises(RemoteError):
+            self.auth.refresh(original, "test-client", RESOURCE)
+
+    def test_exchange_code_keeps_code_on_partial_credential_failure(self):
+        callback = "https://chatgpt.example.test/callback"
+        client = self.auth.register("atomic fixture", [callback])
+        verifier = "a" * 43
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        pending = self.auth.pending(client, callback, challenge, RESOURCE, "atomic-state-1")
+        code, _ = self.auth.approve(pending, "fixture-admin-password")
+        with patch("bwmini.remote_auth.secret", side_effect=["B" * 64, RuntimeError("injected")]):
+            with self.assertRaisesRegex(RuntimeError, "injected"):
+                self.auth.exchange_code(code, client, callback, verifier, RESOURCE)
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_codes").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials").fetchone()[0], 0)
+        pair = self.auth.exchange_code(code, client, callback, verifier, RESOURCE)
+        self.assertIsNotNone(self.auth.verify(pair["access_token"], ("access",), RESOURCE))
+        with self.assertRaises(RemoteError):
+            self.auth.exchange_code(code, client, callback, verifier, RESOURCE)
+
+    def test_token_http_refresh_midissue_rollback_and_recovery(self):
+        old = self.auth.issue("refresh", "http rollback", "test-client", RESOURCE,
+                              self.now[0] + 600)
+        form = {"grant_type": "refresh_token", "refresh_token": old,
+                "client_id": "test-client", "resource": RESOURCE}
+        with patch("bwmini.remote_auth.secret", side_effect=["D" * 64, RuntimeError("injected")]):
+            with self.assertRaisesRegex(RuntimeError, "injected"):
+                self.client.post("/token", data=form)
+        self.assertIsNotNone(self.auth.verify(old, ("refresh",)))
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials").fetchone()[0], 1)
+        recovered = self.client.post("/token", data=form)
+        self.assertEqual(recovered.status_code, 200)
+        self.assertEqual(self.call(recovered.json["access_token"]).status_code, 200)
+        self.assertEqual(self.client.post("/token", data=form).status_code, 400)
+
+    def test_concurrent_refresh_only_one_rotation_can_win(self):
+        from concurrent.futures import ThreadPoolExecutor
+        original = self.auth.issue("refresh", "concurrent", "test-client", RESOURCE,
+                                   self.now[0] + 300)
+        def rotate(_):
+            try:
+                pair = self.auth.refresh(original, "test-client", RESOURCE)
+                return ("success", pair)
+            except RemoteError as error:
+                return (error.code, None)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(rotate, range(8)))
+        self.assertEqual(sum(kind == "success" for kind, _ in results), 1)
+        self.assertEqual(sum(kind == "invalid_grant" for kind, _ in results), 7)
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials").fetchone()[0], 3)
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials WHERE revoked=1").fetchone()[0], 1)
+
+    def test_issue_pair_constraint_failure_rolls_back_first_token(self):
+        # Both inserts must be atomic even if the token generator produces a
+        # duplicate digest and SQLite rejects the second insert.
+        with patch("bwmini.remote_auth.secret", return_value="C" * 64):
+            with self.assertRaisesRegex(Fault, "STATE_UNAVAILABLE"):
+                self.auth.issue_pair("test-client", RESOURCE)
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_credentials").fetchone()[0], 0)
 
     def test_dcr_authorization_pkce_refresh_and_reset(self):
         registered = self.client.post("/register", json={
