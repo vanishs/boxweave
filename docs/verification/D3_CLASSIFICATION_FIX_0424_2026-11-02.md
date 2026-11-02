@@ -24,3 +24,8 @@
 - Existing v0.42.3 journal rows retain their historical code. No retroactive database rewrite; only requests processed by the updated Gateway can yield revised classifications.
 
 **Status:** D3 exact source/fixture T PASS; installed acceptance **pending** at this checkpoint. Original issue scope and remaining external-client, R-02/R-04 and Provider gaps stay independently unaccepted.
+
+
+## Exact v0.42.4 release and installed upgrade addendum
+
+[Real installed v0.42.3 -> v0.42.4 differential proof](D3_CLASSIFICATION_LIVE_0424_2026-11-02.md) supersedes the earlier L=U checkpoint: exact-release CI verify/publish PASS, pinned upgrade exit 0, actual Gateway persistent D3 journal **failed/BOX_PATH_INVALID** vs historical **unknown/UPSTREAM_JSONRPC_ERROR**, normal Provider success and conservative target uncertainty, installed doctor **10/10 PASS**, and task-owned Box cleanup PASS. The operator's real host itself was not updated; stable pin remains v0.42.1.

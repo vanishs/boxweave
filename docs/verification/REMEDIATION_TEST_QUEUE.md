@@ -899,3 +899,8 @@ remain U/BLOCKED; source/default/installed identities are distinct.
 ## D3 v0.42.4 source fix and pending live acceptance (2026-11-02)
 
 [D3 fix source evidence and separate live gate](D3_CLASSIFICATION_FIX_0424_2026-11-02.md): 644/644 Python, 4/4 architecture and 166-document knowledge checks PASS; local fixed code classification, no-response-rewrite and no secret persistence regression. New pinned installed Gateway must produce one definite local rejection recorded as failed/fixed code, an unverified upstream error recorded as unknown, and one normal succeeded observation. Old host v0.42.3 retains old journal rows. Do not promote stable pin without separate acceptance.
+
+
+## D3 P3 v0.42.4 real installed closure (2026-11-02)
+
+[Exact release, v0.42.3 baseline reproduction, and v0.42.4 host-in-Box upgrade receipts](D3_CLASSIFICATION_LIVE_0424_2026-11-02.md). CI 41546914163 verify/publish PASS; original 0.42.3 Gateway publicly rejected invalid path but journalled unknown; upgraded 0.42.4 journal correctly records failed/BOX_PATH_INVALID, failed/TASK_TRACKING_UNAVAILABLE, succeeded Provider read and preserves unknown for unverified target errors. Installed `boxweave version=0.42.4`, `doctor --mcp` 10/10 PASS; original seven Boxes remain after exact task-owned Box deletion. D3 P3 closed **T+L in tested scope**. Actual operator host version change, public HTTP/OAuth/desktop, R-02/R-04/D4 positive tests remain U.

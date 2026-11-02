@@ -221,3 +221,8 @@ No historical risk is globally closed by this scoped release test.
 ## D3 classification source fix (v0.42.4 candidate, 2026-11-02)
 
 [Specific fixed-code classification and source tests](D3_CLASSIFICATION_FIX_0424_2026-11-02.md) resolve the v0.42.3 deterministic-refusal P3 issue at source level while preserving `unknown` on untrusted Provider JSON-RPC errors and potentially dispatched mutations. Existing historical rows are not rewritten. **Installed L/U** until exact release and pinned live Gateway journal observation; D4 positive, R-02 and R-04 remain separately unaccepted.
+
+
+## D3 P3 fixed and independently installed — v0.42.4 (2026-11-02)
+
+[Observed baseline -> fixed Gateway journal and cleanup](D3_CLASSIFICATION_LIVE_0424_2026-11-02.md) closes the earlier D3 deterministic-refusal misclassification within a verified pinned installed v0.42.3 -> v0.42.4 test Box upgrade. Provider-call failures and uncertain writes remain conservatively unknown; historical journal entries remain unchanged. **Deployment gap remains:** the owner's upgraded v0.42.3 host was not upgraded during this test; recheck D3 there only after independent host installation of v0.42.4. External clients and unrelated R-02/R-04/D4 positive gaps remain open.

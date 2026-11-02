@@ -120,3 +120,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## D3 deterministic classification source repair — v0.42.4 (2026-11-02)
 
 [Exact source and source-only acceptance](D3_CLASSIFICATION_FIX_0424_2026-11-02.md): known fixed local R-01 read/SSH target refusals may be journalled as failed with bounded reason code. Upstream JSON-RPC errors and potentially dispatched writes remain unknown. 644 Python, 4 architecture tests PASS in prepared Box; full installed upgrade/Gateway acceptance remains L=U until separately observed.
+
+
+### D3 v0.42.4 actual installed upgrade acceptance (2026-11-02)
+
+[Source and live differential acceptance](D3_CLASSIFICATION_LIVE_0424_2026-11-02.md): immutable v0.42.4 CI verify/publish PASS, real pinned 0.42.3 -> 0.42.4 disposable-Box upgrade exit 0, actual Gateway D3 fixed-code refusal **L PASS** and conservative `unknown` **L PASS**, authenticated Provider + doctor 10/10 PASS. Earlier source-only U for this scoped D3 P3 defect is closed, not unrelated R-02/R-04/D4 positive or external OAuth.
