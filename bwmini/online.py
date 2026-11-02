@@ -512,8 +512,15 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             code = run(args, deadline, log, check=False)
         if code:
             app_log = Path("/var/lib/boxweave-bootstrap/boxweave/application-install.log")
-            info = json.loads(app_log.read_text()) if app_log.exists() else {}
-            require(info.get("code") == "ADMIN_SETUP_REQUIRED", "APPLICATION_INSTALL_INCOMPLETE_INSPECT_PRIVATE_LOG")
+            # A standalone installer may emit a traceback instead of JSON.
+            # Keep the original private log, and emit the actionable typed
+            # failure instead of collapsing it into INSTALL_OR_CONFIGURATION_FAILED.
+            try:
+                info = json.loads(app_log.read_text()) if app_log.exists() else {}
+            except (OSError, UnicodeError, ValueError):
+                info = {}
+            require(isinstance(info, dict) and info.get("code") == "ADMIN_SETUP_REQUIRED",
+                    "APPLICATION_INSTALL_INCOMPLETE_INSPECT_PRIVATE_LOG")
             account = pwd.getpwnam(APP)
             admin_script = """import os,secrets,stat
 from pathlib import Path
