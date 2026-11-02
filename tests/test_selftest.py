@@ -70,7 +70,11 @@ class SelftestTests(unittest.TestCase):
                        {"schema_version": 2}, {"created_utc": "x" * 65}, {"extra": 1}):
             with self.subTest(change=change), self.assertRaisesRegex(Fault, "SELFTEST_PLAN_INVALID"):
                 selftest.load_plan({**plan, **change}, selftest.confirmation({**plan, **change}))
-        for bad in ("", "zz", checksum.replace("a", "b")):
+        # Always change exactly one valid hex digit; replace("a", "b")
+        # leaves an a-free random digest unchanged and flakes this test.
+        corrupt_checksum = ("0" if checksum[0] != "0" else "1") + checksum[1:]
+        self.assertNotEqual(corrupt_checksum, checksum)
+        for bad in ("", "zz", corrupt_checksum):
             with self.subTest(bad=bad), self.assertRaisesRegex(Fault, "CONFIRMATION_MISMATCH"):
                 selftest.load_plan(plan, bad)
 
