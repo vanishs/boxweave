@@ -300,6 +300,8 @@ def installation_summary(web_port, version, remote_config=None):
         "  boxweave client --help  # More options",
         "",
         "Use your ordinary Linux administrator login (no sudo).",
+        "HTTP MCP is recommended. Use --method http for automation; complete OAuth in the Agent App.",
+        "Advanced SSH MCP remains available via --method ssh or existing SSH flags.",
         "SSH public-key enrollment later requires explicit administrator approval.",
         "Scripted/agent setup: pass --replace or --no-replace explicitly, or set BOXWEAVE_BATCH;",
         "interactive prompts need a full terminal.",
