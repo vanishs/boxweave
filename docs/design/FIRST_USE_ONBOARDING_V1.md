@@ -119,7 +119,7 @@ Provide concise reasons for: incomplete installer/app unit, port conflict, missi
 
 ## 6. Priorities and implementation batches
 
-**Integration INT-05 (standalone delivery):** This onboarding feature intentionally has **zero implementation prerequisites** on R-01 Box file tools, R-02 task receipts, R-04 leases or candidate E0–E4. Its only end-to-end MCP milestone is an authenticated safe read via **existing** initialized client/tools list/`list_containers`; optional Box execution is a separately authorized smoke test. Do not add task IDs, request-key persistence, lease renewal, workspace initialization, public tunnels or auto-created Boxes to a normal first connection. See [cross-feature roadmap](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+**Integration INT-05 (standalone delivery):** This onboarding feature intentionally has **zero implementation prerequisites** on R-01 Box file tools, R-02 task receipts, R-04 leases or candidate E0–E4. Its only end-to-end MCP milestone is an authenticated safe read via **existing** initialized client/tools list/`list_containers`; optional Box execution is a separately authorized smoke test. Do not add task IDs, request-key persistence, lease renewal, workspace initialization, public tunnels or auto-created Boxes to a normal first connection. See [cross-feature roadmap](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies-2026-11-01).
 
 
 | Batch | Scope | Target value | Dependencies and limit |
