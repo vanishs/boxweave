@@ -9,6 +9,13 @@ from unittest.mock import patch
 
 from bwmini import mcp_gate
 from bwmini.gateway_tasks import TaskStore
+from bwmini.coordination_bridge import SharedClaims, app_box
+from bwmini.coordination_runtime import private_connection
+from bwmini.operation_coordination import OperationCoordinator
+from bwmini.domain import Target
+
+SCOPE = {"provider":"containarium","backend":"dev","project":"default"}
+TARGET = Target("containarium","dev","default","box1","box1-container","123","box1","box1-container")
 
 class FakeProvider:
     def __init__(self):
@@ -48,16 +55,22 @@ class GatewayTaskIntegration(unittest.TestCase):
         path.touch(mode=0o600)
         self.store=TaskStore(path)
         self.store.initialize()
+        claim_path=pathlib.Path(self.tmp.name)/"claims.sqlite"
+        claim_path.touch(mode=0o600)
+        OperationCoordinator(lambda:private_connection(claim_path)).initialize()
+        self.claims=SharedClaims(claim_path)
 
     def run_gateway(self,requests,allowed=None):
         provider=FakeProvider()
         inbox=io.StringIO("".join(json.dumps(x)+"\n" for x in requests))
         out=io.StringIO()
         with patch.object(mcp_gate,"tool_policy",return_value=allowed), \
-             patch.object(mcp_gate,"trusted_registry",return_value={}), \
+             patch.object(mcp_gate,"trusted_registry",return_value={"scope":SCOPE}), \
              patch.object(mcp_gate,"trusted",return_value=None), \
              patch.object(mcp_gate.subprocess,"Popen",return_value=provider), \
              patch.object(mcp_gate.gateway_tasks,"TaskStore",return_value=self.store), \
+             patch.object(mcp_gate.coordination_bridge,"SharedClaims",return_value=self.claims), \
+             patch.object(mcp_gate.coordination_bridge,"published_scope",return_value=SCOPE), \
              patch.object(mcp_gate.gd,"record"), \
              patch.object(mcp_gate.sys,"stdin",inbox), redirect_stdout(out):
             mcp_gate.main()
@@ -89,6 +102,30 @@ class GatewayTaskIntegration(unittest.TestCase):
         self.assertEqual(next_provider.sent,[])
         result=json.loads(other[0]["result"]["content"][0]["text"])
         self.assertEqual(result["state"],"completed")
+
+
+    def test_web_mutation_claim_blocks_tracked_gateway_exec(self):
+        identity,scope,logical=app_box(TARGET,SCOPE)
+        self.claims.acquire("1"*32,"web_1",identity,scope,logical)
+        command={"jsonrpc":"2.0","id":12,"method":"tools/call",
+                 "params":{"name":"boxweave_task_submit",
+                           "arguments":{"box":"box1","request_key":"d"*32,"exec":"echo denied"}}}
+        provider,replies=self.run_gateway([command])
+        self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+        self.assertEqual(replies[0]["error"]["message"],"RESOURCE_BUSY")
+        self.assertEqual(self.store.get(request_key="d"*32)["state"],"failed_before_dispatch")
+
+    def test_unknown_web_claim_survives_recovered_gateway(self):
+        identity,scope,logical=app_box(TARGET,SCOPE)
+        self.claims.acquire("1"*32,"web_1",identity,scope,logical)
+        self.claims.dispatch_intent("1"*32)
+        self.claims.unknown("1"*32)
+        command={"jsonrpc":"2.0","id":12,"method":"tools/call",
+                 "params":{"name":"boxweave_task_submit",
+                           "arguments":{"box":"box1","request_key":"e"*32,"exec":"echo denied"}}}
+        provider,replies=self.run_gateway([command])
+        self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+        self.assertEqual(replies[0]["error"]["message"],"RECOVERY_REQUIRED")
 
     def test_missing_connect_allowlist_denies_before_provider_read(self):
         submit={"jsonrpc":"2.0","id":4,"method":"tools/call",

@@ -67,3 +67,7 @@ Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite
 ## Phase 3 E0/E1 supported capability and fingerprint checkpoint (v0.36.0 candidate)
 
 [Source implementation and boundaries](../design/BOX_ENV_E0_E1_IMPLEMENTATION.md). Authenticated Provider get_container with exact pinned Target; conservative unsupported/not_verified snapshot/clone, stable bounded fingerprint, app SQLite v13 immutable operator-scoped captures and CSRF-protected Web capture/list/compare. Fixture CI pending final source SHA; installed Web and current daemon source version must be independently proved. E2/E3/E4 await verified Provider snapshot/restore/clone/rekey and custom-volume contracts. Cross-entry R-04 protection remains NOT IMPLEMENTED; the phase is PARTIAL, not complete.
+
+## Phase 2 tracked-exec shared claims (v0.37.0 candidate, NOT global enforcement)
+
+[Shared-claim implementation](../design/PHASE2_SHARED_DISPATCH_INTEGRATION.md) integrates R-02 tracked SSH/HTTP exec with the private minimal operation coordinator, using the root-published Provider scope and exact Box incarnation. One concurrent same-Box tracked request is refused, other Boxes may proceed, and transport UNKNOWN keeps the claim. This does **not** cover direct legacy `connect(exec)`, other raw Provider mutators, or Web BoxActions/lifecycle/access workers. No globally safe Agent lease API is exposed. Stable installer stays v0.28.0; installed transport and cross-version tests remain L/U.

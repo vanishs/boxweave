@@ -1,5 +1,5 @@
 """Trusted local-Incus public host-key reconciliation for a dedicated MCP account."""
-import datetime, hashlib, ipaddress, json, os, pwd, re, subprocess, sys, tempfile, time
+import datetime, hashlib, ipaddress, json, os, platform, pwd, re, subprocess, sys, tempfile, time
 from pathlib import Path
 
 PUBLIC = Path("/var/lib/boxweave-default/public")
@@ -69,7 +69,9 @@ def reconcile():
     data = (previous.rstrip("\n") + ("\n" if previous.strip() else "") +
             begin + "\n" + "\n".join(lines) + "\n" + end + "\n").encode()
     atomic(path, data, account.pw_uid, account.pw_gid, 0o600)
-    atomic(PUBLIC / "targets.json", json.dumps({"observed_at": time.time(), "targets": targets}, sort_keys=True).encode())
+    atomic(PUBLIC / "targets.json", json.dumps({"observed_at": time.time(),
+        "scope": {"provider": "containarium", "backend": platform.node(), "project": "default"},
+        "targets": targets}, sort_keys=True).encode())
     print(json.dumps({"state": "trusted_public_keys_synchronized", "targets": len(targets), "project": "default"}))
 
 

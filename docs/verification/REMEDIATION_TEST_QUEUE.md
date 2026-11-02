@@ -1,5 +1,11 @@
 # Remediation validation and next-Agent queue
 
+## R-04 partial shared-claim dispatch source checkpoint v0.37.0
+
+[Exact shared-claim design and negative coverage](../design/PHASE2_SHARED_DISPATCH_INTEGRATION.md): both SSH/HTTP tracked Gateway execs now use one independently provisioned claim DB. Root-published scope must agree with immutable target identity; held/UNKNOWN same-Box claims deny dispatch; different Boxes parallel. Tests: `tests/test_shared_claims.py` and `tests/test_gateway_tasks_gateway.py`, plus all unit/source/package CI. Must still test installed SSH/HTTP duplicate keys, unknown restart, app Web worker concurrency, stale scope, old v0.36 helper, and missing DB. **No global R-04 acceptance:** Web/app and direct untracked mutators bypass the new claim boundary.
+
+
+
 ## Phase 3 E0/E1 source + disposable Box acceptance queue
 
 [Implementation notes](../design/BOX_ENV_E0_E1_IMPLEMENTATION.md): exact-target Provider read-only E0 report, source fingerprint E1, app-owned SQLite schema v13 capture/list/diff, new CSRF-protected Web routes. Focused pure fixtures and DB migration, old v12 fixture upgrades and source-bound CI required. A separate real disposable Box `bwphase2-1102` was created and read with existing `get_container`; an authenticated installed v0.36.0 Web-to-Provider report is **still L/U**. The connected Provider MCP catalog exposes no verified create/list/delete snapshot, restore, clone or trust-rekey methods; keep E2/E3/E4 unsupported/not_verified, do not invoke root Incus. Old installed v0.28.0 stable remains unchanged.
