@@ -71,7 +71,7 @@ These are **not** additional automatic work packages. They are candidates or par
 
 ## Phase 1 implementation (authorized 2026-11-01)
 
-The owner authorized staged implementation, focused acceptance and commits for the unified operation foundation and related existing-path migration. The [Phase 1 implementation and acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) is the active delivery handoff. P1-A source and fixture verification passed at `05a95aea` ([CI 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)). It introduces only a non-dispatching operation-claim core; it is **not** installed protection, a new MCP API, complete R-02 recovery or R-04 leasing. Subsequent adapters require verified source/transport/security gates before announcing coverage. Stable installation pins are unchanged.
+The owner authorized staged implementation, focused acceptance and commits for the unified operation foundation and related existing-path migration. The [Phase 1 implementation and acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) is the active delivery handoff. P1-A source and fixture verification passed at `05a95aea` ([CI 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)). It introduces only a non-dispatching operation-claim core; it is **not** installed protection, a new MCP API, complete R-02 recovery or R-04 leasing. P1-B1 adds a candidate verified-identity/private-storage adapter, not installed provisioning. Subsequent adapters require verified source/transport/security gates before announcing coverage. Stable installation pins are unchanged.
 
 ## 5. Integration review: conflicts, reuse and corrected dependencies (2026-11-01)
 

@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Phase 1 unified operation base — P1-B1 identity/private storage adapter
+
+Candidate source: `bwmini/coordination_runtime.py`, `tests/test_coordination_runtime.py`. Test on the exact candidate SHA: `python -m unittest discover -s tests -p test_coordination_runtime.py`, then full fixture/knowledge/packaging CI. The adapter must reject missing storage, symlink, unsafe directory/file, invalid identity and cross-incarnation mismatch; it must not create or authorize production shared storage. **Status: pending exact-SHA CI; live host and protected mutator integration NOT DONE.**
+
 ## Phase 1 unified operation base — P1-A initial source review (2026-11-01)
 
 Source baseline: `1480b0671cab543d4664b57b0079f1d8962981fc` (v0.28.0). [Implementation/acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md). Initial new files: `bwmini/operation_coordination.py` and `tests/test_operation_coordination.py`. **Status: source/fixture PASS at `05a95aea`** via [CI run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634), verify job success; evidence-only follow-up commit requires new CI. Not an installed acceptance. Run `python -m unittest tests.test_operation_coordination` (or `python -m unittest discover -s tests -p test_operation_coordination.py`), `python scripts/check_knowledge.py`, and `python scripts/validate.py` in a prepared checkout. Check atomic multi-resource conflicts, stale/unknown retention and DB unavailability. No privileged host/Provider action or cross-principal SQLite grant has been performed. Pending P1-B: audited permissions and Web/gateway adapter coverage; pending P1-C: actual SSH/HTTP/Web mutual exclusion and migrations. Never treat this unit-core slice as live protection.

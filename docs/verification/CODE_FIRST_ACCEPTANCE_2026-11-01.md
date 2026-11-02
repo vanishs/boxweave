@@ -49,7 +49,7 @@ Code-first additions not fully represented in the older F-001–F-015 narrative 
 
 The lists enumerate all Python app modules, Python unittest files, client helper scripts, support scripts, frontend sources, application/host CLI action names, Web and remote HTTP routes, gateway-owned MCP tools, client catalog and frontend views. Downstream Provider tool names are dynamic and are **not** mistaken for locally implemented BoxWeave tools. Each source-backed entry must be tested at the layer its acceptance claim requires.
 
-### Python application modules (39)
+### Python application modules (40)
 
 <!-- inventory:python-modules:start -->
 - `bwmini/__init__.py`
@@ -64,6 +64,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/capabilities.py`
 - `bwmini/client_profiles.py`
 - `bwmini/client_setup.py`
+- `bwmini/coordination_runtime.py`
 - `bwmini/deploy_check.py`
 - `bwmini/diagnostics.py`
 - `bwmini/distribution.py`
@@ -93,7 +94,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/web.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (43)
+### Python unittest files (44)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -105,6 +106,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_box_debug.py`
 - `tests/test_capabilities.py`
 - `tests/test_client_setup.py`
+- `tests/test_coordination_runtime.py`
 - `tests/test_diagnostic_golden.py`
 - `tests/test_diagnostic_report.py`
 - `tests/test_diagnostics.py`

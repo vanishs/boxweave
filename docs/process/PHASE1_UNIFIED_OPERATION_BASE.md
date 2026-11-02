@@ -34,7 +34,16 @@ dispatch intent, UNKNOWN persistence, receipt mismatch, multi-resource
 atomicity, independent Boxes, concurrent SQLite connections, unavailable
 storage and invalid data. CI result must be recorded against the exact SHA.
 
-## Slice P1-B — Security/provisioning and adapter contract (PENDING)
+## Slice P1-B — Security/provisioning and adapter contract (IN PROGRESS)
+
+**P1-B1 candidate:** `coordination_runtime.py` adds canonical Box incarnation
+fingerprints for separately verified Provider/app/gateway views and an opt-in
+private SQLite opener. Refuses missing/unowned/shared-mode/symlink DBs and
+unsafe parents; does not create or authorize the DB. Ten negative/positive
+fixture tests are in `test_coordination_runtime.py`. CI and exact-revision
+acceptance are pending. The installer still does not provision a shared DB,
+and no app/gateway mutator uses the coordinator yet.
+
 
 1. Review authenticated host/group ownership of the coordination directory,
    file and connection factory; reject unsafe symlink, owner, mode, downgrade
@@ -62,7 +71,7 @@ storage and invalid data. CI result must be recorded against the exact SHA.
 | Slice | Source | Focused tests | CI | Installed/live | Decision |
 | --- | --- | --- | --- | --- | --- |
 | P1-A | Implemented, internal-only | 9 unit cases in full CI | [Run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634), commit `05a95aea`, verify succeeded | No installed caller or Provider action | **PASS for source/fixture only** |
-| P1-B | Not implemented | Not run | Not run | Not run | Pending |
+| P1-B | Identity/storage adapter candidate only | Pending CI | Pending | No host provisioning or migration | **IN PROGRESS** |
 | P1-C | Not implemented | Not run | Not run | Not run | Pending |
 
 **No production behavior changes in P1-A.** Install/release/version pins remain
