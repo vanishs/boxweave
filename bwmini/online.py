@@ -274,13 +274,21 @@ def build_provenance(old, descriptor, installed_utc):
                        for p in old.get("phase_history", [])][-64:]}
 
 
-def installation_summary(web_port, version):
-    """Human-facing last screen; use the verified installed release version."""
-    require(isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version),
+def installation_summary(web_port, version, remote_config=None):
+    """Human-facing last screen; addresses are configuration, not reachability proof."""
+    require(isinstance(version, str) and re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+", version),
             "INSTALLED_VERSION_INVALID")
     port = str(web_port)
     web_url = "http://127.0.0.1:" + port
-    return "\n".join((
+    remote = remote_config or {}
+    require(isinstance(remote, dict), "REMOTE_CONFIG_INVALID")
+    http_enabled = remote.get("enabled", True)
+    http_port = remote.get("port", 18844)
+    require(type(http_enabled) is bool and type(http_port) is int
+            and 1024 <= http_port <= 65535, "REMOTE_CONFIG_INVALID")
+    local_origin = "http://127.0.0.1:" + str(http_port)
+    public_origin = remote.get("public_url")
+    lines = [
         "",
         "[boxweave] BoxWeave v" + version + " installed successfully",
         "",
@@ -299,6 +307,46 @@ def installation_summary(web_port, version):
         "  sudo python3 /usr/local/lib/boxweave/default/online.py enroll --public-key KEY,",
         "then rerun the setup with --already-enrolled.",
         "",
+        "==============================================================",
+        "  HTTP MCP (authenticated, loopback only)",
+        "==============================================================",
+        "",
+    ]
+    if not http_enabled:
+        lines += [
+            "  Disabled by remote_mcp.enabled=false in the private application config.",
+            "  To enable: review /home/boxweave/boxweave/config.json and reinstall.",
+        ]
+    else:
+        lines += [
+            "  Local MCP URL: " + local_origin + "/mcp",
+            "  Local info page: " + local_origin + "/",
+            "  Status: boxweave http status",
+            "  Diagnostics: sudo boxweave http doctor",
+            "  Restart: sudo boxweave http restart",
+            "  The endpoint requires credentials; installation does not prove live reachability.",
+            "",
+        ]
+        if public_origin:
+            lines += [
+                "  Configured public MCP URL: " + public_origin.rstrip("/") + "/mcp",
+                "  Public HTTPS/Tunnel availability is NOT verified by installation.",
+                "  Use this /mcp URL in ChatGPT; authorize with the BoxWeave Web admin password.",
+                "  If the external hostname changed, reconfigure and reconnect the client.",
+            ]
+        else:
+            lines += [
+                "  For hosted ChatGPT (optional; public access is NOT enabled by default):",
+                "    1. Install cloudflared yourself, then run:",
+                "       cloudflared tunnel --url " + local_origin,
+                "    2. Copy the HTTPS hostname printed by cloudflared and configure:",
+                "       sudo boxweave http configure --public-url https://YOUR_HOST.trycloudflare.com",
+                "    3. Register https://YOUR_HOST.trycloudflare.com/mcp in ChatGPT.",
+                "       Finish OAuth with the BoxWeave Web admin password.",
+                "  Quick Tunnel is temporary; after its hostname changes, reconfigure/reconnect.",
+            ]
+    lines += [
+        "",
         "Optional operations:",
         "  Web dashboard (server-local only): " + web_url,
         "    From your computer: ssh -N -L " + port + ":127.0.0.1:" + port +
@@ -308,7 +356,8 @@ def installation_summary(web_port, version):
         "  Host overview: boxweave",
         "  Diagnostics: boxweave status | boxweave doctor",
         "  After client setup: verify actual MCP initialize/tools/read",
-    ))
+    ]
+    return "\\n".join(lines)
 
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
@@ -650,7 +699,7 @@ store.admin(generate_password_hash(password))
                           "admin_password_file":"/home/boxweave/boxweave/initial-admin-password",
                           "public_routes_created":False,"provider_mode":old["provider_mode"],"reboot":"not_verified"}),flush=True)
         # Human-facing last screen; JSON above remains machine-readable.
-        print(installation_summary(web_port, version), flush=True)
+        print(installation_summary(web_port, version, cfg.get("remote_mcp")), flush=True)
 
     finally: os.close(lock)
 
