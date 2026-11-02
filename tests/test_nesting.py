@@ -200,6 +200,30 @@ class GateProtocolTests(unittest.TestCase):
         self.assertIn("NESTING_HELPER_UNAVAILABLE",reply["error"]["message"])
         self.assertNotIn("TRUST_OR_WORKLOAD_KEY_GATE",reply["error"]["message"])
 
+    def test_nesting_partial_preserves_upstream_created_receipt(self):
+        request={"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"create_container",
+                    "arguments":{"username":"work","enable_nesting":True}}}
+        receipt={"type":"text","text":"Created work-container; running at 10.100.0.20"}
+        observed={"container":{"name":"work-container","createdAt":"123","username":"work"}}
+        upstream=[{"jsonrpc":"2.0","id":12,"result":{"content":[receipt]}},
+                  {"jsonrpc":"2.0","id":"boxweave-nesting-12","result":{"content":[{"type":"text","text":json.dumps(observed)}]}}]
+        process=self.peer(upstream)
+        output=io.StringIO()
+        with (patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),
+              patch.object(mcp_gate.sys,"stdout",output),
+              patch.object(mcp_gate.subprocess,"Popen",return_value=process),
+              patch.object(mcp_gate,"managed_public_key",return_value="ssh-ed25519 AAAA"),
+              patch.object(mcp_gate,"nesting_invoke",side_effect=ValueError("SECRET_NON_ALLOWLIST"))):
+            mcp_gate.main()
+        reply=json.loads(output.getvalue())
+        self.assertTrue(reply["result"]["isError"])
+        self.assertEqual(reply["result"]["content"][1],receipt)
+        partial=json.loads(reply["result"]["content"][0]["text"])["boxweave_nesting"]
+        self.assertTrue(partial["box_created"])
+        self.assertEqual(partial["nesting_outcome"],"not_verified")
+        self.assertEqual(partial["code"],"NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE")
+        self.assertNotIn("SECRET_NON_ALLOWLIST",json.dumps(reply))
+
     def test_created_box_survives_nesting_helper_gap_without_recreation(self):
         request={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_container",
                     "arguments":{"username":"work","enable_nesting":True}}}
@@ -215,6 +239,13 @@ class GateProtocolTests(unittest.TestCase):
         self.assertEqual(sum(message.get("method")=="tools/call" and message["params"]["name"]=="create_container"
                              for message in forwarded),1)
         reply=json.loads(output.getvalue())
-        self.assertIn("BOXWEAVE_NESTING_NOT_APPLIED",reply["error"]["message"])
-        self.assertIn("must not be repeated",reply["error"]["message"])
-        self.assertIn("NESTING_HELPER_UNAVAILABLE",reply["error"]["message"])
+        self.assertNotIn("error", reply)
+        self.assertTrue(reply["result"]["isError"])
+        partial=json.loads(reply["result"]["content"][0]["text"])["boxweave_nesting"]
+        self.assertEqual(partial["state"], "partial")
+        self.assertTrue(partial["box_created"])
+        self.assertTrue(partial["requested_nesting"])
+        self.assertEqual(partial["nesting_outcome"], "not_verified")
+        self.assertEqual(partial["username"], "work")
+        self.assertEqual(partial["code"], "NESTING_HELPER_UNAVAILABLE")
+        self.assertIn("do not repeat", partial["next_action"])

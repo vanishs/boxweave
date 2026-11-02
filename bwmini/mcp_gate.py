@@ -13,7 +13,7 @@ except ImportError:
     import gate_diagnostics as gd
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.26.4"
+SERVER_INFO_VERSION = "0.26.5"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -531,8 +531,21 @@ def main():
                             message["result"]["content"].append({"type":"text","text":json.dumps({"boxweave_nesting":value})})
                         except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
                             detail = str(error) if str(error) in GATE_ERROR_CODES else "NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE"
-                            message = {"jsonrpc":"2.0","id":request["id"],"error":{
-                                "code":-32603,"message":"BOXWEAVE_NESTING_NOT_APPLIED; box creation itself succeeded and must not be repeated; "+detail}}
+                            # Preserve the upstream *successful creation* receipt.
+                            # A JSON-RPC error hides that a real Box exists and can
+                            # prompt a client to retry a non-idempotent create.
+                            # The post-create setting may have applied even if its
+                            # verification failed: report UNKNOWN, never "false".
+                            partial = {"state": "partial", "box_created": True,
+                                       "requested_nesting": nesting,
+                                       "nesting_outcome": "not_verified",
+                                       "code": detail, "username": args["username"],
+                                       "next_action": "Inspect the original Box; do not repeat create_container."}
+                            result = message["result"]
+                            result["content"] = [{"type": "text",
+                                                  "text": json.dumps({"boxweave_nesting": partial})}
+                                                 ] + result.get("content", [])
+                            result["isError"] = True
                     gd.record(request.get("params", {}).get("name", ""), message,
                               (time.monotonic() - started) * 1000, trace=trace)
                     print(json.dumps(message), flush=True)
