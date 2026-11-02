@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Selftest CI flake fixed and exact source release verified
+
+**Maintenance closure confirmed:** [PR #40](https://github.com/vanishs/boxweave/pull/40) merged as `4f51f44682677fc1e5e982af41ed1a600484d88f`; [PR CI 41425906154](https://github.com/vanishs/boxweave/actions/runs/41425906154) and [main verify/publish CI 41426251396](https://github.com/vanishs/boxweave/actions/runs/41426251396) both PASS. [Immutable v0.34.0 Release](https://github.com/vanishs/boxweave/releases/tag/v0.34.0) targets exactly the merged commit. This fixes only nondeterministic selftest-fixture checksum corruption and version provenance; no runtime validator change, host upgrade, live Box acceptance, or completion of P1-B2/R-04 global dispatch is implied. Stable PUBLISHED_RELEASE remains v0.28.0.
+
 ## Selftest CI flake identified after Phase 2 acceptance PR #39
 
 [Main CI 41422944355](https://github.com/vanishs/boxweave/actions/runs/41422944355) failed because the random SHA-256 fixture in `tests/test_selftest.py` sometimes contains no letter `a`; `checksum.replace("a","b")` then fails to corrupt the checksum. Fix uses an always-different valid first digit. The immutable v0.33.0 release is not modified; maintenance source version v0.34.0 needs its own independent CI/tag. No production selftest validator change or new Phase 2 write-operation acceptance is claimed.
