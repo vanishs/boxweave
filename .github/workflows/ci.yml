@@ -69,7 +69,7 @@ jobs:
           app_source = source("bwmini/client_profiles.py")
           catalog = re.search(r"APPS\s*=\s*\(([^)]+)\)", app_source)
           assert catalog, "Client catalog missing"
-          owned_tools = source("bwmini/mcp_gate.py") + source("bwmini/gate_diagnostics.py") + source("bwmini/box_reads.py") + source("bwmini/gateway_tasks.py")
+          owned_tools = source("bwmini/mcp_gate.py") + source("bwmini/gate_diagnostics.py") + source("bwmini/box_reads.py") + source("bwmini/gateway_tasks.py") + source("bwmini/gateway_protection.py")
           expected = {
               "python-modules": names("bwmini/*.py"),
               "unit-tests": names("tests/test_*.py"),

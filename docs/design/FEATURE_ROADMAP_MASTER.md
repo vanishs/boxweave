@@ -180,3 +180,7 @@ Evidence classes and installed/current revision must follow the [verification qu
 ## Phase 2 staged source acceptance — 2026-11-02
 
 [Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
+
+## Phase 2 source checkpoint: optional protected gateway mode (v0.39.0 candidate)
+
+[Root-owned policy and forwarded-tool classification](PHASE2_PROTECTED_GATEWAY_POLICY.md) optionally denies direct connect, create/resize/delete, nesting apply and unclassified Provider writes before forwarding while exposing reviewed read tools and R-02 tracked exec. The marker is not provisioned/enabled by the installer; Web lifecycle/access writes are not covered. Source-only protection is not a global multi-Agent guarantee or installed acceptance.
