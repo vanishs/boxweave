@@ -56,6 +56,9 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 
 ## Phase 1 unified operation base (owner authorized; source partial only)
 
+v0.29.0: [source CI + publish PASS 41404753003](https://github.com/vanishs/boxweave/actions/runs/41404753003) on `160a09c4d2d2defff3adf3fe538861e28128b1a3`; immutable `v0.29.0` tag points to the same source. P1-A minimal resource claims and P1-B1 identity/private DB adapter are source/fixture **PASS**. Shared coordinator is **not yet provisioned/enabled**; no protected Web/SSH/HTTP path or installation acceptance. Stable installer remains pinned to v0.28.0.
+
+
 [Delivery ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) tracks P1-A source-only operation-claim primitives. The core adds no exposed MCP/Web mutation, no production SQLite migration, no task-result store and no deployed multi-Agent protection. Targeted source/fixture CI passed at `05a95aea` ([run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)); the final merged SHA and installed/live behavior require separate evidence. P1-B/P1-C adapter coverage, host permissions, historical receipt migration and live cross-transport tests remain pending.
 
 ## Code-first source coverage and acceptance state (2026-11-01)

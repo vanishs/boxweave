@@ -2,7 +2,7 @@
 
 ## Phase 1 source release metadata correction
 
-P1-A/P1-B1 PR verification passed, but `main` publish runs [41403253971](https://github.com/vanishs/boxweave/actions/runs/41403253971) and [41404041307](https://github.com/vanishs/boxweave/actions/runs/41404041307) correctly refused changed source at immutable version `v0.28.0`. Fix: increment source VERSION to `0.29.0` across Python/Web metadata and self-information while retaining stable installer pin `0.28.0`. Verify source check, full fixture CI, new immutable release tag/source SHA and separate installed version. **Status: pending new exact-SHA publication test**.
+P1-A/P1-B1 PR verification passed, but `main` publish runs [41403253971](https://github.com/vanishs/boxweave/actions/runs/41403253971) and [41404041307](https://github.com/vanishs/boxweave/actions/runs/41404041307) correctly refused changed source at immutable version `v0.28.0`. Fix: increment source VERSION to `0.29.0` across Python/Web metadata and self-information while retaining stable installer pin `0.28.0`. Verify source check, full fixture CI, new immutable release tag/source SHA and separate installed version. **Status: source release PASS:** [main CI 41404753003](https://github.com/vanishs/boxweave/actions/runs/41404753003) verification and publication succeeded at `160a09c4d2d2defff3adf3fe538861e28128b1a3`; `v0.29.0` immutable tag points to that exact commit. **Installed/live U**: no production upgrade, coordinator provisioning or cross-transport protection test. Stable install pin remains 0.28.0.
 
 ## Phase 1 unified operation base — P1-B1 identity/private storage adapter
 

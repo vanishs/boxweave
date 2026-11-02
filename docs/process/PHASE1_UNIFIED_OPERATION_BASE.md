@@ -69,7 +69,8 @@ and no app/gateway mutator uses the coordinator yet.
 
 - Both feature PRs passed full verification CI, but the `main` push publish job correctly refused to reuse already immutable `v0.28.0` for changed runnable source. Affected push runs: [P1-A 41403253971](https://github.com/vanishs/boxweave/actions/runs/41403253971) and [P1-B1 41404041307](https://github.com/vanishs/boxweave/actions/runs/41404041307).
 - New source uses `0.29.0` consistently in VERSION, Python metadata, Web metadata, and MCP self-description; README distinguishes stable 0.28.0 from new source. Do **not** change `PUBLISHED_RELEASE` or default installer pin before independent release/promotion validation.
-- Exact final CI, immutable tag/publication, source-artifact equality and installed-host verification are separate gates; do not mark the release corrected until actual checks pass.
+- **Source publication PASS:** [main-push CI 41404753003](https://github.com/vanishs/boxweave/actions/runs/41404753003), exact merged SHA `160a09c4d2d2defff3adf3fe538861e28128b1a3`, verify and publish succeeded. [Immutable release v0.29.0](https://github.com/vanishs/boxweave/releases/tag/v0.29.0) targets the same SHA and includes the SHA256-digested application archive. Source tag/CI does not prove any installed service or external client.
+- **Installed acceptance U:** no host upgrade, shared coordinator provision, effective gateway/app integration, authenticated SSH/HTTP recovery or multi-Agent race test has been executed for v0.29.0.
 
 ## Current acceptance
 
@@ -79,5 +80,4 @@ and no app/gateway mutator uses the coordinator yet.
 | P1-B | Identity/storage adapter source implemented; migration pending | 10 focused new cases in full fixture suite | [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130) at `8ee12fd` PASS | No host provisioning or mutation integration | **PARTIAL (source PASS, live U)** |
 | P1-C | Not implemented | Not run | Not run | Not run | Pending |
 
-**No production behavior changes in P1-A.** Install/release/version pins remain
-unchanged. Evidence is reported only after actual execution.
+**No production behavior changes in P1-A/P1-B1.** Source version is now 0.29.0; `PUBLISHED_RELEASE` and default stable installer remain 0.28.0. Evidence is reported only after actual execution.
