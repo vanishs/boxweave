@@ -531,3 +531,189 @@ def render(settings):
             .replace("__LABEL__",settings["app"]+" / "+settings["os"]+" / "+settings["transport"])
             .replace("__POLICY__", "replace only conflicting BoxWeave MCP after verified read; backup kept"
                      if settings["replace"] else "preserve conflicting BoxWeave MCP entry"))
+
+
+# Standalone HTTP client-side setup. The application owns OAuth and final read.
+HTTP_PORTABLE = r'''#!/usr/bin/env python3
+# =====================================================================
+# BoxWeave HTTP MCP client setup: __LABEL__
+# This entire file is Python 3.11+ source; run it on the CLIENT computer.
+# Registration policy: __POLICY__
+# OAuth consent and actual MCP tool verification happen in the Agent App.
+# No secrets are embedded. No SSH keys, AGENTS.md, host or tunnel changes.
+# =====================================================================
+import argparse, json, os, pathlib, re, stat, sys, tomllib, uuid
+SETTINGS = __SETTINGS__
+APP = SETTINGS["app"]
+URL = SETTINGS["url"]
+REPLACE = SETTINGS["replace"]
+
+def require(condition, code):
+    if not condition: raise ValueError(code)
+
+def safe_path(path):
+    require(path.is_absolute(), "CONFIG_PATH_MUST_BE_ABSOLUTE")
+    # Never follow a user-provided symlink to another application's config.
+    for part in (path, *path.parents):
+        require(not part.is_symlink(), "CONFIG_SYMLINK_REFUSED")
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, mode=0o700)
+    require(path.parent.is_dir(), "CONFIG_DIRECTORY_INVALID")
+    if os.name != "nt":
+        require(path.parent.stat().st_uid == os.getuid(), "CONFIG_DIRECTORY_NOT_OWNED")
+    if path.exists():
+        info=path.stat()
+        require(path.is_file() and info.st_nlink == 1 and info.st_size <= 1048576,
+                "CONFIG_FILE_UNSAFE")
+        if os.name != "nt":
+            require(info.st_uid == os.getuid(), "CONFIG_FILE_NOT_OWNED")
+
+def write_config(path, payload):
+    original=path.read_bytes() if path.exists() else None
+    if original is not None:
+        backup=path.with_name(path.name+".boxweave-"+uuid.uuid4().hex+".bak")
+        with os.fdopen(os.open(backup,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),"wb") as f:
+            f.write(original)
+    tmp=path.parent/(".boxweave-"+uuid.uuid4().hex+".tmp")
+    try:
+        with os.fdopen(os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),"wb") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp,path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+def json_entry():
+    if APP=="antigravity": return {"serverUrl":URL}
+    if APP=="claude": return {"type":"http","url":URL}
+    if APP=="copilot": return {"type":"http","url":URL,"tools":["*"]}
+    if APP=="opencode": return {"type":"remote","url":URL}
+    if APP=="zcode": return {"type":"http","url":URL}
+    return {"url":URL}
+
+def app_location():
+    home=pathlib.Path.home()
+    if APP=="antigravity": return home/".gemini"/"config"/"mcp_config.json",("mcpServers",)
+    if APP=="claude": return home/".claude.json",("mcpServers",)
+    if APP=="copilot": return pathlib.Path(os.environ.get("COPILOT_HOME",str(home/".copilot")))/"mcp-config.json",("mcpServers",)
+    if APP=="cursor": return home/".cursor"/"mcp.json",("mcpServers",)
+    if APP=="opencode": return home/".config"/"opencode"/"opencode.json",("mcp",)
+    if APP=="zcode": return home/".zcode"/"cli"/"config.json",("mcp","servers")
+    raise ValueError("MANUAL_IMPORT_REQUIRED")
+
+def update_json():
+    entry=json_entry()
+    if APP in ("qoder","trae"):
+        print("Manual import required; no local files changed.")
+        print(json.dumps({"mcpServers":{"boxweave":entry}},indent=2))
+        print("Open "+("Qoder IDE > Settings > MCP > My Servers > Add" if APP=="qoder" else "TRAE > Settings > MCP > Add > Manual"))
+        print("Then authorize and verify actual MCP tools in the App.")
+        return "manual_import_required"
+    path,keys=app_location()
+    safe_path(path)
+    original=path.read_text(encoding="utf-8") if path.exists() else "{}"
+    root=json.loads(original)
+    require(isinstance(root,dict), "CONFIG_OBJECT_REQUIRED")
+    if APP=="opencode" and isinstance(root.get("mcp"),dict) and isinstance(root["mcp"].get("servers"),dict):
+        keys=("mcp","servers")
+    section=root
+    for key in keys:
+        if key not in section: section[key]={}
+        section=section[key]
+        require(isinstance(section,dict),"CONFIG_SECTION_INVALID")
+    old=section.get("boxweave")
+    if old==entry:
+        print("BoxWeave HTTP MCP already configured: "+str(path))
+        return "configured"
+    require(old is None or REPLACE,"BOXWEAVE_ENTRY_CONFLICT_USE_REPLACE")
+    section["boxweave"]=entry
+    encoded=(json.dumps(root,ensure_ascii=False,indent=2)+"\n").encode("utf-8")
+    if encoded!=original.encode("utf-8"):
+        write_config(path,encoded)
+    print("BoxWeave HTTP MCP configured: "+str(path))
+    return "configured"
+
+def update_codex():
+    path=pathlib.Path(os.environ.get("CODEX_HOME",str(pathlib.Path.home()/".codex")))/"config.toml"
+    safe_path(path)
+    original=path.read_text(encoding="utf-8") if path.exists() else ""
+    parsed=tomllib.loads(original)
+    group=parsed.get("mcp_servers",{})
+    require(isinstance(group,dict), "CONFIG_SECTION_INVALID")
+    old=group.get("boxweave")
+    require(old is None or isinstance(old,dict), "CONFIG_ENTRY_INVALID")
+    if old and old.get("url")==URL and not any(k in old for k in ("command","args")):
+        print("BoxWeave HTTP MCP already configured: "+str(path))
+        return "configured"
+    require(old is None or REPLACE,"BOXWEAVE_ENTRY_CONFLICT_USE_REPLACE")
+    # Nested approval tables or inline tables cannot safely be rewritten.
+    require(not re.search(r'(?m)^[ \t]*\[mcp_servers\.boxweave\.',original),
+            "NESTED_BOXWEAVE_TOML_REQUIRES_MANUAL_REVIEW")
+    pattern=r'(?ms)^[ \t]*\[mcp_servers\.boxweave\][^\r\n]*\r?\n.*?(?=^[ \t]*\[|\Z)'
+    matches=list(re.finditer(pattern,original))
+    require(len(matches)<=1 and (old is None or len(matches)==1),
+            "AMBIGUOUS_BOXWEAVE_TOML")
+    block='[mcp_servers.boxweave]\nurl = '+json.dumps(URL)+'\n'
+    if matches:
+        m=matches[0]
+        old_body=m.group().split("\n",1)[1]
+        for line in old_body.splitlines(keepends=True):
+            if not re.match(r'^[ \t]*(command|args|url|type|startup_timeout_sec|tool_timeout_sec|bearer_token_env_var)[ \t]*=',line):
+                block+=line
+        updated=original[:m.start()]+block+original[m.end():]
+    else:
+        updated=original.rstrip()+"\n\n"+block
+    require(tomllib.loads(updated)["mcp_servers"]["boxweave"]["url"]==URL,
+            "INVALID_GENERATED_TOML")
+    write_config(path,updated.encode("utf-8"))
+    print("BoxWeave HTTP MCP configured: "+str(path))
+    return "configured"
+
+def main():
+    argparse.ArgumentParser(description="Apply one BoxWeave HTTP MCP client registration").parse_args()
+    require(URL.startswith("https://") and URL.endswith("/mcp") and
+            not any(c.isspace() for c in URL), "HTTP_URL_INVALID")
+    outcome=update_codex() if APP=="codex" else update_json()
+    print("state: "+outcome+" / awaiting_authorization")
+    print("Complete OAuth in the Agent App, then confirm MCP initialize, tools/list and list_containers.")
+    if APP=="codex": print("For Codex: codex mcp login boxweave")
+    if APP=="opencode": print("For OpenCode: opencode mcp auth boxweave")
+    print("WARNING: BoxWeave currently grants trusted operator MCP authority; approve only a trusted client.")
+
+if __name__=="__main__":
+    try: main()
+    except (OSError,ValueError,KeyError,TypeError,UnicodeError,json.JSONDecodeError,tomllib.TOMLDecodeError) as exc:
+        print("BoxWeave HTTP client setup failed: "+str(exc),file=sys.stderr)
+        raise SystemExit(2)
+'''
+
+def validate_http_url(url):
+    """Only a canonical public HTTPS MCP URL, never bearer credentials."""
+    from urllib.parse import urlsplit
+    if not isinstance(url, str) or len(url) > 1024 or not url.isascii() or any(
+            c.isspace() or ord(c) < 32 for c in url):
+        raise ValueError("HTTP_PUBLIC_URL_INVALID")
+    try:
+        p = urlsplit(url)
+        port = p.port
+    except ValueError:
+        raise ValueError("HTTP_PUBLIC_URL_INVALID") from None
+    if (p.scheme != "https" or not p.netloc or not p.hostname or
+            p.username is not None or p.password is not None or
+            p.path != "/mcp" or p.query or p.fragment or
+            p.hostname in ("localhost", "127.0.0.1", "::1") or
+            port == 0 or url != "https://" + p.netloc + "/mcp"):
+        raise ValueError("HTTP_PUBLIC_URL_INVALID")
+    return url
+
+
+def render_http(settings):
+    if settings.get("app") not in APPS or settings.get("os") not in SYSTEMS or type(settings.get("replace")) is not bool:
+        raise ValueError("UNSUPPORTED_HTTP_CLIENT_PROFILE")
+    validate_http_url(settings.get("url"))
+    values = {key: settings[key] for key in ("app", "os", "url", "replace")}
+    return (HTTP_PORTABLE.replace("__SETTINGS__", repr(values))
+            .replace("__LABEL__", values["app"] + " / " + values["os"])
+            .replace("__POLICY__", "replace only BoxWeave entry with private backup" if values["replace"]
+                     else "refuse a conflicting existing BoxWeave entry"))

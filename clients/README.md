@@ -1,4 +1,48 @@
-# BoxWeave MCP client setup
+# BoxWeave MCP client setup — HTTP-first
+
+The interactive `boxweave client` wizard defaults to **HTTP MCP** and generates
+a standalone Python 3.11+ setup script for the chosen Agent and operating system.
+Use `--method http` in noninteractive mode. The client App performs OAuth and
+the actual MCP read; the script only creates/backs up client registration.
+
+```sh
+boxweave client
+boxweave client --method http --app cursor --os linux --url https://YOUR_HOST/mcp --no-replace > boxweave-setup.py
+boxweave client --method ssh --app cursor --os linux --transport native --admin-user YOUR_HOST_ADMIN > boxweave-ssh-setup.py
+```
+
+HTTP is configured per App as follows (the App catalog remains alphabetical):
+
+| App | HTTP entry | Automatic client-side setup |
+| --- | --- | --- |
+| Antigravity | `mcpServers.boxweave.serverUrl` | Scoped JSON |
+| Claude Code | `mcpServers.boxweave.type=http,url` | Scoped JSON |
+| Codex | `[mcp_servers.boxweave] url` | Scoped TOML |
+| Copilot CLI | `mcpServers.boxweave.type=http,url` | Scoped JSON |
+| Cursor | `mcpServers.boxweave.url` | Scoped JSON |
+| OpenCode | `mcp.boxweave` or existing `mcp.servers.boxweave` | Scoped JSON |
+| Qoder IDE | `mcpServers.boxweave.url` | Safe JSON for manual IDE import |
+| TRAE IDE | `mcpServers.boxweave.url` | Safe JSON for manual IDE import |
+| ZCode | `mcp.servers.boxweave` | Scoped JSON |
+
+The generated HTTP client script does not create a tunnel, request admin
+credentials, obtain bearer tokens or claim the connection works. Run it on the
+client (not the server) and authorize/verify the BoxWeave MCP tools in the App.
+No existing BoxWeave entry is replaced unless `--replace` was chosen; all
+unrelated settings survive, and changed configs are backed up. Qoder and TRAE
+expose verified UI import rather than a supported user-global file path, so
+their scripts intentionally print JSON without writing undocumented files.
+
+**Legacy SSH compatibility:** Any existing invocation with `--transport` or
+`--admin-user` continues to emit the original SSH Python script. The
+`--method ssh` override selects advanced SSH in the new interactive wizard.
+HTTP scripts use `--url https://HOST/mcp` or the localhost-reported public
+resource if no URL is specified. On hosts without a public URL, configure
+`sudo boxweave http configure --public-url https://HOST` first. A local
+`127.0.0.1` address is not a usable remote-agent endpoint. No SSH config
+or host keys are migrated or modified by an HTTP setup.
+
+## Existing SSH setup details
 
 The installed `boxweave client` generator supports the following Apps.
 **Always list Apps in alphabetical order (case-insensitive)** when adding

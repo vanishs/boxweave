@@ -489,5 +489,133 @@ class ClientGeneratorTests(unittest.TestCase):
                 self.assertNotIn("SECRET",json.dumps(summary))
 
 
+
+class HttpFirstClientTests(unittest.TestCase):
+    URL="https://mcp.example.test/mcp"
+
+    def script(self, app, replace=False):
+        return client_profiles.render_http({"app":app,"os":"linux",
+                                            "url":self.URL,"replace":replace})
+
+    def run_script(self, app, home, replace=False):
+        import subprocess,sys
+        script=home/"setup.py"
+        script.write_text(self.script(app,replace))
+        env=os.environ.copy()
+        env.update(HOME=str(home),USERPROFILE=str(home))
+        return subprocess.run([sys.executable,str(script)],env=env,cwd=home,
+                              capture_output=True,text=True,timeout=10)
+
+    def test_http_all_apps_and_os_are_pure_python(self):
+        for app in client_profiles.APPS:
+            for system in client_profiles.SYSTEMS:
+                with self.subTest(app=app,system=system):
+                    text=client_profiles.render_http(
+                        {"app":app,"os":system,"url":self.URL,"replace":False})
+                    self.assertTrue(text.startswith("#!/usr/bin/env python3\n# ==="))
+                    self.assertNotIn("ssh-keygen",text)
+                    self.assertIn("awaiting_authorization",text)
+                    compile(text,"setup.py","exec")
+
+    def test_http_generate_noninteractive_and_legacy_ssh_unchanged(self):
+        with patch.object(client_setup,"load_public_state",return_value=ready_state()), \
+             patch("sys.stdin.isatty",return_value=False), \
+             patch("sys.stdout",new_callable=io.StringIO) as out, \
+             patch("sys.stderr",new_callable=io.StringIO) as err:
+            self.assertEqual(client_setup.main(["--method","http","--app","cursor",
+                            "--os","linux","--url",self.URL]),0)
+            self.assertTrue(out.getvalue().startswith("#!/usr/bin/env python3\n"))
+            self.assertIn("Agent App owns OAuth",err.getvalue())
+            out.truncate(0);out.seek(0)
+            self.assertEqual(client_setup.main(["--app","cursor","--os","linux",
+                            "--transport","native","--admin-user","example-admin"]),0)
+            self.assertEqual(out.getvalue(),client_setup.render(
+                ready_state(),"example-admin",app="cursor",system="linux",transport="native"))
+            self.assertEqual(client_setup.main(["--method","http","--app","cursor",
+                            "--os","linux","--transport","native","--url",self.URL]),2)
+
+    def test_http_public_url_rejects_unsafe_entries(self):
+        for url in ("http://mcp.example.test/mcp","https://127.0.0.1/mcp",
+                    "https://host.test/","https://host.test/mcp?key=x",
+                    "https://host.test/mcp#fragment","https://me:pwd@host.test/mcp",
+                    "https://host.test/mcp\n","javascript:eval(1)"):
+            with self.subTest(url=url),self.assertRaises(ValueError):
+                client_profiles.validate_http_url(url)
+
+    def test_seven_auto_profiles_and_two_manual_imports(self):
+        expected={
+          "antigravity":(".gemini/config/mcp_config.json",("mcpServers",),"serverUrl"),
+          "claude":(".claude.json",("mcpServers",),"url"),
+          "copilot":(".copilot/mcp-config.json",("mcpServers",),"url"),
+          "cursor":(".cursor/mcp.json",("mcpServers",),"url"),
+          "opencode":(".config/opencode/opencode.json",("mcp",),"url"),
+          "zcode":(".zcode/cli/config.json",("mcp","servers"),"url")}
+        with tempfile.TemporaryDirectory() as td:
+            for app,(relative,keys,urlkey) in expected.items():
+                with self.subTest(app=app):
+                    home=Path(td)/app;home.mkdir()
+                    path=home/relative;path.parent.mkdir(parents=True,exist_ok=True)
+                    root={"unrelated":{"setting":"keep"}}
+                    section=root
+                    for key in keys:
+                        section[key]={};section=section[key]
+                    section["other"]={"command":"keep"}
+                    section["boxweave"]={"command":"old"}
+                    path.write_text(json.dumps(root))
+                    before=self.run_script(app,home)
+                    self.assertEqual(before.returncode,2,before.stderr)
+                    self.assertIn("BOXWEAVE_ENTRY_CONFLICT",before.stderr)
+                    self.assertEqual(json.loads(path.read_text()),root)
+                    after=self.run_script(app,home,replace=True)
+                    self.assertEqual(after.returncode,0,after.stderr)
+                    entry=json.loads(path.read_text())
+                    self.assertEqual(entry["unrelated"],root["unrelated"])
+                    for key in keys:entry=entry[key]
+                    self.assertEqual(entry["other"],{"command":"keep"})
+                    self.assertEqual(entry["boxweave"][urlkey],self.URL)
+                    self.assertEqual(len(list(path.parent.glob(path.name+".boxweave-*.bak"))),1)
+                    self.assertEqual(self.run_script(app,home).returncode,0)
+                    self.assertEqual(len(list(path.parent.glob(path.name+".boxweave-*.bak"))),1)
+            for app in ("qoder","trae"):
+                with self.subTest(app=app):
+                    home=Path(td)/app;home.mkdir()
+                    p=self.run_script(app,home)
+                    self.assertEqual(p.returncode,0,p.stderr)
+                    self.assertIn("manual_import_required",p.stdout)
+                    self.assertIn(self.URL,p.stdout)
+
+    def test_codex_toml_scoped_replace_keeps_unrelated_sections(self):
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td);target=home/".codex/config.toml";target.parent.mkdir()
+            original='model = "keep"\n[mcp_servers.other]\ncommand = "keep"\n[mcp_servers.boxweave]\ncommand = "ssh"\nargs = ["-T"]\n'
+            target.write_text(original)
+            self.assertEqual(self.run_script("codex",home).returncode,2)
+            self.assertEqual(target.read_text(),original)
+            p=self.run_script("codex",home,replace=True)
+            self.assertEqual(p.returncode,0,p.stderr)
+            import tomllib
+            config=tomllib.loads(target.read_text())
+            self.assertEqual(config["mcp_servers"]["boxweave"],{"url":self.URL})
+            self.assertEqual(config["mcp_servers"]["other"],{"command":"keep"})
+            self.assertEqual(len(list(target.parent.glob("config.toml.boxweave-*.bak"))),1)
+
+    def test_opencode_v2_and_symlink_rejection(self):
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td);p=home/".config/opencode/opencode.json"
+            p.parent.mkdir(parents=True)
+            p.write_text(json.dumps({"mcp":{"servers":{"other":{"type":"local"}}}}))
+            self.assertEqual(self.run_script("opencode",home).returncode,0)
+            data=json.loads(p.read_text())
+            self.assertEqual(data["mcp"]["servers"]["other"],{"type":"local"})
+            self.assertEqual(data["mcp"]["servers"]["boxweave"],{"type":"remote","url":self.URL})
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td);real=home/"real.json";real.write_text('{"safe":true}')
+            alias=home/".cursor/mcp.json";alias.parent.mkdir();alias.symlink_to(real)
+            p=self.run_script("cursor",home,replace=True)
+            self.assertEqual(p.returncode,2)
+            self.assertIn("CONFIG_SYMLINK_REFUSED",p.stderr)
+            self.assertEqual(real.read_text(),'{"safe":true}')
+
+
 if __name__ == "__main__":
     unittest.main()
