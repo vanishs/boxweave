@@ -2,7 +2,7 @@
 
 ## Phase 1 unified operation base — P1-B1 identity/private storage adapter
 
-Candidate source: `bwmini/coordination_runtime.py`, `tests/test_coordination_runtime.py`. Test on the exact candidate SHA: `python -m unittest discover -s tests -p test_coordination_runtime.py`, then full fixture/knowledge/packaging CI. The adapter must reject missing storage, symlink, unsafe directory/file, invalid identity and cross-incarnation mismatch; it must not create or authorize production shared storage. **Status: pending exact-SHA CI; live host and protected mutator integration NOT DONE.**
+Candidate source: `bwmini/coordination_runtime.py`, `tests/test_coordination_runtime.py`. Test on the exact candidate SHA: `python -m unittest discover -s tests -p test_coordination_runtime.py`, then full fixture/knowledge/packaging CI. The adapter must reject missing storage, symlink, unsafe directory/file, invalid identity and cross-incarnation mismatch; it must not create or authorize production shared storage. **Status: source/fixture PASS at `8ee12fd` via [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130); real host provisioning and protected mutator integration NOT DONE.** Evidence-only follow-up commit needs new CI.
 
 ## Phase 1 unified operation base — P1-A initial source review (2026-11-01)
 

@@ -40,8 +40,7 @@ storage and invalid data. CI result must be recorded against the exact SHA.
 fingerprints for separately verified Provider/app/gateway views and an opt-in
 private SQLite opener. Refuses missing/unowned/shared-mode/symlink DBs and
 unsafe parents; does not create or authorize the DB. Ten negative/positive
-fixture tests are in `test_coordination_runtime.py`. CI and exact-revision
-acceptance are pending. The installer still does not provision a shared DB,
+fixture tests are in `test_coordination_runtime.py`. Source/fixture acceptance at `8ee12fd` passed [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130). The installer still does not provision a shared DB,
 and no app/gateway mutator uses the coordinator yet.
 
 
@@ -71,7 +70,7 @@ and no app/gateway mutator uses the coordinator yet.
 | Slice | Source | Focused tests | CI | Installed/live | Decision |
 | --- | --- | --- | --- | --- | --- |
 | P1-A | Implemented, internal-only | 9 unit cases in full CI | [Run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634), commit `05a95aea`, verify succeeded | No installed caller or Provider action | **PASS for source/fixture only** |
-| P1-B | Identity/storage adapter candidate only | Pending CI | Pending | No host provisioning or migration | **IN PROGRESS** |
+| P1-B | Identity/storage adapter source implemented; migration pending | 10 focused new cases in full fixture suite | [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130) at `8ee12fd` PASS | No host provisioning or mutation integration | **PARTIAL (source PASS, live U)** |
 | P1-C | Not implemented | Not run | Not run | Not run | Pending |
 
 **No production behavior changes in P1-A.** Install/release/version pins remain
