@@ -105,3 +105,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## v0.42.3 R-01 validation correction (2026-11-02)
 
 [Source-level R-01 correction and evidence](REACCEPTANCE_0423_R01_2026-11-02.md): read-only tools explicitly document home-relative paths and publicly return bounded, stable argument/path/guest-unverified codes instead of the misleading generic trust gate. New negative Gateway fixture proves no Provider dispatch for malformed selectors; 642 Python tests PASS. Installed 0.42.3 live classification is U pending exact tag/deployment, and prior R-04/R-02/D4/E2–E4 limitations remain unchanged.
+
+
+### v0.42.3 installed R-01 diagnostic acceptance (2026-11-02)
+
+[Installed and exact-release evidence](REACCEPTANCE_0423_R01_2026-11-02.md) supersedes the pre-publication L=U note above: pinned fresh install exit 0, 10/10 authenticated doctor PASS, configured standalone Gateway under app user returns BOX_PATH_INVALID for absolute/traversal paths and BOX_READ_INVALID for bad offset, with correct tool descriptions. R-01 P3 diagnostic behavior **T+L PASS in this exact scope**; prior no-symlink/guest bounded access guarantees remain guarded by source fixtures and earlier 0.42.2 live checks. Optional multi-Agent and Provider-unavailable roadmap outcomes remain PARTIAL/BLOCKED.

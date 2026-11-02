@@ -884,3 +884,8 @@ remain U/BLOCKED; source/default/installed identities are distinct.
 ## v0.42.3 R-01 error typing repair (2026-11-02)
 
 [Detailed source evidence and remaining live gate](REACCEPTANCE_0423_R01_2026-11-02.md): home-relative paths now explicit in both read-only MCP tool descriptions, and bounded BOX_PATH_INVALID, BOX_READ_INVALID, BOX_READ_UNVERIFIED errors are surfaced rather than an unrelated generic SSH trust message. Source fixture gateway denies bad paths with **zero delegated Provider calls**. Prepared Python 3.12 run: 642 Python tests PASS; 4 architecture tests PASS; knowledge and shell checks PASS. New release CI and installed v0.42.3 real Gateway error behavior must be observed separately; stable pin still v0.42.1.
+
+
+### v0.42.3 post-release installed result (2026-11-02)
+
+[Exact live evidence](REACCEPTANCE_0423_R01_2026-11-02.md): immutable tag v0.42.3 and exact-source [CI 41541285300](https://github.com/vanishs/boxweave/actions/runs/41541285300) passed all verification/publish jobs. Fresh task-owned Box installed pinned v0.42.3 **exit 0**, doctor --mcp **10/10 PASS**, installed application-user standalone Gateway emitted correct BOX_PATH_INVALID for absolute/traversal and BOX_READ_INVALID for invalid offset, live catalog descriptions are home-relative, unauthenticated loopback MCP returned 401. Original seven Boxes preserved after independent test Box deletion. **R-01 P3 diagnostic issue closed within installed invalid-path scope**; provisioned task recovery, R-04 cross-entry races, permitted D4 positive and missing E2–E4 Provider contracts still unaccepted. Stable default v0.42.1 unchanged.
