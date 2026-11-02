@@ -9,11 +9,14 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, gateway_tasks
+    from . import box_reads, gateway_tasks, coordination_bridge
+    from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
     import box_reads
     import gateway_tasks
+    import coordination_bridge
+    from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
 SERVER_INFO_VERSION = "0.36.0"
@@ -216,6 +219,10 @@ GATE_ERROR_CODES = frozenset((
     "TASK_SCHEMA_UNSUPPORTED", "TASK_NOT_FOUND", "TASK_CAPACITY_EXCEEDED",
     "TASK_SELECTOR_INVALID", "TASK_STATE_CONFLICT", "TASK_RESULT_UNVERIFIED",
     "REQUEST_KEY_CONFLICT", "GATE_TOOL_NOT_ALLOWED",
+    "COORDINATION_SCOPE_UNVERIFIED", "COORDINATION_SCOPE_MISMATCH",
+    "COORDINATION_IDENTITY_INVALID", "COORDINATION_UNAVAILABLE",
+    "COORDINATION_SCHEMA_UNSUPPORTED", "COORDINATION_STORAGE_UNSAFE",
+    "RESOURCE_BUSY", "RECOVERY_REQUIRED",
 ))
 
 
@@ -491,36 +498,62 @@ def main():
                         if not isinstance(args, dict) or set(args) != {"box", "request_key", "exec"}:
                             raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
                         payload_digest = gateway_tasks.command_digest(args["box"], args["exec"])
+                        registry = trusted_registry()
                         observed = container(args["box"], request["id"])
-                        trusted({"box": args["box"]}, trusted_registry(), observed)
-                        # Bind to exact observed incarnation. Do not print or
-                        # persist commands or private connection material.
-                        identity = hashlib.sha256(json.dumps({
-                            "name": observed["name"],
-                            "created": str(observed["createdAt"]),
-                            "username": observed["username"],
-                            "ip": observed["network"]["ipAddress"]
-                        }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                        trusted({"box": args["box"]}, registry, observed)
+                        identity, scope_id, logical = coordination_bridge.gateway_box(
+                            observed, registry.get("scope"), args["box"])
                         store = gateway_tasks.TaskStore()
-                        receipt, fresh = store.reserve(args["request_key"], args["box"],
+                        receipt, fresh = store.reserve(args["request_key"], logical,
                                                        identity, payload_digest)
                         if not fresh:
                             emit_result(request["id"], receipt)
                             continue
-                        # A failed durable intent prevents ANY upstream dispatch.
-                        store.advance(receipt["task_id"], "recorded", "dispatch_intent")
+                        claims = coordination_bridge.SharedClaims()
+                        ref = "gateway_" + receipt["task_id"]
+                        try:
+                            # This atomic claim must succeed before any dispatch.
+                            # A Box lease affects BOTH root-published gateways
+                            # and the app's identical canonical resource keys.
+                            claims.acquire(receipt["task_id"], ref, identity, scope_id, logical)
+                        except CoordinationFault:
+                            store.advance(receipt["task_id"], "recorded",
+                                          "failed_before_dispatch")
+                            raise
+                        try:
+                            store.advance(receipt["task_id"], "recorded", "dispatch_intent")
+                            claims.dispatch_intent(receipt["task_id"])
+                        except Exception:
+                            # No remote write was sent. If the durable receipt
+                            # already says dispatch_intent, it stays UNKNOWN.
+                            try:
+                                claims.cancel_before_dispatch(receipt["task_id"])
+                            except CoordinationFault:
+                                pass
+                            raise
                         try:
                             internal = "boxweave-task-" + secrets.token_hex(8)
                             send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
                                   "params": {"name": "connect",
-                                             "arguments": {"box": args["box"], "exec": args["exec"]}}})
+                                             "arguments": {"box": logical, "exec": args["exec"]}}})
                             result = reply(internal, False)
                             code = gateway_tasks.observed_exit(result)
+                            # Commit original receipt BEFORE releasing the
+                            # separately stored resource claim. A failed release
+                            # leaves a conservative claim, never a duplicate run.
                             store.advance(receipt["task_id"], "dispatch_intent", "completed",
                                           exit_code=code)
+                            try:
+                                claims.observed_terminal(receipt["task_id"], ref)
+                            except CoordinationFault:
+                                pass
                         except Exception:
-                            # Once dispatch_intent is committed, no transport
-                            # failure proves the guest command did not run.
+                            # Transport loss is UNKNOWN even if the command
+                            # might have been sent. Never replay or clear lock.
+                            try:
+                                claims.unknown(receipt["task_id"])
+                            except CoordinationFault:
+                                pass
                             try:
                                 store.advance(receipt["task_id"], "dispatch_intent", "unknown")
                             except gateway_tasks.TaskFault:
@@ -566,7 +599,7 @@ def main():
                         if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
                         text = "".join(b["text"] for b in result["content"] if b.get("type") == "text")
                         trusted(args, registry, json.loads(text)["container"])
-                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault) as error:
+                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault, CoordinationFault) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     error_result = {"jsonrpc": "2.0", "id": request.get("id"),
