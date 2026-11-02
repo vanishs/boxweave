@@ -164,3 +164,7 @@ Evidence classes and installed/current revision must follow the [verification qu
 5. This roadmap is intentionally compact and additive: no code changes, no active Box actions, no release/version bump and no new permission claims are implied.
 
 **One-sentence product direction:** *Keep BoxWeave's Box/Provider/MCP foundation, make ordinary Agent usage reliable, coordinate rare conflicts without queues, and add environment snapshots/clones only when the authenticated deployed Provider can prove it supports them.*
+
+## Phase 2 staged source acceptance — 2026-11-02
+
+[Exact CI/Release evidence and outstanding gates](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md): v0.31.0 R-01(read-only)/R-03, v0.32.0 R-02 metadata-only task receipts, v0.33.0 R-04 **internal lease core only**. S/T/source release PASS for these individual slices; overall Phase 2 **PARTIAL**, since P1-B2 Web/SSH/HTTP shared dispatch, R-04 live tool/lease enforcement, guarded patch, and installed cross-entry recovery are NOT IMPLEMENTED or LIVE U. Stable PUBLISHED_RELEASE remains v0.28.0.
