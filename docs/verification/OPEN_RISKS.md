@@ -147,3 +147,11 @@ delete and recreate boxes in response to `BOXWEAVE_NESTING_NOT_APPLIED`.
 ## v0.26.5 follow-up status (2026-11-01)
 
 **Scoped nesting positive closed:** A new nesting-enabled Box successfully hosted/ran an inner Ubuntu/Python child and retained its execution after upgrading to v0.26.5; both test-owned Boxes were explicitly deleted and verified absent. **Partial-create negative path still U:** New structured `isError=true` tool output was CI-tested but not actually provoked against an installed v0.26.5 *outer* gateway. **Host owner-installed v0.26.4 unchanged:** Publication and nested-guest upgrade do not modify the user's host. Other earlier external/host-hop blockers remain, with original failed Box kept for comparison.
+
+## v0.26.6 deep audit risk dispositions (2026-11-01)
+
+**RISK-629 — OAuth admin denial throttle persistence, v0.26.6 source fix / pending source-bound test+release:** `RemoteCredentials.approve` inserted the failed authorization attempt inside the same transaction that raised `RemoteError`; `Store.db` rolls back on that error. Denials therefore failed to consume the advertised 5/min limit. The corrected code commits the rate row before the separate pending/password transaction. Synthetic SQLite/OAuth fixture verifies persistence, HTTP429, no authorization code, and recovery; no live administrator password or external OAuth client involved. **External protocol path remains U.**
+
+**RISK-630 — selftest typed error visibility, OPEN/P2:** The newly real-tested v0.26.5 app selftest completed `create/hello/stop/delete` with `state=passed`, no nested child left. Deliberately incorrect confirmation was safely rejected with exit2/zero new children, but host CLI emitted generic `SELFTEST_FAILED_INSPECT_STEPS` due to dropping nonzero output. Fix typed error presentation in a separately reviewed bounded-reader slice; do not replace proven safe rejection with an unverified security claim. See [deep audit](DEEP_AUDIT_0266_2026-11-01.md).
+
+Existing parent host-hop shell, D4 positive allowlist, real external OAuth/TLS clients, model inference, cross-platform native integrations, and private uncommitted-source transfer remain independently **U/BLOCKED**. These do not block the verified isolated scopes.

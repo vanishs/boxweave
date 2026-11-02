@@ -1,6 +1,6 @@
 # Final handoff — start without chat history
 
-This is the onboarding/runbook entry, not a second status/risk register. Read [PHASE_STATUS](PHASE_STATUS.md) for current authorization, [OPEN_RISKS](../verification/OPEN_RISKS.md) before any deployment, the [latest post-v0.26.2 reacceptance](../verification/REACCEPTANCE_0262_TO_0264_2026-11-01.md) and [earlier code-first live ledger](../verification/CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) for per-feature confirmed/blocked states, and [VERSION](../../VERSION) for product version. [MAINTENANCE](MAINTENANCE.md) defines future change procedure.
+This is the onboarding/runbook entry, not a second status/risk register. Read [PHASE_STATUS](PHASE_STATUS.md) for current authorization, [OPEN_RISKS](../verification/OPEN_RISKS.md) before any deployment, the [latest v0.26.6 cross-layer OAuth/selftest acceptance](../verification/DEEP_AUDIT_0266_2026-11-01.md), the [post-v0.26.2 reacceptance](../verification/REACCEPTANCE_0262_TO_0264_2026-11-01.md) and [earlier code-first live ledger](../verification/CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) for per-feature confirmed/blocked states, and [VERSION](../../VERSION) for product version. [MAINTENANCE](MAINTENANCE.md) defines future change procedure.
 
 ## First fifteen minutes
 

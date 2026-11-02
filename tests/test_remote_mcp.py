@@ -113,6 +113,31 @@ class RemoteTests(unittest.TestCase):
         self.now[0] += 2
         self.assertEqual(self.call(access).status_code, 401)
 
+    def test_denied_authorization_attempts_commit_before_failure(self):
+        # The rate ledger must survive failed password checks; a rolled-back
+        # SQLite transaction would let repeated denials evade the 5/min gate.
+        callback = "https://chatgpt.example.test/callback"
+        client_id = self.auth.register("Rate ledger fixture", [callback])
+        pending = self.auth.pending(client_id, callback, "A" * 43,
+                                    RESOURCE, "rate-fixture-state")
+        form = {"pending": pending, "password": "invalid-fixture-input",
+                "approve": "yes"}
+        for _ in range(5):
+            self.assertEqual(self.client.post("/authorize", data=form,
+                                              headers={"Origin": ORIGIN}).status_code, 403)
+        with self.store.db() as db:
+            self.assertEqual(db.execute(
+                "SELECT count(*) FROM remote_attempts WHERE category='admin_authorize'"
+            ).fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT count(*) FROM remote_codes").fetchone()[0], 0)
+        self.assertEqual(self.client.post("/authorize", data=form,
+                                          headers={"Origin": ORIGIN}).status_code, 429)
+        # A denied attempt must not consume a still-valid pending grant.
+        self.now[0] += 61
+        form["password"] = "fixture-admin-password"
+        self.assertEqual(self.client.post("/authorize", data=form,
+                                          headers={"Origin": ORIGIN}).status_code, 302)
+
     def test_dcr_authorization_pkce_refresh_and_reset(self):
         registered = self.client.post("/register", json={
             "client_name": "Realistic test",

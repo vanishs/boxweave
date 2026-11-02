@@ -105,3 +105,7 @@ TASK-008 / SRC-073..075 / 0.7.0: native-guided GLM wizard complete in selected s
 ## Routine maintenance validation
 
 Use `python scripts/check_knowledge.py` for authority/links/traceability and non-root assigned-LXC `python scripts/validate.py --browser` for the existing suite, build and seven fixture browser flows. See [maintenance](../process/MAINTENANCE.md) for prerequisites, deadline, logs, evidence classes and separately authorized live checks. This runner never invokes live lab drivers.
+
+## OAuth admin-denial persistence invariant (v0.26.6+)
+
+Every change to remote OAuth authorization must exercise the **failure** path in an ephemeral Store: repeated rejected test inputs consume the intended 5/minute authorization-attempt ledger even when `RemoteError` aborts grant processing, the next attempt is HTTP429 with zero authorization codes issued, and the same unconsumed pending grant can be authorized once the rate window expires. Keep existing positive DCR/PKCE/refresh/revocation fixtures. This is a unit/Flask fixture, not public TLS/external-client acceptance.

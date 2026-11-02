@@ -174,9 +174,15 @@ class RemoteCredentials:
     def approve(self, pending, password):
         if not isinstance(pending, str) or TOKEN_PATTERN.fullmatch(pending) is None:
             raise RemoteError("invalid_request")
+        # Record the attempt in its own committed transaction. The pending
+        # lookup/password check below can raise RemoteError, and Store.db()
+        # rolls back on exceptions. Keeping _rate in that same transaction
+        # would silently erase each failed attempt and disable throttling.
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             self._rate(db, "admin_authorize", 5)
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM remote_pending WHERE id=? AND expires>?",
                              (digest(pending), self.clock())).fetchone()
             admin = db.execute("SELECT password FROM admin WHERE id=1").fetchone()
