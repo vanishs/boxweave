@@ -374,6 +374,8 @@ class RemoteTests(unittest.TestCase):
 
     def test_caddyfile_requires_installed_caddy_and_canonical_host(self):
         remote = {"enabled": True, "public_url": ORIGIN, "port": 18740}
+        with self.assertRaisesRegex(ValueError, "REMOTE_PUBLIC_URL_REQUIRED_FOR_TLS"):
+            caddyfile({"enabled": True, "port": 18740})
         with self.assertRaises(ValueError):
             caddyfile(remote, caddy=str(Path(self.tmp.name) / "missing-caddy"))
         with self.assertRaises(ValueError):
