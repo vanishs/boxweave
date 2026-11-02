@@ -88,3 +88,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## ARCH-0 architecture consolidation — source/fixture checkpoint
 
 [Gate and source audit](../design/ARCHITECTURE_CONSOLIDATION_GATE.md) establish six logical ownership blocks and [executed-route inventory](ARCH0_BOUNDARY_INVENTORY.md). ARCH-0A source map CI 41408681895 PASS; ARCH-0B Provider-scoped exact incarnation / standalone gateway helper packaging / private SQLite safety CI 41409106116 PASS; ARCH-0C pure Provider/access/lifecycle extraction with original public aliases CI 41409883731 PASS. **S/T=PASS** for source/fixtures only. **L/U** for installed SSH/HTTP/Web, cross-UID real storage permissions, mixed-version upgrade/rollback and mutation coordination. New source is v0.30.0 and default stable install remains v0.28.0 until separately promoted.
+
+### ARCH-0 v0.30.0 source publication closure
+
+**Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.

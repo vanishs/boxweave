@@ -104,3 +104,9 @@ ARCH-0C splits pure Provider/access/lifecycle contracts without
 changing gateway, Web or worker APIs; [CI 41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731) PASS at `3ad92b45`.
 P1-B2 cross-transport dispatch guard implementation is still **NOT
 DONE**. No real host installation/upgrade is claimed.
+
+## ARCH-0 final source release evidence
+
+**Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
+
+P1-B2 and P1-C must not be marked done based on these source checks. The next approved isolated-Box checkpoint must verify old/new mixed helpers, actual UID/DB permissions, true SSH/HTTP/Web invocation, original receipt recovery and rollback before installed acceptance.
