@@ -6,7 +6,7 @@ those contents in Web/API responses.
 """
 import json
 from .domain import Fault
-from .provider import text
+from .wire_results import text
 
 
 def summary(provider, target):

@@ -139,3 +139,32 @@ unbounded rewrite.
 - New identity, missing scope, tamper/schema, unsafe parent/sidecar and standalone-sibling smoke fixtures must pass, alongside the legacy online manifest tests. Actual installer/user permissions and original guest writes **L=U**.
 
 **ARCH-0B acceptance:** source/fixture CI only. Do not enable mutating coordinator or promote stable installer as part of this internal contract.
+
+## ARCH-0C scoped extraction and delivery gates
+
+- `wire_results.py` owns pure `text/execution` MCP envelopes;
+  `provider.text/execution` remain compatible public imports, with
+  `access_provider`, `agent_box`, `auto_sleep`, `box_debug` using pure parsing.
+- `access_contract.py` and `lifecycle_contract.py` own configuration
+  checks and resize vocabulary. Provider initialization no longer
+  imports Access or instantiates Lifecycle just to validate. Public
+  Access/Lifecycle imports continue to work.
+- App receipts, Store schema v12, Web routes, gateway tool calls,
+  root installer scripts and generated client templates are unchanged.
+- `tests/test_arch0_contracts.py` checks original aliases, malformed
+  and valid execution envelopes, options, validator rejections and
+  import-dependency direction.
+
+## Per-slice acceptance
+
+| Slice | CI evidence | Remaining scope |
+| --- | --- | --- |
+| ARCH-0A | [41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895) PASS at `107861cc` | Source map only |
+| ARCH-0B | [41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116) PASS at `d090477c` | No installed storage/provision |
+| ARCH-0C | Candidate; CI on exact SHA pending | No installed adapter migration |
+| Live test | U / not run | SSH+HTTP+Web real host/user/Box integration not claimed |
+
+**Exit:** ARCH-0 source/fixture completion requires full CI and
+v0.30.0 source publication evidence. Actual shared mutation dispatch,
+R-02 task recovery, R-04 lease integration and P1-B2 remain distinct
+feature work with real-host checkpoints.

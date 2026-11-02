@@ -1,5 +1,16 @@
 # Remediation validation and next-Agent queue
 
+## ARCH-0 A/B/C source consolidation checkpoint
+
+Owner-authorized source architecture work: [gate](../design/ARCHITECTURE_CONSOLIDATION_GATE.md)
+and [boundary inventory](ARCH0_BOUNDARY_INVENTORY.md).
+ARCH-0A fixture CI [41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895)
+PASS and ARCH-0B fixture CI [41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116)
+PASS. ARCH-0C extraction and v0.30.0 release are subject to
+final exact-SHA CI. **Installed live acceptance U** for user identity,
+SQLite paths, Gateway root helper execution, mixed old/new versions,
+real Web/SSH/HTTP dispatch and rollback. No claim of global guard.
+
 ## ARCH-0 architecture consolidation insertion — static audit only
 
 At source `0a3c0b524cfb6ec33a3d03d81d6f29f1549cecac` (v0.29.0),

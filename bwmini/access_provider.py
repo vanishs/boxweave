@@ -4,7 +4,7 @@ import ipaddress
 import json
 import re
 from .domain import Fault,Target
-from .provider import text
+from .wire_results import text
 
 KEY=re.compile(r'[a-z0-9][a-z0-9._-]{0,127}\Z')
 def tenant(value):

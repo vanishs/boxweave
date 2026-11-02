@@ -5,22 +5,9 @@ import re
 import shlex
 from .domain import Target, Fault
 from .mcp import MCP
-
-def text(result):
-    return "\n".join(b["text"] for b in result["content"])
-
-def execution(result):
-    structured = result.get("structuredContent")
-    if isinstance(structured, dict):
-        code, out = structured.get("exit_code"), structured.get("stdout")
-        if type(code) is int and isinstance(out, str) and len(out) <= 4096:
-            return code, out
-        raise Fault("EXECUTION_FORMAT_UNSUPPORTED")
-    # Only the observed platform envelope, never markers parsed out of guest text.
-    match = re.fullmatch(r"exit_code: (-?\d+)\n\n--- stdout ---\n([\s\S]{0,4096})", text(result))
-    if match is None:
-        raise Fault("EXECUTION_FORMAT_UNSUPPORTED")
-    return int(match[1]), match[2]
+from .wire_results import text, execution  # preserve provider.py public imports
+from .access_contract import validate_config as validate_access_config
+from .lifecycle_contract import validate_config as validate_lifecycle_config
 
 class Fixture:
     mode = "fixture"
@@ -43,8 +30,7 @@ class Provider:
     mode = "mcp"
     def __init__(self, config):
         self.config = config
-        from .access import validate_config
-        validate_config(config.get("access"))
+        validate_access_config(config.get("access"))
         argv = config.get("launcher")
         if not isinstance(argv, list) or not argv or any(not isinstance(a, str) for a in argv):
             raise Fault("MCP_LAUNCHER_REQUIRED", 422)
@@ -52,8 +38,7 @@ class Provider:
             raise Fault("MCP_LAUNCHER_UNAVAILABLE", 422)
         self.argv = argv
         self.lifecycle_config = config.get("lifecycle")
-        from .lifecycle import Lifecycle
-        Lifecycle(None,self)
+        validate_lifecycle_config(self.lifecycle_config, set(config.get("targets", {})))
 
     def session(self, timeout=30):
         return MCP(self.argv, min(30, max(1, timeout)))

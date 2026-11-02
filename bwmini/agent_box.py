@@ -10,7 +10,7 @@ import re
 import stat
 from .domain import Fault, workspace
 from .mcp import MCP
-from .provider import text
+from .wire_results import text
 
 READ_TOOLS = frozenset(("read_file", "list_directory", "tail_log", "process_list",
                         "compose_discover", "compose_autostart_status"))
