@@ -126,6 +126,40 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         if not hasattr(service.provider, "environment_report"):
             raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
         return jsonify(service.provider.environment_report(logical))
+    @app.post("/api/boxes/<logical>/environment/capture")
+    def environment_capture(logical):
+        from .environment_history import save_capture
+        # No request-provided report or actor is accepted.
+        if request.get_json(silent=True) not in (None, {}):
+            raise Fault("INVALID_INPUT",400)
+        service.observe_target(logical)
+        if not hasattr(service.provider,"environment_report"):
+            raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
+        return jsonify(save_capture(store,service.provider.environment_report(logical)))
+
+    @app.get("/api/environment-captures")
+    def environment_captures():
+        from .environment_history import list_captures
+        if set(request.args) - {"target_identity","limit"}:
+            raise Fault("INVALID_INPUT",400)
+        try:
+            limit=int(request.args.get("limit","20"))
+        except ValueError:
+            raise Fault("INVALID_INPUT",400) from None
+        return jsonify(captures=list_captures(
+            store, target_identity=request.args.get("target_identity"), limit=limit))
+
+    @app.get("/api/environment-captures/<ident>")
+    def environment_capture_detail(ident):
+        from .environment_history import read_capture
+        return jsonify(read_capture(store,ident))
+
+    @app.post("/api/environment-captures/compare")
+    def environment_compare():
+        from .environment_history import compare_captures
+        data=body(["left","right"])
+        return jsonify(compare_captures(store,data["left"],data["right"]))
+
 
     @app.get("/api/boxes/<logical>/debug-summary")
     def box_debug_summary(logical):
