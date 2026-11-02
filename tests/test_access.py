@@ -190,6 +190,77 @@ class AccessTests(Base):
     def test_membership_read_keeps_account_and_network_identity_distinct(self):
         rows=self.a.memberships()['memberships'];self.assertEqual(rows[0]['account_user'],TARGET.user);self.assertEqual(rows[0]['network_tenant'],'tenant-a')
 
+class SharedAccessClaimTests(AccessTests):
+    """Access writes join tracked Gateway and lifecycle resource claims."""
+    def setUp(self):
+        super().setUp()
+        from bwmini.coordination_bridge import SharedClaims
+        from bwmini.coordination_runtime import private_connection
+        from bwmini.operation_coordination import OperationCoordinator
+        self.claim_path=self.root/'claims.sqlite3'
+        self.claim_path.touch(mode=0o600)
+        OperationCoordinator(lambda:private_connection(self.claim_path)).initialize()
+        self.claims=SharedClaims(self.claim_path,clock=lambda:self.now[0])
+        self.s.shared_claims=self.claims
+        self.s.lifecycle.shared_claims=self.claims
+        self.mock_scope=patch('bwmini.coordination_bridge.published_scope',
+                              return_value={'provider':'containarium','backend':'dev','project':'default'})
+        self.mock_scope.start()
+        self.addCleanup(self.mock_scope.stop)
+
+    def external(self, resource, id='a'*32):
+        from bwmini.operation_coordination import CoordinationFault
+        self.claims.coordinator.acquire(id,'f'*64,'gateway_'+id,[resource])
+
+    def test_network_claim_blocks_same_tenant_before_dispatch(self):
+        from bwmini.coordination_runtime import scope_digest
+        from bwmini.operation_coordination import tenant_resource
+        scope=scope_digest('containarium','dev','default')
+        self.external(tenant_resource(scope,'tenant-b'))
+        r=self.network()
+        self.assertEqual((r['state'],r['code']),('failed','RESOURCE_BUSY'))
+        self.assertEqual(self.w.writes,[])
+
+    def test_port_conflicts_with_gateway_box_and_releases_observed_receipt(self):
+        from bwmini.coordination_bridge import app_box
+        from bwmini.operation_coordination import box_resource
+        identity,_,_=app_box(TARGET,{'provider':'containarium','backend':'dev','project':'default'})
+        self.external(box_resource(identity))
+        r=self.port()
+        self.assertEqual((r['state'],r['code']),('failed','RESOURCE_BUSY'))
+        self.assertEqual(self.w.writes,[])
+        self.claims.cancel_before_dispatch('a'*32)
+        r=self.port()
+        self.assertEqual(r['state'],'succeeded')
+        self.assertEqual(self.claims.coordinator.status(r['id'])['state'],'observed_terminal')
+
+    def test_lost_access_result_retains_unknown_and_blocks_replay(self):
+        from bwmini.coordination_runtime import scope_digest
+        from bwmini.operation_coordination import tenant_resource,CoordinationFault
+        self.w.lost=True
+        r=self.network()
+        self.assertEqual(r['state'],'unknown')
+        self.assertEqual(self.claims.coordinator.status(r['id'])['state'],'unknown')
+        key=tenant_resource(scope_digest('containarium','dev','default'),'tenant-b')
+        with self.assertRaisesRegex(CoordinationFault,'RECOVERY_REQUIRED'):
+            self.external(key)
+        self.assertEqual(len(self.w.writes),1)
+
+    def test_unprovisioned_store_fails_before_write(self):
+        self.claim_path.unlink()
+        r=self.network()
+        self.assertEqual((r['state'],r['code']),('failed','COORDINATION_UNAVAILABLE'))
+        self.assertEqual(self.w.writes,[])
+        self.assertFalse(self.claim_path.exists())
+
+    def test_scope_mismatch_fails_before_access_write(self):
+        with patch('bwmini.coordination_bridge.published_scope',
+                   return_value={'provider':'containarium','backend':'other','project':'default'}):
+            r=self.network()
+        self.assertEqual((r['state'],r['code']),('failed','COORDINATION_SCOPE_MISMATCH'))
+        self.assertEqual(self.w.writes,[])
+
+
 class WireTests(Base):
     def provider(self):
         from bwmini.provider import Provider

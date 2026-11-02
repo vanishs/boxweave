@@ -34,3 +34,46 @@ After docs-only PR #39 merged at `8e89f025`, [main CI 41422944355](https://githu
 ## v0.40.0 lifecycle worker integration — source checkpoint
 
 [PR #47](https://github.com/vanishs/boxweave/pull/47) adds opt-in app lifecycle create/start/stop/delete/resize claim enforcement with the existing original app receipt. Pre-version-bump code [CI 41493238649](https://github.com/vanishs/boxweave/actions/runs/41493238649) passed fixture Python, packaging, JS and browser checks; final source version and publication require separate exact-SHA CI after this metadata commit. No live Provider, real Web/SSH/HTTP cross-transport or deployed-host acceptance is inferred. Existing Access/tenant/port actions, explicit MCP lease tool, global bypass and BOI patch remain pending or unverified; source state is **PARTIAL**, installed state **U**, stable installer v0.28.0.
+
+
+## v0.41.0 completion candidate / final evidence gate
+
+[Implementation details](../design/PHASE2_CROSS_ENTRY_COMPLETION.md).
+Source now integrates Access Tenant/port claims, a protected-only optional
+Box lease MCP method, and bounded tracked CAS patch, reusing the original
+R-02 metadata-only task receipt. Verify final exact SHA with Linux focused
+tests, complete validation, built archive and source GitHub CI before claiming
+source PASS. A PASS here does **not** satisfy installed cross-entry, independent
+SSH/HTTP client, timeout-after-real-dispatch, legacy upgrade/rollback or
+out-of-band mutation acceptance. Overall Phase 2 is **PARTIAL / LIVE U**
+until installed host gates are proved.
+
+## v0.41.0 actual disposable development Box execution evidence
+
+Target: existing authorized `bwphase2-1102` (not a fresh installation),
+Linux Ubuntu and Python 3.12.3, isolated source worktree at
+`/home/bwphase2-1102/phase2-mainwork` based on `780cdf3` plus
+uncommitted candidate changes. The original pre-existing source directory
+and unrelated Box workloads were preserved.
+
+- `python scripts/check_knowledge.py`: exit 0, 160 documents.
+- `python -m unittest discover -s tests -q` using previously prepared
+  locked virtual environment: exit 0, **630 tests passed**.
+- Local `scripts/validate.py`: exit 2, missing Node/npm in this Box.
+  This is **BLOCKED**, not a passing frontend or browser verification.
+  Verify full release-package/frontend/browser CI on exact GitHub SHA.
+- Actual guest `box_patch.guest_command` executed inside the Box
+  against `/home/bwphase2-1102/phase2-cas-live-proof.txt`:
+  initial file `revision A\\n`, SHA-pinned replacement
+  `revision B\\n` exit 0 with SHA-256
+  `38ff9cf1075f2b5e9c11bbb9a33ad4760991d9c2204113433b3a51c7511c2ee3`;
+  readback matched; repeating with stale original SHA returned exit 1
+  and `BOX_PATCH_STALE`, file remained unchanged. Test-owned proof
+  file deleted after verification. This is **L (guest script only)**,
+  not a proof of installed `boxweave_box_patch` SSH/HTTP MCP routing.
+- Target running host and independent Web/Gateway shared DB root policy
+  were not modified. Real dual-transport upgraded-host acceptance remains U.
+
+Commit, GitHub CI run and immutable tag must be appended to the next
+acceptance checkpoint; historical version-specific evidence is never silently
+promoted to an installed production PASS.

@@ -16,13 +16,13 @@ if __package__:
         app_target_identity, gateway_target_identity, private_connection, scope_digest)
     from .operation_coordination import (
         OperationCoordinator, CoordinationFault, box_resource, name_resource,
-        tenant_resource)
+        tenant_resource, port_resource)
 else:
     from coordination_runtime import (
         app_target_identity, gateway_target_identity, private_connection, scope_digest)
     from operation_coordination import (
         OperationCoordinator, CoordinationFault, box_resource, name_resource,
-        tenant_resource)
+        tenant_resource, port_resource)
 
 DEFAULT_CLAIMS = Path("/home/boxweave/.boxweave/claims.sqlite3")
 PUBLIC_SCOPE = Path("/var/lib/boxweave-default/public/targets.json")
@@ -94,6 +94,49 @@ def app_environment_keys(config, action, logical, target, spec):
     return identity,resources
 
 
+def app_access_keys(config, payload):
+    """Resources for a previously validated, exact-scope Access intent.
+
+    Access.preflight must independently pin the Provider revision/target.
+    This does not grant new privileges or perform any Provider operation.
+    """
+    scope = published_scope()
+    if not isinstance(config, dict) or {
+        k: config.get(k) for k in _SCOPE_KEYS} != scope:
+        raise CoordinationFault("COORDINATION_SCOPE_MISMATCH")
+    if not isinstance(payload, dict):
+        raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+    scope_id = scope_digest(**scope)
+    if payload.get("kind") == "network":
+        changes = payload.get("changes")
+        if not isinstance(changes, list) or not 1 <= len(changes) <= 2:
+            raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+        keys = [tenant_resource(scope_id, c["destination"]) for c in changes
+                if isinstance(c, dict) and "destination" in c]
+        if len(keys) != len(changes) or len(set(keys)) != len(keys):
+            raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+        identity = hashlib.sha256(json.dumps({
+            "scope": scope_id, "kind": "network", "resources": sorted(keys)
+        }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return identity, keys
+    if payload.get("kind") == "port":
+        if not __package__:
+            raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+        from .domain import Target
+        try:
+            target = Target(**payload["target"])
+            route = payload["route"]
+            identity, actual_scope, logical = app_box(target, scope)
+            if actual_scope != scope_id or route["container"] != target.instance:
+                raise CoordinationFault("COORDINATION_IDENTITY_INVALID")
+            keys = [box_resource(identity), name_resource(scope_id, logical),
+                    port_resource(scope_id, route["protocol"], route["external_port"])]
+            return identity, keys
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CoordinationFault("COORDINATION_RESOURCE_INVALID") from exc
+    raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+
+
 class SharedClaims:
     def __init__(self, path=DEFAULT_CLAIMS, *, clock=time.time):
         self.path=Path(path)
@@ -110,6 +153,10 @@ class SharedClaims:
                             action, logical, target, spec):
         identity,resources=app_environment_keys(config,action,logical,target,spec)
         self.coordinator.acquire(operation_id,identity,receipt_ref,resources)
+
+    def acquire_access(self, operation_id, receipt_ref, config, payload):
+        identity, resources = app_access_keys(config, payload)
+        self.coordinator.acquire(operation_id, identity, receipt_ref, resources)
 
     def dispatch_intent(self, operation_id):
         self.coordinator.dispatch_intent(operation_id)

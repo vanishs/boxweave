@@ -359,11 +359,13 @@ configuration and service control to the non-root application account.
 - `POST /token`
 <!-- inventory:remote-api:end -->
 
-### Gateway-owned MCP tools (9)
+### Gateway-owned MCP tools (11)
 
 <!-- inventory:gateway-tools:start -->
 - `boxweave_diagnose`
+- `boxweave_box_lease`
 - `boxweave_box_list_directory`
+- `boxweave_box_patch`
 - `boxweave_box_read_file`
 - `boxweave_info`
 - `boxweave_nesting`

@@ -18,7 +18,7 @@ _GATEWAY_READ = frozenset((
     "boxweave_box_read_file", "boxweave_box_list_directory",
     "boxweave_task_get", "boxweave_task_list",
 ))
-_TRACKED_WRITE = frozenset(("boxweave_task_submit",))
+_TRACKED_WRITE = frozenset(("boxweave_task_submit", "boxweave_box_lease", "boxweave_box_patch"))
 _KNOWN_SPECIAL = frozenset(("boxweave_nesting",))
 VISIBLE = _UPSTREAM_READ | _GATEWAY_READ | _TRACKED_WRITE | _KNOWN_SPECIAL
 

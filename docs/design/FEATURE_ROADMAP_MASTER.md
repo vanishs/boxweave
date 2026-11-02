@@ -188,3 +188,15 @@ Evidence classes and installed/current revision must follow the [verification qu
 ## R-04 lifecycle app-worker source checkpoint (v0.40.0 candidate)
 
 [Web lifecycle shared claims](PHASE2_LIFECYCLE_SHARED_CLAIMS.md) adds opt-in common Box/name/tenant resource claims for the app's existing create/start/stop/delete/resize worker. It records dispatch intent before Provider writes, retains the original app receipt, and releases a claim only after an observed desired-state terminal result. UNKNOWN, unverified resize and unverified nesting remain blocked. This joins the already opt-in Web BoxActions and tracked SSH/HTTP Gateway paths; Web Access/network/port changes, legacy external SSH and unclassified disabled-mode forwarded writes are still outside complete protection. The shared policy is **not enabled on the installed host**, and source CI is not a live Box proof. Overall P1-B2/R-04 still PARTIAL.
+
+
+## Phase 2 cross-entry protected source slice (v0.41.0 candidate)
+
+[Cross-entry source implementation and acceptance boundaries](PHASE2_CROSS_ENTRY_COMPLETION.md)
+completes the source migration of the selected Web Access Tenant/port writes to
+canonical shared claims, adds the **opt-in** protected Gateway lease endpoint
+and a tracked 1024-byte optimistic file patch. All work uses original gateway or
+Web receipts; UNKNOWN remains non-replayable. Root policy/DB/app opt-in must be
+independently installed and dual-client tested. Outside-Gateway SSH/Provider
+writes remain outside guarantee. Source release does not mean global installed
+R-04 acceptance; detailed evidence remains separate.
