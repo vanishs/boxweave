@@ -24,7 +24,7 @@ class FakeProvider:
         message=json.loads(raw)
         self.sent.append(message)
         if message.get("method")=="tools/list":
-            tools=[{"name":n,"inputSchema":{"type":"object"}}
+            tools=[{"name":n,"inputSchema":{"type":"object","properties":{}}}
                    for n in ("list_containers","get_container","get_system_info",
                              "connect","create_container","resize_container",
                              "delete_container","unverified_custom_method")]
