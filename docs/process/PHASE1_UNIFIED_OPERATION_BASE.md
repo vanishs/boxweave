@@ -27,6 +27,8 @@ public exposure, upgrades or unreviewed resource destruction.
   the existing single-operator authority, existing app receipts or MCP behavior.
   There is no claim of SSH/HTTP/Web parity or on-host permission readiness yet.
 
+**Executed fixture evidence (2026-11-01 local):** GitHub Actions run 41402675634 at commit `05a95aeabd633896d11aba05079a3acbaf6baba9` ran the full verify workflow successfully (including Python unittest discovery, documentation inventory, fixture browser and packaging checks). No test used a live Provider or installed coordinator. The subsequent evidence-only commit must receive independent CI.
+
 **Tests:** tests/test_operation_coordination.py — exact typed keys, duplicate
 dispatch intent, UNKNOWN persistence, receipt mismatch, multi-resource
 atomicity, independent Boxes, concurrent SQLite connections, unavailable
@@ -59,7 +61,7 @@ storage and invalid data. CI result must be recorded against the exact SHA.
 
 | Slice | Source | Focused tests | CI | Installed/live | Decision |
 | --- | --- | --- | --- | --- | --- |
-| P1-A | In review | Pending run | Pending exact-SHA CI | Not required for pure core | Pending |
+| P1-A | Implemented, internal-only | 9 unit cases in full CI | [Run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634), commit `05a95aea`, verify succeeded | No installed caller or Provider action | **PASS for source/fixture only** |
 | P1-B | Not implemented | Not run | Not run | Not run | Pending |
 | P1-C | Not implemented | Not run | Not run | Not run | Pending |
 

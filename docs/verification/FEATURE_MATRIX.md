@@ -56,7 +56,7 @@ REQ-003/008/009/011/018/019 nesting extension: TASK-017/ADR-008 -> nesting.py, m
 
 ## Phase 1 unified operation base (owner authorized; source partial only)
 
-[Delivery ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) tracks P1-A source-only operation-claim primitives. The core adds no exposed MCP/Web mutation, no production SQLite migration, no task-result store and no deployed multi-Agent protection. Targeted unit/CI evidence must be checked at the merged SHA before acceptance. P1-B/P1-C adapter coverage, host permissions, historical receipt migration and live cross-transport tests remain pending.
+[Delivery ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) tracks P1-A source-only operation-claim primitives. The core adds no exposed MCP/Web mutation, no production SQLite migration, no task-result store and no deployed multi-Agent protection. Targeted source/fixture CI passed at `05a95aea` ([run 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)); the final merged SHA and installed/live behavior require separate evidence. P1-B/P1-C adapter coverage, host permissions, historical receipt migration and live cross-transport tests remain pending.
 
 ## Code-first source coverage and acceptance state (2026-11-01)
 
