@@ -71,6 +71,9 @@ These are **not** additional automatic work packages. They are candidates or par
 
 ## Phase 1 implementation (authorized 2026-11-01)
 
+**Current checkpoint:** P1-A (claim core) and P1-B1 (Box identity/private DB adapter) were merged and source/fixture-accepted. [v0.29.0 main CI and source publication PASS](https://github.com/vanishs/boxweave/actions/runs/41404753003) at `160a09c4d2d2defff3adf3fe538861e28128b1a3`; unchanged stable v0.28.0 installer. P1-B2/P1-C (actual legacy mutation integration, provision/migration and cross SSH/HTTP/Web acceptance) remain **NOT IMPLEMENTED / LIVE U**. This is not global coordination or recovery readiness.
+
+
 The owner authorized staged implementation, focused acceptance and commits for the unified operation foundation and related existing-path migration. The [Phase 1 implementation and acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) is the active delivery handoff. P1-A source and fixture verification passed at `05a95aea` ([CI 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)). It introduces only a non-dispatching operation-claim core; it is **not** installed protection, a new MCP API, complete R-02 recovery or R-04 leasing. P1-B1 verified-identity/private-storage adapter passed source/fixture [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130) at `8ee12fd`, not installed provisioning. Subsequent adapters require verified source/transport/security gates before announcing coverage. Stable installation pins are unchanged.
 
 ## 5. Integration review: conflicts, reuse and corrected dependencies (2026-11-01)
