@@ -134,7 +134,7 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         from .remote_mcp import validate_remote_config
         remote = validate_remote_config(remote_config)
         from .remote_auth import RemoteCredentials
-        registry = RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock)
+        registry = RemoteCredentials(store, (remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp", clock)
         # A bounded loopback TCP connect is an observation, not an MCP
         # handshake, OAuth proof, or public HTTPS reachability check.
         import socket
@@ -143,8 +143,8 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
                 local_tcp_reachable = True
         except OSError:
             local_tcp_reachable = False
-        return jsonify(enabled=True, public_url=remote["public_url"],
-                       mcp_url=remote["public_url"].rstrip("/") + "/mcp",
+        return jsonify(enabled=True, public_url=remote.get("public_url"),
+                       mcp_url=(remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp",
                        port=remote["port"], listener="127.0.0.1",
                        local_tcp_reachable=local_tcp_reachable,
                        externally_verified=False, credentials=registry.list(),
@@ -163,13 +163,13 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         if d["kind"] not in ("api", "link"):
             raise Fault("INVALID_CREDENTIAL_KIND", 422)
         try:
-            registry = RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock)
+            registry = RemoteCredentials(store, (remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp", clock)
             value = registry.issue(d["kind"], d["label"])
         except RemoteError:
             raise Fault("INVALID_CREDENTIAL", 422) from None
         return jsonify(kind=d["kind"], secret=value,
-                       connection_url=(remote["public_url"].rstrip("/") + "/mcp/link/" + value)
-                           if d["kind"] == "link" else remote["public_url"].rstrip("/") + "/mcp",
+                       connection_url=((remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp/link/" + value)
+                           if d["kind"] == "link" else (remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp",
                        warning="This credential grants broad trusted-operator MCP access. "
                                "Copy it once; anyone holding it may operate your Boxes."), 201
 
@@ -181,7 +181,7 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         from .remote_mcp import validate_remote_config
         remote = validate_remote_config(remote_config)
         try:
-            RemoteCredentials(store, remote["public_url"].rstrip("/") + "/mcp", clock).revoke(ident)
+            RemoteCredentials(store, (remote.get("public_url") or "http://127.0.0.1:" + str(remote["port"])) + "/mcp", clock).revoke(ident)
         except RemoteError as error:
             raise Fault("CREDENTIAL_NOT_FOUND" if error.status == 404 else "INVALID_CREDENTIAL",
                         error.status) from None
