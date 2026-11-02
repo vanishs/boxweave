@@ -5,7 +5,10 @@ receipt databases live here. The host integration must supply a separately
 authorized connection factory and write receipts before dispatch.
 """
 from contextlib import contextmanager
+import hashlib
+import hmac
 import re
+import secrets
 import sqlite3
 import time
 
@@ -36,6 +39,14 @@ CREATE TABLE IF NOT EXISTS coordination_operations (
 CREATE TABLE IF NOT EXISTS coordination_resources (
     resource TEXT PRIMARY KEY,
     operation_id TEXT NOT NULL REFERENCES coordination_operations(operation_id)
+);
+CREATE TABLE IF NOT EXISTS coordination_leases (
+    resource TEXT PRIMARY KEY,
+    identity_digest TEXT NOT NULL,
+    token_digest TEXT NOT NULL,
+    generation INTEGER NOT NULL,
+    expires REAL NOT NULL,
+    updated REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS coordination_resources_operation
     ON coordination_resources(operation_id);
@@ -148,7 +159,7 @@ class OperationCoordinator:
             elif row[0] != 1:
                 raise CoordinationFault("COORDINATION_SCHEMA_UNSUPPORTED")
 
-    def acquire(self, operation_id, identity_digest, receipt_ref, resources):
+    def acquire(self, operation_id, identity_digest, receipt_ref, resources, lease_token=None):
         _operation_id(operation_id)
         _digest(identity_digest)
         _receipt(receipt_ref)
@@ -162,6 +173,14 @@ class OperationCoordinator:
                           (operation_id,)).fetchone():
                 raise CoordinationFault("OPERATION_EXISTS")
             for key in keys:
+                lease = db.execute("SELECT identity_digest,token_digest,expires FROM coordination_leases WHERE resource=?",
+                                   (key,)).fetchone()
+                if lease and lease[2] > self.clock():
+                    if (lease[0] != identity_digest or
+                            not isinstance(lease_token,str) or
+                            not hmac.compare_digest(lease[1], hashlib.sha256(
+                                lease_token.encode("utf-8")).hexdigest())):
+                        raise CoordinationFault("RESOURCE_BUSY")
                 owner = db.execute(
                     "SELECT o.state FROM coordination_resources r "
                     "JOIN coordination_operations o ON o.operation_id=r.operation_id "
@@ -215,6 +234,56 @@ class OperationCoordinator:
             return db.execute(
                 "UPDATE coordination_operations SET state='unknown',updated=? "
                 "WHERE state='dispatch_intent'", (self.clock(),)).rowcount
+
+    def lease(self, action, resource, identity_digest, token=None, seconds=600):
+        """Optional 10-minute operator lease; never removes in-flight claims."""
+        key = _resource(resource)
+        _digest(identity_digest)
+        if key != box_resource(identity_digest):
+            raise CoordinationFault("LEASE_ARGUMENT_INVALID")
+        if (action not in ("acquire","renew","release","status") or
+                type(seconds) is not int or not 1 <= seconds <= 600):
+            raise CoordinationFault("LEASE_ARGUMENT_INVALID")
+        if action in ("renew","release"):
+            if not isinstance(token,str) or re.fullmatch(r"[A-Za-z0-9_-]{43}",token) is None:
+                raise CoordinationFault("LEASE_TOKEN_INVALID")
+        with self._transaction() as db:
+            now=self.clock()
+            old=db.execute("SELECT identity_digest,token_digest,generation,expires "
+                           "FROM coordination_leases WHERE resource=?",(key,)).fetchone()
+            if action=="status":
+                return {"state":"leased" if old and old[3]>now else "free",
+                        "expires":old[3] if old and old[3]>now else None}
+            if action=="acquire":
+                if old and old[3]>now:
+                    raise CoordinationFault("RESOURCE_BUSY")
+                # Expiry of the lease does not release any separate
+                # unknown or dispatching resource claim.
+                claimed=db.execute("SELECT 1 FROM coordination_resources WHERE resource=?",
+                                   (key,)).fetchone()
+                if claimed:
+                    raise CoordinationFault("RESOURCE_BUSY")
+                new_token=secrets.token_urlsafe(32)
+                generation=(old[2]+1) if old else 1
+                expires=now+seconds
+                db.execute("INSERT OR REPLACE INTO coordination_leases VALUES(?,?,?,?,?,?)",
+                           (key,identity_digest,hashlib.sha256(new_token.encode()).hexdigest(),
+                            generation,expires,now))
+                return {"state":"leased","lease_token":new_token,
+                        "generation":generation,"expires":expires}
+            if old is None or old[3]<=now:
+                raise CoordinationFault("LEASE_EXPIRED")
+            if (old[0]!=identity_digest or not hmac.compare_digest(
+                    old[1],hashlib.sha256(token.encode()).hexdigest())):
+                raise CoordinationFault("LEASE_TOKEN_INVALID")
+            if action=="release":
+                db.execute("DELETE FROM coordination_leases WHERE resource=?",(key,))
+                return {"state":"released","generation":old[2]}
+            expires=now+seconds
+            db.execute("UPDATE coordination_leases SET expires=?,updated=? WHERE resource=?",
+                       (expires,now,key))
+            return {"state":"leased","lease_token":token,
+                    "generation":old[2],"expires":expires}
 
     def status(self, operation_id):
         _operation_id(operation_id)

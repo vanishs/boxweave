@@ -55,3 +55,7 @@ Read-only `boxweave setup --mode ssh|https|local [--check] [--format json]` reus
 ## Phase 2 R-02 gateway-private task receipts (staged candidate)
 
 Metadata-only `gateway_tasks.py` uses private app-user SQLite, stable random request keys, exact observed Box incarnation digest and crash-safe dispatch-intent. `boxweave_task_submit/get/list` use the original trusted `connect(exec)` permission and do not store commands, outputs or credentials. Provisioning is separately authorized with `sudo boxweave task provision`. This is **gateway-tracked only**; legacy `connect(exec)` and Web/app work remain untracked by this store. No R-04 cross-entry coordination coverage is claimed. Fixture CI and installed acceptance remain separate.
+
+## Phase 2 R-04 lease core (source candidate)
+
+Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite operation coordinator. Expired leases do not release UNKNOWN dispatched claims; independent Boxes remain concurrent. Source/fixture CI must pass before any tool exposure or installed/global coordination claim. Actual Web/SSH/HTTP guarded mutation routes are still NOT IMPLEMENTED.

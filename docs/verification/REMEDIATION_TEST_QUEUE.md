@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Phase 2 R-04 core-only lease source checkpoint
+
+Lease primitives, 10-minute duration, hashed tokens, exact-identity authorization, independent Box claims, continued UNKNOWN hold after lease expiry, and private explicit coordinator provision were fixture-tested. [Multi-Agent source design](../design/MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md). No operator lease tool, no Web/SSH/HTTP shared mutation interception, no other Provider access guard and no installed host test. **R-04/P1-B2 remain PARTIAL/UNVERIFIED.** Do not promote stable installer based on this core-only release.
+
 ## Phase 2 R-02 completed fixture checkpoints (source)
 
 [Store/negative CI 41417633459](https://github.com/vanishs/boxweave/actions/runs/41417633459) PASS on 8a415b9; [gateway/SSH/HTTP common code CI 41418231631](https://github.com/vanishs/boxweave/actions/runs/41418231631) PASS on f86eaed; release v0.32.0 CI and LIVE operational proof remain separate. See [implementation design and limits](../design/PHASE2_GATEWAY_TASKS_IMPLEMENTATION.md). Remaining R-04 and P1-B2 must not be called done.

@@ -110,3 +110,7 @@ DONE**. No real host installation/upgrade is claimed.
 **Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
 
 P1-B2 and P1-C must not be marked done based on these source checks. The next approved isolated-Box checkpoint must verify old/new mixed helpers, actual UID/DB permissions, true SSH/HTTP/Web invocation, original receipt recovery and rollback before installed acceptance.
+
+## Phase 2 R-04 core handoff (v0.33.0 candidate)
+
+Shared Box lease core now supports 10-minute hashed-token leases and keeps UNKNOWN operation claims on expiration; the gateway task provisioner may initialize only the private shared claims database while explicitly leaving coordination disabled. **P1-B2 actual shared mutation dispatch, app/Web/SSH/HTTP parity, unclassified upstream mutator blocking and real-host lease/rollback acceptance are not yet implemented.** This is a source-only release slice.

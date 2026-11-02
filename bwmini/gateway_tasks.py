@@ -221,6 +221,21 @@ class TaskStore:
             "SELECT * FROM gateway_tasks WHERE logical=? ORDER BY created DESC LIMIT ?",
             (box,limit))])
 
+def provision_claims(folder):
+    """Prepare only the minimum shared claim DB; leave dispatcher disabled."""
+    claim=Path(folder)/"claims.sqlite3"
+    if not claim.exists():
+        fd=os.open(claim,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        os.close(fd)
+    if __package__:
+        from .coordination_runtime import private_connection
+        from .operation_coordination import OperationCoordinator
+    else:
+        from coordination_runtime import private_connection
+        from operation_coordination import OperationCoordinator
+    OperationCoordinator(lambda: private_connection(claim)).initialize()
+
+
 def provision():
     """Explicit app-user setup, invoked only by the approved installer/host CLI."""
     uid=os.geteuid()
@@ -236,7 +251,9 @@ def provision():
         fd=os.open(DEFAULT_DB,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         os.close(fd)
     TaskStore().initialize()
-    print(json.dumps({"state":"ready","private_metadata_only":True}))
+    provision_claims(folder)
+    print(json.dumps({"state":"ready","private_metadata_only":True,
+                      "coordination_prepared":True,"coordination_enabled":False}))
 
 if __name__=="__main__":
     import sys

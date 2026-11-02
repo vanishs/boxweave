@@ -129,8 +129,10 @@ def private_connection(path):
                 raise CoordinationFault("COORDINATION_SCHEMA_UNSUPPORTED")
             present = {r[0] for r in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}
-            expected = {"coordination_operations", "coordination_resources", "coordination_version"}
-            if present and present != expected:
+            base = {"coordination_operations", "coordination_resources", "coordination_version"}
+            # An additive lease table appears only after explicit reviewed
+            # coordinator provisioning. Neither schema accepts app secrets.
+            if present and present not in (base, base | {"coordination_leases"}):
                 raise CoordinationFault("COORDINATION_SCHEMA_UNSUPPORTED")
             if present:
                 row = connection.execute(
