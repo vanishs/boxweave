@@ -48,9 +48,9 @@ try:
                        stat.S_IMODE(info.st_mode)&0o600,dir_fd=fd)
         try:
             remaining=payload
-        while remaining:
-            remaining=remaining[os.write(new_fd,remaining):]
-        os.fsync(new_fd)
+            while remaining:
+                remaining=remaining[os.write(new_fd,remaining):]
+            os.fsync(new_fd)
         finally:os.close(new_fd)
         current=os.stat(leaf,dir_fd=fd,follow_symlinks=False)
         if (current.st_ino,current.st_dev,current.st_size)!=(info.st_ino,info.st_dev,info.st_size):
