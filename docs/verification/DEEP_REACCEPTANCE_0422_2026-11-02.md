@@ -14,7 +14,7 @@
 
 | Area / case | Evidence | Exact outcome and qualification |
 | --- | --- | --- |
-| Repository integrity, 51 Python modules and 59 test modules | T | 640/640 Python tests exit 0; 4/4 architecture guards exit 0; 163-document knowledge audit exit 0; exact-commit CI success with seven browser fixtures and verified release bundle. Synthetic browsers are not the installed Web UI. |
+| Repository integrity, 51 Python modules and 58 Python test files | T | 640/640 Python tests exit 0; 4/4 architecture guards exit 0; 163-document knowledge audit exit 0; exact-commit CI success with seven browser fixtures and verified release bundle. Synthetic browsers are not the installed Web UI. |
 | Fresh v0.42.2 installation and package provenance | L PASS | Version-pinned tagged `install.sh --version 0.42.2` completed with `BoxWeave v0.42.2 installed successfully` and installed `boxweave version = 0.42.2`. Background shell's numeric exit was not captured; independent runtime/status evidence is authoritative. |
 | Installed services, authenticated Provider and private Web | L PASS | `sudo boxweave doctor --mcp`: **10/10 required checks passed**; authenticated MCP initialize, 58 discovered Provider tools and real `list_containers` read. Installed Web and worker healthy; HTTP MCP loopback enabled, no public URL configured. |
 | Web and remote MCP unauthenticated boundary | L scoped PASS | Unauthenticated POST `/mcp` returned HTTP 401. Unauthenticated/non-origin POST to Web `/api/projects` returned HTTP 403; Web `status` reported unauthenticated loopback 401. No admin credentials, external OAuth or public TLS were tested. The HTTP MCP info-page GET 200 is not authenticated MCP proof. |
