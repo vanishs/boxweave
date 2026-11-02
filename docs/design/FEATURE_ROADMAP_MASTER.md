@@ -76,6 +76,12 @@ These are **not** additional automatic work packages. They are candidates or par
 
 The owner authorized staged implementation, focused acceptance and commits for the unified operation foundation and related existing-path migration. The [Phase 1 implementation and acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) is the active delivery handoff. P1-A source and fixture verification passed at `05a95aea` ([CI 41402675634](https://github.com/vanishs/boxweave/actions/runs/41402675634)). It introduces only a non-dispatching operation-claim core; it is **not** installed protection, a new MCP API, complete R-02 recovery or R-04 leasing. P1-B1 verified-identity/private-storage adapter passed source/fixture [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130) at `8ee12fd`, not installed provisioning. Subsequent adapters require verified source/transport/security gates before announcing coverage. Stable installation pins are unchanged.
 
+## Intermediate architecture consolidation gate — ARCH-0 (2026-11-01)
+
+**Inserted before P1-B2 and the next coordinated mutation integration stage.** The owner asked for a code-first audit of whether modules are excessively scattered. [Architecture consolidation source audit and staged acceptance](ARCHITECTURE_CONSOLIDATION_GATE.md) identifies six **logical ownership blocks** without requiring immediate package-wide renaming. The source audit is **S only**, not a completed refactor or live test.
+
+ARCH-0A maps real executable roots, imports, sensitive authority, Provider mutations and deployment artifacts; ARCH-0B resolves canonical identity, shared coordinator storage and standalone Gateway packaging; ARCH-0C performs only narrow, test-backed pure-contract extractions. P1-B2 and Phase 2 must not claim integrated conflict protection while any gateway/app mutation bypass remains. Root/standalone installation helpers and generated client scripts are compatibility-sensitive; postpone cosmetic rearrangement. The prior roadmap's R-01/R-02/R-04 feature choices are unchanged.
+
 ## 5. Integration review: conflicts, reuse and corrected dependencies (2026-11-01)
 
 This section resolves contradictions among the previously independent handoffs; it is **planning guidance, not a new approved implementation**. Implementing Agents must follow both the local child acceptance matrix and the shared gates below.

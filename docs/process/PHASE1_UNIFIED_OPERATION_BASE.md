@@ -34,6 +34,19 @@ dispatch intent, UNKNOWN persistence, receipt mismatch, multi-resource
 atomicity, independent Boxes, concurrent SQLite connections, unavailable
 storage and invalid data. CI result must be recorded against the exact SHA.
 
+## Interstitial gate ARCH-0 — architecture consolidation BEFORE P1-B2
+
+[Architecture source audit and proposed slices](../design/ARCHITECTURE_CONSOLIDATION_GATE.md).
+Owner added this gate after P1-A and P1-B1, before broad Web/SSH/HTTP
+mutation integration. Source audit found standalone Gateway packaging, Box
+identity scope and shared-state ownership as primary integration blockers.
+Six logical code blocks are recommended, **not** a repository-wide
+mass-move or new framework. ARCH-0A maps dependency and mutation entrypoints;
+ARCH-0B settles runtime packaging/storage/identity contracts; ARCH-0C
+extracts only verified pure interfaces behind unchanged public entrypoints.
+**Status: designed / source reviewed (S), no refactor implementation or
+real-host acceptance (T/L=U).** Existing P1-B2 and P1-C remain pending.
+
 ## Slice P1-B — Security/provisioning and adapter contract (IN PROGRESS)
 
 **P1-B1 candidate:** `coordination_runtime.py` adds canonical Box incarnation

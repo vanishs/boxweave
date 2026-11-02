@@ -27,3 +27,13 @@ SRC-103 authorizes implementation and commit/push. SRC-100 dedicated-test scope 
 ## Remote MCP R0–R4 source delivery authorization (2026-10-31)
 
 The owner requested completion of [PR #10](https://github.com/vanishs/boxweave/pull/10) R0–R4 and merge into main **without entering a real Box**. v0.24.0 source adds loopback remote MCP, local-admin OAuth, API Bearer, opaque path URL, optional Caddy/manual HTTPS ingress, and Web credential controls. It does not authorize public listener/TLS/firewall/DNS/Provider mutations. CI fixture results are not production OAuth, client or Box acceptance. [Handoff](REMOTE_MCP_HANDOFF.md) and [test plan](../verification/REMOTE_MCP_TEST_PLAN.md).
+
+## ARCH-0 interstitial architecture gate (source audit only)
+
+The owner requested a code-first modularity investigation before
+continuing the next broad integration stage. The
+[ARCH-0 review](../design/ARCHITECTURE_CONSOLIDATION_GATE.md) was
+added to the [roadmap](../design/FEATURE_ROADMAP_MASTER.md) after
+P1-A/P1-B1 and before P1-B2. This does not authorize an indiscriminate
+rewrite, host installation, Provider mutation or release promotion.
+ARCH-0 implementation and installed acceptance remain pending.
