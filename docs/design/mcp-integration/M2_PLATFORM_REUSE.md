@@ -1,5 +1,7 @@
 # M2 — Reuse the Platform tools that improve existing features
 
+**Global plan:** [BoxWeave feature roadmap](../FEATURE_ROADMAP_MASTER.md) — P-01 auto-sleep / P-06 metrics candidates. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **2026-10-31 main reconciliation:** This original inventory was compiled at BoxWeave v0.21.4; latest reviewed main is v0.22.0 (`aaa8362decd55110eadf8c5caa7ff1b3d1d80ac5`). D0–D2 diagnostics were implemented in main (SRC-108), with remaining live/coverage limits; optional D3 direct-gateway diagnostic lookup remains unimplemented. E0–E4 environment features remain unimplemented. All M0–M5 MCP capability reuse stages are proposal-only here (separately tracked implementation must cite exact source/CI evidence). Previously written statements that D0–D2 are unimplemented are superseded by this notice. Source inventory does not establish installed tool availability.
 
 
