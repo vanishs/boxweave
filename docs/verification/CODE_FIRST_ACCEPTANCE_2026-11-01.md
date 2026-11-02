@@ -49,7 +49,7 @@ Code-first additions not fully represented in the older F-001–F-015 narrative 
 
 The lists enumerate all Python app modules, Python unittest files, client helper scripts, support scripts, frontend sources, application/host CLI action names, Web and remote HTTP routes, gateway-owned MCP tools, client catalog and frontend views. Downstream Provider tool names are dynamic and are **not** mistaken for locally implemented BoxWeave tools. Each source-backed entry must be tested at the layer its acceptance claim requires.
 
-### Python application modules (37)
+### Python application modules (38)
 
 <!-- inventory:python-modules:start -->
 - `bwmini/__init__.py`
@@ -71,6 +71,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/gate_diagnostics.py`
 - `bwmini/graphs.py`
 - `bwmini/host_cli.py`
+- `bwmini/http_manage.py`
 - `bwmini/hostkeys.py`
 - `bwmini/jobs.py`
 - `bwmini/lifecycle.py`
@@ -91,7 +92,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/web.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (41)
+### Python unittest files (42)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -112,6 +113,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_graphs.py`
 - `tests/test_history.py`
 - `tests/test_host_bootstrap.py`
+- `tests/test_http_manage.py`
 - `tests/test_host_cli.py`
 - `tests/test_jobs.py`
 - `tests/test_knowledge.py`
@@ -232,12 +234,13 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `worker`
 <!-- inventory:app-cli:end -->
 
-### Host CLI command identifiers (7)
+### Host CLI command identifiers (8)
 
 <!-- inventory:host-cli:start -->
 - `box`
 - `client`
 - `doctor`
+- `http`
 - `provenance`
 - `report`
 - `status`
@@ -311,6 +314,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `GET /.well-known/oauth-authorization-server`
 - `GET /.well-known/oauth-protected-resource`
 - `GET /.well-known/oauth-protected-resource/mcp`
+- `GET /`
 - `GET /authorize`
 - `GET,POST,DELETE /mcp`
 - `GET,POST,DELETE /mcp/link/<link>`
