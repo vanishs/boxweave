@@ -1,6 +1,6 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Stable v0.27.0 adds default-managed loopback HTTP MCP and quick-start commands.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source v0.27.1 fixes a standalone installer import failure in the v0.27.0 default-managed loopback HTTP MCP rollout; published stable promotion is verified separately.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 
