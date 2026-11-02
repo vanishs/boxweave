@@ -18,6 +18,17 @@ flowchart LR
 
 The application adapter in bwmini/provider.py and access_provider.py uses the configured MCP stdio launcher, typically its own strict SSH identity to the upstream launcher. The app does **not** implement the originally proposed direct REST adapter or borrow the browser session/Agent GLM credential as Provider authority. Underlying upstream MCP may use its own API internally; its protocol names/metadata stay upstream. API/worker share private state; credential files remain outside releases. Direct Agent MCP has broader upstream authority than Web allowlisted plans; single trusted operator is a deliberate boundary.
 
+## Code-first architecture consolidation checkpoint
+
+The [ARCH-0 review and gate](ARCHITECTURE_CONSOLIDATION_GATE.md) audits
+the current flat Python package, independently installed root/SSH gateway
+helpers, imported application/Provider state contracts, and the new
+v0.29.0 coordination core. It proposes six **logical blocks** without
+changing existing runtime trust boundaries. It is a source audit, not a
+completed package reorganization or installed behavior claim. Any
+subsequent extraction must preserve standalone entrypoint compatibility,
+original receipts, privilege separation and release fingerprints.
+
 ## Source responsibilities
 
 | Module | Owns | Must not become |
