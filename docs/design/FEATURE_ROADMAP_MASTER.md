@@ -200,3 +200,15 @@ Web receipts; UNKNOWN remains non-replayable. Root policy/DB/app opt-in must be
 independently installed and dual-client tested. Outside-Gateway SSH/Provider
 writes remain outside guarantee. Source release does not mean global installed
 R-04 acceptance; detailed evidence remains separate.
+
+
+## Phase 3 supported environment completion checkpoint (v0.42.0 candidate)
+
+[Read-only E0/E1 development and real Box evidence](PHASE3_SUPPORTED_ENV_ACCEPTANCE.md)
+documents strict observed-target fingerprint integrity, an authorized
+two-Box Provider read/compare refusal, and real `v0.28.0` schema 12 to
+v13 migration compatibility. E2/E3/E4 remain **BLOCKED by missing
+authenticated upstream snapshot/restore/clone/rekey/storage contracts**;
+nothing bypasses Provider with direct Incus. Source/fixtures are independent
+of installed Web/SSH/HTTP and tested production upgrade/rollback. This
+partial status must not be replaced with an unqualified Phase 3 PASS.

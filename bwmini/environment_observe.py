@@ -5,6 +5,7 @@ Every report is scoped to an already configured exact managed target.
 """
 import hashlib
 import json
+import math
 import re
 import time
 
@@ -41,6 +42,8 @@ def _sha(obj):
 
 def observe_exact(config, logical, payload, catalog, observed_at=None):
     """Accept a verified MCP observation, not an arbitrary requested target."""
+    if not isinstance(config,dict):
+        raise Fault("ENVIRONMENT_SCOPE_INVALID")
     targets=config.get("targets")
     if not isinstance(targets,dict) or logical not in targets:
         raise Fault("TARGET_NOT_ALLOWED",403)
@@ -88,6 +91,9 @@ def observe_exact(config, logical, payload, catalog, observed_at=None):
             capabilities[name]={"state":"not_verified",
                                 "reason":"CONTRACT_AND_STORAGE_NOT_PROVED"}
     completeness=all(report[k] is not None for k in (*_RESOURCE,"network_tenant"))
+    when=time.time() if observed_at is None else observed_at
+    if type(when) not in (int,float) or not math.isfinite(when) or when<0:
+        raise Fault("ENVIRONMENT_OBSERVATION_UNVERIFIED")
     return {"provider_scope_digest":scope,
             "target_identity_digest":target.digest(),
             "observation":report,
@@ -95,17 +101,24 @@ def observe_exact(config, logical, payload, catalog, observed_at=None):
             "observation_status":"complete" if completeness else "partial",
             "storage_coverage":"not_verified",
             "capabilities":capabilities,
-            "observed_at":float(time.time() if observed_at is None else observed_at),
+            "observed_at":float(when),
             "evidence":"authenticated_provider_read_only"}
 
 def diff_fingerprints(before, after):
     """Return only bounded changes for the same immutable incarnation."""
-    if (not isinstance(before,dict) or not isinstance(after,dict) or
-            before.get("target_identity_digest")!=after.get("target_identity_digest") or
-            before.get("provider_scope_digest")!=after.get("provider_scope_digest")):
+    if not isinstance(before,dict) or not isinstance(after,dict):
         raise Fault("ENVIRONMENT_TARGET_CHANGED")
+    for key in ("target_identity_digest","provider_scope_digest"):
+        a,b=before.get(key),after.get(key)
+        if (not isinstance(a,str) or re.fullmatch(r"[0-9a-f]{64}",a) is None
+                or a!=b):
+            raise Fault("ENVIRONMENT_TARGET_CHANGED")
     left,right=before.get("observation"),after.get("observation")
-    if not isinstance(left,dict) or not isinstance(right,dict):
+    if (not isinstance(left,dict) or not isinstance(right,dict)
+            or any(report.get("fingerprint_sha256")!=_sha(obs)
+                   for report,obs in ((before,left),(after,right)))
+            or any(obs.get("identity_digest")!=report["target_identity_digest"]
+                   for report,obs in ((before,left),(after,right)))):
         raise Fault("ENVIRONMENT_OBSERVATION_UNVERIFIED")
     allowed=("state", *_RESOURCE, "network_tenant")
     changes={}
@@ -125,13 +138,19 @@ class EnvironmentInspector:
 
     def report(self, logical):
         config=self.provider.config
-        if logical not in config.get("targets",{}):
+        if not isinstance(config,dict):
+            raise Fault("ENVIRONMENT_SCOPE_INVALID")
+        targets=config.get("targets")
+        if not isinstance(targets,dict) or logical not in targets:
             raise Fault("TARGET_NOT_ALLOWED",403)
         with self.provider.session() as m:
             catalog=m.discover()
-            spec=catalog.get("get_container",{}).get("inputSchema",{})
+            if not isinstance(catalog,dict) or len(catalog)>256:
+                raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
+            tool=catalog.get("get_container")
+            spec=tool.get("inputSchema") if isinstance(tool,dict) else None
             if (not isinstance(spec,dict) or not isinstance(spec.get("properties"),dict)
-                    or "username" not in spec["properties"]):
+                    or not isinstance(spec["properties"].get("username"),dict)):
                 raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
             result=m.tool("get_container",{"username":logical})
             try:

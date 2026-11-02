@@ -54,6 +54,9 @@ def _checked(report):
             raise Fault("ENVIRONMENT_CAPTURE_INVALID",422)
     if report.get("observation_status") not in ("partial","complete"):
         raise Fault("ENVIRONMENT_CAPTURE_INVALID",422)
+    complete=all(obs[k] is not None for k in ("cpu","memory","disk","network_tenant"))
+    if (report["observation_status"]=="complete") != complete:
+        raise Fault("ENVIRONMENT_CAPTURE_INVALID",422)
     if report["fingerprint_sha256"] != _sha(obs):
         raise Fault("ENVIRONMENT_CAPTURE_INVALID",422)
     # Canonical JSON is small and contains only the above reviewed values.
@@ -88,11 +91,21 @@ def read_capture(store, ident, actor="operator"):
     if not isinstance(ident,str) or _ID.fullmatch(ident) is None:
         raise Fault("ENVIRONMENT_CAPTURE_NOT_FOUND",404)
     with store.db() as db:
-        row=db.execute("SELECT id,captured,observation FROM environment_captures "
-                       "WHERE id=? AND actor=?",(ident,actor)).fetchone()
+        row=db.execute("SELECT id,captured,observation,target_identity,provider_scope,fingerprint_sha256 "
+                       "FROM environment_captures WHERE id=? AND actor=?",(ident,actor)).fetchone()
     if row is None:raise Fault("ENVIRONMENT_CAPTURE_NOT_FOUND",404)
-    result=json.loads(row["observation"])
-    return {"capture_id":row["id"],"captured_at":row["captured"],**result}
+    try:
+        result=json.loads(row["observation"])
+        safe,_=_checked(result)
+        if (safe["target_identity_digest"]!=row["target_identity"] or
+                safe["provider_scope_digest"]!=row["provider_scope"] or
+                safe["fingerprint_sha256"]!=row["fingerprint_sha256"]):
+            raise Fault("ENVIRONMENT_CAPTURE_UNVERIFIED")
+    except (ValueError,TypeError,KeyError,Fault) as error:
+        if isinstance(error,Fault) and error.code=="ENVIRONMENT_CAPTURE_UNVERIFIED":
+            raise
+        raise Fault("ENVIRONMENT_CAPTURE_UNVERIFIED") from None
+    return {"capture_id":row["id"],"captured_at":row["captured"],**safe}
 
 def list_captures(store, actor="operator", target_identity=None, limit=20):
     actor=_actor(actor)

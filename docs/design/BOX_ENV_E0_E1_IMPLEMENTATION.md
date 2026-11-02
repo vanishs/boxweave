@@ -13,3 +13,14 @@ Tests: `tests/test_environment_observe.py`, including missing catalog, spoofed t
 `bwmini/environment_history.py` defines private user_version=13 `environment_captures`, bounded immutable capture records and actor-scoped API reads. `bwmini/store.py` migrates from schema v12 and rejects unsupported future versions. The Web API performs fresh reviewed Provider reads, not client-provided reports; POST capture needs the existing CSRF token. A report never contains arbitrary host metadata or original MCP text. Tests cover v12 migration, history immutability, cross-target mismatches, CSRF, oversized/unsafe schema, and no raw token persistence.
 
 This is only the E0/E1 read-only environment branch. E2/E3/E4 remain blocked on **verified upstream snapshot/restore/clone/rekey and storage coverage contracts**. Do not invent direct Incus fallback or promote a source fixture to installed-Provider proof. Actual older installed host upgrades and rollback remain a separate L/U gate.
+
+
+## Phase 3 real-source acceptance refinement (v0.42.0)
+
+[Detailed current acceptance and blockers](PHASE3_SUPPORTED_ENV_ACCEPTANCE.md).
+Malformed catalog/target and nonfinite timestamps fail typed; corrupted
+fingerprint and stored immutable capture data fail closed. Source evidence
+includes two authenticated outer Provider read inputs and an isolated
+v0.28.0 schema 12 to schema 13 migration. E2/E3/E4 are still unsupported
+without explicit Provider write contracts. Installed host and old-version
+rollback acceptance remain separate.

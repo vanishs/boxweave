@@ -99,6 +99,45 @@ class EnvTests(unittest.TestCase):
                                        ("get_container",{"username":"phasebox"})])
         self.assertEqual(len(report["target_identity_digest"]),64)
 
+    def test_untrusted_catalog_shapes_and_scope_fail_typed_without_guest_write(self):
+        class Provider:
+            config=CONFIG
+            def __init__(self,catalog):self.catalog=catalog
+            def session(self):return FakeMCP(self.catalog,CONTAINER)
+        for bad in (None, [], {"get_container":False},
+                    {"get_container":{"inputSchema":None}},
+                    {"get_container":{"inputSchema":{"properties":{"username":"arbitrary"}}}}):
+            with self.subTest(bad=bad),self.assertRaisesRegex(Fault,
+                    "ENVIRONMENT_READ_UNSUPPORTED"):
+                EnvironmentInspector(Provider(bad)).report("phasebox")
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_SCOPE_INVALID"):
+            observe_exact(None,"phasebox",CONTAINER,CATALOG)
+        class BadProvider:
+            config={"provider":"containarium","backend":"local",
+                    "project":"default","targets":None}
+            def session(self):raise AssertionError("must not connect")
+        with self.assertRaisesRegex(Fault,"TARGET_NOT_ALLOWED"):
+            EnvironmentInspector(BadProvider()).report("phasebox")
+
+    def test_nonfinite_observation_time_rejected(self):
+        for moment in (float("nan"),float("inf"),float("-inf"),True,-1,"now"):
+            with self.subTest(moment=moment),self.assertRaisesRegex(
+                    Fault,"ENVIRONMENT_OBSERVATION_UNVERIFIED"):
+                observe_exact(CONFIG,"phasebox",CONTAINER,CATALOG,observed_at=moment)
+
+    def test_corrupted_or_unidentified_history_refused(self):
+        a=observe_exact(CONFIG,"phasebox",CONTAINER,CATALOG)
+        b=copy.deepcopy(a)
+        b["observation"]["cpu"]="7"
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_OBSERVATION_UNVERIFIED"):
+            diff_fingerprints(a,b)
+        b=copy.deepcopy(a)
+        del b["target_identity_digest"]
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_TARGET_CHANGED"):
+            diff_fingerprints(a,b)
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_TARGET_CHANGED"):
+            diff_fingerprints({},{})
+
     def test_refuses_unverified_get_schema(self):
         class Provider:
             config=CONFIG

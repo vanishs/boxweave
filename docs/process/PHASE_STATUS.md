@@ -93,3 +93,14 @@ small-file compare-and-swap patch are added. Exact source/fixture results belong
 to CI and [Phase 2 acceptance](../verification/PHASE2_SOURCE_ACCEPTANCE_2026-11-02.md);
 installed Gateway, Web, old versions and independently authenticated dual-client
 results remain U. Default stable installer v0.28.0 remains unchanged.
+
+
+## Phase 3 v0.42.0 bounded source and Box acceptance
+
+[Supported Provider environment evidence](../design/PHASE3_SUPPORTED_ENV_ACCEPTANCE.md)
+records authenticated real Box read inputs, exact-environment E0/E1
+fingerprints, corrupt capture refusal and old v0.28.0 -> new v13 fixture
+migration. New code strengthens failure behavior, no guest or host mutator.
+E2/E3/E4 remain BLOCKED by unexposed Provider contracts; installed
+service upgrade, client and rollback remain LIVE U. Stable installer
+unchanged.

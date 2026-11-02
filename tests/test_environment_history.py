@@ -92,6 +92,30 @@ class EnvironmentHistoryTests(unittest.TestCase):
         with self.assertRaisesRegex(Fault,"SCHEMA_UNSUPPORTED"):
             Store(self.store.path)
 
+    def test_corrupt_persisted_capture_fails_closed_without_deletion(self):
+        a=save_capture(self.store,report())
+        with self.store.db() as db:
+            db.execute("UPDATE environment_captures SET fingerprint_sha256=? WHERE id=?",
+                       ("0"*64,a["capture_id"]))
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_CAPTURE_UNVERIFIED"):
+            read_capture(self.store,a["capture_id"])
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_CAPTURE_UNVERIFIED"):
+            compare_captures(self.store,a["capture_id"],a["capture_id"])
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM environment_captures").fetchone()[0],1)
+
+    def test_inconsistent_partial_flag_refused(self):
+        value=report()
+        value["observation_status"]="partial"
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_CAPTURE_INVALID"):
+            save_capture(self.store,value)
+        value=report()
+        value["observation"]["memory"]=None
+        from bwmini.environment_observe import _sha
+        value["fingerprint_sha256"]=_sha(value["observation"])
+        with self.assertRaisesRegex(Fault,"ENVIRONMENT_CAPTURE_INVALID"):
+            save_capture(self.store,value)
+
     def test_web_operator_auth_capture_and_compare(self):
         self.store.admin(generate_password_hash("test-only-password"))
         fixture=Fixture(TARGET)
