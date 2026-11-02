@@ -20,7 +20,7 @@ Keep snapshots as managed *resources* with their own immutable IDs and separate 
 
 ## Write contract and data model
 
-**Integration INT-03/INT-04:** E2 depends on the authenticated E0 snapshot contract and a verified shared source operation claim covering lifecycle, direct MCP and Web/app mutation paths; **E1 fingerprints are optional**, not a delivery gate. Reuse R-04 canonical resource/dispatch-intent coordinator if available, and the original typed lifecycle receipt for outcome. Do not create an independently owned snapshot-only lock or `UNKNOWN` ledger. Snapshot status must never turn a lost reply into a safe automatic retry. See [feature roadmap](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies) and [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md).
+**Integration INT-03/INT-04:** E2 depends on the authenticated E0 snapshot contract and a verified shared source operation claim covering lifecycle, direct MCP and Web/app mutation paths; **E1 fingerprints are optional**, not a delivery gate. Reuse R-04 canonical resource/dispatch-intent coordinator if available, and the original typed lifecycle receipt for outcome. Do not create an independently owned snapshot-only lock or `UNKNOWN` ledger. Snapshot status must never turn a lost reply into a safe automatic retry. See [feature roadmap](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies-2026-11-01) and [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md).
 
 
 Candidate `checkpoint_plans`, `checkpoint_operations` and `checkpoint_catalog` app-owned tables:
