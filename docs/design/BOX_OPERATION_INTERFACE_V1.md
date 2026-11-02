@@ -84,6 +84,8 @@ No permanent helper is installed in the Box. An optional **one-shot** guest comm
 | `boxweave_box_exec` | P0 | `box`, approved `root`, command, timeout, output budget | Observed exit code, stdout/stderr, duration, typed execution state | Existing `connect(exec)` and exact-target trust |
 | `boxweave_box_apply_patch` | P1 | `box`, `root`, relative `path`, expected-before hash, bounded patch | New hash, changed flag, conflict/denial, no silent overwrite | Explicitly authorized write, remote atomic validation + replacement |
 
+**Integration INT-02:** The candidate `boxweave_box_exec` is not a separately dispatched shell engine. It MUST call the same reviewed `connect(exec)` adapter as the existing gateway and R-02 tracked tasks. Prefer omitting the direct alias when `boxweave_task_submit(operation=exec)` already solves recoverable execution; if retained, distinguish *untracked* ordinary calls from explicitly tracked ones and keep one permission/target-validation path. See [roadmap integration review](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+
 `boxweave_box_exec` is **not** a promise of confinement to `root`: setting a working directory does not limit where shell commands may access. Treat it as a powerful existing trusted-operator capability, subject to client/operator approval and Box OS/container permissions. Do not advertise `readOnlyHint` for commands merely because the caller says they are tests. The existing `connect(exec)` remains available; do not break or replace it in v1.
 
 Do not create `upload_file`, `download_file`, `process_start` or `process_stop` as duplicate direct tools without first proving the existing transport/capability gap. Larger file transfer and durable process control are follow-on designs, not part of this minimal implementation.
@@ -129,6 +131,9 @@ Keep sensitive output transient and explicitly bounded. Diagnostic journals and 
 
 ### BOI-2 — Conflict-aware editing
 
+**Integration INT-01/INT-03:** Before exposing a mutating patch endpoint, pass through the same canonical Box/resource operation-claim boundary used by R-04 and the original dispatch/UNKNOWN semantics from R-02 when tracking is advertised. Do not invent an independent BOI patch receipt/lock table; without an implemented shared guard, do not claim cross-SSH/HTTP/Web collision safety. Read-only BOI-1 remains independently shippable.
+
+
 - Add create-only and bounded patch with expected-before verification as a reviewed write capability.
 - Reuse existing M4 confirmation/receipt machinery for the application path; do not fabricate shared per-client authorization between Web and direct gateway.
 - Establish one-time remote dispatch semantics and stop on uncertain replies; no automatic retry of writes.
@@ -160,7 +165,10 @@ Keep sensitive output transient and explicitly bounded. Diagnostic journals and 
 
 Use fixture/unit tests first, then authorized real disposable Box validation under [Agent test workflow](../process/AGENT_TEST_WORKFLOW.md). For every test record source SHA, exact installed/runtime/Provider versions, identity, commands, exit code, class S/T/L/U, and retained/cleaned resources. If a test is impossible, mark `BLOCKED` and continue independent cases without claiming acceptance.
 
-## 7. Relationship to MCP task reliability
+## 7. Relationship to MCP task reliability and resource claims
+
+**Current owner decision:** [R-02](MCP_TASK_RELIABILITY_R1.md) now specifies reconnect-recoverable tracked requests. Its durable executor is an opt-in wrapper over the existing `connect(exec)` path, not a second guest runtime. [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md) owns optional Box leases and cross-entry mutation claims; protected BOI edits must reuse that thin claim interface once activated. The initial BOI read-only batch does not wait for R-02/R-04. Any older "until approved" wording below describes the original design baseline, not today's planning status.
+
 
 The operations above MUST emit enough structured evidence (target identity, operation/correlation reference, stage and observed outcome) to support a later MCP reliability layer. **Do not implement automatic retriers, durable command adoption, an Agent scheduling loop, or generalized lifecycle state in this design.**
 
