@@ -4,6 +4,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 
 | Find | Authoritative route |
 | --- | --- |
+| Current and candidate feature roadmap | [Global feature roadmap](design/FEATURE_ROADMAP_MASTER.md): selected designs, historic E0-E4 proposals, deferred candidates, priority/dependencies and child backlinks |
 | New Agent / developer startup | [FINAL_HANDOFF](process/FINAL_HANDOFF.md) |
 | Current work / authorization | [PHASE_STATUS](process/PHASE_STATUS.md), [current handoff](process/HANDOFF.md) |
 | Product goal and selected boundaries | [PRODUCT](product/PRODUCT.md), [SCOPE](product/SCOPE.md) |
@@ -23,6 +24,10 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 Earlier evidence remains available: [phase6 comparison](verification/COMPARISON_REPORT.md), [phase5 release](verification/TASK_012_013_RELEASE.md), [native network/ports](verification/TASK_009_010_ACCESS.md), [historical index](INDEX_HISTORY.md). These are dated/revisioned records, not current gate owners. Archived status/handoff/matrix snapshots are linked from their current owners.
 
 Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs. Reports record evidence; the code, schema and installed manifest remain the truth for actual runtime state. Documentation does not deploy an application.
+
+## Feature planning (global parent; no implementation authority)
+
+- **[Feature roadmap master](design/FEATURE_ROADMAP_MASTER.md)** — one status-aware view of selected Box operations, MCP task reliability, first-use onboarding and multi-Agent collision prevention; historical E0–E4 environment proposals; and conditional/deferred MCP/workflow candidates. Individual design documents link back to this master. Source implementation, real installed acceptance and product approval remain separate.
 
 ## 0.10+ operator remediation routes
 
