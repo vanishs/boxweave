@@ -170,3 +170,9 @@ R-02 task recovery, R-04 lease integration and P1-B2 remain distinct
 feature work with real-host checkpoints.
 
 **Decision:** ARCH-0 contracts, module-boundary extraction and fixture regression are ACCEPTED at source level. ARCH-0 does not replace P1-B2; actual shared coordinator provisioning, app/Web/Gateway dispatch integration, live mixed-version upgrade and rollback remain separate U gates. The stable installer pin is unchanged.
+
+## Final source publication acceptance
+
+**Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
+
+**Stage decision:** ARCH-0A/B/C COMPLETE at S/T/CI + source-release scope. The six logical ownership blocks are documented; pure contracts are extracted; Gateway helper packaging and identity/storage validation are implemented but NOT wired to shared dispatch. Required next installed checkpoint and P1-B2 are deferred as **U / NOT IMPLEMENTED**, not a failed or secretly skipped test.

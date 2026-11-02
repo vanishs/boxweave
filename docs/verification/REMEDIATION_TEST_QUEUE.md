@@ -1,5 +1,12 @@
 # Remediation validation and next-Agent queue
 
+## ARCH-0 v0.30.0 final source publication evidence
+
+**Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
+
+Still **U**: installed v0.30.0 upgrade from v0.28/v0.29, mixed standalone Gateway helpers, actual `boxweave` account storage path and rollback, Provider-scope identity and cross-entry mutation protection. No live box mutation or host upgrade was executed during this repository-only delivery.
+
+
 ## ARCH-0 A/B/C source consolidation checkpoint
 
 Owner-authorized source architecture work: [gate](../design/ARCHITECTURE_CONSOLIDATION_GATE.md)
