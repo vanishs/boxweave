@@ -118,6 +118,9 @@ Acquire/renew/release and conflicting operation-claim checks are **atomic** and 
 
 ## 5. API — keep the surface tiny
 
+**Integration INT-01/INT-03:** The shared operation claim table is the *minimal authoritative dispatch/uncertainty coordination layer*, not an additional full task receipt store. R-02 gateway-private idempotency keys and optional command outputs remain private in [MCP task reliability](MCP_TASK_RELIABILITY_R1.md); existing Web/app receipts remain with the application. Use one opaque `operation_id` correlation, a canonical target/resource key and defensible ordering of short durable commits before remote sends. An observed command exit should be persisted to the original receipt before retiring the claim; if that update pair is interrupted, reconcile from the original evidence (never replay). This does not imply cross-DB/Provider transactions are atomic. See [roadmap integration](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+
+
 Candidate **MCP** operations (names subject to implementation review):
 
 | Tool | Input | Purpose |
@@ -158,7 +161,7 @@ A separate process holding a SQLite `BEGIN IMMEDIATE` transaction must **never**
 
 ## 6. Minimum durable data and operation semantics
 
-The coordinator needs only two logical record types; implement with the smallest practical schema:
+The coordinator needs only two logical record types; implement with the smallest practical schema. It must **not** duplicate full R-02 request-key/result receipts or app-side M4/lifecycle receipts:
 
 1. **Lease:** canonical resource, exact Box target digest/identity, opaque lease ID, token hash (never plain token), generation, optional safe project label, created/renewed/expires timestamps, status.
 2. **Operation claim:** opaque operation ID, claimed resource key(s), exact target identity, accepted/dispatch-intent/terminal/unknown stage, linked existing receipt or safe correlation ID, timestamps. No raw command, file data, OAuth token or private environment.
@@ -203,6 +206,9 @@ If shared coordination storage is corrupt, full, inaccessible, or on a version-m
 - For an operation affecting multiple keys, acquisition is all-or-nothing. No implicit global lock for all Boxes.
 
 ## 8. Development batches (keep it deliberately small)
+
+**Consolidated delivery gate:** MAL-0 first maps all protected mutation entrypoints and the INT-01 operation-id/dispatch-intent contract with R-02. MAL-1 reuses that minimal claim primitive rather than adding another independently interpreted `UNKNOWN` journal. E2/E3/E4 snapshot/restore/clone source/destination claims use the same canonical resource scheme when activated, with no separate snapshot mutex or global serialized host queue. A staged implementation may protect named routes first, but global parity remains **NOT VERIFIED** until Web/app and all advertised direct gateway mutators are covered. Ordinary unleased single-Agent usage must not acquire a session lease or heartbeat automatically.
+
 
 | Batch | What is implemented | Exit criteria |
 | --- | --- | --- |
