@@ -57,3 +57,7 @@ Current acceptance is [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md); actua
 ## v0.24.0 source-only remote MCP extension
 
 A separate loopback Streamable HTTP listener (`bwmini/remote_mcp.py`) invokes the existing server-owned `mcp_gate.py` through a bounded per-request subprocess. SSH/stdio continues independently. `bwmini/remote_auth.py` stores hashed OAuth grants, API tokens and opaque URL capabilities in SQLite v12; the existing Web administrator password is used only for interactive OAuth consent, not as a shared MCP cookie. Public HTTPS is an optional operator-managed Caddy process or external proxy/tunnel. The Web `RemoteMCP.tsx` component manages issuance and revocation. Per-client role/Box policies are explicitly deferred; the current broad trusted-operator Gateway remains. Source/CI does not prove actual TLS, client, Provider or Box operation. [Master](REMOTE_MCP_MASTER.md).
+
+## ARCH-0 source consolidation checkpoint
+
+[Verified implementation batches and architecture ownership](ARCHITECTURE_CONSOLIDATION_GATE.md) retain six logical code blocks without a risky mass directory migration. New pure `wire_results`, `access_contract`, and `lifecycle_contract` remove Provider/worker import inversion. Reviewed coordinator modules are included in standalone Gateway helper manifests; exact instance identity requires explicit verified upstream scope. CLI, Web, SSH/HTTP and provider execution routes are unchanged. **Source/fixture PASS, installed U, shared mutation interception P1-B2 pending.**

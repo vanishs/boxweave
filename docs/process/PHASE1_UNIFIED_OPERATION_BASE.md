@@ -101,6 +101,6 @@ and no app/gateway mutator uses the coordinator yet.
 [architecture gate](../design/ARCHITECTURE_CONSOLIDATION_GATE.md).
 ARCH-0A CI 41408681895 PASS. ARCH-0B CI 41409106116 PASS.
 ARCH-0C splits pure Provider/access/lifecycle contracts without
-changing gateway, Web or worker APIs; exact-SHA CI is pending.
+changing gateway, Web or worker APIs; [CI 41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731) PASS at `3ad92b45`.
 P1-B2 cross-transport dispatch guard implementation is still **NOT
 DONE**. No real host installation/upgrade is claimed.

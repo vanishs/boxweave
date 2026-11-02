@@ -6,8 +6,7 @@ Owner-authorized source architecture work: [gate](../design/ARCHITECTURE_CONSOLI
 and [boundary inventory](ARCH0_BOUNDARY_INVENTORY.md).
 ARCH-0A fixture CI [41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895)
 PASS and ARCH-0B fixture CI [41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116)
-PASS. ARCH-0C extraction and v0.30.0 release are subject to
-final exact-SHA CI. **Installed live acceptance U** for user identity,
+PASS. ARCH-0C extraction [CI 41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731) PASS at `3ad92b45`. v0.30.0 source publication requires separate main-push evidence. **Installed live acceptance U** for user identity,
 SQLite paths, Gateway root helper execution, mixed old/new versions,
 real Web/SSH/HTTP dispatch and rollback. No claim of global guard.
 

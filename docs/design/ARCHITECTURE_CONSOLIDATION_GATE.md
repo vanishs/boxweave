@@ -1,8 +1,8 @@
 # Architecture Consolidation Gate — source audit and insertion before Phase 2
 
-**Status:** DESIGN / source audit only; owner requested an intermediate
-architecture-review stage. No refactor, install, service, Provider or Box write
-has been performed. **Source baseline:** `main` `0a3c0b524cfb6ec33a3d03d81d6f29f1549cecac`,
+**Status:** ARCH-0A/B/C source and fixture tests PASS; owner requested an intermediate
+architecture-review stage. The narrow contract refactor is implemented and CI-tested;
+no installed host, Provider or Box write has been performed. **Source baseline:** `main` `0a3c0b524cfb6ec33a3d03d81d6f29f1549cecac`,
 v0.29.0. No claim of installed v0.29.0 validation.
 
 **Global plan:** [Feature roadmap](FEATURE_ROADMAP_MASTER.md), especially
@@ -161,10 +161,12 @@ unbounded rewrite.
 | --- | --- | --- |
 | ARCH-0A | [41408681895](https://github.com/vanishs/boxweave/actions/runs/41408681895) PASS at `107861cc` | Source map only |
 | ARCH-0B | [41409106116](https://github.com/vanishs/boxweave/actions/runs/41409106116) PASS at `d090477c` | No installed storage/provision |
-| ARCH-0C | Candidate; CI on exact SHA pending | No installed adapter migration |
+| ARCH-0C | [41409883731](https://github.com/vanishs/boxweave/actions/runs/41409883731) PASS at `3ad92b45` | No installed adapter migration |
 | Live test | U / not run | SSH+HTTP+Web real host/user/Box integration not claimed |
 
-**Exit:** ARCH-0 source/fixture completion requires full CI and
-v0.30.0 source publication evidence. Actual shared mutation dispatch,
+**Source/fixture exit:** Full ARCH-0A/B/C CI is PASS. New immutable
+v0.30.0 publication evidence is recorded after main merge. Actual shared mutation dispatch,
 R-02 task recovery, R-04 lease integration and P1-B2 remain distinct
 feature work with real-host checkpoints.
+
+**Decision:** ARCH-0 contracts, module-boundary extraction and fixture regression are ACCEPTED at source level. ARCH-0 does not replace P1-B2; actual shared coordinator provisioning, app/Web/Gateway dispatch integration, live mixed-version upgrade and rollback remain separate U gates. The stable installer pin is unchanged.
