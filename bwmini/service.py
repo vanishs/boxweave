@@ -15,8 +15,11 @@ def ident():
     return uuid.uuid4().hex
 
 class Service:
-    def __init__(self, store, provider, clock=time.time, budget=60):
+    def __init__(self, store, provider, clock=time.time, budget=60, shared_claims=None):
         self.store, self.provider, self.clock = store, provider, clock
+        # Explicit owner-managed deployment only. Fixture and old installations
+        # preserve their original behavior until coordination is provisioned.
+        self.shared_claims = shared_claims
         self.budget = min(600, max(1, budget))
         from .lifecycle import Lifecycle
         self.lifecycle = Lifecycle(store,provider,clock)

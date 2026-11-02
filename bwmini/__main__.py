@@ -26,8 +26,18 @@ def load(path):
         provider=Provider(c)
     else:
         raise Fault("EXPLICIT_MODE_REQUIRED",422)
+    option = c.get("coordination")
+    if option not in (None, {"enabled": True}, {"enabled": False}):
+        raise Fault("COORDINATION_CONFIG_INVALID", 422)
+    claims = None
+    if option == {"enabled": True}:
+        if mode != "mcp":
+            raise Fault("COORDINATION_LIVE_PROVIDER_REQUIRED", 422)
+        from .coordination_bridge import SharedClaims
+        claims = SharedClaims()
     store=Store(c["database"])
-    return c,Service(store,provider,budget=c.get("operation_timeout",60))
+    return c,Service(store,provider,budget=c.get("operation_timeout",60),
+                     shared_claims=claims)
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

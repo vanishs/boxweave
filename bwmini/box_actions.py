@@ -156,9 +156,50 @@ class BoxActions:
                            (self.clock(),op["id"]))
             return True
 
-        with self.store.db() as db:
-            db.execute("UPDATE box_action_receipts SET state='dispatching',code='DISPATCH_INTENT',updated=? WHERE id=?",
-                       (self.clock(),op["id"]))
+        claims = getattr(self.service, "shared_claims", None)
+        claim_ref = "web_" + op["id"]
+        if claims is not None:
+            # The app and root-published Gateway must agree on the exact
+            # Provider scope and Box incarnation. Missing claims fail closed.
+            try:
+                from .coordination_bridge import published_scope, app_box
+                identity, scope, logical = app_box(target, published_scope())
+                claims.acquire(op["id"], claim_ref, identity, scope, logical)
+            except Exception as error:
+                from .operation_coordination import CoordinationFault
+                code = (error.code if isinstance(error, CoordinationFault)
+                        else "COORDINATION_UNAVAILABLE")
+                with self.store.db() as db:
+                    db.execute("UPDATE box_action_receipts SET state='failed',code=?,updated=? WHERE id=?",
+                               (code, self.clock(), op["id"]))
+                return True
+        try:
+            with self.store.db() as db:
+                db.execute("UPDATE box_action_receipts SET state='dispatching',code='DISPATCH_INTENT',updated=? WHERE id=?",
+                           (self.clock(),op["id"]))
+        except Exception:
+            if claims is not None:
+                try:
+                    claims.cancel_before_dispatch(op["id"])
+                except Exception:
+                    pass
+            # Original transaction may have committed. Preserve the
+            # receipt's existing state for app restart to recover.
+            raise
+        if claims is not None:
+            try:
+                claims.dispatch_intent(op["id"])
+            except Exception:
+                try:
+                    claims.cancel_before_dispatch(op["id"])
+                except Exception:
+                    pass
+                # No remote tool was invoked; the original receipt, however,
+                # already recorded dispatching and must not be replayed.
+                with self.store.db() as db:
+                    db.execute("UPDATE box_action_receipts SET state='unknown',code='COORDINATION_DISPATCH_UNVERIFIED',updated=? WHERE id=?",
+                               (self.clock(),op["id"]))
+                return True
         try:
             if op["action"]=="toggle_auto_sleep":
                 from .auto_sleep import execute
@@ -177,4 +218,17 @@ class BoxActions:
         with self.store.db() as db:
             db.execute("UPDATE box_action_receipts SET state=?,code=?,updated=? WHERE id=?",
                        (state,code,self.clock(),op["id"]))
+        if claims is not None:
+            try:
+                # Release only after original observed terminal receipt is
+                # durable. An acknowledged long-running process/sleep is
+                # not terminal; hold it for explicit reconciliation.
+                if state == "succeeded":
+                    claims.observed_terminal(op["id"],claim_ref)
+                else:
+                    claims.unknown(op["id"])
+            except Exception:
+                # A missing/replaced claim DB must not turn an uncertain
+                # outcome into a second execution or a success claim.
+                pass
         return True
