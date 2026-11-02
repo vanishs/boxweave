@@ -84,9 +84,9 @@ def _resource(value):
         _digest(parts[1])
         _logical(parts[2])
     elif len(parts) == 4 and parts[0] == "port":
-        port_resource(parts[1], parts[2], int(parts[3]) if parts[3].isdecimal() else None)
-        if str(int(parts[3])) != parts[3]:
+        if re.fullmatch(r"[1-9][0-9]{0,4}", parts[3]) is None:
             raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+        port_resource(parts[1], parts[2], int(parts[3]))
     else:
         raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
     return value
