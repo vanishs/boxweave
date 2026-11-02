@@ -860,3 +860,18 @@ so exact-SHA GitHub full CI needed. New `app_runtime` package-only,
 no root helper copy or authority changed. Installed v0.42.1 upgrade,
 SSH/HTTP/Provider authority, cross-UID shared coordination and rollback
 remain L/U. Preserve existing Box and old failure scenes.
+
+
+## Stable-default candidate after v0.42.1 real installed verification
+
+[Fresh Box / upgrade plan and observed evidence](STABLE_PROMOTION_2026-11-02.md).
+`bwstable-1102` fresh tagged v0.42.1 installed exit 0,
+authenticated 58-tool Provider list and nested Python selftest
+create/hello/stop/delete exit 0, invalid plan refused exit 2 with
+zero mutation. `bwstable-upgrade-1102` fresh v0.28.0 then
+v0.42.1 upgrade each exited 0, admin initialization preserved,
+same positive nested selftest exit 0. No outer host changed.
+Promote default stable pin only with exact-SHA CI+publication,
+confirmed post-restart authenticated read and task-owned Box cleanup. Installed
+multi-client R-04 / OAuth/TLS, E2/E3/E4 and production downgrade
+remain U/BLOCKED; source/default/installed identities are distinct.

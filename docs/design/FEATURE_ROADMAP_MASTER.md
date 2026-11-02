@@ -5,6 +5,18 @@
 **Owner direction:** Keep Boxes clean, use separate Boxes for parallel projects, prefer external nonintrusive weaving, reuse the installed Provider/SSH/HTTP MCP architecture, and keep optional coordination nearly invisible for ordinary single-Agent use.
 **Scope rule:** The roadmap tracks *ideas and decisions*. Product requirements and delivery authority belong to [SCOPE](../product/SCOPE.md), [REQUIREMENTS](../product/REQUIREMENTS.md), [ACCEPTANCE](../product/ACCEPTANCE.md), and [PHASE_STATUS](../process/PHASE_STATUS.md). Installed evidence belongs to the [feature matrix](../verification/FEATURE_MATRIX.md) and [verification queue](../verification/REMEDIATION_TEST_QUEUE.md). An owner-approved *design* is not permission to implement, publish, install, connect a public listener, create a Box or modify a host.
 
+## Current source and stable-release checkpoint (2026-11-02)
+
+The historical phase narratives below are kept for decision provenance;
+their original incomplete statements are *not* the latest code status.
+The current source, v0.42.2 candidate, selects v0.42.1 as the separately
+reviewed default stable installer following fresh and actual v0.28.0
+upgrade real-Box checks. [Stable selection and limited acceptance](../verification/STABLE_PROMOTION_2026-11-02.md)
+records both real test targets, independent release SHA and remaining
+risk. Protected R-04 coordination remains opt-in/not installed-accepted
+and E2–E4 remain upstream-blocked; stable promotion is **not** a claim
+of complete roadmap implementation.
+
 ## 1. How to read this roadmap
 
 - **DESIGN — owner-selected:** behavior and scope discussed/selected; implementation is not yet complete or authorized here.
