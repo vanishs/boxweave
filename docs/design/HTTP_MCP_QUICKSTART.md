@@ -1,6 +1,6 @@
 # HTTP MCP quick-start: default loopback service and explicit public HTTPS
 
-Status: implementation approved by owner 2026-11-01; target source v0.27.0. Parent: [remote MCP master](../design/REMOTE_MCP_MASTER.md); acceptance [REMOTE_MCP_TEST_PLAN](../verification/REMOTE_MCP_TEST_PLAN.md). Scope follows REQ/AC-021..024 and retains single trusted-operator security.
+Status: source v0.27.0 implemented and GitHub PR CI verified; exact installed managed-service / external browser acceptance remains pending. Parent: [remote MCP master](../design/REMOTE_MCP_MASTER.md); acceptance [REMOTE_MCP_TEST_PLAN](../verification/REMOTE_MCP_TEST_PLAN.md). Scope follows REQ/AC-021..024 and retains single trusted-operator security.
 
 ## Decisions and requirements
 
