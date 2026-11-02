@@ -51,3 +51,7 @@ P1-B2 and R-02/R-04 dispatch integration remain NOT IMPLEMENTED.
 ## Phase 2 R-03 first-use guide (source candidate)
 
 Read-only `boxweave setup --mode ssh|https|local [--check] [--format json]` reuses the installed root-reviewed public descriptor; no connection secret, enrollment, public HTTPS assumption, app login, or host mutation. Independent fixture/CI verification pending; live SSH/HTTPS client handshake not yet tested. R-01/R-02/R-04 remain separate feature tracks.
+
+## Phase 2 R-02 gateway-private task receipts (staged candidate)
+
+Metadata-only `gateway_tasks.py` uses private app-user SQLite, stable random request keys, exact observed Box incarnation digest and crash-safe dispatch-intent. `boxweave_task_submit/get/list` use the original trusted `connect(exec)` permission and do not store commands, outputs or credentials. Provisioning is separately authorized with `sudo boxweave task provision`. This is **gateway-tracked only**; legacy `connect(exec)` and Web/app work remain untracked by this store. No R-04 cross-entry coordination coverage is claimed. Fixture CI and installed acceptance remain separate.

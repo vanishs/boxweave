@@ -99,7 +99,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (48)
+### Python unittest files (49)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -111,6 +111,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_box_actions.py`
 - `tests/test_box_reads.py`
 - `tests/test_gateway_tasks.py`
+- `tests/test_gateway_tasks_gateway.py`
 - `tests/test_box_debug.py`
 - `tests/test_capabilities.py`
 - `tests/test_client_setup.py`
@@ -340,7 +341,7 @@ configuration and service control to the non-root application account.
 - `POST /token`
 <!-- inventory:remote-api:end -->
 
-### Gateway-owned MCP tools (6)
+### Gateway-owned MCP tools (9)
 
 <!-- inventory:gateway-tools:start -->
 - `boxweave_diagnose`
@@ -349,6 +350,9 @@ configuration and service control to the non-root application account.
 - `boxweave_info`
 - `boxweave_nesting`
 - `boxweave_project_diagnose`
+- `boxweave_task_get`
+- `boxweave_task_list`
+- `boxweave_task_submit`
 <!-- inventory:gateway-tools:end -->
 
 ### Client App catalog (9)

@@ -37,10 +37,12 @@ class GuideTests(unittest.TestCase):
             {"name": "list_containers"},
             {"name": "delete_container", "description": "delete"}]}}
         tools = mcp_gate.catalog(data)["result"]["tools"]
-        self.assertEqual([tool["name"] for tool in tools][-6:],
+        self.assertEqual([tool["name"] for tool in tools][-9:],
                          ["boxweave_nesting", "boxweave_info",
                           "boxweave_diagnose", "boxweave_project_diagnose",
-                          "boxweave_box_read_file", "boxweave_box_list_directory"])
+                          "boxweave_box_read_file", "boxweave_box_list_directory",
+                          "boxweave_task_submit", "boxweave_task_get",
+                          "boxweave_task_list"])
         self.assertIn("managed workload SSH public key", tools[0]["description"])
         self.assertNotIn("ssh_keys", tools[0]["inputSchema"]["required"])
         self.assertIn("exact-target", tools[1]["description"])

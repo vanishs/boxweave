@@ -822,6 +822,34 @@ def main(argv=None):
             print(json.dumps({"state": "error", "code": "REMOTE_MANAGEMENT_UNAVAILABLE"}),
                   file=sys.stderr)
             return 2
+    if argv and argv[0] == "task":
+        if argv[1:] != ["provision"]:
+            print("Usage: sudo boxweave task provision", file=sys.stderr)
+            return 2
+        if os.geteuid() != 0:
+            print("Task provisioning requires administrator approval: sudo boxweave task provision",
+                  file=sys.stderr)
+            return 2
+        # The root CLI runs only the explicitly reviewed root-owned helper
+        # *as* the application account. No application-owned code runs as root.
+        helper=Path("/usr/local/lib/boxweave/default/gateway_tasks.py")
+        try:
+            for folder in (helper.parent, *helper.parent.parents):
+                meta=folder.lstat()
+                if not stat.S_ISDIR(meta.st_mode) or meta.st_uid!=0 or meta.st_mode&0o022:
+                    raise ValueError("TASK_HELPER_UNTRUSTED")
+            meta=helper.lstat()
+            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid!=0
+                    or meta.st_mode&0o022 or meta.st_nlink!=1):
+                raise ValueError("TASK_HELPER_UNTRUSTED")
+            return subprocess.run(
+                ["runuser", "-u", "boxweave", "--", "/usr/bin/python3",
+                 "-E", "-s", str(helper), "provision"],
+                check=False, timeout=30).returncode
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            print(json.dumps({"state":"unavailable","code":"TASK_PROVISION_UNAVAILABLE"}),
+                  file=sys.stderr)
+            return 2
     if argv and argv[0] == "job":
         try:
             return job_command(argv[1:])

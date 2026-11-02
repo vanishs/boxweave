@@ -1,5 +1,5 @@
 """MCP stdio relay: inject a server-owned workload key and enforce SSH trust."""
-import base64, json, os, re, stat, subprocess, sys, time, secrets
+import base64, json, os, re, stat, subprocess, sys, time, secrets, hashlib
 from pathlib import Path
 
 try:
@@ -9,10 +9,11 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads
+    from . import box_reads, gateway_tasks
 except ImportError:
     import gate_diagnostics as gd
     import box_reads
+    import gateway_tasks
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
 SERVER_INFO_VERSION = "0.31.0"
@@ -177,7 +178,7 @@ def catalog(message):
                 "explicit authorization and verify target; after a timeout "
                 "inspect state instead of blindly retrying."
             )
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS))
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -211,6 +212,10 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
     "TRUST_NOT_READY", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
+    "TASK_ARGUMENT_INVALID", "TASK_STORAGE_UNSAFE", "TASK_TRACKING_UNAVAILABLE",
+    "TASK_SCHEMA_UNSUPPORTED", "TASK_NOT_FOUND", "TASK_CAPACITY_EXCEEDED",
+    "TASK_SELECTOR_INVALID", "TASK_STATE_CONFLICT", "TASK_RESULT_UNVERIFIED",
+    "REQUEST_KEY_CONFLICT", "GATE_TOOL_NOT_ALLOWED",
 ))
 
 
@@ -464,6 +469,64 @@ def main():
                         outcome = reply(internal, False)
                         emit_result(request["id"], box_reads.typed_output(outcome))
                         continue
+                    if params.get("name") in ("boxweave_task_get", "boxweave_task_list"):
+                        if not isinstance(args, dict):
+                            raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
+                        store = gateway_tasks.TaskStore()
+                        if params["name"] == "boxweave_task_get":
+                            if set(args) - {"task_id", "request_key"}:
+                                raise gateway_tasks.TaskFault("TASK_SELECTOR_INVALID")
+                            value = store.get(**args)
+                        else:
+                            if set(args) - {"box", "limit"} or "box" not in args:
+                                raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
+                            value = {"tasks": store.list(args["box"], args.get("limit", 20))}
+                        emit_result(request["id"], value)
+                        continue
+                    if params.get("name") == "boxweave_task_submit":
+                        # Preserve the original connect permission and target
+                        # validation; request_key is NOT an authorization grant.
+                        if permitted is not None and "connect" not in permitted:
+                            raise ValueError("GATE_TOOL_NOT_ALLOWED")
+                        if not isinstance(args, dict) or set(args) != {"box", "request_key", "exec"}:
+                            raise gateway_tasks.TaskFault("TASK_ARGUMENT_INVALID")
+                        payload_digest = gateway_tasks.command_digest(args["box"], args["exec"])
+                        observed = container(args["box"], request["id"])
+                        trusted({"box": args["box"]}, trusted_registry(), observed)
+                        # Bind to exact observed incarnation. Do not print or
+                        # persist commands or private connection material.
+                        identity = hashlib.sha256(json.dumps({
+                            "name": observed["name"],
+                            "created": str(observed["createdAt"]),
+                            "username": observed["username"],
+                            "ip": observed["network"]["ipAddress"]
+                        }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                        store = gateway_tasks.TaskStore()
+                        receipt, fresh = store.reserve(args["request_key"], args["box"],
+                                                       identity, payload_digest)
+                        if not fresh:
+                            emit_result(request["id"], receipt)
+                            continue
+                        # A failed durable intent prevents ANY upstream dispatch.
+                        store.advance(receipt["task_id"], "recorded", "dispatch_intent")
+                        try:
+                            internal = "boxweave-task-" + secrets.token_hex(8)
+                            send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
+                                  "params": {"name": "connect",
+                                             "arguments": {"box": args["box"], "exec": args["exec"]}}})
+                            result = reply(internal, False)
+                            code = gateway_tasks.observed_exit(result)
+                            store.advance(receipt["task_id"], "dispatch_intent", "completed",
+                                          exit_code=code)
+                        except Exception:
+                            # Once dispatch_intent is committed, no transport
+                            # failure proves the guest command did not run.
+                            try:
+                                store.advance(receipt["task_id"], "dispatch_intent", "unknown")
+                            except gateway_tasks.TaskFault:
+                                pass
+                        emit_result(request["id"], store.get(task_id=receipt["task_id"]))
+                        continue
                     if params.get("name") == "boxweave_nesting":
                         observed = container(args.get("logical"), request["id"])
                         action = args.get("action")
@@ -503,7 +566,7 @@ def main():
                         if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
                         text = "".join(b["text"] for b in result["content"] if b.get("type") == "text")
                         trusted(args, registry, json.loads(text)["container"])
-                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
+                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     error_result = {"jsonrpc": "2.0", "id": request.get("id"),
