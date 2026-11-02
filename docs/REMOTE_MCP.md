@@ -48,7 +48,7 @@ systems use `boxweave http status`, `sudo boxweave http doctor` and
 
 ## Installation completion screen (v0.27.2 source)
 
-The installer prints a human-readable HTTP MCP section **only after** a successful managed application installation. It shows the actual effective port and loopback `/mcp` URL, `boxweave http status`, `sudo boxweave http doctor`, `sudo boxweave http restart`, and Cloudflare Quick Tunnel + configure + hosted ChatGPT OAuth sequence. If a public HTTPS origin is already configured, its `/mcp` client URL is shown, explicitly without claiming external reachability. If HTTP MCP is explicitly disabled, the text explains that state and omits activation/tunnel commands. The default installed service remains loopback-only. JSON `next_steps` and SSH client onboarding are preserved.
+As of published stable v0.27.2, the installer prints a human-readable HTTP MCP section **only after** a successful managed application installation. It shows the actual effective port and loopback `/mcp` URL, `boxweave http status`, `sudo boxweave http doctor`, `sudo boxweave http restart`, and Cloudflare Quick Tunnel + configure + hosted ChatGPT OAuth sequence. If a public HTTPS origin is already configured, its `/mcp` client URL is shown, explicitly without claiming external reachability. If HTTP MCP is explicitly disabled, the text explains that state and omits activation/tunnel commands. The default installed service remains loopback-only. JSON `next_steps` and SSH client onboarding are preserved.
 
 ## Fastest ChatGPT / Cloudflare Quick Tunnel setup
 
