@@ -255,3 +255,7 @@ Tests must include real independent gateway processes (not only sequential mocks
 - **Authority:** Source implementation, normative requirements, release, host ACL/group changes, controlled crash tests and real Box mutations require separate authorization. No code, installs, services, versions or Box contents are changed by this documentation.
 
 **Single-line product principle:** *Normally invisible coordination; on conflict, reject immediately; stale clean leases expire; uncertain remote work blocks only the resources it may still affect.*
+
+## Source implementation checkpoint — R-04 lease core only
+
+Under owner authorization the minimal existing operation coordinator implements a 600-second default lease with SHA256 token hashes, bounded renewal/release, exact immutable Box identity checks and independent Box conflict keys. Once an operation has a dispatch_intent or UNKNOWN claim, lease expiry cannot grant unsafe reuse. Fixture CI covers wrong token, wrong incarnation, lease expiry, cross-Box concurrent operations and UNKNOWN hold. The private coordinator DB is an optional separately-provisioned app-user file; the provisioner reports coordination_enabled=false. **No MCP box lease endpoint, Web/SSH/HTTP dispatch integration, old forwarded tool mutation classifier, protected guest patch or installed service verification is claimed in this checkpoint.** Source-only completion of this internal primitive is not completion of R-04 and does not permit marketing multi-Agent write safety.
