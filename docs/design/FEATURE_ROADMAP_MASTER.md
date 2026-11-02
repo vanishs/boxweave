@@ -184,3 +184,7 @@ Evidence classes and installed/current revision must follow the [verification qu
 ## Phase 2 source checkpoint: optional protected gateway mode (v0.39.0 candidate)
 
 [Root-owned policy and forwarded-tool classification](PHASE2_PROTECTED_GATEWAY_POLICY.md) optionally denies direct connect, create/resize/delete, nesting apply and unclassified Provider writes before forwarding while exposing reviewed read tools and R-02 tracked exec. The marker is not provisioned/enabled by the installer; Web lifecycle/access writes are not covered. Source-only protection is not a global multi-Agent guarantee or installed acceptance.
+
+## R-04 lifecycle app-worker source checkpoint (v0.40.0 candidate)
+
+[Web lifecycle shared claims](PHASE2_LIFECYCLE_SHARED_CLAIMS.md) adds opt-in common Box/name/tenant resource claims for the app's existing create/start/stop/delete/resize worker. It records dispatch intent before Provider writes, retains the original app receipt, and releases a claim only after an observed desired-state terminal result. UNKNOWN, unverified resize and unverified nesting remain blocked. This joins the already opt-in Web BoxActions and tracked SSH/HTTP Gateway paths; Web Access/network/port changes, legacy external SSH and unclassified disabled-mode forwarded writes are still outside complete protection. The shared policy is **not enabled on the installed host**, and source CI is not a live Box proof. Overall P1-B2/R-04 still PARTIAL.

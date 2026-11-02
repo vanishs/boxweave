@@ -5,6 +5,7 @@ private SQLite file, one exact Provider scope and one durable claim namespace.
 This module does not enable protection of legacy forwarded MCP mutations.
 """
 import os
+import hashlib
 from pathlib import Path
 import json
 import stat
@@ -14,12 +15,14 @@ if __package__:
     from .coordination_runtime import (
         app_target_identity, gateway_target_identity, private_connection, scope_digest)
     from .operation_coordination import (
-        OperationCoordinator, CoordinationFault, box_resource, name_resource)
+        OperationCoordinator, CoordinationFault, box_resource, name_resource,
+        tenant_resource)
 else:
     from coordination_runtime import (
         app_target_identity, gateway_target_identity, private_connection, scope_digest)
     from operation_coordination import (
-        OperationCoordinator, CoordinationFault, box_resource, name_resource)
+        OperationCoordinator, CoordinationFault, box_resource, name_resource,
+        tenant_resource)
 
 DEFAULT_CLAIMS = Path("/home/boxweave/.boxweave/claims.sqlite3")
 PUBLIC_SCOPE = Path("/var/lib/boxweave-default/public/targets.json")
@@ -60,6 +63,37 @@ def gateway_box(observed, scope, logical):
     return (gateway_target_identity(observed,scope=scope,logical=logical),
             scope_digest(**scope),logical)
 
+def app_environment_keys(config, action, logical, target, spec):
+    """Exact app-owned lifecycle keys, including pre-creation logical names."""
+    if action not in ("create", "start", "stop", "delete", "resize"):
+        raise CoordinationFault("COORDINATION_RESOURCE_INVALID")
+    if not isinstance(config,dict) or not isinstance(spec,dict):
+        raise CoordinationFault("COORDINATION_SCOPE_UNVERIFIED")
+    scope=published_scope()
+    if {k:config.get(k) for k in _SCOPE_KEYS} != scope:
+        raise CoordinationFault("COORDINATION_SCOPE_MISMATCH")
+    scope_id=scope_digest(**scope)
+    if target is None:
+        if action!="create":
+            raise CoordinationFault("COORDINATION_IDENTITY_INVALID")
+        namekey=name_resource(scope_id,logical)
+        identity=hashlib.sha256(json.dumps({
+            "scope":scope_id,"logical":logical,"resource":"pre_creation"
+        },sort_keys=True,separators=(",",":")).encode()).hexdigest()
+        resources=[namekey]
+    else:
+        if action=="create":
+            raise CoordinationFault("COORDINATION_IDENTITY_INVALID")
+        identity,other_scope,observed_name=app_box(target,scope)
+        if observed_name!=logical or other_scope!=scope_id:
+            raise CoordinationFault("COORDINATION_IDENTITY_INVALID")
+        resources=[box_resource(identity),name_resource(scope_id,logical)]
+    tenant=spec.get("_network_tenant")
+    if tenant is not None:
+        resources.append(tenant_resource(scope_id,tenant))
+    return identity,resources
+
+
 class SharedClaims:
     def __init__(self, path=DEFAULT_CLAIMS, *, clock=time.time):
         self.path=Path(path)
@@ -71,6 +105,11 @@ class SharedClaims:
         resources=[box_resource(identity),name_resource(scope_id,logical)]
         self.coordinator.acquire(operation_id,identity,receipt_ref,resources,
                                  lease_token=lease_token)
+
+    def acquire_environment(self, operation_id, receipt_ref, config,
+                            action, logical, target, spec):
+        identity,resources=app_environment_keys(config,action,logical,target,spec)
+        self.coordinator.acquire(operation_id,identity,receipt_ref,resources)
 
     def dispatch_intent(self, operation_id):
         self.coordinator.dispatch_intent(operation_id)
