@@ -77,6 +77,10 @@ These environment features are **design-only**; D0–D2 shipped in 0.22.0, while
 
 - [Reconnect-recoverable MCP task records, deduplication, bounded result retrieval and UNKNOWN safety](design/MCP_TASK_RELIABILITY_R1.md). Approved design objective: recover known task state/results after reconnect without guaranteeing remote process continuation; no feature implementation or deployment is claimed.
 
+## Multi-Agent resource conflict protection (design only; not implemented)
+
+- [Minimal Box lease and operation conflict protection — shared resources, fail-fast conflicts, 10-minute expiry, UNKNOWN safety, implementation batches and acceptance](design/MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md). Multiple projects keep separate Agents/Boxes; no Git worktrees, Agent runner or automatic task queue.
+
 ## Installation and first-use onboarding (research/design only)
 
 - [First-use onboarding v1 — source audit, SSH/HTTPS guided paths, first authenticated MCP read, readiness states, phased development and acceptance](design/FIRST_USE_ONBOARDING_V1.md). This document proposes UI/CLI guidance only; it does not claim a shipped `boxweave setup` command or an installed v0.27.1 host test.
