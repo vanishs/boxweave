@@ -308,7 +308,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `PUT /api/tenants/<key>/label`
 <!-- inventory:web-api:end -->
 
-### Remote HTTP MCP/OAuth routes (method and path) (9)
+### Remote HTTP MCP/OAuth routes (method and path) (10)
 
 <!-- inventory:remote-api:start -->
 - `GET /.well-known/oauth-authorization-server`
