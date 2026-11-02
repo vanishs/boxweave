@@ -9,13 +9,14 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, gateway_tasks, coordination_bridge
+    from . import box_reads, gateway_tasks, coordination_bridge, gateway_protection
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
     import box_reads
     import gateway_tasks
     import coordination_bridge
+    import gateway_protection
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
@@ -223,6 +224,9 @@ GATE_ERROR_CODES = frozenset((
     "COORDINATION_IDENTITY_INVALID", "COORDINATION_UNAVAILABLE",
     "COORDINATION_SCHEMA_UNSUPPORTED", "COORDINATION_STORAGE_UNSAFE",
     "RESOURCE_BUSY", "RECOVERY_REQUIRED",
+    "COORDINATION_POLICY_UNAVAILABLE", "COORDINATION_POLICY_INVALID",
+    "COORDINATION_POLICY_UNSAFE", "COORDINATION_TOOL_UNCLASSIFIED",
+    "COORDINATION_USE_TRACKED_TASK",
 ))
 
 
@@ -413,6 +417,8 @@ def main():
                 message = reply(request["id"], False)
                 if not request.get("params", {}).get("cursor"): message = catalog(message)
                 message = filter_tools(message, permitted)
+                if gateway_protection.enabled():
+                    message = gateway_protection.filter_catalog(message)
                 print(json.dumps(message), flush=True)
                 continue
             nesting = None
@@ -425,6 +431,8 @@ def main():
                         "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
                     continue
                 try:
+                    if gateway_protection.enabled():
+                        gateway_protection.check_call(params.get("name"), args)
                     if params.get("name") == "boxweave_diagnose":
                         if not isinstance(args, dict):
                             raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")
