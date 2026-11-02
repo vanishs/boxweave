@@ -1,5 +1,7 @@
 # E2 implementation specification — managed instance snapshots and checkpoint catalog
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E2 managed Box snapshots. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **NOT IMPLEMENTED. DESIGN ONLY.** Parent [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Depends on [E0](BOX_ENV_E0_CAPABILITIES.md) for versioned Provider write authority and [E1](BOX_ENV_E1_FINGERPRINTS.md) for optional before/after fingerprint linkage. Snapshot **restoration** and cloning are separate [E3](BOX_ENV_E3_RESTORE.md)/[E4](BOX_ENV_E4_CLONE.md) changes.
 
 ## Scope
