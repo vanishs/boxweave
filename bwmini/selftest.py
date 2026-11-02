@@ -181,13 +181,30 @@ def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None,
         pass
     if ok:
         def hello():
-            left = deadline - clock()
-            if left <= 0:
-                raise Fault("DEADLINE_EXCEEDED")
-            result = provider.hello(target, "/home/" + target.user, left)
-            if (not isinstance(result, dict) or result.get("exit_code") != 0
-                    or result.get("stdout") != HELLO):
-                raise Fault("COMMAND_FAILED")
+            # The Provider can report the new container RUNNING before its
+            # authorized SSH host-key reconciliation finishes. Only retry the
+            # fixed, side-effect-free identity/hello check on *classified*
+            # readiness faults; never retry a create/stop/delete or bypass SSH
+            # host-key validation. Reserve the rest of the test budget for
+            # original-resource stop/delete and evidence.
+            trust_deadline = min(deadline - 15, clock() + min(90, budget // 3))
+            while True:
+                left = deadline - clock()
+                if left <= 0:
+                    raise Fault("DEADLINE_EXCEEDED")
+                try:
+                    result = provider.hello(target, "/home/" + target.user, left)
+                except Fault as error:
+                    if error.code not in ("TRUST_FAILED", "TRUST_NOT_READY", "NOT_CONNECTION_READY"):
+                        raise
+                    if clock() >= trust_deadline:
+                        raise
+                    sleep(min(3, max(0, trust_deadline - clock())))
+                    continue
+                if (not isinstance(result, dict) or result.get("exit_code") != 0
+                        or result.get("stdout") != HELLO):
+                    raise Fault("COMMAND_FAILED")
+                return
         ok = step("hello", hello) and ok
     ok = step("stop", lambda: (provider.lifecycle_mutate("stop", box, spec, deadline - clock()),
                                wait_state(lambda v: v["state"] == "CONTAINER_STATE_STOPPED"), None)) and ok

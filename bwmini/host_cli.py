@@ -700,17 +700,38 @@ def selftest_command(options):
             "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
             str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "selftest-" + mode,
             "--config", str(prefix / "runtime.json")] + passthrough + ["--budget", str(budget)]
-    result = observe(argv, timeout=budget + 120, limit=65536, cwd=str(prefix / "current"))
+    # The app uses exit 2 for both confirmed failed selftests and typed
+    # preflight refusals. A normal observe() discards that stdout and hides
+    # the original cause behind SELFTEST_FAILED_INSPECT_STEPS.
+    reader = run_bounded if mode == "run" else observe
+    result = reader(argv, timeout=budget + 120, limit=65536, cwd=str(prefix / "current"))
     if result is None:
         print(json.dumps({"state": "error", "code": "SELFTEST_FAILED_INSPECT_STEPS"}), file=sys.stderr)
         return 2
-    print(result)
     if mode == "plan":
+        print(result)
         return 0
     try:
-        return 0 if json.loads(result).get("state") == "passed" else 1
+        parsed = json.loads(result)
+        if not isinstance(parsed, dict):
+            raise ValueError("unexpected selftest response")
     except ValueError:
+        print(json.dumps({"state": "error", "code": "SELFTEST_RESULT_INVALID"}), file=sys.stderr)
         return 2
+    if parsed.get("state") in ("passed", "failed") and isinstance(parsed.get("steps"), list):
+        print(result)
+        return 0 if parsed["state"] == "passed" else 1
+    if parsed.get("state") == "unreconciled":
+        print(json.dumps({"state": "unreconciled", "code": "SELFTEST_RUN_UNRECONCILED"}))
+        return 2
+    allowed = ("SELFTEST_CONFIRMATION_MISMATCH", "SELFTEST_PLAN_INVALID",
+               "SELFTEST_PLAN_REQUIRED", "SELFTEST_LIVE_REQUIRED",
+               "SELFTEST_RUN_UNRECONCILED")
+    if parsed.get("code") in allowed:
+        print(json.dumps({"state": "error", "code": parsed["code"]}))
+        return 2
+    print(json.dumps({"state": "error", "code": "SELFTEST_RESULT_INVALID"}), file=sys.stderr)
+    return 2
 
 
 def main(argv=None):

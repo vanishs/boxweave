@@ -109,3 +109,7 @@ Use `python scripts/check_knowledge.py` for authority/links/traceability and non
 ## OAuth admin-denial persistence invariant (v0.26.6+)
 
 Every change to remote OAuth authorization must exercise the **failure** path in an ephemeral Store: repeated rejected test inputs consume the intended 5/minute authorization-attempt ledger even when `RemoteError` aborts grant processing, the next attempt is HTTP429 with zero authorization codes issued, and the same unconsumed pending grant can be authorized once the rate window expires. Keep existing positive DCR/PKCE/refresh/revocation fixtures. This is a unit/Flask fixture, not public TLS/external-client acceptance.
+
+## Trust-readiness timing in installed selftest (v0.26.7+)
+
+After a new Box reaches RUNNING, independently managed pinned SSH host keys may not yet be ready. Mock a temporary `TRUST_FAILED` on the fixed no-side-effect hello: require bounded eventual success, **one** create/stop/delete, and no insecure host-key fallback. A sustained trust failure must give typed FAIL and cleanup; unknown error or identity mismatch must not trigger retry. Also verify the host CLI safely preserves typed app failures on exit2 without exposing arbitrary error content. True installed proof requires exact plan/run step receipts and independently observed absent inner Box.

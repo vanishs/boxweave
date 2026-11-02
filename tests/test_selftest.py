@@ -238,8 +238,9 @@ class JournalTests(unittest.TestCase):
         provider = Live()
         provider.hello_failures = 3
         journal = self.journal()
-        result = selftest.run(provider, self.plan, key=KEY, budget=60, clock=Clock(),
-                              sleep=Clock().sleep, journal=journal)
+        tick = Clock()
+        result = selftest.run(provider, self.plan, key=KEY, budget=60, clock=tick,
+                              sleep=tick.sleep, journal=journal)
         self.assertEqual(result["state"], "failed")
         with self.store.db() as db:
             row = dict(db.execute("SELECT * FROM selftest_runs").fetchone())
