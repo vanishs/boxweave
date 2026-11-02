@@ -1,5 +1,13 @@
 # Remediation validation and next-Agent queue
 
+## Phase 2 R-02 completed fixture checkpoints (source)
+
+[Store/negative CI 41417633459](https://github.com/vanishs/boxweave/actions/runs/41417633459) PASS on 8a415b9; [gateway/SSH/HTTP common code CI 41418231631](https://github.com/vanishs/boxweave/actions/runs/41418231631) PASS on f86eaed; release v0.32.0 CI and LIVE operational proof remain separate. See [implementation design and limits](../design/PHASE2_GATEWAY_TASKS_IMPLEMENTATION.md). Remaining R-04 and P1-B2 must not be called done.
+
+## Phase 2 R-02 tracked gateway candidate gate
+
+`gateway_tasks.py` is a metadata-only durable receipt store (stable request-key, private payload digest, exact target digest, known exit code or conservative UNKNOWN). New direct SSH/HTTP MCP `boxweave_task_submit/get/list` reuses the existing connect adapter; provisioning is an explicit app-account operation `sudo boxweave task provision`. **No automatic provisioning during upgrade, no stdout/stderr retention, no Web-app receipt access, no claim of R-04 parity.** Fixture CI and installed known-result/timeout/cross-session tests remain mandatory.
+
 ## Phase 2 incremental feature gates (source candidate)
 
 R-03 read-only `boxweave setup` from public descriptor and R-01 bounded `boxweave_box_read_file` / `boxweave_box_list_directory` over original trusted `connect(exec)` have source regression tests. Their installed SSH/HTTP/Web/guest-Python and mixed-version operation remain **L=U**. R-02 request-key result recovery, R-04 cross-entry conflicts and R-01 guarded file patch are **not yet implemented**, not implied by the read-only adapter. Stable install stays v0.28.0 pending separate promotion.
