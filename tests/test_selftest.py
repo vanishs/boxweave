@@ -18,6 +18,7 @@ class Live:
         self.boxes = {}
         self.writes = []
         self.hello_failures = 0
+        self.hello_fault = "NOT_CONNECTION_READY"
         self.inspect_calls = 0
     def lifecycle_inspect(self, logical):
         self.inspect_calls += 1
@@ -34,7 +35,7 @@ class Live:
     def hello(self, target, path, timeout):
         if self.hello_failures:
             self.hello_failures -= 1
-            raise Fault("NOT_CONNECTION_READY")
+            raise Fault(self.hello_fault)
         if path != "/home/" + target.user:
             raise Fault("COMMAND_FAILED")
         return {"stdout": selftest.HELLO, "exit_code": 0,
@@ -85,9 +86,21 @@ class SelftestTests(unittest.TestCase):
         self.assertEqual(provider.boxes, {})
         self.assertEqual([w[0] for w in provider.writes], ["create", "stop", "delete"])
 
+    def test_transient_trust_failure_waits_without_recreating_box(self):
+        provider, clock = Live(), Clock()
+        provider.hello_failures = 2
+        provider.hello_fault = "TRUST_FAILED"
+        plan, checksum = selftest.build_plan(now="T")
+        result = selftest.run(provider, selftest.load_plan(plan, checksum), budget=180,
+                              clock=clock, sleep=clock.sleep, key=KEY)
+        self.assertEqual(result["state"], "passed")
+        self.assertGreaterEqual(clock(), 1006)
+        self.assertEqual([x[0] for x in provider.writes], ["create", "stop", "delete"])
+        self.assertEqual(provider.boxes, {})
+
     def test_hello_failure_still_cleans_up_and_reports_failed(self):
         provider, clock = Live(), Clock()
-        provider.hello_failures = 1
+        provider.hello_failures = 100
         plan, checksum = selftest.build_plan(now="T")
         result = selftest.run(provider, selftest.load_plan(plan, checksum), budget=120,
                               clock=clock, sleep=clock.sleep, key=KEY)
@@ -152,6 +165,35 @@ class SelftestTests(unittest.TestCase):
              patch("sys.stderr", new_callable=io.StringIO):
             self.assertEqual(host_cli.selftest_command(["run", "--plan", "/tmp/p.json"]), 2)
 
+
+    def test_host_selftest_run_preserves_safe_typed_failures(self):
+        info = {"application_user": "boxweave", "app_prefix": "/home/boxweave/boxweave"}
+        identity = type("P", (), {"pw_name": "boxweave", "pw_uid": 1001})()
+        cases = [
+            ({"code": "SELFTEST_CONFIRMATION_MISMATCH"}, 2,
+             "SELFTEST_CONFIRMATION_MISMATCH"),
+            ({"state": "failed", "cleanup": "performed",
+              "steps": [{"step": "hello", "state": "failed", "code": "TRUST_FAILED"}]},
+             1, "TRUST_FAILED"),
+            ({"code": "INTERNAL_UNSAFE_OUTPUT"}, 2, "SELFTEST_RESULT_INVALID"),
+        ]
+        for response, expected_exit, expected_code in cases:
+            with self.subTest(response=response):
+                output = io.StringIO()
+                errors = io.StringIO()
+                with (patch.object(host_cli, "public_state", return_value=info),
+                      patch.object(host_cli.os, "geteuid", return_value=0),
+                      patch.object(host_cli.pwd, "getpwnam", return_value=identity),
+                      patch.object(host_cli, "run_bounded", return_value=json.dumps(response)),
+                      patch("sys.stdout", output),
+                      patch("sys.stderr", errors)):
+                    code = host_cli.selftest_command(
+                        ["run", "--plan", "/nonexistent-fixture-plan",
+                         "--confirmation", "a" * 64])
+                self.assertEqual(code, expected_exit)
+                self.assertIn(expected_code, output.getvalue() + errors.getvalue())
+                self.assertNotIn("INTERNAL_UNSAFE_OUTPUT",
+                                 output.getvalue() + errors.getvalue())
 
     def test_cli_argparse_guards_allow_selftest_plan_arguments(self):
         import io
@@ -236,7 +278,7 @@ class JournalTests(unittest.TestCase):
 
     def test_failed_step_is_journaled_and_cleanup_recorded(self):
         provider = Live()
-        provider.hello_failures = 3
+        provider.hello_failures = 100
         journal = self.journal()
         tick = Clock()
         result = selftest.run(provider, self.plan, key=KEY, budget=60, clock=tick,
