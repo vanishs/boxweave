@@ -20,6 +20,32 @@ class DistributionTests(unittest.TestCase):
   self.run=patch.object(d.subprocess,'run',side_effect=lambda *a,**k:subprocess.CompletedProcess(a[0],0,json.dumps({'mcp':{'state':'authenticated_read_passed'},'admin_initialized':True}),''));self.run.start()
  def tearDown(self):self.run.stop();self.env.stop();self.tmp.cleanup()
  def install(self,**kw):return d.install(self.archive,self.info['sha256'],self.prefix,self.config,quiesced=True,**kw)
+ def test_standalone_distribution_import_and_remote_config_no_package_context(self):
+  # bootstrap.py executes a separately staged distribution.py as a script,
+  # not with python -m bwmini.distribution. Reproduce that import context.
+  import runpy
+  standalone=runpy.run_path(str(Path(d.__file__).resolve()),
+                           run_name='standalone_distribution_fixture')
+  raw,c=standalone['config_read'](self.config,self.prefix)
+  self.assertEqual(c['mode'],'mcp')
+  self.assertEqual(raw,self.raw)
+  self.assertEqual(standalone['validate_remote_config'](None),
+                   {'enabled':True,'port':18844,'allowed_origins':[]})
+  remote={'enabled':True,'public_url':'https://mcp.example.test',
+          'port':18844,'allowed_origins':[]}
+  self.assertEqual(standalone['validate_remote_config'](remote),remote)
+  self.assertEqual(standalone['validate_remote_config']({'enabled':True,
+                      'port':18844})['port'],18844)
+  for invalid in ({'public_url':'http://mcp.example.test'},
+                  {'allowed_origins':['null']},
+                  {'port':18981,'enabled':True}):
+   with self.subTest(invalid=invalid):
+    config=self.settings|{'remote_mcp':invalid}
+    self.config.write_text(json.dumps(config))
+    # runpy creates an independent module and its own InstallError class.
+    with self.assertRaises(standalone['InstallError']):
+     standalone['config_read'](self.config,self.prefix)
+
  def test_digest_rejected_before_prefix_or_state_change(self):
   before=self.db.read_bytes()
   with self.assertRaisesRegex(d.InstallError,'DIGEST'):d.install(self.archive,'0'*64,self.prefix,self.config,quiesced=True)
