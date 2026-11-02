@@ -1,6 +1,7 @@
 """R-01: read-only Box commands are bounded and never follow guest symlinks."""
 import base64
 import io
+import io
 import json
 from pathlib import Path
 import shutil
@@ -8,8 +9,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
-from bwmini import box_reads
+from bwmini import box_reads, mcp_gate
 
 class ReadOnlyBoxTests(unittest.TestCase):
     def test_rejects_shell_metacharacters_absolute_and_parent_escape(self):
@@ -62,6 +65,47 @@ class ReadOnlyBoxTests(unittest.TestCase):
         self.assertEqual(box_reads.typed_output(good)["entries"],[])
         with self.assertRaises(ValueError):
             box_reads.typed_output({"result":{"isError":True,"content":[]}})
+
+    def test_gateway_reports_safe_path_errors_without_provider_dispatch(self):
+        class KeepOpen(io.BytesIO):
+            def close(self):
+                pass
+
+        class NoProviderCalls:
+            def __init__(self):
+                self.stdin = KeepOpen()
+                self.stdout = KeepOpen()
+            def poll(self):
+                return 0
+
+        process = NoProviderCalls()
+        requests = [
+            ("boxweave_box_read_file", {"box":"dev","path":"/etc/passwd"}, "BOX_PATH_INVALID"),
+            ("boxweave_box_list_directory", {"box":"dev","path":"../outside"}, "BOX_PATH_INVALID"),
+            ("boxweave_box_read_file", {"box":"dev","path":"ok","offset":-1}, "BOX_READ_INVALID"),
+        ]
+        incoming = io.StringIO("".join(json.dumps({
+            "jsonrpc":"2.0","method":"tools/call","id":i,
+            "params":{"name":name,"arguments":args},
+        })+"\n" for i,(name,args,_) in enumerate(requests,1)))
+        output = io.StringIO()
+        with (patch.object(mcp_gate,"tool_policy",return_value=None),
+              patch.object(mcp_gate.gateway_protection,"enabled",return_value=False),
+              patch.object(mcp_gate.subprocess,"Popen",return_value=process),
+              patch.object(mcp_gate.gd,"record"),
+              patch.object(mcp_gate.sys,"stdin",incoming),
+              redirect_stdout(output)):
+            mcp_gate.main()
+        messages = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual([m["error"]["message"] for m in messages],
+                         [expected for _,_,expected in requests])
+        self.assertEqual(process.stdin.getvalue(),b"")
+
+    def test_guest_failures_remain_opaque(self):
+        with self.assertRaisesRegex(ValueError,"^BOX_READ_UNVERIFIED$"):
+            box_reads.typed_output({"result":{"structuredContent":{
+                "exit_code":1,"stdout":"","stderr":"guest private path /home/dev"}}})
+        self.assertIn("BOX_READ_UNVERIFIED",mcp_gate.GATE_ERROR_CODES)
 
     def test_standalone_helper_import(self):
         with tempfile.TemporaryDirectory() as folder:

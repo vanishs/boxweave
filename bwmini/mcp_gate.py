@@ -21,7 +21,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.42.2"
+SERVER_INFO_VERSION = "0.42.3"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -252,6 +252,7 @@ GATE_ERROR_CODES = frozenset((
     "COORDINATION_USE_TRACKED_TASK", "COORDINATION_LEASE_DISABLED",
     "LEASE_ARGUMENT_INVALID", "LEASE_TOKEN_INVALID", "LEASE_EXPIRED",
     "COORDINATION_PATCH_DISABLED", "BOX_PATCH_INVALID", "BOX_PATCH_TOO_LARGE",
+    "BOX_READ_INVALID", "BOX_PATH_INVALID", "BOX_READ_UNVERIFIED",
 ))
 
 

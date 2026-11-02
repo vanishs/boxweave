@@ -101,3 +101,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## Fresh v0.42.2 source and Box reacceptance (2026-11-02)
 
 [Exact new-source/source-CI, real-Box, old-host comparisons and status ledger](DEEP_REACCEPTANCE_0422_2026-11-02.md) supersedes broad inferences from older version-specific entries. Python 640/640 and exact-head CI PASS; fresh v0.42.2 nested install + authenticated Provider read + real create/hello/stop/delete and post-restart doctor PASS. Actual cross-entry protected R-04 races, provisioned R-02 task recovery, D4 allowlisted positive, E2-E4, external OAuth/desktop, and newly installed old-to-new upgrade remain U/BLOCKED. This report records only observed evidence, not global acceptance.
+
+## v0.42.3 R-01 validation correction (2026-11-02)
+
+[Source-level R-01 correction and evidence](REACCEPTANCE_0423_R01_2026-11-02.md): read-only tools explicitly document home-relative paths and publicly return bounded, stable argument/path/guest-unverified codes instead of the misleading generic trust gate. New negative Gateway fixture proves no Provider dispatch for malformed selectors; 642 Python tests PASS. Installed 0.42.3 live classification is U pending exact tag/deployment, and prior R-04/R-02/D4/E2–E4 limitations remain unchanged.

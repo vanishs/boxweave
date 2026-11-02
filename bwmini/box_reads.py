@@ -11,14 +11,14 @@ import shlex
 
 TOOLS = (
     {"name":"boxweave_box_read_file",
-     "description":"Read up to 1024 bytes from a regular file under the verified Box user's home, denying symlinks. Requires guest python3 and existing connect permission.",
+     "description":"Read up to 1024 bytes from a regular file using a home-relative path (no leading / or ..) under the verified Box user's home. Symlinks are denied. Requires guest python3 and existing connect permission.",
      "inputSchema":{"type":"object","additionalProperties":False,
        "properties":{"box":{"type":"string"},"path":{"type":"string"},
                      "offset":{"type":"integer","minimum":0},
                      "max_bytes":{"type":"integer","minimum":1,"maximum":1024}},
        "required":["box","path"]},"annotations":{"readOnlyHint":True,"destructiveHint":False}},
     {"name":"boxweave_box_list_directory",
-     "description":"List up to 32 entries from an ordinary directory under the verified Box user's home; no symlinks, no recursive walk.",
+     "description":"List up to 32 entries from a directory using a home-relative path (empty path selects home; no leading / or ..). Symlinks and recursive walks are denied.",
      "inputSchema":{"type":"object","additionalProperties":False,
        "properties":{"box":{"type":"string"},"path":{"type":"string"},
                      "offset":{"type":"integer","minimum":0},
