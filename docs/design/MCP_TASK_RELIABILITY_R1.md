@@ -118,7 +118,7 @@ If a task is still being handled synchronously, a query may return `in_progress`
 
 ## 5. Persistence, security and result handling
 
-**Integration INT-01/INT-02:** This feature owns the gateway-private request-key, deduplication and optional retained result. The shared **operation claim/dispatch-intent** for protected mutations belongs to the minimal controller coordination boundary in [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md), correlated by an opaque operation ID; it is not a second, independently interpreted remote-dispatch history. Do not give the Web/app actor access to gateway result storage or gateway access to the entire app SQLite DB. All tracked exec uses the same trusted `connect(exec)` adapter as [R-01](BOX_OPERATION_INTERFACE_V1.md); no second guest executor. See [integration decisions](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies).
+**Integration INT-01/INT-02:** This feature owns the gateway-private request-key, deduplication and optional retained result. The shared **operation claim/dispatch-intent** for protected mutations belongs to the minimal controller coordination boundary in [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md), correlated by an opaque operation ID; it is not a second, independently interpreted remote-dispatch history. Do not give the Web/app actor access to gateway result storage or gateway access to the entire app SQLite DB. All tracked exec uses the same trusted `connect(exec)` adapter as [R-01](BOX_OPERATION_INTERFACE_V1.md); no second guest executor. See [integration decisions](FEATURE_ROADMAP_MASTER.md#5-integration-review-conflicts-reuse-and-corrected-dependencies-2026-11-01).
 
 
 ### 5.1 Store design
