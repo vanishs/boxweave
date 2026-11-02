@@ -75,3 +75,7 @@ Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite
 ## Phase 2 Web BoxAction shared coordination (source v0.38.0 candidate)
 
 [Web worker integration and failure boundaries](../design/PHASE2_APP_SHARED_ACTIONS.md). App configuration `coordination.enabled=true` opt-in protects Web BoxAction writes through the same private SQLite Box+name resources as tracked SSH/HTTP Gateway exec. Original app receipts remain authoritative; UNKNOWN, acknowledged running operations and missing/mismatched coordinator fail conservatively. This does not automatically protect Web lifecycle/access, old direct connect, or nested Provider mutation tools. Source Linux fixture CI and installed Web/SSH/HTTP parity are separate gates; global R-04 acceptance remains partial.
+
+## Phase 2 opt-in protected SSH/HTTP gateway source (v0.39.0 candidate)
+
+[Root-owned gateway policy design](../design/PHASE2_PROTECTED_GATEWAY_POLICY.md) blocks direct and unclassified Provider writes in protected mode, which requires a separately approved root-owned policy marker. The default remains legacy; no marker or public enable command is installed. Web lifecycle/access, external SSH bypass and old helper rollout are NOT protected. Source/fixture CI and installed transport tests remain distinct. Overall R-04 remains PARTIAL.

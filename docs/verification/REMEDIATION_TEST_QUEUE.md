@@ -1,5 +1,15 @@
 # Remediation validation and next-Agent queue
 
+## R-04 protected SSH/HTTP gateway source candidate v0.39.0
+
+[Root policy and strict forwarded-tool contract](../design/PHASE2_PROTECTED_GATEWAY_POLICY.md). Optional root-owned explicit marker only; absent means legacy compatibility. The protected Gateway denies untracked direct connect, create/resize/delete, nesting apply and unknown Provider mutators before forwarding; it limits tools/list to reviewed read/track tools. Required checks: unsafe root policy, stale/absent DB, standalone root helper bundle, exact policy-decision testing in independent SSH/HTTP processes, old-version behavior, and root preflight/rollback. No marker is automatically installed or enabled. Web lifecycle/access and bypassing external SSH remain out of scope, so R-04 is still PARTIAL.
+
+## Real source-level v0.28.0-to-v0.38.0 app DB migration evidence
+
+On the explicitly authorized test Box `bwphase2-1102`, the authentic source tag `v0.28.0` (commit prefix `2fc27a5`) created SQLite schema 12 in a private temporary directory. Explicit imports from current source migrated it to schema 13, creating `environment_captures`. The old v0.28.0 Store then refused the future schema with `SCHEMA_UNSUPPORTED`. Proven output: `OLD_TAG_v0.28.0_SCHEMA 12`, `NEW_SOURCE_SCHEMA 13 E1_TABLE True`, `OLD_DOWNGRADE_REJECTED SCHEMA_UNSUPPORTED`, `UPGRADE_ROLLBACK_GUARD_PASS`, exit 0. The first harness run imported the current tree from cwd and was rejected; the corrected command printed both exact imported module paths. This is real Linux **source-level migration**, not installed systemd/Web/Provider release upgrade or host rollback. Installed acceptance remains U.
+
+
+
 ## R-04 app BoxAction shared-claim source checkpoint (v0.38.0)
 
 [Source scope + opt-in contract](../design/PHASE2_APP_SHARED_ACTIONS.md). BoxAction worker writes can be explicitly protected with `coordination.enabled=true`: exact pinned Target and freshly published root Provider scope, durable app receipt then shared dispatch intent, fail-closed conflict before guest call, terminal release only after original receipt, UNKNOWN/acknowledged claim retention. Test in `tests/test_box_actions_shared_claims.py` with concurrent gateway claims and missing DB/scope. Needs a fresh installed Web-to-SSH/HTTP same-UID test, provision/upgrade, missing DB and legacy direct bypass inventory. Does NOT cover lifecycle/access writes or legacy gateway connect(exec) bypass, therefore NOT global R-04 acceptance.
