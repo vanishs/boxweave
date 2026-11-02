@@ -40,7 +40,7 @@ class LifecycleClaimTests(Base):
 
     def run_action(self,action="create",resize=None):
         ident=self.submit(action,resize)
-        self.assertTrue(self.s.worker(once=True))
+        self.assertTrue(self.s.work_one())
         return ident,self.life.receipt(ident)
 
     def gateway_claim_name(self,logical,oid="a"*32):
