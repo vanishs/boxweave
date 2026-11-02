@@ -110,3 +110,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ### v0.42.3 installed R-01 diagnostic acceptance (2026-11-02)
 
 [Installed and exact-release evidence](REACCEPTANCE_0423_R01_2026-11-02.md) supersedes the pre-publication L=U note above: pinned fresh install exit 0, 10/10 authenticated doctor PASS, configured standalone Gateway under app user returns BOX_PATH_INVALID for absolute/traversal paths and BOX_READ_INVALID for bad offset, with correct tool descriptions. R-01 P3 diagnostic behavior **T+L PASS in this exact scope**; prior no-symlink/guest bounded access guarantees remain guarded by source fixtures and earlier 0.42.2 live checks. Optional multi-Agent and Provider-unavailable roadmap outcomes remain PARTIAL/BLOCKED.
+
+
+## Real host update to v0.42.3: Gateway R-01 reacceptance (2026-11-02)
+
+[Exact host MCP read and denial evidence](HOST_0423_GATEWAY_REACCEPTANCE_2026-11-02.md) independently proves the upgraded host's `BOX_PATH_INVALID` classification, full binary window/EOF/SHA-256, symlink and intermediate symlink refusal, pagination, exact SSH host override denial and compatibility reads on three old Boxes. L/PASS scoped; test-owned files removed. This is not a host-local CLI/Web version probe or a complete authorization of D4/R-02/R-04. The D3 Gateway journal still classifies local known refusals as generic unknown (P3).

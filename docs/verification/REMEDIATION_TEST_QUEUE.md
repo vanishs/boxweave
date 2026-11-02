@@ -889,3 +889,8 @@ remain U/BLOCKED; source/default/installed identities are distinct.
 ### v0.42.3 post-release installed result (2026-11-02)
 
 [Exact live evidence](REACCEPTANCE_0423_R01_2026-11-02.md): immutable tag v0.42.3 and exact-source [CI 41541285300](https://github.com/vanishs/boxweave/actions/runs/41541285300) passed all verification/publish jobs. Fresh task-owned Box installed pinned v0.42.3 **exit 0**, doctor --mcp **10/10 PASS**, installed application-user standalone Gateway emitted correct BOX_PATH_INVALID for absolute/traversal and BOX_READ_INVALID for invalid offset, live catalog descriptions are home-relative, unauthenticated loopback MCP returned 401. Original seven Boxes preserved after independent test Box deletion. **R-01 P3 diagnostic issue closed within installed invalid-path scope**; provisioned task recovery, R-04 cross-entry races, permitted D4 positive and missing E2–E4 Provider contracts still unaccepted. Stable default v0.42.1 unchanged.
+
+
+## v0.42.3 actually upgraded host recheck (2026-11-02)
+
+[Post-update Gateway acceptance ledger](HOST_0423_GATEWAY_REACCEPTANCE_2026-11-02.md): owner reports v0.42.3 and `boxweave_info` identifies 0.42.3 source; real connected MCP returns correct R-01 typed invalid-path errors, bounded binary windows/EOF/SHA-256, no-follow symlink negatives, directory paging, old Box reads and exact-target override refusal. D4 default deny and R-02 unavailable task store are L/PASS **negative only**. D3 journal has an open P3 classification concern (`UPSTREAM_JSONRPC_ERROR/unknown` for known safe refusals). Host CLI/Web/worker version, provisioned R-02, protected R-04, D4 positive and external OAuth remain U. No host settings changed; task-owned guest files were independently removed.
