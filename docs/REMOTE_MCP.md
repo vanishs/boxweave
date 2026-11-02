@@ -1,10 +1,22 @@
 # Remote MCP HTTP(S) — source integration guide
 
-**Source and published stable v0.26.7 include operator-scoped D3/D4 diagnostic tools.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
+**Source v0.27.0 adds default-managed loopback HTTP MCP and quick-start commands; stable release promotion remains separate.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
 ## Configure
 
-Add this fragment to the existing private application JSON while preserving all other existing keys:
+The authenticated HTTP MCP server now starts automatically at `127.0.0.1:18844`
+in the standard **activated** managed install. No private configuration or
+Cloudflare account is required to use its local endpoint. The landing page is
+`http://127.0.0.1:18844/`, while the MCP endpoint is `/mcp`.
+Existing `remote_mcp` settings are preserved and an explicit `enabled:false`
+prevents auto-start. The configured HTTPS `public_url` remains optional and
+is never discovered from untrusted proxy headers.
+
+For an operator-managed public HTTPS endpoint, the following is an example
+of the private configuration this tool will write. **Do not edit
+`runtime.json` manually while the managed service is running**:
+
+
 
 ~~~json
 {
@@ -27,7 +39,35 @@ Under the existing non-root BoxWeave application user, in the installed Python e
 python -m bwmini remote-mcp --config /path/to/private/application.json
 ~~~
 
-Manage the process with a reviewed user service; the installer does not silently start it. Restart the existing Web process separately after changing its private config to display the new Remote MCP panel.
+The managed installer creates and enables a separate `remote-mcp` user
+systemd service with restart-on-failure. Do not also run `python -m bwmini
+remote-mcp` on the same port. The manual command above remains an explicit
+diagnostic/developer option after stopping the managed service. On installed
+systems use `boxweave http status`, `sudo boxweave http doctor` and
+`sudo boxweave http restart` instead.
+
+## Fastest ChatGPT / Cloudflare Quick Tunnel setup
+
+```sh
+boxweave http status
+# Install cloudflared separately using its official packages.
+cloudflared tunnel --url http://127.0.0.1:18844
+# Copy the HTTPS origin printed by cloudflared (omit /mcp):
+sudo boxweave http configure --public-url https://YOUR-HOST.trycloudflare.com
+sudo boxweave http doctor
+```
+
+Then register `https://YOUR-HOST.trycloudflare.com/mcp` with ChatGPT and
+complete BoxWeave administrator OAuth approval. This is a temporary external
+tunnel, not a permanent host service or a stable URL. Restarting Quick Tunnel
+may change its hostname; update `--public-url` and reauthorize. To return
+to local mode use `sudo boxweave http configure --local-only`. Never
+copy a token, password or full OAuth redirect query into diagnostics.
+
+**Security:** The listener always remains on `127.0.0.1`, Origin and
+DNS-rebinding checks stay active, and all MCP tools require valid credentials.
+Public networking is strictly opt-in, with no automatic firewall, DNS or
+Cloudflare configuration.
 
 ## HTTPS choices
 
