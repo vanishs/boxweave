@@ -18,6 +18,8 @@ CADDY = "/usr/bin/caddy"
 
 def caddyfile(remote, caddy=CADDY):
     remote = validate_remote_config(remote)
+    if not remote.get("public_url"):
+        raise ValueError("REMOTE_PUBLIC_URL_REQUIRED_FOR_TLS")
     host = urlsplit(remote["public_url"]).hostname
     if not re.fullmatch(r"[a-zA-Z0-9.-]{1,253}", host) or "." not in host:
         raise ValueError("TLS_HOST_INVALID")
