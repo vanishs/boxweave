@@ -602,6 +602,7 @@ def onboarding(info):
     print()
     print("  boxweave client")
     print("  boxweave client --help  # More options")
+    print("  HTTP MCP recommended; SSH MCP remains an advanced --method ssh option.")
     print()
     print("Run as your normal Linux SSH/sudo administrator (no sudo for client setup),")
     print("not the boxweave service account. Key enrollment needs admin approval.")
