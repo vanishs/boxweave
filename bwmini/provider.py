@@ -43,6 +43,11 @@ class Provider:
     def session(self, timeout=30):
         return MCP(self.argv, min(30, max(1, timeout)))
 
+    def environment_report(self, logical):
+        """E0/E1 exact-target read-only report; no snapshots or guest shell."""
+        from .environment_observe import EnvironmentInspector
+        return EnvironmentInspector(self).report(logical)
+
     def observe(self, logical):
         expected = self.config["targets"].get(logical)
         if expected is None:

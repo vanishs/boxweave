@@ -119,6 +119,14 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
         response=jsonify(code="OK")
         response.delete_cookie("bw_session")
         return response
+    @app.get("/api/boxes/<logical>/environment")
+    def environment_report(logical):
+        # The existing operator session and current target pin are mandatory.
+        service.observe_target(logical)
+        if not hasattr(service.provider, "environment_report"):
+            raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
+        return jsonify(service.provider.environment_report(logical))
+
     @app.get("/api/boxes/<logical>/debug-summary")
     def box_debug_summary(logical):
         # Service owns the allowlist and exact incarnation check.
