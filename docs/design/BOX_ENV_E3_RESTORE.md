@@ -1,5 +1,7 @@
 # E3 implementation specification — explicit restore of a managed checkpoint
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — E3 snapshot restore. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **NOT IMPLEMENTED. DESIGN ONLY.** Parent [Box environment proposal](BOX_ENVIRONMENT_PROPOSAL.md). Requires [E0 capability](BOX_ENV_E0_CAPABILITIES.md) and [E2 snapshot catalog](BOX_ENV_E2_SNAPSHOTS.md). Optional [E1 fingerprint diff](BOX_ENV_E1_FINGERPRINTS.md) gives before/after context; [D2 diagnostics](DIAGNOSTICS_PROPOSAL.md) is NOT IMPLEMENTED and is not a prerequisite.
 
 ## What restore means
