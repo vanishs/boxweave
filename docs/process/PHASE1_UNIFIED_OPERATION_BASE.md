@@ -6,7 +6,7 @@
 [Agent test rules](AGENT_TEST_WORKFLOW.md)
 
 **Owner authorization:** Implement Phase 1 in independently tested and committed slices.
-**Source baseline:** main 1480b0671cab543d4664b57b0079f1d8962981fc (v0.28.0).
+**Source baseline:** main 1480b0671cab543d4664b57b0079f1d8962981fc (v0.28.0). Phase 1 source bumped to v0.29.0 after merged P1-A/P1-B1; installed stable pin remains v0.28.0.
 **Scope:** Shared internal operation claims, then adapter migration and compatibility.
 **Not authorized by this document:** production installation, Provider changes,
 public exposure, upgrades or unreviewed resource destruction.
@@ -64,6 +64,12 @@ and no app/gateway mutator uses the coordinator yet.
   fixture, CI and LIVE evidence independently in verification docs.
 - Do not mark Phase 1 accepted until all protected mutation routes have
   shared guards, no bypass, fail-closed degradation and verified rollback.
+
+## Release gate correction
+
+- Both feature PRs passed full verification CI, but the `main` push publish job correctly refused to reuse already immutable `v0.28.0` for changed runnable source. Affected push runs: [P1-A 41403253971](https://github.com/vanishs/boxweave/actions/runs/41403253971) and [P1-B1 41404041307](https://github.com/vanishs/boxweave/actions/runs/41404041307).
+- New source uses `0.29.0` consistently in VERSION, Python metadata, Web metadata, and MCP self-description; README distinguishes stable 0.28.0 from new source. Do **not** change `PUBLISHED_RELEASE` or default installer pin before independent release/promotion validation.
+- Exact final CI, immutable tag/publication, source-artifact equality and installed-host verification are separate gates; do not mark the release corrected until actual checks pass.
 
 ## Current acceptance
 

@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Phase 1 source release metadata correction
+
+P1-A/P1-B1 PR verification passed, but `main` publish runs [41403253971](https://github.com/vanishs/boxweave/actions/runs/41403253971) and [41404041307](https://github.com/vanishs/boxweave/actions/runs/41404041307) correctly refused changed source at immutable version `v0.28.0`. Fix: increment source VERSION to `0.29.0` across Python/Web metadata and self-information while retaining stable installer pin `0.28.0`. Verify source check, full fixture CI, new immutable release tag/source SHA and separate installed version. **Status: pending new exact-SHA publication test**.
+
 ## Phase 1 unified operation base — P1-B1 identity/private storage adapter
 
 Candidate source: `bwmini/coordination_runtime.py`, `tests/test_coordination_runtime.py`. Test on the exact candidate SHA: `python -m unittest discover -s tests -p test_coordination_runtime.py`, then full fixture/knowledge/packaging CI. The adapter must reject missing storage, symlink, unsafe directory/file, invalid identity and cross-incarnation mismatch; it must not create or authorize production shared storage. **Status: source/fixture PASS at `8ee12fd` via [CI 41403521130](https://github.com/vanishs/boxweave/actions/runs/41403521130); real host provisioning and protected mutator integration NOT DONE.** Evidence-only follow-up commit needs new CI.
