@@ -69,6 +69,10 @@ These are **not** additional automatic work packages. They are candidates or par
 - D0–D2 and the selected D3/D4 implementation are not hypothetical proposals. Current exact-runtime D4 positive and full external transports remain separate acceptance questions. [Diagnostics master](DIAGNOSTICS_D3_D4_MASTER.md), [feature matrix](../verification/FEATURE_MATRIX.md).
 - Remote HTTP MCP, OAuth, bearer and credential-URL modes exist in source; user-facing guided first-use is the new R-03 design, and actual externally reachable client integration still needs version-specific evidence. [Remote master](REMOTE_MCP_MASTER.md), [R-03](FIRST_USE_ONBOARDING_V1.md).
 
+## Phase 1 implementation (authorized 2026-11-01)
+
+The owner authorized staged implementation, focused acceptance and commits for the unified operation foundation and related existing-path migration. The [Phase 1 implementation and acceptance ledger](../process/PHASE1_UNIFIED_OPERATION_BASE.md) is the active delivery handoff. P1-A introduces only a non-dispatching operation-claim core; it is **not** installed protection, a new MCP API, complete R-02 recovery or R-04 leasing. Subsequent adapters require verified source/transport/security gates before announcing coverage. Stable installation pins are unchanged.
+
 ## 5. Integration review: conflicts, reuse and corrected dependencies (2026-11-01)
 
 This section resolves contradictions among the previously independent handoffs; it is **planning guidance, not a new approved implementation**. Implementing Agents must follow both the local child acceptance matrix and the shared gates below.
