@@ -1,6 +1,6 @@
 # Whole-project code-first deep reacceptance — 0.26.8 candidate
 
-**Run:** 2026-11-01 America/Los_Angeles (2026-11-02 UTC). **Base source:** main `154eb8b8de931f4647da37271fcd7132f9e8489a`, source candidate 0.26.8. **Scope:** 38 code/feature acceptance areas, revised from the historical [A01–A33 ledger](REACCEPTANCE_0262_TO_0264_2026-11-01.md), [A34 audit](DEEP_AUDIT_0266_2026-11-01.md), and [A35/A36 proof](SELFTEST_TRUST_RACE_0267_2026-11-01.md). This is a new set of executed observations, **not** an assertion that every implementation or external feature was accepted. Scope results below attach to their exact version.
+**Run:** 2026-11-01 America/Los_Angeles (2026-11-02 UTC). **Base source:** main `154eb8b8de931f4647da37271fcd7132f9e8489a`; released 0.26.8 source `1ea072865222585df96875dd4ae5b2d4ff90ed71` (final supplement below). **Scope:** 38 code/feature acceptance areas, revised from the historical [A01–A33 ledger](REACCEPTANCE_0262_TO_0264_2026-11-01.md), [A34 audit](DEEP_AUDIT_0266_2026-11-01.md), and [A35/A36 proof](SELFTEST_TRUST_RACE_0267_2026-11-01.md). This is a new set of executed observations, **not** an assertion that every implementation or external feature was accepted. Scope results below attach to their exact version.
 
 **Notation:** S = inspected source; T = actually run local unit/fixture; L = authenticated real installation/guest command; D = older documented evidence, not reexecuted here; U = not independently verified; BLOCKED = no usable test transport/prerequisite. PASS is always limited to the named criterion, never the entire feature.
 
@@ -18,9 +18,9 @@
 
 | ID | Implemented source/feature | New evidence and exact acceptance limit |
 | --- | --- | --- |
-| A01 | Streamed fresh install/managed Provider | **L PASS** fresh Ubuntu v0.26.7 install exit0; 0.26.8 live upgrade **U** pending release |
-| A02 | Package, digest, wheelhouse, DB migration | **T PASS** source release/packaging fixtures; v0.26.7 signed/pinned installed **L PASS**; 0.26.8 release **U** |
-| A03 | Host CLI/version/status/doctor/report | **L PASS** v0.26.7 doctor 10/10; unauthorized/missing cases only T/D |
+| A01 | Streamed fresh install/managed Provider | **L PASS** fresh Ubuntu v0.26.7 install exit0, repeat install exit0, 0.26.7→0.26.8 real upgrade exit0 and service restart |
+| A02 | Package, digest, wheelhouse, DB migration | **T PASS** source release/packaging fixtures; v0.26.7 and published source-bound 0.26.8 installed **L PASS** |
+| A03 | Host CLI/version/status/doctor/report | **L PASS** v0.26.7 and v0.26.8 post-upgrade/restart doctor 10/10; unauthorized/missing cases only T/D |
 | A04 | Nine-App Python client profiles | **L PASS** 36/36 script generation/compile/keepalive; actual client registration/GUI **U** |
 | A05 | Managed public key, exact Box SSH, fixed Python | **L PASS** direct exact guest `connect(exec)` and nested selftest; external host-hop path **U** |
 | A06 | MCP gateway catalog/tool policy | **L PASS** authenticated inner Provider list/read; optional outer policy comprehensive test **U** |
@@ -30,7 +30,7 @@
 | A10 | Jobs, recovery, no replay | **L PASS** success/exit7/timeout receipts on 0.26.7; forced worker crash / uncertain operation no-replay **U** |
 | A11 | Web auth/session/CSRF | **T PASS** 7 browser fixtures; **L PASS** unauthenticated 401 and login GET 405; real external admin/browser session **U** |
 | A12 | Project binding/fixed hello | **T PASS** browser binding/receipt and **L PASS** app selftest fixed hello; specific user project→real guest binding **U** |
-| A13 | Native Tenant policy/network routes | **D** prior same/cross-Tenant packet tests; broader v0.26.7 live packet policy **U** |
+| A13 | Native Tenant policy/network routes | **D** prior same/cross-Tenant packet tests; **L PASS** new native-Tenant negative TCP check from two other Tenants against verified local HTTP200; broader policy **U** |
 | A14 | Prompt Graph editing/export | **T PASS** browser fixture; installed authenticated public UI **U** |
 | A15 | Model wizard | **T PASS** browser fixture; paid inference/native model execution **U** |
 | A16 | Agent-box MCP read-only Web adapter | **T PASS** source contract; current installed true user-bound file read **U** |
@@ -40,25 +40,36 @@
 | A20 | D0–D2 diagnostics/report | **L PASS** host doctor and **T** report checks; current full private report pipeline **U/D** |
 | A21 | D3 gateway/app journal | **L PASS** classified gateway read, source T; app positive trace/restart/cap **U** |
 | A22 | D4 exact Box project diagnosis | **L/D PASS** default deny; **T PASS** source checks and A37 fix; live allowlisted positive **U/BLOCKED** |
-| A23 | App-owned selftest | **L PASS** installed 0.26.7 real create/hello/stop/delete, zero remnants |
+| A23 | App-owned selftest | **L PASS** installed v0.26.7 and upgraded v0.26.8 real create/hello/stop/delete, zero remnants |
 | A24 | Browser + external desktop UI | **T PASS** seven real Chromium fixture flows; actual Windows/macOS/WSL App UI **U** |
 | A25 | Agent source bundle | **T PASS** bundle tests; authenticated cross-machine dirty-source delivery **U** |
 | A26 | MCP self-information/version | **L PASS** outer catalog static source description; 0.26.8 outer running process upgrade **U** |
 | A27 | Exact missing Incus instance semantics | **T PASS/D** previous real missing-instance correction; newly repeated case **U** |
 | A28 | Report CLI supported kind choices | **L PASS** v0.26.7 help reports only hello/environment/access |
 | A29 | Dynamic upstream Provider tools | **L PASS** authenticated inner inventory 58; availability ≠ tested functionality |
-| A30 | Agent-selected end-to-end testing/cleanup | **L PASS** new Box→installed selftest→independent zero child; outer task Box final cleanup pending |
+| A30 | Agent-selected end-to-end testing/cleanup | **L PASS** new Box→installed selftest→upgraded selftest→restart→independent zero child→outer task Box deleted/absence readback |
 | A31 | Incus v7.6 nesting query correction | **L PASS** outer nesting inspect on task Box, actual inner child via installed app |
 | A32 | HTTP 404/405 exception classification | **L PASS** old 0.26.1 login GET500 vs v0.26.4/v0.26.7 405; unknown route unauthenticated 401 is not proof of post-auth 404 |
 | A33 | Post-create nesting partial acknowledgement | **T PASS** source contracts; deliberate second-stage real failure client rendering **U** |
 | A34 | OAuth denial throttling durability | **T PASS** SQLite/OAuth fixtures, actual public admin auth **U** |
 | A35 | Typed selftest refusal on failure | **L PASS** wrong-confirmation typed code/exit2, no mutation |
 | A36 | Fixed selftest trust-readiness retry | **L PASS** one real positive v0.26.7 selftest; forced trust-race variant **U** |
-| A37 | D4 nonzero service-state bug | **S/T PASS** reproduced then fixed/11-case D4 fixture; **L positive U** |
+| A37 | D4 nonzero service-state bug | **S/T PASS** reproduced/fixed/11-case D4 fixture and installed 0.26.8 module envelope parse observed; outer root-policy authenticated D4-positive **U** |
 | A38 | Synthetic SSH key fixture umask independence | **T PASS** 0002-focused and 458 entire suite; production key permission guard unchanged |
 
 ## Unresolved gates and cleanup
 
-External public OAuth/TLS/browser authentication and real client enrollment, D4 root-owned exact-Box positive policy on the *outer gateway*, privileged host-hop SSH wrapper, paid inference, actual 30-minute idle sleep, worker-kill/restart and uncertain-write recovery, cross-machine transfer of unpublished source, and deliberate second-stage partial-create failure are **U/BLOCKED**, not quietly passed. Historical 0.26.1/0.26.4 environments were read only for comparison. 0.26.8 code is a **source candidate** until GitHub CI, source-bound immutable release and a distinct installed v0.26.7→v0.26.8 checkpoint verify it. Do not promote stable installer pin before those observations.
+External public OAuth/TLS/browser authentication and real client enrollment, D4 root-owned exact-Box positive policy on the *outer gateway*, privileged host-hop SSH wrapper, paid inference, actual 30-minute idle sleep, worker-kill/restart and uncertain-write recovery, cross-machine transfer of unpublished source, and deliberate second-stage partial-create failure are **U/BLOCKED**, not quietly passed. Historical 0.26.1/0.26.4 environments were read only for comparison. 0.26.8 source CI/release and installed v0.26.7→v0.26.8 checkpoint are now **PASS** as detailed in the final supplement. Stable pin promotion is recorded separately, after that evidence.
 
-**Resource status at source-audit checkpoint:** new parent `bwfullaudit-1101` retained temporarily for candidate upgrade; its selftest child independently absent. Original six Boxes retained, especially older failed nesting scene `bwaudit-1101`. Record final cleanup separately after candidate verification. No secrets, private keys, public ingress or network policy were changed.
+**Resource status at source-audit checkpoint:** the parent `bwfullaudit-1101` was temporarily retained for upgrade; final deletion and absence are independently verified below. Original six Boxes retained, including older failed nesting scene `bwaudit-1101`. No secrets, private keys, public ingress or network policy were changed.
+
+## Final v0.26.8 immutable release, real upgrade, and cleanup — L/T PASS (2026-11-02 UTC)
+
+- **Published identity T PASS:** GitHub Actions [run 41384817175](https://github.com/vanishs/boxweave/actions/runs/41384817175), exact head `1ea072865222585df96875dd4ae5b2d4ff90ed71`, both `verify` and `publish` completed `success`. Immutable [v0.26.8](https://github.com/vanishs/boxweave/releases/tag/v0.26.8) tag targets the same SHA; Release is non-draft/non-prerelease with 14 source-bound assets. This supersedes the source-candidate publication U above.
+- **Actual prior installation and upgrade L PASS:** On verified new `bwfullaudit-1101-container`, rerunning the reviewed v0.26.7 installer preserved healthy installation and exited 0, followed by 10/10 doctor. The official `main/install.sh --version 0.26.8` upgrade exited **0**, `boxweave version` 0.26.8, `boxweave provenance` exact source SHA `1ea072865222585df96875dd4ae5b2d4ff90ed71`, and `sudo boxweave doctor --mcp` 10/10 PASS, Web GET /api/login 405. Repeated real installed service observation after stop/start confirmed identical release/provenance and 10/10 doctor. This is **not** an outer operator host upgrade or universal fresh-host proof.
+- **Installed diagnostic patch scope:** Running the *installed* v0.26.8 Python `bwmini.gate_diagnostics.project_summary` with representative actual Provider `connect(exec)` text-envelope shapes yields `observed` for service active exit0, inactive exit3/4, failed exit3 and unknown exit4, with corresponding classified state and exit code. Real `systemctl --user is-active` on a nonexistent service was independently observed returning **`inactive` with exit 4**, so restricting the fixture to `unknown` at exit 4 would be incorrect. **Actual server-allowlisted D4-positive MCP invocation is still U/BLOCKED**, and outer gateway correctly rejects this test Box with `PROJECT_DIAG_NOT_AUTHORIZED`.
+- **Installed v0.26.8 selftest L PASS:** New confirmed plan targeted `boxweave-selftest-9bcf53`; an incorrect confirmation produced bounded `SELFTEST_CONFIRMATION_MISMATCH`, CLI exit **2**, no guest mutation. Correct run returned `state=passed`, CLI exit **0**, app-owned `create/hello/stop/delete` all successful `OK`, independently zero Incus guests. After independent outer Box stop/start, installed release identity and doctor PASS remained, with zero inner guests.
+- **Tenant Guard TCP negative L PASS:** Temporarily hosted fixed `BW_FULL_AUDIT_HTTP_OK` on `10.100.0.8:18761` in test Box. Same guest loopback returned HTTP200/exact marker. Two independent Boxes belonging to different native Tenants each timed out connecting (`curl` exit 28, HTTP000); Guard reported `GUARD_MODE_ENFORCE`, nftables ACLs attached for each. Stopped the exact task-owned server, independently observed no TCP listener, and deleted its temporary directory. This is a scoped cross-Tenant refusal, not exhaustive network-policy enforcement/allowed same-Tenant peer certification.
+- **Final cleanup L PASS:** After rechecking exact name/creation ID and stop/readback, deleted only newly created `bwfullaudit-1101`. Fresh outer MCP `list_containers` returned exactly the original **six** historical Boxes and no `bwfullaudit-1101`; the failing old `bwaudit-1101` parent was not removed or reset. No temporary listener or nested test child remains.
+
+**Final disposition:** A01–A08 selected real cases, A10 jobs, A13 negative isolation, A23, A30, A31–A32, A35–A36, and the installed A37 parser show scoped PASS at their observed levels; A38 fixture PASS. A09 real idle/wake, A11 external authenticated UI, A16 current live agent-box adapter, A17–A19 public OAuth/TLS client, A21 full D3 app trace/restart, A22 full D4 allowlist-positive, A25 unpublished cross-machine delivery, A33 deliberately induced partial-create error, and forced worker crash/no-replay remain U/BLOCKED. No universal whole-project certification is claimed. Stable pin promotion is a follow-up source pointer change, not a re-tagging of released files.
