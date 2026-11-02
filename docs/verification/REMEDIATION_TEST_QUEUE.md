@@ -1,5 +1,10 @@
 # Remediation validation and next-Agent queue
 
+## Phase 2 incremental feature gates (source candidate)
+
+R-03 read-only `boxweave setup` from public descriptor and R-01 bounded `boxweave_box_read_file` / `boxweave_box_list_directory` over original trusted `connect(exec)` have source regression tests. Their installed SSH/HTTP/Web/guest-Python and mixed-version operation remain **L=U**. R-02 request-key result recovery, R-04 cross-entry conflicts and R-01 guarded file patch are **not yet implemented**, not implied by the read-only adapter. Stable install stays v0.28.0 pending separate promotion.
+
+
 ## ARCH-0 v0.30.0 final source publication evidence
 
 **Source release PASS:** [main CI + immutable publish 41410649605](https://github.com/vanishs/boxweave/actions/runs/41410649605) at `06d1714021be9a0350982a02223ffefab9ba3305`; [v0.30.0](https://github.com/vanishs/boxweave/releases/tag/v0.30.0) tag targets the exact merged source commit and releases 16 assets, including `operation_coordination.py`, `coordination_runtime.py`, and the SHA256-verified `boxweave.zip`. Default `PUBLISHED_RELEASE` still v0.28.0; no automatic host promotion. **Installed L=U**.
