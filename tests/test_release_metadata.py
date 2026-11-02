@@ -35,6 +35,20 @@ bash install.sh apply --archive /reviewed/boxweave.zip
             with self.subTest(text=text):
                 self.assertTrue(readme_narrative_errors(text))
 
+    def test_stable_install_pin_is_reported_by_current_readme(self):
+        root=Path(__file__).resolve().parents[1]
+        stable=(root/'PUBLISHED_RELEASE').read_text().strip()
+        source=(root/'VERSION').read_text().strip()
+        readme=(root/'README.md').read_text()
+        script=(root/'install.sh').read_text()
+        self.assertRegex(stable,r"^0\.[0-9]+\.[0-9]+$")
+        self.assertLessEqual(tuple(map(int,stable.split("."))),
+                             tuple(map(int,source.split("."))))
+        self.assertIn("Default stable installer: v"+stable+".",readme)
+        self.assertIn('python3 - "'+stable+'" "${streamed_options[@]}"',script)
+        self.assertIn("Source CI, published installer version, running service",
+                      readme)
+
     def test_versions_agree_and_bad_lock_is_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)

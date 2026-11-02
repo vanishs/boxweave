@@ -191,3 +191,18 @@ Existing parent host-hop shell, D4 positive allowlist, real external OAuth/TLS c
 **RISK-634 closed within installed local credential transactions, external client still U:** Published v0.26.9 source `008f659593376c7df1608599bd523885197a6362`, source CI verify/publish success, 14 assets. A fresh installed v0.26.8 showed old refresh revoked and one orphan valid access token on second issuance failure. A real installed v0.26.9 upgrade and the identical SQLite fault returned zero revoked predecessor/zero new credential, preserved the authorization code on injected exchange fault, then allowed valid one-time recovery. Independent synthetic loopback HTTP bearer/Origin/revocation combinations passed before and after upgrade. This does **not** validate public OAuth/TLS callbacks, a real ChatGPT/desktop OAuth client, or actual operator credentials. See [A39 report](STATE_TRANSITION_AUDIT_0269_2026-11-01.md).
 
 **Lifecycle and cleanup:** Same new test Box accepted online CPU/disk growth, successful selftest create/hello/stop/delete before/after upgrade and stable runtime after stop/start. Original test Box was independently deleted, original six retained. Post-restart `TRUST_NOT_READY` recovered by observation without trust bypass. Forced unknown-write worker crash, root-preauthorized D4 positive, external OAuth and real model inference remain U/BLOCKED.
+
+
+## 2026-11-02 promoted stable installer scope (v0.42.1)
+
+[Source-bound real-Box acceptance](STABLE_PROMOTION_2026-11-02.md)
+records fresh v0.42.1 and in-place v0.28.0 -> v0.42.1 Ubuntu
+test Box success, with authenticated Provider MCP list, private Web,
+real guest selftest and cleanup. **Not closed:** default-disabled
+global multi-Agent R-04 protection; external TLS/OAuth/desktop
+client validation; snapshot/restore/clone upstream absence; production
+fleet downgrade and unsupported older app schema; real cross-principal
+SSH/HTTP/Web races. Post-restart outer SSH could briefly report
+TRUST_NOT_READY independently of guest BoxWeave health; collect
+independent read recovery evidence, do not weaken host-key checks.
+No historical risk is globally closed by this scoped release test.

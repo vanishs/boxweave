@@ -115,3 +115,16 @@ is guarded by executable tests. Existing ARCH-0A/B/C are historically
 source-complete. Real installed host cross-UID/SSH/HTTP/Web, version
 upgrade and rollback gates are still L=U. Default stable installer
 v0.28.0 is unchanged.
+
+
+## Stable installer promotion checkpoint — v0.42.2 source candidate
+
+[Real two-Box baseline, old-to-new upgrade and acceptance limits](../verification/STABLE_PROMOTION_2026-11-02.md).
+Default streamed release selected by `PUBLISHED_RELEASE` and `install.sh`
+is promoted from historical v0.28.0 to source-bound **v0.42.1** after
+successful disposable Ubuntu fresh-install and installed v0.28.0 to
+v0.42.1 upgrade, authenticated Provider list read, child create/Python/
+stop/delete and negative confirmation. Source patch uses version
+v0.42.2 and must pass final CI and immutable release. No production
+host was updated. Global R-04 guarded mode, external OAuth/TLS and
+unsupported E2–E4 remain separate U/BLOCKED claims.
