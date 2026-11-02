@@ -197,6 +197,13 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
   if previous.exists():
    require(len(previous.read_bytes())<=65536,'CONFIG_TOO_LARGE')
    prior=json.loads(regular(previous));require(isinstance(prior,dict),'RUNTIME_CONFIG_INVALID')
+   # Older operators sometimes set remote_mcp only in runtime.json.
+   # Never silently replace that explicit HTTPS URL or disabled state with
+   # the new default; require a reviewed move into persistent config.json.
+   if 'remote_mcp' not in c and 'remote_mcp' in prior:
+    baseline={'enabled':True,'port':18844,'allowed_origins':[]}
+    require(prior['remote_mcp'] in (baseline,None),
+            'OPERATOR_REMOTE_SETTINGS_MOVE_TO_CONFIG_JSON')
    dropped=sorted(set(prior)-set(runtime))
    require(not dropped,'OPERATOR_RUNTIME_KEYS_REQUIRE_CONFIG_JSON:'+','.join(dropped))
   atomic(prefix/'runtime.json',encoded(runtime))
