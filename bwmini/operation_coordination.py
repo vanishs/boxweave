@@ -173,11 +173,12 @@ class OperationCoordinator:
                           (operation_id,)).fetchone():
                 raise CoordinationFault("OPERATION_EXISTS")
             for key in keys:
-                lease = db.execute("SELECT token_digest,expires FROM coordination_leases WHERE resource=?",
+                lease = db.execute("SELECT identity_digest,token_digest,expires FROM coordination_leases WHERE resource=?",
                                    (key,)).fetchone()
-                if lease and lease[1] > self.clock():
-                    if (not isinstance(lease_token,str) or
-                            not hmac.compare_digest(lease[0], hashlib.sha256(
+                if lease and lease[2] > self.clock():
+                    if (lease[0] != identity_digest or
+                            not isinstance(lease_token,str) or
+                            not hmac.compare_digest(lease[1], hashlib.sha256(
                                 lease_token.encode("utf-8")).hexdigest())):
                         raise CoordinationFault("RESOURCE_BUSY")
                 owner = db.execute(
@@ -238,6 +239,8 @@ class OperationCoordinator:
         """Optional 10-minute operator lease; never removes in-flight claims."""
         key = _resource(resource)
         _digest(identity_digest)
+        if key != box_resource(identity_digest):
+            raise CoordinationFault("LEASE_ARGUMENT_INVALID")
         if (action not in ("acquire","renew","release","status") or
                 type(seconds) is not int or not 1 <= seconds <= 600):
             raise CoordinationFault("LEASE_ARGUMENT_INVALID")

@@ -78,8 +78,11 @@ class LeaseTests(unittest.TestCase):
 
     def test_wrong_incarnation_cannot_use_token(self):
         value=self.c.lease("acquire",A,IDENTITY_A)
-        with self.assertRaisesRegex(CoordinationFault,"LEASE_TOKEN_INVALID"):
+        with self.assertRaisesRegex(CoordinationFault,"LEASE_ARGUMENT_INVALID"):
             self.c.lease("release",A,IDENTITY_B,token=value["lease_token"])
+        with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
+            self.c.acquire("9"*32,IDENTITY_B,"receipt_wrong",[A],
+                           lease_token=value["lease_token"])
         with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
             self.c.acquire("1"*32,IDENTITY_A,"receipt_a",[A])
         self.assertEqual(self.c.lease("release",A,IDENTITY_A,token=value["lease_token"])["state"],"released")

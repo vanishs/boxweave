@@ -68,6 +68,18 @@ class TrackedTaskTests(unittest.TestCase):
         self.assertEqual(sum(new for _,new in output),1)
         self.assertEqual(len({x["task_id"] for x,_ in output}),1)
 
+    def test_explicit_claim_provision_private_idempotent(self):
+        tasks.provision_claims(self.folder.name)
+        claim=Path(self.folder.name)/"claims.sqlite3"
+        self.assertEqual(claim.stat().st_mode & 0o777, 0o600)
+        with sqlite3.connect(claim) as db:
+            tables={r[0] for r in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertIn("coordination_leases",tables)
+        self.assertIn("coordination_operations",tables)
+        tasks.provision_claims(self.folder.name)
+        self.assertEqual(claim.stat().st_mode & 0o777, 0o600)
+
     def test_unprovisioned_or_corrupt_database_refuses(self):
         self.path.unlink()
         with self.assertRaisesRegex(tasks.TaskFault,"TASK_TRACKING_UNAVAILABLE"):
