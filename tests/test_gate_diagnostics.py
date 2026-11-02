@@ -155,6 +155,25 @@ class GatewayDiagnosticsTests(unittest.TestCase):
                          {"structuredContent": {"exit_code": 0, "stdout": "x" * 9999}})["state"],
                          "not_verified")
 
+    def test_d4_service_inactive_and_failed_are_valid_systemctl_observations(self):
+        args = {"box": "testbox", "check": "service", "service": "app.service"}
+        for service_state, code in (("inactive", 3), ("failed", 3), ("unknown", 4)):
+            with self.subTest(service_state=service_state):
+                result = d.project_summary(args, {"structuredContent": {
+                    "exit_code": code, "stdout": service_state + "\n"}})
+                self.assertEqual(result["state"], "observed")
+                self.assertEqual(result["service_state"], service_state)
+                self.assertEqual(result["exit_code"], code)
+        for bad_code, output in ((1, "failed\n"), (3, "active\n"),
+                                 (3, "arbitrary input\n")):
+            with self.subTest(bad_code=bad_code, output=output):
+                result = d.project_summary(args, {"structuredContent": {
+                    "exit_code": bad_code, "stdout": output}})
+                self.assertEqual(result["state"], "not_verified")
+        unrelated = d.project_summary({"check": "ports"}, {"structuredContent": {
+            "exit_code": 3, "stdout": "inactive\n"}})
+        self.assertEqual(unrelated["state"], "not_verified")
+
     def test_mcp_gateway_passthrough_records_without_rewriting_provider(self):
         import io
         from contextlib import redirect_stdout

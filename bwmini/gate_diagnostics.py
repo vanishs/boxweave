@@ -351,12 +351,17 @@ def project_summary(args, response):
         code, out = int(found[1]), found[2]
     if not isinstance(out, str) or len(out.encode("utf-8")) > 8192:
         return {"state": "not_verified", "code": "PROJECT_OUTPUT_LIMIT"}
-    if code:
+    # systemctl is-active reports inactive/failed with exit 3 (and unknown
+    # with exit 4). These are observed service states, not read failures.
+    # Preserve fail-closed behavior for unexpected exit/status combinations.
+    recognized_service_state = (args.get("check") == "service" and code in (3, 4)
+                                and out.strip() in ("inactive", "failed", "unknown"))
+    if code and not recognized_service_state:
         return {"state": "not_verified", "code": "PROJECT_COMMAND_EXIT_NONZERO",
                 "exit_code": max(-255, min(255, code))}
     lines = out.splitlines()[:40]
     kind = args["check"]
-    summary = {"state": "observed", "check": kind, "exit_code": 0,
+    summary = {"state": "observed", "check": kind, "exit_code": code,
                "scope": "selected_box_guest", "root_cause": "not_verified"}
     if kind == "processes":
         summary["sample_count"] = len(lines)

@@ -21,6 +21,7 @@ class StreamedInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"id_ed25519.pub"
             path.write_text(self.key()+"\n")
+            path.chmod(0o644)  # Avoid test outcome depending on developer umask.
             with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
                 managed=mcp_gate.normalized_public_key(self.key())
                 for input_args in ({}, {"ssh_keys":[]}, {"ssh_keys":[extra]},

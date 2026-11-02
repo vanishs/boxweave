@@ -30,6 +30,7 @@ class WorkloadIdentityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/"id_ed25519.pub"
             path.write_text(key(b"a")+"\n")
+            path.chmod(0o644)  # Avoid test outcome depending on developer umask.
             with patch.object(mcp_gate,"MANAGED_PUBLIC_KEY_FILE",path):
                 first=mcp_gate.managed_create_arguments({"username":"box1"})
                 self.assertEqual(first["ssh_keys"],[key(b"a")])

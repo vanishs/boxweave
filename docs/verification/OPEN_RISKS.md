@@ -167,3 +167,11 @@ Existing parent host-hop shell, D4 positive allowlist, real external OAuth/TLS c
 **RISK-629 source/CI fix accepted with installed v0.26.7 package:** The OAuth admin rate-ledger transaction fix included in v0.26.7 passed complete CI/fixtures and installed version checks; **real external administrator-OAuth + public TLS flow is U** because no live client or private credentials were used. Do not conflate a fixture's 429 behavior with external transport acceptance.
 
 **Cleanup verified:** The disposable `bwdeep-1101` was stopped and deleted; the final MCP Box list contains exactly six historical Box entries and excludes it. Original `bwaudit-1101` failure environment intentionally preserved. [Full source/fixture/live acceptance](SELFTEST_TRUST_RACE_0267_2026-11-01.md).
+
+## 0.26.8 deep reacceptance (2026-11-01 local / 2026-11-02 UTC)
+
+**RISK-632 — A37 D4 service-state false unknown (P2, source-fixed / live positive U):** Existing service diagnosis treated `systemctl --user is-active` exit3 inactive/failed and exit4 unknown as generic command failure, despite bounded recognizable stdout. Added the explicit state/exit pair handler and negative regressions in candidate 0.26.8; source tests pass, **outer gateway allowlisted positive remains not verified**. See [A01–A38 ledger](DEEP_REACCEPTANCE_0268_2026-11-01.md).
+
+**RISK-633 — A38 temporary-key fixture depends on umask (P3, source-fixed / T PASS):** Two fixture public keys defaulted to 0664 under umask0002, correctly refused by strict real key validator, causing seven incidental test errors. Set test-only 0644; no weakening of production security. Full candidate suite 458/458 passes under the reproducible umask0002.
+
+**Other retained risks:** External desktop App/OAuth/TLS and real admin login, host-hop SSH, live D4 allowlisted read, deliberate partial-create failure, worker process-kill/no-replay, actual autosleep/wake, model inference, private cross-machine source transport remain U/BLOCKED; they do not block independent completed checks. Candidate 0.26.8 CI/immutable release/real upgrade and task-created Box cleanup require separate positive observations before the stable pin moves.
