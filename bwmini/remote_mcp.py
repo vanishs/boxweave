@@ -171,6 +171,16 @@ def create_remote_app(store, config, dispatch=None, clock=None):
                 and request.headers.get("Origin") != origin):
             raise RemoteError("invalid_origin", 403)
 
+    @app.get("/")
+    def root_help():
+        # Public information only: never disclose operator data or tokens.
+        return Response(
+            "<!doctype html><title>BoxWeave HTTP MCP</title>"
+            "<h1>BoxWeave HTTP MCP</h1><p>Endpoint: /mcp</p>"
+            "<p>OAuth metadata: /.well-known/oauth-protected-resource/mcp</p>"
+            "<p>Authentication is required for MCP tool access.</p>",
+            mimetype="text/html")
+
     @app.get("/.well-known/oauth-protected-resource")
     @app.get("/.well-known/oauth-protected-resource/mcp")
     def protected_resource():
