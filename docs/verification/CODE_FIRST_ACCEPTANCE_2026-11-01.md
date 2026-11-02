@@ -103,7 +103,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (54)
+### Python unittest files (55)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -113,6 +113,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_bindings.py`
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
+- `tests/test_box_actions_shared_claims.py`
 - `tests/test_box_reads.py`
 - `tests/test_box_patch.py`
 - `tests/test_gateway_tasks.py`

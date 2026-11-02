@@ -71,3 +71,7 @@ Adds opt-in 10-minute hashed-token Box leases inside the existing minimal SQLite
 ## Phase 2 tracked-exec shared claims (v0.37.0 candidate, NOT global enforcement)
 
 [Shared-claim implementation](../design/PHASE2_SHARED_DISPATCH_INTEGRATION.md) integrates R-02 tracked SSH/HTTP exec with the private minimal operation coordinator, using the root-published Provider scope and exact Box incarnation. One concurrent same-Box tracked request is refused, other Boxes may proceed, and transport UNKNOWN keeps the claim. This does **not** cover direct legacy `connect(exec)`, other raw Provider mutators, or Web BoxActions/lifecycle/access workers. No globally safe Agent lease API is exposed. Stable installer stays v0.28.0; installed transport and cross-version tests remain L/U.
+
+## Phase 2 Web BoxAction shared coordination (source v0.38.0 candidate)
+
+[Web worker integration and failure boundaries](../design/PHASE2_APP_SHARED_ACTIONS.md). App configuration `coordination.enabled=true` opt-in protects Web BoxAction writes through the same private SQLite Box+name resources as tracked SSH/HTTP Gateway exec. Original app receipts remain authoritative; UNKNOWN, acknowledged running operations and missing/mismatched coordinator fail conservatively. This does not automatically protect Web lifecycle/access, old direct connect, or nested Provider mutation tools. Source Linux fixture CI and installed Web/SSH/HTTP parity are separate gates; global R-04 acceptance remains partial.
