@@ -1,5 +1,7 @@
 # Box Operation Interface v1 — External-First, Agentless Design
 
+**Global plan:** [BoxWeave feature roadmap](FEATURE_ROADMAP_MASTER.md) — R-01 Box operation interfaces. This link tracks the overall selection/status; this document retains detailed scope and test obligations.
+
 **Status:** DESIGN ONLY — implementation, live Box changes, release and acceptance are **not** authorized by this document.
 **Baseline:** BoxWeave main at `16470c715c16c713af2ba31f4f6145d647967f73`, source version 0.26.9, reviewed 2026-11-01.
 **Product decision:** Preserve existing BoxWeave architecture and lifecycle; a Box remains an independent, clean execution environment. External, non-invasive weaving is preferred. Do not broaden this design into management of foreign/unmanaged Boxes.
