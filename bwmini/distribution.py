@@ -91,6 +91,13 @@ def config_read(path,prefix):
  require(u.scheme=='https' or u.hostname in ('127.0.0.1','localhost'),'ORIGIN_INVALID')
  require(c.get('secure_cookie',True)==(u.scheme=='https'),'COOKIE_ORIGIN_INVALID')
  argv=c.get('launcher');require(isinstance(argv,list) and bool(argv) and all(isinstance(x,str) for x in argv) and Path(argv[0]).is_absolute(),'CONFIG_INVALID')
+ from .remote_mcp import validate_remote_config
+ remote=c.get('remote_mcp')
+ require(remote is None or isinstance(remote,dict),'REMOTE_CONFIG_INVALID')
+ if remote is None or remote.get('enabled',True):
+  try:parsed=validate_remote_config(remote)
+  except ValueError as exc:raise InstallError(str(exc)) from None
+  require(parsed['port']!=c['port'],'REMOTE_PORT_CONFLICT')
  return raw,c
 def installed(prefix):
  p=prefix/'installed.json'
@@ -115,7 +122,7 @@ def health(prefix,mcp=False):
   unit_states={}
   for unit in state['units']:
    props=result['services'].get(unit,{})
-   role='serve' if unit.endswith('-serve.service') else 'worker' if unit.endswith('-worker.service') else 'unknown'
+   role='serve' if unit.endswith('-serve.service') else 'worker' if unit.endswith('-worker.service') else 'remote-mcp' if unit.endswith('-remote-mcp.service') else 'unknown'
    if role in unit_states:role='unknown'
    if not props:unit_states[role]='unavailable'
    elif props.get('ActiveState')=='failed' or props.get('Result') in ('exit-code','signal','core-dump','start-limit-hit'):unit_states[role]='failed'
@@ -161,7 +168,11 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
    old_manifest=json.loads(regular(current/'manifest.json'))
    require(tuple(map(int,manifest['version'].split('.')))>=tuple(map(int,old_manifest['version'].split('.'))),'DOWNGRADE_REQUIRES_BACKUP')
   identifier='boxweave-v2-'+digest(str(prefix).encode())[:12]
-  units={identifier+'-'+action+'.service':unit_text(prefix,prefix/'runtime.json',action) for action in ('serve','worker')}
+  from .remote_mcp import validate_remote_config
+  remote_setting=c.get('remote_mcp')
+  remote_active=remote_setting is None or remote_setting.get('enabled',True)
+  actions=('serve','worker','remote-mcp') if remote_active else ('serve','worker')
+  units={identifier+'-'+action+'.service':unit_text(prefix,prefix/'runtime.json',action) for action in actions}
   directory=Path.home()/'.config/systemd/user'
   if activate:
    require(bool(os.environ.get('XDG_RUNTIME_DIR')),'USER_BUS_REQUIRED')
@@ -172,11 +183,16 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
      previous=regular(f);legacy=content.replace(('WorkingDirectory='+str(prefix/'current').replace('%','%%').replace(' ',r'\x20').replace(chr(34),r'\x22')).encode(),('WorkingDirectory='+q(prefix/'current')).encode())
      owned=old is not None and name in old['units'] and (digest(previous)==old.get('unit_sha256',{}).get(name) or ('unit_sha256' not in old and previous in (content,legacy,content.replace(b'Description=BoxWeave ',b'Description=BoxWeave v2 '),legacy.replace(b'Description=BoxWeave ',b'Description=BoxWeave v2 '))))
      require(owned,'FOREIGN_SERVICE')
+   for name in set(old.get('units',()))-set(units) if old else ():
+    f=directory/name
+    require(not f.exists() or digest(regular(f))==old.get('unit_sha256',{}).get(name),'FOREIGN_SERVICE')
   marker=prefix/'update-in-progress.json'
   def mark(stage,**kw):atomic(marker,encoded({'stage':stage,'archive_sha256':sha,'previous':current.name if current else None,'time':time.time(),**kw}))
   mark('verified')
   if not saved.exists():atomic(saved,raw)
   runtime=dict(c);runtime['dist']=str(prefix/'current/web/dist')
+  runtime['remote_mcp']=(validate_remote_config(remote_setting)
+                         if remote_active else {'enabled':False})
   previous=prefix/'runtime.json'
   if previous.exists():
    require(len(previous.read_bytes())<=65536,'CONFIG_TOO_LARGE')
@@ -193,7 +209,7 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
    os.replace(staging,release)
   release_check(release,manifest);mark('staged')
   if activate:
-   for name in units:
+   for name in set(units)|set(old.get('units',()) if old else ()):
     if (directory/name).exists():stop_owned_unit(name)
   environment=release/'.venv'
   if environment.exists():
@@ -223,6 +239,10 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
    atomic(prefix/'installed.json',encoded({'version':manifest['version'],'archive_sha256':sha,'manifest_sha256':digest(regular(release/'manifest.json')),'source':manifest['source'],'units':list(units) if activate else [],'unit_sha256':{n:digest(b) for n,b in units.items()} if activate else {},'backup':str(backup) if backup else None}))
    mark('published',backup=str(backup) if backup else None)
   if activate:
+   for name in set(old.get('units',()) if old else ())-set(units):
+    if (directory/name).exists():
+     systemctl('disable',name)
+     (directory/name).unlink()
    for name,content in units.items():atomic(directory/name,content)
    systemctl('daemon-reload')
    for name in units:systemctl('enable','--now',name)
