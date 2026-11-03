@@ -1,5 +1,11 @@
 # Remediation validation and next-Agent queue
 
+## Containarium v0.127.0/latest-main sleep and wake isolation gate — 2026-11-03
+
+[Full source-identity and two-route live evidence](CONTAINARIUM_0127_AUTOSLEEP_WAKE_UPSTREAM_LIVE_2026-11-03.md). On a new task-owned BoxWeave-managed nested Ubuntu Box, the compiled upstream main daemon passed focused auto-sleep/server/wake Go tests. Real Incus auto-sleep STOPPED a target twice, with its separate HTTP 8080 and 8081 application routes each waking on their **first** Caddy request (200 and exact body). Reproduced missing birth `LastStartedAt` on the official v0.127.0 **local CLI** create path. Follow-up fork [`42b79978`](https://github.com/vanishs/Containarium/commit/42b79978ce39b262a7a0cb3e6ac6882339a61237) fixes local CLI clock and exposes opt-in `idle_stop_minutes` to MCP; Go packages and independent live CLI/MCP create→automatic STOP passed. BoxWeave source fixture tests: Box Actions **28/28**, Lifecycle **32/32**.
+
+**Status:** upstream main server wake **L/PASS**; CLI/MCP parity **tested in fork, upstream UNMERGED** (PR-create API 403); real installed BoxWeave Web lifecycle create, direct untrusted 403, external TLS, native-provider production upgrade and E2/E3/E4 remain **U**. Keep default-off policy. BoxWeave's current Web create adapter does not forward birth idle-stop; do not infer the source fork patch is already available from the installed Provider.
+
 ## R-04 protected SSH/HTTP gateway source candidate v0.39.0
 
 [Root policy and strict forwarded-tool contract](../design/PHASE2_PROTECTED_GATEWAY_POLICY.md). Optional root-owned explicit marker only; absent means legacy compatibility. The protected Gateway denies untracked direct connect, create/resize/delete, nesting apply and unknown Provider mutators before forwarding; it limits tools/list to reviewed read/track tools. Required checks: unsafe root policy, stale/absent DB, standalone root helper bundle, exact policy-decision testing in independent SSH/HTTP processes, old-version behavior, and root preflight/rollback. No marker is automatically installed or enabled. Web lifecycle/access and bypassing external SSH remain out of scope, so R-04 is still PARTIAL.
