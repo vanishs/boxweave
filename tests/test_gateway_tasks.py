@@ -125,6 +125,9 @@ class TrackedTaskTests(unittest.TestCase):
                     {"type": "text", "text": raw}]}})
         self.assertEqual(tasks.observed_exit({"result": {"content": [
             {"type": "text", "text": "exit_code: 2\n\n--- stdout ---\noutput\n"}]}}), 2)
+        # Actual Provider stderr-only response: exit code is definitive.
+        self.assertEqual(tasks.observed_exit({"result": {"content": [
+            {"type": "text", "text": "exit_code: 7\n\n--- stderr ---\nmarker\n"}]}}), 7)
 
     def test_bounded_capacity_and_selector(self):
         with patch.object(tasks,"TASK_LIMIT",0):

@@ -83,9 +83,17 @@ def observed_exit(message):
     bare=re.fullmatch(r"exit_code: (-?[0-9]+)\n",text)
     if bare:
         return int(bare[1])
+    # The Provider emits a stderr-only section on failing commands with
+    # diagnostics but no stdout. The observed numeric exit is still terminal.
+    # Keep the same bounded, fixed-heading contract as the stdout branch.
     m=re.match(r"\Aexit_code: (-?[0-9]+)\n\n--- stdout ---\n",text)
     if m:
         return int(m[1])
+    # Stderr-only formatting is emitted only when bytes actually exist.
+    # Refuse an incomplete stderr heading with a missing body.
+    stderr=re.match(r"\Aexit_code: (-?[0-9]+)\n\n--- stderr ---\n[\s\S]",text)
+    if stderr:
+        return int(stderr[1])
     raise TaskFault("TASK_RESULT_UNVERIFIED")
 
 class TaskStore:
