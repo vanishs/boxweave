@@ -73,3 +73,8 @@ Run the prioritized tests and preserve failure evidence described by [the remedi
 ## Current nesting handoff
 
 Historical source-only/unfinished-streamed descriptions above are dated reports. Current0.15.1 streamed install and real peer creation/identity/Python passed in the dedicated boxes. [NESTING_VERIFICATION](../verification/NESTING_VERIFICATION.md) records transition observations and0.16.0 source/U helper boundary. Assigned source: /home/boxweave-tenant-dev/e2e-default-1029/source. Preserve original interrupted and successful children.
+
+
+## Next Agent: Containarium v0.126.0 and Box environment E2/E3/E4
+
+Use [exact-tag upgrade and E2/E3/E4 handoff](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md) before any attempted Provider upgrade. Snapshot ContainerService REST/gRPC and CLI, whole-box encrypted backup restore and same-Box rollback have different contracts; snapshot clone remains proposed. Source discovery is not installed acceptance. This plan does **not** authorize upgrading the owner's existing Provider, changing public routing/credentials, or enabling new E2/E3/E4 mutations. The prior installed D4 and auto-sleep limitations are tracked separately in [verification queue](../verification/REMEDIATION_TEST_QUEUE.md).

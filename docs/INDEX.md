@@ -5,6 +5,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 | Find | Authoritative route |
 | --- | --- |
 | Current and candidate feature roadmap | [Global feature roadmap](design/FEATURE_ROADMAP_MASTER.md): selected designs, historic E0-E4 proposals, deferred candidates, priority/dependencies and child backlinks |
+| Future Agent upstream integration handoff | [Containarium v0.126.0 upgrade and E2/E3/E4 gates](design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md): pin, isolated upgrade, authenticated API mapping, snapshot/backup/clone boundaries, sleep/wake verification |
 | New Agent / developer startup | [FINAL_HANDOFF](process/FINAL_HANDOFF.md) |
 | Current work / authorization | [PHASE_STATUS](process/PHASE_STATUS.md), [current handoff](process/HANDOFF.md) |
 | Product goal and selected boundaries | [PRODUCT](product/PRODUCT.md), [SCOPE](product/SCOPE.md) |

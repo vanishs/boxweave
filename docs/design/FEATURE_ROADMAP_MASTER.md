@@ -64,6 +64,10 @@ Note that historical E0/E1 child prose may call D0–D2 "not implemented": those
 
 The owner authorized development and real-Box acceptance. [E0/E1 implementation contract](BOX_ENV_E0_E1_IMPLEMENTATION.md) now supplies exact-target authenticated Provider read-only reports, conservative tool/schema capability classification, bounded stable/runtime fingerprint comparison, and immutable actor-scoped Web captures using app SQLite schema v13. New write actions E2/E3/E4 are **not implemented** where the connected Provider lacks verified snapshot/restore/clone/rekey and storage-volume coverage contracts. No direct-Incus fallback is authorized. Source CI and disposable real-Box read proof must be recorded separately from installed BoxWeave/Web acceptance. R-04 global coordinated mutations remain incomplete, so environment writes cannot be claimed safe yet.
 
+### Pending upstream v0.126.0 re-evaluation and handoff (2026-11-02)
+
+[Containarium v0.126.0 upgrade and E2/E3/E4 implementation handoff](CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md) records the immutable upstream tag identity, exact snapshot REST/gRPC versus database-backup and whole-box restore distinctions, ZFS storage requirements, future isolated upgrade/rollback gates, authorized Provider adapter decisions, and explicit Agent tests for auto-sleep/wake. This is **planning only**; the operator host and stable installer pin are unchanged. The older 58-tool Provider MCP catalog was not proof that snapshot APIs were absent from REST/CLI. E2/E3/E4 remain **not implemented** in BoxWeave until deployed, tested and independently accepted.
+
 ## 4. Other previously proposed capabilities — current dispositions
 
 These are **not** additional automatic work packages. They are candidates or partial features noted in previous source audits, MCP M0–M5 research, historical parity matrices and user workflow discussions.
