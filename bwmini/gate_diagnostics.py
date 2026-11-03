@@ -350,10 +350,16 @@ def command_for_check(args):
     service = args["service"]
     if not SERVICE.fullmatch(service):
         raise ValueError("PROJECT_SELECTOR_INVALID")
+    # Provider non-interactive SSH exec may omit XDG_RUNTIME_DIR even when
+    # systemd user@UID and its bus are active. Resolve only the *guest's own*
+    # numeric UID, using an absolute binary and a fixed /run/user root;
+    # never accept a caller-selected runtime directory or shell expression.
+    runtime = "XDG_RUNTIME_DIR=/run/user/$(/usr/bin/id -u) "
     if kind == "service":
-        return "systemctl --user is-active -- " + service
+        return runtime + "/usr/bin/systemctl --user is-active -- " + service
     if kind == "logs":
-        return "journalctl --user -u " + service + " --no-pager -n 40 --output=cat"
+        return (runtime + "/usr/bin/journalctl --user -u " + service +
+                " --no-pager -n 40 --output=cat")
     raise ValueError("PROJECT_SELECTOR_INVALID")
 
 

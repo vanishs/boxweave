@@ -202,7 +202,27 @@ class GatewayDiagnosticsTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 d.preauthorize_project(bad, policy=policy)
         self.assertEqual(d.command_for_check(args),
-                         "systemctl --user is-active -- app.service")
+                         "XDG_RUNTIME_DIR=/run/user/$(/usr/bin/id -u) "
+                         "/usr/bin/systemctl --user is-active -- app.service")
+        self.assertEqual(d.command_for_check({"box": "testbox", "check": "logs",
+                                               "service": "app.service"}),
+                         "XDG_RUNTIME_DIR=/run/user/$(/usr/bin/id -u) "
+                         "/usr/bin/journalctl --user -u app.service --no-pager -n 40 --output=cat")
+
+    def test_d4_runtime_command_never_embeds_caller_selected_shell(self):
+        # Provider connect(exec) does not reliably inherit a PAM-created
+        # XDG_RUNTIME_DIR even when the user's systemd manager is running.
+        # Use the guest's own numeric UID from an absolute reviewed binary.
+        cmd = d.command_for_check({"check": "service", "service": "safe-probe.service"})
+        self.assertIn("$(/usr/bin/id -u)", cmd)
+        self.assertNotIn("/home/boxweave", cmd)
+        self.assertEqual(cmd.count("$("), 1)
+        self.assertEqual(d.command_for_check({"check": "processes"}),
+                         "ps -eo stat=,comm= | head -n 40")
+        for invalid in ("evil;id", "a$(id).service", "-l", "../secret.service"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "PROJECT_SELECTOR_INVALID"):
+                    d.command_for_check({"check": "service", "service": invalid})
 
     def test_d4_read_summaries_never_expose_raw_output(self):
         samples = [
