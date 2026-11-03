@@ -280,3 +280,8 @@ Source v0.42.9 now includes the pinned official wrapper with guarded
 managed/opt-in installation; it does not silently modify external
 Providers, sshd or sudoers. See
 [source test record](CONTAINARIUM_SHELL_PACKAGE_0429.md).
+
+
+### 2026-11-03 upstream MCP contract, backups and vendored host-hop ownership — design selected, not implemented
+
+[Owner-selected follow-ups](../design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md) register P1 documented stable external MCP subset; P2 whole-Box backup creation parity; P2 trusted host-held age identity for remote-controller restores; and the choice to **stop shipping vendored `containarium-shell` in future BoxWeave releases**. Historical v0.42.9 packaging remains present in its published artifact. The existing script/host login path must not be silently removed, and the direct MCP `connect(exec)` positive evidence does not verify host-hop SSH. No source, installer, upstream version, existing host or stable pin was modified by this documentation decision. Upstream #3500 is an investigation, not a compatibility guarantee. Before implementation: audit existing managed-file state/repair flag, check per-account Incus SSH-wake authorization, and execute isolated migration and cross-target negative tests.

@@ -4,6 +4,8 @@
 
 **Status: owner-patched host wrapper now PRESENT; actual host-hop SSH login remains UNVERIFIED.** These are reviewed instructions, not evidence of a production repair. No host/sshd/sudoers file was modified by the coding Agent. Follow explicit, host-specific operator authorization; preserve console/admin access and obtain a rollback window before any live writes.
 
+**New owner packaging decision (2026-11-03; design only):** [upstream MCP and host-hop ownership](../design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md) selects **no vendored `containarium-shell` in future BoxWeave releases** and Containarium-side responsibility for the optional host-hop channel. The v0.42.9 historical release behavior and this runbook's evidence remain accurate, but the previous BoxWeave installer repair mechanism is **not** the recommended long-term architecture. Do not remove an already installed login shell or edit the host in response to this document; the code/release migration and its validation have not been performed.
+
 ## Updated host and project state (2026-11-02)
 
 After the owner repaired the `dev` host, a fresh read-only
