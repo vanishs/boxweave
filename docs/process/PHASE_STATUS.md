@@ -138,3 +138,7 @@ unsupported E2–E4 remain separate U/BLOCKED claims.
 ## 2026-11-03 pinned Containarium-shell dependency source checkpoint
 
 UP-SSH-01 is source implemented in v0.42.10 candidate, test 661/661 and bounded Box root sandbox PASS, but full installed acceptance remains U. [Evidence](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md), [owner decisions](../design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md). Upstream MCP contract/backup P1/P2/P2 remain follow-ups. No Containarium binary upgrade or stable promotion.
+
+## 2026-11-03 v0.42.10 published and isolated installed acceptance
+
+**UP-SSH-01 RELEASED / LIMITED INSTALLED PASS**: [official v0.42.10 Release](https://github.com/vanishs/boxweave/releases/tag/v0.42.10), merged `6ac4cb6986fe76a810321538e4af9fc3a1bfb602`, [main CI passed](https://github.com/vanishs/boxweave/actions/runs/41680412941). Published v0.42.9 fresh nested install and published v0.42.10 upgrade on disposable `bwshell-1103-verify-container` both ended `ready`, `sudo boxweave doctor` exit 0, 8 required checks passed; prior managed root shell hash retained; installed local Containarium stays at **0.120.1**. [Exact acceptance record](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md). Actual host-hop login/wake, cross-tenant denial and future Containarium upgrade are **not** accepted by these results. Stable default installer pin still **0.42.1**, not promoted. Other UP-MCP P1/P2/P2 requests remain upstream-facing.
