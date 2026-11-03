@@ -1,6 +1,11 @@
-"""Host-hop shell packaging and guarded remediation: isolated, non-root contracts."""
+"""Pinned upstream host-hop fetch, bounded installation, and legacy upgrade tests.
+
+All host filesystem writes are mocked into disposable temp paths. No Provider
+version is upgraded, no upstream installer is run, and no host sudoers edited.
+"""
 import hashlib
 import os
+import socket
 import stat
 import subprocess
 import sys
@@ -11,10 +16,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from bwmini import online
-
-
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "bwmini" / "containarium-shell"
 
 
 class ShellInstallTests(unittest.TestCase):
@@ -31,16 +32,26 @@ class ShellInstallTests(unittest.TestCase):
         self.registry.chmod(0o644)
         self.stage = self.base / "release"
         self.stage.mkdir()
-        (self.stage / "containarium-shell").write_bytes(SOURCE.read_bytes())
+        self.wrapper = b"#!/bin/bash\nexec /bin/true\n"
+        self.source = (b"#!/usr/bin/env bash\n"
+                       b"cat > \"$WRAPPER_SCRIPT\" << 'SHELLEOF'\n"
+                       + self.wrapper +
+                       b"SHELLEOF\n"
+                       b"# Unrelated root setup must NEVER execute.\n"
+                       b"ALL ALL=(root) NOPASSWD: incus exec *\n")
         self.state = {"managed_files": {}}
-        self.original_stat = Path.stat
+        self.stat_original = Path.stat
         self.atomic_calls = []
+        self.download_calls = []
+        self.version_output = "Containarium v0.120.1"
+        self.syntax_exit = 0
+        self.download_failure = None
 
-    def fake_stat(self, path, *args, **kwargs):
-        result = self.original_stat(path, *args, **kwargs)
+    def fake_stat(self, path, *a, **kw):
+        actual = self.stat_original(path, *a, **kw)
         if path in (self.host_dir, self.target, self.registry):
-            return SimpleNamespace(st_uid=0, st_gid=0, st_mode=result.st_mode)
-        return result
+            return SimpleNamespace(st_uid=0, st_gid=0, st_mode=actual.st_mode)
+        return actual
 
     def atomic(self, path, payload, mode=0o600):
         self.atomic_calls.append((path, mode))
@@ -48,145 +59,183 @@ class ShellInstallTests(unittest.TestCase):
         self.target.write_bytes(payload)
         self.target.chmod(mode)
 
-    def invoke(self, *, external=False, repair=False, rooted=True):
-        # Stand in for root-owned filesystem metadata WITHOUT requiring
-        # privileged host access in unit tests.
+    def fake_download(self, url, path, expected, limit=180_000_000):
+        self.download_calls.append((url, expected, limit))
+        self.assertEqual(url, online.HOST_SHELL_UPSTREAM_URL)
+        self.assertEqual(expected, hashlib.sha256(self.source).hexdigest())
+        if self.download_failure:
+            raise self.download_failure
+        path.write_bytes(self.source)
+
+    def fake_run(self, argv, **kwargs):
+        if argv[0] == "/bin/bash":
+            self.assertEqual(argv[1], "-n")
+            return SimpleNamespace(returncode=self.syntax_exit, stdout="", stderr="")
+        self.assertEqual(argv, ["/opt/containariumd", "version"])
+        return SimpleNamespace(returncode=0, stdout=self.version_output, stderr="")
+
+    def invoke(self, *, external=False, repair=False, rooted=True,
+               provider_cli="/opt/containariumd"):
+        # Patching stat/atomic simulates root-owned paths WITHOUT touching
+        # /usr/local/bin, system sshd, sudoers, or a real managed Provider.
         with patch.object(online, "HOST_SHELL", self.target), \
              patch.object(online, "HOST_SHELLS", self.registry), \
+             patch.object(online, "HOST_SHELL_SHA256", hashlib.sha256(self.wrapper).hexdigest()), \
+             patch.object(online, "HOST_SHELL_SOURCE_SHA256", hashlib.sha256(self.source).hexdigest()), \
              patch.object(online, "atomic", side_effect=self.atomic), \
-             patch.object(Path, "stat", (lambda path, *a, **kw: self.fake_stat(path, *a, **kw)) if rooted else self.original_stat):
+             patch.object(online, "download", side_effect=self.fake_download), \
+             patch.object(online.subprocess, "run", side_effect=self.fake_run), \
+             patch.object(Path, "stat", (lambda p, *a, **kw: self.fake_stat(p, *a, **kw)) if rooted else self.stat_original):
             return online.ensure_containarium_shell(
-                self.stage, self.state, external=external, repair=repair
+                self.stage, self.state, external=external, repair=repair,
+                provider_cli=provider_cli
             )
 
-    def test_pinned_wrapper_matches_official_v01201_and_parses(self):
-        data = SOURCE.read_bytes()
-        self.assertEqual(len(data.splitlines()), 106)
-        self.assertEqual(hashlib.sha256(data).hexdigest(), online.HOST_SHELL_SHA256)
-        self.assertEqual(subprocess.run(["bash", "-n", str(SOURCE)],
-                                        capture_output=True, check=False).returncode, 0)
-        self.assertIn(b"SSH_ORIGINAL_COMMAND", data)
-        self.assertIn(b"sudo incus exec", data)
-        self.assertNotIn(b"ALL ALL=(root)", data)
-        self.assertNotIn(b"sshd_config", data)
+    def test_upstream_source_pin_and_release_asset_exclusion(self):
+        self.assertEqual(online.PROVIDER_VERSION, "0.120.1")
+        self.assertEqual(online.HOST_SHELL_UPSTREAM_COMMIT,
+                         "e5deb167c973033d9a847abdcb2420e917095546")
+        self.assertEqual(online.HOST_SHELL_SOURCE_SHA256,
+                         "93365c56cd70aafac9880bc4dfcc4b1bcbb55dfc86e37b17b207c8245989f04a")
+        self.assertEqual(online.HOST_SHELL_SHA256,
+                         "2212651e2083b80d76363523bf794ec4d530f8eb74bbac0def0c347bb544caa6")
+        self.assertNotIn("containarium-shell", online.RELEASE_FILES)
+        self.assertFalse((Path(__file__).resolve().parents[1] / "bwmini/containarium-shell").exists())
 
-    def test_external_missing_is_read_only(self):
-        status = self.invoke(external=True)
-        self.assertEqual(status, "missing_external_unmodified")
-        self.assertFalse(self.target.exists())
-        self.assertEqual(self.atomic_calls, [])
-        self.assertEqual(self.state["managed_files"], {})
+    def test_extract_only_wrapper_not_full_upstream_setup(self):
+        with patch.object(online, "HOST_SHELL_SHA256", hashlib.sha256(self.wrapper).hexdigest()), \
+             patch.object(online, "HOST_SHELL_SOURCE_SHA256", hashlib.sha256(self.source).hexdigest()):
+            result = online.extract_upstream_containarium_shell(self.source)
+            self.assertEqual(result, self.wrapper)
+            self.assertNotIn(b"NOPASSWD", result)
+            with self.assertRaisesRegex(online.Failure, "SOURCE_PIN_MISMATCH"):
+                online.extract_upstream_containarium_shell(self.source + b"changed")
+            changed = self.source.replace(b"SHELLEOF", b"DRIFT")
+            with patch.object(online, "HOST_SHELL_SOURCE_SHA256", hashlib.sha256(changed).hexdigest()):
+                with self.assertRaisesRegex(online.Failure, "SOURCE_FORMAT_CHANGED"):
+                    online.extract_upstream_containarium_shell(changed)
 
-    def test_external_matching_shell_is_preserved_without_claiming_ownership(self):
-        self.target.write_bytes(SOURCE.read_bytes())
-        self.target.chmod(0o755)
-        self.registry.write_text("/bin/bash\n" + str(self.target) + "\n")
-        self.assertEqual(self.invoke(external=True), "present_external")
-        self.assertEqual(self.invoke(external=True, repair=True), "present_external")
-        self.assertEqual(self.atomic_calls, [])
-        self.assertEqual(self.state["managed_files"], {})
-
-    def test_external_unregistered_and_foreign_are_observed_not_mutated(self):
-        self.target.write_bytes(SOURCE.read_bytes())
-        self.target.chmod(0o755)
-        self.assertEqual(self.invoke(external=True), "unregistered_external_unmodified")
-        self.assertNotIn(str(self.target), self.registry.read_text())
-        self.target.write_text("foreign binary\n")
-        self.assertEqual(self.invoke(external=True), "foreign_external_unmodified")
-        self.assertEqual(self.atomic_calls, [])
-
-    def test_local_install_adds_only_missing_pinned_wrapper_and_shell_entry(self):
-        self.assertEqual(self.invoke(), "installed_registered")
-        self.assertEqual(self.target.read_bytes(), SOURCE.read_bytes())
+    def test_local_missing_auto_downloads_and_installs_once(self):
+        self.assertEqual(self.invoke(), "installed_from_pinned_upstream_registered")
+        self.assertEqual(self.target.read_bytes(), self.wrapper)
         self.assertEqual(self.target.stat().st_mode & 0o777, 0o755)
-        self.assertEqual(self.state["managed_files"], {str(self.target): online.HOST_SHELL_SHA256})
-        self.assertEqual(self.registry.read_text(), "/bin/bash\n" + str(self.target) + "\n")
+        self.assertEqual(self.state["managed_files"][str(self.target)],
+                         hashlib.sha256(self.wrapper).hexdigest())
+        self.assertEqual(self.registry.read_text(),
+                         "/bin/bash\n" + str(self.target) + "\n")
         self.assertEqual(self.invoke(), "present_managed")
-        self.assertEqual(len(self.atomic_calls), 1)
-        self.assertEqual(self.registry.read_text().count(str(self.target)), 1)
-
-    def test_explicit_external_repair_is_identical_but_not_automatic(self):
-        self.assertEqual(self.invoke(external=True, repair=True), "installed_registered")
-        self.assertTrue(self.target.exists())
+        self.assertEqual(len(self.download_calls), 1)
         self.assertEqual(len(self.atomic_calls), 1)
 
-    def test_exact_existing_local_shell_keeps_external_provenance(self):
-        self.target.write_bytes(SOURCE.read_bytes())
+    def test_external_requires_explicit_opt_in(self):
+        self.assertEqual(self.invoke(external=True), "missing_external_unmodified")
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.download_calls, [])
+        self.assertEqual(self.invoke(external=True, repair=True),
+                         "installed_from_pinned_upstream_registered")
+        self.assertEqual(len(self.download_calls), 1)
+
+    def test_external_unsupported_or_unknown_version_never_downloads(self):
+        self.version_output = "Containarium v0.127.0"
+        with self.assertRaisesRegex(online.Failure, "PROVIDER_VERSION_UNSUPPORTED"):
+            self.invoke(external=True, repair=True)
+        with self.assertRaisesRegex(online.Failure, "PROVIDER_VERSION_UNKNOWN"):
+            self.invoke(external=True, repair=True, provider_cli=None)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.download_calls, [])
+
+    def test_existing_safe_wrapper_preserves_file_even_if_external(self):
+        self.target.write_bytes(self.wrapper)
         self.target.chmod(0o755)
         self.registry.write_text("/bin/bash\n" + str(self.target) + "\n")
         self.assertEqual(self.invoke(), "present_external")
+        self.assertEqual(self.invoke(external=True), "present_external")
+        self.assertEqual(self.invoke(external=True, repair=True), "present_external")
+        self.assertEqual(len(self.download_calls), 0)
+        self.assertEqual(len(self.atomic_calls), 0)
         self.assertEqual(self.state["managed_files"], {})
-        self.assertEqual(self.atomic_calls, [])
 
-    def test_existing_wrapper_without_world_execute_is_not_accepted(self):
-        self.target.write_bytes(SOURCE.read_bytes())
-        self.target.chmod(0o700)
+    def test_external_unregistered_does_not_change_registry(self):
+        self.target.write_bytes(self.wrapper)
+        self.target.chmod(0o755)
+        self.assertEqual(self.invoke(external=True), "unregistered_external_unmodified")
+        self.assertEqual(self.registry.read_text(), "/bin/bash\n")
+
+    def test_foreign_and_symlink_are_not_overwritten(self):
+        self.target.write_text("foreign content\n")
         self.assertEqual(self.invoke(external=True), "foreign_external_unmodified")
-        with self.assertRaisesRegex(online.Failure, "FOREIGN_CONTAINARIUM_SHELL_REFUSED"):
-            self.invoke()
-        self.assertEqual(self.atomic_calls, [])
-
-    def test_foreign_wrapper_or_symlink_fails_closed_on_enabled_paths(self):
-        self.target.write_text("foreign shell\n")
-        for mode in ((False, False), (True, True)):
-            with self.subTest(mode=mode), self.assertRaisesRegex(
-                online.Failure, "FOREIGN_CONTAINARIUM_SHELL_REFUSED"
-            ):
-                self.invoke(external=mode[0], repair=mode[1])
+        for external, repair in ((False, False), (True, True)):
+            with self.assertRaisesRegex(online.Failure, "FOREIGN_CONTAINARIUM_SHELL_REFUSED"):
+                self.invoke(external=external, repair=repair)
         self.target.unlink()
-        self.target.symlink_to(self.base / "not-existing")
+        self.target.symlink_to(self.base / "missing")
+        self.assertEqual(self.invoke(external=True), "foreign_external_unmodified")
         with self.assertRaisesRegex(online.Failure, "FOREIGN_CONTAINARIUM_SHELL_REFUSED"):
             self.invoke()
-        self.assertEqual(self.invoke(external=True), "foreign_external_unmodified")
-        self.assertEqual(self.atomic_calls, [])
+        self.assertEqual(self.download_calls, [])
 
-    def test_untrusted_source_hash_fails_before_writing_even_external(self):
-        (self.stage / "containarium-shell").write_bytes(b"#!/bin/sh\nexit 0\n")
-        for external in (False, True):
-            with self.subTest(external=external), self.assertRaisesRegex(
-                online.Failure, "CONTAINARIUM_SHELL_PIN_MISMATCH"
-            ):
-                self.invoke(external=external)
-        self.assertEqual(self.atomic_calls, [])
-
-    def test_registry_missing_or_untrusted_refuses_only_mutating_paths(self):
-        self.registry.unlink()
-        self.assertEqual(self.invoke(external=True), "missing_external_unmodified")
-        with self.assertRaisesRegex(online.Failure, "HOST_SHELL_REGISTRY_UNAVAILABLE"):
-            self.invoke()
-        self.registry.write_text("/bin/bash\n")
+    def test_unsafe_registry_or_directory_stops_before_download(self):
         self.registry.chmod(0o666)
-        self.assertEqual(self.invoke(external=True), "missing_external_unmodified")
         with self.assertRaisesRegex(online.Failure, "HOST_SHELL_REGISTRY_UNSAFE"):
             self.invoke()
-        self.assertEqual(self.atomic_calls, [])
-
-    def test_shell_syntax_failure_stops_before_host_write(self):
-        with patch.object(online.subprocess, "run", return_value=SimpleNamespace(returncode=1)):
-            with self.assertRaisesRegex(online.Failure, "CONTAINARIUM_SHELL_SYNTAX_INVALID"):
-                self.invoke()
-        self.assertEqual(self.atomic_calls, [])
-
-    def test_versioned_cli_passes_explicit_repair_flag(self):
-        with patch.object(sys, "argv", ["online.py", "install", "--stage", "/tmp/stage",
-                                        "--version", "0.42.9",
-                                        "--repair-containarium-shell"]), \
-             patch.object(online, "install") as install:
-            self.assertEqual(online.main(), 0)
-            install.assert_called_once_with(Path("/tmp/stage"), "0.42.9", None,
-                                            None, None, repair_containarium_shell=True)
-
-        with patch.object(sys, "argv", ["online.py", "install", "--stage", "/tmp/stage",
-                                        "--version", "0.42.9"]), \
-             patch.object(online, "install") as install:
-            self.assertEqual(online.main(), 0)
-            install.assert_called_once_with(Path("/tmp/stage"), "0.42.9", None,
-                                            None, None, repair_containarium_shell=False)
-
-    def test_bad_directory_ownership_fails_closed(self):
+        self.registry.chmod(0o644)
         with self.assertRaisesRegex(online.Failure, "CONTAINARIUM_SHELL_PARENT_UNSAFE"):
             self.invoke(rooted=False)
-        self.assertEqual(self.atomic_calls, [])
+        self.assertEqual(self.download_calls, [])
+
+    def test_offline_download_or_bad_syntax_is_non_mutating(self):
+        self.download_failure = OSError("no network")
+        with self.assertRaises(OSError):
+            self.invoke()
+        self.assertFalse(self.target.exists())
+        self.download_failure = None
+        self.syntax_exit = 1
+        with self.assertRaisesRegex(online.Failure, "CONTAINARIUM_SHELL_SYNTAX_INVALID"):
+            self.invoke()
+        self.assertFalse(self.target.exists())
+
+    def test_legacy_managed_missing_allows_repair_but_drift_denied(self):
+        expected = hashlib.sha256(self.wrapper).hexdigest()
+        state = {"hostname": socket.gethostname(),
+                 "managed_files": {str(self.target): expected}}
+        with patch.object(online, "HOST_SHELL", self.target), \
+             patch.object(online, "HOST_SHELL_SHA256", expected):
+            online.check_managed(state)
+            self.target.write_text("tampered\n")
+            with self.assertRaisesRegex(online.Failure, "MANAGED_FILE_CHANGED"):
+                online.check_managed(state)
+            self.target.unlink()
+            self.target.symlink_to(self.base / "missing")
+            with self.assertRaisesRegex(online.Failure, "MANAGED_FILE_CHANGED"):
+                online.check_managed(state)
+
+    def test_optional_failure_does_not_block_core_installer(self):
+        with patch.object(online, "ensure_containarium_shell",
+                          side_effect=online.Failure("CONTAINARIUM_SHELL_PIN_MISMATCH")):
+            result = online.optional_containarium_shell_setup(self.stage, self.state)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(result["code"], "CONTAINARIUM_SHELL_PIN_MISMATCH")
+        self.assertFalse(result["host_hop_ssh_verified"])
+        with patch.object(online, "ensure_containarium_shell",
+                          side_effect=OSError("sensitive network details")):
+            result = online.optional_containarium_shell_setup(self.stage, self.state)
+        self.assertEqual(result["code"], "CONTAINARIUM_SHELL_SETUP_FAILED")
+        self.assertNotIn("sensitive", str(result))
+        with patch.object(online, "ensure_containarium_shell",
+                          return_value="missing_external_unmodified"):
+            result = online.optional_containarium_shell_setup(self.stage, self.state)
+        self.assertIsNone(result["code"])
+
+    def test_versioned_cli_legacy_repair_flag_still_works(self):
+        with patch.object(sys, "argv", ["online.py", "install", "--stage", "/tmp/stage",
+                                        "--version", "0.42.10",
+                                        "--repair-containarium-shell"]), \
+             patch.object(online, "install") as installer:
+            self.assertEqual(online.main(), 0)
+            installer.assert_called_once_with(
+                Path("/tmp/stage"), "0.42.10", None, None, None,
+                repair_containarium_shell=True
+            )
 
 
 if __name__ == "__main__":

@@ -16,14 +16,19 @@ PROVIDER_ASSETS = {
     "containarium": "dc356b07ca2138f28052d021458f8081753b2c6c186fe7508b0645a06a9b121d",
     "mcp-server": "5b12e284b3b103c01bf9eff0cfe2f2a1e3b25476dfcc72aebe8166b4235198a2",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "containarium-shell", "hostkeys.py", "mcp_gate.py", "gate_diagnostics.py", "operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "gate_diagnostics.py", "operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
-# Pinned official Containarium v0.120.1 host-hop wrapper, identical at main@4be7f81a.
-# Packaging it is NOT authorization to alter an externally managed Provider.
+# The upstream main at e5deb167 and v0.120.1 contain the identical wrapper.
+# Source is fetched from immutable upstream revision, NEVER from a BoxWeave Release.
+# This does not authorize a Containarium binary upgrade.
 HOST_SHELL = Path("/usr/local/bin/containarium-shell")
 HOST_SHELLS = Path("/etc/shells")
 HOST_SHELL_SHA256 = "2212651e2083b80d76363523bf794ec4d530f8eb74bbac0def0c347bb544caa6"
+HOST_SHELL_UPSTREAM_COMMIT = "e5deb167c973033d9a847abdcb2420e917095546"
+HOST_SHELL_SOURCE_SHA256 = "93365c56cd70aafac9880bc4dfcc4b1bcbb55dfc86e37b17b207c8245989f04a"
+HOST_SHELL_UPSTREAM_URL = ("https://raw.githubusercontent.com/FootprintAI/Containarium/"
+                           + HOST_SHELL_UPSTREAM_COMMIT + "/scripts/setup-ssh-container-proxy.sh")
 
 
 class Failure(Exception): pass
@@ -130,24 +135,59 @@ def current_state():
 def check_managed(old):
     for name, digest in old.get("managed_files", {}).items():
         p = Path(name)
+        # Older releases tracked this optional host-hop helper as a managed
+        # file. Permit a truly missing, known pinned helper to be repaired on
+        # upgrade; never exempt a changed file or even a dangling symlink.
+        if (name == str(HOST_SHELL) and digest == HOST_SHELL_SHA256
+                and not p.is_symlink() and not p.exists()):
+            continue
         require(not p.is_symlink() and p.is_file() and sha(p.read_bytes()) == digest, "MANAGED_FILE_CHANGED")
     require(old.get("hostname") == socket.gethostname(), "HOST_IDENTITY_CHANGED")
 
 
-def ensure_containarium_shell(release, old, *, external=False, repair=False):
-    """Install only the reviewed host-hop wrapper on owned hosts, or opt-in.
+def extract_upstream_containarium_shell(source):
+    """Extract ONLY the pinned wrapper; never execute upstream's setup script."""
+    marker = b"cat > \"$WRAPPER_SCRIPT\" << 'SHELLEOF'\n"
+    terminator = b"\nSHELLEOF\n"
+    require(sha(source) == HOST_SHELL_SOURCE_SHA256,
+            "CONTAINARIUM_SHELL_SOURCE_PIN_MISMATCH")
+    require(source.count(marker) == 1, "CONTAINARIUM_SHELL_SOURCE_FORMAT_CHANGED")
+    tail = source.split(marker, 1)[1]
+    require(tail.count(terminator) == 1, "CONTAINARIUM_SHELL_SOURCE_FORMAT_CHANGED")
+    wrapper = tail.split(terminator, 1)[0] + b"\n"
+    require(wrapper.startswith(b"#!/bin/bash\n") and len(wrapper) <= 16_384
+            and sha(wrapper) == HOST_SHELL_SHA256, "CONTAINARIUM_SHELL_PIN_MISMATCH")
+    return wrapper
 
-    This is NOT a general host SSH/sshd/sudoers repair. A matching foreign
-    wrapper is observed, never taken over, and external Providers are read-only
-    unless the operator explicitly selects --repair-containarium-shell.
+
+def verified_host_shell_provider_version(*, external=False, provider_cli=None):
+    """Do not install an unreviewed wrapper against an unknown Provider."""
+    require(PROVIDER_VERSION == "0.120.1", "CONTAINARIUM_SHELL_PROVIDER_PIN_UNSUPPORTED")
+    if not external:
+        return
+    require(provider_cli and Path(provider_cli).is_absolute(),
+            "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNKNOWN")
+    version = subprocess.run([provider_cli, "version"], capture_output=True,
+                             text=True, timeout=10, check=False)
+    require(version.returncode == 0,
+            "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNKNOWN")
+    observed = re.findall(r"(?<![\d.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![\d.])",
+                          version.stdout + " " + version.stderr)
+    require(len(set(observed)) == 1 and observed[0] == PROVIDER_VERSION,
+            "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNSUPPORTED")
+
+
+def ensure_containarium_shell(release, old, *, external=False, repair=False,
+                              provider_cli=None):
+    """Install a reviewed upstream dependency on owned hosts, or by opt-in.
+
+    Existing host login shells are never overwritten. A missing wrapper is
+    fetched by exact upstream commit + source SHA256 + extracted body SHA256.
+    Upstream's full setup-ssh-container-proxy.sh is NEVER executed.
     """
-    source = release / "containarium-shell"
-    payload = source.read_bytes()
-    require(sha(payload) == HOST_SHELL_SHA256, "CONTAINARIUM_SHELL_PIN_MISMATCH")
     enabled = not external or repair
     target = HOST_SHELL
     managed = str(target) in old.get("managed_files", {})
-
     if target.is_symlink():
         require(not enabled, "FOREIGN_CONTAINARIUM_SHELL_REFUSED")
         return "foreign_external_unmodified"
@@ -168,13 +208,7 @@ def ensure_containarium_shell(release, old, *, external=False, repair=False):
         require(parent.is_dir() and not parent.is_symlink() and info.st_uid == 0
                 and not info.st_mode & 0o022 and bool(info.st_mode & stat.S_IXOTH),
                 "CONTAINARIUM_SHELL_PARENT_UNSAFE")
-        validate = subprocess.run(["/bin/bash", "-n", str(source)],
-                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL, timeout=10)
-        require(validate.returncode == 0, "CONTAINARIUM_SHELL_SYNTAX_INVALID")
 
-    # Observe the system-wide shell registry without modifying its ownership,
-    # sudoers, sshd configuration, user accounts or listening SSH process.
     registry_available = not HOST_SHELLS.is_symlink() and HOST_SHELLS.is_file()
     if not registry_available:
         require(not enabled, "HOST_SHELL_REGISTRY_UNAVAILABLE")
@@ -192,9 +226,26 @@ def ensure_containarium_shell(release, old, *, external=False, repair=False):
         return "present_external" if registered else "unregistered_external_unmodified"
 
     if not target.exists():
+        verified_host_shell_provider_version(external=external,
+                                             provider_cli=provider_cli)
+        source = Path(release) / "containarium-ssh-proxy-source.sh"
+        download(HOST_SHELL_UPSTREAM_URL, source, HOST_SHELL_SOURCE_SHA256,
+                 limit=65_536)
+        payload = extract_upstream_containarium_shell(source.read_bytes())
+        # Even correctly downloaded sources must parse before a host write.
+        with tempfile.NamedTemporaryFile(prefix="boxweave-shell-validate-",
+                                         dir=Path(release)) as candidate:
+            candidate.write(payload)
+            candidate.flush()
+            validation = subprocess.run(["/bin/bash", "-n", candidate.name],
+                                        stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL, timeout=10)
+        require(validation.returncode == 0,
+                "CONTAINARIUM_SHELL_SYNTAX_INVALID")
         atomic(target, payload, 0o755)
         old.setdefault("managed_files", {})[str(target)] = HOST_SHELL_SHA256
-        state = "installed"
+        state = "installed_from_pinned_upstream"
     else:
         state = "present_managed" if managed else "present_external"
     if not registered:
@@ -206,6 +257,21 @@ def ensure_containarium_shell(release, old, *, external=False, repair=False):
             os.fsync(out.fileno())
         state += "_registered"
     return state
+
+
+def optional_containarium_shell_setup(release, old, **kwargs):
+    """Record a bounded optional failure; core MCP installation continues."""
+    try:
+        status = ensure_containarium_shell(release, old, **kwargs)
+        error_code = None
+    except (Failure, OSError, ValueError, subprocess.SubprocessError) as error:
+        status = "incomplete"
+        error_code = (str(error) if isinstance(error, Failure)
+                      else "CONTAINARIUM_SHELL_SETUP_FAILED")
+    return {"status": status, "code": error_code,
+            "host_hop_ssh_verified": False,
+            "source_commit": HOST_SHELL_UPSTREAM_COMMIT,
+            "note": "Optional host-hop setup; direct Box MCP SSH is independent."}
 
 
 PG_ETC = Path("/etc/postgresql")
@@ -627,13 +693,12 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 require(time.monotonic() < deadline, "PROVIDER_API_NOT_READY")
                 time.sleep(15)
         phase("containarium_host_shell")
-        shell_status = ensure_containarium_shell(release, old, external=external,
-                                                 repair=repair_containarium_shell)
-        print(json.dumps({"containarium_shell": {
-            "status": shell_status,
-            "host_hop_ssh_verified": False,
-            "note": "Direct Box MCP SSH is independent; host-hop login needs separate acceptance."
-        }}), flush=True)
+        # Host-hop SSH is optional; independent app/MCP installation continues
+        # after a pinned-source fetch, compatibility or host-ownership failure.
+        shell_result = optional_containarium_shell_setup(
+            release, old, external=external, repair=repair_containarium_shell,
+            provider_cli=old["external_provider"]["cli"] if external else None)
+        print(json.dumps({"containarium_shell": shell_result}), flush=True)
         deadline = phase("independent_application")
         mcp_binary = str(release / "mcp-server") if external else "/usr/local/bin/mcp-server"
         provider_binary = old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"
@@ -693,7 +758,7 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","containarium-shell","hostkeys.py","mcp_gate.py","gate_diagnostics.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","gate_diagnostics.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)

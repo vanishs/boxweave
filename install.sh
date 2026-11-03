@@ -14,10 +14,11 @@ Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-sec
   /etc/containarium/jwt.secret, and containariumd on PATH.
   A standalone preinstalled Incus storage pool is also preserved.
   Custom Provider settings require the options above.
-  For a BoxWeave-managed local Provider, install the pinned containarium-shell
-  host-hop wrapper automatically. For external Providers, preserve their SSH
-  setup by default; --repair-containarium-shell explicitly installs ONLY the
-  missing, reviewed wrapper plus its /etc/shells registration.
+  For a BoxWeave-managed local Provider, download an immutable upstream
+  containarium-shell only if missing and verify the pinned SHA-256 before
+  installation. No wrapper is bundled in the BoxWeave Release. External
+  Providers are inspect-only unless --repair-containarium-shell is supplied.
+  Optional host-hop setup failures do not block independently working MCP.
   This never writes wildcard Incus sudoers or host sshd configuration.
   Recommended: Ubuntu >= 24.04. Linux x86_64, Python >= 3.12 and systemd required.
   No distribution-name restriction. Host dependencies are checked directly.

@@ -6,6 +6,8 @@
 
 **New owner packaging decision (2026-11-03; design only):** [upstream MCP and host-hop ownership](../design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md) selects **no vendored `containarium-shell` file in future BoxWeave releases**; **Option A** automatically fetches a vetted, immutable Containarium upstream source and SHA-256-verifies the extracted wrapper when it is missing on a BoxWeave-managed local Provider; externally managed Providers remain read-only unless the operator explicitly approves repair. Upstream remains the source owner while BoxWeave remains responsible for its installer behavior. The v0.42.9 historical release behavior and this runbook's evidence remain accurate, but the previous **bundled-file** repair mechanism is **not** the recommended long-term architecture; a separately tested pinned-upstream-fetch path is the selected replacement. Do not remove an already installed login shell or edit the host in response to this document; the code/release migration and its validation have not been performed.
 
+**2026-11-03 source update:** v0.42.10 candidate implements Option A, removing bundled Release bytes and instead downloading the exact verified upstream script when missing on an owned local Provider. External Providers require explicit repair; core MCP remains independent. [Source and isolated verification](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md). Historical v0.42.9 instructions below are retained for reproducible recovery, not a recommendation to reintroduce a vendored asset. No automatic removal of host login shells.
+
 ## Updated host and project state (2026-11-02)
 
 After the owner repaired the `dev` host, a fresh read-only
