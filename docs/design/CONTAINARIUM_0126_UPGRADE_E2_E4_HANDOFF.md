@@ -68,4 +68,8 @@ Never overwrite a running Box, forcibly replace an existing backup destination, 
 
 **Stop/skip escalation:** Ask the owner only when a decision changes product semantics (e.g. whether destructive same-Box rollback or new-copy restore is primary), required storage/credential trust, global HTTP exposure or protected default policy. Otherwise continue independent safe tests and accurately record missing prerequisites.
 
+## New live handoff evidence on the preceding 0.120.1 Provider (2026-11-02)
+
+The next Agent should **reuse the verified facts, not the previously deleted test Boxes**, from [v0.42.8 user-service and real auto-sleep acceptance](../verification/BLOCKED_REACCEPTANCE_0428_2026-11-02.md). An installed 0.120.1 Provider already exposed `containarium snapshot create/list/delete/rollback` in its **CLI**, although authenticated MCP exposed only 58 tools without snapshot/clone/backup methods. The tested pool was `driver=dir`, so no ZFS snapshot/rollback was attempted. The same Provider really auto-stopped a task-owned guest with a 1-minute idle timer **after a manually observed test-only stop/start stamped LastStartedAt**, accounting for the 2x-threshold anti-thrash window. A newly created guest with neither last-start nor traffic signal did not sleep, even after 3 minutes: specifically retest cold-create handling in 0.126.0, never auto-restart production as a workaround. No HTTP request-wake was possible because routes were empty and app hosting/Caddy absent. D4 positive user-service behavior was independently fixed/accepted in BoxWeave v0.42.8, not gated on the upstream version.
+
 [Back to roadmap master](FEATURE_ROADMAP_MASTER.md)

@@ -78,3 +78,8 @@ Historical source-only/unfinished-streamed descriptions above are dated reports.
 ## Next Agent: Containarium v0.126.0 and Box environment E2/E3/E4
 
 Use [exact-tag upgrade and E2/E3/E4 handoff](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md) before any attempted Provider upgrade. Snapshot ContainerService REST/gRPC and CLI, whole-box encrypted backup restore and same-Box rollback have different contracts; snapshot clone remains proposed. Source discovery is not installed acceptance. This plan does **not** authorize upgrading the owner's existing Provider, changing public routing/credentials, or enabling new E2/E3/E4 mutations. The prior installed D4 and auto-sleep limitations are tracked separately in [verification queue](../verification/REMEDIATION_TEST_QUEUE.md).
+
+
+## New accepted D4 / actual upstream idle-stop checkpoint — 2026-11-02
+
+The [v0.42.8 installed residual BLOCKED reacceptance](../verification/BLOCKED_REACCEPTANCE_0428_2026-11-02.md) proves real guest user-systemd service active/inactive/fail-closed with the D4 SSH runtime-dir fix, and a live auto-idle-stop on Provider 0.120.1 **after test-only restart stamped last-start time**. HTTP wake with actual route remains U; E2/E3/E4 remain a future isolated 0.126.0 upgrade/integration project. [Detailed next Agent plan](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md). No production Provider upgrade, stable pin change or leftover test Box.

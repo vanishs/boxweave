@@ -249,3 +249,8 @@ runtime validation remain unverified, not silently accepted.
 ### v0.28.0 direct installed upgrade checkpoint (2026-11-02)
 
 [Second independent test Box v0.28.0 -> v0.42.6 acceptance](../verification/BROAD_REACCEPTANCE_0426_2026-11-02.md): pinned fresh older install and direct current upgrade both exit 0, authenticated doctor 10/10 both sides, real SQLite schema 12 -> 13 with old admin credential record unchanged, old v12 backups retained. This is live evidence, not a fixture. v0.26.x, fleet rollback/downgrade and unrelated Provider/Agent blockers remain U; successful task-owned outer Box cleaned up.
+
+
+## 2026-11-02 v0.42.8 corrective acceptance and future Provider gate
+
+The [isolated installed v0.42.8 D4 + upstream idle-stop acceptance](../verification/BLOCKED_REACCEPTANCE_0428_2026-11-02.md) supersedes the old *D4 positive blocked* and *upstream has no sleep implementation* assumptions: real exact-Box authorized user service active/inactive and bounded log reads passed; the actual Provider 0.120.1 idle-stop ticker stopped a guest once its last-start timestamp was recorded. Newly created cold-Box idle tracking and HTTP route wake remain unaccepted. E2/E3/E4 remain unimplemented at the BoxWeave layer. The [future v0.126.0 upgrade and API/storage handoff](CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md) owns the next gated work; the owner's Provider and default stable pin were not upgraded.
