@@ -83,3 +83,8 @@ Use [exact-tag upgrade and E2/E3/E4 handoff](../design/CONTAINARIUM_0126_UPGRADE
 ## New accepted D4 / actual upstream idle-stop checkpoint — 2026-11-02
 
 The [v0.42.8 installed residual BLOCKED reacceptance](../verification/BLOCKED_REACCEPTANCE_0428_2026-11-02.md) proves real guest user-systemd service active/inactive/fail-closed with the D4 SSH runtime-dir fix, and a live auto-idle-stop on Provider 0.120.1 **after test-only restart stamped last-start time**. HTTP wake with actual route remains U; E2/E3/E4 remain a future isolated 0.126.0 upgrade/integration project. [Detailed next Agent plan](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md). No production Provider upgrade, stable pin change or leftover test Box.
+
+
+## Containarium patched candidate wake/cold idle proof (2026-11-02)
+
+[Full exact-source and isolated live acceptance](../verification/CONTAINARIUM_0126_AUTOSLEEP_WAKE_LIVE_2026-11-02.md): patched upstream v0.126.0 source was compiled and accepted **inside one task-owned nested BoxWeave** with independent client + HTTP target + newly created cold Box. Clock stamp and actual idle-stop without restart PASS; Caddy-swapped HTTP wake first-request **200 + original response in 1.65s** PASS; untrusted direct wake **403** PASS. [Six-file owner-fork commit](https://github.com/vanishs/Containarium/commit/40b9d650584ceef66ea196ec6ee6dd9d88263f2f). Upstream PR creation from this GitHub app returned 403: the owner/authorized app must open PR, await upstream merge/release, then next Agent perform isolated upgrade and release gates. All three inner test guests and the outer lab deleted, historical nine remained; no owner host/provider or BoxWeave version/stable-pin change.

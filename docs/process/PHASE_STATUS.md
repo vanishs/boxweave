@@ -128,3 +128,8 @@ stop/delete and negative confirmation. Source patch uses version
 v0.42.2 and must pass final CI and immutable release. No production
 host was updated. Global R-04 guarded mode, external OAuth/TLS and
 unsupported E2–E4 remain separate U/BLOCKED claims.
+
+
+## 2026-11-02 P-01 candidate-only real acceptance, upstream release still gated
+
+[Two-client wake plus cold-create live report](../verification/CONTAINARIUM_0126_AUTOSLEEP_WAKE_LIVE_2026-11-02.md) demonstrates patched Containarium v0.126.0 **T+L PASS** in an isolated disposable provider: new Box clock was stamped and later automatically stopped, Caddy routed HTTP to wake proxy, and first request returned HTTP 200 + original app body as target restarted. Security negative returned 403. Go focused tests and build exit 0; BoxWeave v0.42.8 Gateway doctor 10/10. The six-file [fork commit](https://github.com/vanishs/Containarium/commit/40b9d650584ceef66ea196ec6ee6dd9d88263f2f) is **not upstream merged or released**: PR creation was forbidden (403). Official Provider upgrade/rollback and external HTTPS remain blocked/unaccepted; BoxWeave version and default stable pin unchanged. All task resources removed, existing nine parent Boxes preserved.
