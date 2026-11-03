@@ -1,0 +1,49 @@
+# ADR-010 (candidate) — API-first internal Containarium control plane, MCP-first Agent access
+
+**Status: PROPOSED / NOT ACCEPTED.** Date: 2026-11-03. This document records a future alternative, not an owner authorization to implement it. Until an explicit decision is recorded here, [ADR-003](0003-transport-and-trust.md) remains the accepted and implemented transport choice. ADR-009 remains the accepted external HTTP MCP/OAuth decision.
+
+**Parent:** [long-term architecture master](../API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). **Implementation plan:** [Provider migration and parity](../API_FIRST_PROVIDER_MIGRATION_PLAN.md). **Observability:** [unified trace evolution](../UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md).
+
+## Context
+
+BoxWeave currently has two different upstream Containarium MCP consumers: its application Provider (typed service workflow through stdio tool calls) and the Agent-facing gateway (upstream MCP tool relay plus BoxWeave-specific protection and tools). Containarium's Protobuf/gRPC REST gateway exposes core management operations, some of which are missing as individually registered MCP tools. Some MCP tools, particularly \`connect(exec)\`, \`push/sync\` and \`code_*\`, also use SSH/local transfer and cannot be replaced by one lifecycle REST request.
+
+The owner asked to consider a hypothetical radical rewrite: no obligation to preserve legacy database/interface compatibility, but preserve ~99% of user-visible capabilities. The previous in-place recommendation to continue upstream MCP-first was reevaluated under that assumption. Actual published releases, live hosts, credentials and third-party clients do not inherit those hypothetical freedoms without a separately approved deployment plan.
+
+## Considered options
+
+1. **Continue platform MCP for all internal calls.** Easiest immediate migration and upstream catalogue reuse; keeps tool schema/text translation and two different operation/diagnostic paths.
+2. **Use Containarium CLI as internal execution API.** Familiar operational surface but subprocess output/privilege/mode ambiguity and some host-local direct Incus actions; not preferred as a management core.
+3. **REST-first management, SSH-first Box executor, BoxWeave-owned MCP outward (preferred candidate).** Structured machine contract and one operation/trace boundary; requires separate SSH implementation and careful gateway feature parity.
+4. **Direct gRPC-first management.** Protobuf-generated types directly, but additional deployed mTLS/server configuration and runtime exposure; evaluate later with evidence.
+5. **Direct Incus/host shell.** Rejected: bypasses upstream ownership, authorization and safety boundaries.
+
+## Proposed decision, if accepted later
+
+- Outbound provider lifecycle, Tenant/Guard, routes, metrics and backup/snapshot operations use a typed Containarium REST adapter verified against the installed Protobuf/grpc-gateway contract.
+- The Agent continues using BoxWeave's own authenticated MCP (SSH stdio / Streamable HTTP OAuth), which becomes a facade over the common Operation Core.
+- Guest execution, files and detached coding runs use an exact Box-scoped SSH Executor; optional \`agent-box\` MCP remains permitted where necessary and independently authorized.
+- A minimal host CLI repairs/diagnoses the installation independently; it cannot be an unrestricted Agent escape hatch.
+- An explicit allowlisted upstream MCP compatibility lane may remain during feature migration, with clear \`not API-only\` status and **no untracked mutation bypass**.
+- A single common operation/identity/claim/receipt/trace contract spans Web, Agent MCP and CLI. D3 continues to diagnose inbound MCP and adds Provider API spans; D4 remains exact-Box preauthorized and bounded.
+- The hypothetical 99% parity goal needs a baseline feature ledger; security invariants are non-negotiable even if a percentage threshold is met.
+
+## Consequences and costs
+
+Advantages: fewer outbound protocol translations, direct typed status/error classification, simpler REST capability checking and improved coherent D1–D4 trace design. Upstream MCP tool renames no longer break the main application path. Management and guest execution failure planes become explicit.
+
+Costs: substantial Agent gateway rewrite, SSH identity and host-key management, optional \`agent-box\` routing, OAuth/MCP feature-parity tests, credential installation changes, API version drift, and possible host API availability/secret-locality issues. REST status does not equal actual business completion; an API response alone is not a daemon-internal trace or a retry grant.
+
+## Acceptance gates before promoting to ACCEPTED
+
+1. A0 complete inventory of current user-reachable app and forwarded upstream MCP capabilities, with immutable version reference and feature-level parity statuses.
+2. A1 read-only authenticated REST proof on the **actual intended Containarium runtime**, including auth/TLS, empty inventory, identity and error/timeout handling.
+3. A validated safe SSH/Box operation plan for \`connect(exec)\`, files, detached runs, missing helpers and Box replacement.
+4. A unified operation-claim model covering **all** Agent/Web mutators with crash/unknown semantics and no blind replay.
+5. D1–D4 correlation/secret-non-disclosure tests, plus operator-approved key custody for backup restore.
+6. Independent isolated-host install/upgrade/rollback plan, no automatic Provider upgrade, and an explicit decision on intentionally unsupported features.
+7. Owner review and explicit adoption; subsequently mark ADR-003 superseded **only for the internal Provider transport portion**, preserving its other identity/release trust guarantees.
+
+## Current disposition
+
+**No change authorized.** All implementation and stable release paths retain their current contracts. Treat this candidate as the future planning option and use the linked child documents for Agent development/acceptance slices.
