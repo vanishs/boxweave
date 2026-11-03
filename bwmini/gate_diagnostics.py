@@ -368,9 +368,22 @@ def project_summary(args, response):
         blocks = response.get("content", [])
         text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict))
         found = re.fullmatch(r"exit_code: (-?\d+)\n\n--- stdout ---\n([\s\S]{0,8192})", text)
-        if not found:
-            return {"state": "not_verified", "code": "PROJECT_READ_FORMAT_UNSUPPORTED"}
-        code, out = int(found[1]), found[2]
+        if found:
+            code, out = int(found[1]), found[2]
+        elif args.get("check") == "logs" and text == "exit_code: 0\n":
+            # Real Provider omits stdout/stderr headings entirely when an
+            # authorized journalctl completes successfully with zero output.
+            # No lines is an observed empty log, not a missing MCP result.
+            code, out = 0, ""
+        else:
+            stderr_only = re.fullmatch(
+                r"exit_code: (-?\d+)\n\n--- stderr ---\n([\s\S]{1,8192})", text)
+            if not stderr_only or int(stderr_only[1]) == 0:
+                return {"state": "not_verified", "code": "PROJECT_READ_FORMAT_UNSUPPORTED"}
+            # Numeric nonzero code is observed; the raw guest error body is
+            # NEVER returned or journalled. In particular, a missing user bus
+            # is not evidence that the requested service is inactive.
+            code, out = int(stderr_only[1]), ""
     if not isinstance(out, str) or len(out.encode("utf-8")) > 8192:
         return {"state": "not_verified", "code": "PROJECT_OUTPUT_LIMIT"}
     # systemctl is-active reports inactive/failed with exit 3 (and unknown

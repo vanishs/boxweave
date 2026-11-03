@@ -225,6 +225,44 @@ class GatewayDiagnosticsTests(unittest.TestCase):
                          {"structuredContent": {"exit_code": 0, "stdout": "x" * 9999}})["state"],
                          "not_verified")
 
+    def test_d4_empty_provider_logs_are_observed_without_raw_output(self):
+        # Real Provider returns only a numeric exit receipt for a successful
+        # journalctl command with zero stdout/stderr. Empty logs are not a
+        # transport/parser failure.
+        args = {"box": "testbox", "check": "logs", "service": "default.target"}
+        reply = {"content": [{"type": "text", "text": "exit_code: 0\n"}]}
+        observed = d.project_summary(args, reply)
+        self.assertEqual(observed["state"], "observed")
+        self.assertEqual(observed["exit_code"], 0)
+        self.assertEqual(observed["sample_log_lines"], 0)
+        self.assertEqual(observed["error_hint_count"], 0)
+        for kind in ("service", "processes", "ports"):
+            with self.subTest(kind=kind):
+                self.assertEqual(d.project_summary({"check": kind}, reply)["state"],
+                                 "not_verified")
+        for envelope in ("exit_code: 0\nnot-a-complete-reply",
+                         "exit_code: 0\n\n--- stderr ---\n"):
+            with self.subTest(envelope=envelope):
+                self.assertEqual(d.project_summary(args, {"content": [
+                    {"type": "text", "text": envelope}]} )["state"],
+                    "not_verified")
+
+    def test_d4_stderr_only_failure_is_classified_without_exposing_stderr(self):
+        # User systemd bus may not exist on freshly created guest; Provider
+        # returns this genuine nonzero exit in a stderr-only envelope.
+        args = {"check": "service", "service": "default.target"}
+        reply = {"content": [{"type": "text", "text":
+            "exit_code: 1\n\n--- stderr ---\nSECRET: No medium found\n"}]}
+        observed = d.project_summary(args, reply)
+        self.assertEqual(observed["state"], "not_verified")
+        self.assertEqual(observed["code"], "PROJECT_COMMAND_EXIT_NONZERO")
+        self.assertEqual(observed["exit_code"], 1)
+        self.assertNotIn("SECRET", json.dumps(observed))
+        malformed = {"content": [{"type": "text", "text":
+            "exit_code: 1\n\n--- stderr ---\n"}]}
+        self.assertEqual(d.project_summary(args, malformed)["code"],
+                         "PROJECT_READ_FORMAT_UNSUPPORTED")
+
     def test_d4_service_inactive_and_failed_are_valid_systemctl_observations(self):
         args = {"box": "testbox", "check": "service", "service": "app.service"}
         for service_state, code in (("inactive", 3), ("failed", 3), ("unknown", 4)):
