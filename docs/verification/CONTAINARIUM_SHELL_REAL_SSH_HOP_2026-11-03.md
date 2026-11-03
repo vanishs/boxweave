@@ -35,6 +35,10 @@ The Containarium v0.120.1 host-account creation path wrote this **per-account su
 
 This exposes a **broad host Incus command capability** and needs an upstream account/authorization review before declaring tenant-isolated host-hop access. We did **not** demonstrate a cross-tenant exploit, create a second guest or bypass the host login shell. A normal successful SSH forward does **not** prove that all alternate execution paths are denied. Do not respond by adding global Incus sudoers in BoxWeave. Record scoped-broker / least-privilege and audit requirements separately.
 
+## Separate interactive PTY coverage — not accepted
+
+After the successful non-interactive SSH tests and credential cleanup, a follow-up interactive PTY check was considered. Its prerequisite of re-authorizing a new short-lived test SSH credential was **blocked by the active tool safety check** before a PTY SSH session was initiated. No bypass was attempted and **no interactive PTY result is claimed**. The outer test Box was stopped again. Interactive login remains **U**, separate from the PASS evidence for real SSH command forwarding and wake.
+
 ## Cleanup and limits
 
 - After the live tests, the injected `authorized_keys` was removed after matching it to the temporary test public key; both test key files and known-host test files were removed. The disposable outer Box `bwhop-1103-e2e-container` was gracefully **stopped**, not destroyed, preserving the nested filesystem for authorized repro.
