@@ -107,3 +107,8 @@ binaries are changed. Details:
 [verification](../verification/CONTAINARIUM_SHELL_PACKAGE_0429.md) and
 [runbook](CONTAINARIUM_SHELL_RECOVERY.md).
 The stable installer pin remains v0.42.1 pending separate promotion.
+
+
+## 2026-11-03 UP-SSH-01 v0.42.10 candidate handoff
+
+[Decision](../design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md) and [verification](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md). SOURCE IMPLEMENTED, 661 unit tests PASS and limited root-box download PASS. No new Containarium release integration, no host changes, and no stable installer pin change. Await PR CI, immutable release and separate live host-hop/old installed upgrade acceptance.
