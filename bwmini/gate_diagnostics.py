@@ -42,16 +42,19 @@ LOCAL_DENIAL_CODES = {
                                    "TASK_NOT_FOUND")),
     "boxweave_task_list": frozenset(("TASK_TRACKING_UNAVAILABLE", "TASK_ARGUMENT_INVALID")),
     "boxweave_info": frozenset(("INFO_TOPIC_INVALID",)),
+    "restore_box_backup": frozenset(("RESTORE_APPROVAL_REQUIRED",
+                                    "RESTORE_KEY_OR_POLICY_UNSAFE",
+                                    "RESTORE_ARGUMENT_INVALID")),
 }
 
 
 
 DIAG_TOOL = {
     "name": "boxweave_diagnose",
-    "description": "Read classified bounded operator-scoped gateway or application diagnostics. Gateway: source=gateway plus recent (1..25) or trace_id. App: source=app plus trace_id or operation_kind and operation_id. Does not repair, replay writes, return raw logs, or grant new authority. Use after errors or uncertain outcomes.",
+    "description": "Read bounded classified gateway/app diagnostics or an on-demand read-only Provider MCP subset schema probe. source=compat takes no other args; it returns a non-secret catalog fingerprint and changed tool/field names, not runtime proof. Never replays mutations, returns raw logs or grants permissions.",
     "inputSchema": {
         "type": "object", "additionalProperties": False,
-        "properties": {"source": {"type": "string", "enum": ["gateway", "app"]},
+        "properties": {"source": {"type": "string", "enum": ["gateway", "app", "compat"]},
                        "recent": {"type": "integer", "minimum": 1, "maximum": 25},
                        "trace_id": {"type": "string"},
                        "operation_kind": {"type": "string", "enum": ["hello", "environment", "access"]},

@@ -147,3 +147,7 @@ UP-SSH-01 is source implemented in v0.42.10 candidate, test 661/661 and bounded 
 ## 2026-11-03 UP-SSH-01 live SSH forwarding checkpoint
 
 **L PASS bounded:** In newly created and stopped test Box `bwhop-1103-e2e-container`, published BoxWeave v0.42.10 + local Containarium v0.120.1 successfully forwarded a real SSH command through `containarium-shell` into `hopprobe-container`; STOPPED SSH wake and denied unapproved key also passed. [Exact evidence](../verification/CONTAINARIUM_SHELL_REAL_SSH_HOP_2026-11-03.md). **U:** external sshpiper ingress, cross-tenant privilege denial. **Security review OPEN:** Containarium-generated per-account sudoers allowed unrestricted root `/usr/bin/incus`. No default stable release pin change or upstream Provider upgrade.
+
+## 2026-11-03 P1 compat diagnosis / P2 local age-key guard implementation
+
+**Source implemented; release/live gates pending:** [minimal design](../design/MCP_COMPAT_AND_LOCAL_RESTORE_GUARD_04211.md) · [execution evidence](../verification/MCP_COMPAT_RESTORE_04211_2026-11-03.md). Reuses the D3 MCP gateway diagnosis, bounded tool-list fingerprint and root-owned exact local restore approvals; no polling/KMS/new Containarium integration. Upstream stable contract and whole-box backup create MCP remain OPEN. Default stable selector 0.42.1 unchanged.

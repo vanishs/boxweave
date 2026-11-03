@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.42.10. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
+**Current source version: 0.42.11. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
 
 Optional multi-Agent shared coordination requires separate reviewed policy/SQLite provisioning and opt-in. Snapshot/restore/clone writes remain unsupported without verified Provider contracts. Source CI, published installer version, running service version and production-host acceptance are distinct. Historical rollout and unresolved risks are retained in [the risk register](docs/verification/OPEN_RISKS.md).
 
@@ -22,6 +22,8 @@ To install or update to an exact published version, including a historical relea
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.42.1
 ```
+
+**MCP compatibility diagnosis and protected local restore (v0.42.11 candidate):** After suspected Containarium MCP schema drift, call `boxweave_diagnose` with `source=compat` for a bounded, read-only comparison of the small set of BoxWeave-dependent upstream tool contracts; an unknown result is not an assurance of compatibility. Agent-facing `restore_box_backup` is default-denied: an operator must preapprove the exact source Box, existing backup ID, target and private key alias through `/etc/boxweave/restore-policy.json`. A protected key file remains on the same MCP host under `.restore-keys`; the gateway does not read private-key bytes and cannot accept an arbitrary file path. An explicit backup-ID confirmation is needed and `force=true` is refused. This adds no KMS or Provider upgrade. See the [design and operator procedure](docs/design/MCP_COMPAT_AND_LOCAL_RESTORE_GUARD_04211.md). Full backup creation over MCP is still an **upstream** P2 follow-up.
 
 **Containarium host-hop SSH wrapper (v0.42.10):** BoxWeave no longer
 bundles `containarium-shell` in Release assets. On a BoxWeave-managed local

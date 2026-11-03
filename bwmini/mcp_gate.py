@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -18,10 +18,12 @@ except ImportError:
     import gateway_tasks
     import coordination_bridge
     import gateway_protection
+    import mcp_compat
+    import restore_guard
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.42.10"
+SERVER_INFO_VERSION = "0.42.11"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -44,6 +46,8 @@ SERVER_INSTRUCTIONS = (
     "inspect real state before retrying, never blindly replay mutations. "
     "On errors, use boxweave_diagnose to inspect classified evidence; use "
     "boxweave_project_diagnose only within the server-authorized Box scope. "
+    "Use boxweave_diagnose(source=compat) to read a narrow, on-demand "
+    "Provider MCP schema check when compatibility is suspected. "
     "A diagnosis is not a verified cause or permission to repair. For ordinary "
     "users explain/prepare a private issue draft; for authorized developers "
     "investigate source and tests. Never upload reports or open an external "
@@ -86,7 +90,8 @@ INFO_TOPICS = {
     "diagnostics": {
         "gateway": "boxweave_diagnose reads bounded gateway and app evidence; gateway capture defaults to 7 days/50 MiB and is configurable by the host operator.",
         "projects": "boxweave_project_diagnose is read-only and defaults deny until root-owned exact Box incarnation and check allowlist is installed.",
-        "agent_workflow": "On failure or unknown result diagnose first, never blindly retry writes. For disclosure draft privately, user reviews sensitive data, then separately approves final external submission."
+        "agent_workflow": "On failure or unknown result diagnose first, never blindly retry writes. For suspected tool-schema drift use boxweave_diagnose(source=compat), an on-demand read-only subset check.",
+        "restore": "Whole-Box restore through this Agent gateway is default-denied; the host operator preapproves exact source backup / target / local private key alias. No arbitrary key paths or overwrite."
     },
     "security": {
         "authority": "Single trusted-operator MCP authority, optionally restricted by a root-owned host-wide tool allowlist; not per-Agent/per-Box RBAC.",
@@ -163,6 +168,23 @@ LEASE_TOOL = {
         "required":["action","box"]},
 }
 
+def guard_restore_catalog(message):
+    """Rewrite or omit the privileged upstream tool on EVERY catalog page."""
+    result = message.get("result")
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        return message
+    reviewed = []
+    for tool in result["tools"]:
+        if isinstance(tool, dict) and tool.get("name") == "restore_box_backup":
+            adapted = restore_guard.catalog_tool(tool)
+            if adapted is not None:
+                reviewed.append(adapted)
+        else:
+            reviewed.append(tool)
+    result["tools"] = reviewed
+    return message
+
+
 def catalog(message):
     if "result" not in message: return message
     for tool in message["result"].get("tools", []):
@@ -204,6 +226,7 @@ def catalog(message):
                 "explicit authorization and verify target; after a timeout "
                 "inspect state instead of blindly retrying."
             )
+    message = guard_restore_catalog(message)
     extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
     message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
     return message
@@ -236,6 +259,7 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_SELECTOR_INVALID", "PROJECT_POLICY_INVALID",
     "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
     "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
+    "RESTORE_APPROVAL_REQUIRED", "RESTORE_KEY_OR_POLICY_UNSAFE", "RESTORE_ARGUMENT_INVALID",
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
     "TRUST_NOT_READY", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
@@ -434,6 +458,7 @@ def main():
         result = reply(internal, False)["result"]
         if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
         return json.loads("".join(b["text"] for b in result["content"] if b.get("type")=="text"))["container"]
+    upstream_mcp_version = "not_verified"
     try:
         for line in sys.stdin:
             if len(line) > 65536: raise ValueError("REQUEST_LIMIT")
@@ -441,7 +466,10 @@ def main():
             if request.get("method") == "tools/list":
                 send(request)
                 message = reply(request["id"], False)
-                if not request.get("params", {}).get("cursor"): message = catalog(message)
+                if not request.get("params", {}).get("cursor"):
+                    message = catalog(message)
+                else:
+                    message = guard_restore_catalog(message)
                 message = filter_tools(message, permitted)
                 if gateway_protection.enabled():
                     message = gateway_protection.filter_catalog(message)
@@ -466,6 +494,17 @@ def main():
                             value = gd.query_gateway(args)
                         elif args.get("source") == "app":
                             value = gd.query_app(args)
+                        elif args == {"source": "compat"}:
+                            try:
+                                snapshot = mcp_compat.read_tools(send, reply)
+                                value = mcp_compat.analyze(snapshot, allowed=permitted)
+                                value["upstream_version"] = upstream_mcp_version
+                                value["version_source"] = (
+                                    "initialize.serverInfo.version"
+                                    if upstream_mcp_version != "not_verified"
+                                    else "not_verified")
+                            except (ValueError, KeyError, TypeError, OSError):
+                                value = mcp_compat.unavailable()
                         else:
                             raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")
                         emit_result(request["id"], value)
@@ -487,6 +526,11 @@ def main():
                         value.update(source="project", box=args["box"])
                         emit_result(request["id"], value)
                         continue
+                    if params.get("name") == "restore_box_backup":
+                        # An Agent cannot supply an arbitrary host file path.
+                        # The root-approved exact backup/target/key must match.
+                        # No upstream call takes place until the preflight passes.
+                        params["arguments"] = restore_guard.approve(args)
                     if params.get("name") == "boxweave_info":
                         value = boxweave_info(args)
                         print(json.dumps({"jsonrpc":"2.0","id":request["id"],
@@ -706,6 +750,12 @@ def main():
                     message = reply(request["id"], False)
                     result = message.get("result")
                     if isinstance(result, dict):
+                        original = result.get("serverInfo")
+                        version = original.get("version") if isinstance(original, dict) else None
+                        if isinstance(version, str) and re.fullmatch(
+                                r"v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?",
+                                version) and len(version) <= 64:
+                            upstream_mcp_version = version
                         info = result.setdefault("serverInfo", {})
                         info.update({"name":"boxweave","version":SERVER_INFO_VERSION,
                                      "description":SERVER_DESCRIPTION})
