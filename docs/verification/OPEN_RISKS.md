@@ -236,3 +236,13 @@ No historical risk is globally closed by this scoped release test.
 ### v0.28.0 installed direct migration reduction (2026-11-02)
 
 [Live second Box upgrade addendum](BROAD_REACCEPTANCE_0426_2026-11-02.md) closes the missing **v0.28.0 -> v0.42.6 fresh-test installed upgrade** with exit-0 pinned installers, doctor 10/10 before/after, schema-12 actual DB to schema-13 runtime and preserved original admin password record. Stored v12 files are intact backups. v0.26.x direct upgrades, multi-tenant production data migration and actual downgrade/rollback remain U. The successful second Box was stopped/deleted, and original seven plus separately stopped incident Box remain.
+
+
+## v0.42.7 independent test and D4 empty-log format correction (2026-11-02)
+
+[Exact real-Box discovery and source fix](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md). v0.42.6 D4 wrongly classifies exact successful empty Provider journal `exit_code: 0\n` and genuine stderr-only service nonzero as unsupported wire format. v0.42.7 source accepts only exact successful empty logs and classified nonzero stderr-only without exposing raw guest stderr, preserving fail-closed under missing user bus. CI/installed pending at source checkpoint. Simulated two-client R-02/R-04/CAS outcomes PASS within tested protected Gateway routes, but global multi-client protections and actual Web/HTTP OAuth do not follow. Two concurrent Provider creates succeeded on this rerun; prior HTTP-500 + created cases remain unresolved upstream intermittent risk, not safe to auto-retry.
+
+
+### v0.42.7 bounded D4 live closure and residual risks (2026-11-02)
+
+[Independent v0.42.7 live upgrade and full risk/acceptance ledger](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md). The v0.42.6 empty successful journal/provider result and stderr-only failed user-service format defect is **closed** at source and installed Gateway after pinned v0.42.7 upgrade, with 10/10 doctor, no raw stderr, unchanged D4 root allowlist/security and task-owned cleanup. Real guest user systemd service positive remains blocked by absent user manager/lingering denied in this lab; E2-E4 still lack authenticated upstream snapshot/restore/clone/rekey contracts. HTTP OAuth desktop, real worker cross-transport conflict, complete rollback, sleep/wake and model inference stay U. Prior intermittent Provider HTTP-500 with successfully created Boxes remains an OPEN upstream async race: new two-client run succeeded but does not prove root cause repaired.

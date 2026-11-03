@@ -914,3 +914,13 @@ remain U/BLOCKED; source/default/installed identities are distinct.
 ### v0.28.0 direct-to-v0.42.6 upgrade gate: LIVE PASS (2026-11-02)
 
 [Exact second disposable Box receipts and cleanup](BROAD_REACCEPTANCE_0426_2026-11-02.md): pinned authentic v0.28.0 installer exit 0 and doctor 10/10, old live database schema 12; pinned v0.42.6 in-place upgrade installer exit 0 and doctor 10/10, actual live DB schema 13 with environment_captures and preexisting admin record preserved. Installer retained both source-schema-12 backups. Outer old-upgrade test Box stopped and deleted independently, leaving the seven original outer Boxes plus previously stopped incident Box. This supersedes v0.28.0 direct upgrade L=U only; v0.26.x, rollback/downgrade and external-client gaps remain open.
+
+
+## Independent residual reacceptance and v0.42.7 D4 source repair (2026-11-02)
+
+[Detailed one-row-per-feature ledger](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md): new outer v0.42.6 install and nested selftest exit 0; 2 simulated Gateway clients same-key R-02 executed guest once, protected R-04 lease blocked same Box and allowed different Box, CAS valid/stale terminal results passed; D4 bounded processes/ports passed. Real allowed empty journal returned bare `exit_code: 0\n` but D4 incorrectly emitted PROJECT_READ_FORMAT_UNSUPPORTED; stderr-only service failure similarly misclassified. Source v0.42.7 correction plus 647/647 Python, 4 architecture and 124 selected combined tests PASS. Exact pinned v0.42.7 installed Gateway retest/CI still required for L; no operator host/policy changes. Two repeated simultaneous Provider creates both succeeded; older HTTP-500 with created resources remains intermittent OPEN. Preserve U/BLOCKED for external client, mid-write crash, full Web parity, E2–E4 and inference.
+
+
+### v0.42.7 D4 source+installed real acceptance closure (2026-11-02)
+
+[Exact host-in-Box, source CI, differential D4 test, per-item statuses and cleanup](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md): v0.42.7 immutable release at a626f53ad5e189ab7350216e639df4ad6d407cb0 and CI 41562454737 verify/publish PASS; independent pinned 0.42.6->0.42.7 upgrade exit 0; doctor --mcp 10/10 PASS; installed D4 empty logs L PASS with observed 0 lines; real stderr-only user-service error returns not_verified/PROJECT_COMMAND_EXIT_NONZERO with no raw data. D3 fixed codes, default-deny service, prior R-02/R-04/CAS positives and 58-tool upstream capability probes recorded. Cleanup of task-owned nested and outer Box independently observed. Remaining global/external OAuth/Provider E2–E4/real inference and intermittent asynchronous Provider create issue remain U/BLOCKED/OPEN, not silently accepted; default stable pin 0.42.1.

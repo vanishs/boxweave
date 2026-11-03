@@ -135,3 +135,13 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ### Direct v0.28.0 -> v0.42.6 installed migration closure (2026-11-02)
 
 [Addendum to complete installed reacceptance](BROAD_REACCEPTANCE_0426_2026-11-02.md): an independently seeded v0.28.0 Box installed and upgraded directly to v0.42.6 with **both installer exit 0, both doctor --mcp 10/10 PASS**, exact source commits, actual live app SQLite **schema 12 -> 13** and original admin credential hash preserved without value disclosure. Two schema-12 backup files remain intact; they are not the live DB. Task-owned Box deleted after PASS; seven historical Boxes and separate stopped incident Box unchanged. v0.26.x direct migration and production downgrade/rollback remain U.
+
+
+## Independent multi-client and D4 parser reacceptance — v0.42.7 candidate (2026-11-02)
+
+[All remaining items and exact evidence](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md): 647 Python source regressions PASS; independent installed v0.42.6 Box test had R-02 two-client one-dispatch and reconnect PASS, R-04 protected lease and same-Box denial/different-Box success PASS, CAS successful/stale PASS. D4 real process/ports PASS; empty-journal bare Provider receipt and stderr-only service exit triggered a new parser ISSUE. Source v0.42.7 fixes bounded empty logs and classifies known numeric failure without raw stderr. Installed v0.42.7 L/U until a pinned upgrade. External OAuth/Web worker races, E2–E4, live model and intermittent upstream create errors stay partial/U/BLOCKED.
+
+
+### v0.42.7 D4 real installed parser closure (2026-11-02)
+
+[Full residual ledger and exact live v0.42.7 upgrade](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md): immutable v0.42.7 CI verify/publish PASS; fresh v0.42.6 -> v0.42.7 installed upgrade exit 0, doctor --mcp 10/10 PASS, real D4 zero-line logs now observed/0 and stderr-only nonzero is not_verified/PROJECT_COMMAND_EXIT_NONZERO without raw stderr. Root allowlist negative, process/ports and D3 invalid-path still pass; 3 nested test Boxes and outer test Box deleted, protected-policy marker restored absent. Global Web/SSH/HTTP cross-transport R-04, E2–E4, external OAuth, positive guest user service and model inference remain PARTIAL/U/BLOCKED.
