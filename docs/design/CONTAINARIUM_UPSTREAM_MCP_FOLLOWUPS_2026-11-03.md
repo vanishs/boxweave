@@ -67,3 +67,9 @@ The [v0.42.10 verification record](../verification/CONTAINARIUM_SHELL_PINNED_FET
 - **Scope:** owner decision is now followed by an isolated v0.42.10 source candidate. Release publication/installed acceptance remain separate. No upstream PR/comment, Containarium upgrade, or owner-host action was performed. Existing [shell runbook](../process/CONTAINARIUM_SHELL_RECOVERY.md) remains historical/operator recovery evidence, not a future recommendation to vendor the wrapper.
 
 [Back to feature roadmap master](FEATURE_ROADMAP_MASTER.md)
+
+## 2026-11-03 shipment update — UP-SSH-01
+
+**SHIPPED: BoxWeave v0.42.10**, merged from [PR #52](https://github.com/vanishs/boxweave/pull/52) at `6ac4cb6986fe76a810321538e4af9fc3a1bfb602`; [GitHub Release](https://github.com/vanishs/boxweave/releases/tag/v0.42.10) contains no vendored shell. [Post-release installed acceptance](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md) proves official v0.42.9 fresh install followed by v0.42.10 upgrade and `boxweave doctor` 8 required PASS in a disposable Box, retaining original shell and Containarium `0.120.1`. **Real host-hop SSH login/wake is not yet accepted**. Historical design-only and pre-release checkpoints above remain dated evidence, not the current delivery status.
+
+The other priorities remain distinct **upstream requests**, not delivered as part of this release: **UP-MCP-01 P1 stable MCP contract**, **UP-MCP-02 P2 whole-Box MCP backup create**, and **UP-MCP-03 P2 host-owned `age` restore keys**. No v0.127+ Containarium integration or compatibility promise. Default stable pin remains `0.42.1` pending its own promotion gate.

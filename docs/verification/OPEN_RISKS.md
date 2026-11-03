@@ -290,3 +290,7 @@ Providers, sshd or sudoers. See
 ### 2026-11-03 UP-SSH-01 source implementation residual gates
 
 [v0.42.10 evidence](CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md) supersedes design-only status: pinned upstream main and v0.120.1 wrapper bytes are equal; 661 Python tests and disposable-Box root sandbox PASS. Still unverified: actual host-hop login/wake, cross-target denial, installed old->new full upgrade, published Release asset integrity, stable pin promotion. No host or Containarium version change authorized.
+
+### 2026-11-03 UP-SSH-01 released: installed upgrade closed, host-hop still unverified
+
+[Final release/live upgrade receipt](CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md) supersedes the older source-only status for UP-SSH-01. v0.42.10 was published with exact source `6ac4cb6986fe76a810321538e4af9fc3a1bfb602`, no bundled shell asset. Official `v0.42.9` clean installed followed by `v0.42.10` actual upgrade in a dedicated disposable Box both `ready`; `boxweave doctor` 8/8 required PASS, original managed wrapper preserved, local Containarium **0.120.1** unchanged. **CLOSED within scoped isolated Box:** old->new installed upgrade, published Release existence and manifest/source SHA checks. **OPEN:** actual host-hop SSH/sshpiper/wake and cross-tenant denial, MCP authenticated read beyond doctor scope, fleet rollback, external Provider upgrade compatibility and default stable pin promotion. Unqualified install still selects `0.42.1`, not `0.42.10`.
