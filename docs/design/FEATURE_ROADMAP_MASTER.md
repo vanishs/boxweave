@@ -17,6 +17,13 @@ risk. Protected R-04 coordination remains opt-in/not installed-accepted
 and E2–E4 remain upstream-blocked; stable promotion is **not** a claim
 of complete roadmap implementation.
 
+
+## Long-term architecture alternative — API-first internal Provider (2026-11-03)
+
+**DESIGN CANDIDATE, NOT APPROVED OR IMPLEMENTED.** The owner asked to evaluate a hypothetical full redesign without legacy data/interface compatibility obligations, targeting preservation of approximately 99% of existing *user-visible* functionality. The resulting preferred **candidate** is **BoxWeave MCP outward / Containarium REST API inward / independent Box SSH Executor / host CLI for maintenance**, with an explicit guarded upstream MCP compatibility lane during transition. This does **not** change the accepted [ADR-003](ADR/0003-transport-and-trust.md), the installed Provider pin or the current stable release. The 99% target is not measured and does not relax security/recovery invariants.
+
+Read [API-first long-term architecture master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) for boundaries and decision gates; [Provider migration and Agent acceptance plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) for the per-feature mapping, seven exceptions, implementation difficulty and phases; [unified trace/D1–D4 diagnostics evolution](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) for logging and observability; and [candidate ADR-010](ADR/0010-api-first-control-plane-candidate.md) for rationale and explicit adoption conditions. These are **future studies only**, not new requirements or authorization to start migrations.
+
 ## 1. How to read this roadmap
 
 - **DESIGN — owner-selected:** behavior and scope discussed/selected; implementation is not yet complete or authorized here.
