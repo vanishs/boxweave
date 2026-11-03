@@ -76,8 +76,15 @@ def observed_exit(message):
         return structured["exit_code"]
     text="\n".join(item.get("text","") for item in result.get("content",[])
                    if isinstance(item,dict) and isinstance(item.get("text"),str))
-    m=re.match(r"\Aexit_code: (-?\d+)\n\n--- stdout ---\n",text)
-    if m and len(text)<=2097152:
+    if len(text)>2097152:
+        raise TaskFault("TASK_RESULT_UNVERIFIED")
+    # Real Provider responses without output contain only "exit_code: N\n".
+    # Match the entire bare response; never infer completion from a prefix.
+    bare=re.fullmatch(r"exit_code: (-?[0-9]+)\n",text)
+    if bare:
+        return int(bare[1])
+    m=re.match(r"\Aexit_code: (-?[0-9]+)\n\n--- stdout ---\n",text)
+    if m:
         return int(m[1])
     raise TaskFault("TASK_RESULT_UNVERIFIED")
 

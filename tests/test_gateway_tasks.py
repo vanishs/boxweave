@@ -112,6 +112,20 @@ class TrackedTaskTests(unittest.TestCase):
                 tasks.observed_exit(payload)
         self.assertEqual(tasks.observed_exit({"result":{"structuredContent":{"exit_code":7}}}),7)
 
+    def test_real_provider_empty_output_exit_is_authoritative(self):
+        for code in (0, 1, 7, -1):
+            self.assertEqual(tasks.observed_exit({"result": {
+                "content": [{"type": "text", "text": f"exit_code: {code}\n"}]}}), code)
+        for raw in ("exit_code: 0", "exit_code: 0\nSECRET",
+                    "exit_code: 0\n\n", "exit_code: 0\n\n--- stderr ---\n",
+                    "prefix exit_code: 0\n", "exit_code: +0\n"):
+            with self.subTest(raw=raw), self.assertRaisesRegex(
+                    tasks.TaskFault, "TASK_RESULT_UNVERIFIED"):
+                tasks.observed_exit({"result": {"content": [
+                    {"type": "text", "text": raw}]}})
+        self.assertEqual(tasks.observed_exit({"result": {"content": [
+            {"type": "text", "text": "exit_code: 2\n\n--- stdout ---\noutput\n"}]}}), 2)
+
     def test_bounded_capacity_and_selector(self):
         with patch.object(tasks,"TASK_LIMIT",0):
             with self.assertRaisesRegex(tasks.TaskFault,"TASK_CAPACITY_EXCEEDED"):
