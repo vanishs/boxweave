@@ -151,3 +151,7 @@ UP-SSH-01 is source implemented in v0.42.10 candidate, test 661/661 and bounded 
 ## 2026-11-03 P1 compat diagnosis / P2 local age-key guard implementation
 
 **Source implemented; release/live gates pending:** [minimal design](../design/MCP_COMPAT_AND_LOCAL_RESTORE_GUARD_04211.md) · [execution evidence](../verification/MCP_COMPAT_RESTORE_04211_2026-11-03.md). Reuses the D3 MCP gateway diagnosis, bounded tool-list fingerprint and root-owned exact local restore approvals; no polling/KMS/new Containarium integration. Upstream stable contract and whole-box backup create MCP remain OPEN. Default stable selector 0.42.1 unchanged.
+
+## 2026-11-03 v0.42.11 publication and installed acceptance
+
+PR #55 merged to 4f5ffe7f; main CI/publish SUCCESS; Release v0.42.11 published. Separate fresh isolated Box upgraded from v0.42.10 to official v0.42.11, phase=ready, doctor 8/8 required PASS, Containarium still v0.120.1. Real service-account stdio MCP source=compat matched all five monitored input schemas and unapproved restore was denied. **LIMIT:** this pinned Provider's real tools/list did **not** advertise restore_box_backup; approved actual encrypted whole-Box restoration remains OPEN. Stable selector stays v0.42.1. See [live evidence](../verification/MCP_COMPAT_RESTORE_04211_2026-11-03.md).
