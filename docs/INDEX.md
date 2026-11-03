@@ -5,6 +5,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 | Find | Authoritative route |
 | --- | --- |
 | Upstream MCP priorities and future host-hop packaging | [2026-11-03 owner decisions](design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md): stable MCP subset P1, whole-Box backup MCP P2, host-held age identity P2, Option A for `containarium-shell`: unbundle from Release, auto-fetch verified upstream dependency on managed local Providers, opt-in only on external Providers (design only) |
+| Real SSH forwarding/wake via containarium-shell | [2026-11-03 real SSH evidence](verification/CONTAINARIUM_SHELL_REAL_SSH_HOP_2026-11-03.md): command hop, stopped wake, unapproved-key denial **PASS**; host Incus sudo scope and sshpiper/cross-tenant checks **OPEN** |
 | Upstream host-hop pinned fetch source verification | [v0.42.10 isolated tests and open installed gates](verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md): 661 Python tests, root-sandbox network/download checks, no new Containarium binary |
 | Current and candidate feature roadmap | [Global feature roadmap](design/FEATURE_ROADMAP_MASTER.md): selected designs, historic E0-E4 proposals, deferred candidates, priority/dependencies and child backlinks |
 | Future Agent upstream integration handoff | [Containarium v0.126.0 upgrade and E2/E3/E4 gates](design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md): pin, isolated upgrade, authenticated API mapping, snapshot/backup/clone boundaries, sleep/wake verification |

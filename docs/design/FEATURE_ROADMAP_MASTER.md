@@ -273,3 +273,8 @@ The selected **Option A** is source-implemented: future BoxWeave Release manifes
 ## 2026-11-03 shipped UP-SSH-01 v0.42.10 post-release checkpoint
 
 [Owner-selected upstream dependency retrieval](CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md) **SHIPPED** in [BoxWeave v0.42.10](https://github.com/vanishs/boxweave/releases/tag/v0.42.10); [PR #52](https://github.com/vanishs/boxweave/pull/52) and main CI passed. Real disposable Box published-v0.42.9 fresh install and published-v0.42.10 upgrade both reached `ready`; `boxweave doctor` 8/8 required PASS, existing wrapper unchanged, local Containarium remained **0.120.1**. [Post-release evidence](../verification/CONTAINARIUM_SHELL_PINNED_FETCH_04210_2026-11-03.md). The actual host-hop SSH/wake/authorization lane is still **U** and default stable pin remains **0.42.1**. Upstream contract P1, backup parity P2 and host-owned age identity P2 remain future upstream decisions, not part of this shipped slice.
+
+
+## 2026-11-03 UP-SSH-01 real SSH hop follow-up
+
+[Live SSH acceptance in a new disposable Box](../verification/CONTAINARIUM_SHELL_REAL_SSH_HOP_2026-11-03.md) **PASS** for sshd→`containarium-shell`→nested guest command, host-IP SSH, STOPPED→RUNNING wake and invalid-key rejection with published BoxWeave v0.42.10 / pinned Containarium v0.120.1. **Remaining external dependencies:** remote sshpiper ingress and cross-target negative tests. **Security risk:** upstream host user has unrestricted passwordless `/usr/bin/incus` sudo; this is **not** tenant-isolation acceptance. Retain original P1 MCP contract / P2 backup parity / P2 host-held age key planning and do not mix this evidence with a new Containarium release upgrade. [Child owner decisions](CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md).

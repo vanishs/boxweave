@@ -61,3 +61,8 @@ Current source/fixture evidence does not justify changing the operator's Contain
 - **What remains unaccepted:** actual real host-hop SSH session and wake-on-SSH, sshpiper, cross-tenant negative authorization, additional Provider-version compatibility, offline real full application bootstrap with missing optional wrapper, and default stable-channel promotion. `PUBLISHED_RELEASE` deliberately remains `0.42.1`, so the unqualified default installer does **not** yet select `0.42.10`. The versioned `--version 0.42.10` route is fully published and was actually used.
 
 **Resource policy:** the disposable Box is the only nested installation/test target, distinct from existing user Boxes. No real owner-host Containarium binary, signing authority, public listener or stable selector was changed.
+
+
+## 2026-11-03 real host-hop verification follow-up (separate test Box)
+
+[Real TCP SSH hop, wake and invalid-key results](CONTAINARIUM_SHELL_REAL_SSH_HOP_2026-11-03.md) **PASS** in a newly created disposable outer Box with published v0.42.10 and Containarium v0.120.1: host sshd → pinned `containarium-shell` → nested guest command via loopback/assigned-IP, and a STOPPED inner Box woke and updated lifecycle markers. The test did **not** establish remote-machine sshpiper ingress or cross-tenant isolation. Important independent finding: the Containarium-created test host account had unrestricted `NOPASSWD: /usr/bin/incus` sudo permission; upstream host authorization requires review. The test SSH keys were revoked and the test Box stopped.
