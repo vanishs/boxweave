@@ -18,6 +18,10 @@ flowchart LR
 
 The application adapter in bwmini/provider.py and access_provider.py uses the configured MCP stdio launcher, typically its own strict SSH identity to the upstream launcher. The app does **not** implement the originally proposed direct REST adapter or borrow the browser session/Agent GLM credential as Provider authority. Underlying upstream MCP may use its own API internally; its protocol names/metadata stay upstream. API/worker share private state; credential files remain outside releases. Direct Agent MCP has broader upstream authority than Web allowlisted plans; single trusted operator is a deliberate boundary.
 
+## Future API-first alternative (design only, 2026-11-03)
+
+The [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) records a **candidate**, not the implemented architecture: retain BoxWeave Agent-facing MCP, consider Containarium REST API for internal management, an independent exact-Box SSH executor, and unified durable operation/diagnostic boundaries. Its [Agent migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md), [D1–D4 trace proposal](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) and [proposed ADR-010](ADR/0010-api-first-control-plane-candidate.md) do not override this code-first diagram or accepted ADR-003 until separately authorized and implemented.
+
 ## Code-first architecture consolidation checkpoint
 
 The [ARCH-0 review and gate](ARCHITECTURE_CONSOLIDATION_GATE.md) audits
