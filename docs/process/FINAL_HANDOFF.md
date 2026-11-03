@@ -92,3 +92,18 @@ The [v0.42.8 installed residual BLOCKED reacceptance](../verification/BLOCKED_RE
 ## Updated source baseline for P-01 (2026-11-02)
 
 For next upstream PR, use [owner's latest-upstream-main-based fix `28b18edc`](https://github.com/vanishs/Containarium/commit/28b18edc550f79a049cfa7f08fcf5fd09b926a1e) (parent `FootprintAI/Containarium:main` at `4be7f81a`), **not** the older v0.126.0-tag-based `40b9d65` branch. Full `internal/server` Go package tests and final binary build passed after adapting tenant log strings to `%q`. Latest-main rerun was **source/build only**; the original v0.126.0 tag patch has the separately recorded real nested HTTP wake and cold-auto-sleep proof. The GitHub integration cannot create the upstream PR (403); user authorization via GitHub UI is required to submit to the official repo. No upstream merge/release or owner Provider deployment yet. [Full handoff](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md).
+
+
+## v0.42.9 Containarium host-hop shell source repair
+
+After an operator patch, the `dev` backend reports
+`/usr/local/bin/containarium-shell` exists, but advertises no
+external SSH ingress; full host-hop SSH is still unverified.
+Source v0.42.9 now packages the exact upstream wrapper. Managed
+local Provider installs it if missing; externally managed Providers
+stay read-only until explicit `--repair-containarium-shell`.
+No wildcard Incus sudoers, host sshd, MOTD, user accounts or Provider
+binaries are changed. Details:
+[verification](../verification/CONTAINARIUM_SHELL_PACKAGE_0429.md) and
+[runbook](CONTAINARIUM_SHELL_RECOVERY.md).
+The stable installer pin remains v0.42.1 pending separate promotion.

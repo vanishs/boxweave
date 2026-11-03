@@ -2,7 +2,31 @@
 
 [Agent rules](../../AGENTS.md) · [Open risks](../verification/OPEN_RISKS.md) · [issue #19](https://github.com/vanishs/boxweave/issues/19)
 
-**Status: HOST-HOP NOT REPAIRED on the owner's `dev` backend.** These are reviewed instructions, not evidence of a production repair. No real host/sshd/sudoers file was changed. Follow explicit, host-specific operator authorization; preserve console/admin access and obtain a rollback window before any live writes.
+**Status: owner-patched host wrapper now PRESENT; actual host-hop SSH login remains UNVERIFIED.** These are reviewed instructions, not evidence of a production repair. No host/sshd/sudoers file was modified by the coding Agent. Follow explicit, host-specific operator authorization; preserve console/admin access and obtain a rollback window before any live writes.
+
+## Updated host and project state (2026-11-02)
+
+After the owner repaired the `dev` host, a fresh read-only
+`debug_container(username="bwphase2-1102")` showed
+`hostUserShell="/usr/local/bin/containarium-shell"` and
+**`hostUserShellExists=true`** on Containarium v0.120.1.
+The backend advertises **no external SSH ingress**, so this does not
+prove host-hop authentication or a working sshpiper path.
+
+BoxWeave source **v0.42.9** includes the pinned official Containarium
+v0.120.1 host wrapper as a source-bound release asset, SHA-256
+`2212651e2083b80d76363523bf794ec4d530f8eb74bbac0def0c347bb544caa6`.
+For BoxWeave-managed Providers, installation automatically repairs a
+missing script and `/etc/shells` entry, preserving identical existing
+script content and rejecting foreign or unsafe content.
+Externally managed Providers remain read-only unless the operator
+explicitly supplies `--repair-containarium-shell` to the versioned
+streamed installer. No broad sudoers, host sshd, SSH keys, or
+Containarium binaries are modified by this source feature.
+See [source verification](../verification/CONTAINARIUM_SHELL_PACKAGE_0429.md).
+
+The actual host-hop SSH positive/negative acceptance remains open;
+direct BoxWeave MCP `connect(exec)` success is separate.
 
 ## Diagnosis: not all SSH is broken
 

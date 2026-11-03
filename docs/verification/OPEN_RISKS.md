@@ -265,3 +265,18 @@ The [upstream latest-main source candidate `28b18edc`](https://github.com/vanish
 ### RISK-624 current live recheck — host-hop only (2026-11-02)
 
 Read-only `debug_container(containarium-prqa-1102)` on backend `dev` / Containarium `0.120.1`: host user exists; host login shell `/usr/local/bin/containarium-shell`; **hostUserShellExists=false**. Independently `connect(exec)` to that **same newly created Box** returned real guest user, Python `hello world` and exit 0; reused `bwphase2-1102` also returned direct guest Python stdout/exit 0. **Only the host-hop route is blocked.** Source audit: BoxWeave local-provider bootstrap does not deploy the host shell; upstream whole setup script also grants global Incus sudo and mutates sshd/MOTD, so it must **not** run automatically. A pinned 106-line wrapper-only extract (`4be7f81a`) was SHA-256 verified and `bash -n` tested **inside a disposable, non-host Box**. No owner host SSH/sudoers/shell write was executed; [operator recovery instructions](../process/CONTAINARIUM_SHELL_RECOVERY.md) still require a separately authorized host shell and validated host-hop acceptance. Continue other Agents' Go testing using direct managed `connect(exec)` meanwhile.
+
+
+### RISK-624 host patched, source v0.42.9 packaging (2026-11-02)
+
+The owner applied a `dev` host patch. Subsequent read-only
+`debug_container(bwphase2-1102)` reports
+`hostUserShellExists=true` on Containarium v0.120.1, reversing the
+previous observed missing-file state. The backend has no advertised
+external SSH ingress. Thus actual host-hop login, existing sudo
+permissions and cross-tenant negative checks remain **U**, while direct
+guest MCP access has independent evidence.
+Source v0.42.9 now includes the pinned official wrapper with guarded
+managed/opt-in installation; it does not silently modify external
+Providers, sshd or sudoers. See
+[source test record](CONTAINARIUM_SHELL_PACKAGE_0429.md).

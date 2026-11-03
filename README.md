@@ -4,7 +4,7 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.42.8. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
+**Current source version: 0.42.9. Default stable installer: v0.42.1.** The default streamed command selects the independently verified, immutable v0.42.1 release. In an isolated Ubuntu 24.04 Box it completed fresh host installation, authenticated local Provider MCP read, and a real create/hello/stop/delete selftest. See [exact live acceptance and limits](docs/verification/STABLE_PROMOTION_2026-11-02.md); this is not a blanket guarantee for all hosts or externally hosted OAuth clients.
 
 Optional multi-Agent shared coordination requires separate reviewed policy/SQLite provisioning and opt-in. Snapshot/restore/clone writes remain unsupported without verified Provider contracts. Source CI, published installer version, running service version and production-host acceptance are distinct. Historical rollout and unresolved risks are retained in [the risk register](docs/verification/OPEN_RISKS.md).
 
@@ -22,6 +22,22 @@ To install or update to an exact published version, including a historical relea
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.42.1
 ```
+
+**Containarium host-hop SSH wrapper (source v0.42.9):** The source-bound
+release includes the official, SHA-256-pinned `containarium-shell` login
+wrapper. A BoxWeave-owned local Provider installs a missing wrapper and
+registers it in `/etc/shells`. A separately managed Containarium is
+**read-only by default**; its operator can explicitly opt into a
+missing-wrapper-only repair when installing a published v0.42.9 or later release:
+
+```bash
+sudo bash install.sh --version 0.42.9 --repair-containarium-shell
+```
+
+This command is available **only after v0.42.9 has been published**; it
+does not upgrade Containarium, modify broad sudoers or sshd, or prove a
+live host-hop SSH session. Existing foreign wrappers are never overwritten.
+See the [host-hop shell acceptance and recovery notes](docs/process/CONTAINARIUM_SHELL_RECOVERY.md).
 
 The developer-only [Agent deployment/test workflow v1.0](docs/process/AGENT_TEST_DEPLOYMENT.md) uses existing authorized BoxWeave transports, local worktree snapshots and verified artifacts; it does not add MCP tools or treat a source snapshot as a Release installer.
 

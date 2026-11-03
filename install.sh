@@ -6,7 +6,7 @@ umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
-Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE]
+Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE] [--repair-containarium-shell]
   --version selects an exact published, digest-verified release (default: stable pin).
   Streamed install/update/repair. Reuse an existing Containarium + Incus
   without changing its binaries, service, storage or signing secret.
@@ -14,6 +14,11 @@ Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-sec
   /etc/containarium/jwt.secret, and containariumd on PATH.
   A standalone preinstalled Incus storage pool is also preserved.
   Custom Provider settings require the options above.
+  For a BoxWeave-managed local Provider, install the pinned containarium-shell
+  host-hop wrapper automatically. For external Providers, preserve their SSH
+  setup by default; --repair-containarium-shell explicitly installs ONLY the
+  missing, reviewed wrapper plus its /etc/shells registration.
+  This never writes wildcard Incus sudoers or host sshd configuration.
   Recommended: Ubuntu >= 24.04. Linux x86_64, Python >= 3.12 and systemd required.
   No distribution-name restriction. Host dependencies are checked directly.
   Missing packages use APT only when apt-get and a compatible repository
@@ -38,7 +43,7 @@ working user systemd bus are prerequisites. Rerun apply for app update/repair.
 USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
-if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli ]]; then
+if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli || "${1:-}" == --repair-containarium-shell ]]; then
   streamed_options=()
   selected_version=''
   while (( $# )); do
@@ -51,6 +56,8 @@ if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "$
       --provider-url|--provider-secret-file|--provider-cli)
         (( $# >= 2 )) || die "Missing value for $1"
         streamed_options+=("$1" "$2"); shift 2;;
+      --repair-containarium-shell)
+        streamed_options+=("$1"); shift;;
       *) die "Unknown streamed installer option: $1";;
     esac
   done
