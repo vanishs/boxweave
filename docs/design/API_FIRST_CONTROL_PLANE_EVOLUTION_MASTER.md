@@ -1,7 +1,7 @@
 # API-first control-plane evolution — long-term architecture master
 
 > **Status: DESIGN CANDIDATE / DISCUSSION RECORD, not an implementation approval, migration decision, installed result, release gate, or compatibility promise.**
-> Recorded: 2026-11-03. BoxWeave source baseline: \`main\` at \`4f5ffe7fae586c79e6d75ed90560ee196e618ec3\` (\`VERSION=0.42.11\`). Containarium source inspected: \`main\` at \`e5deb167c973033d9a847abdcb2420e917095546\`. The BoxWeave-managed installer is pinned separately to Containarium \`v0.120.1\`; do not assume current upstream-main API is installed.
+> Recorded: 2026-11-03. BoxWeave source baseline: `main` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3` (`VERSION=0.42.11`). Containarium source inspected: `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The BoxWeave-managed installer is pinned separately to Containarium `v0.120.1`; do not assume current upstream-main API is installed.
 >
 > **Core direction under study:** outward-facing **MCP-first**, internal **Containarium REST API-first**, Box execution **SSH-first**, local maintenance **CLI-only**. This does *not* mean eliminating MCP from BoxWeave: BoxWeave owns its Agent-facing MCP, and an upstream MCP compatibility lane remains until its actual functional coverage is mapped and accepted.
 
@@ -23,7 +23,7 @@ BoxWeave is not only an MCP forwarding proxy. It provides a durable environment-
 
 Current call paths:
 
-\`\`\`text
+```text
 Agent MCP (SSH stdio or authenticated Streamable HTTP)
   -> BoxWeave mcp_gate.py (catalogue relay, auth/trust, tools and rewrites)
   -> Containarium platform MCP stdio process
@@ -35,11 +35,11 @@ Browser / host CLI
   -> bwmini/provider.py, access_provider.py, agent_box.py
   -> separately configured upstream platform MCP or per-Box agent-box MCP
   -> daemon / SSH / Box
-\`\`\`
+```
 
 This has worked for incremental delivery; the costs appear when the product needs one stable operation, error, ownership and trace model across *both* Agent and Web mutations. MCP tool-discovery schema and some text output are poor long-term substitutes for a typed machine-to-machine API. REST/gRPC are not inherently more secure or reliable; the benefit comes from **a smaller, explicit contract** and the opportunity to centralize policy, dispatch, receipts and tracing.
 
-Do not confuse upstream's **CLI-first delivery policy** with an instruction for BoxWeave to shell out to \`containarium\` for every action. Upstream CLI, REST and MCP are client entry points to common underlying operations, except for host-local CLI paths. The upstream MCP server itself normally uses REST; its \`connect(exec)\`, \`code_*\` and \`push/sync\` have SSH or local transfer portions not representable as plain lifecycle REST calls.
+Do not confuse upstream's **CLI-first delivery policy** with an instruction for BoxWeave to shell out to `containarium` for every action. Upstream CLI, REST and MCP are client entry points to common underlying operations, except for host-local CLI paths. The upstream MCP server itself normally uses REST; its `connect(exec)`, `code_*` and `push/sync` have SSH or local transfer portions not representable as plain lifecycle REST calls.
 
 ## 2. Scope assumptions: radical redesign versus in-place migration
 
@@ -49,7 +49,7 @@ Define an acceptance denominator before committing to a rewrite:
 
 - Count *existing user-reachable behaviors* from source and installed evidence, not aspirational roadmap rows or an unreviewed number of MCP tools.
 - Distinguish **built-in BoxWeave features**, **forwarded upstream MCP tool availability**, **optional per-Box agent-box features**, **environment/host-specific capabilities** and **design-only E2–E4 behaviors**.
-- Mark each feature \`preserved\`, \`equivalent-with-observable-difference\`, \`intentional-retirement\`, \`not-yet-proven\`, \`unsupported-by-runtime\`. Unknown is not preserved.
+- Mark each feature `preserved`, `equivalent-with-observable-difference`, `intentional-retirement`, `not-yet-proven`, `unsupported-by-runtime`. Unknown is not preserved.
 - Do not justify removal of a rare **security-critical invariant** (no duplicate create, no unauthorised Box execution, target-incarnation pinning, secret non-disclosure) by a numeric 99% threshold. Such invariants have 100% mandatory acceptance.
 - An upstream MCP tool that BoxWeave transparently advertises must be accounted for *separately* from app-owned typed operations. Its **presence in a catalogue** is not proof of authorization, execution or user reliance; actual feature reachability must be measured.
 
@@ -57,7 +57,7 @@ The **in-place migration** route can preserve current Web/SQLite and change the 
 
 ## 3. Proposed target boundaries
 
-\`\`\`text
+```text
                  Codex / Claude / other Agent clients          Browser         Operator
                  SSH-stdio MCP | HTTP(S)-OAuth MCP             Web/API         CLI
                                    \            |                  |             /
@@ -82,7 +82,7 @@ The **in-place migration** route can preserve current Web/SQLite and change the 
 
             Host operator CLI: separate, narrow privileged recovery path
             Upstream MCP compatibility lane: explicit/allowlisted and audited
-\`\`\`
+```
 
 ### 3.1 BoxWeave owns
 
@@ -96,12 +96,12 @@ The **in-place migration** route can preserve current Web/SQLite and change the 
 
 - Authorization and the *actual* lifecycle, Tenant, network, route, backup, snapshot, storage and guest-source-of-truth operations.
 - Its daemon, Incus integration and service-side validation. BoxWeave does not bypass a missing API with raw Incus or host-root shell.
-- Daemon-side tracing **only when upstream implements and exposes it**; downstream \`trace_id\` is not proof that the daemon consumed a matching identifier.
+- Daemon-side tracing **only when upstream implements and exposes it**; downstream `trace_id` is not proof that the daemon consumed a matching identifier.
 
 ### 3.3 Three internal blocks, multiple adapters
 
 1. **Provider API:** typed JSON→domain translation, request authentication, timeout, response-shape validation, feature probing, bounded retries of *safe reads only*, upstream response IDs where available. REST maps to a Protobuf-defined contract through grpc-gateway; direct gRPC remains a possible later benchmark/ADR, not an implied requirement.
-2. **Box Executor:** separate SSH execution and file/copy/sync adapters. Prefer service-owned key/certificate, inspect upstream-stamped \`ssh_host\` and verified incarnation, never accept caller-supplied arbitrary host, username, key file or remote root. Optional per-Box \`agent-box\` MCP may remain an implementation detail for its unique capabilities.
+2. **Box Executor:** separate SSH execution and file/copy/sync adapters. Prefer service-owned key/certificate, inspect upstream-stamped `ssh_host` and verified incarnation, never accept caller-supplied arbitrary host, username, key file or remote root. Optional per-Box `agent-box` MCP may remain an implementation detail for its unique capabilities.
 3. **Operation Core:** single intent/claims/dispatch/observed state machine; all exposed mutators (including any compatibility path) must pass it **before** a side effect. Use one task identity and trace correlation from both entry points.
 
 The host repair CLI remains independently functional when MCP, API or Web is down, but host privilege must not become an Agent escape hatch.
@@ -126,7 +126,7 @@ This is an **architectural preference under a no-compatibility-cost assumption**
 - Failed-before-dispatch, upstream-acknowledged, observed-complete, observed-failed and **unknown-after-dispatch** are different states. HTTP 200/202/204 is not business completion; timeout/connection drop after possible send is **UNKNOWN**, not permission to retry.
 - Never replay uncertain creates, deletes, restores, network changes or guest commands automatically. Reconcile via independent read evidence, and state exactly what remains unverified.
 - Default deny deep D4 read of any Box until an exact incarnation and check/service scope is explicitly allowed by server-owned policy. Preapproval is not approval for arbitrary shell, raw logs, secrets or new Boxes.
-- Keep secret files server-side, hardened by OS ownership and path checks. API restore requests can contain decrypted \`age_identity\` on the **authenticated transport**: a host file path is not proof that key material never travels on the wire. Never persist or log it; prefer an upstream-approved host-side key *reference* if one is later provided.
+- Keep secret files server-side, hardened by OS ownership and path checks. API restore requests can contain decrypted `age_identity` on the **authenticated transport**: a host file path is not proof that key material never travels on the wire. Never persist or log it; prefer an upstream-approved host-side key *reference* if one is later provided.
 - Keep public HTTPS ingress opt-in; prefer loopback for Provider API; keep platform MCP outward-facing auth and untrusted tool-output handling independent.
 - Trace/log capture is secondary and best-effort: failure to log must never turn a failed operation into success, overwrite business receipts or cause duplicate dispatch.
 - No hidden installation, provider upgrade, public port exposure, host wrapper repair or key rotation as a side effect of an ordinary API request.
@@ -140,7 +140,7 @@ This is an **architectural preference under a no-compatibility-cost assumption**
 | Standalone SSH executor vs optional upstream agent-box reuse | Real execution identity/trust, file scopes, streaming, cancellation/reconnect semantics, clean Box requirement |
 | Installed-host cutover | Existing host ownership, API binding, token issuance/rotation, no secret exposure, independent rollback, zero accidental provider upgrade |
 | Operation core migration | Cross-Web/SSH/HTTP mutation interception and durable UNKNOWN/claim recovery under crash/timeout |
-| API diagnostics depth | Which response fields and upstream request IDs exist **on the installed daemon**, not only in upstream \`main\` source |
+| API diagnostics depth | Which response fields and upstream request IDs exist **on the installed daemon**, not only in upstream `main` source |
 
 None of these questions should block independent read-only proofs of the typed REST adapter.
 
