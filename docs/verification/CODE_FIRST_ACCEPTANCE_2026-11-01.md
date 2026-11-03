@@ -49,7 +49,7 @@ Code-first additions not fully represented in the older F-001–F-015 narrative 
 
 The lists enumerate all Python app modules, Python unittest files, client helper scripts, support scripts, frontend sources, application/host CLI action names, Web and remote HTTP routes, gateway-owned MCP tools, client catalog and frontend views. Downstream Provider tool names are dynamic and are **not** mistaken for locally implemented BoxWeave tools. Each source-backed entry must be tested at the layer its acceptance claim requires.
 
-### Python application modules (51)
+### Python application modules (53)
 
 <!-- inventory:python-modules:start -->
 - `bwmini/__init__.py`
@@ -63,8 +63,8 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/bootstrap.py`
 - `bwmini/box_actions.py`
 - `bwmini/box_debug.py`
-- `bwmini/box_reads.py`
 - `bwmini/box_patch.py`
+- `bwmini/box_reads.py`
 - `bwmini/capabilities.py`
 - `bwmini/client_profiles.py`
 - `bwmini/client_setup.py`
@@ -73,21 +73,22 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/deploy_check.py`
 - `bwmini/diagnostics.py`
 - `bwmini/distribution.py`
+- `bwmini/domain.py`
 - `bwmini/environment_history.py`
 - `bwmini/environment_observe.py`
-- `bwmini/domain.py`
 - `bwmini/gate_diagnostics.py`
 - `bwmini/gateway_protection.py`
 - `bwmini/gateway_tasks.py`
 - `bwmini/graphs.py`
 - `bwmini/host_cli.py`
-- `bwmini/http_manage.py`
 - `bwmini/hostkeys.py`
+- `bwmini/http_manage.py`
 - `bwmini/jobs.py`
 - `bwmini/lifecycle.py`
 - `bwmini/lifecycle_contract.py`
 - `bwmini/manage.py`
 - `bwmini/mcp.py`
+- `bwmini/mcp_compat.py`
 - `bwmini/mcp_gate.py`
 - `bwmini/models.py`
 - `bwmini/nesting.py`
@@ -98,6 +99,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/remote_auth.py`
 - `bwmini/remote_mcp.py`
 - `bwmini/remote_tls.py`
+- `bwmini/restore_guard.py`
 - `bwmini/selftest.py`
 - `bwmini/service.py`
 - `bwmini/store.py`
@@ -105,7 +107,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (59)
+### Python unittest files (62)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -117,35 +119,36 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
 - `tests/test_box_actions_shared_claims.py`
-- `tests/test_box_reads.py`
-- `tests/test_box_patch.py`
-- `tests/test_gateway_protection.py`
-- `tests/test_gateway_tasks.py`
-- `tests/test_gateway_tasks_gateway.py`
 - `tests/test_box_debug.py`
+- `tests/test_box_patch.py`
+- `tests/test_box_reads.py`
 - `tests/test_capabilities.py`
 - `tests/test_client_setup.py`
 - `tests/test_containarium_shell.py`
 - `tests/test_coordination_runtime.py`
-- `tests/test_shared_claims.py`
 - `tests/test_diagnostic_golden.py`
 - `tests/test_diagnostic_report.py`
 - `tests/test_diagnostics.py`
-- `tests/test_environment_history.py`
-- `tests/test_environment_observe.py`
 - `tests/test_distribution.py`
 - `tests/test_enrollment.py`
+- `tests/test_environment_history.py`
+- `tests/test_environment_observe.py`
 - `tests/test_gate_diagnostics.py`
+- `tests/test_gateway_compat_restore_flow.py`
+- `tests/test_gateway_protection.py`
+- `tests/test_gateway_tasks.py`
+- `tests/test_gateway_tasks_gateway.py`
 - `tests/test_graphs.py`
 - `tests/test_history.py`
 - `tests/test_host_bootstrap.py`
-- `tests/test_http_manage.py`
 - `tests/test_host_cli.py`
+- `tests/test_http_manage.py`
 - `tests/test_jobs.py`
 - `tests/test_knowledge.py`
 - `tests/test_lifecycle.py`
 - `tests/test_lifecycle_shared_claims.py`
 - `tests/test_manage.py`
+- `tests/test_mcp_compat.py`
 - `tests/test_mcp_gate_policy.py`
 - `tests/test_mcp_info.py`
 - `tests/test_mcp_resources.py`
@@ -162,8 +165,10 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_recovery.py`
 - `tests/test_release_metadata.py`
 - `tests/test_remote_mcp.py`
+- `tests/test_restore_guard.py`
 - `tests/test_selftest.py`
 - `tests/test_setup_guide.py`
+- `tests/test_shared_claims.py`
 - `tests/test_slice.py`
 - `tests/test_ssh_keepalive.py`
 - `tests/test_workload_guidance.py`
