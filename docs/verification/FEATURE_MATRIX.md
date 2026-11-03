@@ -125,3 +125,8 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ### D3 v0.42.4 actual installed upgrade acceptance (2026-11-02)
 
 [Source and live differential acceptance](D3_CLASSIFICATION_LIVE_0424_2026-11-02.md): immutable v0.42.4 CI verify/publish PASS, real pinned 0.42.3 -> 0.42.4 disposable-Box upgrade exit 0, actual Gateway D3 fixed-code refusal **L PASS** and conservative `unknown` **L PASS**, authenticated Provider + doctor 10/10 PASS. Earlier source-only U for this scoped D3 P3 defect is closed, not unrelated R-02/R-04/D4 positive or external OAuth.
+
+
+## Broad v0.42.6 exact-source and installed reacceptance (2026-11-02)
+
+[Complete per-feature live/fixture/blocked ledger](BROAD_REACCEPTANCE_0426_2026-11-02.md) supersedes prior incomplete source-only claims: final v0.42.6 exact-release CI/PUBLISH PASS, 645 Python and 4 architecture tests PASS, in-place v0.42.4->v0.42.5->v0.42.6 real Box upgrade PASS, Provider/doctor 10/10, R-02 empty-output and stderr-only result repairs live PASS, stale CAS recorded completed/1 without overwrite, independent app/Gateway R-04 claim conflict, D4 allowed process/port, E0/E1 actual Provider plus authenticated test-client routes. Global cross-entry R-04, externally authenticated HTTP/SSH/OAuth clients, in-flight kill recovery, old-to-current fleet upgrade, real model inference and missing E2-E4 Provider contracts remain U/BLOCKED. A concurrent-create Provider error despite actual successful creations is retained as an OPEN uncertain-write issue. Original seven outer Boxes preserved; new incident Box STOPPED/retained; stable pin v0.42.1 unchanged.

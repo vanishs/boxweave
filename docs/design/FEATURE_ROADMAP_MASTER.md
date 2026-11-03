@@ -235,3 +235,8 @@ Gateway publication-parity and no app-private DB import into root
 helpers. Six groups remain logical contracts. Installed shared-UID
 coordination, independent old/new helper acceptance and cross-entry
 runtime validation remain unverified, not silently accepted.
+
+
+## Second-wave v0.42.6 execution checkpoint (2026-11-02)
+
+[Exact source, installed multi-client, D4/E0/E1 and blocked feature ledger](../verification/BROAD_REACCEPTANCE_0426_2026-11-02.md). Two real Provider output-envelope bugs were closed in v0.42.5 (bare exit code) and v0.42.6 (stderr-only exit code). Scoped Gateway R-02 dedupe, R-01 CAS, R-04 protected lease + app primitive, D4 authorized diagnostics, and E0/E1 actual Provider/app test-client have live evidence; global Web-worker/cross-transport R-04 and external OAuth remain U, E2-E4 remain BLOCKED by missing Provider contracts. A new concurrent Provider create UNKNOWN race remains OPEN for follow-up; no broad new operator permissions were activated. Overall roadmap PARTIAL; stable default v0.42.1 unchanged.
