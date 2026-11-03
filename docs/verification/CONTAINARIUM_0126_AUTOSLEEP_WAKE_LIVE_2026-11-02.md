@@ -1,5 +1,7 @@
 # Containarium v0.126.0 patched cold-create auto-sleep and HTTP wake — isolated live acceptance (2026-11-02 PST)
 
+**Newer upstream verification:** [Containarium v0.127.0 / current-main isolated sleep and HTTP wake acceptance](CONTAINARIUM_0127_AUTOSLEEP_WAKE_UPSTREAM_LIVE_2026-11-03.md). This historical report remains scoped to its own patched v0.126.0 candidate; the later report documents the merged upstream fix, new live checks, and separate unmerged CLI/MCP follow-ups.
+
 [Feature matrix](FEATURE_MATRIX.md) · [Verification queue](REMEDIATION_TEST_QUEUE.md) · [Open risks](OPEN_RISKS.md) · [v0.126.0 future Agent handoff](../design/CONTAINARIUM_0126_UPGRADE_E2_E4_HANDOFF.md) · [Roadmap](../design/FEATURE_ROADMAP_MASTER.md)
 
 **Result: T+L PASS for the two narrowly scoped behaviors on a locally compiled, patched Containarium v0.126.0 candidate. NOT a released or production-upgraded upstream Provider.** HTTP route wake restored the previously stopped Box and delivered the first request's HTTP 200 and exact original app body; a newly created Box with an auto-sleep toggle stamped its start clock and later stopped automatically without manual start/restart. The unpatched local Provider baseline v0.120.1 did **not** satisfy those same claims. Existing BoxWeave release remains **v0.42.8**; default stable pointer remains **v0.42.1**; no BoxWeave runtime source was changed.
