@@ -5,6 +5,8 @@
 
 [Master roadmap](FEATURE_ROADMAP_MASTER.md) · [Upstream ownership](../UPSTREAM_PROVIDER.md) · [Host-hop recovery](../process/CONTAINARIUM_SHELL_RECOVERY.md) · [Wrapper verification](../verification/CONTAINARIUM_SHELL_PACKAGE_0429.md) · [Isolated upstream v0.127.0 test](../verification/CONTAINARIUM_0127_AUTOSLEEP_WAKE_UPSTREAM_LIVE_2026-11-03.md)
 
+**Long-term internal transport alternative (not approved):** [API-first architecture master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Retaining BoxWeave's Agent-facing MCP remains important even if the internal Provider eventually uses REST; upstream #3500 compatibility requests and current installed contracts are tracked independently.
+
 ## Origin and boundaries
 
 The upstream maintainer's [Containarium issue #3500](https://github.com/FootprintAI/Containarium/issues/3500) investigated BoxWeave as an **external** MCP client. Its "Out of scope" section means that the issue does not undertake to change BoxWeave, maintain BoxWeave's vendored `containarium-shell`, certify version pairs, or promise compatibility. This is a scope/ownership statement, **not proof that host-hop SSH is inherently incorrect**.
