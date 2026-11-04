@@ -69,7 +69,8 @@ class UpstreamPolicyTests(unittest.TestCase):
 
     def test_synthetic_unchanged_newer_daemon_with_sufficient_mcp(self):
         with patch.object(u.os, "geteuid", return_value=0), \
-             patch.object(u, "installed_version", side_effect=["0.200.0", "0.130.0"]), \
+             patch.object(u, "installed_version", return_value="0.200.0"), \
+             patch.object(u, "mcp_version", return_value="0.130.0"), \
              patch.object(u.Path, "exists", return_value=True), \
              patch.object(u, "trusted", return_value=True), \
              patch.object(u, "download_assets") as download:
@@ -78,6 +79,30 @@ class UpstreamPolicyTests(unittest.TestCase):
                               secret="/etc/containarium/jwt.secret")
             self.assertEqual(status["status"], "kept_compatible")
             download.assert_not_called()
+
+    def test_stdio_mcp_initialize_is_only_version_probe(self):
+        message = {"jsonrpc": "2.0", "id": 1, "result": {
+            "serverInfo": {"name": "containarium-mcp-server", "version": "0.131.2"},
+            "protocolVersion": "2024-11-05"}}
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(u, "STATE", Path(d)), \
+                 patch.object(u, "trusted", return_value=True), \
+                 patch.object(u, "_token", return_value="private-not-printed"), \
+                 patch.object(u.subprocess, "run", return_value=SimpleNamespace(
+                     returncode=0, stdout=json.dumps(message) + "\\n", stderr=""
+                 )) as run:
+                result = u.mcp_version("/usr/local/bin/mcp-server",
+                                       "/usr/local/bin/containariumd",
+                                       "http://127.0.0.1:8080",
+                                       "/etc/containarium/jwt.secret")
+                self.assertEqual(result, "0.131.2")
+                args, kwargs = run.call_args
+                self.assertEqual(args[0], ["/usr/local/bin/mcp-server"])
+                self.assertTrue(kwargs["input"].endswith("\\n"))
+                self.assertIn('"method": "initialize"', kwargs["input"])
+                self.assertEqual(kwargs["env"]["CONTAINARIUM_SERVER_URL"],
+                                 "http://127.0.0.1:8080")
+                self.assertNotIn("private-not-printed", str(kwargs["env"]))
 
     def test_downgrade_refused_before_network_or_write(self):
         with patch.object(u.os, "geteuid", return_value=0), \
@@ -98,6 +123,7 @@ class UpstreamPolicyTests(unittest.TestCase):
             with patch.object(u.os, "geteuid", return_value=0), \
                  patch.object(u, "STATE", Path(d)), \
                  patch.object(u, "installed_version", side_effect=installed), \
+                 patch.object(u, "mcp_version", return_value="0.120.1"), \
                  patch.object(u.Path, "exists", return_value=True), \
                  patch.object(u, "trusted", return_value=True), \
                  patch.object(u, "download_assets") as download, \
