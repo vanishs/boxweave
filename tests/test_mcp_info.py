@@ -37,9 +37,10 @@ class GuideTests(unittest.TestCase):
             {"name": "list_containers"},
             {"name": "delete_container", "description": "delete"}]}}
         tools = mcp_gate.catalog(data)["result"]["tools"]
-        self.assertEqual([tool["name"] for tool in tools][-9:],
+        self.assertEqual([tool["name"] for tool in tools][-10:],
                          ["boxweave_nesting", "boxweave_info",
                           "boxweave_diagnose", "boxweave_project_diagnose",
+                          "boxweave_diagnostic_run",
                           "boxweave_box_read_file", "boxweave_box_list_directory",
                           "boxweave_task_submit", "boxweave_task_get",
                           "boxweave_task_list"])

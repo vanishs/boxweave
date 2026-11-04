@@ -15,6 +15,7 @@ POLICY = Path("/var/lib/boxweave-default/public/coordination-policy.json")
 _UPSTREAM_READ = frozenset(("list_containers", "get_container", "get_system_info"))
 _GATEWAY_READ = frozenset((
     "boxweave_info", "boxweave_diagnose", "boxweave_project_diagnose",
+    "boxweave_diagnostic_run",
     "boxweave_box_read_file", "boxweave_box_list_directory",
     "boxweave_task_get", "boxweave_task_list",
 ))

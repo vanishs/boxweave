@@ -23,7 +23,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.42.12"
+SERVER_INFO_VERSION = "0.43.0"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -44,6 +44,9 @@ SERVER_INSTRUCTIONS = (
     "Diagnose SSH failures with debug_container. Obtain approval for destructive "
     "or network exposure changes. Timed-out writes have UNKNOWN outcomes: "
     "inspect real state before retrying, never blindly replay mutations. "
+    "Use boxweave_diagnostic_run for read-only app preflight, REST/MCP "
+    "readiness and actor-scoped operation traces; it cannot execute host "
+    "shell commands or modify Boxes. "
     "On errors, use boxweave_diagnose to inspect classified evidence; use "
     "boxweave_project_diagnose only within the server-authorized Box scope. "
     "Use boxweave_diagnose(source=compat) to read a narrow, on-demand "
@@ -228,7 +231,7 @@ def catalog(message):
             )
     message = guard_restore_catalog(message)
     extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
+    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, gd.COORD_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
     return message
 
 def nesting_plan(logical, wanted, observed):
@@ -258,6 +261,7 @@ GATE_ERROR_CODES = frozenset((
     "DIAGNOSTIC_SELECTOR_INVALID", "DIAGNOSTIC_SETTINGS_INVALID",
     "PROJECT_SELECTOR_INVALID", "PROJECT_POLICY_INVALID",
     "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
+    "COORDINATOR_SELECTOR_INVALID",
     "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
     "RESTORE_APPROVAL_REQUIRED", "RESTORE_KEY_OR_POLICY_UNSAFE", "RESTORE_ARGUMENT_INVALID",
     "PROJECT_COMMAND_UNAVAILABLE",
@@ -509,6 +513,10 @@ def main():
                             raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")
                         emit_result(request["id"], value)
                         continue
+                    if params.get("name") == "boxweave_diagnostic_run":
+                        value = gd.query_coordinator(args)
+                        emit_result(request["id"], value)
+                        continue
                     if params.get("name") == "boxweave_project_diagnose":
                         # Root-owned policy is checked BEFORE any Provider read.
                         gd.preauthorize_project(args)
@@ -734,7 +742,7 @@ def main():
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     error_result = {"jsonrpc": "2.0", "id": request.get("id"),
                                     "error": {"code": -32602, "message": reason}}
-                    if params.get("name") not in ("boxweave_diagnose", "boxweave_project_diagnose"):
+                    if params.get("name") not in ("boxweave_diagnose", "boxweave_project_diagnose", "boxweave_diagnostic_run"):
                         # Only the gateway's own reviewed read/preflight
                         # refusals are definitely FAILED. A Provider error,
                         # dispatched write, or unreviewed exception stays
