@@ -5,10 +5,11 @@ from .app_runtime import load,read_config
 from .provider import Provider
 from .mcp import MCP
 from .domain import Fault
+from .upstream_version import BASELINE as UPSTREAM_DEVELOPMENT_BASELINE
 
 def require_minimum_runtime_version(value, code):
  match=re.fullmatch(r'v?([0-9]+)\.([0-9]+)\.([0-9]+)',value) if isinstance(value,str) else None
- if not match or tuple(int(n) for n in match.groups()) < (0,128,0):
+ if not match or tuple(int(n) for n in match.groups()) < tuple(int(n) for n in UPSTREAM_DEVELOPMENT_BASELINE.split('.')):
   raise Fault(code)
  return value
 
@@ -26,7 +27,7 @@ def read_provider(c):
   version=server.get('version') if isinstance(server,dict) else None
   require_minimum_runtime_version(version,'MCP_SERVER_BELOW_MINIMUM_OR_UNKNOWN')
   client.tool('list_containers',{})
-  result={'state':'authenticated_read_passed','server':server,'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers','minimum_mcp_server':'0.128.0'}
+  result={'state':'authenticated_read_passed','server':server,'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers','minimum_mcp_server':UPSTREAM_DEVELOPMENT_BASELINE}
   if p.rest is not None:
    # Authenticated daemon runtime identity is independent from the binary
    # currently present on disk. Refuse old running processes after an update.
