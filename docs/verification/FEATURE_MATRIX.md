@@ -163,3 +163,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## v0.43.1 post-commit lifecycle and Gateway error hardening (2026-11-03)
 
 [One-row-per-gate source/live ledger](CREATE_OUTCOME_0431_2026-11-03.md). New tests reproduced a real source bug: post-dispatch MCP error falsely terminalized a created Box as failed. Repair makes it UNKNOWN, holds coordination claims, prevents replay and exposes a bounded Agent create-error follow-up. Pending main CI and isolated installed source-version verification must not be inferred from focused fixture PASS; upstream create-after-commit 500 cause remains open.
+
+## v0.43.1 immutable release and isolated host gate (2026-11-03)
+
+[Published and live acceptance ledger](STABLE_PROMOTION_0431_2026-11-03.md) records CI/tag and real 0.43.0→0.43.1 upgrade, installed doctor 10/10 and REST/MCP coordinator smoke. Default installer pin is an independent promotion; no production-host or upstream HTTP 500 repair is implied.
