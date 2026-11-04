@@ -447,7 +447,7 @@ COORDINATOR_CHECKS = frozenset(("config", "provider_mode", "runtime_binding",
     "provider_rest", "rest_inventory", "mcp_inventory", "probe", "receipt_trace",
     "timeline", "rest_span"))
 COORDINATOR_STATES = frozenset(("passed", "failed", "not_verified"))
-COORDINATOR_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,63}\\Z")
+COORDINATOR_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,63}\Z")
 
 
 def _coordinator_unavailable(profile, code):
