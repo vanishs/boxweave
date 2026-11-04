@@ -311,3 +311,7 @@ Providers, sshd or sudoers. See
 ### 2026-11-03 v0.42.11 installed Containarium restore capability gap
 
 [Published real upgrade and MCP test](MCP_COMPAT_RESTORE_04211_2026-11-03.md): the installed BoxWeave v0.42.11 gateway passes a five-tool source=compat probe and denies unauthorized restore requests. However, the actual pinned Containarium v0.120.1 MCP catalog advertised 67 tools **without restore_box_backup**. Therefore the protective gateway adapter cannot deliver an end-to-end whole-Box restore on this runtime. Current upstream main source is not evidence that the installed pinned binary exposes the tool. Provider-version integration and backup/key/target authorization testing remain **OPEN**, not a regression of the local guard. Do not silently upgrade the Provider.
+
+### 2026-11-03 v0.43.0 independent reacceptance risks
+
+[Fresh audit evidence](REACCEPTANCE_0430_2026-11-03.md) reproduced the already-known create-after-commit ambiguity: an upstream HTTP 500 / Instance already exists response with the original Box actually RUNNING, so a retry is unsafe. A browser-fixture fixed-port collision was repaired in the audited source and all seven Chromium fixtures then passed. Current isolated installed v0.43.0 REST/MCP and diagnostic reads passed; this does not close R-02 provisioned recovery, global R-04, D4 permitted positive, nested guest execution, E2–E4, external clients or cross-version migration/rollback. Affected task-owned Box retained as evidence; original environments preserved.

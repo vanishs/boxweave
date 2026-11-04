@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Current v0.43.0 independent reacceptance (2026-11-03)
+
+[Per-feature execution and explicitly unverified gates](REACCEPTANCE_0430_2026-11-03.md). Fresh main at `33ea432`: 699 Python tests PASS, 190 knowledge documents PASS, all 7 Chromium fixtures and a complete 10-step validation PASS after repairing the hardcoded 18640 browser fixture port collision. Newly created isolated Box: tagged 0.43.0 installer exit 0, installed doctor 10/10, 68-tool Gateway DC-01 preflight/REST+MCP reads PASS, R-01 reads/denials and old 0.26.1 read compatibility PASS. **Reproduced** intermittent create HTTP 500 despite observed running instance; no blind retry. R-02 on the outer host remains unprovisioned, D4 defaults deny; nested selftest execution, R-04 global cross-entry, E2–E4, external clients and old-version direct migration remain U/BLOCKED. Exact resource retained and restoration boundaries in the report.
+
 ## DC-01 read-only Agent diagnostic coordinator v0.43.0 candidate — 2026-11-03
 
 [Design](../design/DIAGNOSTIC_COORDINATOR_V1.md) | [Exact evidence and remaining installed-host gate](DIAGNOSTIC_COORDINATOR_0430_2026-11-03.md). New enumerated Agent tool coordinates fixed app preflight, independent authenticated REST/MCP inventory and actor-scoped D2 trace presentation. No host shell, source mutation, credential rotation or automatic Box writes. In a newly created isolated Box, source unit/knowledge/fixture build and packaged app subprocess with synthetic HTTP/MCP passed. **PR CI and main source-bound release PASS; isolated installed v0.43.0 Containarium/Gateway plus actual D2 REST trace PASS**. Exact [live promotion evidence](STABLE_PROMOTION_DC01_0430_2026-11-03.md) records a 0.42.12→0.43.0 upgrade, three acknowledged real REST operations, installed MCP tool positive/negative and cleanup. Separate stable-pinned installation does not upgrade the owner's running v0.42.12 host.
