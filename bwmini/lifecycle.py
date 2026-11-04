@@ -268,7 +268,10 @@ class Lifecycle:
             return self.receipt(ident,actor)
         target = Target(**json.loads(job["target"])) if job["target"] else None
         try:
-            value = self.provider.lifecycle_inspect(job["logical"])
+            from .provider_rest import trace_operation
+            trace = diagnostics.trace_for_operation(self.store, job["actor"], "environment", job["id"]) or diagnostics.new_trace_id()
+            with trace_operation(trace, job["id"], job["actor"]):
+                value = self.provider.lifecycle_inspect(job["logical"])
             if job["state"]=="unknown" or not job["acknowledged"]:
                 self.save(job,"unknown","reconciled","OUTCOME_UNKNOWN",result={
                     "resource_state":value["state"] if value else "absent",
@@ -388,7 +391,9 @@ class Lifecycle:
                         # not retried; retain a conservative shared claim if
                         # its dispatch intent was somehow already committed.
                         raise Fault(error.code) from None
-                self.provider.lifecycle_mutate(job["action"],job["logical"],current_spec,job["deadline"]-self.clock())
+                from .provider_rest import trace_operation
+                with trace_operation(trace, job["id"], job["actor"]):
+                    self.provider.lifecycle_mutate(job["action"],job["logical"],current_spec,job["deadline"]-self.clock())
                 self.save(job,"observing","submitted","ACKNOWLEDGED",acknowledged=1)
                 diagnostics.emit(self.store, component="lifecycle", phase="submitted", event_type="acknowledged",
                                  outcome="passed", code="ACKNOWLEDGED", trace_id=trace,
@@ -397,7 +402,7 @@ class Lifecycle:
             except Fault as error:
                 if error.code=="STATE_UNAVAILABLE":
                     raise
-                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED",
+                known={"TARGET_CHANGED","TARGET_NOT_ALLOWED","RESOURCE_EXISTS","STALE_RESOURCE_STATE","CONFIG_CHANGED","MANAGED_TARGET_REQUIRED","MANAGED_RESOURCE_MISSING_REVIEW_REQUIRED","CONTRACT_UNSUPPORTED","PROVIDER_API_CONFIG_INVALID","PROVIDER_API_LOOPBACK_REQUIRED","PROVIDER_API_TOKEN_FILE_REQUIRED","PROVIDER_API_TOKEN_UNSAFE","PROVIDER_API_TOKEN_UNAVAILABLE","PROVIDER_API_ROUTE_DENIED","PROVIDER_API_METHOD_DENIED","PROVIDER_API_REQUEST_TOO_LARGE","API_TARGET_INVALID","LIFECYCLE_DISABLED","TENANT_NOT_ALLOWED","ACCESS_DISABLED","SHARED_CREATE_UNSUPPORTED","NETWORK_CONTRACT_UNSUPPORTED","GUARD_NOT_READY","RESIZE_SPEC_INVALID","PROVIDER_REJECTED",
                        "COORDINATION_UNAVAILABLE","COORDINATION_STORAGE_UNSAFE",
                        "COORDINATION_SCHEMA_UNSUPPORTED","COORDINATION_SCOPE_UNVERIFIED",
                        "COORDINATION_SCOPE_MISMATCH","COORDINATION_IDENTITY_INVALID",
