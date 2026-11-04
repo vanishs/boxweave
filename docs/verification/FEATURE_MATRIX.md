@@ -1,3 +1,7 @@
+## v0.44.5 current-round scoped crosswalk
+
+[Feature and combination results](REACCEPTANCE_0445_2026-11-04.md). L PASS for isolated Box lifecycle, CPU/memory writes and readbacks, native Tenant/guard posture; connect/file reads BLOCKED by gateway exact trust, task tracking unprovisioned. Disk-shrink safeguard S+historical T only, installed 0.44.5 U. Fresh install, Web/auth/REST, R-04 global, external clients/OAuth, monitoring positive, E2–E4 and external Provider upgrade/rollback remain U/SKIPPED; source CI/release pending.
+
 # Feature/evidence matrix — historical phase6 scope plus 0.13.0 remediation obligations\n\n**Latest source/live supersession:** [v0.44.3 whole-project acceptance and remaining gates](REACCEPTANCE_0443_2026-11-04.md). Older phase6 and v0.26.x judgments below are preserved by exact version; they do not supersede the v0.44.3 isolated installation, authenticated MCP and provider 0.128.0 checks.\n
 
 Current authority SRC-084..088: [comparison and run inventory](COMPARISON_REPORT.md), [risk dispositions](OPEN_RISKS.md), [fresh phase6 evidence](phase6-runtime-evidence.json), [actual generated Windows enrollment](phase6-windows-web-profiles.json). Three missing/false-positive paths in0.9.0 are now fixed; earlier completion prose does not override these findings. The following REQ→AC→TASK/implementation→normal/error/authority/boundary/state matrix is authoritative. Fixture, current live, previous live, human and static evidence stay distinct.

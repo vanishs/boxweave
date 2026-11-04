@@ -220,7 +220,22 @@ jobs:
           version=$(python3 -c 'import json; print(json.load(open("release/release.json"))["version"])')
           source=$(python3 -c 'import json; print(json.load(open("release/release.json"))["source"])')
           test "$source" = "$GITHUB_SHA"
-          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          tag="v$version"
+          upload_verified() {
+            local file="$1" name attempt
+            name=$(basename "$file")
+            for attempt in 1 2 3 4; do
+              if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+                return 0
+              fi
+              if upload_verified "$file"; then
+                return 0
+              fi
+              sleep $((attempt * 5))
+            done
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"
+          }
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # gh release create can leave an authenticated-only draft and no
             # git tag when asset publication fails (HTTP 502). Recover only a
             # draft with the same source lineage; never retarget published data.
@@ -280,16 +295,13 @@ jobs:
               echo "Documentation/CI-only update validated; preserving immutable release v$version."
               exit 0
             fi
-            gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$version" > release-state.json
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets' > release-state.json
             for file in release/*; do
               name=$(basename "$file")
-              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))["assets"]) else 1)' "$name"; then
-                gh release upload "v$version" "$file" --repo "$GITHUB_REPOSITORY"
+              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))) else 1)' "$name"; then
+                upload_verified "$file"
               fi
             done
-            if [[ "$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "true" ]]; then
-              gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --draft=false
-            fi
           else
             # GitHub can reject a release creation for a previously missing tag.
             # Publish the immutable tag first, always bound to the verified CI SHA.
@@ -308,7 +320,7 @@ jobs:
               if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
                 break
               fi
-              if gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."; then
+              if gh release create "$tag" --draft --verify-tag --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."; then
                 break
               fi
               if [[ "$attempt" == 4 ]]; then
@@ -317,11 +329,24 @@ jobs:
               fi
               sleep $((attempt * 8))
             done
-            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > release-state.json
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets' > release-state.json
             for file in release/*; do
               name=$(basename "$file")
-              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))["assets"]) else 1)' "$name"; then
-                gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY"
+              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))) else 1)' "$name"; then
+                upload_verified "$file"
               fi
             done
           fi
+          # Draft releases return HTTP 404 from the releases/tags lookup.
+          # Confirm complete assets and verified tag identity before publishing.
+          expected=$(find release -maxdepth 1 -type f | wc -l | tr -d ' ')
+          actual=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets|length')
+          [[ "$expected" -gt 0 && "$actual" -eq "$expected" ]] || {
+            echo "Draft asset mismatch: expected $expected, observed $actual" >&2; exit 1;
+          }
+          if [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi
+          [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "false" ]] || {
+            echo 'Release remains draft after publication request' >&2; exit 1;
+          }
