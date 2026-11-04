@@ -679,7 +679,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             raise Failure("INSTALLED_MCP_SERVER_UNTRUSTED_OR_MISSING")
         if external:
             deadline = phase("external_provider_preflight")
-            # Do not install, upgrade, restart, or initialize Containarium or Incus.
+            # Preserve the reviewed endpoint, signing authority and Incus state.
             verify_existing_provider(old["external_provider"])
         else:
             if not shutil.which("incus"):
@@ -772,6 +772,10 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 except OSError: pass
                 require(time.monotonic() < deadline, "PROVIDER_API_NOT_READY")
                 time.sleep(15)
+        old["upstream_development_baseline"] = MIN_PROVIDER_VERSION
+        old["upstream_version_observed"] = component_version(
+            old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd")
+        atomic(marker, json.dumps(old, sort_keys=True, indent=2).encode())
         phase("containarium_host_shell")
         # Host-hop SSH is optional; independent app/MCP installation continues
         # after a pinned-source fetch, compatibility or host-ownership failure.
@@ -907,7 +911,8 @@ store.admin(generate_password_hash(password))
         atomic(provenance_path,provenance_payload,0o644)
         old["managed_files"][str(provenance_path)] = sha(provenance_payload)
         old.update(phase="ready",host=host,port=port,server_key=key,managed_public_key=managed_public_key,
-                   credential_contents="not_read",provider_mode="external" if external else "standalone",version=version,source=m["source"])
+                   credential_contents="not_read",provider_mode="external" if external else "standalone",
+                   upstream_development_baseline=MIN_PROVIDER_VERSION, version=version,source=m["source"])
         atomic(marker,json.dumps(old,sort_keys=True,indent=2).encode())
         http_config=cfg.get("remote_mcp") or {}
         http_enabled=http_config.get("enabled",True)
