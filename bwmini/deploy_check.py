@@ -23,7 +23,7 @@ def read_provider(c):
   else:result['basic_management']='legacy_mcp'
   return result
 def check(config,mcp=False):
- c=read_config(config);p=Provider(c);result={'mode':'mcp'}
+ c=read_config(config);p=Provider(c);result={'mode':'mcp','basic_management':'rest' if p.rest is not None else 'legacy_mcp'}
  if not mcp:
   c,s=load(config);result['schema']=7
  else:
