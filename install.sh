@@ -6,10 +6,14 @@ umask 077
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<'USAGE'
-Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE] [--repair-containarium-shell]
+Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE] [--repair-containarium-shell] [--upstream-version X.Y.Z | --upstream-latest]
   --version selects an exact published, digest-verified release (default: stable pin).
-  Streamed install/update/repair. Reuse an existing Containarium + Incus
-  without changing its binaries, service, storage or signing secret.
+  Streamed install/update/repair. Require Containarium >= project baseline.
+  An older local Provider is upgraded through an authorized, verified native
+  upgrade; a newer compatible Provider stays untouched by default.
+  --upstream-version chooses a published exact upstream version >= baseline.
+  --upstream-latest requests the current published upstream release.
+  An upstream downgrade is refused; existing Incus/storage/secret remain.
   Existing Provider defaults: http://127.0.0.1:8080,
   /etc/containarium/jwt.secret, and containariumd on PATH.
   A standalone preinstalled Incus storage pool is also preserved.
@@ -44,7 +48,7 @@ working user systemd bus are prerequisites. Rerun apply for app update/repair.
 USAGE
 }
 die() { printf '[boxweave] %s\n' "$*" >&2; exit 2; }
-if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli || "${1:-}" == --repair-containarium-shell ]]; then
+if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "${1:-}" == --provider-secret-file || "${1:-}" == --provider-cli || "${1:-}" == --repair-containarium-shell || "${1:-}" == --upstream-version || "${1:-}" == --upstream-latest ]]; then
   streamed_options=()
   selected_version=''
   while (( $# )); do
@@ -57,8 +61,12 @@ if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "$
       --provider-url|--provider-secret-file|--provider-cli)
         (( $# >= 2 )) || die "Missing value for $1"
         streamed_options+=("$1" "$2"); shift 2;;
-      --repair-containarium-shell)
+      --repair-containarium-shell|--upstream-latest)
         streamed_options+=("$1"); shift;;
+      --upstream-version)
+        (( $# >= 2 )) || die "Missing value for --upstream-version"
+        [[ "$2" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Invalid --upstream-version"
+        streamed_options+=("$1" "$2"); shift 2;;
       *) die "Unknown streamed installer option: $1";;
     esac
   done

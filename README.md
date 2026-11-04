@@ -4,7 +4,9 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.43.3. Default stable installer: v0.43.1.** The immutable v0.43.1 release passed source CI and a separate isolated 0.43.0-to-0.43.1 installed upgrade; the operator host has not been upgraded. See [release and promotion evidence](docs/verification/STABLE_PROMOTION_0431_2026-11-03.md). The immutable v0.43.0 release passed CI, an isolated Ubuntu 24.04 in-place upgrade from v0.42.12, authenticated live Provider REST/MCP reads, and a real app lifecycle-to-Agent-D2-trace check with cleanup. See [v0.43.0 stable promotion evidence](docs/verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md); this does not mean the original host was upgraded or remote OAuth, all Providers, or alternate platforms have been verified.
+**Current source version: 0.44.0 (candidate). Default stable installer: v0.43.1.** The immutable v0.43.1 release passed source CI and a separate isolated 0.43.0-to-0.43.1 installed upgrade; the operator host has not been upgraded. See [release and promotion evidence](docs/verification/STABLE_PROMOTION_0431_2026-11-03.md). The immutable v0.43.0 release passed CI, an isolated Ubuntu 24.04 in-place upgrade from v0.42.12, authenticated live Provider REST/MCP reads, and a real app lifecycle-to-Agent-D2-trace check with cleanup. See [v0.43.0 stable promotion evidence](docs/verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md); this does not mean the original host was upgraded or remote OAuth, all Providers, or alternate platforms have been verified.
+
+**v0.44.0 upstream baseline and version management:** The development baseline is explicitly recorded as **Containarium v0.128.0**. An exact BoxWeave installation automatically provisions or raises a trusted older Containarium daemon and MCP server to that minimum; an already compatible newer upstream version stays untouched, with **no maximum constraint**. An operator may select a *published exact* upstream release with `--upstream-version X.Y.Z` or the *latest published* with `--upstream-latest`, separately from BoxWeave's `--version 0.44.0` release selector. After installation, `sudo boxweave upstream status`, `sudo boxweave upstream update --latest` and `sudo boxweave upstream update --version X.Y.Z` manage the local upstream; downgrades and unverifiable assets fail closed. The running daemon and authenticated MCP are checked separately. Automatic upgrades can restart the Provider and affect a connected fleet: follow the [standard upgrading and rollback SOP](docs/process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md) before use. This is a source/CI candidate until it has independent isolated live acceptance; the original host is not changed by publishing.
 
 **v0.43.3 authenticated runtime version guard:** Beyond checking the locally installed root-owned daemon binary and MCP initialize version, deployment now checks the **running** Containarium daemon's authenticated `GET /v1/system/info` `info.daemonVersion`. A stale pre-upgrade process is refused as below minimum/unknown, even if a newer binary is already on disk. See [v0.43.3 follow-up verification](docs/verification/CONTAINARIUM_0128_RUNTIME_GATE_0433_2026-11-03.md).
 
@@ -23,7 +25,7 @@ The desired default command is:
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash
 ```
 
-To install or update to an exact published version, including a historical release, use:
+To install or update to an exact **published** BoxWeave release, including a historical release, use:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.43.1

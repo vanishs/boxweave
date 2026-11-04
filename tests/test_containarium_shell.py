@@ -242,7 +242,7 @@ class ShellInstallTests(unittest.TestCase):
             self.assertEqual(online.main(), 0)
             installer.assert_called_once_with(
                 Path("/tmp/stage"), "0.42.10", None, None, None,
-                repair_containarium_shell=True
+                repair_containarium_shell=True, upstream_version=None, upstream_latest=False
             )
 
 

@@ -1,3 +1,7 @@
+## 2026-11-03 Containarium upstream baseline and automatic update candidate (0.44.0)
+
+The development baseline is `0.128.0` (no maximum). A published BoxWeave 0.44.0 install auto-upgrades an older compatible local upstream to the baseline; the operator can select exact/latest upstream independently by installer options or `sudo boxweave upstream update`. [Implementation and actual test boundary](../verification/UPSTREAM_BASELINE_MANAGER_0440_2026-11-03.md) and [standard SOP](UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md). Source/CI and installed-host validation remain distinct. Stable default `0.43.1` is not moved.
+
 # Current phase status
 
 Authority for authorization/gates only; product version is [VERSION](../../VERSION), risk state is [OPEN_RISKS](../verification/OPEN_RISKS.md).

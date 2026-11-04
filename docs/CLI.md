@@ -78,6 +78,26 @@ Setup and diagnostic probes use the same options. Existing client MCP
 registrations are not rewritten by a server update: regenerate with
 explicit replacement consent and restart the client App.
 
+## Root-controlled Containarium version management (v0.44.0+)
+
+The following commands manage **only a verified local Provider** and require
+an explicit host administrator's `sudo`; they do not run application-owned
+code as root:
+
+```sh
+sudo boxweave upstream status
+sudo boxweave upstream update --latest
+sudo boxweave upstream update --version 0.128.0
+```
+
+The development baseline is currently v0.128.0 (minimum only, no ceiling).
+`status` describes the installed daemon binary and is **not** full running
+REST/MCP acceptance. `update` verifies the selected release and returns a
+bounded status or failure/UNKNOWN code. A missing upgrade receipt or timeout
+is not retried automatically. An upgrade may restart the daemon; read the
+[upstream SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md) and inspect
+fleet/sentinel behavior and backups before using it on production.
+
 ## Privilege/ownership audit
 
 | Action or file | Boundary |
@@ -89,6 +109,7 @@ explicit replacement consent and restart the client App.
 | `boxweave` / `status` / `doctor` / `client` | Ordinary user; no implicit elevation |
 | `boxweave box inspect/diagnose` | Read-only but requires existing Incus authorization |
 | `sudo boxweave doctor --mcp` | Explicit administrative operator; starts the probe as `boxweave`, not root |
+| `sudo boxweave upstream status/update` | Root-only, fixed verified helper; update may restart an existing Provider |
 | `online.py enroll` | Explicit administrator approval to update forced-command authorized public SSH keys |
 | `hostkeys.py`, `nesting.py`, `bootstrap.py` | Host privilege boundaries preserved; never made generally writable or silently escalated |
 

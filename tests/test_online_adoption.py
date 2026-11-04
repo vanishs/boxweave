@@ -86,7 +86,7 @@ class ExistingProviderTests(unittest.TestCase):
             self.assertEqual(http.call_args.args[0], "http://127.0.0.1:8080/v1/containers")
             write.assert_not_called()
             managed_run.assert_not_called()
-            version.assert_called_once_with("/usr/local/bin/containariumd")
+            version.assert_called_once_with("/usr/local/bin/containariumd", minimum=None)
 
     def test_uninitialized_incus_refused_without_writing(self):
         provider = {"url": "http://127.0.0.1:8080",
