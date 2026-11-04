@@ -42,3 +42,17 @@ Before new mutation, the original private app database and claims database were 
 - **Containarium upstream:** Create-after-error and native atomic disk shrink semantics remain OPEN for evidence and tracking **only**; no upstream code or runtime was changed.
 - **Real installed Web HTTP with administrator login, D4 positive diagnostics, external OAuth/TLS clients, Provider rollback, E2–E4 and OTel collection:** U or BLOCKED as in the current roadmap. An authenticated Flask fixture is not equivalent to real installed Web login.
 - No BoxWeave product defect requiring a new version was established by this follow-up. No new release and no stable-selector promotion was performed.
+
+## P2 read-only feature/host triage at this installed checkpoint
+
+| Queue | Verified classification | Remaining gate |
+| --- | --- | --- |
+| P2-01 live installed Web login | **Partial negative only:** an uncredentialed POST to the installed /api/environment-plans endpoint returned HTTP 403 (could be Origin/CSRF/auth gate; do not attribute it to a particular layer). | Actual authorized administrator login, real CSRF/Origin positive request and accepted/rejected real POST remain BLOCKED without an authorized credential |
+| P2-02 D4 positive | **U on this exact installation.** Historical earlier-version positive tests are not a substitute. | An explicit exact-target operator allowlist and permitted diagnostic probe |
+| P2-03 remote OAuth/TLS/desktop | **U/BLOCKED:** no authorized external client or new public endpoint supplied. | Independently authenticated end-to-end external client tests |
+| P2-04 Provider upgrade/rollback | **U:** no historical-provider upgrade/rollback run in this follow-up. | Independent disposable Provider with recorded versions and data/Box persistence; never mutate the owner's host |
+| P2-05 E2–E4 snapshot/restore/clone | **NOT IMPLEMENTED in the current BoxWeave roadmap**, not merely an untested completed feature. | E0 verified runtime Provider contract, authorized implementation and independent lifecycle/storage/identity tests; upstream issues record-only |
+| P2-06 monitoring and capacity | Real outer Provider system read: OTel collector **not configured**; physical CPU 4, tenant committed 45.00 cores (11.25x), admission gate **disabled**. This is observed configuration, not proof of failed admission or workload instability. | Operator-approved collector and admission policy; no stress test or host configuration changes in this round |
+| P2-07 stable selector | No promotion: 0.43.1 remains selected; verification docs now reflect released and installed 0.44.7 evidence. | Separate owner stability decision after remaining live gates |
+
+**Post-cleanup final health:** `sudo boxweave doctor --mcp` on the same isolated parent again returned v0.44.7, overall passed, all 10 of 10 checks passed. The temporary new child remained absent and its test allowlist had been restored. These follow-up observations do not change the production-host authorization boundary.
