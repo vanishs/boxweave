@@ -235,6 +235,21 @@ jobs:
             done
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"
           }
+          create_verified_tag() {
+            # API ref creation requires contents:write, not a workflow-file git push.
+            # Never move an existing version tag, even after a partial release.
+            local actual
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' >/dev/null 2>&1; then
+              actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')
+              [[ "$actual" == "$GITHUB_SHA" ]] || {
+                echo "Immutable tag already targets $actual; expected $GITHUB_SHA" >&2; return 1;
+              }
+            else
+              gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+            fi
+            actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')
+            [[ "$actual" == "$GITHUB_SHA" ]]
+          }
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # gh release create can leave an authenticated-only draft and no
             # git tag when asset publication fails (HTTP 502). Recover only a
@@ -257,8 +272,7 @@ jobs:
                 [[ "$existing_assets" == "0" ]] || { echo 'Retained draft assets require manual inspection' >&2; exit 1; }
                 gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
               fi
-              git tag "v$version" "$GITHUB_SHA"
-              git push origin "refs/tags/v$version"
+              create_verified_tag
             fi
             existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --jq '.object.sha')
             if [[ "$existing" != "$GITHUB_SHA" ]]; then
@@ -306,13 +320,7 @@ jobs:
             # GitHub can reject a release creation for a previously missing tag.
             # Publish the immutable tag first, always bound to the verified CI SHA.
             tag="v$version"
-            if git show-ref --verify --quiet "refs/tags/$tag"; then
-              existing_tag=$(git rev-parse "refs/tags/$tag^{commit}")
-              [[ "$existing_tag" == "$GITHUB_SHA" ]] || { echo 'Existing tag points at another commit' >&2; exit 1; }
-            else
-              git tag "$tag" "$GITHUB_SHA"
-              git push origin "refs/tags/$tag"
-            fi
+            create_verified_tag
             # Some release API failures happen after the server has accepted
             # the request. Recheck the original tag before retrying, and keep
             # uploads idempotent on an interrupted publish.
