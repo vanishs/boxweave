@@ -15,7 +15,13 @@ def read_provider(c):
  p=Provider(c)
  with Observed(p.argv,30) as client:
   tools=client.discover();client.tool('list_containers',{})
-  return {'state':'authenticated_read_passed','server':client.server.get('serverInfo',{}),'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers'}
+  result={'state':'authenticated_read_passed','server':client.server.get('serverInfo',{}),'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers'}
+  if p.rest is not None:
+   # A real local Provider API read is mandatory for newly configured installs.
+   p.rest.inventory()
+   result['basic_management']='rest_authenticated_inventory_passed'
+  else:result['basic_management']='legacy_mcp'
+  return result
 def check(config,mcp=False):
  c=read_config(config);p=Provider(c);result={'mode':'mcp'}
  if not mcp:
