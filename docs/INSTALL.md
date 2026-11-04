@@ -83,13 +83,15 @@ before changing Provider ownership or enabling automatic upstream execution.
 
 ## Fresh-host streamed entry
 
-The README command selects the source-bound release's `online.py` coordinator. It stages/validates all artifacts, provisions only an inspected empty local host, then delegates app installation to the dedicated non-root account. Repeat the same command for managed app update/repair after inspecting a failed phase and any original package processes; existing Provider binary/version mismatches remain refused. No old data migration or arbitrary environment adoption occurs.
+The streamed README command selects the source-bound release's `online.py` coordinator. As of the explicitly selected BoxWeave v0.44.0 release, the streamed installer stages/validates all artifacts, provisions a missing local Provider, and upgrades an existing trusted Provider that is below the project's Containarium minimum (currently v0.128.0). A newer runtime is kept; an unknown, untrusted or partial Provider is refused. Repeat the same exact BoxWeave command for app update/repair after inspecting any failed phase and original processes. Unlike this streamed path, the lower-level non-root `distribution.py install` is application-only and does not update infrastructure. No old data migration or arbitrary environment adoption occurs.
 
 The successful completion screen shows the verified BoxWeave release version.
 For a new standalone deployment without Incus, BoxWeave uses `apt-get -s`
 to check a coherent, unpinned `incus`/`incus-client`/`incus-extra`
 dependency transaction before installation, with `--no-upgrade` to avoid
-upgrading installed packages. Existing complete Containarium+Incus is untouched.
+upgrading installed Incus packages. An existing complete Containarium is
+preserved if it meets the baseline; older verified Containarium components are
+upgraded using the reviewed upstream mechanism.
 This is an incremental fix, not a transfer of Incus and PostgreSQL ownership
 to Containarium. The upstream installer can modify installed Incus and network
 settings; do not invoke it automatically without a reviewed provisioning plan.
@@ -101,11 +103,11 @@ Installation's app health/MCP read is separate from a later client's actual crea
 
 ## Streamed installation with an existing Containarium
 
-On **Linux x86_64 with CPython >= 3.12 and systemd**, the default streamed entry can reuse an existing Incus + Containarium deployment. The installed Provider must expose its authenticated REST API on loopback and have a root-private JWT signing-secret file. BoxWeave inspects its availability and the existing Incus pool, but never installs/upgrades/restarts the external Provider, rewrites its secret, or replaces its network/storage configuration. BoxWeave-owned application bootstrap, user/timer, trust helper and app updates are still carried out.
+On **Linux x86_64 with CPython >= 3.12 and systemd**, the default streamed entry can reuse an existing Incus + Containarium deployment. The installed Provider must expose its authenticated REST API on loopback and have a root-private JWT signing-secret file. BoxWeave inspects its availability and existing Incus pool. Since source v0.44.0, a root-authorized streamed install automatically upgrades below-baseline Containarium via the upstream native upgrade API; already adequate newer versions are kept. The upgrade can restart its service but does not rewrite the signing secret, SSH identity, or network/storage configuration. BoxWeave-owned application bootstrap, user/timer, trust helper and app updates are still carried out.
 
 The ordinary zero-argument streamed command uses Provider URL `http://127.0.0.1:8080`, secret path `/etc/containarium/jwt.secret` and installed `containariumd`. For a different local Provider setup, download and review the matching release `install.sh`, then execute `sudo bash install.sh --provider-url http://127.0.0.1:PORT --provider-secret-file /reviewed/secret/path --provider-cli /absolute/path/to/containariumd`. The custom options are only for the streamed entry; the independent `plan/apply` mode is unchanged. Existing Incus **without** Containarium is also supported when its storage pool is already configured: the installer preserves the pool and provisions the fixed managed Provider.
 
-The installer saves the chosen ownership mode on first installation. Repeating the command updates or repairs only BoxWeave-owned artifacts and verifies the same external Provider identity. Changes to the external Provider binary/secret require a separate operator-reviewed adoption process, not an implicit upgrade. Partial existing Provider installations, foreign BoxWeave accounts/state, and empty Incus pools are refused safely. This does not import historical 0.5.1 data.
+The installer saves the chosen ownership mode on first installation. Repeating the command updates or repairs only BoxWeave-owned artifacts and verifies the same external Provider identity. Changes to the external Provider identity, signer, endpoint or installation mode still require a separately reviewed adoption. An explicitly invoked v0.44.0 streamed install **may upgrade** its existing trusted upstream binary under the pinned minimum and upgrade SOP; this is not authorization to adopt a different Provider or change secrets. Partial existing Provider installations, foreign BoxWeave accounts/state, and empty Incus pools are refused safely. This does not import historical 0.5.1 data.
 
 **Minimum application runtime: Linux x86_64 and CPython >= 3.12, with systemd and reviewed Provider prerequisites. No Ubuntu-version or distribution-name gate remains.** If packages are missing, APT is used only when apt-get and a compatible suite are available; otherwise prepare reviewed dependencies/Provider first. Ubuntu 24.04+ is recommended, not required. The release contains hash-checked offline wheels for CPython 3.12, 3.13, 3.14 and 3.15. A later Python may pass the version gate but lack a compatible bundled wheel: it must fail safely rather than download an unreviewed dependency. Ubuntu 26.04 is accepted by source checks but still needs live host and reboot acceptance. See [implementation and test queue](verification/EXISTING_PROVIDER_INSTALL.md).
 
