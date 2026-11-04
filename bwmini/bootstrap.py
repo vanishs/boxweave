@@ -291,7 +291,8 @@ def apply(args, artifacts):
             atomic(stage / name, artifacts[name], 0o600, owner)
         config = {"mode": "mcp", "database": str(home / "boxweave-state/state.sqlite3"),
                   "provider": "containarium", "backend": platform.node(), "project": "default",
-                  "launcher": [str(launcher)], "targets": {}, "host": "127.0.0.1", "port": args.port,
+                  "launcher": [str(launcher)], "provider_api": {"url": args.provider_url,
+                  "token_file": str(token)}, "targets": {}, "host": "127.0.0.1", "port": args.port,
                   "origin": "http://127.0.0.1:" + str(args.port), "secure_cookie": False,
                   "operation_timeout": 60}
         config_path = stage / "application.json"
