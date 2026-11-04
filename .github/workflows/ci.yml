@@ -221,6 +221,30 @@ jobs:
           source=$(python3 -c 'import json; print(json.load(open("release/release.json"))["source"])')
           test "$source" = "$GITHUB_SHA"
           if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # gh release create can leave an authenticated-only draft and no
+            # git tag when asset publication fails (HTTP 502). Recover only a
+            # draft with the same source lineage; never retarget published data.
+            if ! git show-ref --verify --quiet "refs/tags/v$version"; then
+              draft=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+              [[ "$draft" == "true" ]] || { echo 'Published release has no verified tag; refuse' >&2; exit 1; }
+              original=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
+              if [[ "$original" != "$GITHUB_SHA" ]]; then
+                git merge-base --is-ancestor "$original" "$GITHUB_SHA"
+                changes=$(git diff --name-only "$original" "$GITHUB_SHA")
+                [[ -n "$changes" ]] || exit 1
+                while IFS= read -r changed; do
+                  case "$changed" in .github/workflows/ci.yml) ;; *)
+                    echo "Draft retarget has runnable-source change: $changed" >&2
+                    exit 1
+                  ;; esac
+                done <<< "$changes"
+                existing_assets=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets|length')
+                [[ "$existing_assets" == "0" ]] || { echo 'Retained draft assets require manual inspection' >&2; exit 1; }
+                gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
+              fi
+              git tag "v$version" "$GITHUB_SHA"
+              git push origin "refs/tags/v$version"
+            fi
             existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --jq '.object.sha')
             if [[ "$existing" != "$GITHUB_SHA" ]]; then
               # A published version is immutable. Documentation-only and this
@@ -263,6 +287,9 @@ jobs:
                 gh release upload "v$version" "$file" --repo "$GITHUB_REPOSITORY"
               fi
             done
+            if [[ "$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "true" ]]; then
+              gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --draft=false
+            fi
           else
             # GitHub can reject a release creation for a previously missing tag.
             # Publish the immutable tag first, always bound to the verified CI SHA.
