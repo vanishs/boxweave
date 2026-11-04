@@ -299,9 +299,29 @@ def apply(args, artifacts):
         argv = ["runuser", "-u", user, "--", "env", "XDG_RUNTIME_DIR=" + runtime,
                 "/usr/bin/python3", str(stage / "distribution"), "install", "--package",
                 str(stage / "package"), "--sha256", args.sha256, "--prefix", str(prefix), "--activate"]
-        if not (prefix / "config.json").exists():
+        saved_config = prefix / "config.json"
+        if not saved_config.exists():
             atomic(config_path, encoded(config), 0o600, owner)
             argv += ["--config", str(config_path)]
+        else:
+            # Existing installs retain their settings, but receive the reviewed
+            # localhost API binding as an additive, strictly owned migration.
+            # Refuse foreign, symlinked or nonprivate configuration.
+            info = saved_config.lstat()
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == owner[0]
+                    and info.st_nlink == 1 and not info.st_mode & 0o077
+                    and info.st_size <= 65536, "APP_CONFIG_UNSAFE")
+            previous = json.loads(saved_config.read_text())
+            require(isinstance(previous, dict) and previous.get("mode") == "mcp"
+                    and previous.get("provider") == "containarium"
+                    and isinstance(previous.get("launcher"), list),
+                    "PROVIDER_API_CONFIG_REVIEW_REQUIRED")
+            if "provider_api" in previous:
+                require(previous["provider_api"] == config["provider_api"],
+                        "PROVIDER_API_CONFIG_CONFLICT")
+            else:
+                previous["provider_api"] = config["provider_api"]
+                atomic(saved_config, encoded(previous), 0o600, owner)
         # App installer output is bounded public state, but keep it private on disk.
         with (folder / "application-install.log").open("wb") as log:
             result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
