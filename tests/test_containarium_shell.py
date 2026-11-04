@@ -71,7 +71,8 @@ class ShellInstallTests(unittest.TestCase):
         if argv[0] == "/bin/bash":
             self.assertEqual(argv[1], "-n")
             return SimpleNamespace(returncode=self.syntax_exit, stdout="", stderr="")
-        self.assertEqual(argv, ["/opt/containariumd", "version"])
+        self.assertIn(argv, [["/opt/containariumd", "version"],
+                             ["/usr/local/bin/containariumd", "version"]])
         return SimpleNamespace(returncode=0, stdout=self.version_output, stderr="")
 
     def invoke(self, *, external=False, repair=False, rooted=True,

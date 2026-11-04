@@ -17,7 +17,7 @@ def read_provider(c):
   tools=client.discover()
   server=client.server.get('serverInfo',{})
   version=server.get('version') if isinstance(server,dict) else None
-  match=re.fullmatch(r'v?([0-9]+)\\.([0-9]+)\\.([0-9]+)',version) if isinstance(version,str) else None
+  match=re.fullmatch(r'v?([0-9]+)\.([0-9]+)\.([0-9]+)',version) if isinstance(version,str) else None
   if not match or tuple(int(n) for n in match.groups()) < (0,128,0):
    raise Fault('MCP_SERVER_BELOW_MINIMUM_OR_UNKNOWN')
   client.tool('list_containers',{})

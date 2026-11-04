@@ -154,7 +154,7 @@ def component_version(binary, *, minimum=MIN_PROVIDER_VERSION):
                                 text=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         raise Failure("PROVIDER_COMPONENT_VERSION_UNKNOWN") from None
-    observed = re.findall(r"(?<![\\d.])v?([0-9]+\\.[0-9]+\\.[0-9]+)(?![\\d.])",
+    observed = re.findall(r"(?<![\d.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![\d.])",
                           result.stdout + " " + result.stderr)
     require(result.returncode == 0 and len(set(observed)) == 1,
             "PROVIDER_COMPONENT_VERSION_UNKNOWN")
