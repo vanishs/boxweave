@@ -16,6 +16,10 @@ Owner is the project maintainer/operator unless specified. P0/P1 = blocks the se
 
 Phase7 maintenance is authorized by SRC-089; its completion evidence belongs in [PHASE_07_REVIEW](PHASE_07_REVIEW.md). It does not resolve these operational bounds or authorize publication/deployment. No pending product decision remains after SRC-086. A future required claim becoming unsupported must be reopened as cannot accept, not hidden under a P2 label.
 
+## Latest v0.44.6 installed acceptance and outstanding operator gates (2026-11-04)
+
+[Isolated four-gate evidence](FOUR_GATE_ISOLATED_ACCEPTANCE_0446_2026-11-04.md) supersedes earlier *isolated* BLOCKED claims for inner guest execution, explicit R-02 provisioning and disk shrink MCP/REST/Web-shared application code: these specific pathways now have real positive or negative execution evidence. The outer owner host is **not** upgraded; its R-02 metadata store is **not provisioned** and still returns `TASK_TRACKING_UNAVAILABLE`. A separate operator-authorized `sudo boxweave task provision` is necessary before that host's R-02 can be claimed operational. Real authenticated HTTP POST on the **installed Web listener** remains unverified because access to the private first-admin credential is not authorized; authenticated Flask fixture route and installed shared lifecycle plan are separate evidence. R-04 cross-Web/MCP/REST coordination (disabled in this isolation) and atomic upstream/native disk shrink protection remain unverified; BoxWeave's installed app/MCP guards are preflight checks rather than a global Provider invariant. Test parent `bwverify-0446-e2e-container` is STOPPED, child workloads removed. No new code defect, patch release, stable promotion or owner-host mutation was performed.
+
 ## New 0.10+ remediation risks (current; not closed by the old phase6 report)
 
 | ID | Priority / status | Impact / scope | Evidence and action / owner |
