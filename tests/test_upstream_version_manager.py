@@ -176,6 +176,90 @@ class UpstreamPolicyTests(unittest.TestCase):
             self.assertEqual(receipt["upgrade_id"], "upg-12345")
             self.assertNotIn("private", json.dumps(receipt))
 
+    def _exercise_external_host_upgrade_fixture(self, *, fail_new=False):
+        """Synthetic protected service, fake binary and REST; never touches host."""
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            stage = state / "stage"
+            stage.mkdir()
+            (stage / "containariumd").write_bytes(b"new-signed-binary")
+            current = {"raw": b"old-signed-binary", "running": "0.120.1"}
+            restarts = []
+            real_read = Path.read_bytes
+
+            def read_bytes(path):
+                if str(path) == "/usr/local/bin/containariumd":
+                    return current["raw"]
+                return real_read(path)
+
+            def process(argv, **kwargs):
+                if argv[:2] == ["systemctl", "show"]:
+                    return SimpleNamespace(returncode=0, stdout=(
+                        "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
+                        "ExecStart={ path=/usr/local/bin/containariumd ; "
+                        "argv[]=/usr/local/bin/containariumd daemon }\n"))
+                if argv == ["systemctl", "restart", "containarium.service"]:
+                    current["running"] = ("0.128.0" if current["raw"] == b"new-signed-binary"
+                                          else "0.120.1")
+                    restarts.append(current["running"])
+                    return SimpleNamespace(returncode=0)
+                raise AssertionError(argv)
+
+            def api(url, token, method, path, body=None, timeout=12):
+                self.assertEqual(method, "GET")
+                if path == "/v1/system/info":
+                    if fail_new and current["running"] == "0.128.0":
+                        raise u.UpgradeFailure("simulated_new_runtime_unverified")
+                    return {"info": {"daemonVersion": current["running"]}}
+                if path == "/v1/containers":
+                    return {"containers": []}
+                raise AssertionError(path)
+
+            def swap(binary, staged):
+                self.assertEqual(str(binary), "/usr/local/bin/containariumd")
+                current["raw"] = staged.read_bytes()
+
+            with patch.object(u, "STATE", state), \
+                 patch.object(u, "trusted", return_value=True), \
+                 patch.object(u.Path, "read_bytes", read_bytes), \
+                 patch.object(u.subprocess, "run", side_effect=process), \
+                 patch.object(u, "installed_version", return_value="0.128.0"), \
+                 patch.object(u, "_token", return_value="private-fixture-token"), \
+                 patch.object(u, "_api", side_effect=api), \
+                 patch.object(u, "_atomic_binary", side_effect=swap):
+                if fail_new:
+                    with self.assertRaisesRegex(
+                            u.UpgradeFailure, "UPSTREAM_EXTERNAL_UPGRADE_FAILED_ROLLED_BACK"):
+                        u.external_host_upgrade(
+                            stage, "/usr/local/bin/containariumd",
+                            "/etc/containarium/jwt.secret", "http://127.0.0.1:8080",
+                            "0.120.1", "0.128.0")
+                else:
+                    receipt = u.external_host_upgrade(
+                        stage, "/usr/local/bin/containariumd",
+                        "/etc/containarium/jwt.secret", "http://127.0.0.1:8080",
+                        "0.120.1", "0.128.0")
+                    self.assertEqual(receipt["status"], "running_verified")
+                    self.assertEqual(receipt["version"], "0.128.0")
+
+            self.assertEqual(restarts, (["0.128.0", "0.120.1"] if fail_new
+                                       else ["0.128.0"]))
+            self.assertEqual(current["raw"], (b"old-signed-binary" if fail_new
+                                               else b"new-signed-binary"))
+            checkpoint = json.loads((state / "upstream-host-upgrade.json").read_text())
+            self.assertEqual(checkpoint["status"], "rolled_back" if fail_new else "verified")
+            self.assertEqual(checkpoint["from"], "0.120.1")
+            backup = state / "upstream-binary-backups" / (
+                "containariumd-" + u.sha256(b"old-signed-binary"))
+            self.assertEqual(backup.read_bytes(), b"old-signed-binary")
+            self.assertNotIn("private-fixture-token", json.dumps(checkpoint))
+
+    def test_external_host_upgrade_verified_fixture(self):
+        self._exercise_external_host_upgrade_fixture()
+
+    def test_external_host_upgrade_rollback_fixture(self):
+        self._exercise_external_host_upgrade_fixture(fail_new=True)
+
     def test_external_host_upgrade_refuses_unknown_service_before_write(self):
         fake = SimpleNamespace(returncode=0, stdout=(
             "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
