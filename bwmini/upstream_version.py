@@ -180,6 +180,12 @@ def native_upgrade(binary, secret, url, selected, *, deadline=180):
         try:
             response = _api(url, token, "POST", "/v1/backends/upgrade",
                             {"github_tag": "v" + selected}, timeout=65)
+        except error.HTTPError as exc:
+            # A definite HTTP rejection occurred before a successful upgrade receipt.
+            # Never leak its response body (which may contain private diagnostics).
+            if exc.code in (400, 401, 403, 404, 409, 422):
+                raise UpgradeFailure("UPSTREAM_UPGRADE_REJECTED_HTTP_" + str(exc.code)) from None
+            raise UpgradeFailure("UPSTREAM_UPGRADE_OUTCOME_UNKNOWN_NO_RETRY") from None
         except (OSError, TimeoutError, error.URLError):
             raise UpgradeFailure("UPSTREAM_UPGRADE_OUTCOME_UNKNOWN_NO_RETRY") from None
         require(isinstance(response, dict) and response.get("upgradeId"),
@@ -220,6 +226,12 @@ def refresh_clients(folder, selected, old, daemon_path, *, managed):
     """Only replace conventional root-controlled local CLI and MCP binaries."""
     targets = {"containarium": Path("/usr/local/bin/containarium"),
                "mcp-server": Path("/usr/local/bin/mcp-server")}
+    # Check all local binary ownership before replacing any component.
+    for dest in targets.values():
+        require(not dest.exists() or trusted(dest) or
+                (dest == targets["containarium"] and dest.is_symlink()
+                 and dest.resolve() == daemon_path.resolve()
+                 and trusted(daemon_path)), "UPSTREAM_CLIENT_UNTRUSTED")
     for name, dest in targets.items():
         # A normal upstream CLI symlink to the upgraded daemon is retained.
         if dest.is_symlink():
