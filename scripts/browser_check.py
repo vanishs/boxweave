@@ -20,10 +20,14 @@ state.mkdir(parents=True,mode=0o700,exist_ok=False)
 password=secrets.token_urlsafe(24)
 counter=state/"calls.txt"
 counter.write_text("")
+# Coexist with an installed dashboard, which may already own port 18640.
+with socket.socket() as port_probe:
+    port_probe.bind(("127.0.0.1", 0))
+    fixture_port = port_probe.getsockname()[1]
 config={"mode":"fixture","database":str(state/"state.sqlite3"),
 "target":{"provider":"containarium","backend":"dev","project":"default","logical":"fixture-box",
 "instance":"fixture-box-container","created":"123","user":"fixture-box","hostname":"fixture-box-container"},
-"fixture_counter":str(counter),"host":"127.0.0.1","port":18640,"origin":"http://127.0.0.1:18640",
+"fixture_counter":str(counter),"host":"127.0.0.1","port":fixture_port,"origin":f"http://127.0.0.1:{fixture_port}",
 "secure_cookie":False,"dist":str(root/"web/dist"),"operation_timeout":60}
 path=state/"config.json";path.write_text(json.dumps(config));path.chmod(0o600)
 _,service=load(path)
@@ -42,7 +46,7 @@ def stop(p):
 server=worker=None
 try:
     with socket.socket() as check:
-        check.bind(("127.0.0.1",18640))
+        check.bind(("127.0.0.1", fixture_port))
     server=start("serve");worker=start("worker")
     deadline=time.monotonic()+30
     while True:
