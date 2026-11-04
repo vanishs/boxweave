@@ -135,6 +135,13 @@ class GatewayCoordinatorTests(unittest.TestCase):
         self.assertEqual(item["inputSchema"]["properties"]["profile"]["enum"],
                          ["preflight", "rest_read", "operation_trace"])
         self.assertFalse(item["inputSchema"]["additionalProperties"])
+        self.assertIn("boxweave_diagnostic_run", mcp_gate.gateway_protection.VISIBLE)
+        mcp_gate.gateway_protection.check_call("boxweave_diagnostic_run",
+                                                {"profile": "preflight"})
+        protected = mcp_gate.gateway_protection.filter_catalog(
+            {"result": {"tools": tools}})
+        self.assertIn("boxweave_diagnostic_run",
+                      [t["name"] for t in protected["result"]["tools"]])
 
     def test_fixed_subprocess_argv_cwd_and_safe_projection(self):
         response = SimpleNamespace(returncode=0,
