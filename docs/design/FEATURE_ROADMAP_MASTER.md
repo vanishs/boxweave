@@ -5,6 +5,10 @@
 **Owner direction:** Keep Boxes clean, use separate Boxes for parallel projects, prefer external nonintrusive weaving, reuse the installed Provider/SSH/HTTP MCP architecture, and keep optional coordination nearly invisible for ordinary single-Agent use.
 **Scope rule:** The roadmap tracks *ideas and decisions*. Product requirements and delivery authority belong to [SCOPE](../product/SCOPE.md), [REQUIREMENTS](../product/REQUIREMENTS.md), [ACCEPTANCE](../product/ACCEPTANCE.md), and [PHASE_STATUS](../process/PHASE_STATUS.md). Installed evidence belongs to the [feature matrix](../verification/FEATURE_MATRIX.md) and [verification queue](../verification/REMEDIATION_TEST_QUEUE.md). An owner-approved *design* is not permission to implement, publish, install, connect a public listener, create a Box or modify a host.
 
+## Containarium v0.128.0 minimum-only upgrade contract (2026-11-03)
+
+The owner selected **minimum versions without any upper-version allowlist** for dependent Containarium components, replacing any proposal to maintain an exact release compatibility table. The [complete upgrade source assessment](CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [repeatable Agent SOP](../process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md) and [v0.43.2 evidence ledger](../verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md) own the details. This P0 slice preserves coequal REST/MCP adapters and does not change accepted ADR-003, E2/E3/E4 scope, the host's running Provider, or default stable pin 0.43.1.
+
 ## Current source and stable-release checkpoint (2026-11-02)
 
 The historical phase narratives below are kept for decision provenance;
