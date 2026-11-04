@@ -183,9 +183,13 @@ class RESTClient:
             code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
             raise Fault(code, 409) from None
         finally:
-            self._event(method, path, None, code,
-                        min(3600000, max(0, int((time.monotonic() - started) * 1000))),
-                        is_write)
+            try:
+                self._event(method, path, None, code,
+                            min(3600000, max(0, int((time.monotonic() - started) * 1000))),
+                            is_write)
+            except Exception:
+                # Evidence capture is always secondary to the actual request.
+                pass
 
     def inventory(self):
         result = self.request("GET", "/v1/containers", timeout=20)
