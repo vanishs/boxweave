@@ -167,3 +167,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## v0.43.1 immutable release and isolated host gate (2026-11-03)
 
 [Published and live acceptance ledger](STABLE_PROMOTION_0431_2026-11-03.md) records CI/tag and real 0.43.0→0.43.1 upgrade, installed doctor 10/10 and REST/MCP coordinator smoke. Default installer pin is an independent promotion; no production-host or upstream HTTP 500 repair is implied.
+
+## Updated host v0.43.1 real reacceptance (2026-11-03)
+
+[Per-feature current-grade matrix](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md): live create/SSH/bounded reads/stop-start/persistence/resize/network ACL and historical 0.26.1 read/doctor PASS, source 703/703 + seven browsers PASS. Deployment-disabled task tracking, protected R-04, D4 positive, missing current client DC-01 catalog entry and unsupported untested storage/external client/nested child remain U/BLOCKED.

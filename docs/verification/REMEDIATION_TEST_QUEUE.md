@@ -1,12 +1,16 @@
 # Remediation validation and next-Agent queue
 
+## Post-host-upgrade v0.43.1 independent reacceptance — 2026-11-03
+
+[Actual evidence matrix and open live gates](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md): current Gateway source 0.43.1, Containarium daemon still 0.120.1; 703 Python/7 Chromium/10-step source validation PASS. Created isolated managed Box, SSH/write/read/stop/start/persistent file/online CPU resize/cleanup PASS; cross-Tenant ACL actual TCP denial and old installed 0.26.1 doctor 10/10 PASS. Deliberate duplicate-name create returns 500 but original Box incarnation is unchanged; **not** prior after-commit-race reproduction. R-02 unprovisioned, D4 denies unapproved checks, DC-01 missing from this client catalog, typed create error data not displayed in surfaced exception. Global R-04/E2–E4/external OAuth/actual nested child remain U.
+
 ## v0.43.1 published source and isolated installed acceptance — 2026-11-03
 
 [Release and stable-default gate](STABLE_PROMOTION_0431_2026-11-03.md) and [post-dispatch bug test](CREATE_OUTCOME_0431_2026-11-03.md): source main CI 41776913234 verify + publish PASS at `eadcb27`; immutable v0.43.1 release contains 23 SHA-256-bearing assets. The dedicated test Box performed a real 0.43.0→0.43.1 upgrade with exit 0, installed doctor 10/10, authenticated REST/MCP, installed Gateway 68-tool catalog and DC-01 preflight/rest_read PASS. The upstream intermittent 500 root cause, real production host, global R-04 and external client checks remain OPEN/U; do not infer full acceptance from the limited host. Default stable pin upgrade is separately reviewed and does not rewrite v0.43.1 source assets.
 
 ## Current v0.43.1 post-dispatch repair and release gate — 2026-11-03
 
-[Post-commit error classification and acceptance](CREATE_OUTCOME_0431_2026-11-03.md): reproducible **bug** in app lifecycle incorrectly treated post-dispatch MCP `PROVIDER_REJECTED` as definite pre-dispatch failure, risking a false terminal receipt after real creation; existing shared-claim cleanup remained conservative. Fixed to UNKNOWN with preserved claim and read-only candidate observation. Agent Gateway now adds explicit non-retry metadata to create errors without modifying the upstream error; the raw Provider 500 root cause remains OPEN. Focused regression tests PASS; fresh full source validation 703 Python tests, knowledge, Web build and all seven Chromium fixtures PASS (10/10). Independent CI/tag and installed current-version checks tracked separately; stable installer pinned v0.43.0 pending promotion.
+[Post-commit error classification and acceptance](CREATE_OUTCOME_0431_2026-11-03.md): reproducible **bug** in app lifecycle incorrectly treated post-dispatch MCP `PROVIDER_REJECTED` as definite pre-dispatch failure, risking a false terminal receipt after real creation; existing shared-claim cleanup remained conservative. Fixed to UNKNOWN with preserved claim and read-only candidate observation. Agent Gateway now adds explicit non-retry metadata to create errors without modifying the upstream error; the raw Provider 500 root cause remains OPEN. Focused regression tests PASS; fresh full source validation 703 Python tests, knowledge, Web build and all seven Chromium fixtures PASS (10/10). Immutable v0.43.1 CI/release and exact+default installed acceptance were subsequently completed; see the stable promotion record.
 
 ## Current v0.43.0 independent reacceptance (2026-11-03)
 
