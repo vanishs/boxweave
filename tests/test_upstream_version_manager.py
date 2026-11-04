@@ -90,6 +90,50 @@ class UpstreamPolicyTests(unittest.TestCase):
                      target="0.128.0")
         download.assert_not_called()
 
+    def test_old_external_daemon_uses_one_native_upgrade_and_updates_clients(self):
+        with tempfile.TemporaryDirectory() as d:
+            calls = []
+            def installed(path):
+                return "0.120.1" if str(path).endswith("containariumd") else "0.120.1"
+            with patch.object(u.os, "geteuid", return_value=0), \
+                 patch.object(u, "STATE", Path(d)), \
+                 patch.object(u, "installed_version", side_effect=installed), \
+                 patch.object(u.Path, "exists", return_value=True), \
+                 patch.object(u, "trusted", return_value=True), \
+                 patch.object(u, "download_assets") as download, \
+                 patch.object(u, "native_upgrade", return_value={
+                     "status": "running_verified", "version": "0.128.0", "upgrade_id": "one"
+                 }) as native, \
+                 patch.object(u, "refresh_clients") as clients:
+                state = {}
+                result = u.ensure(state, cli="/usr/local/bin/containariumd",
+                                  url="http://127.0.0.1:8080",
+                                  secret="/etc/containarium/jwt.secret")
+                self.assertEqual(result["upgrade_id"], "one")
+                self.assertEqual(result["baseline"], "0.128.0")
+                self.assertEqual(state["upstream_version_observed"], "0.128.0")
+                download.assert_called_once()
+                native.assert_called_once_with("/usr/local/bin/containariumd",
+                                               "/etc/containarium/jwt.secret",
+                                               "http://127.0.0.1:8080", "0.128.0")
+                clients.assert_called_once()
+
+    def test_native_upgrade_denial_is_definite_without_replay(self):
+        from urllib.error import HTTPError
+        with tempfile.TemporaryDirectory() as d:
+            calls = []
+            def refuse(url, token, method, path, body=None, timeout=12):
+                calls.append(method)
+                raise HTTPError(url, 403, "Forbidden", {}, None)
+            with patch.object(u, "STATE", Path(d)), \
+                 patch.object(u, "_token", return_value="private-not-printed"), \
+                 patch.object(u, "_api", side_effect=refuse), \
+                 self.assertRaisesRegex(u.UpgradeFailure, "REJECTED_HTTP_403"):
+                u.native_upgrade("/usr/local/bin/containariumd",
+                                 "/etc/containarium/jwt.secret",
+                                 "http://127.0.0.1:8080", "0.128.0")
+            self.assertEqual(calls, ["POST"])
+
     def test_unprivileged_status_and_upgrade_refused(self):
         with patch.object(u.os, "geteuid", return_value=1000):
             self.assertEqual(u.main(["status"]), 2)
