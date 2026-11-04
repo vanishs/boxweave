@@ -1,5 +1,5 @@
 """Source-bound BoxWeave install/update/repair for fresh or reviewed existing Providers.
-Existing Containarium/Incus are never replaced or upgraded. Credentials stay private.
+Existing Containarium is upgraded to the declared minimum when needed. Credentials stay private.
 """
 import argparse, base64, datetime, fcntl, hashlib, importlib.util, ipaddress, json, os
 from pathlib import Path
@@ -10,7 +10,7 @@ PUBLIC = Path("/usr/local/lib/boxweave/default")
 APP = "boxweave"
 # Minimum runtime version; there is no maximum or per-release allowlist.
 MIN_PROVIDER_VERSION = "0.128.0"
-PROVIDER_VERSION = MIN_PROVIDER_VERSION  # SHA-pinned clean bootstrap only.
+PROVIDER_VERSION = MIN_PROVIDER_VERSION  # Default baseline for fresh bootstrap.
 INCUS_PACKAGES = ("incus", "incus-client", "incus-extra")
 KEY_SHA256 = "f1adb44fdf82083f983a392b5b406d34e473dce3d66a51de3118cdc1f51d3f87"
 # These hashes authenticate only the initial v0.128.0 clean-host download,
@@ -20,7 +20,7 @@ PROVIDER_ASSETS = {
     "containarium": "74560e96c4216cfb83218499682c816a9db78e4f367a4c194a587d650b83f696",
     "mcp-server": "d1c645843ef2989fc5bff53ec57b6612ff931e3b94c9f42d040ee8d7c065b0ba",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py", "upstream_version.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 # The upstream main at e5deb167 and v0.120.1 contain the identical wrapper.
@@ -159,7 +159,7 @@ def component_version(binary, *, minimum=MIN_PROVIDER_VERSION):
     require(result.returncode == 0 and len(set(observed)) == 1,
             "PROVIDER_COMPONENT_VERSION_UNKNOWN")
     version = observed[0]
-    require(tuple(map(int, version.split("."))) >= tuple(map(int, minimum.split("."))),
+    require(minimum is None or tuple(map(int, version.split("."))) >= tuple(map(int, minimum.split("."))),
             "PROVIDER_COMPONENT_BELOW_MINIMUM")
     return version
 
@@ -426,7 +426,8 @@ def verify_existing_provider(provider):
         require(error.code == 401, "EXISTING_PROVIDER_API_UNEXPECTED_STATUS")
     except (urllib.error.URLError, TimeoutError):
         raise Failure("EXISTING_PROVIDER_API_UNAVAILABLE") from None
-    component_version(provider["cli"])
+    # Check actual version after the authorized native upgrade below.
+    component_version(provider["cli"], minimum=None)
     return provider
 
 
@@ -545,7 +546,7 @@ def installation_summary(web_port, version, remote_config=None):
     return "\n".join(lines)
 
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None,
-            repair_containarium_shell=False):
+            repair_containarium_shell=False, upstream_version=None, upstream_latest=False):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
             "LINUX_X86_64_CPYTHON_MIN312_REQUIRED")
@@ -608,17 +609,15 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             require(not any((provider_url, provider_secret_file, provider_cli)),
                     "PROVIDER_OPTIONS_REQUIRE_EXISTING_CONTAINARIUM")
         if external:
-            provider_version = component_version(old["external_provider"]["cli"])
+            provider_version = component_version(old["external_provider"]["cli"], minimum=None)
         elif "/usr/local/bin/containariumd" in old.get("managed_files", {}):
-            # The operator upgrades the running Provider first; never swap it
-            # implicitly when an application-only --version is selected.
-            provider_version = component_version("/usr/local/bin/containariumd")
+            provider_version = component_version("/usr/local/bin/containariumd", minimum=None)
         else:
             provider_version = PROVIDER_VERSION
         print(json.dumps({"provider_compatibility": {"minimum": MIN_PROVIDER_VERSION,
                   "observed": provider_version, "maximum": None,
                   "managed_toolchain": toolchain_preflight(provider_version),
-                  "provider_upgraded_by_boxweave": False}}), flush=True)
+                  "upgrade_policy": "baseline_or_explicit_tag"}}), flush=True)
         directory(STATE / "releases")
         release = STATE / "releases" / (version + "-" + m["source"])
         directory(release)
@@ -645,16 +644,39 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 require(sha(Path(__file__).read_bytes()) == expected, "ONLINE_INSTALLER_DIGEST_MISMATCH")
                 atomic(release / name, Path(__file__).read_bytes())
             else: download(release_url + name, release / name, expected)
-        # A new empty Provider receives SHA-verified minimum-version binaries.
-        # An existing Provider may run ANY newer trusted version unchanged.
+        # This helper is part of the digest-verified release and is loaded only
+        # after all its source bytes have passed the release manifest check.
+        spec = importlib.util.spec_from_file_location("upstream_version", release / "upstream_version.py")
+        require(spec is not None and spec.loader is not None, "UPSTREAM_HELPER_UNAVAILABLE")
+        manager = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(manager)
+        require(manager.BASELINE == MIN_PROVIDER_VERSION and manager.PINNED == PROVIDER_ASSETS,
+                "UPSTREAM_BASELINE_SOURCE_MISMATCH")
+        upstream_selected, upstream_digests = manager.release(upstream_version, upstream_latest)
+        fresh_provider = not external and "/usr/local/bin/containariumd" not in old.get("managed_files", {})
+        bootstrap_stage = release / "upstream-bootstrap"
+        if fresh_provider:
+            bootstrap_stage.mkdir(mode=0o700, exist_ok=True)
+            try:
+                manager.download_assets(bootstrap_stage, upstream_selected, upstream_digests)
+            except manager.UpgradeFailure as exc:
+                raise Failure(str(exc)) from None
+        else:
+            deadline = phase("upstream_compatibility")
+            try:
+                upgrade_receipt = manager.ensure(
+                    old, cli=(old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"),
+                    url=(old["external_provider"]["url"] if external else "http://127.0.0.1:18080"),
+                    secret=(old["external_provider"]["secret"] if external else str(SECRET)),
+                    target=upstream_version, latest=upstream_latest, standalone=not external)
+            except manager.UpgradeFailure as exc:
+                raise Failure(str(exc)) from None
+            atomic(marker, json.dumps(old, sort_keys=True, indent=2).encode())
+            print(json.dumps({"upstream_upgrade": upgrade_receipt}), flush=True)
         local_mcp = Path("/usr/local/bin/mcp-server")
         use_installed_mcp = local_mcp.exists() and trusted_provider_binary(local_mcp)
-        for name, digest in PROVIDER_ASSETS.items():
-            needs_bootstrap = not external and not (Path("/usr/local/bin") / name).exists()
-            if needs_bootstrap or (name == "mcp-server" and not use_installed_mcp):
-                download("https://github.com/FootprintAI/Containarium/releases/download/v" +
-                         PROVIDER_VERSION + "/" + name + "-linux-amd64",
-                         release / name, digest)
+        if not use_installed_mcp and not fresh_provider:
+            raise Failure("INSTALLED_MCP_SERVER_UNTRUSTED_OR_MISSING")
         if external:
             deadline = phase("external_provider_preflight")
             # Do not install, upgrade, restart, or initialize Containarium or Incus.
@@ -715,7 +737,8 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 if target.exists():
                     require(trusted_provider_binary(target), "PROVIDER_COMPONENT_NOT_TRUSTED")
                 else:
-                    atomic(target, (release / name).read_bytes(), 0o755)
+                    require(fresh_provider, "UPSTREAM_COMPONENT_MISSING_AFTER_UPGRADE")
+                    atomic(target, (bootstrap_stage / name).read_bytes(), 0o755)
                 old["managed_files"][str(target)] = sha(target.read_bytes())
             component_version("/usr/local/bin/containariumd")
             if not SECRET.exists():
@@ -816,7 +839,7 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py","upstream_version.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
@@ -951,12 +974,16 @@ def main():
     a=sub.add_parser("install");a.add_argument("--stage",required=True);a.add_argument("--version",required=True)
     a.add_argument("--provider-url");a.add_argument("--provider-secret-file");a.add_argument("--provider-cli")
     a.add_argument("--repair-containarium-shell",action="store_true")
+    choice = a.add_mutually_exclusive_group()
+    choice.add_argument("--upstream-version")
+    choice.add_argument("--upstream-latest", action="store_true")
     a=sub.add_parser("enroll");a.add_argument("--public-key",required=True)
     a=sub.add_parser("client-config");a.add_argument("--identity",required=True);a.add_argument("--known-hosts",required=True)
     args=p.parse_args()
     try:
         if args.action=="install":install(Path(args.stage),args.version,args.provider_url,args.provider_secret_file,args.provider_cli,
-                                          repair_containarium_shell=args.repair_containarium_shell)
+                                          repair_containarium_shell=args.repair_containarium_shell,
+                                           upstream_version=args.upstream_version, upstream_latest=args.upstream_latest)
         elif args.action=="enroll":enroll(args.public_key)
         else:client_config(args.identity,args.known_hosts)
         return 0
