@@ -292,6 +292,49 @@ class UpstreamPolicyTests(unittest.TestCase):
     def test_external_host_upgrade_reconciles_prior_prepared_recovery(self):
         self._exercise_external_host_upgrade_fixture(previous_checkpoint=True)
 
+    def test_external_host_upgrade_refuses_mismatched_recovery_digest(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            checkpoint = state / "upstream-host-upgrade.json"
+            checkpoint.write_text(json.dumps({
+                "status": "prepared", "from": "0.120.1", "to": "0.128.0",
+                "prior_digest": "0" * 64}))
+            checkpoint.chmod(0o600)
+            real_stat = Path.stat
+            real_read = Path.read_bytes
+
+            def stat(path, *args, **kwargs):
+                result = real_stat(path, *args, **kwargs)
+                if str(path) == str(checkpoint):
+                    return SimpleNamespace(st_uid=0, st_mode=result.st_mode)
+                return result
+
+            def read_bytes(path):
+                if str(path) == "/usr/local/bin/containariumd":
+                    return b"actual-old-binary"
+                return real_read(path)
+
+            unit = SimpleNamespace(returncode=0, stdout=(
+                "LoadState=loaded\\nActiveState=active\\nProtectSystem=strict\\n"
+                "ExecStart={ path=/usr/local/bin/containariumd ; "
+                "argv[]=/usr/local/bin/containariumd daemon }\\n"))
+            with patch.object(u, "STATE", state), \\
+                 patch.object(u, "trusted", return_value=True), \\
+                 patch.object(u.Path, "stat", stat), \\
+                 patch.object(u.Path, "read_bytes", read_bytes), \\
+                 patch.object(u.subprocess, "run", return_value=unit), \\
+                 patch.object(u, "_atomic_binary") as swap, \\
+                 patch.object(u, "_token") as token, \\
+                 self.assertRaisesRegex(
+                     u.UpgradeFailure, "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED"):
+                u.external_host_upgrade(
+                    state, "/usr/local/bin/containariumd",
+                    "/etc/containarium/jwt.secret", "http://127.0.0.1:8080",
+                    "0.120.1", "0.128.0")
+            swap.assert_not_called()
+            token.assert_not_called()
+            self.assertEqual(json.loads(checkpoint.read_text())["status"], "prepared")
+
     def test_external_host_upgrade_refuses_unknown_service_before_write(self):
         fake = SimpleNamespace(returncode=0, stdout=(
             "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
