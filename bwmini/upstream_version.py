@@ -138,7 +138,11 @@ def download_assets(folder, selected, digests):
             os.fsync(output.fileno())
         require(digest.hexdigest() == digests[name], "UPSTREAM_ASSET_DIGEST_MISMATCH")
         dest.chmod(0o700)
-        require(installed_version(dest) == selected, "UPSTREAM_ASSET_VERSION_MISMATCH")
+        # mcp-server is a stdio server and has NO 'version' subcommand.
+        # Its digest binds the clean-host binary to the published release;
+        # the later real MCP initialize/read validates its running version.
+        if name != "mcp-server":
+            require(installed_version(dest) == selected, "UPSTREAM_ASSET_VERSION_MISMATCH")
     return folder
 
 
@@ -157,6 +161,50 @@ def _token(binary, secret, destination):
     require(proc.returncode == 0 and 20 <= destination.stat().st_size <= 8192,
             "UPSTREAM_TOKEN_ISSUANCE_FAILED")
     return destination.read_text().strip()
+
+
+def mcp_version(binary, daemon_cli, url, secret):
+    """Read mcp-server's advertised version via the real stdio MCP initialize.
+
+    Containarium v0.128.0 mcp-server/main.go does not implement 'version'.
+    The handshake requires no authorization to mutate a Provider and never
+    submits an upstream write.
+    """
+    require(trusted(binary), "UPSTREAM_MCP_BINARY_UNTRUSTED")
+    require(re.fullmatch(r"http://127\\.0\\.0\\.1:[0-9]{4,5}", url) is not None,
+            "UPSTREAM_LOOPBACK_REQUIRED")
+    with tempfile.TemporaryDirectory(prefix="boxweave-upstream-mcp-", dir=STATE) as folder:
+        token_file = Path(folder) / "jwt"
+        _token(daemon_cli, secret, token_file)
+        payload = json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05",
+                       "capabilities": {},
+                       "clientInfo": {"name": "boxweave-upstream-probe",
+                                      "version": "1.0.0"}}
+        }) + "\\n"
+        env = {"HOME": "/root", "PATH": "/usr/bin:/bin",
+               "CONTAINARIUM_SERVER_URL": url,
+               "CONTAINARIUM_MCP_ALLOW_INSECURE": "true",
+               "CONTAINARIUM_JWT_TOKEN_FILE": str(token_file)}
+        try:
+            result = subprocess.run([str(binary)], input=payload,
+                                    capture_output=True, text=True,
+                                    env=env, timeout=15, check=False)
+        except (OSError, subprocess.SubprocessError):
+            raise UpgradeFailure("UPSTREAM_MCP_VERSION_UNVERIFIED") from None
+    require(result.returncode == 0 and len(result.stdout) <= 65536,
+            "UPSTREAM_MCP_VERSION_UNVERIFIED")
+    lines = result.stdout.strip().splitlines()
+    require(len(lines) == 1, "UPSTREAM_MCP_VERSION_UNVERIFIED")
+    try:
+        reply = json.loads(lines[0])
+        require(reply.get("id") == 1 and isinstance(reply.get("result"), dict),
+                "UPSTREAM_MCP_VERSION_UNVERIFIED")
+        version = reply["result"]["serverInfo"]["version"]
+        return normalize_version(version)
+    except (TypeError, ValueError, KeyError, AttributeError):
+        raise UpgradeFailure("UPSTREAM_MCP_VERSION_UNVERIFIED") from None
 
 
 def _api(url, token, method, path, body=None, timeout=12):
@@ -222,7 +270,7 @@ def _atomic_binary(path, staged):
             os.unlink(temp)
 
 
-def refresh_clients(folder, selected, old, daemon_path, *, managed):
+def refresh_clients(folder, selected, old, daemon_path, *, managed, url, secret):
     """Only replace conventional root-controlled local CLI and MCP binaries."""
     targets = {"containarium": Path("/usr/local/bin/containarium"),
                "mcp-server": Path("/usr/local/bin/mcp-server")}
@@ -240,8 +288,11 @@ def refresh_clients(folder, selected, old, daemon_path, *, managed):
             require(version_tuple(installed_version(daemon_path)) >= version_tuple(selected), "UPSTREAM_CLI_DAEMON_MISMATCH")
             continue
         require(not dest.exists() or trusted(dest), "UPSTREAM_CLIENT_UNTRUSTED")
-        if dest.exists() and version_tuple(installed_version(dest)) >= version_tuple(selected):
-            continue
+        if dest.exists():
+            observed = (mcp_version(dest, daemon_path, url, secret)
+                        if name == "mcp-server" else installed_version(dest))
+            if version_tuple(observed) >= version_tuple(selected):
+                continue
         # Save previous verified binary; never overwrite an operator's backup.
         if dest.exists():
             backups = STATE / "upstream-binary-backups"
@@ -254,7 +305,9 @@ def refresh_clients(folder, selected, old, daemon_path, *, managed):
                     out.write(dest.read_bytes())
                 backup.chmod(0o600)
         _atomic_binary(dest, folder / name)
-        require(installed_version(dest) == selected, "UPSTREAM_CLIENT_VERSION_NOT_APPLIED")
+        observed = (mcp_version(dest, daemon_path, url, secret)
+                    if name == "mcp-server" else installed_version(dest))
+        require(observed == selected, "UPSTREAM_CLIENT_VERSION_NOT_APPLIED")
         if managed:
             old.setdefault("managed_files", {})[str(dest)] = sha256(dest.read_bytes())
 
@@ -274,7 +327,7 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
         raise UpgradeFailure("UPSTREAM_DOWNGRADE_REFUSED")
     daemon_needs_upgrade = version_tuple(current) < version_tuple(selected)
     mcp = Path("/usr/local/bin/mcp-server")
-    mcp_old = installed_version(mcp) if mcp.exists() and trusted(mcp) else None
+    mcp_old = mcp_version(mcp, cli, url, secret) if mcp.exists() and trusted(mcp) else None
     client_needs_upgrade = not mcp_old or version_tuple(mcp_old) < version_tuple(selected)
     if not daemon_needs_upgrade and not client_needs_upgrade:
         return {"status": "kept_compatible", "running_version": current, "baseline": BASELINE}
@@ -322,7 +375,8 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
                 receipt = native_upgrade(cli, secret, url, selected)
         else:
             receipt = {"status": "running_version_unchanged", "version": current}
-        refresh_clients(folder, selected, old, Path(cli), managed=standalone)
+        refresh_clients(folder, selected, old, Path(cli), managed=standalone,
+                        url=url, secret=secret)
         old["upstream_version_observed"] = current if version_tuple(current) > version_tuple(selected) else selected
         old["upstream_version_updated_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         return {**receipt, "baseline": BASELINE, "clients_verified": True}
