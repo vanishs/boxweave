@@ -172,8 +172,6 @@ class RESTClient:
                 return result
         except urllib.error.HTTPError as error:
             code = ("API_AUTH_REJECTED" if error.code in (401, 403)
-                    else "API_TARGET_NOT_FOUND" if error.code == 404 and
-                    method == "GET" and re.fullmatch(r"/v1/containers/[a-z][a-z0-9-]{0,62}", path)
                     else "API_ROUTE_UNSUPPORTED" if error.code == 404
                     else "API_CONFLICT" if error.code == 409
                     else "API_RATE_LIMITED" if error.code == 429

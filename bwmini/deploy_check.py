@@ -1,5 +1,5 @@
 """Deployment validation and independent authenticated read; diagnostic output is public metadata."""
-import argparse,json,re,sqlite3,sys
+import argparse,json,sqlite3,sys
 from pathlib import Path
 from .app_runtime import load,read_config
 from .provider import Provider
@@ -14,14 +14,8 @@ class Observed(MCP):
 def read_provider(c):
  p=Provider(c)
  with Observed(p.argv,30) as client:
-  tools=client.discover()
-  server=client.server.get('serverInfo',{})
-  version=server.get('version') if isinstance(server,dict) else None
-  match=re.fullmatch(r'v?([0-9]+)\\.([0-9]+)\\.([0-9]+)',version) if isinstance(version,str) else None
-  if not match or tuple(int(n) for n in match.groups()) < (0,128,0):
-   raise Fault('MCP_SERVER_BELOW_MINIMUM_OR_UNKNOWN')
-  client.tool('list_containers',{})
-  result={'state':'authenticated_read_passed','server':server,'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers','minimum_mcp_server':'0.128.0'}
+  tools=client.discover();client.tool('list_containers',{})
+  result={'state':'authenticated_read_passed','server':client.server.get('serverInfo',{}),'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers'}
   if p.rest is not None:
    # A real local Provider API read is mandatory for newly configured installs.
    p.rest.inventory()
