@@ -1,3 +1,7 @@
+## 2026-11-04 v0.44.2 slow-start Provider upgrade recovery candidate
+
+The operator retained a post-0.44.1 upgrade failure scene: original daemon binary 0.120.1, recorded checkpoint `prepared` with original SHA-256, systemd active/running, and 10 tenant Boxes running. Startup 08:13:12 -> REST ready 08:15:17 (~125 s) exceeded 0.44.1's new/rollback waits of 120/60 seconds. **0.44.2 source candidate** extends each readiness window to 240 seconds, the upstream phase to 900 seconds, and reconciles the original checkpoint by exact digest + authenticated old running API/inventory before a new explicit upgrade attempt. No host mutations performed by the source change. **Source review S; test and live acceptance pending.** [Operator evidence and test plan](../verification/UPSTREAM_SLOW_RESTART_RECOVERY_0442_2026-11-04.md).
+
 ## 2026-11-04 v0.44.1 protected-unit upgrade repair candidate
 
 Operator-retained failure scene on an externally managed 0.120.1 Provider: original job `upg-1793777286401216718` failed attempting to write `/usr/local/bin/containariumd.new` under `ProtectSystem=strict`. The 0.44.0 installer did not poll the terminal job status. A 0.44.1 **source-only candidate** moves the canonical external unit's binary swap into the root installer with guarded backup/verification/rollback and preserves native failed-job receipts. **S reviewed, T pending, L unverified**; no owner-host modifications, release, or stable-pin promotion authorized. [Incident and acceptance boundary](../verification/UPSTREAM_EXTERNAL_PROTECTED_UNIT_0441_2026-11-04.md).

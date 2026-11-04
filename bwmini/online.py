@@ -621,13 +621,13 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         directory(STATE / "releases")
         release = STATE / "releases" / (version + "-" + m["source"])
         directory(release)
-        def phase(name):
+        def phase(name, seconds=600):
             old.update(phase=name, phase_started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                       phase_deadline_seconds=600, source=m["source"], version=version)
+                       phase_deadline_seconds=seconds, source=m["source"], version=version)
             old.setdefault("phase_history", []).append({"name": name, "started_utc": old["phase_started_utc"]})
             atomic(marker, json.dumps(old, sort_keys=True, indent=2).encode())
-            print(json.dumps({"phase":name, "deadline_seconds":600}), flush=True)
-            return time.monotonic()+600
+            print(json.dumps({"phase":name, "deadline_seconds":seconds}), flush=True)
+            return time.monotonic()+seconds
         if importlib.util.find_spec("ensurepip") is None:
             require(bool(shutil.which("apt-get")), "APT_GET_REQUIRED_FOR_PYTHON_VENV")
             deadline = phase("python_venv_prerequisite")
@@ -662,7 +662,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             except manager.UpgradeFailure as exc:
                 raise Failure(str(exc)) from None
         else:
-            deadline = phase("upstream_compatibility")
+            deadline = phase("upstream_compatibility", seconds=900)
             try:
                 upgrade_receipt = manager.ensure(
                     old, cli=(old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"),
