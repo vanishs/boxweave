@@ -225,10 +225,10 @@ def refresh_clients(folder, selected, old, daemon_path, *, managed):
         if dest.is_symlink():
             require(name == "containarium" and dest.resolve() == daemon_path.resolve(),
                     "UPSTREAM_CLIENT_FOREIGN_SYMLINK")
-            require(installed_version(daemon_path) == selected, "UPSTREAM_CLI_DAEMON_MISMATCH")
+            require(version_tuple(installed_version(daemon_path)) >= version_tuple(selected), "UPSTREAM_CLI_DAEMON_MISMATCH")
             continue
         require(not dest.exists() or trusted(dest), "UPSTREAM_CLIENT_UNTRUSTED")
-        if dest.exists() and installed_version(dest) == selected:
+        if dest.exists() and version_tuple(installed_version(dest)) >= version_tuple(selected):
             continue
         # Save previous verified binary; never overwrite an operator's backup.
         if dest.exists():
@@ -256,11 +256,10 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
     selected, digests = release(target, latest)
     current = installed_version(cli)
     require(version_tuple(selected) >= version_tuple(BASELINE), "UPSTREAM_BELOW_BOXWEAVE_BASELINE")
-    if version_tuple(current) > version_tuple(selected):
-        # Ordinary install has no maximum; don't downgrade future releases.
-        if target is not None or latest:
-            raise UpgradeFailure("UPSTREAM_DOWNGRADE_REFUSED")
-        return {"status": "kept_newer", "running_version": current, "baseline": BASELINE}
+    # Upgrade only the required old components; never downgrade a newer daemon
+    # or an independently upgraded CLI on an ordinary BoxWeave install.
+    if version_tuple(current) > version_tuple(selected) and (target is not None or latest):
+        raise UpgradeFailure("UPSTREAM_DOWNGRADE_REFUSED")
     daemon_needs_upgrade = version_tuple(current) < version_tuple(selected)
     mcp = Path("/usr/local/bin/mcp-server")
     mcp_old = installed_version(mcp) if mcp.exists() and trusted(mcp) else None
@@ -302,7 +301,7 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
         else:
             receipt = {"status": "running_version_unchanged", "version": current}
         refresh_clients(folder, selected, old, Path(cli), managed=standalone)
-        old["upstream_version_observed"] = selected
+        old["upstream_version_observed"] = current if version_tuple(current) > version_tuple(selected) else selected
         old["upstream_version_updated_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         return {**receipt, "baseline": BASELINE, "clients_verified": True}
 
@@ -311,7 +310,7 @@ def execute_installed(argv):
     """Root-owned host CLI entry with the same lock as the streamed installer."""
     import argparse
     parser = argparse.ArgumentParser(prog="sudo boxweave upstream")
-    parser.add_argument("command", choices=("status", "upgrade"))
+    parser.add_argument("command", choices=("status", "upgrade", "update"))
     select = parser.add_mutually_exclusive_group()
     select.add_argument("--version")
     select.add_argument("--latest", action="store_true")
@@ -334,7 +333,7 @@ def execute_installed(argv):
         current = installed_version(cli)
         result = {"baseline": BASELINE, "installed": current,
                   "mode": old.get("provider_mode"), "maximum": None}
-        if args.command == "upgrade":
+        if args.command in ("upgrade", "update"):
             require(args.version is not None or args.latest, "UPSTREAM_TARGET_REQUIRED")
             result["upgrade"] = ensure(old, cli=cli, url=url, secret=secret,
                                        target=args.version, latest=args.latest, standalone=standalone)
