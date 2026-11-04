@@ -96,6 +96,23 @@ class LifecycleClaimTests(Base):
         self.s.worker(once=True)
         self.assertEqual(self.provider.writes,[("create",NAME)])
 
+    def test_upstream_rejected_after_create_keeps_shared_claim_unknown(self):
+        original = self.provider.lifecycle_mutate
+        from bwmini.domain import Fault
+        def created_then_error(action, logical, spec, timeout):
+            original(action, logical, spec, timeout)
+            raise Fault("PROVIDER_REJECTED")
+        self.provider.lifecycle_mutate = created_then_error
+        oid,receipt=self.run_action()
+        self.assertEqual((receipt["state"], receipt["code"]),
+                         ("unknown", "OUTCOME_UNKNOWN"))
+        self.assertEqual(self.claims.coordinator.status(oid)["state"], "unknown")
+        with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
+            self.gateway_claim_name(NAME)
+        self.life.observe(oid)
+        self.assertEqual(self.life.receipt(oid)["state"], "unknown")
+        self.assertEqual(self.provider.writes, [("create", NAME)])
+
     def test_observation_pending_retains_claim_until_verified(self):
         self.provider.ready_failures=1
         oid,result=self.run_action()

@@ -117,6 +117,28 @@ class LifecycleTests(Base):
         p=self.life.plan("create",NAME)
         with self.assertRaisesRegex(Fault,"OPERATION_PENDING"):self.life.confirm(p["id"],NAME)
 
+    def test_provider_rejected_after_create_side_effect_stays_unknown(self):
+        # An MCP tool error is a response, not proof the write was never sent.
+        original = self.provider.lifecycle_mutate
+        def ambiguous(action, logical, spec, timeout):
+            original(action, logical, spec, timeout)
+            raise Fault("PROVIDER_REJECTED")
+        self.provider.lifecycle_mutate = ambiguous
+        op = self.confirmed()
+        self.s.worker(once=True)
+        receipt = self.life.receipt(op["id"])
+        self.assertEqual((receipt["state"], receipt["code"], receipt["phase"]),
+                         ("unknown", "OUTCOME_UNKNOWN", "submitted"))
+        self.assertEqual(self.provider.writes, [("create", NAME)])
+        self.assertNotIn(NAME, [entry["logical"] for entry in self.life.settings()["environments"]])
+        observed = self.life.observe(op["id"])
+        self.assertEqual(observed["state"], "unknown")
+        self.assertEqual(observed["result"]["completion"], "unverified")
+        self.assertEqual(observed["result"]["candidate"]["logical"], NAME)
+        self.life.recover()
+        self.s.worker(once=True)
+        self.assertEqual(self.provider.writes, [("create", NAME)])
+
     def test_resize_plan_confirm_and_observed_resources(self):
         self.ready()
         plan=self.life.plan("resize",NAME,resize={"memory":"2GB"})

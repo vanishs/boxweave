@@ -23,7 +23,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.43.0"
+SERVER_INFO_VERSION = "0.43.1"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -435,6 +435,40 @@ def filter_tools(message, allowed):
                        isinstance(t, dict) and t.get("name") in allowed]
     return message
 
+def annotate_failed_create(message, args):
+    """Preserve upstream error while making post-commit ambiguity explicit.
+
+    This path does not inspect, retry, adopt or modify the target. An original
+    name readback through get_container is required before any decision.
+    """
+    if not isinstance(message, dict) or not isinstance(args, dict):
+        return message
+    logical = args.get("username")
+    if (not isinstance(logical, str) or
+            re.fullmatch(r"[a-z][a-z0-9-]{0,62}", logical) is None):
+        return message
+    failed = "error" in message or (
+        isinstance(message.get("result"), dict) and
+        message["result"].get("isError") is True)
+    if not failed:
+        return message
+    evidence = {"state": "unknown", "code": "CREATE_OUTCOME_UNVERIFIED",
+                "logical": logical, "inspect": "get_container",
+                "retry": "not_authorized"}
+    if isinstance(message.get("error"), dict):
+        error = message["error"]
+        if error.get("data") is None:
+            error["data"] = {"boxweave_create": evidence}
+        elif isinstance(error["data"], dict):
+            error["data"].setdefault("boxweave_create", evidence)
+    else:
+        result = message.get("result")
+        if isinstance(result, dict) and isinstance(result.get("content"), list):
+            result["content"].insert(0, {"type": "text",
+                                       "text": json.dumps({"boxweave_create": evidence})})
+    return message
+
+
 def main():
     permitted = tool_policy()
     process = subprocess.Popen([LAUNCHER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -781,11 +815,13 @@ def main():
                                       (time.monotonic() - started) * 1000, trace=trace)
                         raise
                     if request.get("method") == "tools/call":
+                        if params.get("name") == "create_container":
+                            message = annotate_failed_create(message, args)
                         gd.record(request.get("params", {}).get("name", ""), message,
                                   (time.monotonic() - started) * 1000, trace=trace)
                     print(json.dumps(message), flush=True)
                 else:
-                    message = reply(request["id"], False)
+                    message = annotate_failed_create(reply(request["id"], False), args)
                     if "error" not in message and not message.get("result", {}).get("isError"):
                         try:
                             logical = args["username"]
