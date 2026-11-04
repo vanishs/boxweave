@@ -1,6 +1,6 @@
 # DC-01 v0.43.0 — agent-safe diagnostic coordinator acceptance ledger
 
-**Date:** 2026-11-03 (America/Los_Angeles). **Scope:** standalone Agent Gateway tool + application-owned read-only subprocess. **Release:** v0.43.0 candidate; default `PUBLISHED_RELEASE` remains independently accepted v0.42.1 until new installed-host gate.
+**Date:** 2026-11-03 (America/Los_Angeles). **Scope:** standalone Agent Gateway tool + application-owned read-only subprocess. **Release:** [v0.43.0](https://github.com/vanishs/boxweave/releases/tag/v0.43.0) immutable and live accepted in an isolated nested Containarium host; stable default promotion recorded in [dedicated ledger](STABLE_PROMOTION_DC01_0430_2026-11-03.md).
 
 ## Implemented source contract
 
@@ -15,16 +15,16 @@
 | Grade | Environment and exact action | Result |
 |---|---|---|
 | S | Reviewed `bwmini/mcp_gate.py`, `gate_diagnostics.py`, `diagnostic_probe.py`, `gateway_protection.py` and `online.RELEASE_FILES` trust/packaging boundaries | Source inspected; no new root helper required |
-| T | Fresh task-owned `bwdiag-0430-ci` Ubuntu 24.04 Box, `python -m unittest discover -s tests -q` | PASS, **699 tests**, exit 0 before protected-gateway extension; rerun required for final revision |
+| T | Fresh task-owned `bwdiag-0430-ci` Ubuntu 24.04 Box, `python -m unittest discover -s tests -q` | PASS, **699 tests** on final candidate source (including protected-gateway extension); CI independently repeated the full suite |
 | T | Same isolated Box, `python scripts/check_knowledge.py` | PASS, exit 0 |
 | T | Same isolated Box, `python scripts/validate.py` with prepared locked Python + npm dependencies | PASS, 3 steps: knowledge, unit, Web build |
 | T | Same Box `npm --prefix web ci --ignore-scripts --no-audit --no-fund` and `npm --prefix web run build` | PASS, TypeScript/Vite build |
 | T | Built `bwmini.distribution build` with locked offline wheels; extracted application ZIP; imported `bwmini.diagnostic_probe` using the **bundled** Python environment | PASS; version 0.43.0 |
 | T | Executed bundled `gate_diagnostics.query_coordinator` using real subprocess, synthetic authenticated loopback HTTP service, synthetic MCP process and private test token | PASS: preflight, REST and MCP read, exact GET count 1, no POST, no secret in responses, MCP-only fallback `not_verified` |
 | T | Invalid paths/selectors, injection, crash/timeout, secret canary, D2 trace linkage, protected gateway policy | Unit test profiles; no real Provider operations inferred |
-| CI | PR GitHub Actions and final commit provenance | PENDING until PR created and check observed |
-| L | Installation into isolated **real Containarium** host and authenticated `boxweave_diagnostic_run` from external Agent transport | **NOT VERIFIED**; packaged synthetic test is not installed Provider acceptance |
-| L | Owner's running `dev` host still using BoxWeave 0.42.12 | **UNCHANGED**; do not claim v0.43.0 live acceptance |
+| CI | [PR #59](https://github.com/vanishs/boxweave/pull/59) and exact source tag | PR CI [41765599442](https://github.com/vanishs/boxweave/actions/runs/41765599442) **PASS**; merged commit `f6e522d`; main verify/publish CI [41768868895](https://github.com/vanishs/boxweave/actions/runs/41768868895) **PASS** |
+| L | Real isolated installed Containarium host with non-root Gateway MCP | **PASS**: fresh v0.42.12 installer, authenticated baseline doctor, in-place v0.43.0 upgrade, v0.43.0 doctor/REST/MCP, 68-tool MCP discovery, `preflight`, `rest_read`, true REST lifecycle D2 `operation_trace`, invalid selectors, cleanup and restored Worker; external desktop/OAuth remains U |
+| L | Independent original `dev` host application | **UNCHANGED** at previously observed v0.42.12; no production upgrade inferred from isolated v0.43.0 PASS |
 
 ## Defects caught and corrected
 
@@ -36,9 +36,9 @@
 
 Candidate source changes are additive: no schema migrations, no upstream Containarium upgrade, no new privilege grant, no host service config changes, no Gateway rewrite, no automatic mutation. Existing `boxweave_diagnose`, D2/D3/D4 and MCP legacy paths retain their contracts. Reinstall the prior immutable source tag to roll back, with the ordinary installer-owned backup/ownership checks; do not manually replace running helper files.
 
-**Gates:** final-source 699+ tests, knowledge, package/manifest, protected gateway, PR CI, immutable release, and separately a live installed read-only probe are all distinct. Do not promote `PUBLISHED_RELEASE` merely because an isolated synthetic probe or GitHub release succeeded.
+**Gates:** final-source 699 tests, knowledge, package/manifest, protected gateway, PR CI, immutable release **and** a real isolated installed-host read-only+trace probe now have separate PASS evidence. Stable pin promotion is separately reviewed in [the exact host ledger](STABLE_PROMOTION_DC01_0430_2026-11-03.md); do not conflate it with production host deployment.
 
-## Next-agent read-only installed smoke after candidate release
+## Repeatable read-only installed smoke after v0.43.0 release
 
 On a specifically authorized isolated BoxWeave host with v0.43.0 installed, invoke through a newly reconnected Agent MCP:
 1. `boxweave_diagnostic_run({"profile":"preflight"})` and expect explicit installed runtime path and REST binding PASS.
@@ -53,3 +53,7 @@ On a specifically authorized isolated BoxWeave host with v0.43.0 installed, invo
 - [Unified tracing evolution](../design/UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md)
 - [Remediation validation queue](REMEDIATION_TEST_QUEUE.md)
 - [0.42.12 REST source/host gate](PROVIDER_REST_A1_04212_2026-11-03.md)
+
+## Final live checkpoint summary
+
+The task-owned Ubuntu 24.04 nested test host upgraded from authentic v0.42.12 to v0.43.0 with exit 0. The real installed Gateway read both authenticated REST and MCP, and `operation_trace` returned PASS on five events from an actual acknowledged Containarium REST creation with exact D2 Trace linkage. Three temporary lifecycle operations completed and the nested Box was deleted. Both invalid selector calls were rejected, Worker resumed and post-test doctor was PASS. [Full source, environment, operation and release identities](STABLE_PROMOTION_DC01_0430_2026-11-03.md).
