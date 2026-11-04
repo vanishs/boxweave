@@ -54,8 +54,9 @@ def run(profile, config_path, persisted_path, *, reader=read_config,
                 "state": conclude(checks), "coverage": "app_owned_probe",
                 "checks": checks, "omissions": ["provider_not_initialized"]}
     checks.append(check("provider_mode", "passed", "PROVIDER_MODE_VALID"))
-    if (isinstance(runtime.get("provider_api"), dict)
-            and runtime["provider_api"] == persistent.get("provider_api")):
+    if ((runtime.get("provider_api") is None and persistent.get("provider_api") is None)
+            or (isinstance(runtime.get("provider_api"), dict)
+                and runtime["provider_api"] == persistent.get("provider_api"))):
         checks.append(check("runtime_binding", "passed", "PROVIDER_BINDING_MATCHES"))
     else:
         checks.append(check("runtime_binding", "failed", "PROVIDER_BINDING_DRIFT"))
