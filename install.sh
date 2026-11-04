@@ -9,8 +9,11 @@ usage() {
 Usage: sudo bash install.sh [--version 0.X.Y] [--provider-url URL --provider-secret-file ABSOLUTE_FILE --provider-cli ABSOLUTE_FILE] [--repair-containarium-shell] [--upstream-version X.Y.Z | --upstream-latest]
   --version selects an exact published, digest-verified release (default: stable pin).
   Streamed install/update/repair. Require Containarium >= project baseline.
-  An older local Provider is upgraded through an authorized, verified native
-  upgrade; a newer compatible Provider stays untouched by default.
+  On canonical external systemd units, an older local Provider is upgraded
+  by the installer root process (verified binary swap and guarded rollback),
+  without relaxing the Provider daemon sandbox. A prior incomplete upgrade
+  requires exact original-binary and authenticated runtime reconciliation.
+  A newer compatible Provider stays untouched by default.
   --upstream-version chooses a published exact upstream version >= baseline.
   --upstream-latest requests the current published upstream release.
   An upstream downgrade is refused; existing Incus/storage/secret remain.

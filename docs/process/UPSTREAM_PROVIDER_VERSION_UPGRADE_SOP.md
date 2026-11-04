@@ -74,3 +74,7 @@ An accepted asynchronous POST is **not success**. Do not weaken `ProtectSystem=s
 This file is an evolving operational SOP, not a waiver of per-version source review or the real-host test gate.
 
 **Incident and host-swap acceptance:** [protected-unit failed native job and 0.44.1 source candidate](../verification/UPSTREAM_EXTERNAL_PROTECTED_UNIT_0441_2026-11-04.md). Do not treat 0.44.0 as a working protected-unit upgrade path.
+
+## Observed 0.44.1 slow-boot recovery boundary
+
+An actual external host showed core-container readiness at ~125 seconds after daemon restart, longer than 0.44.1's 120-second new-runtime and 60-second rollback windows. Both binary and runtime returned to `0.120.1`, yet the old transaction remained `prepared` and installation returned `UPSTREAM_EXTERNAL_RECOVERY_REQUIRES_OPERATOR`. A 0.44.2 source candidate raises both readiness windows to 240 seconds and the upstream-compatibility installer phase to 900 seconds. On the next **explicit operator install**, a prior `prepared` checkpoint is reconciled only if the root-trusted binary's SHA-256 matches its recorded `prior_digest` **and** authenticated REST confirms the recorded old running version and container listing. The new transaction retains that previous checkpoint inside the receipt. Unmatched evidence is refused; do not delete markers or retry in-place without inspection. [Detailed incident and regression boundary](../verification/UPSTREAM_SLOW_RESTART_RECOVERY_0442_2026-11-04.md).

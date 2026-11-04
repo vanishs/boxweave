@@ -176,7 +176,7 @@ class UpstreamPolicyTests(unittest.TestCase):
             self.assertEqual(receipt["upgrade_id"], "upg-12345")
             self.assertNotIn("private", json.dumps(receipt))
 
-    def _exercise_external_host_upgrade_fixture(self, *, fail_new=False):
+    def _exercise_external_host_upgrade_fixture(self, *, fail_new=False, previous_checkpoint=False):
         """Synthetic protected service, fake binary and REST; never touches host."""
         with tempfile.TemporaryDirectory() as d:
             state = Path(d)
@@ -185,12 +185,20 @@ class UpstreamPolicyTests(unittest.TestCase):
             (stage / "containariumd").write_bytes(b"new-signed-binary")
             current = {"raw": b"old-signed-binary", "running": "0.120.1"}
             restarts = []
+            simulated = {"clock": 0, "ready": 0}
+            if previous_checkpoint:
+                checkpoint = state / "upstream-host-upgrade.json"
+                checkpoint.write_text(json.dumps({
+                    "status": "prepared", "from": "0.120.1", "to": "0.128.0",
+                    "prior_digest": u.sha256(b"old-signed-binary")}))
+                checkpoint.chmod(0o600)
             real_read = Path.read_bytes
             real_stat = Path.stat
 
             def stat(path, *args, **kwargs):
                 result = real_stat(path, *args, **kwargs)
-                if str(path) == str(state / "upstream-binary-backups"):
+                if str(path) in (str(state / "upstream-binary-backups"),
+                                 str(state / "upstream-host-upgrade.json")):
                     return SimpleNamespace(st_uid=0, st_mode=result.st_mode)
                 return result
 
@@ -209,11 +217,15 @@ class UpstreamPolicyTests(unittest.TestCase):
                     current["running"] = ("0.128.0" if current["raw"] == b"new-signed-binary"
                                           else "0.120.1")
                     restarts.append(current["running"])
+                    simulated["ready"] = simulated["clock"] + 125
                     return SimpleNamespace(returncode=0)
                 raise AssertionError(argv)
 
             def api(url, token, method, path, body=None, timeout=12):
                 self.assertEqual(method, "GET")
+                if simulated["clock"] < simulated["ready"]:
+                    from urllib.error import URLError
+                    raise URLError("mock core containers not ready")
                 if path == "/v1/system/info":
                     if fail_new and current["running"] == "0.128.0":
                         raise u.UpgradeFailure("simulated_new_runtime_unverified")
@@ -234,7 +246,9 @@ class UpstreamPolicyTests(unittest.TestCase):
                  patch.object(u, "installed_version", return_value="0.128.0"), \
                  patch.object(u, "_token", return_value="private-fixture-token"), \
                  patch.object(u, "_api", side_effect=api), \
-                 patch.object(u, "_atomic_binary", side_effect=swap):
+                 patch.object(u, "_atomic_binary", side_effect=swap), \
+                 patch.object(u.time, "monotonic", side_effect=lambda: simulated["clock"]), \
+                 patch.object(u.time, "sleep", side_effect=lambda delay: simulated.__setitem__("clock", simulated["clock"] + delay)):
                 if fail_new:
                     with self.assertRaisesRegex(
                             u.UpgradeFailure, "UPSTREAM_EXTERNAL_UPGRADE_FAILED_ROLLED_BACK"):
@@ -257,6 +271,13 @@ class UpstreamPolicyTests(unittest.TestCase):
             checkpoint = json.loads((state / "upstream-host-upgrade.json").read_text())
             self.assertEqual(checkpoint["status"], "rolled_back" if fail_new else "verified")
             self.assertEqual(checkpoint["from"], "0.120.1")
+            if previous_checkpoint:
+                self.assertEqual(
+                    checkpoint["previous_reconciliation"]["original"]["status"], "prepared")
+                self.assertEqual(
+                    checkpoint["previous_reconciliation"]["status"],
+                    "previous_binary_and_runtime_restored")
+            self.assertGreaterEqual(simulated["clock"], 125)
             backup = state / "upstream-binary-backups" / (
                 "containariumd-" + u.sha256(b"old-signed-binary"))
             self.assertEqual(backup.read_bytes(), b"old-signed-binary")
@@ -267,6 +288,52 @@ class UpstreamPolicyTests(unittest.TestCase):
 
     def test_external_host_upgrade_rollback_fixture(self):
         self._exercise_external_host_upgrade_fixture(fail_new=True)
+
+    def test_external_host_upgrade_reconciles_prior_prepared_recovery(self):
+        self._exercise_external_host_upgrade_fixture(previous_checkpoint=True)
+
+    def test_external_host_upgrade_refuses_mismatched_recovery_digest(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            checkpoint = state / "upstream-host-upgrade.json"
+            checkpoint.write_text(json.dumps({
+                "status": "prepared", "from": "0.120.1", "to": "0.128.0",
+                "prior_digest": "0" * 64}))
+            checkpoint.chmod(0o600)
+            real_stat = Path.stat
+            real_read = Path.read_bytes
+
+            def stat(path, *args, **kwargs):
+                result = real_stat(path, *args, **kwargs)
+                if str(path) == str(checkpoint):
+                    return SimpleNamespace(st_uid=0, st_mode=result.st_mode)
+                return result
+
+            def read_bytes(path):
+                if str(path) == "/usr/local/bin/containariumd":
+                    return b"actual-old-binary"
+                return real_read(path)
+
+            unit = SimpleNamespace(returncode=0, stdout=(
+                "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
+                "ExecStart={ path=/usr/local/bin/containariumd ; "
+                "argv[]=/usr/local/bin/containariumd daemon }\n"))
+            with patch.object(u, "STATE", state), \
+                 patch.object(u, "trusted", return_value=True), \
+                 patch.object(u.Path, "stat", stat), \
+                 patch.object(u.Path, "read_bytes", read_bytes), \
+                 patch.object(u.subprocess, "run", return_value=unit), \
+                 patch.object(u, "_atomic_binary") as swap, \
+                 patch.object(u, "_token") as token, \
+                 self.assertRaisesRegex(
+                     u.UpgradeFailure, "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED"):
+                u.external_host_upgrade(
+                    state, "/usr/local/bin/containariumd",
+                    "/etc/containarium/jwt.secret", "http://127.0.0.1:8080",
+                    "0.120.1", "0.128.0")
+            swap.assert_not_called()
+            token.assert_not_called()
+            self.assertEqual(json.loads(checkpoint.read_text())["status"], "prepared")
 
     def test_external_host_upgrade_refuses_unknown_service_before_write(self):
         fake = SimpleNamespace(returncode=0, stdout=(

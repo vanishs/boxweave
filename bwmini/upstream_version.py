@@ -309,22 +309,55 @@ def external_host_upgrade(folder, binary, secret, url, current, selected):
             and not Path(str(binary) + ".old").exists(),
             "UPSTREAM_EXTERNAL_ORIGINAL_UPGRADE_ARTIFACTS_PRESENT")
     checkpoint = STATE / "upstream-host-upgrade.json"
+    previous_reconciliation = None
     if checkpoint.exists():
         require(not checkpoint.is_symlink() and checkpoint.is_file()
                 and checkpoint.stat().st_uid == 0
                 and not checkpoint.stat().st_mode & 0o077,
                 "UPSTREAM_EXTERNAL_CHECKPOINT_UNTRUSTED")
         prior = json.loads(checkpoint.read_text())
-        require(prior.get("status") in ("verified", "rolled_back"),
-                "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED")
+        require(isinstance(prior, dict), "UPSTREAM_EXTERNAL_CHECKPOINT_INVALID")
+        if prior.get("status") == "prepared":
+            # A previous attempt might have restored the original binary but
+            # timed out before the old service finished starting. Reconcile
+            # from disk AND authenticated runtime; never erase the incident
+            # checkpoint based only on the daemon's version command.
+            prior_digest = prior.get("prior_digest")
+            require(prior.get("from") == current
+                    and isinstance(prior_digest, str)
+                    and re.fullmatch(r"[0-9a-f]{64}", prior_digest)
+                    and sha256(binary.read_bytes()) == prior_digest,
+                    "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED")
+            with tempfile.TemporaryDirectory(
+                    prefix="upstream-reconcile-", dir=STATE) as temp:
+                prior_token = _token(binary, secret, Path(temp) / "jwt")
+                try:
+                    observed = _api(url, prior_token, "GET", "/v1/system/info")
+                    require(observed.get("info", {}).get("daemonVersion") == current,
+                            "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED")
+                    _api(url, prior_token, "GET", "/v1/containers")
+                except (OSError, error.URLError, ValueError, KeyError):
+                    raise UpgradeFailure(
+                        "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED") from None
+            previous_reconciliation = {
+                "status": "previous_binary_and_runtime_restored",
+                "original": prior,
+                "observed_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+        else:
+            require(prior.get("status") in ("verified", "rolled_back"),
+                    "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED")
 
     def record(status, previous_digest):
         fd, name = tempfile.mkstemp(prefix=".upstream-host-", dir=STATE)
         try:
             with os.fdopen(fd, "w") as output:
                 os.fchmod(output.fileno(), 0o600)
-                json.dump({"status": status, "from": current,
-                           "to": selected, "prior_digest": previous_digest}, output)
+                event = {"status": status, "from": current,
+                         "to": selected, "prior_digest": previous_digest}
+                if previous_reconciliation is not None:
+                    event["previous_reconciliation"] = previous_reconciliation
+                json.dump(event, output)
                 output.flush()
                 os.fsync(output.fileno())
             os.replace(name, checkpoint)
@@ -371,7 +404,7 @@ def external_host_upgrade(folder, binary, secret, url, current, selected):
             subprocess.run(["systemctl", "restart", "containarium.service"],
                            stdin=subprocess.DEVNULL, check=True, timeout=45,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            deadline = time.monotonic() + 120
+            deadline = time.monotonic() + 240
             verified = False
             while time.monotonic() < deadline:
                 try:
@@ -395,7 +428,7 @@ def external_host_upgrade(folder, binary, secret, url, current, selected):
                                stdin=subprocess.DEVNULL, check=True, timeout=45,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 # Check rollback runtime, not merely the restored file.
-                deadline = time.monotonic() + 60
+                deadline = time.monotonic() + 240
                 rolled_back = False
                 while time.monotonic() < deadline:
                     try:
