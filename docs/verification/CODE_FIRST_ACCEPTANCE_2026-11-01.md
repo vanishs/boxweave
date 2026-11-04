@@ -162,6 +162,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_operation_coordination.py`
 - `tests/test_operation_leases.py`
 - `tests/test_platform_minimums.py`
+- `tests/test_provider_minimum_versions.py`
 - `tests/test_portable_codex_merge.py`
 - `tests/test_profiles.py`
 - `tests/test_provider_rest.py`

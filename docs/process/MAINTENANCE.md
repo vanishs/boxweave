@@ -2,8 +2,6 @@
 
 This file owns change procedure. [DOCUMENT_AUTHORITY.json](DOCUMENT_AUTHORITY.json) assigns one owner per information type; [INDEX](../INDEX.md) is navigation, [PHASE_STATUS](PHASE_STATUS.md) owns gates, and [OPEN_RISKS](../verification/OPEN_RISKS.md) owns risk status. Do not copy their changing conclusions into other documents.
 
-For any Containarium upgrade, use the [minimum-only upstream Provider upgrade SOP](UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md); source/CI and operator-host acceptance are separate.
-
 ## Daily change path
 
 1. Confirm explicit worktree/branch, clean or understood Git state, requested scope and current risks. Follow FINAL_HANDOFF's resource/credential boundaries.
