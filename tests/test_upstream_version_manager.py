@@ -89,7 +89,7 @@ class UpstreamPolicyTests(unittest.TestCase):
                  patch.object(u, "trusted", return_value=True), \
                  patch.object(u, "_token", return_value="private-not-printed"), \
                  patch.object(u.subprocess, "run", return_value=SimpleNamespace(
-                     returncode=0, stdout=json.dumps(message) + "\\n", stderr=""
+                     returncode=0, stdout=json.dumps(message) + "\n", stderr=""
                  )) as run:
                 result = u.mcp_version("/usr/local/bin/mcp-server",
                                        "/usr/local/bin/containariumd",
@@ -98,7 +98,7 @@ class UpstreamPolicyTests(unittest.TestCase):
                 self.assertEqual(result, "0.131.2")
                 args, kwargs = run.call_args
                 self.assertEqual(args[0], ["/usr/local/bin/mcp-server"])
-                self.assertTrue(kwargs["input"].endswith("\\n"))
+                self.assertTrue(kwargs["input"].endswith("\n"))
                 self.assertIn('"method": "initialize"', kwargs["input"])
                 self.assertEqual(kwargs["env"]["CONTAINARIUM_SERVER_URL"],
                                  "http://127.0.0.1:8080")
