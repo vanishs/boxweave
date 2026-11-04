@@ -1,6 +1,6 @@
 # BoxWeave v0.43.2 P0 — Containarium minimum-only compatibility
 
-**Date:** 2026-11-03. **Status:** candidate source branch; source/CI/publish evidence must be appended only after actual execution. **Stable default:** 0.43.1 unchanged. **Operator host:** Containarium 0.120.1 last observed and not upgraded by this work. 
+**Date:** 2026-11-03. **Status:** immutable v0.43.2 released with source/CI acceptance; a v0.43.3 runtime-version-gate follow-up is now the recommended operator candidate. The real v0.128.0 Provider is still untested. **Stable default:** 0.43.1 unchanged. **Operator host:** Containarium 0.120.1 last observed and not upgraded by this work. 
 
 ## Selected contract
 
@@ -21,7 +21,7 @@
 | Existing Provider adoption/digest | T | Pending CI | `tests/test_online_adoption.py` and installer tests |
 | Independent authenticated MCP/REST | L | Not yet executed at 0.128.0 | Disposable isolated Provider, exact source/host evidence |
 | Guest SSH/task/coordination/UNKNOWN | L | Not yet executed at 0.128.0 | Approved disposable Box, exact identity and receipt |
-| Published v0.43.2 | P | Pending | PR, merge, main CI/publish, release SHA |
+| Published v0.43.2 | P | PASS | [PR #65](https://github.com/vanishs/boxweave/pull/65) merge `952b7b677ad53fdb4b17268f76f8fe038ef6e0a8`; PR 710/710 Python, 7/7 browser; [main CI 41782830084](https://github.com/vanishs/boxweave/actions/runs/41782830084) success; [immutable Release](https://github.com/vanishs/boxweave/releases/tag/v0.43.2) |
 | Operator-host v0.128.0 smoke | L | Deferred to operator | Follow [SOP](../process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md) |
 
 The CI status will be updated only from actual workflow results. A source-only release is **not** real-host compatibility certification.
