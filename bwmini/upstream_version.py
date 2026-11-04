@@ -171,7 +171,7 @@ def mcp_version(binary, daemon_cli, url, secret):
     submits an upstream write.
     """
     require(trusted(binary), "UPSTREAM_MCP_BINARY_UNTRUSTED")
-    require(re.fullmatch(r"http://127\\.0\\.0\\.1:[0-9]{4,5}", url) is not None,
+    require(re.fullmatch(r"http://127\.0\.0\.1:[0-9]{4,5}", url) is not None,
             "UPSTREAM_LOOPBACK_REQUIRED")
     with tempfile.TemporaryDirectory(prefix="boxweave-upstream-mcp-", dir=STATE) as folder:
         token_file = Path(folder) / "jwt"
@@ -182,7 +182,7 @@ def mcp_version(binary, daemon_cli, url, secret):
                        "capabilities": {},
                        "clientInfo": {"name": "boxweave-upstream-probe",
                                       "version": "1.0.0"}}
-        }) + "\\n"
+        }) + "\n"
         env = {"HOME": "/root", "PATH": "/usr/bin:/bin",
                "CONTAINARIUM_SERVER_URL": url,
                "CONTAINARIUM_MCP_ALLOW_INSECURE": "true",
