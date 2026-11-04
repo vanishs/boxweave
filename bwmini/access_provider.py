@@ -99,8 +99,11 @@ class Wire:
     def container(self,logical):
         # Full inventory avoids interpreting an arbitrary get failure as absence.
         if logical not in self.provider.lifecycle_inventory():return None
-        with self.provider.session() as m:
-            m.discover();value=read_json(m,'get_container',{'username':logical}).get('container',{})
+        if getattr(self.provider, "rest", None) is not None:
+            value = self.provider.rest.container(logical)
+        else:
+            with self.provider.session() as m:
+                m.discover();value=read_json(m,'get_container',{'username':logical}).get('container',{})
         try:
             target=Target(self.provider.config['provider'],self.provider.config['backend'],self.provider.config['project'],logical,value['name'],str(value['createdAt']),value['username'],value['name'])
             if value['username']!=logical:raise ValueError()

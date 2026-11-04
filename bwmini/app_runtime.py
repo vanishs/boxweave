@@ -37,5 +37,7 @@ def load(path, *, reader=None):
         from .coordination_bridge import SharedClaims
         claims = SharedClaims()
     store=Store(c["database"])
+    if getattr(provider, "rest", None) is not None:
+        provider.rest.store = store
     return c,Service(store,provider,budget=c.get("operation_timeout",60),
                      shared_claims=claims)

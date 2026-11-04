@@ -37,6 +37,13 @@ class Provider:
         if not pathlib.Path(argv[0]).is_absolute() or not pathlib.Path(argv[0]).is_file():
             raise Fault("MCP_LAUNCHER_UNAVAILABLE", 422)
         self.argv = argv
+        # Outbound REST is enabled only by an explicit, locally provisioned
+        # API URL and per-request rotated token file. The independent MCP
+        # launcher remains for Box SSH/exec and specialized compatibility.
+        self.rest = None
+        if "provider_api" in config:
+            from .provider_rest import RESTClient
+            self.rest = RESTClient(config["provider_api"])
         self.lifecycle_config = config.get("lifecycle")
         validate_lifecycle_config(self.lifecycle_config, set(config.get("targets", {})))
 
@@ -52,6 +59,19 @@ class Provider:
         expected = self.config["targets"].get(logical)
         if expected is None:
             raise Fault("TARGET_NOT_ALLOWED", 403)
+        if self.rest is not None:
+            c = self.rest.container(logical)
+            try:
+                target = Target(self.config["provider"], self.config["backend"],
+                                self.config["project"], logical, c["name"],
+                                str(c["createdAt"]), c["username"], c["name"])
+            except (KeyError, TypeError, ValueError):
+                raise Fault("TARGET_FORMAT_UNSUPPORTED") from None
+            if c.get("state") != "CONTAINER_STATE_RUNNING":
+                raise Fault("NOT_CONNECTION_READY")
+            if target.data() != Target(**expected).data():
+                raise Fault("TARGET_CHANGED")
+            return target
         with self.session() as m:
             tools = m.discover()
             if "get_container" not in tools:
@@ -95,6 +115,8 @@ class Provider:
                 raise Fault("INDEPENDENT_NESTING_UNSUPPORTED",409)
 
     def lifecycle_inventory(self):
+        if self.rest is not None:
+            return self.rest.inventory()
         with self.session() as m:
             m.discover()
             raw=text(m.tool("list_containers",{})).strip()
@@ -123,11 +145,17 @@ class Provider:
     def lifecycle_inspect(self, logical):
         if logical not in self.lifecycle_inventory():
             return None
-        with self.session() as m:
-            m.discover()
-            raw=m.tool("get_container",{"username":logical})
+        if self.rest is not None:
+            c = self.rest.container(logical)
+        else:
+            with self.session() as m:
+                m.discover()
+                raw=m.tool("get_container",{"username":logical})
+            try:
+                c=json.loads(text(raw))["container"]
+            except (KeyError,ValueError,TypeError):
+                raise Fault("TARGET_FORMAT_UNSUPPORTED") from None
         try:
-            c=json.loads(text(raw))["container"]
             if c["username"]!=logical:
                 raise ValueError()
             target=Target(self.config["provider"],self.config["backend"],self.config["project"],
@@ -143,6 +171,10 @@ class Provider:
     def lifecycle_mutate(self, action, logical, spec, timeout):
         if timeout<=0:
             raise Fault("DEADLINE_EXCEEDED")
+        # A create with _nesting is a special upstream MCP composite; this
+        # cannot be represented by ContainerService.CreateContainer REST.
+        if getattr(self, "rest", None) is not None and (action != "create" or "_nesting" not in spec):
+            return self.rest.mutate(action,logical,spec,timeout)
         tool={"create":"create_container","start":"start_container","stop":"stop_container","delete":"delete_container","resize":"resize_container"}.get(action)
         if tool is None:
             raise Fault("ACTION_NOT_ALLOWED")

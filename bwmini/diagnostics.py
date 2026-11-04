@@ -24,7 +24,7 @@ from .domain import Fault
 SCHEMA_VERSION = 1
 
 KINDS = ("hello", "environment", "access", "job", "selftest")
-COMPONENTS = ("web", "worker", "service", "lifecycle", "access", "mcp", "provider", "selftest", "gate")
+COMPONENTS = ("web", "worker", "service", "lifecycle", "access", "mcp", "provider", "provider_api", "selftest", "gate")
 EVENT_TYPES = ("accepted", "claimed", "submitted", "acknowledged", "observed", "rejected", "unknown", "recovered")
 OUTCOMES = ("passed", "failed", "unknown", "not_verified")
 CAPTURE_STATES = ("captured", "truncated", "dropped", "unavailable")
