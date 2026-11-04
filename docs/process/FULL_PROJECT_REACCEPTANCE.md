@@ -1,0 +1,37 @@
+# Full-project deep reacceptance and remediation (Agent runbook)
+
+**Trigger phrase:** `Run full BoxWeave reacceptance.`
+
+**Purpose:** A reusable, owner-invoked instruction to audit, exercise, repair, and reaccept the entire current BoxWeave project, then publish one version. This file is an instruction template, **not evidence of completed testing**. Merely reading this file does not start the workflow. Follow [AGENTS.md](../../AGENTS.md), [Agent test workflow](AGENT_TEST_WORKFLOW.md), [Agent test deployment](AGENT_TEST_DEPLOYMENT.md), [maintenance](MAINTENANCE.md), [test strategy](../verification/TEST_STRATEGY.md), and the current authoritative status and risk documents.
+
+## Agent instruction
+
+Perform a fresh, deep, **whole-project** audit of all current BoxWeave documentation, source code, packaging, tests, feature plans, and existing verification reports. Do not rely on historical PASS statements as proof for the present code, installed version, or running environment. Identify every implemented feature, previously untested or ambiguously accepted capability, known regression, and high-risk integration boundary. Compare expected behavior with current implementation and actual evidence.
+
+**Work through the entire audit and repair cycle without stopping for routine decisions.** Make reasonable implementation and test decisions independently within the authorization below. Fix defects as you find them, rerun relevant checks, and reaccept corrected behavior. If one feature cannot be tested or accepted, record it accurately, **skip that specific gate and keep progressing on other independent work**. Ask the owner only when a genuinely new authorization, indispensable external prerequisite, or decision outside the granted scope is required; do not let that halt unrelated work.
+
+### Authorization and test environments
+
+I authorize use of **any available BoxWeave MCP operation needed for this task within identified, project-owned test environments**, including creating, configuring, starting, stopping, resizing, connecting to, and deleting test Boxes. You may create new disposable Boxes, enable supported nesting where permitted, install BoxWeave and Containarium inside an outer test Box, and create nested child Boxes. Prefer the outer controller as the independent recovery and observation path when an inner stack fails.
+
+Use a **new clean disposable Box** for genuine fresh-install evidence. Use a new Box seeded with an older version for normal upgrade regressions. You may inspect, compare, modify, or destructively exercise **confirmed test-owned existing Boxes running older BoxWeave versions** when that history is relevant; record exact identities and preserve valuable failure evidence where feasible. Do not assume that an arbitrary existing Box is disposable or production-safe merely because MCP exposes it. This permission does not authorize unrelated production hosts, private keys, credentials, trust bypasses, or unapproved changes to host-level Provider, networking, firewall, Incus, or SSH policy; obtain separate targeted authorization for those boundaries.
+
+Some defects require a newly built or installed BoxWeave version before they can be reproduced or verified. **Use an isolated nested Box to deploy and exercise the actual candidate build/package before publishing the final release whenever practical.** Record the exact source commit, package hash, installed version, running service version, Provider version, target identity, and test result. Do not mistake a source-only pass for an installed-release pass.
+
+### Acceptance process
+
+1. **Discover and inventory.** Deep-read the current docs, source and tests; follow document authority, requirements/acceptance IDs, feature matrix, current handoff, risks, past test queue, and runtime/package entrypoints. Build or update a current, version-scoped feature-by-feature verification matrix covering implemented surfaces and relevant pending functionality. Highlight stale evidence and mismatches between docs and behavior.
+2. **Exercise features individually.** Cover happy paths, permission/identity denial, malformed input, timeout or partial success, restart/reconnect, upgrade/rollback where supported, and cleanup. Select appropriate unit, integration, browser, CLI, MCP, REST, installer, and actual Box checks. Distinguish static review, fixtures, real authenticated operations, and installed behavior.
+3. **Test realistic combinations.** Prioritize frequent workflows and failure-prone crossings: clean install → bootstrap → authentication → Provider access → Box lifecycle → `connect(exec)` → cleanup; MCP/REST/Web parity; update/repair with preserved configuration; old-to-new version upgrade; stop/start and nesting; concurrent Agents and lease conflicts; retry/reconnect and UNKNOWN outcomes; diagnostics/logging; security and tenant isolation; backup/recovery only where supported. Add combinations suggested by source changes or failures rather than treating this list as exhaustive.
+4. **Repair and re-test continuously.** Reproduce the smallest failing case, isolate the faulty layer, apply a bounded fix, add or update regression coverage, and run the affected tests plus relevant real Box checks. Preserve original unknown-outcome targets; inspect before repeating a possibly completed write. Do not hide or downgrade failed assertions to make the suite green.
+5. **Mark the actual acceptance state.** For every significant feature or combination, record scope, exact tested versions/commits, environment and Box identity, commands or steps, observable result/exit code, evidence links, remaining limitations, and follow-up. Use **PASS, FAIL, PARTIAL, BLOCKED, SKIPPED, or UNKNOWN**, with **S** (source review), **D** (historical documents), **T** (executed tests), **L** (live identity-pinned Box/Provider) or **U** (unverified) as evidence class. Never label an untested, unsupported, historically tested, or blocked feature as currently accepted. Keep the verification queue, current status/handoff, and open risks consistent.
+6. **Close out and release once.** Continue until all **feasible, authorized** feature checks and repairs have been processed, then run the required release-level tests, documentation/manifest checks, and CI. If release gates pass, commit the changes and publish **one new immutable BoxWeave version** using the project's actual release procedure; validate the exact published artifact where practical. Do **not** move the default/stable release pointer without explicit authorization. If a gate remains impossible or fails, document that honestly rather than fabricating a successful release.
+7. **Report and stop.** Provide the final commit/version/release link, concise coverage and status totals, important fixes, executed evidence, skipped/blocked/unknown items, retained test resources, and risks requiring operator action. Then **wait for further instructions**. Do not automatically begin another development round or host upgrade.
+
+**Non-negotiable:** An untestable feature does not stop the rest of the remediation. An untested feature also does not become PASS. Keep working across independent areas until the authorized work is exhausted.
+
+## One-sentence invocation
+
+`Run full BoxWeave reacceptance.`
+
+This **documentation-only addition** is not itself an invocation: committing this runbook requires **no test run, version bump, or release**.

@@ -2,6 +2,8 @@
 
 Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [current status](docs/process/PHASE_STATUS.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language. **Do not copy the requester's language into project artifacts or generated user-facing text; preserve standard technical terminology.**
 
+**Whole-project reacceptance shortcut:** When the owner says **"Run full BoxWeave reacceptance"** (or clearly equivalent), follow [the full-project reacceptance runbook](docs/process/FULL_PROJECT_REACCEPTANCE.md) end to end, subject to the owner's active authorization and the safety boundaries below. The link alone does not initiate tests, host actions, or a release.
+
 ## Authorized 0.10+ remediation
 
 - The 2026-10-29 owner request authorizes **small, independent commits directly to main**, without a PR, for the remediation R-00–R-09; do not force-push. Confirm the current main SHA before each commit and reject unexpected changes. Never use an unreviewed working tree or wipe unrelated work. Remote repository-only edits via the approved GitHub connection are permitted; lack of a checked-out/test-capable environment must be recorded rather than invented.
