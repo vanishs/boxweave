@@ -1,6 +1,6 @@
 ## Containarium baseline and upstream manager 0.44.0 candidate — 2026-11-03
 
-[Source implementation and test boundary](UPSTREAM_BASELINE_MANAGER_0440_2026-11-03.md): development baseline 0.128.0; root-owned exact/latest update; clean-host verified assets; existing Provider below-minimum auto-upgrade; newer version retained. Source branch `feat/upstream-version-manager-0440`. **S** source review, **T pending** exact PR CI, **L blocked** new disposable `bw-upstream-release-1103-container` due `TRUST_OR_WORKLOAD_KEY_GATE` on initial `connect(exec)`; `debug_container` shows host shell present but no advertised external SSH ingress. No upgrade or live Provider smoke was performed. Stable default remains 0.43.1.
+[Source implementation and test boundary](UPSTREAM_BASELINE_MANAGER_0440_2026-11-03.md): development baseline 0.128.0; root-owned exact/latest update; clean-host verified assets; existing Provider below-minimum auto-upgrade; newer version retained. Source branch `feat/upstream-version-manager-0440`. **S/T** accepted (PR #68 exact-head CI #41790793899 PASS; main CI #41791101508 verify/publish PASS; immutable release v0.44.0 at `dbb73976`), **L blocked** new disposable `bw-upstream-release-1103-container` due `TRUST_OR_WORKLOAD_KEY_GATE` on initial `connect(exec)`; `debug_container` shows host shell present but no advertised external SSH ingress. No upgrade or live Provider smoke was performed. Stable default remains 0.43.1.
 
 # Remediation validation and next-Agent queue
 
