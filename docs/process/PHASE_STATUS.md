@@ -183,3 +183,7 @@ PR #55 merged to 4f5ffe7f; main CI/publish SUCCESS; Release v0.42.11 published. 
 ## DC-01 Agent-safe diagnostic coordinator — installed release v0.43.0
 
 The owner authorized design, development, tests, live isolated acceptance and release. [PR #59](https://github.com/vanishs/boxweave/pull/59) merged read-only `boxweave_diagnostic_run` profiles (`preflight`, `rest_read`, `operation_trace`) without a host shell or mutation grant. [Exact independent CI, immutable release, v0.42.12-to-v0.43.0 real installed upgrade, Containarium REST/MCP and Trace PASS](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md). Stable default pin is a distinct source-only selection and does not upgrade the owner's original host or authorize remote OAuth/public network changes. Protected-mode live integration and cross-layer write-timeout fault injection remain unverified.
+
+## v0.44.4 current-host reacceptance / source repair gate (2026-11-04)
+
+[Latest exact scope ledger](../verification/REACCEPTANCE_0444_2026-11-04.md). Updated host 0.128.0, v0.44.3 static Gateway. Full current-main unit/browser/docs PASS, new Box installed v0.44.3 doctor 10/10 and real nested child execution+cleanup L PASS. Reproduced upstream disk 25→24GB shrink accepted despite grow-only contract; candidate v0.44.4 adds explicit pre-dispatch app+Agent guard T PASS, real installed v0.44.4 pending. Overall PARTIAL, R-02 store BLOCKED and R-04/external/E2–E4 still U. No stable-pin or original host/provider change.

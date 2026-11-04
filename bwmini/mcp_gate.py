@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -20,10 +20,11 @@ except ImportError:
     import gateway_protection
     import mcp_compat
     import restore_guard
+    import resource_size
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.44.3"
+SERVER_INFO_VERSION = "0.44.4"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -267,6 +268,7 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
     "TRUST_NOT_READY", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
+    "RESOURCE_DISK_SIZE_UNVERIFIED", "RESOURCE_DISK_SHRINK_REFUSED",
     "TASK_ARGUMENT_INVALID", "TASK_STORAGE_UNSAFE", "TASK_TRACKING_UNAVAILABLE",
     "TASK_SCHEMA_UNSUPPORTED", "TASK_NOT_FOUND", "TASK_CAPACITY_EXCEEDED",
     "TASK_SELECTOR_INVALID", "TASK_STATE_CONFLICT", "TASK_RESULT_UNVERIFIED",
@@ -761,6 +763,36 @@ def main():
                             if type(nesting) is not bool: raise ValueError("NESTING_BOOLEAN_REQUIRED")
                     if params.get("name") == "resize_container":
                         validated_resize_arguments(args)
+                        if args.get("disk") not in (None, ""):
+                            logical = args.get("username")
+                            if (not isinstance(logical, str) or
+                                    re.fullmatch(r"[a-z][a-z0-9-]{0,62}", logical) is None):
+                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED")
+                            # Upstream 0.128.0 acknowledged a 25GB->24GB shrink,
+                            # contradicting its advertised disk-grow-only contract.
+                            # Do a read-only authoritative preflight. An invalid
+                            # response must never be treated as zero size.
+                            internal = "boxweave-disk-" + secrets.token_hex(12)
+                            send({"jsonrpc":"2.0", "id":internal, "method":"tools/call",
+                                  "params":{"name":"get_container",
+                                            "arguments":{"username":logical}}})
+                            observed = reply(internal, False)
+                            result = observed.get("result")
+                            if (not isinstance(result, dict) or result.get("isError") or
+                                    not isinstance(result.get("content"), list)):
+                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED")
+                            try:
+                                blocks = [b["text"] for b in result["content"]
+                                          if isinstance(b, dict) and b.get("type") == "text"]
+                                if len(blocks) != 1:
+                                    raise ValueError()
+                                row = json.loads(blocks[0])["container"]
+                                if row["username"] != logical:
+                                    raise ValueError()
+                                current = row["resources"]["disk"]
+                            except (KeyError, TypeError, ValueError, UnicodeError):
+                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED") from None
+                            resource_size.require_nonshrinking_disk(args["disk"], current)
                     if params.get("name") == "connect":
                         registry = trusted_registry()
                         internal = "boxweave-trust-" + str(request["id"])

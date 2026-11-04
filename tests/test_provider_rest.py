@@ -143,6 +143,30 @@ class ProviderRESTTests(unittest.TestCase):
         self.assertIsNone(self.sent[4][2])
         self.assertTrue(all(x[3] == "Bearer " + "a" * 72 for x in self.sent))
 
+    def test_rest_disk_shrink_and_unsupported_size_refused_before_put(self):
+        for current, requested, expected in (
+                ("25GB", "24GB", "RESOURCE_DISK_SHRINK_REFUSED"),
+                ("unknown", "26GB", "RESOURCE_DISK_SIZE_UNVERIFIED"),
+                ("25GB", "invalid", "RESOURCE_DISK_SIZE_UNVERIFIED")):
+            with self.subTest(current=current, requested=requested):
+                self.sent.clear()
+                row = self.box()
+                row["resources"]["disk"] = current
+                self.queue({"container": row})
+                with self.assertRaisesRegex(Fault, expected):
+                    self.rest.mutate("resize", "work", {"_resize": {"disk": requested}}, timeout=30)
+                self.assertEqual([x[0] for x in self.sent], ["GET"])
+                self.assertTrue(self.sent[0][1].endswith("/v1/containers/work"))
+
+    def test_rest_disk_equal_or_grow_requires_read_then_put(self):
+        for disk in ("25GB", "26GB"):
+            with self.subTest(disk=disk):
+                self.sent.clear()
+                self.queue({"container": self.box()}, {"message": "acknowledged"})
+                self.rest.mutate("resize", "work", {"_resize": {"disk": disk}}, timeout=30)
+                self.assertEqual([x[0] for x in self.sent], ["GET", "PUT"])
+                self.assertEqual(json.loads(self.sent[1][2]), {"disk": disk})
+
     def test_token_rotation_and_unsupported_redirect(self):
         self.queue({}, {})
         self.rest.inventory()

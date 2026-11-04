@@ -171,3 +171,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## Updated host v0.43.1 real reacceptance (2026-11-03)
 
 [Per-feature current-grade matrix](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md): live create/SSH/bounded reads/stop-start/persistence/resize/network ACL and historical 0.26.1 read/doctor PASS, source 703/703 + seven browsers PASS. Deployment-disabled task tracking, protected R-04, D4 positive, missing current client DC-01 catalog entry and unsupported untested storage/external client/nested child remain U/BLOCKED.
+
+## v0.44.4 current-host independent source/live crosswalk (2026-11-04)
+
+[Exact feature-level statuses and new upstream disk-shrink mismatch](REACCEPTANCE_0444_2026-11-04.md). **L FAIL** on upstream 0.128.0 shrink (25GB→24GB returned success contrary to grow-only contract). New Agent Gateway / REST / Web plan disk-size guard **S+T PASS**, installed v0.44.4 L pending. Existing current main 728 units/7 browsers PASS; task Box v0.44.3 install+doctor 10/10 and nested child execute+cleanup L PASS. R-02 unprovisioned; real global R-04, external OAuth/native clients and E2–E4 remain U/BLOCKED. Original operator host untouched.

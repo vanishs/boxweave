@@ -174,15 +174,23 @@ class LifecycleTests(Base):
         row=self.life.receipt(op["id"])
         self.assertEqual((row["state"],row["code"]),("unknown","DEADLINE_EXCEEDED"))
 
-    def test_resize_without_observed_resources_succeeds_unverified(self):
+    def test_resize_disk_plan_rejects_shrink_or_missing_current_size(self):
         self.ready()
-        self.provider.no_resources=True
-        plan=self.life.plan("resize",NAME,resize={"disk":"20GB"})
-        op=self.life.confirm(plan["id"],NAME)
+        self.provider.resources[NAME]["resources"]["disk"] = "20GB"
+        with self.assertRaisesRegex(Fault, "RESOURCE_DISK_SHRINK_REFUSED"):
+            self.life.plan("resize", NAME, resize={"disk": "8GB"})
+        # Equal size is an idempotent request.
+        plan = self.life.plan("resize", NAME, resize={"disk": "20GB"})
+        self.assertEqual(plan["resize"], {"disk": "20GB"})
+        self.provider.no_resources = True
+        with self.assertRaisesRegex(Fault, "RESOURCE_DISK_SIZE_UNVERIFIED"):
+            self.life.plan("resize", NAME, resize={"disk": "20GB"})
+        plan = self.life.plan("resize", NAME, resize={"cpu": "2"})
+        op = self.life.confirm(plan["id"], NAME)
         self.s.worker(once=True)
-        row=self.life.receipt(op["id"])
-        self.assertEqual((row["state"],row["code"]),("succeeded","OK"))
-        self.assertEqual(row["result"]["verification"],"not_available")
+        row = self.life.receipt(op["id"])
+        self.assertEqual((row["state"], row["code"]), ("succeeded", "OK"))
+        self.assertEqual(row["result"]["verification"], "not_available")
     def test_used_wrong_actor_and_wrong_confirmation(self):
         p=self.life.plan("create",NAME)
         with self.assertRaisesRegex(Fault,"NOT_FOUND"):self.life.confirm(p["id"],NAME,"other")

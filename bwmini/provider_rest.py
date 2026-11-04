@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import diagnostics
+from . import diagnostics, resource_size
 from .domain import Fault
 
 _TARGET = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
@@ -242,6 +242,19 @@ class RESTClient:
             body = spec.get("_resize")
             if not isinstance(body, dict) or not body or set(body) - {"cpu", "memory", "disk"}:
                 raise Fault("RESIZE_SPEC_INVALID", 422)
+            if body.get("disk") not in (None, ""):
+                # The Provider's advertised grow-only promise is not enforced
+                # by its 0.128.0 response. Observe the current authenticated
+                # target before any write; refuse ambiguous sizes or shrinks.
+                row = self.container(logical)
+                try:
+                    current = row["resources"]["disk"]
+                except (KeyError, TypeError):
+                    raise Fault("RESOURCE_DISK_SIZE_UNVERIFIED", 422) from None
+                try:
+                    resource_size.require_nonshrinking_disk(body["disk"], current)
+                except ValueError as exc:
+                    raise Fault(str(exc), 422) from None
             route, method = "/v1/containers/" + logical + "/resize", "PUT"
         else:
             raise Fault("ACTION_NOT_ALLOWED")
