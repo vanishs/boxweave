@@ -3,6 +3,8 @@
 > **Status: future implementation design, not approved or executed.** Parent: [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Companion: [trace/diagnostics](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md), [candidate ADR](ADR/0010-api-first-control-plane-candidate.md).
 > Source-only review: BoxWeave `main`/`VERSION 0.42.11` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3`; Containarium `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The BoxWeave-managed installer still pins **Containarium 0.120.1**, and the runtime is not certified by these source observations.
 
+> **2026-11-03 implementation checkpoint (not part of the historical estimates):** App-owned REST lifecycle basics were implemented in v0.42.12 and independently live-checked as part of the v0.43.0 stable promotion. The upstream MCP Agent gateway, specialist Tenant/Guard and nesting features, Box SSH work, and cross-entry mutation mediation are **not** completely migrated or globally accepted. The existing `v0.42.11` analysis below is retained for rationale; use [actual REST evidence](../verification/PROVIDER_REST_A1_04212_2026-11-03.md), [v0.43.0 acceptance](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md), and the current [feature ledger](../verification/FEATURE_MATRIX.md) for delivery status. The Containarium installer pin remains `v0.120.1`.
+
 ## 1. Exact question and answer
 
 How hard would it be for a coding Agent to replace **BoxWeave's own internal Containarium MCP calls** with the **Containarium REST API**?
@@ -12,9 +14,25 @@ How hard would it be for a coding Agent to replace **BoxWeave's own internal Con
 - These are **qualitative risk ratings**, not measured effort, deadlines, precise LOC estimates or assurances of a particular Agent's completion rate.
 - The recommended staged route is **REST on the app/provider side first**, while keeping upstream platform MCP and existing client setup alive until a testable replacement exists.
 
+### 1.1 Target channel map — *not* 100% REST
+
+Containarium's published implementation has parallel `containarium` CLI and platform `mcp-server` clients; the REST gateway lives in **`containariumd`**. The platform MCP mostly calls REST but also performs **client-local** credential/configuration work, direct SSH (`connect(exec)`), local Git/SSH transfer (`push/sync`), and SSH-to-`agent-box` coding sessions (`code_*`). Its README's planned Q4 2026 OSS v1.0 API milestone is **not** evidence those SSH paths will be retired.
+
+| Existing user-visible operation | Intended BoxWeave internal path | Migration/acceptance condition |
+| --- | --- | --- |
+| List/get/create/start/stop/delete/resize | `Operation Core → Provider REST → containariumd` | Current app-owned subset exists; recheck Agent gateway, identity, tenancy, negative results and postconditions |
+| Network tenants, Guard, routing, metrics, auto-sleep, backup/snapshot | Same typed REST adapter **where supported** | Check installed daemon proto/HTTP route, scopes, Guard or storage eligibility, and real-Box effect; never infer from upstream `main` |
+| Box command, shell session, bounded file read/write/patch | `Operation Core → exact-Box SSH Executor → Box` | Server-owned identities, host-key pin, incarnation, safe workspace, output/timeouts, uncertainty; no required in-Box helper |
+| `push` / `sync` | Explicit transfer adapter over SSH/local source operations | Decide source locality/permissions, atomicity, size caps, workspace and user authorization; not a REST CRUD alias |
+| `code_run` / `code_attach` / `code_status` | Optional SSH → `agent-box` MCP, or independently specified equivalent | Capability probe and install policy; offset/reconnect/cancel tests; never assume `agent-box` exists |
+| Client `sync_ssh_config`, local keys/certificates, encrypted restore identity | Explicit client/service-local effect **plus** API | Separate secret/path privileges, operator consent and audit; REST success does not verify a usable local file |
+| GitHub Actions runner provisioning | Orchestrated API + SSH + GitHub API | Per-stage receipts/authority, remote failure and partial-state reconciliation |
+
+**Boundary invariant:** The **inbound** Agent-facing BoxWeave MCP (SSH-stdio and HTTP/OAuth) remains a supported product entry; migration changes only **outbound** Provider calls. The default Box executor must not require installing `agent-box` inside a clean Box. The operator recovery CLI stays independently available without becoming a host-shell escape for Agents. All mutating channels require the same operation claim and UNKNOWN handling before any global coordination guarantee.
+
 ## 2. Current code owners and required changes
 
-| Source path | Today's role | Future disposition | Relative effort |
+| Source path | v0.42.11 baseline role (historical) | Future disposition | Relative effort |
 | --- | --- | --- | --- |
 | `bwmini/provider.py` | Platform MCP session; get/list/create/start/stop/delete/resize; identity verification with `connect(exec)` | Typed `ContainariumAPI`; preserve lifecycle/identity interface while moving `hello`/identity exec to Box Executor | Medium |
 | `bwmini/access_provider.py` | `network_tenant_capabilities`, Guard, tenant policy and passthrough route operations over tool names | Map to authenticated REST network/tenant endpoints; retain revisions, no partial two-Tenant writes, Guard verification | Medium–high |
@@ -75,6 +93,15 @@ Primary upstream references:
 6. **Encrypted backup restore.** The host-local `age_identity_file` is read on the MCP/client host; upstream client passes its *contents* as `age_identity` to the authenticated daemon API. A redesign should have operator-controlled key custody, exact backup/target allowlist, no client-selected secret path, redacted request logging, one-shot confirmation and honest partial/unknown receipts. Remote-key-reference design requires upstream work; do not claim nonexistent native support.
 7. **Runtime capabilities, storage and API drift.** Replace MCP `tools/list` probing with explicitly allowlisted REST read/capability checks derived from protobuf and runtime evidence. Distinguish `defined`, `endpoint_available`, `authorized`, `storage_supported`, `operation_tested`. Older daemon version, missing Guard or non-ZFS backend must show `unsupported`, not a fabricated feature.
 
+### 3.3 Unresolved design conflicts — ask owner, do not silently decide
+
+1. **Accepted transport ADR vs long-term REST preference.** [ADR-003](ADR/0003-transport-and-trust.md) still records the accepted upstream SSH/MCP transport choice; [ADR-010](ADR/0010-api-first-control-plane-candidate.md) is only a candidate. The v0.42.12 app REST slice is limited implementation, **not** formal supersession. A full gateway transition requires a separately reviewed ADR decision and migration/rollback evidence.
+2. **Raw forwarded upstream MCP writes vs common mutation coordination.** `mcp_gate.py` can forward permitted upstream writes even when app lifecycle uses REST; a shared `Operation Core` would be bypassed. Owner must choose between **(A)** mediation/allowlisting of every mutating forwarded tool and **(B)** refusing unmediated forwarded writes *in protected mode* until equivalent mediation is available. Tradeoff: (A) broader functionality/higher implementation cost; (B) temporarily reduces advanced Agent capabilities. Neither option is preselected here; do not claim full protection meanwhile.
+3. **No mandatory guest agent vs upstream `code_*` dependence on `agent-box`.** The existing R-01 clean-Box rule takes precedence. Treat upstream `code_*` as optional and `unsupported/not configured` when its helper is absent; do **not** silently install a guest service to preserve tool parity. If code-run parity cannot be reached through approved SSH or optional helper, record a feature gap rather than reclassifying it as REST.
+4. **Upstream latest code vs pinned deployed API.** `main` route existence and a published v1.0 roadmap do not prove `v0.120.1` supports, authorizes or can safely execute the feature. No automatic Provider upgrade; block unsupported operations and record a future upgrade gate.
+
+This section records *conflicts and alternatives*, not a decision or new implementation authorization.
+
 ## 4. Agent-facing compatibility is a separate project
 
 Preserve two different contracts:
@@ -104,6 +131,8 @@ Switching the first **does not imply removing the second**. A complete gateway r
 | **A6 — Full parity/installed release gates** | Test pin matrix, upgrades, failure repair, auth, real Boxes, route/backup ZFS controls in disposable lab | Each feature row has evidence; no unverified high-risk claim; rollback/promotion independently authorized | Very high |
 
 **Sequencing constraint:** A1 and A0 can proceed without any production host upgrade. A2 can ship independently of A5 **if app and gateway write boundaries remain honest**; it must not be marketed as globally coordinated while untracked Agent writes exist. A5 must not precede A3/A4 if its tool routing would bypass required trust/claims.
+
+**Checkpoint against this phase map:** v0.43.0 provides a limited **application-owned** A1/A2 REST foundation and diagnostic evidence; it does **not** complete A0 catalogue parity, all A2 specialist paths, A3 SSH Executor, A4 cross-entry mediation, A5 native Agent gateway or A6 full installed parity. Work in that order as separately reviewed slices; do not couple gateway rewrite, OAuth changes and Provider host upgrades in one release. Special attention goes first to the already existing REST/Web-versus-forwarded-MCP mutation bypass and correct D1–D4 span coverage.
 
 ## 6. Concrete verification checklist for later Agent execution
 
