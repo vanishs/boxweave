@@ -186,6 +186,13 @@ class UpstreamPolicyTests(unittest.TestCase):
             current = {"raw": b"old-signed-binary", "running": "0.120.1"}
             restarts = []
             real_read = Path.read_bytes
+            real_stat = Path.stat
+
+            def stat(path, *args, **kwargs):
+                result = real_stat(path, *args, **kwargs)
+                if str(path) == str(state / "upstream-binary-backups"):
+                    return SimpleNamespace(st_uid=0, st_mode=result.st_mode)
+                return result
 
             def read_bytes(path):
                 if str(path) == "/usr/local/bin/containariumd":
@@ -222,6 +229,7 @@ class UpstreamPolicyTests(unittest.TestCase):
             with patch.object(u, "STATE", state), \
                  patch.object(u, "trusted", return_value=True), \
                  patch.object(u.Path, "read_bytes", read_bytes), \
+                 patch.object(u.Path, "stat", stat), \
                  patch.object(u.subprocess, "run", side_effect=process), \
                  patch.object(u, "installed_version", return_value="0.128.0"), \
                  patch.object(u, "_token", return_value="private-fixture-token"), \
