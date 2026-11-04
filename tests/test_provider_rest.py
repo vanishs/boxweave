@@ -190,7 +190,7 @@ class ProviderRESTTests(unittest.TestCase):
                 "create_container": {"inputSchema": {"properties": {
                     "username": {}, "cpu": {}, "memory": {}, "disk": {},
                     "image": {}, "ssh_keys": {}, "enable_podman": {},
-                    "enable_nesting": {"type": "boolean"}}}}
+                    "enable_nesting": {"type": "boolean"}}}}}
             p.lifecycle_mutate("create", "work", {
                 "cpu": "2", "memory": "2GB", "disk": "20GB",
                 "ssh_public_key": "ssh-ed25519 AAAtest", "_nesting": True
