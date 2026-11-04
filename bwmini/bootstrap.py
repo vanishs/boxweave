@@ -225,8 +225,9 @@ def apply(args, artifacts):
         if old:
             require(old["user"] == user and old["url"] == args.provider_url and old["port"] == args.port and
                     old["secret"] == str(safe_path(args.secret_file)) and old.get("ssh_entry", False) == args.ssh_entry, "BOOTSTRAP_SETTINGS_CONFLICT")
-            for name, data in (("mcp", artifacts["mcp"]), ("provider", artifacts["provider"])):
-                require(old[name + "_sha256"] == hashlib.sha256(data).hexdigest(), "PROVIDER_UPGRADE_NOT_ALLOWED")
+            # The upstream runtime may be upgraded independently of BoxWeave.
+            # prepare() already verifies each new component against its current
+            # reviewed source digest; old app-owned copies must remain intact.
             for path, sha in old["managed_files"].items():
                 reviewed(path, sha)
         else:
@@ -242,10 +243,11 @@ def apply(args, artifacts):
         home.chmod(0o700)
         owner = (account.pw_uid, account.pw_gid)
         prefix = home / "boxweave"
-        # The two provider executables are snapshotted into root-controlled paths.
+        # Refresh only app-owned snapshots after reviewing new input bytes.
+        # Never write to an operator's actual Containarium executable.
         for name in ("mcp", "provider"):
             target = public / name
-            if not old:
+            if not old or old[name + "_sha256"] != hashlib.sha256(artifacts[name]).hexdigest():
                 atomic(target, artifacts[name], 0o755)
         launcher = public / "launcher"
         token = public / "application.token"

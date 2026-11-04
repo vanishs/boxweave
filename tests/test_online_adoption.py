@@ -76,6 +76,7 @@ class ExistingProviderTests(unittest.TestCase):
              patch.object(online.subprocess, "run", return_value=SimpleNamespace(
                  returncode=0, stdout=json.dumps([{"name": "default", "driver": "dir"}]))) as execute, \
              patch.object(online.urllib.request, "urlopen", return_value=HTTPResponse()) as http, \
+             patch.object(online, "component_version", return_value="0.128.0") as version, \
              patch.object(online, "atomic") as write, \
              patch.object(online, "run") as managed_run:
             self.assertEqual(online.verify_existing_provider(provider), provider)
@@ -85,6 +86,7 @@ class ExistingProviderTests(unittest.TestCase):
             self.assertEqual(http.call_args.args[0], "http://127.0.0.1:8080/v1/containers")
             write.assert_not_called()
             managed_run.assert_not_called()
+            version.assert_called_once_with("/usr/local/bin/containariumd")
 
     def test_uninitialized_incus_refused_without_writing(self):
         provider = {"url": "http://127.0.0.1:8080",

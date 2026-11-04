@@ -43,7 +43,7 @@ class ShellInstallTests(unittest.TestCase):
         self.stat_original = Path.stat
         self.atomic_calls = []
         self.download_calls = []
-        self.version_output = "Containarium v0.120.1"
+        self.version_output = "Containarium v0.128.0"
         self.syntax_exit = 0
         self.download_failure = None
 
@@ -71,7 +71,8 @@ class ShellInstallTests(unittest.TestCase):
         if argv[0] == "/bin/bash":
             self.assertEqual(argv[1], "-n")
             return SimpleNamespace(returncode=self.syntax_exit, stdout="", stderr="")
-        self.assertEqual(argv, ["/opt/containariumd", "version"])
+        self.assertIn(argv, [["/opt/containariumd", "version"],
+                             ["/usr/local/bin/containariumd", "version"]])
         return SimpleNamespace(returncode=0, stdout=self.version_output, stderr="")
 
     def invoke(self, *, external=False, repair=False, rooted=True,
@@ -85,6 +86,7 @@ class ShellInstallTests(unittest.TestCase):
              patch.object(online, "atomic", side_effect=self.atomic), \
              patch.object(online, "download", side_effect=self.fake_download), \
              patch.object(online.subprocess, "run", side_effect=self.fake_run), \
+             patch.object(online, "trusted_provider_binary", return_value=True), \
              patch.object(Path, "stat", (lambda p, *a, **kw: self.fake_stat(p, *a, **kw)) if rooted else self.stat_original):
             return online.ensure_containarium_shell(
                 self.stage, self.state, external=external, repair=repair,
@@ -92,7 +94,8 @@ class ShellInstallTests(unittest.TestCase):
             )
 
     def test_upstream_source_pin_and_release_asset_exclusion(self):
-        self.assertEqual(online.PROVIDER_VERSION, "0.120.1")
+        self.assertEqual(online.PROVIDER_VERSION, "0.128.0")
+        self.assertEqual(online.MIN_PROVIDER_VERSION, "0.128.0")
         self.assertEqual(online.HOST_SHELL_UPSTREAM_COMMIT,
                          "e5deb167c973033d9a847abdcb2420e917095546")
         self.assertEqual(online.HOST_SHELL_SOURCE_SHA256,
@@ -136,13 +139,18 @@ class ShellInstallTests(unittest.TestCase):
         self.assertEqual(len(self.download_calls), 1)
 
     def test_external_unsupported_or_unknown_version_never_downloads(self):
-        self.version_output = "Containarium v0.127.0"
-        with self.assertRaisesRegex(online.Failure, "PROVIDER_VERSION_UNSUPPORTED"):
+        self.version_output = "Containarium v0.120.1"
+        with self.assertRaisesRegex(online.Failure, "PROVIDER_COMPONENT_BELOW_MINIMUM"):
             self.invoke(external=True, repair=True)
         with self.assertRaisesRegex(online.Failure, "PROVIDER_VERSION_UNKNOWN"):
             self.invoke(external=True, repair=True, provider_cli=None)
         self.assertFalse(self.target.exists())
         self.assertEqual(self.download_calls, [])
+
+    def test_future_runtime_version_does_not_block_verified_wrapper(self):
+        self.version_output = "Containarium v0.140.1"
+        self.assertEqual(self.invoke(external=True, repair=True),
+                         "installed_from_pinned_upstream_registered")
 
     def test_existing_safe_wrapper_preserves_file_even_if_external(self):
         self.target.write_bytes(self.wrapper)

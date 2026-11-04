@@ -8,13 +8,17 @@ import platform, pwd, re, secrets, shutil, socket, stat, subprocess, sys, tempfi
 STATE = Path("/var/lib/boxweave-default")
 PUBLIC = Path("/usr/local/lib/boxweave/default")
 APP = "boxweave"
-PROVIDER_VERSION = "0.120.1"
+# Minimum runtime version; there is no maximum or per-release allowlist.
+MIN_PROVIDER_VERSION = "0.128.0"
+PROVIDER_VERSION = MIN_PROVIDER_VERSION  # SHA-pinned clean bootstrap only.
 INCUS_PACKAGES = ("incus", "incus-client", "incus-extra")
 KEY_SHA256 = "f1adb44fdf82083f983a392b5b406d34e473dce3d66a51de3118cdc1f51d3f87"
+# These hashes authenticate only the initial v0.128.0 clean-host download,
+# NOT a compatibility whitelist for already installed upstream binaries.
 PROVIDER_ASSETS = {
-    "containariumd": "7d992e5df41d7070c187e8b11d516d61e8b89b4b7be677f7a0880b9cfed5d4bd",
-    "containarium": "dc356b07ca2138f28052d021458f8081753b2c6c186fe7508b0645a06a9b121d",
-    "mcp-server": "5b12e284b3b103c01bf9eff0cfe2f2a1e3b25476dfcc72aebe8166b4235198a2",
+    "containariumd": "7c19f21b07d8e988ebbfd39243e22cf97d97d9595598b9860f5bc4123e41e09f",
+    "containarium": "74560e96c4216cfb83218499682c816a9db78e4f367a4c194a587d650b83f696",
+    "mcp-server": "d1c645843ef2989fc5bff53ec57b6612ff931e3b94c9f42d040ee8d7c065b0ba",
 }
 RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
@@ -132,6 +136,42 @@ def current_state():
     return json.loads(path.read_text())
 
 
+def trusted_provider_binary(path):
+    """Only trust a regular root-controlled executable; do not follow symlinks."""
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        return False
+    meta = path.stat()
+    return (meta.st_uid == 0 and meta.st_nlink == 1 and
+            not meta.st_mode & 0o022 and bool(meta.st_mode & stat.S_IXUSR))
+
+
+def component_version(binary, *, minimum=MIN_PROVIDER_VERSION):
+    """Fail closed below minimum, with no maximum and no version whitelist."""
+    require(trusted_provider_binary(binary), "PROVIDER_COMPONENT_NOT_TRUSTED")
+    try:
+        result = subprocess.run([str(binary), "version"], capture_output=True,
+                                text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise Failure("PROVIDER_COMPONENT_VERSION_UNKNOWN") from None
+    observed = re.findall(r"(?<![\d.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![\d.])",
+                          result.stdout + " " + result.stderr)
+    require(result.returncode == 0 and len(set(observed)) == 1,
+            "PROVIDER_COMPONENT_VERSION_UNKNOWN")
+    version = observed[0]
+    require(tuple(map(int, version.split("."))) >= tuple(map(int, minimum.split("."))),
+            "PROVIDER_COMPONENT_BELOW_MINIMUM")
+    return version
+
+
+def toolchain_preflight(version):
+    """Advisory only: advanced BUILD_TOOLS runs need a managed host toolchain."""
+    if tuple(map(int, version.split("."))) < (0, 123, 0):
+        return "not_required"
+    return ("present" if Path("/opt/containarium/toolchains/current/bin").is_dir()
+            else "missing_for_build_tools")
+
+
 def check_managed(old):
     for name, digest in old.get("managed_files", {}).items():
         p = Path(name)
@@ -140,6 +180,12 @@ def check_managed(old):
         # upgrade; never exempt a changed file or even a dangling symlink.
         if (name == str(HOST_SHELL) and digest == HOST_SHELL_SHA256
                 and not p.is_symlink() and not p.exists()):
+            continue
+        if (old.get("provider_mode") == "standalone" and
+                name in {"/usr/local/bin/containariumd", "/usr/local/bin/containarium",
+                         "/usr/local/bin/mcp-server"} and trusted_provider_binary(p)):
+            # Upstream programs may be operator-upgraded independently. Do
+            # not exempt any other managed file from byte-integrity checks.
             continue
         require(not p.is_symlink() and p.is_file() and sha(p.read_bytes()) == digest, "MANAGED_FILE_CHANGED")
     require(old.get("hostname") == socket.gethostname(), "HOST_IDENTITY_CHANGED")
@@ -161,20 +207,11 @@ def extract_upstream_containarium_shell(source):
 
 
 def verified_host_shell_provider_version(*, external=False, provider_cli=None):
-    """Do not install an unreviewed wrapper against an unknown Provider."""
-    require(PROVIDER_VERSION == "0.120.1", "CONTAINARIUM_SHELL_PROVIDER_PIN_UNSUPPORTED")
-    if not external:
-        return
-    require(provider_cli and Path(provider_cli).is_absolute(),
+    """Check only the minimum version before optional host-hop setup."""
+    candidate = provider_cli if external else "/usr/local/bin/containariumd"
+    require(candidate and Path(candidate).is_absolute(),
             "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNKNOWN")
-    version = subprocess.run([provider_cli, "version"], capture_output=True,
-                             text=True, timeout=10, check=False)
-    require(version.returncode == 0,
-            "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNKNOWN")
-    observed = re.findall(r"(?<![\d.])v?([0-9]+\.[0-9]+\.[0-9]+)(?![\d.])",
-                          version.stdout + " " + version.stderr)
-    require(len(set(observed)) == 1 and observed[0] == PROVIDER_VERSION,
-            "CONTAINARIUM_SHELL_PROVIDER_VERSION_UNSUPPORTED")
+    component_version(candidate)
 
 
 def ensure_containarium_shell(release, old, *, external=False, repair=False,
@@ -389,6 +426,7 @@ def verify_existing_provider(provider):
         require(error.code == 401, "EXISTING_PROVIDER_API_UNEXPECTED_STATUS")
     except (urllib.error.URLError, TimeoutError):
         raise Failure("EXISTING_PROVIDER_API_UNAVAILABLE") from None
+    component_version(provider["cli"])
     return provider
 
 
@@ -569,6 +607,18 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
         else:
             require(not any((provider_url, provider_secret_file, provider_cli)),
                     "PROVIDER_OPTIONS_REQUIRE_EXISTING_CONTAINARIUM")
+        if external:
+            provider_version = component_version(old["external_provider"]["cli"])
+        elif "/usr/local/bin/containariumd" in old.get("managed_files", {}):
+            # The operator upgrades the running Provider first; never swap it
+            # implicitly when an application-only --version is selected.
+            provider_version = component_version("/usr/local/bin/containariumd")
+        else:
+            provider_version = PROVIDER_VERSION
+        print(json.dumps({"provider_compatibility": {"minimum": MIN_PROVIDER_VERSION,
+                  "observed": provider_version, "maximum": None,
+                  "managed_toolchain": toolchain_preflight(provider_version),
+                  "provider_upgraded_by_boxweave": False}}), flush=True)
         directory(STATE / "releases")
         release = STATE / "releases" / (version + "-" + m["source"])
         directory(release)
@@ -595,11 +645,15 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 require(sha(Path(__file__).read_bytes()) == expected, "ONLINE_INSTALLER_DIGEST_MISMATCH")
                 atomic(release / name, Path(__file__).read_bytes())
             else: download(release_url + name, release / name, expected)
-        # Fixed official upstream assets, never mutable latest or an existing-host upgrade.
+        # A new empty Provider receives SHA-verified minimum-version binaries.
+        # An existing Provider may run ANY newer trusted version unchanged.
+        local_mcp = Path("/usr/local/bin/mcp-server")
+        use_installed_mcp = local_mcp.exists() and trusted_provider_binary(local_mcp)
         for name, digest in PROVIDER_ASSETS.items():
-            # The externally managed Provider's binaries are never downloaded or installed.
-            if not external or name == "mcp-server":
-                download("https://github.com/FootprintAI/Containarium/releases/download/v" + PROVIDER_VERSION + "/" + name + "-linux-amd64",
+            needs_bootstrap = not external and not (Path("/usr/local/bin") / name).exists()
+            if needs_bootstrap or (name == "mcp-server" and not use_installed_mcp):
+                download("https://github.com/FootprintAI/Containarium/releases/download/v" +
+                         PROVIDER_VERSION + "/" + name + "-linux-amd64",
                          release / name, digest)
         if external:
             deadline = phase("external_provider_preflight")
@@ -658,9 +712,12 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
                 atomic(marker,json.dumps(old,sort_keys=True).encode())
             for name, expected in PROVIDER_ASSETS.items():
                 target = Path("/usr/local/bin") / name
-                if target.exists(): require(not target.is_symlink() and sha(target.read_bytes()) == expected, "PROVIDER_UPGRADE_OR_FOREIGN_BINARY_REFUSED")
-                else: atomic(target, (release/name).read_bytes(), 0o755)
-                old["managed_files"][str(target)] = expected
+                if target.exists():
+                    require(trusted_provider_binary(target), "PROVIDER_COMPONENT_NOT_TRUSTED")
+                else:
+                    atomic(target, (release / name).read_bytes(), 0o755)
+                old["managed_files"][str(target)] = sha(target.read_bytes())
+            component_version("/usr/local/bin/containariumd")
             if not SECRET.exists():
                 directory(SECRET.parent)
                 atomic(SECRET, secrets.token_hex(32).encode())
@@ -700,15 +757,16 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             provider_cli=old["external_provider"]["cli"] if external else None)
         print(json.dumps({"containarium_shell": shell_result}), flush=True)
         deadline = phase("independent_application")
-        mcp_binary = str(release / "mcp-server") if external else "/usr/local/bin/mcp-server"
+        mcp_binary = str(local_mcp if use_installed_mcp else release / "mcp-server")
         provider_binary = old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"
-        provider_digest = sha(Path(provider_binary).read_bytes()) if external else PROVIDER_ASSETS["containariumd"]
+        provider_digest = sha(Path(provider_binary).read_bytes())
+        mcp_digest = sha(Path(mcp_binary).read_bytes())
         secret_file = old["external_provider"]["secret"] if external else str(SECRET)
         api_url = old["external_provider"]["url"] if external else "http://127.0.0.1:18080"
         args = ["/usr/bin/python3", str(release/"bootstrap.py"), "apply", "--app-user", APP,
                 "--archive", str(release/"boxweave.zip"), "--sha256", m["files"]["boxweave.zip"],
                 "--distribution", str(release/"distribution.py"), "--distribution-sha256", m["files"]["distribution.py"],
-                "--mcp-binary", mcp_binary, "--mcp-sha256", PROVIDER_ASSETS["mcp-server"],
+                "--mcp-binary", mcp_binary, "--mcp-sha256", mcp_digest,
                 "--provider-cli", provider_binary, "--provider-cli-sha256", provider_digest,
                 "--secret-file", secret_file, "--provider-url", api_url,
                 "--ssh-entry", "--ack-root-changes", "INITIALIZE_BOXWEAVE"]

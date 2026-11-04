@@ -10,7 +10,8 @@ for line in sys.stdin:
         initialized=True
         continue
     if method=="initialize":
-        result={"protocolVersion":"2024-11-05","capabilities":{"tools":{}}}
+        result={"protocolVersion":"2024-11-05","capabilities":{"tools":{}},
+                "serverInfo":{"name":"containarium-mcp-server","version":"0.128.0"}}
     elif not initialized:
         raise SystemExit(4)
     elif method=="tools/list":
