@@ -30,7 +30,7 @@ def trusted_helper(name):
     The installed directory and helper files must all be owned by root and
     unmodifiable by non-root callers. Development fixtures run only non-root.
     """
-    if name not in ("client_setup", "nesting"):
+    if name not in ("client_setup", "nesting", "upstream_version"):
         raise ValueError("UNKNOWN_HOST_HELPER")
     directory = Path(__file__).absolute().parent
     installed = Path("/usr/local/lib/boxweave/default")
@@ -42,7 +42,7 @@ def trusted_helper(name):
             info = path.lstat()
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
                 raise ValueError("HOST_HELPER_DIRECTORY_UNTRUSTED")
-        for filename in ("host_cli.py", "client_setup.py", "client_profiles.py", "online.py", "nesting.py"):
+        for filename in ("host_cli.py", "client_setup.py", "client_profiles.py", "online.py", "nesting.py", "upstream_version.py"):
             info = (directory / filename).lstat()
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
                     or info.st_mode & 0o022 or info.st_nlink != 1):
@@ -772,6 +772,15 @@ def setup_guide(info, mode="https", check=False):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "upstream":
+        if os.geteuid() != 0:
+            print("Upstream management requires: sudo boxweave upstream status|update", file=sys.stderr)
+            return 2
+        try:
+            return trusted_helper("upstream_version").main(argv[1:])
+        except (OSError, ValueError, ImportError):
+            print(json.dumps({"state": "unavailable", "code": "UPSTREAM_MANAGER_UNAVAILABLE"}), file=sys.stderr)
+            return 2
     if argv and argv[0] == "client":
         try:
             return trusted_helper("client_setup").main(argv[1:])
