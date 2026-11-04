@@ -1,6 +1,6 @@
 # BoxWeave v2 knowledge index
 
-Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
+**Current source/installed reacceptance:** [v0.44.3 whole-project code-first and real Box verification](verification/REACCEPTANCE_0443_2026-11-04.md) (fresh/repair installation PASS, nested create-response and disk-shrink risks OPEN, unverified feature tracks explicitly marked).\n\nStart here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
 
 | Containarium minimum-only upgrade and reusable Agent SOP | [v0.128.0 compatibility review](design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [standard upgrade SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md), [v0.43.2 P0 acceptance ledger](verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md): only component version floors, no upper bound; stable pointer unchanged |
 | Find | Authoritative route |
