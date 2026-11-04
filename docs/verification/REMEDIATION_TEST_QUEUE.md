@@ -1,5 +1,10 @@
 # Remediation validation and next-Agent queue
 
+## DC-01 read-only Agent diagnostic coordinator v0.43.0 candidate — 2026-11-03
+
+[Design](../design/DIAGNOSTIC_COORDINATOR_V1.md) | [Exact evidence and remaining installed-host gate](DIAGNOSTIC_COORDINATOR_0430_2026-11-03.md). New enumerated Agent tool coordinates fixed app preflight, independent authenticated REST/MCP inventory and actor-scoped D2 trace presentation. No host shell, source mutation, credential rotation or automatic Box writes. In a newly created isolated Box, source unit/knowledge/fixture build and packaged app subprocess with synthetic HTTP/MCP passed. **Real installed v0.43.0 Containarium/Gateway acceptance, final PR CI and stable pin promotion remain separate, not verified**. The owner's running v0.42.12 host was not upgraded.
+
+
 ## Containarium v0.127.0/latest-main sleep and wake isolation gate — 2026-11-03
 
 [Full source-identity and two-route live evidence](CONTAINARIUM_0127_AUTOSLEEP_WAKE_UPSTREAM_LIVE_2026-11-03.md). On a new task-owned BoxWeave-managed nested Ubuntu Box, the compiled upstream main daemon passed focused auto-sleep/server/wake Go tests. Real Incus auto-sleep STOPPED a target twice, with its separate HTTP 8080 and 8081 application routes each waking on their **first** Caddy request (200 and exact body). Reproduced missing birth `LastStartedAt` on the official v0.127.0 **local CLI** create path. Follow-up fork [`42b79978`](https://github.com/vanishs/Containarium/commit/42b79978ce39b262a7a0cb3e6ac6882339a61237) fixes local CLI clock and exposes opt-in `idle_stop_minutes` to MCP; Go packages and independent live CLI/MCP create→automatic STOP passed. BoxWeave source fixture tests: Box Actions **28/28**, Lifecycle **32/32**.
