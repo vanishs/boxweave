@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## v0.43.1 published source and isolated installed acceptance — 2026-11-03
+
+[Release and stable-default gate](STABLE_PROMOTION_0431_2026-11-03.md) and [post-dispatch bug test](CREATE_OUTCOME_0431_2026-11-03.md): source main CI 41776913234 verify + publish PASS at `eadcb27`; immutable v0.43.1 release contains 23 SHA-256-bearing assets. The dedicated test Box performed a real 0.43.0→0.43.1 upgrade with exit 0, installed doctor 10/10, authenticated REST/MCP, installed Gateway 68-tool catalog and DC-01 preflight/rest_read PASS. The upstream intermittent 500 root cause, real production host, global R-04 and external client checks remain OPEN/U; do not infer full acceptance from the limited host. Default stable pin upgrade is separately reviewed and does not rewrite v0.43.1 source assets.
+
 ## Current v0.43.1 post-dispatch repair and release gate — 2026-11-03
 
 [Post-commit error classification and acceptance](CREATE_OUTCOME_0431_2026-11-03.md): reproducible **bug** in app lifecycle incorrectly treated post-dispatch MCP `PROVIDER_REJECTED` as definite pre-dispatch failure, risking a false terminal receipt after real creation; existing shared-claim cleanup remained conservative. Fixed to UNKNOWN with preserved claim and read-only candidate observation. Agent Gateway now adds explicit non-retry metadata to create errors without modifying the upstream error; the raw Provider 500 root cause remains OPEN. Focused regression tests PASS; fresh full source validation 703 Python tests, knowledge, Web build and all seven Chromium fixtures PASS (10/10). Independent CI/tag and installed current-version checks tracked separately; stable installer pinned v0.43.0 pending promotion.
