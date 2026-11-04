@@ -337,7 +337,18 @@ class Lifecycle:
         except Fault as error:
             if error.code=="STATE_UNAVAILABLE":
                 raise
-            if error.code in ("TARGET_CHANGED","IDENTITY_MISMATCH","TRUST_FAILED","NETWORK_MEMBERSHIP_MISMATCH"):
+            if (error.code == "TRUST_FAILED" and job["action"] == "create"
+                    and job["acknowledged"] and target is not None
+                    and self.clock() < job["deadline"]):
+                # Newly created guest host keys and the dedicated root-published
+                # known_hosts inventory converge asynchronously. NEVER bypass
+                # host-key validation, accept a different incarnation or replay
+                # the original create; only observe the original target within
+                # its fixed deadline. An existing Box's trust failure remains
+                # an immediate hard denial.
+                self.save(job,"observing","trust_pending",
+                          "TRUST_READINESS_PENDING",target=target)
+            elif error.code in ("TARGET_CHANGED","IDENTITY_MISMATCH","TRUST_FAILED","NETWORK_MEMBERSHIP_MISMATCH"):
                 self.save(job,"failed","blocked",error.code)
             elif self.clock()>=job["deadline"] or error.code=="DEADLINE_EXCEEDED":
                 self.save(job,"unknown","deadline","DEADLINE_EXCEEDED")

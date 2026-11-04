@@ -1,5 +1,7 @@
 # BoxWeave v2 knowledge index
 
+**Latest R-04 lifecycle issue and isolated candidate:** [v0.44.7 creation trust-readiness and shared claims](verification/TRUST_READINESS_R04_0447_2026-11-04.md) (real protected-mode reproduced error; bounded retry source and real nested acceptance; exact v0.44.7 release/host upgrade pending).
+
 **Current source/installed reacceptance:** [v0.44.6 four-gate isolated installed acceptance](verification/FOUR_GATE_ISOLATED_ACCEPTANCE_0446_2026-11-04.md) (nested child execution, explicit task tracking, live MCP/REST shrink refusals, Web-shared lifecycle, clean install and upgrade PASS within scope; authenticated installed Web HTTP and owner-host upgrade unverified). Previous [v0.44.3 whole-project evidence](verification/REACCEPTANCE_0443_2026-11-04.md) is historical.\n\nStart here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
 
 | Containarium minimum-only upgrade and reusable Agent SOP | [v0.128.0 compatibility review](design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [standard upgrade SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md), [v0.43.2 P0 acceptance ledger](verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md): only component version floors, no upper bound; stable pointer unchanged |

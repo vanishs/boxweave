@@ -80,16 +80,49 @@ class LifecycleTests(Base):
         self.assertEqual(len(again.lifecycle.receipts()),5)
         self.assertEqual([x[0] for x in self.provider.writes],["create","stop","start","stop","delete"])
         self.assertTrue(self.life.settings()["environments"][0]["deleted"])
-    def test_trust_failure_stops_observation_without_retry(self):
+    def test_create_hostkey_convergence_defers_without_redispatch(self):
         def fail(*args):raise Fault("TRUST_FAILED")
         self.provider.lifecycle_identity=fail
         op=self.confirmed();self.s.worker(once=True)
         row=self.life.receipt(op["id"])
-        self.assertEqual((row["state"],row["code"]),("failed","TRUST_FAILED"))
+        self.assertEqual((row["state"],row["phase"],row["code"]),
+                         ("observing","trust_pending","TRUST_READINESS_PENDING"))
         count=self.provider.inspect_count
-        self.now[0]+=30;self.s.worker(once=True)
-        self.assertEqual(self.provider.inspect_count,count)
+        self.now[0]+=16;self.s.worker(once=True)
+        self.assertGreater(self.provider.inspect_count,count)
         self.assertEqual(self.provider.writes,[("create",NAME)])
+        self.now[0]=op["deadline"]+1
+        self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["code"]),("unknown","DEADLINE_EXCEEDED"))
+        self.assertEqual(self.provider.writes,[("create",NAME)])
+
+    def test_transient_create_hostkey_failure_then_verified_identity(self):
+        original=self.provider.lifecycle_identity
+        calls=[]
+        def first_fails(target,timeout):
+            calls.append(target.created)
+            if len(calls)==1:raise Fault("TRUST_FAILED")
+            return original(target,timeout)
+        self.provider.lifecycle_identity=first_fails
+        op=self.confirmed();self.s.worker(once=True)
+        self.assertEqual(self.life.receipt(op["id"])["code"],"TRUST_READINESS_PENDING")
+        self.now[0]+=16;self.s.worker(once=True)
+        receipt=self.life.receipt(op["id"])
+        self.assertEqual((receipt["state"],receipt["code"]),("succeeded","OK"))
+        self.assertEqual(len(set(calls)),1)
+        self.assertEqual(self.provider.writes,[("create",NAME)])
+
+    def test_existing_box_trust_failure_still_blocks(self):
+        self.ready()
+        stop=self.confirmed("stop");self.s.worker(once=True)
+        self.assertEqual(self.life.receipt(stop["id"])["state"],"succeeded")
+        def fail(*args):raise Fault("TRUST_FAILED")
+        self.provider.lifecycle_identity=fail
+        op=self.confirmed("start");self.s.worker(once=True)
+        row=self.life.receipt(op["id"])
+        self.assertEqual((row["state"],row["code"]),("failed","TRUST_FAILED"))
+        self.assertEqual(self.provider.writes,[("create",NAME),("stop",NAME),("start",NAME)])
     def test_running_is_not_connection_ready_and_deadline_not_reset(self):
         self.provider.ready_failures=2
         op=self.confirmed()
