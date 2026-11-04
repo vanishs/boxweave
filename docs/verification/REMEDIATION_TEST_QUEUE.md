@@ -1,5 +1,9 @@
 # Remediation validation and next-Agent queue
 
+## Current v0.43.1 post-dispatch repair and release gate — 2026-11-03
+
+[Post-commit error classification and acceptance](CREATE_OUTCOME_0431_2026-11-03.md): reproducible **bug** in app lifecycle incorrectly treated post-dispatch MCP `PROVIDER_REJECTED` as definite pre-dispatch failure, risking a false terminal receipt after real creation; existing shared-claim cleanup remained conservative. Fixed to UNKNOWN with preserved claim and read-only candidate observation. Agent Gateway now adds explicit non-retry metadata to create errors without modifying the upstream error; the raw Provider 500 root cause remains OPEN. Focused regression tests PASS; fresh full source validation 703 Python tests, knowledge, Web build and all seven Chromium fixtures PASS (10/10). Independent CI/tag and installed current-version checks tracked separately; stable installer pinned v0.43.0 pending promotion.
+
 ## Current v0.43.0 independent reacceptance (2026-11-03)
 
 [Per-feature execution and explicitly unverified gates](REACCEPTANCE_0430_2026-11-03.md). Fresh main at `33ea432`: 699 Python tests PASS, 190 knowledge documents PASS, all 7 Chromium fixtures and a complete 10-step validation PASS after repairing the hardcoded 18640 browser fixture port collision. Newly created isolated Box: tagged 0.43.0 installer exit 0, installed doctor 10/10, 68-tool Gateway DC-01 preflight/REST+MCP reads PASS, R-01 reads/denials and old 0.26.1 read compatibility PASS. **Reproduced** intermittent create HTTP 500 despite observed running instance; no blind retry. R-02 on the outer host remains unprovisioned, D4 defaults deny; nested selftest execution, R-04 global cross-entry, E2–E4, external clients and old-version direct migration remain U/BLOCKED. Exact resource retained and restoration boundaries in the report.

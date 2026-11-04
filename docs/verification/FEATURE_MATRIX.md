@@ -159,3 +159,7 @@ The prior v0.26.6 failed trust-readiness runs remain actual negative evidence. T
 ## Independent current main v0.43.0 reacceptance (2026-11-03)
 
 [Source-/test-/live-graded A01–A14 matrix](REACCEPTANCE_0430_2026-11-03.md) supersedes an assumption that prior old-Box or fixture evidence automatically applies to current installed software. Fresh 699 tests, 7 real Chromium fixture flows, knowledge, newly installed v0.43.0 REST+MCP and DC-01 reads are PASS in their exact scopes; unresolved Provider create-after-commit, unprovisioned R-02 and untested R-04/global/external/E2–E4/upgrade gates remain separately classified U/BLOCKED.
+
+## v0.43.1 post-commit lifecycle and Gateway error hardening (2026-11-03)
+
+[One-row-per-gate source/live ledger](CREATE_OUTCOME_0431_2026-11-03.md). New tests reproduced a real source bug: post-dispatch MCP error falsely terminalized a created Box as failed. Repair makes it UNKNOWN, holds coordination claims, prevents replay and exposes a bounded Agent create-error follow-up. Pending main CI and isolated installed source-version verification must not be inferred from focused fixture PASS; upstream create-after-commit 500 cause remains open.

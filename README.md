@@ -4,7 +4,9 @@
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.
 
-**Current source version: 0.43.0. Default stable installer: v0.43.0.** The immutable v0.43.0 release passed CI, an isolated Ubuntu 24.04 in-place upgrade from v0.42.12, authenticated live Provider REST/MCP reads, and a real app lifecycle-to-Agent-D2-trace check with cleanup. See [v0.43.0 stable promotion evidence](docs/verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md); this does not mean the original host was upgraded or remote OAuth, all Providers, or alternate platforms have been verified.
+**Current source version: 0.43.1. Default stable installer: v0.43.0.** The stable default will be promoted separately after the new release and live checks. The immutable v0.43.0 release passed CI, an isolated Ubuntu 24.04 in-place upgrade from v0.42.12, authenticated live Provider REST/MCP reads, and a real app lifecycle-to-Agent-D2-trace check with cleanup. See [v0.43.0 stable promotion evidence](docs/verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md); this does not mean the original host was upgraded or remote OAuth, all Providers, or alternate platforms have been verified.
+
+**v0.43.1 post-dispatch repair:** A Provider MCP error after a lifecycle write is now recorded as UNKNOWN rather than falsely claiming it was never submitted. Direct Agent create errors retain the original upstream error and add a typed readback hint; neither path retries, adopts or changes an unverified Box. [Fix and acceptance boundary](docs/verification/CREATE_OUTCOME_0431_2026-11-03.md).
 
 Optional multi-Agent shared coordination requires separate reviewed policy/SQLite provisioning and opt-in. Snapshot/restore/clone writes remain unsupported without verified Provider contracts. Source CI, published installer version, running service version and production-host acceptance are distinct. Historical rollout and unresolved risks are retained in [the risk register](docs/verification/OPEN_RISKS.md).
 

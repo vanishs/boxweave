@@ -315,3 +315,7 @@ Providers, sshd or sudoers. See
 ### 2026-11-03 v0.43.0 independent reacceptance risks
 
 [Fresh audit evidence](REACCEPTANCE_0430_2026-11-03.md) reproduced the already-known create-after-commit ambiguity: an upstream HTTP 500 / Instance already exists response with the original Box actually RUNNING, so a retry is unsafe. A browser-fixture fixed-port collision was repaired in the audited source and all seven Chromium fixtures then passed. Current isolated installed v0.43.0 REST/MCP and diagnostic reads passed; this does not close R-02 provisioned recovery, global R-04, D4 permitted positive, nested guest execution, E2–E4, external clients or cross-version migration/rollback. Affected task-owned Box retained as evidence; original environments preserved.
+
+### 2026-11-03 v0.43.1 post-dispatch classification defect corrected in source
+
+[Exact regression and release gates](CREATE_OUTCOME_0431_2026-11-03.md): BoxWeave application MCP `PROVIDER_REJECTED` could previously be classified as pre-dispatch `failed` even if upstream created the Box; the authoritative lifecycle receipt could incorrectly appear terminal; the separate shared claim already followed a conservative UNKNOWN path. Fixed with UNKNOWN and retained lock; Agent direct create receives a typed, explicit not-authorized-to-retry hint. The original underlying Containarium HTTP 500 / actual-create-after-error still requires upstream investigation and must **not** be claimed fixed. R-02/R-04 opt-in provisioning, E2-E4, external clients, and real operator-host acceptance are independent gates.

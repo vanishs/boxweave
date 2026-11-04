@@ -188,6 +188,45 @@ class GateProtocolTests(unittest.TestCase):
         return SimpleNamespace(stdin=KeepBytes(),stdout=io.BytesIO("".join(json.dumps(x)+"\n" for x in upstream).encode()),
                                poll=lambda:0)
 
+    def test_failed_create_preserves_upstream_error_and_exposes_safe_unknown(self):
+        request = {"jsonrpc": "2.0", "id": 15, "method": "tools/call",
+                   "params": {"name": "create_container",
+                              "arguments": {"username": "work", "enable_nesting": False}}}
+        original = {"jsonrpc": "2.0", "id": 15,
+                    "error": {"code": -32000, "message": "upstream create failed"}}
+        output = io.StringIO()
+        peer = self.peer([original])
+        with (patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request)+"\n")),
+              patch.object(mcp_gate.sys, "stdout", output),
+              patch.object(mcp_gate.subprocess, "Popen", return_value=peer),
+              patch.object(mcp_gate, "managed_public_key", return_value="ssh-ed25519 AAAA")):
+            mcp_gate.main()
+        reply = json.loads(output.getvalue())
+        self.assertEqual(reply["error"]["code"], -32000)
+        self.assertEqual(reply["error"]["message"], "upstream create failed")
+        record = reply["error"]["data"]["boxweave_create"]
+        self.assertEqual((record["state"], record["logical"], record["retry"]),
+                         ("unknown", "work", "not_authorized"))
+        self.assertEqual(record["inspect"], "get_container")
+        sent = [json.loads(line) for line in peer.stdin.getvalue().splitlines()]
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["params"]["name"], "create_container")
+
+    def test_failed_create_result_annotation_is_not_success(self):
+        reply = {"jsonrpc": "2.0", "id": 1,
+                 "result": {"isError": True,
+                            "content": [{"type": "text", "text": "remote error"}]}}
+        annotated = mcp_gate.annotate_failed_create(reply, {"username": "work"})
+        self.assertTrue(annotated["result"]["isError"])
+        self.assertEqual(annotated["result"]["content"][1]["text"], "remote error")
+        self.assertEqual(json.loads(annotated["result"]["content"][0]["text"])
+                         ["boxweave_create"]["code"], "CREATE_OUTCOME_UNVERIFIED")
+        self.assertEqual(mcp_gate.annotate_failed_create(
+            {"result": {"isError": False, "content": []}},
+            {"username": "work"})["result"]["content"], [])
+        self.assertNotIn("data", mcp_gate.annotate_failed_create(
+            {"error": {"code": -1}}, {"username": "../unsafe"})["error"])
+
     def test_nesting_helper_gap_is_named_not_masked_as_trust_gate(self):
         request={"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"boxweave_nesting",
                     "arguments":{"action":"inspect","logical":"work"}}}
