@@ -6,6 +6,13 @@ from .provider import Provider
 from .mcp import MCP
 from .domain import Fault
 
+def require_minimum_runtime_version(value, code):
+ match=re.fullmatch(r'v?([0-9]+)\.([0-9]+)\.([0-9]+)',value) if isinstance(value,str) else None
+ if not match or tuple(int(n) for n in match.groups()) < (0,128,0):
+  raise Fault(code)
+ return value
+
+
 class Observed(MCP):
  def call(self,method,params):
   value=super().call(method,params)
@@ -17,14 +24,17 @@ def read_provider(c):
   tools=client.discover()
   server=client.server.get('serverInfo',{})
   version=server.get('version') if isinstance(server,dict) else None
-  match=re.fullmatch(r'v?([0-9]+)\.([0-9]+)\.([0-9]+)',version) if isinstance(version,str) else None
-  if not match or tuple(int(n) for n in match.groups()) < (0,128,0):
-   raise Fault('MCP_SERVER_BELOW_MINIMUM_OR_UNKNOWN')
+  require_minimum_runtime_version(version,'MCP_SERVER_BELOW_MINIMUM_OR_UNKNOWN')
   client.tool('list_containers',{})
   result={'state':'authenticated_read_passed','server':server,'protocol':client.server['protocolVersion'],'tools':len(tools),'read':'list_containers','minimum_mcp_server':'0.128.0'}
   if p.rest is not None:
-   # A real local Provider API read is mandatory for newly configured installs.
+   # Authenticated daemon runtime identity is independent from the binary
+   # currently present on disk. Refuse old running processes after an update.
+   details=p.rest.request('GET','/v1/system/info',timeout=20).get('info')
+   runtime=details.get('daemonVersion') if isinstance(details,dict) else None
+   require_minimum_runtime_version(runtime,'PROVIDER_RUNTIME_BELOW_MINIMUM_OR_UNKNOWN')
    p.rest.inventory()
+   result['daemon_version']=runtime
    result['basic_management']='rest_authenticated_inventory_passed'
   else:result['basic_management']='legacy_mcp'
   return result

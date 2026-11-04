@@ -55,7 +55,7 @@ class RuntimeVersionTests(unittest.TestCase):
 
 
 class MinimumMCPTests(unittest.TestCase):
-    def probe(self, reported):
+    def probe(self, reported, daemon=None):
         class FakeMCP:
             def __init__(self, *_args, **_kwargs):
                 self.server = {"serverInfo": {"name": "containarium-mcp-server",
@@ -66,7 +66,13 @@ class MinimumMCPTests(unittest.TestCase):
             def __exit__(self, *_): return False
             def discover(self): return {"list_containers": {}}
             def tool(self, name, args): self.calls.append((name, args))
-        p = SimpleNamespace(argv=["/approved/launcher"], rest=None)
+        rest = (SimpleNamespace(
+            request=lambda method, path, timeout: (
+                {"info": {"daemonVersion": daemon}}
+                if (method, path, timeout) == ("GET", "/v1/system/info", 20)
+                else {}), inventory=lambda: set())
+                if daemon is not None else None)
+        p = SimpleNamespace(argv=["/approved/launcher"], rest=rest)
         with patch.object(deploy_check, "Provider", return_value=p), \
              patch.object(deploy_check, "Observed", FakeMCP):
             return deploy_check.read_provider({"mode": "mcp"})
@@ -77,6 +83,19 @@ class MinimumMCPTests(unittest.TestCase):
                 result=self.probe(version)
                 self.assertEqual(result["state"], "authenticated_read_passed")
                 self.assertEqual(result["minimum_mcp_server"], "0.128.0")
+
+    def test_authenticated_running_daemon_minimum_and_future(self):
+        for daemon in ("0.128.0", "0.129.0", "1.0.0"):
+            with self.subTest(daemon=daemon):
+                observed = self.probe("0.128.0", daemon=daemon)
+                self.assertEqual(observed["daemon_version"], daemon)
+                self.assertEqual(observed["basic_management"],
+                                 "rest_authenticated_inventory_passed")
+        for daemon in ("0.127.0", "unknown"):
+            with self.subTest(daemon=daemon), self.assertRaises(Fault) as error:
+                self.probe("0.128.0", daemon=daemon)
+            self.assertEqual(error.exception.code,
+                             "PROVIDER_RUNTIME_BELOW_MINIMUM_OR_UNKNOWN")
 
     def test_mcp_unknown_and_old_refused(self):
         for version in ("", "0.127.0", "dev"):

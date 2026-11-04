@@ -4,6 +4,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 
 | Containarium minimum-only upgrade and reusable Agent SOP | [v0.128.0 compatibility review](design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [standard upgrade SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md), [v0.43.2 P0 acceptance ledger](verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md): only component version floors, no upper bound; stable pointer unchanged |
 | Find | Authoritative route |
+| Containarium running-daemon minimum follow-up | [v0.43.3 runtime gate](verification/CONTAINARIUM_0128_RUNTIME_GATE_0433_2026-11-03.md): independently checks authenticated daemon process version, not only on-disk daemon/MCP binaries; no upper version cap |
 | --- | --- |
 | Upstream MCP priorities and future host-hop packaging | [2026-11-03 owner decisions](design/CONTAINARIUM_UPSTREAM_MCP_FOLLOWUPS_2026-11-03.md): stable MCP subset P1, whole-Box backup MCP P2, host-held age identity P2, Option A for `containarium-shell`: unbundle from Release, auto-fetch verified upstream dependency on managed local Providers, opt-in only on external Providers (design only) |
 | Real SSH forwarding/wake via containarium-shell | [2026-11-03 real SSH evidence](verification/CONTAINARIUM_SHELL_REAL_SSH_HOP_2026-11-03.md): command hop, stopped wake, unapproved-key denial **PASS**; host Incus sudo scope and sshpiper/cross-tenant checks **OPEN** |

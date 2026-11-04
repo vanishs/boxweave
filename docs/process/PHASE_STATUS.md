@@ -12,6 +12,10 @@ Historical gate/checkpoint text is preserved in [PHASE_STATUS_HISTORY](PHASE_STA
 
 Owner approved source compatibility, documentation, immutable candidate release and independent future operator-host acceptance. Containarium runtime minimum is 0.128.0 with no upper version bound; existing Providers are never automatically upgraded by a BoxWeave release. Candidate is [v0.43.2 source work](../verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md); real 0.128.0 host acceptance is deferred to operator, and `PUBLISHED_RELEASE` + default streamed installer remain 0.43.1. [General SOP](UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md). This source authorization does not authorize real host/Provider writes.
 
+## 2026-11-03 v0.43.2 released; v0.43.3 running-daemon gate candidate
+
+[PR #65](https://github.com/vanishs/boxweave/pull/65) merged v0.43.2 to `952b7b6`; exact PR and main CI PASS, immutable Release v0.43.2 published with default stable selector still 0.43.1. Follow-up [v0.43.3 runtime gate](../verification/CONTAINARIUM_0128_RUNTIME_GATE_0433_2026-11-03.md) requires authenticated running daemon `info.daemonVersion >=0.128.0`, not only on-disk binaries; future version maximum remains **none**. No operator Provider or real-host application update was performed.
+
 ## Source branch promotion
 
 SRC-092 separately authorizes publishing v2 as main and preserving the old implementation as legacy/pre-v2. This overrides the earlier no-push phase scope only for this branch operation; no application deployment, host change or runtime test scope is added. Completion/verification belongs in [BRANCH_PROMOTION](BRANCH_PROMOTION.md).

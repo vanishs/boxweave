@@ -49,7 +49,7 @@ Use a **new explicitly approved disposable Box** with nested capability rather t
 On this isolated host only, perform the **upstream-documented upgrade** (avoid floating root install scripts; verify exact binaries or official signed release), one backend at a time. Before applying, check any required toolchain or storage preflight. For `0.123.0+`, BUILD_TOOLS requires `/opt/containarium/toolchains/current/bin`; missing tools cause a typed refusal and must not be hidden by silently installing new host packages.
 
 After upgrade, independently check:
-- Running daemon exact reported version is at least the minimum; app/daemon/CLI version mismatch is reported, not guessed away.
+- Running daemon **authenticated REST `GET /v1/system/info` `info.daemonVersion`** is at least the minimum, independently from the on-disk `containariumd version`. A newer executable with an old running process is refused; app/daemon/CLI version mismatch is reported, not guessed away.
 - Authenticated REST `GET /v1/containers` and a specific known Box; MCP initialize `serverInfo.version` >=minimum, tools discovery and actual `list_containers` read; compare schemas and the identities returned by each transport.
 - One approved disposable **create→inspect→SSH identity→resize→stop→start→delete** with per-step read-back. Include denied target/scopes, missing target, upstream 404 route, timeout/UNKNOWN reconciliation and no duplicate create.
 - Managed SSH host-hop separately from direct MCP SSH; validate client host pins, known wrappers, negative key authorization. No blanket Incus privilege changes.
@@ -68,7 +68,7 @@ Verify actual running Provider version, authenticated REST/MCP, private credenti
 After the running Provider meets minimum and its credentials/SSH trust are intact, install the exact published BoxWeave candidate:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.43.2
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.43.3
 ```
 
 For later versions, substitute only the reviewed, immutable BoxWeave release number. **This does not change the upstream Provider version**. For externally managed Providers, use their previously reviewed `--provider-url`, `--provider-secret-file`, `--provider-cli` settings only if the original installation requires them; do not paste token contents into the command.
