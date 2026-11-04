@@ -14,6 +14,7 @@
 | Upstream failure safety | No retry of dispatched native upgrade; separate running version and authenticated GET checks; root-only and same install lock | S, synthetic tests pending |
 | Operator SOP and usage | Standard [upgrade SOP](../process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md) and README | S |
 
+- The `mcp-server` binary has no `version` subcommand: the manager verifies the publisher digest of staged bytes, probes existing/new MCP through `initialize.serverInfo.version`, and requires subsequent authenticated MCP/REST checks.
 ## Scope and non-claims
 
 - Existing provider upgrades **can be disruptive**; upstream's watchdog checks `/health` and does not prove workload compatibility.
