@@ -24,7 +24,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.44.5"
+SERVER_INFO_VERSION = "0.44.6"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -213,7 +213,8 @@ def catalog(message):
                 "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
         elif tool.get("name") == "connect":
             tool["description"] = (
-                "Connect to a managed Box with BoxWeave exact-target SSH trust. "
+                "Connect to a managed Box by logical username or a registry-verified "
+                "displayed <username>-container name with exact-target SSH trust. "
                 "Optional exec runs one command inside the Box and returns "
                 "stdout/stderr/exit_code; omit exec for human SSH instructions. "
                 "Commands may mutate the Box. Host/user overrides inconsistent "
@@ -267,7 +268,7 @@ GATE_ERROR_CODES = frozenset((
     "RESTORE_APPROVAL_REQUIRED", "RESTORE_KEY_OR_POLICY_UNSAFE", "RESTORE_ARGUMENT_INVALID",
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
-    "TRUST_NOT_READY", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
+    "TRUST_NOT_READY", "BOX_TARGET_AMBIGUOUS", "TARGET_OVERRIDE_REFUSED", "RESOURCE_CPU_INVALID",
     "RESOURCE_DISK_SIZE_UNVERIFIED", "RESOURCE_DISK_SHRINK_REFUSED",
     "TASK_ARGUMENT_INVALID", "TASK_STORAGE_UNSAFE", "TASK_TRACKING_UNAVAILABLE",
     "TASK_SCHEMA_UNSUPPORTED", "TASK_NOT_FOUND", "TASK_CAPACITY_EXCEEDED",
@@ -353,6 +354,32 @@ def trusted_registry():
         raise ValueError("TRUST_REGISTRY_UNAVAILABLE") from None
 
 
+def resolve_managed_box(box, registry):
+    """Resolve only exact trusted display-name aliases, never guessed targets."""
+    if not isinstance(box, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,62}", box) is None:
+        raise ValueError("EXACT_MANAGED_TARGET_REQUIRED")
+    targets = registry.get("targets")
+    if not isinstance(targets, dict):
+        raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
+    direct = targets.get(box)
+    alias = None
+    if box.endswith("-container"):
+        logical = box[:-len("-container")]
+        candidate = targets.get(logical)
+        if (isinstance(candidate, dict) and candidate.get("name") == box
+                and candidate.get("user") == logical):
+            alias = logical
+    if direct is not None and alias is not None and alias != box:
+        raise ValueError("BOX_TARGET_AMBIGUOUS")
+    if direct is not None:
+        if not isinstance(direct, dict):
+            raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
+        return box
+    if alias is not None:
+        return alias
+    raise ValueError("TRUST_NOT_READY")
+
+
 def validated_resize_arguments(args):
     """Reject malformed CPU syntax before any remote Provider mutation.
 
@@ -388,17 +415,27 @@ def validated_resize_arguments(args):
 
 
 def trusted(args, registry, container):
-    if not 0 <= time.time() - registry.get("observed_at", 0) <= 45: raise ValueError("TRUST_OBSERVATION_STALE")
-    target = registry.get("targets", {}).get(args.get("box"))
-    if not target or not target.get("keys"): raise ValueError("TRUST_NOT_READY")
-    if (container.get("name") != target["name"] or str(container.get("createdAt")) != target["created"]
-        or container.get("username") != target["user"]
-        or container.get("network", {}).get("ipAddress") != target["ip"]
+    observed_at = registry.get("observed_at")
+    if type(observed_at) not in (int, float):
+        raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
+    if not 0 <= time.time() - observed_at <= 45:
+        raise ValueError("TRUST_OBSERVATION_STALE")
+    targets = registry.get("targets")
+    if not isinstance(targets, dict):
+        raise ValueError("TRUST_REGISTRY_UNAVAILABLE")
+    target = targets.get(args.get("box"))
+    if not isinstance(target, dict) or not target.get("keys"):
+        raise ValueError("TRUST_NOT_READY")
+    if (container.get("name") != target.get("name")
+        or str(container.get("createdAt")) != target.get("created")
+        or container.get("username") != target.get("user")
+        or not isinstance(container.get("network"), dict)
+        or container["network"].get("ipAddress") != target.get("ip")
         or container.get("state") != "CONTAINER_STATE_RUNNING"):
         raise ValueError("TARGET_CHANGED")
-    if args.get("host", target["ip"]) != target["ip"] or args.get("user", target["user"]) != target["user"]:
+    if (args.get("host", target.get("ip")) != target.get("ip")
+            or args.get("user", target.get("user")) != target.get("user")):
         raise ValueError("TARGET_OVERRIDE_REFUSED")
-
 
 POLICY = Path("/etc/boxweave/mcp-tool-policy.json")
 
@@ -495,9 +532,20 @@ def main():
         internal = "boxweave-nesting-" + str(ident)
         send({"jsonrpc":"2.0","id":internal,"method":"tools/call",
               "params":{"name":"get_container","arguments":{"username":logical}}})
-        result = reply(internal, False)["result"]
-        if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
-        return json.loads("".join(b["text"] for b in result["content"] if b.get("type")=="text"))["container"]
+        result = reply(internal, False).get("result")
+        if not isinstance(result, dict) or result.get("isError"):
+            raise ValueError("TARGET_READ_FAILED")
+        try:
+            blocks = [b["text"] for b in result["content"]
+                      if isinstance(b, dict) and b.get("type") == "text"]
+            if len(blocks) != 1:
+                raise ValueError()
+            observed = json.loads(blocks[0])["container"]
+            if not isinstance(observed, dict):
+                raise ValueError()
+            return observed
+        except (TypeError, KeyError, ValueError, UnicodeError):
+            raise ValueError("TARGET_READ_FAILED") from None
     upstream_mcp_version = "not_verified"
     try:
         for line in sys.stdin:
@@ -588,8 +636,11 @@ def main():
                         if permitted is not None and "connect" not in permitted:
                             raise ValueError("GATE_TOOL_NOT_ALLOWED")
                         verified = box_reads.verified_args(params["name"], args)
-                        observed = container(verified["box"], request["id"])
-                        trusted({"box": verified["box"]}, trusted_registry(), observed)
+                        registry = trusted_registry()
+                        logical = resolve_managed_box(verified["box"], registry)
+                        observed = container(logical, request["id"])
+                        trusted({"box": logical}, registry, observed)
+                        verified["box"] = logical
                         internal = "boxweave-box-read-" + secrets.token_hex(8)
                         send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
                               "params": {"name": "connect",
@@ -794,15 +845,14 @@ def main():
                                 raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED") from None
                             resource_size.require_nonshrinking_disk(args["disk"], current)
                     if params.get("name") == "connect":
+                        if not isinstance(args, dict):
+                            raise ValueError("EXACT_MANAGED_TARGET_REQUIRED")
                         registry = trusted_registry()
-                        internal = "boxweave-trust-" + str(request["id"])
-                        send({"jsonrpc": "2.0", "id": internal, "method": "tools/call",
-                              "params": {"name": "get_container", "arguments": {"username": args.get("box")}}})
-                        observed = reply(internal, False)
-                        result = observed["result"]
-                        if result.get("isError"): raise ValueError("TARGET_READ_FAILED")
-                        text = "".join(b["text"] for b in result["content"] if b.get("type") == "text")
-                        trusted(args, registry, json.loads(text)["container"])
+                        logical = resolve_managed_box(args.get("box"), registry)
+                        observed = container(logical, request["id"])
+                        trusted({**args, "box": logical}, registry, observed)
+                        # Forward only the verified logical username.
+                        params["arguments"] = {**args, "box": logical}
                 except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault, CoordinationFault) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"

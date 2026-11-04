@@ -80,6 +80,37 @@ class StreamedInstallTests(unittest.TestCase):
             with self.subTest(args=args),self.assertRaises(ValueError):mcp_gate.trusted(args,registry,observed)
         with self.assertRaises(ValueError):mcp_gate.trusted({"box":"work"},registry|{"observed_at":time.time()-60},observed)
 
+    def test_connect_alias_requires_exact_registry_and_no_collision(self):
+        target={"name":"work-container","created":"123","user":"work",
+                "ip":"10.203.0.2","keys":[self.key()]}
+        registry={"observed_at":time.time(),"targets":{"work":target}}
+        self.assertEqual(mcp_gate.resolve_managed_box("work",registry),"work")
+        self.assertEqual(mcp_gate.resolve_managed_box("work-container",registry),"work")
+        for value in ("missing", "missing-container", "work-container-container"):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,"TRUST_NOT_READY"):
+                mcp_gate.resolve_managed_box(value,registry)
+        for value in ("", "bad/name", "work_container", 42):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,"EXACT_MANAGED_TARGET_REQUIRED"):
+                mcp_gate.resolve_managed_box(value,registry)
+        collision={**registry,"targets":{**registry["targets"],
+            "work-container":{**target,"name":"work-container-container","user":"work-container"}}}
+        with self.assertRaisesRegex(ValueError,"BOX_TARGET_AMBIGUOUS"):
+            mcp_gate.resolve_managed_box("work-container",collision)
+
+    def test_trusted_registry_and_network_type_fail_closed(self):
+        target={"name":"work-container","created":"123","user":"work",
+                "ip":"10.203.0.2","keys":[self.key()]}
+        observed={"name":"work-container","createdAt":"123","username":"work",
+                  "network":{"ipAddress":"10.203.0.2"},"state":"CONTAINER_STATE_RUNNING"}
+        registry={"observed_at":time.time(),"targets":{"work":target}}
+        for value in ("bad", None, True):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,"TRUST_REGISTRY_UNAVAILABLE"):
+                mcp_gate.trusted({"box":"work"},{**registry,"observed_at":value},observed)
+        with self.assertRaisesRegex(ValueError,"TARGET_CHANGED"):
+            mcp_gate.trusted({"box":"work"},registry,observed|{"network":None})
+        with self.assertRaisesRegex(ValueError,"TARGET_OVERRIDE_REFUSED"):
+            mcp_gate.trusted({"box":"work","host":"10.203.0.3"},registry,observed)
+
     def test_hostkey_inventory_excludes_core_and_unmanaged_instances(self):
         normal={"name":"work-container","status":"Running","config":{"user.containarium.label.os-type":"ubuntu_2404"}}
         self.assertTrue(hostkeys.eligible(normal))
