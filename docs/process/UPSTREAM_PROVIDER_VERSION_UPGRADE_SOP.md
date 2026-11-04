@@ -1,6 +1,6 @@
 # Containarium upstream version baseline and repeatable upgrade SOP
 
-**Status:** active for BoxWeave 0.44.0 and later. **Development baseline:** `0.128.0` (defined by `bwmini/upstream_version.py:BASELINE` and checked against the release installer). **Compatibility:** required Containarium components must be **at least** the baseline, with **no upper limit and no approved-version list**. A version string does not replace runtime API, MCP, identity, authorization or workload tests. Historical comparison: [v0.120.1 → v0.128.0](../design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md).
+**Status:** minimum-only policy active for BoxWeave 0.44.0 and later; protected-unit host upgrade fix is a 0.44.1 source candidate pending release and live acceptance. **Development baseline:** `0.128.0` (defined by `bwmini/upstream_version.py:BASELINE` and checked against the release installer). **Compatibility:** required Containarium components must be **at least** the baseline, with **no upper limit and no approved-version list**. A version string does not replace runtime API, MCP, identity, authorization or workload tests. Historical comparison: [v0.120.1 → v0.128.0](../design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md).
 
 Read [AGENTS.md](../../AGENTS.md), [maintenance](MAINTENANCE.md), [current gates](PHASE_STATUS.md), [risk register](../verification/OPEN_RISKS.md), [REST/MCP evolution](../design/API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) and the [upstream operator runbook](https://github.com/FootprintAI/Containarium/blob/v0.128.0/docs/UPGRADE-AND-ROLLBACK.md). The operator runbook is a source reference, **not** a substitute for testing a particular host topology. It explicitly states its rollback drills have not yet been completed.
 
@@ -17,7 +17,7 @@ Read [AGENTS.md](../../AGENTS.md), [maintenance](MAINTENANCE.md), [current gates
 
 No major-version maximum is imposed. An installed, valid version newer than the baseline is retained on an ordinary BoxWeave installation. Explicitly selecting a lower version is **refused** rather than performing an unreviewed downgrade. "Latest" is not automatically substituted for the development baseline.
 
-## B. Installation behavior (release 0.44.0+)
+## B. Installation behavior (0.44.1 protected-unit candidate)
 
 On a new installation, BoxWeave resolves and checksum-verifies the official baseline release's Linux x86_64 binaries for `containariumd`, `containarium`, and `mcp-server`, then runs the pre-existing Incus/Provider bootstrap. A later explicitly requested published tag uses GitHub Release API asset digests; a missing digest is a **hard failure**, not permission to run an unchecked binary.
 
@@ -25,7 +25,8 @@ On an existing complete Provider, BoxWeave first confirms the original loopback 
 
 The two Provider ownership modes are **not interchangeable**:
 
-- **Externally managed Containarium:** use native authenticated `POST /v1/backends/upgrade` with `github_tag=vX.Y.Z`. The daemon performs its own download/swap/watchdog/restart. Record the original upgrade job identifier and independently observe the running daemon; never retry a POST after timeout or unknown dispatch.
+- **Externally managed Containarium (canonical systemd unit):** the installer runs as root outside the daemon's `ProtectSystem=strict` mount namespace and performs a verified host-controlled daemon swap. It checks the exact active `containarium.service`/`ExecStart` layout and old authenticated runtime, retains a root-owned binary backup, restarts only that unit, validates authenticated running version + container listing, and attempts a guarded binary rollback if validation fails. The daemon's `ReadWritePaths` is never broadened. Unknown/custom unit layouts fail closed for operator review. This follows the host-side manual binary recovery mechanics in the upstream runbook, not a falsely claimed native-watchdog transaction.
+- **Existing Containarium native jobs:** `POST /v1/backends/upgrade` is an alternative for operator-run upgrades. A posted job must be polled through `GET /v1/upgrades/{upgrade_id}` and reconciled against the running version. The earlier BoxWeave 0.44.0 implementation mistakenly timed out on a confirmed failed job and could not write `/usr/local/bin` inside the protected daemon unit. Preserve original job identifiers and never blindly resend an unknown POST.
 - **BoxWeave-owned standalone Provider:** the service is `boxweave-provider.service` (not Containarium's standard systemd unit). Stage verified binaries privately, preserve the prior binary by digest, replace the owned executable and restart only the owned service. Verify running version plus authenticated REST listing. Do not pretend the native Containarium watchdog manages this differently named service.
 
 **MCP version probing:** Containarium `mcp-server` is a stdio protocol server, **not a CLI** and does not accept `version`. For installed components use a bounded, root-authorized JSON-RPC `initialize` probe and inspect `serverInfo.version`; for freshly staged binaries trust exact official asset SHA and verify the MCP handshake after the Provider/app starts. Never attempt `mcp-server version` or misreport its output as a valid version.
@@ -36,13 +37,13 @@ An existing Provider can be part of a wider fleet. Inspect sentinel/backend auto
 
 ```sh
 # Published BoxWeave release; only upgrades upstream if below its baseline:
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.0
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.1
 
 # Explicit upstream version on the same BoxWeave install:
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.0 --upstream-version 0.128.0
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.1 --upstream-version 0.128.0
 
 # Explicit current published latest (upstream, not BoxWeave):
-curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.0 --upstream-latest
+curl -fsSL https://raw.githubusercontent.com/vanishs/boxweave/main/install.sh | sudo bash -s -- --version 0.44.1 --upstream-latest
 
 # After that candidate is installed:
 sudo boxweave upstream status
@@ -50,7 +51,7 @@ sudo boxweave upstream update --latest
 sudo boxweave upstream update --version 0.128.0
 ```
 
-These commands become executable once `v0.44.0` is published; do not use an unpublished candidate. Do not put JWTs, age keys, or signing secret **contents** in arguments, logs or chat. `upstream status` reports binary version, not a comprehensive authenticated running-daemon acceptance. Avoid specifying an upstream tag already older than the currently running daemon: it will be refused as a downgrade. The default streamed BoxWeave selector remains `PUBLISHED_RELEASE`, **not** the newest candidate.
+These revised examples require a separately verified published `v0.44.1` release; do not use an unpublished candidate. Do not put JWTs, age keys, or signing secret **contents** in arguments, logs or chat. `upstream status` reports binary version, not a comprehensive authenticated running-daemon acceptance. Avoid specifying an upstream tag already older than the currently running daemon: it will be refused as a downgrade. The default streamed BoxWeave selector remains `PUBLISHED_RELEASE`, **not** the newest candidate.
 
 ## C. Procedure for each future Containarium version
 
@@ -66,8 +67,10 @@ These commands become executable once `v0.44.0` is published; do not use an unpu
 
 ### Mandatory upgrade and rollback semantics
 
-An accepted asynchronous POST is **not success**. After disconnect, read the original upgrade state, installed and running versions, unit status and service journal on the original host before any new write. If still uncertain, stop; do not resend. A Containarium watchdog may roll back on failed `/health` but cannot guarantee database/schema rollback or REST/MCP compatibility. Never automatically downgrade a data-bearing host, change sentinel fleet images or destructive-restore persistent Boxes without explicit separately scoped operator approval.
+An accepted asynchronous POST is **not success**. Do not weaken `ProtectSystem=strict` or grant the daemon write access to `/usr/local/bin` to make it self-upgrade. After disconnect, read the original upgrade state, installed and running versions, unit status and service journal on the original host before any new write. If still uncertain, stop; do not resend. A Containarium watchdog may roll back on failed `/health` but cannot guarantee database/schema rollback or REST/MCP compatibility. Never automatically downgrade a data-bearing host, change sentinel fleet images or destructive-restore persistent Boxes without explicit separately scoped operator approval.
 
 **Known v0.128.0 caveat:** host BUILD_TOOLS execution requires a separately installed, signed managed toolchain from `v0.123.0` onward. A daemon upgrade alone does not install it. Missing toolchain is an advanced execution preflight failure, not a generic CRUD incompatibility.
 
 This file is an evolving operational SOP, not a waiver of per-version source review or the real-host test gate.
+
+**Incident and host-swap acceptance:** [protected-unit failed native job and 0.44.1 source candidate](../verification/UPSTREAM_EXTERNAL_PROTECTED_UNIT_0441_2026-11-04.md). Do not treat 0.44.0 as a working protected-unit upgrade path.

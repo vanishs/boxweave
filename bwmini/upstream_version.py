@@ -239,6 +239,24 @@ def native_upgrade(binary, secret, url, selected, *, deadline=180):
         require(isinstance(response, dict) and response.get("upgradeId"),
                 "UPSTREAM_UPGRADE_RECEIPT_UNKNOWN_NO_RETRY")
         receipt = response["upgradeId"]
+        require(isinstance(receipt, str) and
+                re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", receipt),
+                "UPSTREAM_UPGRADE_RECEIPT_UNKNOWN_NO_RETRY")
+        # Persist the original receipt before polling: never lose the only
+        # identifier that can distinguish a failed job from an unknown write.
+        receipt_path = STATE / "upstream-original-upgrade.json"
+        fd, pending = tempfile.mkstemp(prefix=".upstream-job-", dir=STATE)
+        try:
+            with os.fdopen(fd, "w") as out:
+                os.fchmod(out.fileno(), 0o600)
+                json.dump({"upgrade_id": receipt, "selected": selected,
+                           "status": "dispatched"}, out)
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(pending, receipt_path)
+        finally:
+            if os.path.exists(pending):
+                os.unlink(pending)
         start = time.monotonic()
         while time.monotonic() - start < deadline:
             time.sleep(5)
@@ -248,10 +266,156 @@ def native_upgrade(binary, secret, url, selected, *, deadline=180):
                 if running == selected:
                     _api(url, token, "GET", "/v1/containers")
                     return {"status": "running_verified", "version": selected, "upgrade_id": receipt}
+                job = _api(url, token, "GET", "/v1/upgrades/" + receipt)
+                if job.get("status") == "failed":
+                    raise UpgradeFailure("UPSTREAM_UPGRADE_JOB_FAILED_INSPECT_ORIGINAL_RECEIPT")
+                if job.get("status") == "noop":
+                    raise UpgradeFailure("UPSTREAM_UPGRADE_JOB_NOOP_VERSION_NOT_APPLIED")
             except (OSError, error.URLError, ValueError, KeyError):
                 continue  # The daemon may be restarting; never re-submit the POST.
         raise UpgradeFailure("UPSTREAM_UPGRADE_PENDING_RECONCILE_ORIGINAL_JOB")
 
+
+
+def external_host_upgrade(folder, binary, secret, url, current, selected):
+    """Upgrade a standard externally owned daemon from the installer, not its sandbox.
+
+    The upstream daemon is normally launched with ProtectSystem=strict, which
+    denies writing /usr/local/bin even to root *inside that service*. Never
+    weaken its unit or replay a self-upgrade POST to work around the sandbox.
+    Unsupported/custom unit layouts require a separate operator decision.
+    """
+    binary = Path(binary)
+    require(binary == Path("/usr/local/bin/containariumd") and trusted(binary),
+            "UPSTREAM_EXTERNAL_UNIT_REVIEW_REQUIRED")
+    try:
+        proc = subprocess.run(
+            ["systemctl", "show", "containarium.service",
+             "-p", "LoadState", "-p", "ActiveState",
+             "-p", "ProtectSystem", "-p", "ExecStart"],
+            capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise UpgradeFailure("UPSTREAM_EXTERNAL_UNIT_REVIEW_REQUIRED") from None
+    require(proc.returncode == 0, "UPSTREAM_EXTERNAL_UNIT_REVIEW_REQUIRED")
+    fields = dict(line.split("=", 1) for line in proc.stdout.splitlines()
+                  if "=" in line)
+    require(fields.get("LoadState") == "loaded"
+            and fields.get("ActiveState") == "active"
+            and fields.get("ProtectSystem") == "strict"
+            and re.search(r"(?<!\S)path=/usr/local/bin/containariumd(?:\s|;|$)",
+                          fields.get("ExecStart", "")),
+            "UPSTREAM_EXTERNAL_UNIT_REVIEW_REQUIRED")
+    require(not Path(str(binary) + ".new").exists()
+            and not Path(str(binary) + ".old").exists(),
+            "UPSTREAM_EXTERNAL_ORIGINAL_UPGRADE_ARTIFACTS_PRESENT")
+    checkpoint = STATE / "upstream-host-upgrade.json"
+    if checkpoint.exists():
+        require(not checkpoint.is_symlink() and checkpoint.is_file()
+                and checkpoint.stat().st_uid == 0
+                and not checkpoint.stat().st_mode & 0o077,
+                "UPSTREAM_EXTERNAL_CHECKPOINT_UNTRUSTED")
+        prior = json.loads(checkpoint.read_text())
+        require(prior.get("status") in ("verified", "rolled_back"),
+                "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED")
+
+    def record(status, previous_digest):
+        fd, name = tempfile.mkstemp(prefix=".upstream-host-", dir=STATE)
+        try:
+            with os.fdopen(fd, "w") as output:
+                os.fchmod(output.fileno(), 0o600)
+                json.dump({"status": status, "from": current,
+                           "to": selected, "prior_digest": previous_digest}, output)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(name, checkpoint)
+        finally:
+            if os.path.exists(name):
+                os.unlink(name)
+
+    # Authenticate the actual old daemon before any write. A different running
+    # version could indicate an unfinished concurrent upgrade.
+    with tempfile.TemporaryDirectory(prefix="upstream-host-check-", dir=STATE) as tmp:
+        token = _token(binary, secret, Path(tmp) / "jwt")
+        info = _api(url, token, "GET", "/v1/system/info")
+        require(info.get("info", {}).get("daemonVersion") == current,
+                "UPSTREAM_EXTERNAL_RUNNING_VERSION_DRIFT")
+        _api(url, token, "GET", "/v1/containers")
+
+        # Leave a separately verifiable, immutable, root-only prior binary.
+        previous = binary.read_bytes()
+        prior_digest = sha256(previous)
+        backups = STATE / "upstream-binary-backups"
+        backups.mkdir(mode=0o700, exist_ok=True)
+        require(not backups.is_symlink() and backups.stat().st_uid == 0
+                and not backups.stat().st_mode & 0o077,
+                "UPSTREAM_BACKUP_DIRECTORY_UNTRUSTED")
+        backup = backups / ("containariumd-" + prior_digest)
+        if backup.exists():
+            require(not backup.is_symlink() and backup.is_file()
+                    and backup.stat().st_uid == 0
+                    and sha256(backup.read_bytes()) == prior_digest,
+                    "UPSTREAM_BACKUP_COLLISION")
+        else:
+            with backup.open("xb") as out:
+                out.write(previous)
+                out.flush()
+                os.fsync(out.fileno())
+            backup.chmod(0o600)
+
+        staged = folder / "containariumd"
+        require(installed_version(staged) == selected,
+                "UPSTREAM_ASSET_VERSION_MISMATCH")
+        record("prepared", prior_digest)
+        _atomic_binary(binary, staged)
+        try:
+            subprocess.run(["systemctl", "restart", "containarium.service"],
+                           stdin=subprocess.DEVNULL, check=True, timeout=45,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            deadline = time.monotonic() + 120
+            verified = False
+            while time.monotonic() < deadline:
+                try:
+                    info = _api(url, token, "GET", "/v1/system/info")
+                    if info.get("info", {}).get("daemonVersion") == selected:
+                        _api(url, token, "GET", "/v1/containers")
+                        verified = True
+                        break
+                except (OSError, error.URLError, ValueError, KeyError):
+                    pass
+                time.sleep(4)
+            require(verified, "UPSTREAM_EXTERNAL_RUNNING_VERSION_UNVERIFIED")
+        except (UpgradeFailure, OSError, subprocess.SubprocessError):
+            # No second install/POST. Restore only if the installed bytes are
+            # still exactly the ones this transaction staged (no other writer).
+            if not trusted(binary) or sha256(binary.read_bytes()) != sha256(staged.read_bytes()):
+                raise UpgradeFailure("UPSTREAM_EXTERNAL_UPGRADE_OUTCOME_UNKNOWN_BINARY_CHANGED") from None
+            try:
+                _atomic_binary(binary, backup)
+                subprocess.run(["systemctl", "restart", "containarium.service"],
+                               stdin=subprocess.DEVNULL, check=True, timeout=45,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Check rollback runtime, not merely the restored file.
+                deadline = time.monotonic() + 60
+                rolled_back = False
+                while time.monotonic() < deadline:
+                    try:
+                        info = _api(url, token, "GET", "/v1/system/info")
+                        if info.get("info", {}).get("daemonVersion") == current:
+                            _api(url, token, "GET", "/v1/containers")
+                            rolled_back = True
+                            break
+                    except (OSError, error.URLError, ValueError, KeyError):
+                        pass
+                    time.sleep(4)
+                require(rolled_back, "UPSTREAM_EXTERNAL_ROLLBACK_UNVERIFIED")
+            except (UpgradeFailure, OSError, subprocess.SubprocessError):
+                raise UpgradeFailure("UPSTREAM_EXTERNAL_RECOVERY_REQUIRES_OPERATOR") from None
+            record("rolled_back", prior_digest)
+            raise UpgradeFailure("UPSTREAM_EXTERNAL_UPGRADE_FAILED_ROLLED_BACK") from None
+
+    record("verified", prior_digest)
+    return {"status": "running_verified", "version": selected,
+            "method": "installer_host_swap", "prior_binary": str(backup)}
 
 def _atomic_binary(path, staged):
     parent = path.parent
@@ -372,7 +536,7 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
                 old.setdefault("managed_files", {})[str(cli)] = sha256(Path(cli).read_bytes())
                 receipt = {"status": "running_verified", "version": selected}
             else:
-                receipt = native_upgrade(cli, secret, url, selected)
+                receipt = external_host_upgrade(folder, cli, secret, url, current, selected)
         else:
             receipt = {"status": "running_version_unchanged", "version": current}
         refresh_clients(folder, selected, old, Path(cli), managed=standalone,
