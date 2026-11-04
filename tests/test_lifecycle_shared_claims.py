@@ -129,7 +129,7 @@ class LifecycleClaimTests(Base):
     def test_resize_unverified_keeps_claim_not_false_release(self):
         self.run_action()
         self.provider.no_resources=True
-        oid,result=self.run_action("resize",{"disk":"20GB"})
+        oid,result=self.run_action("resize",{"cpu":"2"})
         self.assertEqual(result["state"],"succeeded")
         self.assertEqual(result["result"]["verification"],"not_available")
         self.assertEqual(self.gateway.coordinator.status(oid)["state"],"unknown")

@@ -6,7 +6,7 @@ import json
 import re
 import time
 import uuid
-from . import diagnostics
+from . import diagnostics, resource_size
 from .domain import Target, Fault
 
 SCHEMA = """
@@ -137,6 +137,15 @@ class Lifecycle:
             if (not isinstance(resize,dict) or not resize
                     or set(resize)-set(RESIZE) or any(resize.get(k) not in RESIZE[k] for k in resize)):
                 raise Fault("RESIZE_SPEC_INVALID",422)
+            if "disk" in resize:
+                # Fail at Web plan time and again in the REST/MCP write path.
+                # The upstream 0.128.0 resize contract did not reject shrinking.
+                observed = value.get("resources") if isinstance(value, dict) else None
+                current = observed.get("disk") if isinstance(observed, dict) else None
+                try:
+                    resource_size.require_nonshrinking_disk(resize["disk"], current)
+                except ValueError as exc:
+                    raise Fault(str(exc), 422) from None
             spec["_resize"]=dict(resize)
         if network_tenant is not None:
             if action!="create":raise Fault("NETWORK_TENANT_CREATE_ONLY",422)

@@ -98,6 +98,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/profiles.py`
 - `bwmini/provider.py`
 - `bwmini/provider_rest.py`
+- `bwmini/resource_size.py`
 - `bwmini/remote_auth.py`
 - `bwmini/remote_mcp.py`
 - `bwmini/remote_tls.py`

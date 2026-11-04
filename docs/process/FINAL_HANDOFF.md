@@ -124,3 +124,7 @@ The stable installer pin remains v0.42.1 pending separate promotion.
 ## 2026-11-03 final v0.42.11 release and isolated gateway acceptance
 
 Earlier candidate notes are superseded: [PR #55](https://github.com/vanishs/boxweave/pull/55) merged; source commit 4f5ffe7f; [Release v0.42.11](https://github.com/vanishs/boxweave/releases/tag/v0.42.11) published, main CI/publish success. Isolated official v0.42.10 to v0.42.11 install finished ready; doctor 8/8 required PASS; real gateway stdio compatibility probe matched five tool schemas, while unauthorized restore was denied. The pinned Containarium v0.120.1 does **not** advertise restore_box_backup in its actual MCP catalog: real approved encrypted whole-Box restore remains unavailable/unverified until separately tested on a compatible Provider. No original host upgrade or stable selector promotion. [Complete evidence](../verification/MCP_COMPAT_RESTORE_04211_2026-11-03.md).
+
+## 2026-11-04 v0.44.4 disk safety deep reacceptance
+
+[Source/live report](../verification/REACCEPTANCE_0444_2026-11-04.md). Reproduced 0.128.0 accepted 25GB→24GB disk shrink and reversed test-only to 25GB; created isolated nested child Python verified exit0 and deleted/list-empty. Candidate code prevents known shrinks at Gateway, app REST and lifecycle plan and declares upstream concurrency/physical limits unverified. New Box old v0.44.3 seeded install 10/10 PASS, release v0.44.4 CI and installed upgrade still pending. R-02 unavailable. Default stable pin 0.43.1 unchanged.
