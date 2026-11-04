@@ -1,6 +1,6 @@
 # Diagnostic Coordinator v1 — agent-safe host evidence (DC-01)
 
-**Status:** approved implementation slice, pending CI and installed-host verification. **Target:** BoxWeave 0.43.0. **Upstream:** Containarium 0.120.1 unchanged.
+**Status:** v0.43.0 shipped; source/CI and isolated real installed-host acceptance passed. Stable default selection is documented separately. **Upstream:** Containarium 0.120.1 unchanged. Original production host not upgraded.
 
 ## Problem and evidence
 
