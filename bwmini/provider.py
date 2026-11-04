@@ -173,7 +173,7 @@ class Provider:
             raise Fault("DEADLINE_EXCEEDED")
         # A create with _nesting is a special upstream MCP composite; this
         # cannot be represented by ContainerService.CreateContainer REST.
-        if self.rest is not None and (action != "create" or "_nesting" not in spec):
+        if getattr(self, "rest", None) is not None and (action != "create" or "_nesting" not in spec):
             return self.rest.mutate(action,logical,spec,timeout)
         tool={"create":"create_container","start":"start_container","stop":"stop_container","delete":"delete_container","resize":"resize_container"}.get(action)
         if tool is None:
