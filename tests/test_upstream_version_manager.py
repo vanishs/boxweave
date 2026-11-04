@@ -315,16 +315,16 @@ class UpstreamPolicyTests(unittest.TestCase):
                 return real_read(path)
 
             unit = SimpleNamespace(returncode=0, stdout=(
-                "LoadState=loaded\\nActiveState=active\\nProtectSystem=strict\\n"
+                "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
                 "ExecStart={ path=/usr/local/bin/containariumd ; "
-                "argv[]=/usr/local/bin/containariumd daemon }\\n"))
-            with patch.object(u, "STATE", state), \\
-                 patch.object(u, "trusted", return_value=True), \\
-                 patch.object(u.Path, "stat", stat), \\
-                 patch.object(u.Path, "read_bytes", read_bytes), \\
-                 patch.object(u.subprocess, "run", return_value=unit), \\
-                 patch.object(u, "_atomic_binary") as swap, \\
-                 patch.object(u, "_token") as token, \\
+                "argv[]=/usr/local/bin/containariumd daemon }\n"))
+            with patch.object(u, "STATE", state), \
+                 patch.object(u, "trusted", return_value=True), \
+                 patch.object(u.Path, "stat", stat), \
+                 patch.object(u.Path, "read_bytes", read_bytes), \
+                 patch.object(u.subprocess, "run", return_value=unit), \
+                 patch.object(u, "_atomic_binary") as swap, \
+                 patch.object(u, "_token") as token, \
                  self.assertRaisesRegex(
                      u.UpgradeFailure, "UPSTREAM_EXTERNAL_ORIGINAL_JOB_RECONCILE_REQUIRED"):
                 u.external_host_upgrade(
