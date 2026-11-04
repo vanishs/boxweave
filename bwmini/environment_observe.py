@@ -152,9 +152,14 @@ class EnvironmentInspector:
             if (not isinstance(spec,dict) or not isinstance(spec.get("properties"),dict)
                     or not isinstance(spec["properties"].get("username"),dict)):
                 raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
-            result=m.tool("get_container",{"username":logical})
-            try:
-                payload=json.loads(text(result))
-            except (ValueError,TypeError):
-                raise Fault("ENVIRONMENT_OBSERVATION_UNVERIFIED") from None
+            if getattr(self.provider, "rest", None) is None:
+                result=m.tool("get_container",{"username":logical})
+                try:
+                    payload=json.loads(text(result))
+                except (ValueError,TypeError):
+                    raise Fault("ENVIRONMENT_OBSERVATION_UNVERIFIED") from None
+            else:
+                # Preserve the separate MCP capability discovery contract;
+                # retrieve the actual Box state through the typed REST API.
+                payload={"container":self.provider.rest.container(logical)}
         return observe_exact(config,logical,payload,catalog)
