@@ -1,6 +1,6 @@
 # v0.44.7 bounded post-create SSH trust-readiness and R-04 acceptance — 2026-11-04
 
-**Status: source and isolated manually patched candidate tested; exact published-release CI and installed v0.44.7 are separate pending gates.** Scope: only the newly acknowledged **create** lifecycle's verified host-key handshake and the opt-in cross-entry coordination paths. This does **not** claim global multi-Agent/REST/Web perfection, per-client RBAC, atomic upstream disk shrink safety, or an upgrade of the owner's host.
+**Historical pre-publication scope:** source and manually patched candidate were tested at the time of this original report. **Later exact v0.44.7 published/installed evidence is recorded in [the post-install follow-up](RELEASE_0447_POSTINSTALL_R04_2026-11-04.md)**; do not mistake the dated pending gates below for current release status. Scope: only the newly acknowledged **create** lifecycle's verified host-key handshake and the opt-in cross-entry coordination paths. This does **not** claim global multi-Agent/REST/Web perfection, per-client RBAC, atomic upstream disk shrink safety, or an upgrade of the owner's host.
 
 ## Provenance and original failures
 
