@@ -28,6 +28,8 @@ The two Provider ownership modes are **not interchangeable**:
 - **Externally managed Containarium:** use native authenticated `POST /v1/backends/upgrade` with `github_tag=vX.Y.Z`. The daemon performs its own download/swap/watchdog/restart. Record the original upgrade job identifier and independently observe the running daemon; never retry a POST after timeout or unknown dispatch.
 - **BoxWeave-owned standalone Provider:** the service is `boxweave-provider.service` (not Containarium's standard systemd unit). Stage verified binaries privately, preserve the prior binary by digest, replace the owned executable and restart only the owned service. Verify running version plus authenticated REST listing. Do not pretend the native Containarium watchdog manages this differently named service.
 
+**MCP version probing:** Containarium `mcp-server` is a stdio protocol server, **not a CLI** and does not accept `version`. For installed components use a bounded, root-authorized JSON-RPC `initialize` probe and inspect `serverInfo.version`; for freshly staged binaries trust exact official asset SHA and verify the MCP handshake after the Provider/app starts. Never attempt `mcp-server version` or misreport its output as a valid version.
+
 An existing Provider can be part of a wider fleet. Inspect sentinel/backend auto-upgrade behavior first: a sentinel-served binary can propagate to multiple backends. Installation auto-upgrade is an approved administrator operation, **not** a promise of zero downtime or a fleet-safe staged rollout. For production, take verified backups and review any dependent host toolchain first.
 
 ### Operator commands
