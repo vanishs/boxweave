@@ -1,0 +1,100 @@
+"""Upstream version policy, release trust and no-retry regression.
+
+Synthetic tests only: no daemon, secrets, host upgrades, or downloads.
+"""
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from bwmini import upstream_version as u
+
+
+class UpstreamPolicyTests(unittest.TestCase):
+    def test_baseline_is_explicit_and_minimum_only(self):
+        self.assertEqual(u.BASELINE, "0.128.0")
+        self.assertEqual(u.release(), ("0.128.0", u.PINNED))
+        for v in ("0.128.0", "v0.129.0", "1.2.3"):
+            self.assertGreaterEqual(u.version_tuple(v), u.version_tuple(u.BASELINE))
+        for v in ("v0.127.9", "latest", "v0.129.0-rc1", "../../1.0", "0.129"):
+            with self.subTest(v=v), self.assertRaises(u.UpgradeFailure):
+                u.release(v)
+
+    def test_latest_resolves_published_verifiable_assets(self):
+        version = "0.130.1"
+        metadata = {
+            "tag_name": "v" + version, "draft": False, "prerelease": False,
+            "assets": [{
+                "name": n + "-linux-amd64",
+                "browser_download_url": u.DOWNLOAD + version + "/" + n + "-linux-amd64",
+                "digest": "sha256:" + ("%064x" % (i + 1)),
+            } for i, n in enumerate(u.ASSETS)]
+        }
+        with patch.object(u, "_get_json", return_value=metadata) as get:
+            selected, digests = u.release(latest=True)
+        self.assertEqual(selected, version)
+        self.assertEqual(len(digests), 3)
+        get.assert_called_once_with(u.API + "/latest")
+
+    def test_missing_or_forged_digest_refused(self):
+        metadata = {"tag_name": "v0.130.0", "draft": False, "prerelease": False,
+                    "assets": [{"name": name + "-linux-amd64", "digest": None,
+                                "browser_download_url": u.DOWNLOAD + "0.130.0/" + name + "-linux-amd64"}
+                               for name in u.ASSETS]}
+        with patch.object(u, "_get_json", return_value=metadata), \
+             self.assertRaisesRegex(u.UpgradeFailure, "UPSTREAM_ASSET_DIGEST_UNAVAILABLE"):
+            u.release("0.130.0")
+        metadata["draft"] = True
+        with patch.object(u, "_get_json", return_value=metadata), \
+             self.assertRaisesRegex(u.UpgradeFailure, "UPSTREAM_RELEASE_NOT_PUBLISHED"):
+            u.release("0.130.0")
+
+    def test_native_upgrade_timeout_never_reposts(self):
+        with tempfile.TemporaryDirectory() as d:
+            calls = []
+            def request(url, token, method, path, body=None, timeout=12):
+                calls.append((method, path, body))
+                raise TimeoutError()
+            with patch.object(u, "STATE", Path(d)), \
+                 patch.object(u, "_token", return_value="private-not-printed"), \
+                 patch.object(u, "_api", side_effect=request), \
+                 self.assertRaisesRegex(u.UpgradeFailure, "OUTCOME_UNKNOWN_NO_RETRY"):
+                u.native_upgrade("/usr/local/bin/containariumd",
+                                 "/etc/containarium/jwt.secret",
+                                 "http://127.0.0.1:8080", "0.128.0")
+            self.assertEqual(calls, [("POST", "/v1/backends/upgrade",
+                                       {"github_tag": "v0.128.0"})])
+
+    def test_synthetic_unchanged_newer_daemon_with_sufficient_mcp(self):
+        with patch.object(u.os, "geteuid", return_value=0), \
+             patch.object(u, "installed_version", side_effect=["0.200.0", "0.130.0"]), \
+             patch.object(u.Path, "exists", return_value=True), \
+             patch.object(u, "trusted", return_value=True), \
+             patch.object(u, "download_assets") as download:
+            status = u.ensure({}, cli="/usr/local/bin/containariumd",
+                              url="http://127.0.0.1:8080",
+                              secret="/etc/containarium/jwt.secret")
+            self.assertEqual(status["status"], "kept_compatible")
+            download.assert_not_called()
+
+    def test_downgrade_refused_before_network_or_write(self):
+        with patch.object(u.os, "geteuid", return_value=0), \
+             patch.object(u, "installed_version", return_value="0.140.0"), \
+             patch.object(u, "download_assets") as download, \
+             self.assertRaisesRegex(u.UpgradeFailure, "UPSTREAM_DOWNGRADE_REFUSED"):
+            u.ensure({}, cli="/usr/local/bin/containariumd",
+                     url="http://127.0.0.1:8080",
+                     secret="/etc/containarium/jwt.secret",
+                     target="0.128.0")
+        download.assert_not_called()
+
+    def test_unprivileged_status_and_upgrade_refused(self):
+        with patch.object(u.os, "geteuid", return_value=1000):
+            self.assertEqual(u.main(["status"]), 2)
+            self.assertEqual(u.main(["update", "--latest"]), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
