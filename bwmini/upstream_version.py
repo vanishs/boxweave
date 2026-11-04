@@ -299,13 +299,23 @@ def ensure(old, *, cli, url, secret, target=None, latest=False, standalone=False
                 subprocess.run(["systemctl", "restart", "boxweave-provider.service"],
                                stdin=subprocess.DEVNULL, check=True, timeout=45,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                # The installed binary alone is not proof of the running service.
+                # systemctl restart may return before the HTTP listener is ready.
+                # Poll only GET: no retry of an uncertain write.
                 with tempfile.TemporaryDirectory(prefix="upstream-check-", dir=STATE) as private:
                     token = _token(Path(cli), secret, Path(private) / "jwt")
-                    info = _api(url, token, "GET", "/v1/system/info")
-                    require(info.get("info", {}).get("daemonVersion") == selected,
-                            "UPSTREAM_RUNNING_DAEMON_VERSION_UNVERIFIED")
-                    _api(url, token, "GET", "/v1/containers")
+                    verified = False
+                    deadline = time.monotonic() + 120
+                    while time.monotonic() < deadline:
+                        try:
+                            info = _api(url, token, "GET", "/v1/system/info")
+                            if info.get("info", {}).get("daemonVersion") == selected:
+                                _api(url, token, "GET", "/v1/containers")
+                                verified = True
+                                break
+                        except (OSError, error.URLError, ValueError, KeyError):
+                            pass
+                        time.sleep(4)
+                    require(verified, "UPSTREAM_RUNNING_DAEMON_VERSION_UNVERIFIED")
                 old.setdefault("managed_files", {})[str(cli)] = sha256(Path(cli).read_bytes())
                 receipt = {"status": "running_verified", "version": selected}
             else:
