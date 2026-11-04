@@ -20,13 +20,21 @@
 
 ## Stable-selector change
 
-The release/promotion follow-up modifies only `PUBLISHED_RELEASE` from `0.43.0` to `0.43.1`, the embedded default `install.sh` release-selector string, and documentation. It does **not** modify the tag `v0.43.1`, its assets, executable installer code or the upstream Containarium version. The exact-release option `--version 0.43.1` was tested above; default no-version installer selection must be rechecked after the promotion merge before claiming that last gate passed.
+The release/promotion follow-up modifies only `PUBLISHED_RELEASE` from `0.43.0` to `0.43.1`, the embedded default `install.sh` release-selector string, and documentation. It does **not** modify the tag `v0.43.1`, its assets, executable installer code or the upstream Containarium version. The exact-release option `--version 0.43.1` and the default no-version installer were both successfully tested on the isolated Box; the post-merge main CI publisher also confirmed immutable-release protection. See the final gate below.
 
 ## Outstanding explicitly unverified surfaces
 
 - The user's **original** host upgrade and all external client re-enrollment are intentionally deferred until the owner updates it.
 - Original Containarium MCP create-after-commit HTTP 500 root cause remains open; no automatic retry, adoption, removal or unsafe fallback is authorized.
 - Positive R-02/R-04 provisioning, E2 snapshots / E3 restore / E4 clone and ZFS/storage-contract gaps, public TLS/OAuth/desktop integration, true nested child workload, model inference and live mid-dispatch crash injection were not part of this release safety patch.
-- The test-owned Box's exact final state should be inspected separately after default-promotion smoke, and recorded; do not infer cleanup from `install.sh` or CI.
+- The test-owned Box was gracefully stopped after the default-promotion smoke; independent `get_container` read confirmed `CONTAINER_STATE_STOPPED` on the same `createdAt=1793766262` identity. Retained intentionally for original 500-after-commit evidence; not deleted.
 
 Related: [post-dispatch regression details](CREATE_OUTCOME_0431_2026-11-03.md), [v0.43.0 prior acceptance](REACCEPTANCE_0430_2026-11-03.md), [risk register](OPEN_RISKS.md).
+
+## Final post-merge default installer gate — PASS
+
+- [PR #64](https://github.com/vanishs/boxweave/pull/64) merged to main `98fbecf9815741a4ce96879db60b73dc05ff9c2e`. The source change against tagged v0.43.1 `install.sh` was verified on the actual test host to be **only** the embedded default string `0.43.0`→`0.43.1` (other release assets and installer code unchanged).
+- [Post-promotion main CI run 41777921122](https://github.com/vanishs/boxweave/actions/runs/41777921122): **verify SUCCESS, publish SUCCESS**. The publish step accepted an immutable v0.43.1 source tag and the separately selected stable pin without replacing release assets.
+- On the original task-owned isolated `bwaudit-0430-1103-container`, downloaded the exact post-promotion **main** `install.sh` and ran `sudo bash /tmp/bw-default-0431.sh` **without --version**. Receipt `/tmp/bw-default-0431.exit` = **0**; installer selected `0.43.1`. Running `boxweave version` = `0.43.1`; `sudo boxweave doctor --mcp` **10/10 required PASS**, independently authenticated REST and MCP reads PASS. HTTP MCP without credentials returned 401; installed Gateway SHA-256 remained `e495207a8379446e375aa87637da9d4da081f6491b6a638d3878c58710821603`, identical to immutable release digest.
+- After independent acceptance, stopped **only** the task-owned Box using original managed identity; `get_container` confirmed `CONTAINER_STATE_STOPPED`, original `createdAt=1793766262`. The Box remains retained for the original ambiguous HTTP 500 create evidence, not deleted or used as proof of production-host acceptance.
+- **Scope conclusion:** stable default `0.43.1` is released and isolated-host accepted. The original operator host is deliberately unchanged; upstream create-after-commit HTTP 500 cause, external OAuth/TLS and unprovisioned optional R-02/R-04 protections remain OPEN/U.
