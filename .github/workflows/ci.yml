@@ -228,7 +228,7 @@ jobs:
               if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
                 return 0
               fi
-              if upload_verified "$file"; then
+              if gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY"; then
                 return 0
               fi
               sleep $((attempt * 5))
