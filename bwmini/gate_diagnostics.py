@@ -62,6 +62,25 @@ DIAG_TOOL = {
         "required": ["source"]},
     "annotations": {"readOnlyHint": True, "destructiveHint": False,
                     "idempotentHint": True, "openWorldHint": False}}
+COORD_TOOL = {
+    "name": "boxweave_diagnostic_run",
+    "description": ("Run an approved read-only installed-host diagnostic profile. "
+                    "preflight checks application runtime and REST selection; "
+                    "rest_read independently verifies authenticated local REST and legacy MCP inventory; "
+                    "operation_trace summarizes one actor-scoped D2 app operation. "
+                    "No arbitrary host commands, Box mutations, token rotation or secret output."),
+    "inputSchema": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "profile": {"type": "string",
+                        "enum": ["preflight", "rest_read", "operation_trace"]},
+            "operation_kind": {"type": "string", "enum": ["hello", "environment", "access"]},
+            "operation_id": {"type": "string"}},
+        "required": ["profile"]},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True, "openWorldHint": False},
+}
+
 PROJECT_TOOL = {
     "name": "boxweave_project_diagnose",
     "description": "Read bounded categorized process, port, service or log status for a server-preauthorized exact managed Box; defaults DENY and never returns raw logs. No arbitrary command, path, privilege or remediation. Admin must explicitly allowlist Box incarnation and checks.",
@@ -421,3 +440,125 @@ def project_summary(args, response):
         summary["error_hint_count"] = sum(bool(re.search(r"error|exception|failed|timeout|refused",
                                                             line, flags=re.I)) for line in lines)
     return summary
+
+# DC-01: fixed app-user probe. This is *not* a general host execution surface.
+COORDINATOR_PROFILES = frozenset(("preflight", "rest_read", "operation_trace"))
+COORDINATOR_CHECKS = frozenset(("config", "provider_mode", "runtime_binding",
+    "provider_rest", "rest_inventory", "mcp_inventory", "probe", "receipt_trace",
+    "timeline", "rest_span"))
+COORDINATOR_STATES = frozenset(("passed", "failed", "not_verified"))
+COORDINATOR_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,63}\\Z")
+
+
+def _coordinator_unavailable(profile, code):
+    return {"source": "coordinator", "profile": profile, "state": "not_verified",
+            "coverage": "app_probe_unavailable", "root_cause": "not_verified",
+            "checks": [{"id": "probe", "state": "not_verified", "code": code}],
+            "omissions": ["app_probe_unavailable"]}
+
+
+def query_coordinator(args, *, prefix=APP_PREFIX):
+    """Bounded read-only preflight, authenticated reads, or D2 trace summary.
+
+    The caller cannot pass paths, argv, actors, URLs, arbitrary profiles or
+    operation bodies. The fixed subprocess runs under the gateway's existing
+    non-root service principal, not under sudo/root.
+    """
+    if not isinstance(args, dict) or args.get("profile") not in COORDINATOR_PROFILES:
+        raise ValueError("COORDINATOR_SELECTOR_INVALID")
+    profile = args["profile"]
+    if profile == "operation_trace":
+        if set(args) != {"profile", "operation_kind", "operation_id"}:
+            raise ValueError("COORDINATOR_SELECTOR_INVALID")
+        kind, operation = args["operation_kind"], args["operation_id"]
+        if kind not in ("hello", "environment", "access") or (
+                not isinstance(operation, str) or not re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}", operation)):
+            raise ValueError("COORDINATOR_SELECTOR_INVALID")
+        evidence = query_app({"source": "app", "operation_kind": kind,
+                              "operation_id": operation}, prefix=prefix)
+        events = evidence.get("events", [])
+        linked = evidence.get("state") == "observed" and bool(evidence.get("trace_id"))
+        timeline = bool(events)
+        api = any(e.get("component") == "provider_api" for e in events)
+        checks = [
+            {"id": "receipt_trace", "state": "passed" if linked else "not_verified",
+             "code": "RECEIPT_TRACE_LINKED" if linked else "RECEIPT_TRACE_UNAVAILABLE"},
+            {"id": "timeline", "state": "passed" if timeline else "not_verified",
+             "code": "TIMELINE_CAPTURED" if timeline else "TIMELINE_UNAVAILABLE"}]
+        if kind == "environment":
+            checks.append({"id": "rest_span",
+                           "state": "passed" if api else "not_verified",
+                           "code": "REST_SPAN_CAPTURED" if api else "REST_SPAN_UNAVAILABLE"})
+        return {
+            "source": "coordinator", "profile": profile,
+            "state": "passed" if all(c["state"] == "passed" for c in checks) else "not_verified",
+            "coverage": evidence.get("coverage", "not_verified"),
+            "root_cause": "not_verified",
+            "checks": checks,
+            "trace_id": evidence.get("trace_id") if linked else None,
+            "event_count": len(events),
+            "events": events[:25],
+            "omissions": evidence.get("omissions", [])[:8],
+        }
+    if set(args) != {"profile"}:
+        raise ValueError("COORDINATOR_SELECTOR_INVALID")
+    workdir = prefix / "current"
+    executable = workdir / ".venv/bin/python"
+    runtime = prefix / "runtime.json"
+    persisted = prefix / "config.json"
+    if not workdir.is_dir():
+        return _coordinator_unavailable(profile, "APP_WORKDIR_MISSING")
+    if not executable.is_file():
+        return _coordinator_unavailable(profile, "APP_PYTHON_MISSING")
+    if not runtime.is_file() or not persisted.is_file():
+        return _coordinator_unavailable(profile, "APP_CONFIG_MISSING")
+    argv = [str(executable), "-m", "bwmini.diagnostic_probe",
+            "--profile", profile, "--config", str(runtime),
+            "--persisted", str(persisted)]
+    try:
+        process = subprocess.run(
+            argv, cwd=str(workdir), stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=55, check=False)
+        if process.returncode != 0 or len(process.stdout) > 8192:
+            return _coordinator_unavailable(profile, "APP_PROBE_EXEC_UNAVAILABLE")
+        payload = json.loads(process.stdout)
+        if (not isinstance(payload, dict)
+                or set(payload) != {"schema_version", "profile", "state",
+                                   "coverage", "checks", "omissions"}
+                or payload["schema_version"] != 1 or payload["profile"] != profile
+                or payload["coverage"] != "app_owned_probe"
+                or payload["state"] not in COORDINATOR_STATES
+                or not isinstance(payload["checks"], list)
+                or not 1 <= len(payload["checks"]) <= 8
+                or not isinstance(payload["omissions"], list)
+                or len(payload["omissions"]) > 8):
+            return _coordinator_unavailable(profile, "APP_PROBE_SCHEMA_INVALID")
+        checks = []
+        for item in payload["checks"]:
+            if (not isinstance(item, dict) or set(item) != {"id", "state", "code"}
+                    or item["id"] not in COORDINATOR_CHECKS
+                    or item["state"] not in COORDINATOR_STATES
+                    or not isinstance(item["code"], str)
+                    or not COORDINATOR_CODE.fullmatch(item["code"])):
+                return _coordinator_unavailable(profile, "APP_PROBE_SCHEMA_INVALID")
+            checks.append({key: item[key] for key in ("id", "state", "code")})
+        if (len({item["id"] for item in checks}) != len(checks)
+                or payload["state"] !=
+                ("failed" if any(c["state"] == "failed" for c in checks) else
+                 "not_verified" if any(c["state"] == "not_verified" for c in checks)
+                 else "passed")):
+            return _coordinator_unavailable(profile, "APP_PROBE_SCHEMA_INVALID")
+        omissions = payload["omissions"]
+        if any(not isinstance(s, str) or not re.fullmatch(
+                r"[a-z_]{1,64}", s) for s in omissions):
+            return _coordinator_unavailable(profile, "APP_PROBE_SCHEMA_INVALID")
+        return {"source": "coordinator", "profile": profile,
+                "state": payload["state"], "coverage": "app_owned_probe",
+                "root_cause": "not_verified", "checks": checks,
+                "omissions": omissions}
+    except subprocess.TimeoutExpired:
+        return _coordinator_unavailable(profile, "APP_PROBE_TIMEOUT")
+    except (OSError, ValueError, TypeError, KeyError):
+        return _coordinator_unavailable(profile, "APP_PROBE_EXEC_UNAVAILABLE")
