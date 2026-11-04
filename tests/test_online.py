@@ -15,6 +15,19 @@ class StreamedInstallTests(unittest.TestCase):
         for value in ("SHA256:fingerprint","ssh-ed25519 AAAA","not-a-key"):
             with self.subTest(value=value),self.assertRaises((online.Failure,ValueError)):online.public_key(value)
 
+    def test_application_mcp_resolves_after_fresh_bootstrap_not_release_asset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mcp = Path(directory) / "mcp-server"
+            with self.assertRaisesRegex(online.Failure, "INSTALLED_MCP_SERVER_UNTRUSTED_OR_MISSING"):
+                online.application_mcp_binary(mcp)
+            mcp.write_bytes(b"fixture-binary")
+            mcp.chmod(0o755)
+            with patch.object(online, "trusted_provider_binary", return_value=True):
+                self.assertEqual(online.application_mcp_binary(mcp), str(mcp))
+            with patch.object(online, "trusted_provider_binary", return_value=False):
+                with self.assertRaisesRegex(online.Failure, "INSTALLED_MCP_SERVER_UNTRUSTED_OR_MISSING"):
+                    online.application_mcp_binary(mcp)
+
     def test_server_adds_workload_key_when_client_omits_it(self):
         extra = "ssh-ed25519 " + base64.b64encode(
             struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"y"*32).decode()

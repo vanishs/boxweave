@@ -146,6 +146,12 @@ def trusted_provider_binary(path):
             not meta.st_mode & 0o022 and bool(meta.st_mode & stat.S_IXUSR))
 
 
+def application_mcp_binary(path):
+    """Resolve MCP after local Provider bootstrap, never from a pre-bootstrap decision."""
+    require(trusted_provider_binary(path), "INSTALLED_MCP_SERVER_UNTRUSTED_OR_MISSING")
+    return str(path)
+
+
 def component_version(binary, *, minimum=MIN_PROVIDER_VERSION):
     """Fail closed below minimum, with no maximum and no version whitelist."""
     require(trusted_provider_binary(binary), "PROVIDER_COMPONENT_NOT_TRUSTED")
@@ -784,7 +790,7 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             provider_cli=old["external_provider"]["cli"] if external else None)
         print(json.dumps({"containarium_shell": shell_result}), flush=True)
         deadline = phase("independent_application")
-        mcp_binary = str(local_mcp if use_installed_mcp else release / "mcp-server")
+        mcp_binary = application_mcp_binary(local_mcp)
         provider_binary = old["external_provider"]["cli"] if external else "/usr/local/bin/containariumd"
         provider_digest = sha(Path(provider_binary).read_bytes())
         mcp_digest = sha(Path(mcp_binary).read_bytes())
