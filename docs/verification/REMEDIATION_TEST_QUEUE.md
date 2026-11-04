@@ -2,7 +2,7 @@
 
 ## DC-01 read-only Agent diagnostic coordinator v0.43.0 candidate — 2026-11-03
 
-[Design](../design/DIAGNOSTIC_COORDINATOR_V1.md) | [Exact evidence and remaining installed-host gate](DIAGNOSTIC_COORDINATOR_0430_2026-11-03.md). New enumerated Agent tool coordinates fixed app preflight, independent authenticated REST/MCP inventory and actor-scoped D2 trace presentation. No host shell, source mutation, credential rotation or automatic Box writes. In a newly created isolated Box, source unit/knowledge/fixture build and packaged app subprocess with synthetic HTTP/MCP passed. **Real installed v0.43.0 Containarium/Gateway acceptance, final PR CI and stable pin promotion remain separate, not verified**. The owner's running v0.42.12 host was not upgraded.
+[Design](../design/DIAGNOSTIC_COORDINATOR_V1.md) | [Exact evidence and remaining installed-host gate](DIAGNOSTIC_COORDINATOR_0430_2026-11-03.md). New enumerated Agent tool coordinates fixed app preflight, independent authenticated REST/MCP inventory and actor-scoped D2 trace presentation. No host shell, source mutation, credential rotation or automatic Box writes. In a newly created isolated Box, source unit/knowledge/fixture build and packaged app subprocess with synthetic HTTP/MCP passed. **PR CI and main source-bound release PASS; isolated installed v0.43.0 Containarium/Gateway plus actual D2 REST trace PASS**. Exact [live promotion evidence](STABLE_PROMOTION_DC01_0430_2026-11-03.md) records a 0.42.12→0.43.0 upgrade, three acknowledged real REST operations, installed MCP tool positive/negative and cleanup. Separate stable-pinned installation does not upgrade the owner's running v0.42.12 host.
 
 
 ## Containarium v0.127.0/latest-main sleep and wake isolation gate — 2026-11-03

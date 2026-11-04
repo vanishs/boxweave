@@ -155,3 +155,7 @@ UP-SSH-01 is source implemented in v0.42.10 candidate, test 661/661 and bounded 
 ## 2026-11-03 v0.42.11 publication and installed acceptance
 
 PR #55 merged to 4f5ffe7f; main CI/publish SUCCESS; Release v0.42.11 published. Separate fresh isolated Box upgraded from v0.42.10 to official v0.42.11, phase=ready, doctor 8/8 required PASS, Containarium still v0.120.1. Real service-account stdio MCP source=compat matched all five monitored input schemas and unapproved restore was denied. **LIMIT:** this pinned Provider's real tools/list did **not** advertise restore_box_backup; approved actual encrypted whole-Box restoration remains OPEN. Stable selector stays v0.42.1. See [live evidence](../verification/MCP_COMPAT_RESTORE_04211_2026-11-03.md).
+
+## DC-01 Agent-safe diagnostic coordinator — installed release v0.43.0
+
+The owner authorized design, development, tests, live isolated acceptance and release. [PR #59](https://github.com/vanishs/boxweave/pull/59) merged read-only `boxweave_diagnostic_run` profiles (`preflight`, `rest_read`, `operation_trace`) without a host shell or mutation grant. [Exact independent CI, immutable release, v0.42.12-to-v0.43.0 real installed upgrade, Containarium REST/MCP and Trace PASS](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md). Stable default pin is a distinct source-only selection and does not upgrade the owner's original host or authorize remote OAuth/public network changes. Protected-mode live integration and cross-layer write-timeout fault injection remain unverified.
