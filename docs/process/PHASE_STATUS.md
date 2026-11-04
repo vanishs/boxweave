@@ -1,3 +1,7 @@
+## 2026-11-04 v0.44.1 protected-unit upgrade repair candidate
+
+Operator-retained failure scene on an externally managed 0.120.1 Provider: original job `upg-1793777286401216718` failed attempting to write `/usr/local/bin/containariumd.new` under `ProtectSystem=strict`. The 0.44.0 installer did not poll the terminal job status. A 0.44.1 **source-only candidate** moves the canonical external unit's binary swap into the root installer with guarded backup/verification/rollback and preserves native failed-job receipts. **S reviewed, T pending, L unverified**; no owner-host modifications, release, or stable-pin promotion authorized. [Incident and acceptance boundary](../verification/UPSTREAM_EXTERNAL_PROTECTED_UNIT_0441_2026-11-04.md).
+
 ## 2026-11-03 Containarium upstream baseline and automatic update candidate (0.44.0)
 
 The development baseline is `0.128.0` (no maximum). A published BoxWeave 0.44.0 install auto-upgrades an older compatible local upstream to the baseline; the operator can select exact/latest upstream independently by installer options or `sudo boxweave upstream update`. [Implementation and actual test boundary](../verification/UPSTREAM_BASELINE_MANAGER_0440_2026-11-03.md) and [standard SOP](UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md). Exact-head PR CI #41790793899 and main verification/publish CI #41791101508 both passed; immutable v0.44.0 was published at `dbb73976`, with 24 assets. **T accepted; L blocked/not executed.** Stable default `0.43.1` is not moved.

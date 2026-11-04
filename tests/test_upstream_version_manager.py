@@ -115,7 +115,7 @@ class UpstreamPolicyTests(unittest.TestCase):
                      target="0.128.0")
         download.assert_not_called()
 
-    def test_old_external_daemon_uses_one_native_upgrade_and_updates_clients(self):
+    def test_old_external_daemon_uses_one_host_upgrade_and_updates_clients(self):
         with tempfile.TemporaryDirectory() as d:
             calls = []
             def installed(path):
@@ -127,9 +127,9 @@ class UpstreamPolicyTests(unittest.TestCase):
                  patch.object(u.Path, "exists", return_value=True), \
                  patch.object(u, "trusted", return_value=True), \
                  patch.object(u, "download_assets") as download, \
-                 patch.object(u, "native_upgrade", return_value={
+                 patch.object(u, "external_host_upgrade", return_value={
                      "status": "running_verified", "version": "0.128.0", "upgrade_id": "one"
-                 }) as native, \
+                 }) as host_upgrade, \
                  patch.object(u, "refresh_clients") as clients:
                 state = {}
                 result = u.ensure(state, cli="/usr/local/bin/containariumd",
@@ -139,10 +139,57 @@ class UpstreamPolicyTests(unittest.TestCase):
                 self.assertEqual(result["baseline"], "0.128.0")
                 self.assertEqual(state["upstream_version_observed"], "0.128.0")
                 download.assert_called_once()
-                native.assert_called_once_with("/usr/local/bin/containariumd",
-                                               "/etc/containarium/jwt.secret",
-                                               "http://127.0.0.1:8080", "0.128.0")
+                host_upgrade.assert_called_once()
+                args = host_upgrade.call_args.args
+                self.assertTrue(Path(args[0]).name.startswith("upstream-stage-"))
+                self.assertEqual(args[1:], ("/usr/local/bin/containariumd",
+                                            "/etc/containarium/jwt.secret",
+                                            "http://127.0.0.1:8080",
+                                            "0.120.1", "0.128.0"))
                 clients.assert_called_once()
+
+    def test_native_upgrade_failed_job_is_reported_not_timed_out(self):
+        with tempfile.TemporaryDirectory() as d:
+            calls = []
+            def request(url, token, method, path, body=None, timeout=12):
+                calls.append((method, path))
+                if method == "POST":
+                    return {"upgradeId": "upg-12345"}
+                if path == "/v1/system/info":
+                    return {"info": {"daemonVersion": "0.120.1"}}
+                if path == "/v1/upgrades/upg-12345":
+                    return {"status": "failed", "error": "private upstream error"}
+                raise AssertionError((method, path))
+            with patch.object(u, "STATE", Path(d)), \
+                 patch.object(u, "_token", return_value="private-not-printed"), \
+                 patch.object(u, "_api", side_effect=request), \
+                 patch.object(u.time, "sleep"), \
+                 self.assertRaisesRegex(u.UpgradeFailure, "UPSTREAM_UPGRADE_JOB_FAILED"):
+                u.native_upgrade("/usr/local/bin/containariumd",
+                                 "/etc/containarium/jwt.secret",
+                                 "http://127.0.0.1:8080", "0.128.0")
+            self.assertEqual(calls, [
+                ("POST", "/v1/backends/upgrade"),
+                ("GET", "/v1/system/info"),
+                ("GET", "/v1/upgrades/upg-12345")])
+            receipt = json.loads((Path(d) / "upstream-original-upgrade.json").read_text())
+            self.assertEqual(receipt["upgrade_id"], "upg-12345")
+            self.assertNotIn("private", json.dumps(receipt))
+
+    def test_external_host_upgrade_refuses_unknown_service_before_write(self):
+        fake = SimpleNamespace(returncode=0, stdout=(
+            "LoadState=loaded\nActiveState=active\nProtectSystem=strict\n"
+            "ExecStart={ path=/usr/bin/unrelated ; argv[]=/usr/bin/unrelated }\n"))
+        with patch.object(u, "trusted", return_value=True), \
+             patch.object(u.subprocess, "run", return_value=fake), \
+             patch.object(u, "_atomic_binary") as swap, \
+             patch.object(u, "_token") as token:
+            with self.assertRaisesRegex(u.UpgradeFailure, "UPSTREAM_EXTERNAL_UNIT_REVIEW_REQUIRED"):
+                u.external_host_upgrade(Path("/stage"), "/usr/local/bin/containariumd",
+                                        "/etc/containarium/jwt.secret", "http://127.0.0.1:8080",
+                                        "0.120.1", "0.128.0")
+            swap.assert_not_called()
+            token.assert_not_called()
 
     def test_native_upgrade_denial_is_definite_without_replay(self):
         from urllib.error import HTTPError
