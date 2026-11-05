@@ -1,3 +1,5 @@
+**v0.44.10 targeted correction:** [selftest private-plan handoff, typed diagnostics, test and release acceptance ledger](verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md); R-02 owner-host reboot test explicitly deferred, no global R-04 activation.
+
 # BoxWeave v2 knowledge index
 
 **Current v0.44.9 architecture:** [runtime call chains, ingress guard coverage and P0/P1 acceptance map](design/RUNTIME_CALL_CHAINS_0449.md). This is a source-backed view, **not** global R-04 production acceptance. The authoritative current implementation map is [ARCHITECTURE](design/ARCHITECTURE.md).

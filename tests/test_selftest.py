@@ -1,6 +1,7 @@
 """Confirmed selftest regressions: plan hash gate, live-only, full cleanup."""
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -181,23 +182,151 @@ class SelftestTests(unittest.TestCase):
              1, "TRUST_FAILED"),
             ({"code": "INTERNAL_UNSAFE_OUTPUT"}, 2, "SELFTEST_RESULT_INVALID"),
         ]
-        for response, expected_exit, expected_code in cases:
-            with self.subTest(response=response):
-                output = io.StringIO()
-                errors = io.StringIO()
-                with (patch.object(host_cli, "public_state", return_value=info),
-                      patch.object(host_cli.os, "geteuid", return_value=0),
-                      patch.object(host_cli.pwd, "getpwnam", return_value=identity),
-                      patch.object(host_cli, "run_bounded", return_value=json.dumps(response)),
-                      patch("sys.stdout", output),
-                      patch("sys.stderr", errors)):
-                    code = host_cli.selftest_command(
-                        ["run", "--plan", "/nonexistent-fixture-plan",
-                         "--confirmation", "a" * 64])
-                self.assertEqual(code, expected_exit)
-                self.assertIn(expected_code, output.getvalue() + errors.getvalue())
-                self.assertNotIn("INTERNAL_UNSAFE_OUTPUT",
-                                 output.getvalue() + errors.getvalue())
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_file = Path(tmp) / "operator-plan.json"
+            plan_file.write_text(json.dumps(selftest.build_plan(now="T")[0]))
+            for response, expected_exit, expected_code in cases:
+                with self.subTest(response=response):
+                    output = io.StringIO()
+                    errors = io.StringIO()
+                    with (patch.object(host_cli, "public_state", return_value=info),
+                          patch.object(host_cli.os, "geteuid", return_value=0),
+                          patch.object(host_cli.pwd, "getpwnam", return_value=identity),
+                          patch.object(host_cli, "run_bounded", return_value=json.dumps(response)) as runner,
+                          patch("sys.stdout", output),
+                          patch("sys.stderr", errors)):
+                        code = host_cli.selftest_command(
+                            ["run", "--plan", str(plan_file),
+                             "--confirmation", "a" * 64])
+                    self.assertEqual(code, expected_exit)
+                    self.assertIn(expected_code, output.getvalue() + errors.getvalue())
+                    self.assertNotIn("INTERNAL_UNSAFE_OUTPUT",
+                                     output.getvalue() + errors.getvalue())
+                    self.assertEqual(runner.call_args.kwargs["input_data"], plan_file.read_bytes())
+                    self.assertIn("-", runner.call_args.args[0])
+                    self.assertNotIn(str(plan_file), runner.call_args.args[0])
+
+    def test_host_private_plan_pipe_accepts_operator_home_without_app_read_access(self):
+        """Host reads the caller's 0600 plan; app sees stdin, never caller path."""
+        plan, checksum = selftest.build_plan(now="T")
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "private-home"
+            directory.mkdir(mode=0o700)
+            file = directory / "plan.json"
+            file.write_text(json.dumps(plan))
+            file.chmod(0o600)
+            self.assertEqual(host_cli.selftest_plan_bytes(str(file), os.getuid()+10000),
+                             file.read_bytes())
+            info = {"application_user": "boxweave", "app_prefix": "/home/boxweave/boxweave"}
+            account = type("P", (), {"pw_name": "boxweave", "pw_uid": os.getuid()+10000})()
+            forwarded = {}
+            def fake_bounded(argv, timeout, limit, cwd, input_data=None):
+                forwarded["argv"], forwarded["input"] = argv, input_data
+                return json.dumps({"state": "passed", "steps": [], "cleanup": "not_needed"})
+            with (patch.object(host_cli, "public_state", return_value=info),
+                  patch.object(host_cli.os, "geteuid", return_value=0),
+                  patch.object(host_cli.pwd, "getpwnam", return_value=account),
+                  patch.object(host_cli, "run_bounded", side_effect=fake_bounded),
+                  patch("sys.stdout", new_callable=io.StringIO)):
+                self.assertEqual(host_cli.selftest_command([
+                    "run", "--plan", str(file), "--confirmation", checksum]), 0)
+            self.assertEqual(forwarded["input"], file.read_bytes())
+            self.assertIn("--plan", forwarded["argv"])
+            self.assertEqual(forwarded["argv"][forwarded["argv"].index("--plan")+1], "-")
+            self.assertNotIn(str(file), forwarded["argv"])
+
+    def test_host_plan_input_rejects_symlink_directory_fifo_oversize_and_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            target=root/"plan.json"
+            target.write_bytes(b"{}")
+            target.chmod(0o600)
+            link=root/"link"
+            link.symlink_to(target)
+            folder=root/"folder"
+            folder.mkdir()
+            fifo=root/"pipe"
+            os.mkfifo(fifo)
+            big=root/"big.json"
+            big.write_bytes(b"x"*(host_cli.SELFTEST_MAX_PLAN_BYTES+1))
+            for file,code in ((link,"SELFTEST_PLAN_UNSAFE"),
+                              (folder,"SELFTEST_PLAN_UNSAFE"),
+                              (fifo,"SELFTEST_PLAN_UNSAFE"),
+                              (big,"SELFTEST_PLAN_TOO_LARGE"),
+                              (root/"missing","SELFTEST_PLAN_NOT_FOUND")):
+                with self.subTest(file=file), self.assertRaisesRegex(ValueError,code):
+                    host_cli.selftest_plan_bytes(str(file),os.getuid())
+            with patch.dict(host_cli.os.environ, {"SUDO_UID": str(os.getuid()+9000)}):
+                with self.assertRaisesRegex(ValueError,"SELFTEST_PLAN_UNSAFE"):
+                    host_cli.selftest_plan_bytes(str(target),os.getuid()+9001)
+
+    def test_host_malformed_flag_positions_are_refused_without_crashing(self):
+        info={"application_user":"boxweave","app_prefix":"/home/boxweave/boxweave"}
+        account=type("P",(),{"pw_name":"boxweave","pw_uid":os.getuid()})()
+        with (patch.object(host_cli,"public_state",return_value=info),
+              patch.object(host_cli.os,"geteuid",return_value=0),
+              patch.object(host_cli.pwd,"getpwnam",return_value=account),
+              patch.object(host_cli,"run_bounded") as runner,
+              patch("sys.stderr",new_callable=io.StringIO)):
+            for invalid in (
+                ["run","--confirmation","a"*64,"trailing","--plan"],
+                ["run","--plan","a.json","--plan","b.json"],
+                ["run","--plan","--confirmation","--confirmation","a"*64]):
+                with self.subTest(invalid=invalid):
+                    self.assertEqual(host_cli.selftest_command(invalid),2)
+        runner.assert_not_called()
+
+    def test_host_preflight_refusal_does_not_launch_app_or_echo_plan(self):
+        info = {"application_user": "boxweave", "app_prefix": "/home/boxweave/boxweave"}
+        account = type("P", (), {"pw_name": "boxweave", "pw_uid": os.getuid()+10000})()
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_file = Path(tmp) / "private"
+            plan_file.write_bytes(b"private-test-input")
+            alias = Path(tmp) / "alias"
+            alias.symlink_to(plan_file)
+            error = io.StringIO()
+            with (patch.object(host_cli, "public_state", return_value=info),
+                  patch.object(host_cli.os, "geteuid", return_value=0),
+                  patch.object(host_cli.pwd, "getpwnam", return_value=account),
+                  patch.object(host_cli, "run_bounded") as runner,
+                  patch("sys.stderr", error)):
+                self.assertEqual(host_cli.selftest_command([
+                    "run", "--plan", str(alias), "--confirmation", "a"*64]), 2)
+            runner.assert_not_called()
+            self.assertIn("SELFTEST_PLAN_UNSAFE", error.getvalue())
+            self.assertNotIn("private-test-input", error.getvalue())
+
+    def test_app_selftest_stdin_plan_valid_and_invalid_are_pre_dispatch(self):
+        from bwmini.__main__ import main
+        plan,checksum=selftest.build_plan(now="T")
+        with tempfile.TemporaryDirectory() as tmp:
+            config=Path(tmp)/"config.json"
+            config.write_text(json.dumps({
+                "mode":"fixture","database":str(Path(tmp)/"db.sqlite3"),
+                "target":{"provider":"containarium","backend":"dev","project":"default",
+                          "logical":"v2-lifecycle-e2e","instance":"v2-lifecycle-e2e-container",
+                          "created":"1","user":"v2-lifecycle-e2e",
+                          "hostname":"v2-lifecycle-e2e-container"},
+                "fixture_counter":None}))
+            argv=["__main__.py","selftest-run","--config",str(config),
+                  "--plan","-","--confirmation",checksum,"--budget","60"]
+            cases=[(json.dumps(plan).encode(), "SELFTEST_LIVE_REQUIRED"),
+                   (b"{broken", "SELFTEST_PLAN_INVALID"),
+                   (b"x"*8193, "SELFTEST_PLAN_TOO_LARGE")]
+            for data, code in cases:
+                with self.subTest(code=code):
+                    out=io.StringIO()
+                    fake_stdin=type("Input",(),{"buffer":io.BytesIO(data)})()
+                    with (patch("sys.argv",argv),patch("sys.stdin",fake_stdin),
+                          patch("sys.stdout",out)):
+                        self.assertEqual(main(),2)
+                    self.assertEqual(json.loads(out.getvalue())["code"],code)
+
+    def test_bounded_input_transport_is_true_stdin_not_argument(self):
+        result=host_cli.run_bounded(
+            ["python3","-c","import sys;print(len(sys.stdin.buffer.read()))"],
+            timeout=5,limit=64,cwd=None,input_data=b"some private bytes")
+        self.assertEqual(result.strip(),str(len(b"some private bytes")))
 
     def test_cli_argparse_guards_allow_selftest_plan_arguments(self):
         import io

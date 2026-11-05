@@ -5,6 +5,7 @@ system service changes retain their separate privilege boundaries.
 """
 import argparse
 import datetime
+import errno
 import importlib
 import json
 import os
@@ -185,11 +186,14 @@ def classify_unit(observed, expect_enabled):
     return "not_verified", "UNIT_STATE_UNEXPECTED"
 
 
-def run_bounded(argv, timeout, limit, cwd):
-    """Bounded observation that also accepts the reader's typed exit-2 result output."""
+def run_bounded(argv, timeout, limit, cwd, input_data=None):
+    """Bounded observation; an explicit byte pipe can carry a private app-user input."""
+    if input_data is not None and not isinstance(input_data, bytes):
+        raise TypeError("INPUT_BYTES_REQUIRED")
+    stdin = {"stdin": subprocess.DEVNULL} if input_data is None else {"input": input_data}
     try:
-        result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, timeout=timeout, check=False, cwd=cwd)
+        result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=timeout, check=False, cwd=cwd, **stdin)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode not in (0, 2) or len(result.stdout) > limit:
@@ -663,8 +667,50 @@ def job_command(options):
         return 2
 
 
+SELFTEST_MAX_PLAN_BYTES = 8192
+
+
+def selftest_plan_bytes(path, app_uid):
+    """Read one operator-owned regular file as root, never return its path to the app.
+
+    Do not run application code as root, follow final-component symlinks, consume
+    unbounded input, or read an arbitrary third party's private file. The hash
+    confirmation and strict plan shape remain enforced in the app-user process.
+    """
+    if not isinstance(path, str) or not path or len(path) > 4096 or path == "-":
+        raise ValueError("SELFTEST_PLAN_UNSAFE")
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as error:
+        code = ("SELFTEST_PLAN_NOT_FOUND" if error.errno == errno.ENOENT
+                else "SELFTEST_PLAN_UNSAFE" if error.errno == errno.ELOOP
+                else "SELFTEST_PLAN_UNREADABLE")
+        raise ValueError(code) from None
+    try:
+        meta = os.fstat(fd)
+        # sudo supplies the original uid; without sudo use the actual caller.
+        caller = os.environ.get("SUDO_UID", str(os.getuid()))
+        if not caller.isdecimal():
+            raise ValueError("SELFTEST_PLAN_UNSAFE")
+        caller_uid = int(caller)
+        allowed_owners = {caller_uid, app_uid}
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid not in allowed_owners
+                or meta.st_nlink != 1):
+            raise ValueError("SELFTEST_PLAN_UNSAFE")
+        if meta.st_size > SELFTEST_MAX_PLAN_BYTES:
+            raise ValueError("SELFTEST_PLAN_TOO_LARGE")
+        raw = os.read(fd, SELFTEST_MAX_PLAN_BYTES + 1)
+        if len(raw) > SELFTEST_MAX_PLAN_BYTES:
+            raise ValueError("SELFTEST_PLAN_TOO_LARGE")
+        return raw
+    except OSError:
+        raise ValueError("SELFTEST_PLAN_UNREADABLE") from None
+    finally:
+        os.close(fd)
+
+
 def selftest_command(options):
-    """Confirmed live smoke through the application: plan, then run with the plan hash."""
+    """Confirmed live smoke; pass the private plan to the app via a bounded stdin pipe."""
     try:
         info = public_state()
     except ValueError as exc:
@@ -672,7 +718,7 @@ def selftest_command(options):
         return 2
     if os.geteuid() != 0:
         print(json.dumps({"state": "error", "code": "SELFTEST_REQUIRES_ROOT",
-                          "next": "sudo boxweave selftest plan | sudo boxweave selftest run --plan FILE --confirmation HEX"}), file=sys.stderr)
+                          "next": "sudo boxweave selftest plan; save the plan JSON as your user; sudo boxweave selftest run --plan FILE --confirmation HEX"}), file=sys.stderr)
         return 2
     if not options or options[0] not in ("plan", "run"):
         print("# Usage: boxweave selftest plan [--budget SECONDS]\n"
@@ -691,12 +737,34 @@ def selftest_command(options):
         else:
             passthrough.append(options[0])
             options = options[1:]
-    if mode == "run" and ("--plan" not in passthrough or "--confirmation" not in passthrough):
+    if mode == "run" and (len(passthrough) != 4
+            or set(passthrough[::2]) != {"--plan", "--confirmation"}
+            or any(not value or value.startswith("--") for value in passthrough[1::2])):
         print("# Usage: boxweave selftest run --plan FILE --confirmation HEX [--budget SECONDS]", file=sys.stderr)
+        return 2
+    if mode == "plan" and passthrough:
+        print("# Usage: boxweave selftest plan [--budget SECONDS]", file=sys.stderr)
         return 2
     budget = min(1800, max(60, budget))
     account = pwd.getpwnam(info["application_user"])
     prefix = Path(info["app_prefix"])
+    plan_input = None
+    if mode == "run":
+        slot = passthrough.index("--plan") + 1
+        try:
+            plan_input = selftest_plan_bytes(passthrough[slot], account.pw_uid)
+        except ValueError as exc:
+            guidance = {
+                "SELFTEST_PLAN_NOT_FOUND": "Check the --plan file path (relative paths use the current directory).",
+                "SELFTEST_PLAN_UNREADABLE": "Use a readable regular JSON plan owned by your sudo caller or boxweave.",
+                "SELFTEST_PLAN_UNSAFE": "Use a regular, non-symlink plan file owned by your sudo caller or boxweave.",
+                "SELFTEST_PLAN_TOO_LARGE": "Use only the generated plan JSON; maximum 8192 bytes.",
+            }
+            print(json.dumps({"state": "error", "code": str(exc),
+                              "next": guidance.get(str(exc), "Review the plan file.")}), file=sys.stderr)
+            return 2
+        # The application receives content via stdin, not the operator's path.
+        passthrough[slot] = "-"
     argv = ["runuser", "-u", account.pw_name, "--", "env",
             "XDG_RUNTIME_DIR=/run/user/" + str(account.pw_uid),
             str(prefix / "current/.venv/bin/python"), "-m", "bwmini", "selftest-" + mode,
@@ -705,7 +773,11 @@ def selftest_command(options):
     # preflight refusals. A normal observe() discards that stdout and hides
     # the original cause behind SELFTEST_FAILED_INSPECT_STEPS.
     reader = run_bounded if mode == "run" else observe
-    result = reader(argv, timeout=budget + 120, limit=65536, cwd=str(prefix / "current"))
+    if mode == "run":
+        result = reader(argv, timeout=budget + 120, limit=65536,
+                        cwd=str(prefix / "current"), input_data=plan_input)
+    else:
+        result = reader(argv, timeout=budget + 120, limit=65536, cwd=str(prefix / "current"))
     if result is None:
         print(json.dumps({"state": "error", "code": "SELFTEST_FAILED_INSPECT_STEPS"}), file=sys.stderr)
         return 2
@@ -726,7 +798,8 @@ def selftest_command(options):
         print(json.dumps({"state": "unreconciled", "code": "SELFTEST_RUN_UNRECONCILED"}))
         return 2
     allowed = ("SELFTEST_CONFIRMATION_MISMATCH", "SELFTEST_PLAN_INVALID",
-               "SELFTEST_PLAN_REQUIRED", "SELFTEST_LIVE_REQUIRED",
+               "SELFTEST_PLAN_UNREADABLE", "SELFTEST_PLAN_NOT_FOUND",
+               "SELFTEST_PLAN_TOO_LARGE", "SELFTEST_PLAN_UNSAFE", "SELFTEST_PLAN_REQUIRED", "SELFTEST_LIVE_REQUIRED",
                "SELFTEST_RUN_UNRECONCILED")
     if parsed.get("code") in allowed:
         print(json.dumps({"state": "error", "code": parsed["code"]}))

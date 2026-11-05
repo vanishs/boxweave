@@ -3,6 +3,7 @@ import argparse
 import getpass
 import json
 import os
+import sys
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 from .domain import Target, Fault
@@ -120,7 +121,7 @@ def main():
             from .selftest import build_plan
             plan,checksum=build_plan()
             print(json.dumps({"plan":plan,"confirmation":checksum,
-                  "next":"Save the plan object to a file, review it, then run selftest-run with --plan FILE --confirmation HEX"} ,indent=2,sort_keys=True))
+                  "next":"Save the plan JSON to an operator-owned regular file; sudo boxweave selftest run --plan FILE --confirmation HEX reads it without changing directory permissions."} ,indent=2,sort_keys=True))
             return 0
         if a.action=="selftest-run":
             from .selftest import Journal,load_plan,run as run_selftest
@@ -138,8 +139,19 @@ def main():
             if not isinstance(a.plan,str) or not isinstance(a.confirmation,str):
                 raise Fault("SELFTEST_PLAN_REQUIRED",422)
             try:
-                raw=json.loads(Path(a.plan).read_text(encoding="utf-8"))
-            except (OSError,ValueError):
+                # Root wrapper sends the bounded, caller-owned plan over
+                # stdin; never grant the app user access to operator home.
+                if a.plan == "-":
+                    payload = sys.stdin.buffer.read(8193)
+                else:
+                    with Path(a.plan).open("rb") as handle:
+                        payload = handle.read(8193)
+                if len(payload) > 8192:
+                    raise Fault("SELFTEST_PLAN_TOO_LARGE", 422)
+                raw = json.loads(payload.decode("utf-8"))
+            except PermissionError:
+                raise Fault("SELFTEST_PLAN_UNREADABLE",422) from None
+            except (OSError,UnicodeError,ValueError):
                 raise Fault("SELFTEST_PLAN_INVALID",422) from None
             plan=load_plan(raw,a.confirmation)
             result=run_selftest(s.provider,plan,budget=a.budget,journal=Journal(s.store))
