@@ -1,4 +1,6 @@
-# Architecture — current implemented boundaries
+# Architecture — MCP-first + REST-assisted hybrid (current implemented boundaries)
+
+**Owner-selected architecture policy (2026-11-05): MCP-first + REST-assisted.** Upstream Containarium MCP remains the **default integration path for new and specialist Provider operations**, while direct REST is a **selective auxiliary adapter** for justified typed application flows. The seven existing app-owned REST lifecycle operations (`list/get/create/start/stop/delete/resize`) remain unchanged and must **not** be automatically routed back through MCP. Agent-facing SSH/stdio and authenticated HTTP MCP remain first-class. The previously proposed bulk migration of 8+21 remaining MCP interfaces to REST and universal API-first architecture are **abandoned**; [PR #77](https://github.com/vanishs/boxweave/pull/77) was merged then reverted (`020ebfe8` / `e19e60bb`). Any new direct REST route requires a specific demonstrated benefit, authenticated deployed API/shape/permission checks, safety/UNKNOWN parity and explicit approval. **Transport preference never bypasses R-04 claims, authorization or trust checks.**
 
 This file owns the implementation map. [SCOPE](../product/SCOPE.md) owns selected outcomes, [ADR index](ADR/INDEX.md) owns decision status, and code/VERSION own actual schema/runtime versions. Historical design/checkpoint wording is preserved in [ARCHITECTURE_HISTORY](ARCHITECTURE_HISTORY.md).
 
@@ -15,7 +17,7 @@ flowchart LR
   Gate --> Task[("R-02 task SQLite")]
   Gate -->|"tracked writes claim"| Claims[("R-04 shared claims SQLite")]
   Service -.->|"only if coordination enabled"| Claims
-  Service -->|"basic lifecycle"| REST["Loopback REST adapter"]
+  Service -->|"7 existing app lifecycle ops when configured"| REST["Loopback REST adapter"]
   Service -->|"nesting, network, SSH / specialist"| MCP["Containarium MCP"]
   Gate -->|"policy-checked forwarding"| MCP
   REST --> Daemon["containariumd"]
@@ -25,13 +27,13 @@ flowchart LR
   GuestSSH --> Incus
 ```
 
-The app's `bwmini/provider.py` **has a bounded direct REST adapter** (`provider_rest.py`) when `provider_api` is explicitly configured: basic application lifecycle list/get/create/start/stop/delete/resize goes through authenticated loopback `containariumd` REST where supported. Nesting-enabled create, specialist Tenant/Guard/route operations, and identity/guest command execution still use the upstream MCP path. The standalone Agent gateway retains the upstream MCP tool catalogue subject to explicit policy. SSH/stdio and authenticated HTTP MCP enter the **same** Gateway, but Web/CLI enter independently through application services. This is a deliberate **REST + MCP coexistence** architecture, not completed universal REST replacement.
+The app's `bwmini/provider.py` **has a bounded direct REST adapter** (`provider_rest.py`) when `provider_api` is explicitly configured: basic application lifecycle list/get/create/start/stop/delete/resize goes through authenticated loopback `containariumd` REST where supported. Nesting-enabled create, specialist Tenant/Guard/route operations, and identity/guest command execution still use the upstream MCP path. The standalone Agent gateway retains the upstream MCP tool catalogue subject to explicit policy. SSH/stdio and authenticated HTTP MCP enter the **same** Gateway, but Web/CLI enter independently through application services. This is the implemented **MCP-first + REST-assisted hybrid**, not a universal REST replacement; the seven existing app REST methods are an explicit retained exception to the default integration preference.
 
 The Gateway's tracked task path and the app's opt-in shared claims are mediated through the same reviewed-identity coordinator SQLite when configured correctly. Gateway **protected mode** is a separate root-owned tool-policy gate: without it, legacy forwarded Provider mutations are not automatically coordinated. Application `coordination.enabled=true` is independently opt-in; both channels must share trusted Provider scope, target identity, permissions and effective coordination storage. The upstream Provider's own direct CLI/REST/MCP and Incus operations are outside BoxWeave's shared R-04 guarantee. As of the owner-host v0.44.8 checkpoint, `task provision` prepared metadata storage but reported `coordination_enabled=false`; the latest released v0.44.9 has passed independent isolated installation, **not global owner-host protected-mode certification**.
 
-## Future API-first alternative (design only, 2026-11-03)
+## Retired universal API-first alternative (historical study, abandoned 2026-11-05)
 
-The [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) remains an owner-selected **long-term** direction, not a claim of completed migration. One tranche (application-owned basic REST lifecycle) is already implemented as mapped above; an independent exact-Box SSH executor, comprehensive specialist REST parity, and universal shared write interception are **not** complete. Its [Agent migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md), [D1–D4 trace plan](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md), and [proposed ADR-010](ADR/0010-api-first-control-plane-candidate.md) must be read alongside the existing MCP architectural contract (ADR-003), not as an implicit replacement.
+The former [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) and [bulk Provider migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) are retained for historical comparison, **not** as implementation authorization. The proposed independent SSH Executor and universal specialist REST conversion are **not required** by the selected architecture. The existing seven app REST lifecycle operations stay implemented; unrelated native upstream MCP, guest SSH and optional agent-box behavior stay supported. The [protocol-neutral D1–D4 diagnostics study](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) can still inform MCP and REST evidence without requiring an API-first redesign. See [ADR-003](ADR/0003-transport-and-trust.md) and the revised [ADR-010](ADR/0010-api-first-control-plane-candidate.md).
 
 ## Code-first architecture consolidation checkpoint
 
