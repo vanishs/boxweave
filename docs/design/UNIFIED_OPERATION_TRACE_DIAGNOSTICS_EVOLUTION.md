@@ -1,7 +1,7 @@
-# Unified operation trace and diagnostics — API-first evolution design
+# Unified operation trace and diagnostics — MCP-first + REST-assisted hybrid evolution
 
-> **Status: candidate future design only. Not implemented, deployed, or authorized by this document.**
-> Parent: [API-first architecture](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Migration phases: [API Provider plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md).
+> **Status: protocol-neutral diagnostics research only; no implementation, deployment or authorization from this document.** **2026-11-05 policy:** MCP-first + REST-assisted hybrid. Improve tracing/diagnosis for **both** upstream MCP and the existing seven app REST lifecycle operations; **do not** require universal REST migration or a new standalone SSH Executor. The 8+21 bulk REST proposal is abandoned, but cross-entry R-04 claims and UNKNOWN safety remain independently relevant.
+> Parent: [current architecture](ARCHITECTURE.md) and [MCP-first/REST-assisted ADR-010](ADR/0010-api-first-control-plane-candidate.md). Historical comparison: [former API-first master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) and [archived migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md).
 > Current decisions and safeguards remain authoritative: [D3/D4 master](DIAGNOSTICS_D3_D4_MASTER.md), [D1](DIAGNOSTICS_D1_IMPLEMENTATION.md), [D2](DIAGNOSTICS_D2_IMPLEMENTATION.md), [R-02](MCP_TASK_RELIABILITY_R1.md), [R-04](MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md).
 
 ## 1. Primary outcome
@@ -17,7 +17,7 @@ Agent MCP / Web / CLI entry
     -> authoritative operation receipt and bounded diagnostic report
 ```
 
-**What API-first improves:** request method/route, HTTP status, structured response/code, time to first response, transport failure, API acknowledgement and follow-up observation can be classified *separately* instead of being obscured behind MCP JSON-RPC and upstream tool text. It also avoids a separate platform MCP start/initialize/tools/list on *normal app-side* calls.
+**What the existing REST-assisted path can improve:** for its *already implemented app-managed lifecycle subset*, HTTP method/route, status and structured responses can be separated from final Box observation in logs. **MCP remains the default for other upstream tools**, and those calls still need equally useful inbound/outbound transport/error and postcondition spans. None of these improvements depends on converting the remaining 29 MCP tools.
 
 **What it does not improve automatically:** Containarium daemon-internal Incus/ZFS details, post-acceptance convergence, SSH correctness, source-of-truth authorization, and whether the daemon received bytes before the connection was lost. Those need explicit upstream observability and reconciliation. An HTTP 200 is **not** proof that the Box is ready.
 
