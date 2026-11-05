@@ -1,11 +1,11 @@
-# API-first control-plane evolution — long-term architecture master
+# MCP-first + REST-assisted control-plane — current policy and archived API-first research
 
-> **CURRENT OWNER DISPOSITION (2026-11-05): ABANDONED for bulk REST migration.** The proposed **29-tool (8 P1 + 21 P2) MCP-to-REST implementation program** and universal API-first direction are cancelled; [PR #77](https://github.com/vanishs/boxweave/pull/77) closed; merge commit `020ebfe8` was reverted by `e19e60bb`. This archived research does **not** authorize new REST work. Preserve existing 7 app-owned REST lifecycle methods and long-term **REST+MCP coexistence**, with upstream MCP the default for remaining specialist operations. Any future individual REST use requires demonstrable benefit and separately accepted design/verification. Do not mistake this status for abandoning ADR-003, authenticated MCP, or R-04 shared coordination safety work.
+> **CURRENT OWNER DISPOSITION (2026-11-05): MCP-first + REST-assisted hybrid SELECTED; universal API-first and 29-tool bulk REST migration ABANDONED.** The proposed **29-tool (8 P1 + 21 P2) MCP-to-REST implementation program** and universal API-first direction are cancelled; [PR #77](https://github.com/vanishs/boxweave/pull/77) closed; merge commit `020ebfe8` was reverted by `e19e60bb`. This archived research does **not** authorize new REST work. Preserve existing 7 app-owned REST lifecycle methods and long-term **REST+MCP coexistence**, with upstream MCP the default for remaining specialist operations. Any future individual REST use requires demonstrable benefit and separately accepted design/verification. Do not mistake this status for abandoning ADR-003, authenticated MCP, or R-04 shared coordination safety work.
 
 > **Status: OWNER-SELECTED LONG-TERM COEXISTENCE DIRECTION / FEATURE-BY-FEATURE IMPLEMENTATION ACCEPTANCE PENDING.** The owner selected Option A and coequal ADR-003/ADR-010 on 2026-11-03; this is not acceptance of universal mediation, an automatic migration or a host/release change.
 > Recorded: 2026-11-03. BoxWeave source baseline: `main` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3` (`VERSION=0.42.11`). Containarium source inspected: `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The installer used Containarium `v0.120.1` **at this historical v0.42.11 analysis baseline**; v0.44.7 requires Containarium >= v0.128.0 and has no automatic maximum-version ceiling. Never assume upstream-main APIs are deployed.
 >
-> **Core direction under study:** outward-facing **MCP-first**, internal **Containarium REST API-first**, Box execution **SSH-first**, local maintenance **CLI-only**. This does *not* mean eliminating MCP from BoxWeave: BoxWeave owns its Agent-facing MCP, and an upstream MCP compatibility lane remains until its actual functional coverage is mapped and accepted.
+> **Current transport preference (supersedes the 2026-11-03 API-first thought experiment):** **MCP-first end-to-end for Agent-facing tools and new/specialist Containarium operations; REST-assisted only for reviewed, scoped app-owned operations.** The seven already-implemented app direct REST lifecycle methods remain active with configured localhost API credentials. Containarium MCP/SSH remains supported, including specialist Tenant/Guard/network tools and guest execution. Do not infer that preferring MCP makes unsafe writes or unknown outcomes safe. No automatic MCP-to-REST migration, or REST-to-MCP rollback after a possibly dispatched write, is permitted.
 
 > **2026-11-03 implementation checkpoint (later than the research baseline below):** BoxWeave v0.42.12 added application-owned, loopback-only authenticated REST for list/get/create/start/stop/delete/resize, and v0.43.0 became the default stable selection after isolated installed-host evidence. The Agent-facing upstream MCP relay, specialist Tenant/Guard/nesting paths and SSH execution were **not** thereby converted. The original operator host is not implied to be upgraded. See [REST slice evidence](../verification/PROVIDER_REST_A1_04212_2026-11-03.md) and [v0.43.0 stable promotion](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md). The v0.42.11 commit IDs below remain a **historical analysis baseline**, not the latest implementation status.
 
@@ -47,7 +47,7 @@ This has worked for incremental delivery; the costs appear when the product need
 
 Do not confuse upstream's **CLI-first delivery policy** with an instruction for BoxWeave to shell out to `containarium` for every action. Upstream CLI, REST and MCP are client entry points to common underlying operations, except for host-local CLI paths. The upstream MCP server itself normally uses REST; its `connect(exec)`, `code_*` and `push/sync` have SSH or local transfer portions not representable as plain lifecycle REST calls.
 
-## 2. Scope assumptions: radical redesign versus in-place migration
+## 2. Historical scope assumptions: radical redesign versus in-place migration (retired universal API-first proposal)
 
 **Thought experiment:** all old data, CLI spellings and external interface names could be replaced, provided the user-visible functional outcome is retained to a target of **99%**. That percentage is a **design objective, not a measured claim**. It does not authorize ignoring the existing operator's active host, credentials, data, configured clients or stable release when any real deployment is attempted.
 
@@ -61,7 +61,7 @@ Define an acceptance denominator before committing to a rewrite:
 
 The **in-place migration** route can preserve current Web/SQLite and change the app Provider first. The **new-core rewrite** route can consolidate more deeply but has far larger acceptance and host-cutover cost. These are separate planning options and must not be mixed in an estimate.
 
-## 3. Proposed target boundaries
+## 3. Historical proposed API-first target boundaries (not the current implementation mandate)
 
 ```text
                  Codex / Claude / other Agent clients          Browser         Operator
@@ -106,7 +106,7 @@ The **in-place migration** route can preserve current Web/SQLite and change the 
 
 ### 3.3 Three internal blocks, multiple adapters
 
-1. **Provider API:** typed JSON→domain translation, request authentication, timeout, response-shape validation, feature probing, bounded retries of *safe reads only*, upstream response IDs where available. REST maps to a Protobuf-defined contract through grpc-gateway; direct gRPC remains a possible later benchmark/ADR, not an implied requirement.
+1. **Historical Provider API proposal (not universal policy):** typed JSON→domain translation, request authentication, timeout, response-shape validation, feature probing, bounded retries of *safe reads only*, upstream response IDs where available. REST maps to a Protobuf-defined contract through grpc-gateway; direct gRPC remains a possible later benchmark/ADR, not an implied requirement.
 2. **Box Executor:** separate SSH execution and file/copy/sync adapters. Prefer service-owned key/certificate, inspect upstream-stamped `ssh_host` and verified incarnation, never accept caller-supplied arbitrary host, username, key file or remote root. Optional per-Box `agent-box` MCP may remain an implementation detail for its unique capabilities.
 3. **Operation Core:** single intent/claims/dispatch/observed state machine; all exposed mutators (including any compatibility path) must pass it **before** a side effect. Use one task identity and trace correlation from both entry points.
 
@@ -127,7 +127,7 @@ The host repair CLI remains independently functional when MCP, API or Web is dow
 
 Code references: [Containarium platform MCP](https://github.com/FootprintAI/Containarium/tree/main/internal/mcp), [upstream connect](https://github.com/FootprintAI/Containarium/blob/main/internal/mcp/connect.go), [upstream code tools](https://github.com/FootprintAI/Containarium/blob/main/internal/mcp/code_tools.go), [upstream transfer](https://github.com/FootprintAI/Containarium/tree/main/internal/transfer), and [upstream README roadmap](https://github.com/FootprintAI/Containarium#roadmap). The README lists `agent-box` tier-2 work and a **planned** Q4 2026 OSS v1.0/stable-API milestone. These are intentions, **not** a shipped or guaranteed REST replacement for SSH/stdio; verify an immutable deployed release, not the `main` branch or roadmap alone.
 
-**Architectural rule:** migrate the **outbound management control plane** to typed REST; keep the **inbound BoxWeave MCP** (SSH stdio and authenticated HTTP/OAuth) as a client contract; retain guest SSH execution as a distinct plane. A change of transport does **not** remove the need for independent Box state/readiness evidence. The default Box operation design remains clean-Box/no mandatory `agent-box` install, matching [R-01](BOX_OPERATION_INTERFACE_V1.md). Do not bypass a missing upstream REST capability with direct Incus/root shell.
+**Current architectural rule (2026-11-05, superseding the historical diagram above):** prefer **upstream MCP** for new and specialist outbound Containarium capabilities; use direct REST only for the **seven already-shipped app lifecycle operations** or a separately justified and verified auxiliary feature. Preserve **inbound BoxWeave MCP** (SSH stdio and authenticated HTTP/OAuth), guest SSH, existing app receipts and exact target trust. The historical diagram is not a mandatory redesign. No protocol choice removes the need for authoritative postconditions, claims and UNKNOWN handling. No required in-Box agent and no direct Incus/root-shell bypass.
 
 ### 3.5 One operation boundary without forcing one transport
 
@@ -135,19 +135,19 @@ Agent MCP, Web and non-emergency CLI mutations should enter the **same BoxWeave 
 
 **Owner choice (2026-11-03): Option A — preserve upstream MCP write capabilities and progressively mediate each mutating tool through the shared Operation Core.** This is a **design decision**, not evidence that the present gateway already enforces it. Do not use a blanket prohibition of advanced writes as the migration strategy. Inventory the forwarded tool catalogue and, for each mutator, bind trusted actor, exact Box/resource identity, authority, operation claim, durable dispatch intent/receipt, UNKNOWN recovery and a bounded `compat_mcp` diagnostic span **before** dispatch. Classify multi-resource, host-level and unknown-schema tools explicitly; unreviewed mutations cannot be *advertised as protected*. Where protected mode requires full interception, an unmediated path must not bypass the guard: leave it visibly outside the protected guarantee until migrated, or fail that operation closed in protected mode with an explicit coverage reason; do not turn this limited safety invariant into Option B's general retirement of MCP writes. Ordinary existing behavior and published tool exposure are unchanged by this documentation-only decision. Acceptance requires same-Box conflict and different-Box concurrency tests across Web/REST, Agent MCP, and the compatibility lane.
 
-**Owner choice (2026-11-03): treat ADR-003 and ADR-010 as long-lived, complementary architecture records at the same design level, not a priority chain or a replacement sequence.** [ADR-003](ADR/0003-transport-and-trust.md) retains upstream MCP/SSH client transport, identity and bootstrap trust; [ADR-010](ADR/0010-api-first-control-plane-candidate.md) describes typed REST for application-owned management and a separately guarded SSH Executor. Both can coexist for a long time. A given operation still needs **one declared owner/path** and a common claim boundary; "coequal" does not authorize duplicate side effects or parallel unmanaged dispatch. ADR-010's formal adoption/implementation evidence remains separately gated; neither record is silently superseded.
+**Owner choice (2026-11-05 update): keep ADR-003 and ADR-010 as long-lived, complementary decisions at the same design level, while preferring MCP for **new/specialist** upstream integrations and retaining the already shipped REST lifecycle subset.** [ADR-003](ADR/0003-transport-and-trust.md) retains upstream MCP/SSH client transport, identity and bootstrap trust; [ADR-010](ADR/0010-api-first-control-plane-candidate.md) describes typed REST for application-owned management and a separately guarded SSH Executor. Both can coexist for a long time. A given operation still needs **one declared owner/path** and a common claim boundary; "coequal" does not authorize duplicate side effects or parallel unmanaged dispatch. ADR-010's formal adoption/implementation evidence remains separately gated; neither record is silently superseded.
 
-## 4. Working recommendation and its limits
+## 4. Current recommendation — MCP-first, REST-assisted; historical alternatives below
 
-**Owner-selected coexistence direction (implementation still gated):** use the API as the *long-lived typed contract for application-owned management* alongside **equally supported** BoxWeave Agent MCP and retained upstream MCP/SSH capability lanes; retain a separate SSH execution plane. No protocol or ADR has universal priority outside its declared responsibility. Compare this composition against:
+**Owner-selected direction (2026-11-05):** **upstream MCP is the default for new/specialist operations**; keep the existing seven app-owned lifecycle direct REST calls because their scope and credential/trace contracts are already implemented, and admit additional REST **only case by case** after measured functional or diagnostic value, runtime authentication/schema/identity checks and full write-safety acceptance. Agent-facing SSH/HTTP MCP and upstream MCP/SSH stay first-class. An independent SSH Executor is **optional**, not a required migration. The historical API-first alternatives below are reference comparisons, not scheduled development. Compare the current direction against:
 
-- **MCP-only inside and out:** fastest inheritance of upstream tools, but more catalogue/text coupling and different app/gateway mutation boundaries.
+- **MCP-only inside and out:** closest to the current default for specialist tools, but would discard already useful app REST lifecycle contracts and still require BoxWeave-specific conflict/diagnostic boundaries.
 - **CLI subprocess for all operations:** local-vs-remote behavior ambiguity, output parsing, subprocess privilege and weaker structured error guarantees.
 - **Direct Incus:** violates Containarium authorization, tenant encryption, network/Guard ownership and host safety.
 - **Full direct gRPC at day one:** possible technical strength from generated clients, but adds daemon exposure, mTLS and deployment/config complexity beyond the current default REST gateway.
 - **Full upstream tool reimplementation immediately:** makes the 99%-parity target and security reviews unbounded.
 
-This is an **architectural preference under a no-compatibility-cost assumption**, not proof that REST performs better or requires fewer total engineering hours today. In particular, rebuilding the entire Agent gateway is significantly harder than changing the app-side Provider.
+**Historical research caveat:** the abandoned universal API-first preference assumed low compatibility cost; it did not establish that REST changes less, is inherently safer, or reduces long-term maintenance. Rebuilding the Agent Gateway remains a high-risk project and is **not authorized by the current MCP-first decision**.
 
 ## 5. Non-negotiable operational invariants
 
@@ -167,9 +167,9 @@ This is an **architectural preference under a no-compatibility-cost assumption**
 | Decision | What must be proved before approval |
 | --- | --- |
 | REST vs generated gRPC client | Exact deployed API availability, auth/TLS model, endpoint/version contracts, real latency/failure evidence, operational complexity |
-| API-only gateway vs retained upstream MCP compatibility lane | Actual per-tool reachable feature matrix and owner-reviewed treatment of missing MCP-only actions |
+| API-only gateway vs retained upstream MCP compatibility lane | **API-only plan abandoned:** upstream MCP remains supported/default; reconsider individual REST adapters only upon a separately reviewed need |
 | Forwarded MCP mutators vs shared coordination | **Option A selected:** per-tool common claim mediation, preserving writes; review inventory, unknown/host-wide tools, cross-entry real conflict tests; record interim unprotected coverage truthfully |
-| Coequal ADR-003 and ADR-010 scope | **Complementary, long-lived records** (MCP/SSH trust and compatibility vs typed REST app management/SSH Executor); clarify overlaps, but no ADR supersession; independently review implementation evidence |
+| Coequal ADR-003 and ADR-010 scope | **Complementary, long-lived records**; ADR-003 owns MCP/SSH trust; ADR-010 records MCP-first default and REST auxiliary app features. This is integration preference, not ADR supersession |
 | Standalone SSH executor vs optional upstream agent-box reuse | Real execution identity/trust, file scopes, streaming, cancellation/reconnect semantics, clean Box requirement |
 | Installed-host cutover | Existing host ownership, API binding, token issuance/rotation, no secret exposure, independent rollback, zero accidental provider upgrade |
 | Operation core migration | Cross-Web/SSH/HTTP mutation interception and durable UNKNOWN/claim recovery under crash/timeout |
@@ -181,4 +181,4 @@ None of these questions should block independent read-only proofs of the typed R
 
 A future Agent should first read the [migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md), [diagnostic contract](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) and actual [feature matrix](../verification/FEATURE_MATRIX.md), then record **S** (source), **T** (fixture/CI), **L** (real installed host), or **U** (unknown/unsupported) separately. Produce explicit branch/PR and review evidence per slice; do not silently change the pinned Provider version or published release.
 
-**This document creates no implementation ticket, migration authorization, or upstream compatibility commitment.**
+**This document records the MCP-first + REST-assisted policy but creates no implementation ticket, blanket REST migration authorization, release, host change or upstream compatibility guarantee.**

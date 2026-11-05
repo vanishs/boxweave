@@ -2,6 +2,8 @@
 
 # BoxWeave v2 knowledge index
 
+**Current architecture decision (2026-11-05): MCP-first + REST-assisted hybrid.** Keep upstream MCP as the default for new/specialist Containarium operations and BoxWeave SSH/HTTP MCP for Agents; retain **seven shipped app-owned REST lifecycle operations**. The universal API-first redesign and bulk **8 P1 + 21 P2** REST migration are **ABANDONED**, not pending tasks. [Authoritative current architecture](design/ARCHITECTURE.md), [updated ADR-010](design/ADR/0010-api-first-control-plane-candidate.md), [archived migration study](design/API_FIRST_PROVIDER_MIGRATION_PLAN.md), [architecture history](design/API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md).
+
 **Current v0.44.9 architecture:** [runtime call chains, ingress guard coverage and P0/P1 acceptance map](design/RUNTIME_CALL_CHAINS_0449.md). This is a source-backed view, **not** global R-04 production acceptance. The authoritative current implementation map is [ARCHITECTURE](design/ARCHITECTURE.md).
 
 **Five-level evidence depth:** [v0.44.9 feature-by-feature evidence](verification/EVIDENCE_LAYERS_0449.md) compares source review, automated tests, isolated installed, owner host, and independent external-client proof. Test levels are independent, not a product coverage percentage.
