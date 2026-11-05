@@ -1,5 +1,7 @@
 # Runtime entrypoints and call chains — v0.44.9
 
+> **Architectural disposition as of 2026-11-05 (not a retroactive runtime version change):** **MCP-first + REST-assisted hybrid** is the selected integration direction. The actual v0.44.9 diagram below remains a source-bound snapshot: Agent entrypoints and specialist Provider tools continue using MCP/SSH; **seven** app-owned lifecycle methods use optional authenticated loopback REST. The planned bulk **8 P1 + 21 P2** REST migration and universal API-first target were abandoned. An MCP preference does not itself certify R-04 coordination or resolve UNKNOWN.
+
 **Snapshot:** BoxWeave immutable source release `v0.44.9` at `0ec0dc81d8cdc69d4fb9a8abaae0615cf41e4f24`; documentation review on 2026-11-04 PT / 2026-11-05 UTC. This is a **source-backed architecture map (S)** correlated with previously recorded fixture and isolated-live evidence; it is **not** a fresh production-wide certification. The authoritative architecture owner is [ARCHITECTURE](ARCHITECTURE.md); acceptance and current risk conclusions belong to [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) and [OPEN_RISKS](../verification/OPEN_RISKS.md).
 
 **Companion evidence view:** [five-level test evidence matrix](../verification/EVIDENCE_LAYERS_0449.md) shows which mapped call chains have source review, automated tests, isolated installed execution, owner-host acceptance or external-client proof. Graph arrows alone are not high-level acceptance evidence.
@@ -70,7 +72,7 @@ flowchart TB
 
 - `bwmini/provider.py` configures `provider_rest.RESTClient` only when a reviewed `provider_api` block exists. It requires an authenticated loopback URL, restricted token file and typed paths. With an eligible action, application-owned `list/get/create/start/stop/delete/resize` use REST; they still need authoritative post-write observation.
 - `create` with an explicit `_nesting` option uses upstream MCP because that composite is not represented in the current REST create contract. `lifecycle_identity` and fixed guest SSH/hello still use upstream MCP; `access_provider.Wire` obtains Tenant/Guard/route operations through specialized MCP. The Agent-facing Gateway also retains upstream MCP compatibility.
-- Therefore **REST and MCP are coequal, complementary channels today**. The historical future **full** API-first and independent SSH-executor plans are not proof of implemented complete migration.
+- Therefore the **implemented** paths are complementary: **MCP-first for Agent tools and specialist Provider capabilities**, with **REST-assisted app lifecycle** for the seven eligible methods. The future *full* API-first/mandatory independent SSH-executor proposal was abandoned and never becomes runtime truth because it appears in historical design text.
 
 ## 3. R-02 task durability versus R-04 coordinated mutation
 
