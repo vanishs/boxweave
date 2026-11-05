@@ -1,3 +1,7 @@
+## 2026-11-05 UTC — v0.46.1 official installed scope (RACC-0461-20261105-B)
+
+[Installed release black-box evidence](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md): selected v0.46.1 official upgrade/doctor, live nested MCP selftest and verified cleanup **L PASS**; scoped outer Gateway tracked dedup/refusals, test-owned lifecycle+cgroup, CLI generator and unauthenticated Web/HTTP MCP checks **L PASS**. The [runtime-outer vs installed-source inventory](REACCEPTANCE_0461_2026-11-05_BLACKBOX_SURFACES.json) is classified but does not prove inner authenticated tools/list or live positive Web flows. One **P2 CLI global help discoverability defect OPEN**, no independent Verifier. Prior v0.46.1 pending-installed statements are superseded solely for the exact isolated upgrade; whole-project R-04/R-02/external paths remain U/PARTIAL/DEFERRED. Stable pin unchanged.
+
 ## v0.46.1 full-project reacceptance evidence — 2026-11-05 UTC
 
 [Fresh scope-by-scope T/L/U verification and live installation evidence](REACCEPTANCE_0461_2026-11-05.md): 774 Python and 10-step browser check T PASS for the CDN fallback candidate, fresh official v0.46.0 isolated install/doctor/nesting and sampled Box lifecycle/task gates L PASS. Exact v0.46.1 release/installed acceptance pending. R-04 global, external OAuth, historical UNKNOWN reconciliation, native shrink, owner-host R-02 cold-reboot and real client coverage not globally accepted.
