@@ -5,7 +5,7 @@
 
 [Master roadmap](FEATURE_ROADMAP_MASTER.md) · [Upstream ownership](../UPSTREAM_PROVIDER.md) · [Host-hop recovery](../process/CONTAINARIUM_SHELL_RECOVERY.md) · [Wrapper verification](../verification/CONTAINARIUM_SHELL_PACKAGE_0429.md) · [Isolated upstream v0.127.0 test](../verification/CONTAINARIUM_0127_AUTOSLEEP_WAKE_UPSTREAM_LIVE_2026-11-03.md)
 
-**Long-term internal transport alternative (not approved):** [API-first architecture master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Retaining BoxWeave's Agent-facing MCP remains important even if the internal Provider eventually uses REST; upstream #3500 compatibility requests and current installed contracts are tracked independently.
+**Current integration policy (owner decision 2026-11-05): MCP-first + REST-assisted.** Retain upstream Containarium MCP as the default for new/specialist integration and BoxWeave's Agent-facing MCP; preserve the seven existing app REST lifecycle methods. The [historical API-first architecture study](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) and proposed 29-tool bulk REST migration are **abandoned**, not approved future phases. Upstream #3500 MCP compatibility requests and installed contracts remain relevant and tracked independently.
 
 ## Origin and boundaries
 
