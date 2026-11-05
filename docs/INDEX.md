@@ -8,8 +8,6 @@
 
 **Latest exact-version evidence:** [v0.44.9 immutable release, independent installed v0.44.8→v0.44.9 upgrade, live nested selftest and outer R-02](verification/REACCEPTANCE_0449_2026-11-05.md). Source 742 Python tests and seven browser fixtures passed; owner host global R-04 is still disabled. See [PHASE_STATUS](process/PHASE_STATUS.md) and [OPEN_RISKS](verification/OPEN_RISKS.md).
 
-**Proposed next development:** [29-tool outbound REST migration research and implementation specification](design/REST_MCP_29_TOOL_MIGRATION_IMPLEMENTATION.md) — combined eight P1 and 21 P2 tools, both Web/App and Agent Gateway, 20 semantic reads / 9 writes, source-only; no development or host rollout has begun.
-
 Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
 
 | Containarium minimum-only upgrade and reusable Agent SOP | [v0.128.0 compatibility review](design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [standard upgrade SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md), [v0.43.2 P0 acceptance ledger](verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md): only component version floors, no upper bound; stable pointer unchanged |
