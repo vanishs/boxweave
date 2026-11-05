@@ -1,0 +1,96 @@
+# Test evidence depth matrix — v0.44.9
+
+**Snapshot and meaning.** Review date 2026-11-04 PT / 2026-11-05 UTC. Exact immutable BoxWeave v0.44.9 source/release `0ec0dc81d8cdc69d4fb9a8abaae0615cf41e4f24`, documentation baseline `ea6bfcd81aaeb21dc238db9f47565edb0ba7a466`, and newly committed scoped R-04 installed evidence from `f2ab1954781067740dd84e4784bed040be3433d1` / `e7c2773932fd4eaf104f97372b647aba3afb30c0`. **This is a curated cross-feature evidence index (S/D), not a newly executed real-host test.** References point to scoped historical and v0.44.9 reports; old successful tests do not silently certify v0.44.9 binaries or owner-host processes. [Current authoritative feature ledger](FEATURE_MATRIX.md), [architecture/call graph](../design/RUNTIME_CALL_CHAINS_0449.md), [test methodology](TEST_STRATEGY.md), and [risk owner](OPEN_RISKS.md).
+
+## Evidence levels: five independent boundaries
+
+| Level | Acceptance proof | What it cannot prove |
+| --- | --- | --- |
+| **S** — source and contract inspection | Inspected exact implementation, data/trust boundary, catalog and source revision | Existence does not prove execution. |
+| **T** — automated tests / CI | A real test process completed, with named version, test assertions and exit 0 (fixtures explicitly identified) | Browser backed by fixtures is **not** an installed authenticated Provider path. |
+| **I** — isolated installed live host | Official installed source/provenance and actual Provider/Incus effect + independent postcondition, in a specifically disposable Box; old-version I is scoped historical evidence | A nested host does not certify actual outer-host permission/service/configuration. |
+| **H** — actual operator outer host | Authorized observed Provider/Box/receipt effect and verified identity on the actual `dev` host | A successful read or task on v0.44.8 does not mean the current owner-host app is installed at v0.44.9 or R-04 globally active. |
+| **X** — independent external real client | Explicit Windows-native/WSL Codex/ZCode or external published HTTPS/OAuth client connected, used and diagnosed end-to-end, with OS/client version and authenticated transport | Test-only HTTP loopback, generated client config and this chat's MCP provider tool view do not establish the requested independent external client profiles. |
+
+**Marker legend:** `Y` = independently supported *within the stated scoped test*; `~` = only partial, historical-version, negative-only or *adjacent but not the exact named positive path* evidence; `!` = **observed native defect**, not a PASS; `-` = not independently established. A mark in one column does **not** imply any other column. The strongest evidence is not a numeric overall coverage percentage. A row can contain **Y** under I but still be **P0** because the missing entrypoint, race or original-instance recovery is the risky part.
+
+**Priorities** are the next-work level, not product importance: P0 collision/UNKNOWN integrity, P1 critical user entrypoint or upstream issue, P2 targeted edge/maintenance. `—` means no immediate incremental work in the sampled capability; it does **not** claim universal certification.
+
+## Feature groups and actual evidence boundaries
+
+| ID | Domain / feature | S | T | I | H | X | Next | Last grounded scope / outstanding distinction |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | --- |
+| F01 | Delivery — Immutable release / asset checks | Y | Y | Y | - | - | — | v0.44.9: CI verify+publish, exact tag/25 assets; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F02 | Delivery — Pinned clean install and 0.44.8→0.44.9 upgrade | Y | Y | Y | - | - | — | Isolated official install (baseline 0.44.8) and real in-place 0.44.9 upgrade; no owner-host upgrade; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F03 | Delivery — Interrupted install / schema migration / rollback | Y | Y | ~ | - | - | P2 | Specific 0.44.2→0.44.3 repair and 0.28.0→0.42.6 app DB migration; production rollback and newer schema/fleet paths U; [evidence](REACCEPTANCE_0443_2026-11-04.md) |
+| F04 | Delivery — Doctor / installed provenance / MCP+REST read | Y | Y | Y | ~ | - | P2 | Installed 0.44.9 10/10 and authenticated 0.128.0 inventory; owner dev MCP info and read, not an independent current owner-app binary check; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F05 | Delivery — Upstream minimum-version and provider upgrade | Y | Y | ~ | ~ | - | P1 | 0.128.0 retained compatible on 0.44.9 isolated upgrade; external protected-unit upgrade/rollback and owner-host equivalence remain U; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F06 | Box runtime — List / get / exact immutable Box identity | Y | Y | Y | Y | - | — | Isolated and owner dev identity/createdAt/state real reads; external native desktop clients not checked; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F07 | Box runtime — Create / start / stop / delete lifecycle | Y | Y | Y | Y | - | — | Official installed 0.44.9 nested selftest create→hello→stop→delete; earlier owner-host MCP lifecycle tests; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F08 | Box runtime — CPU / memory resize and state readback | Y | Y | Y | Y | - | P2 | Earlier task-owned real Box resize and authoritative Provider readback; no all-backend parity; [evidence](REACCEPTANCE_0443_2026-11-04.md) |
+| F09 | Box runtime — BoxWeave disk-shrink pre-dispatch refusal | Y | Y | Y | ~ | - | P1 | Installed 0.44.8 protected gateway, REST, lifecycle path deny shrink and no Provider PUT; upstream native write not safe; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F10 | Box runtime — Nested Box create→exec→delete | Y | Y | Y | - | - | — | Exact v0.44.9 official installed nested live_mcp selftest, four steps success and independent empty Incus list; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F11 | Box runtime — SSH connect(exec) and trust identity | Y | Y | Y | Y | - | P2 | Verified guest Python/host identity; original owner-host connect used; real first transient trust-failure recovery is a separate row; [evidence](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md) |
+| F12 | Box runtime — Bounded guest file / directory reads | Y | Y | Y | Y | - | — | Real exact home-relative read/list and wrong-path/symlink rejection on owner host in earlier release; [evidence](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md) |
+| F13 | Box runtime — Nesting inspect/plan (Issue #20) | Y | Y | Y | Y | - | — | Original Box `bwaccept-20261101` identity observed (see [Issue #20](https://github.com/vanishs/boxweave/issues/20)); inspect and plan pass; invalid exact target refused; does not certify nested workload from that same original Box; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F14 | Network — Tenant / Guard / native ACL and packet isolation | Y | Y | ~ | ~ | - | P1 | 0.43.1 task-owned two-Tenant packet check and guard enforce; full current 0.128.0 topology/effective policy matrix U; [evidence](POST_HOST_UPGRADE_REACCEPTANCE_0431_2026-11-03.md) |
+| F15 | Network — Port publish / route / revoke | Y | Y | ~ | ~ | - | P1 | Earlier scoped TCP/UDP and negative traffic evidence; actual current public reachability/TLS and complete scope not proven; [evidence](FEATURE_MATRIX.md) |
+| F16 | Runtime extras — Auto sleep / HTTP wake / timer | Y | ~ | ~ | - | - | P2 | v0.42.8 timeout and isolated patched upstream 0.126.0 first-request wake, not universal released 0.128.0 acceptance; [evidence](CONTAINARIUM_0126_AUTOSLEEP_WAKE_LIVE_2026-11-02.md) |
+| F17 | Runtime extras — Monitoring / OTel positive export | Y | ~ | ~ | - | - | P2 | Absent collector was correctly rejected in live lab; a successful end-to-end OTel export remains U; [evidence](REACCEPTANCE_0443_2026-11-04.md) |
+| F18 | Web & app — Web authentication / Origin / CSRF | Y | Y | ~ | - | - | P1 | Seven Chromium **fixture** workflows and unauthenticated live 401; no full positive installed Web HTTP mutation on v0.44.9; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F19 | Web & app — Web plan→worker lifecycle / REST mutator | Y | Y | Y | - | - | P0 | Official installed 0.44.9 authenticated Web HTTP POST and worker lifecycle competed with SSH/HTTP MCP under test-only seeded Web session; first-admin login and Web-owned-first in-flight remain U | [evidence](REMEDIATION_TEST_QUEUE.md) 
+| F20 | Web & app — Projects / binding / receipts / history | Y | Y | ~ | - | - | P2 | Real older installed binding/storage scopes, current v0.44.9 fixture browser; multi-client current installed flow U; [evidence](FEATURE_MATRIX.md) |
+| F21 | Web & app — Prompt Graph editor / copy / export | Y | Y | - | - | - | P2 | Source & seven synthetic browser lanes; no claim of live current installed end-user flow or graph automation; [evidence](FEATURE_MATRIX.md) |
+| F22 | Web & app — Model wizard and native-client handoff | Y | Y | ~ | - | - | P2 | Source/browser fixtures and earlier human/client configuration evidence; fresh real paid inference not tested; [evidence](FEATURE_MATRIX.md) |
+| F23 | Web & app — Tenant / port management via Web | Y | Y | ~ | - | - | P1 | App-layer access claim and live Provider contracts sampled; authenticated current Web HTTP plus outside packet assertion U; [evidence](FOUR_GATE_ISOLATED_ACCEPTANCE_0446_2026-11-04.md) |
+| F24 | Agent transports — SSH / stdio MCP Gateway discovery & read | Y | Y | Y | Y | - | — | Authenticated Provider MCP read and tools discovered, outer dev tools currently operational; external Windows/WSL app unproven; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F25 | Agent transports — Loopback HTTP MCP / OAuth token revocation | Y | Y | ~ | - | - | P1 | Earlier v0.24.0 loopback OAuth/Bearer/link and revocation live; no current independently authenticated external client; [evidence](CODE_FIRST_ACCEPTANCE_2026-11-01.md) |
+| F26 | Agent transports — Public HTTPS / external OAuth client | Y | ~ | ~ | - | - | P1 | Local TLS proxy tested earlier, public DNS/TLS/external client genuine end-to-end U; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F27 | Agent transports — Windows native / WSL Codex & ZCode | Y | Y | - | - | - | P1 | Generator/PowerShell/profile fixtures; actual requested four real client profiles U; [evidence](TEST_STRATEGY.md) |
+| F28 | Agent transports — App-owned Provider REST/MCP hybrid | Y | Y | Y | ~ | - | P1 | 0.44.9 installed authenticated inventory, prior 0.44.6 REST shrink preflight and MCP nested work; complete REST feature parity U; [evidence](FOUR_GATE_ISOLATED_ACCEPTANCE_0446_2026-11-04.md) |
+| F29 | Coordination — R-02 task submit/get/list/dedup | Y | Y | Y | Y | - | P1 | dev owner task provision + real private guest marker and key conflict; *outer-host reboot persistence and truly independent concurrent writer* U; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F30 | Coordination — R-04 shared claims, lease, protected Gateway | Y | Y | Y | - | - | P0 | Only opt-in isolated protected 0.44.8 host: lease blocks app resize and tracked exec, no mutation; owner dev R-04 disabled; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F31 | Coordination — R-04 Web + SSH MCP + HTTP MCP simultaneous | Y | Y | Y | - | - | P0 | Official installed 0.44.9 real pinned SSH MCP, bearer loopback HTTP MCP and seeded-session Web HTTP POST shared claims; same-target lease/in-flight denials and independent Box progress L PASS. Web-owned-first, natural expiry, replacement, complete bypass U | [evidence](REMEDIATION_TEST_QUEUE.md) 
+| F32 | Coordination — UNKNOWN/no replay after killed dispatched work | Y | Y | Y | - | - | P0 | Official installed 0.44.9 test-only Gateway SIGKILL after dispatch preserved UNKNOWN and two claims with one observed guest byte; new contenders RECOVERY_REQUIRED/no replay across worker/HTTP restart. Original historical identity/reconciliation remains BLOCKED | [evidence](REMEDIATION_TEST_QUEUE.md) 
+| F33 | Coordination — First TRUST_FAILED→READINESS_PENDING→ready | Y | Y | ~ | - | - | P1 | Real new Box creates reached connection_ready, but genuine first failure transition was **not** seen; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F34 | Provider native — Create-after-error authoritative outcome | Y | ~ | ! | - | - | P1 | Historical upstream error despite realized Box; BoxWeave UNKNOWN guarding source tests PASS; new native request correlation absent; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F35 | Provider native — Disk-shrink atomic contract | Y | ~ | ! | - | - | P1 | Containarium 0.128.0 native accepted 10→8 GB config shrink in isolated child and later restored; BoxWeave guard not upstream atomicity; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F36 | Diagnostics — D0 Doctor / D2 basic trace & read | Y | Y | Y | ~ | - | P2 | Installed v0.44.9 Doctor 10/10; scoped earlier independent operation tracing, dev diagnosis read; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
+| F37 | Diagnostics — D3 classified faults, D4 privileged read diagnostics | Y | Y | ~ | ~ | - | P2 | Historical positive exact granted service/port and denial real tests; owner dev current negative diagnoses, no full current positive rollout; [evidence](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md) |
+| F38 | Diagnostics — DC-01 preflight/rest_read/operation_trace | Y | Y | Y | - | - | P2 | Source release v0.43.0 independent installed read-only diagnostic coordinator accepted; later version not independently re-run; [evidence](STABLE_PROMOTION_DC01_0430_2026-11-03.md) |
+| F39 | Recovery — Backup/restore guard vs actual E2–E4 operations | Y | ~ | - | - | - | P2 | Exact backup/key policy default-denial shipped; native supported whole-Box create/restore/snapshot/clone **not shipped or L-certified**; [evidence](MCP_COMPAT_RESTORE_04211_2026-11-03.md) |
+
+## Summary by evidence boundary (descriptive, **not** a pass rate)
+
+This table counts the **39 reviewed capability groups above**, not all routes, tools, test cases, requirements or available runtime platforms. The **I=Y** entries F19/F31/F32 include the new official v0.44.9 R-04 installed three-entry/real server-crash checkpoint recorded in `REMEDIATION_TEST_QUEUE.md`. The user-facing Web and HTTP MCP test credentials were seeded **only inside the isolated test app store**, not issued via a normal first-admin Web login or an external OAuth client. A row may have a `Y` on a historical version only where explicitly described; larger coverage or higher levels must not be inferred.
+
+| Boundary | Scoped Y | Partial/historical ~ | Known defect ! | Not proven - |
+| --- | ---: | ---: | ---: | ---: |
+| S | 39 | 0 | 0 | 0 |
+| T | 33 | 6 | 0 | 0 |
+| I | 20 | 14 | 2 | 3 |
+| H | 8 | 8 | 0 | 23 |
+| X | 0 | 0 | 0 | 39 |
+
+The absence of any **X** row does **not** mean the platform cannot serve an Agent. It means no independently verified selected **Windows/WSL native app or public external OAuth** profile has met this document's explicit five-layer gate. In particular, a functioning current ChatGPT-to-BoxWeave MCP connector does not establish which of the selected external client profiles or independent transports were tested.
+
+## Most important gaps and next evidence promotion
+
+| Priority | Required new observation | Evidence movement expected | Safe operating boundary |
+| --- | --- | --- | --- |
+| **P0** | Complete the **remaining** v0.44.9 real three-entrance cases: Web-owned **first** in-flight claim against independent SSH/HTTP contenders, natural lease expiry, replaced Box incarnation, all write/bypass routes; confirm receipt and actual Provider state | F19/F30/F31: existing sampled I=Y must be extended with explicit **additional** I=Y for each uncovered race; no H or X implication | Fresh authorized isolated host only; no owner-host R-04 enablement. |
+| **P0** | Extend the already executed *test-only* Gateway SIGKILL / UNKNOWN scenario: natural lease expiry, Web-owned-first interrupted dispatch, immutable original-operation reconciliation with independent Provider correlation | F32: sampled Gateway-crash I=Y already recorded; original historical P1-03 reconciliation and other crash orders are **still blocked/U** | Preserve historical `bwweb-0446`/`bwweb-0447` incidents, no raw SQLite deletion. |
+| **P1** | Read existing outer R-02 task/receipt after separately authorized owner-host restart and test truly independent parallel distinct request keys | F29: close specifically **H reboot+parallel** gate | Do not restart host without new specific authorization, or resubmit original command. |
+| **P1** | Complete real installed authenticated Web HTTP mutation and external independent OAuth/HTTPS/Windows/WSL clients | F18/F19/F25/F26/F27: promote exact tested I/H/X boundary only, preserving client and credential scopes | Explicit client infrastructure, credentials and public routing approval required. |
+| **P1** | Capture genuine `TRUST_FAILED → TRUST_READINESS_PENDING → connection_ready` on original same Box; verify upstream create-after-error & disk-shrink contract | F33–F35 and F09 scoped new evidence | No host-key bypass, no guess by logical name, avoid dangerous native production writes. |
+| **P2** | Review selftest plan-file handoff, sleep/wake, OTel monitoring, D4 allowed positive and environment recovery contracts | F16/F17/F37/F39: close individually as supported | No inference that backup restore/clone is already shipped. |
+
+## How to update this matrix after future releases
+
+1. Record **current exact source/tag/installed/running versions** separately, OS, backend, immutable target UUID/createdAt, actor/transport, request key/receipt and approved resource scope.
+2. Name the executed command or test and independent postcondition, exit/status, logs/Trace without secrets, interruption/restart result and cleanup. For T/browser tests, explicitly state whether it used fixtures; for I/H/X, state whether the Provider was actually called.
+3. Advance **only the observed cell** (and only for its named scope). Previous version success becomes historical `~` if a materially changed current implementation needs fresh acceptance. New failures get `!` with original immutable evidence; do not replace the unknown outcome with a fabricated failed state.
+4. Keep this view an evidence index. [FEATURE_MATRIX](FEATURE_MATRIX.md) retains requirement-level traceability, [OPEN_RISKS](OPEN_RISKS.md) owns open risk status, [PHASE_STATUS](../process/PHASE_STATUS.md) owns phase state, [RUNTIME_CALL_CHAINS_0449](../design/RUNTIME_CALL_CHAINS_0449.md) owns the accompanying v0.44.9 call graph. Do not duplicate mutable risk conclusions as competing authoritative lists.
+5. Run `python scripts/check_knowledge.py` after updates. A document/link check is **not** an end-to-end feature test. Reuse prior genuine evidence with source/version/date attribution.
+
+**No action performed by this document:** no test Box creation, Provider mutation, administrator credentials read, production R-04 activation, original UNKNOWN reconciliation, stable-version promotion, or new software release.

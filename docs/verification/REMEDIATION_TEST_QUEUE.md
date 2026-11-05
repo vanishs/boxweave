@@ -1,3 +1,7 @@
+## v0.44.9 evidence-depth index and residual acceptance queue — 2026-11-05 UTC
+
+[Five-layer 39-capability evidence matrix](EVIDENCE_LAYERS_0449.md) indexes S/T/I/H/X results with explicit historical versions and priorities. **Documentation-only:** no new test was performed by this index. The **actual** isolated official v0.44.9 real Web HTTP + independent SSH MCP + bearer HTTP MCP contention and Gateway SIGKILL checkpoint is immediately below and counts as scoped I PASS, **not** universal R-04. Remaining P0 includes Web-owned-first in-flight claim, natural 600-second lease expiration, same-name changed-incarnation claims, original UNKNOWN authoritative reconciliation and comprehensive bypass. P1 includes owner R-02 post-provision reboot, normal Web-first login/OAuth/external clients, and upstream create-after-error and disk-shrink source contracts. Do not alter historical UNKNOWNs or globally enable R-04 on the owner host to fill a view cell.
+
 ## P0 R-04 v0.44.9 isolated three-entry matrix live checkpoint — 2026-11-05 UTC
 
 **Disposition: scoped installed L PASS for sampled real three-entry conflict, lease, in-flight and server-crash fail-closed paths; GLOBAL R-04 remains PARTIAL / NOT ENABLED.** This was executed, unlike the earlier documentation-only matrix plan below. No owner-host global protection, stable pin, historical UNKNOWN or upstream source was changed.

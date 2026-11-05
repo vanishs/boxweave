@@ -2,6 +2,8 @@
 
 **Current v0.44.9 architecture:** [runtime call chains, ingress guard coverage and P0/P1 acceptance map](design/RUNTIME_CALL_CHAINS_0449.md). This is a source-backed view, **not** global R-04 production acceptance. The authoritative current implementation map is [ARCHITECTURE](design/ARCHITECTURE.md).
 
+**Five-level evidence depth:** [v0.44.9 feature-by-feature evidence](verification/EVIDENCE_LAYERS_0449.md) compares source review, automated tests, isolated installed, owner host, and independent external-client proof. Test levels are independent, not a product coverage percentage.
+
 **Latest exact-version evidence:** [v0.44.9 immutable release, independent installed v0.44.8→v0.44.9 upgrade, live nested selftest and outer R-02](verification/REACCEPTANCE_0449_2026-11-05.md). Source 742 Python tests and seven browser fixtures passed; owner host global R-04 is still disabled. See [PHASE_STATUS](process/PHASE_STATUS.md) and [OPEN_RISKS](verification/OPEN_RISKS.md).
 
 Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
@@ -25,6 +27,7 @@ Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STAT
 | Actual runtime / module design | [ARCHITECTURE](design/ARCHITECTURE.md), [ADR index and status](design/ADR/INDEX.md) |
 | Transport-to-Provider call graph, R-04 entry coverage and follow-up tests | [Current v0.44.9 runtime call chains](design/RUNTIME_CALL_CHAINS_0449.md) (S; see separate T/L evidence) |
 | Task dependencies | [IMPLEMENTATION_PLAN](process/IMPLEMENTATION_PLAN.md) |
+| Evidence depth and next acceptance by feature | [v0.44.9 five-level evidence matrix](verification/EVIDENCE_LAYERS_0449.md) |
 | REQ/AC → code/tests/evidence | [FEATURE_MATRIX](verification/FEATURE_MATRIX.md), [code-first acceptance baseline](verification/CODE_FIRST_ACCEPTANCE_2026-11-01.md), [latest selftest trust-readiness remediation](verification/SELFTEST_TRUST_RACE_0267_2026-11-01.md), [OAuth transaction deep audit](verification/DEEP_AUDIT_0266_2026-11-01.md), [nesting and partial-create acceptance](verification/NESTING_ACCEPTANCE_0265_2026-11-01.md), [post-v0.26.2 full-project reacceptance](verification/REACCEPTANCE_0262_TO_0264_2026-11-01.md), [previous live ledger](verification/CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) |
 | Host-hop wrapper release and bounded remediation | [v0.42.9 Containarium shell source/test record](verification/CONTAINARIUM_SHELL_PACKAGE_0429.md): managed Provider install, external opt-in, host-hop acceptance still open |
 | Containarium host-hop SSH missing wrapper | [Read-only diagnosis and operator-only recovery](process/CONTAINARIUM_SHELL_RECOVERY.md): distinguish direct Box MCP from missing backend shell; never run broad sudoers setup automatically |

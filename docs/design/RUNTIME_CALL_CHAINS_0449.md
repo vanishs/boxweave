@@ -2,6 +2,10 @@
 
 **Snapshot:** BoxWeave immutable source release `v0.44.9` at `0ec0dc81d8cdc69d4fb9a8abaae0615cf41e4f24`; documentation review on 2026-11-04 PT / 2026-11-05 UTC. This is a **source-backed architecture map (S)** correlated with previously recorded fixture and isolated-live evidence; it is **not** a fresh production-wide certification. The authoritative architecture owner is [ARCHITECTURE](ARCHITECTURE.md); acceptance and current risk conclusions belong to [FEATURE_MATRIX](../verification/FEATURE_MATRIX.md) and [OPEN_RISKS](../verification/OPEN_RISKS.md).
 
+**Companion evidence view:** [five-level test evidence matrix](../verification/EVIDENCE_LAYERS_0449.md) shows which mapped call chains have source review, automated tests, isolated installed execution, owner-host acceptance or external-client proof. Graph arrows alone are not high-level acceptance evidence.
+
+**Subsequent v0.44.9 isolated live checkpoint (not production):** a newly committed [three-entry Web/SSH MCP/HTTP MCP and actual Gateway SIGKILL acceptance report](../verification/REMEDIATION_TEST_QUEUE.md) established scoped test-only Web authenticated HTTP, pinned SSH MCP and bearer loopback HTTP MCP sharing R-04 claims, with contention denial and retained UNKNOWN. It does **not** establish normal first-admin/OAuth issuance, external TLS, owner-host enablement, Web-first in-flight claiming, natural lease expiry, immutable-incarnation replacement, bypass-free Provider routes, or historical original UNKNOWN reconciliation. Rows below that describe these combinations as unverified are a **pre-checkpoint historical call-graph snapshot**; use the [current evidence matrix](../verification/EVIDENCE_LAYERS_0449.md) for up-to-date scope.
+
 ## 1. Current execution topology
 
 ```mermaid

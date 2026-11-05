@@ -6,6 +6,8 @@ Status: selected phase5 obligations executed through TASK-012/0130.9.0, with153 
 
 ## Layers and evidence
 
+**Latest evidence presentation:** [v0.44.9 five-level matrix](EVIDENCE_LAYERS_0449.md) distinguishes S source evidence, T executed automated tests, I isolated installed live, H actual operator-host live, and X genuine independent external-client execution. These are separate boundaries, not automatic progressive levels or a single coverage metric. A Chromium fixture is not an installed Web/Provider authentication proof; a nested live task does not prove outer-host coordination; an OAuth loopback test is not public client acceptance. Record source version and immutable identity, command/exit, original receipt, Provider effect and cleanup for every promotion.
+
 | Layer | Boundary and repeatable cases | Environment and task |
 | --- | --- | --- |
 | Unit/contract | Target normalization, revision/CAS, malformed result/cursor/protocol, plan confirmation/digest/expiry, model/profile selection, redaction | Deterministic fake provider/process/clock; TASK-001/003/007/008 |
