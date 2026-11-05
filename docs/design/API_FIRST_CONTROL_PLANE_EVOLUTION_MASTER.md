@@ -1,9 +1,9 @@
-# API-first control-plane evolution — long-term architecture master
+# REST + MCP hybrid control-plane evolution — long-term architecture master
 
 > **Status: OWNER-SELECTED LONG-TERM COEXISTENCE DIRECTION / FEATURE-BY-FEATURE IMPLEMENTATION ACCEPTANCE PENDING.** The owner selected Option A and coequal ADR-003/ADR-010 on 2026-11-03; this is not acceptance of universal mediation, an automatic migration or a host/release change.
 > Recorded: 2026-11-03. BoxWeave source baseline: `main` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3` (`VERSION=0.42.11`). Containarium source inspected: `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The installer used Containarium `v0.120.1` **at this historical v0.42.11 analysis baseline**; v0.44.7 requires Containarium >= v0.128.0 and has no automatic maximum-version ceiling. Never assume upstream-main APIs are deployed.
 >
-> **Core direction under study:** outward-facing **MCP-first**, internal **Containarium REST API-first**, Box execution **SSH-first**, local maintenance **CLI-only**. This does *not* mean eliminating MCP from BoxWeave: BoxWeave owns its Agent-facing MCP, and an upstream MCP compatibility lane remains until its actual functional coverage is mapped and accepted.
+> **Owner-selected direction, clarified 2026-11-04 PT:** BoxWeave uses a **long-term REST + MCP hybrid**, **not API-first or a mandatory all-REST end state**. The application already uses opt-in REST for basic Provider lifecycle; upstream MCP remains a coequal complementary channel for specialist operations, nesting, guest SSH execution and Agent compatibility. Inbound BoxWeave SSH/HTTP MCP remains a first-class product interface. An independent SSH executor is optional future work, not a prerequisite. Select REST per operation and installed capability, with one shared mutation/trace policy across transports. The historical `API_FIRST_*` filename remains for link compatibility.
 
 > **2026-11-03 implementation checkpoint (later than the research baseline below):** BoxWeave v0.42.12 added application-owned, loopback-only authenticated REST for list/get/create/start/stop/delete/resize, and v0.43.0 became the default stable selection after isolated installed-host evidence. The Agent-facing upstream MCP relay, specialist Tenant/Guard/nesting paths and SSH execution were **not** thereby converted. The original operator host is not implied to be upgraded. See [REST slice evidence](../verification/PROVIDER_REST_A1_04212_2026-11-03.md) and [v0.43.0 stable promotion](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md). The v0.42.11 commit IDs below remain a **historical analysis baseline**, not the latest implementation status.
 
@@ -13,7 +13,7 @@
 
 This is the parent of three future-looking design records:
 
-1. [Migration and feature-parity plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) — code inventory, REST coverage, difficulty, phases, parity measurement and test gates.
+1. [Grouped hybrid migration and feature-parity plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) — implemented REST, remaining REST candidates, retained MCP, 1–5 complexity and P0/P1/P2 priorities.
 2. [Unified operation trace and diagnostics](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) — D1–D4 evolution, request/operation correlation, uncertainty, privacy and live acceptance.
 3. [Candidate ADR-010](ADR/0010-api-first-control-plane-candidate.md) — decision alternatives, reasoning and explicit open gates.
 
@@ -47,7 +47,7 @@ Do not confuse upstream's **CLI-first delivery policy** with an instruction for 
 
 ## 2. Scope assumptions: radical redesign versus in-place migration
 
-**Thought experiment:** all old data, CLI spellings and external interface names could be replaced, provided the user-visible functional outcome is retained to a target of **99%**. That percentage is a **design objective, not a measured claim**. It does not authorize ignoring the existing operator's active host, credentials, data, configured clients or stable release when any real deployment is attempted.
+**Historical thought experiment (not the selected implementation target):** all old data, CLI spellings and external interface names could be replaced, provided the user-visible functional outcome is retained to a target of **99%**. That percentage is a **design objective, not a measured claim**. It does not authorize ignoring the existing operator's active host, credentials, data, configured clients or stable release when any real deployment is attempted.
 
 Define an acceptance denominator before committing to a rewrite:
 
@@ -57,9 +57,9 @@ Define an acceptance denominator before committing to a rewrite:
 - Do not justify removal of a rare **security-critical invariant** (no duplicate create, no unauthorised Box execution, target-incarnation pinning, secret non-disclosure) by a numeric 99% threshold. Such invariants have 100% mandatory acceptance.
 - An upstream MCP tool that BoxWeave transparently advertises must be accounted for *separately* from app-owned typed operations. Its **presence in a catalogue** is not proof of authorization, execution or user reliance; actual feature reachability must be measured.
 
-The **in-place migration** route can preserve current Web/SQLite and change the app Provider first. The **new-core rewrite** route can consolidate more deeply but has far larger acceptance and host-cutover cost. These are separate planning options and must not be mixed in an estimate.
+The **selective hybrid evolution** route preserves current Web/SQLite and changes only app Provider operations with clear benefits. The **new-core rewrite** route can consolidate more deeply but has far larger acceptance and host-cutover cost. These are separate planning options and must not be mixed in an estimate.
 
-## 3. Proposed target boundaries
+## 3. Hybrid responsibility boundaries (not a universal REST cutover)
 
 ```text
                  Codex / Claude / other Agent clients          Browser         Operator
@@ -102,10 +102,10 @@ The **in-place migration** route can preserve current Web/SQLite and change the 
 - Its daemon, Incus integration and service-side validation. BoxWeave does not bypass a missing API with raw Incus or host-root shell.
 - Daemon-side tracing **only when upstream implements and exposes it**; downstream `trace_id` is not proof that the daemon consumed a matching identifier.
 
-### 3.3 Three internal blocks, multiple adapters
+### 3.3 Shared logical blocks, complementary transports
 
-1. **Provider API:** typed JSON→domain translation, request authentication, timeout, response-shape validation, feature probing, bounded retries of *safe reads only*, upstream response IDs where available. REST maps to a Protobuf-defined contract through grpc-gateway; direct gRPC remains a possible later benchmark/ADR, not an implied requirement.
-2. **Box Executor:** separate SSH execution and file/copy/sync adapters. Prefer service-owned key/certificate, inspect upstream-stamped `ssh_host` and verified incarnation, never accept caller-supplied arbitrary host, username, key file or remote root. Optional per-Box `agent-box` MCP may remain an implementation detail for its unique capabilities.
+1. **Provider REST (selectively):** typed JSON→domain translation, authentication, timeout, response-shape validation, capability probing and bounded safe-read retries. REST maps to a Protobuf-defined contract through grpc-gateway; direct gRPC needs separate justification. **Upstream MCP is a retained, complementary outbound adapter**, not a temporary failure or authorization bypass.
+2. **Box execution (existing MCP/SSH, optional future executor):** retain proven bounded SSH/MCP guest paths. An independent SSH/file/copy/sync adapter is an optional separately accepted redesign, preserving server-owned identity, immutable incarnation, host-key pin and no arbitrary caller host/key/path. Optional per-Box `agent-box` MCP can remain for its unique capabilities.
 3. **Operation Core:** single intent/claims/dispatch/observed state machine; all exposed mutators (including any compatibility path) must pass it **before** a side effect. Use one task identity and trace correlation from both entry points.
 
 The host repair CLI remains independently functional when MCP, API or Web is down, but host privilege must not become an Agent escape hatch.
@@ -125,7 +125,7 @@ The host repair CLI remains independently functional when MCP, API or Web is dow
 
 Code references: [Containarium platform MCP](https://github.com/FootprintAI/Containarium/tree/main/internal/mcp), [upstream connect](https://github.com/FootprintAI/Containarium/blob/main/internal/mcp/connect.go), [upstream code tools](https://github.com/FootprintAI/Containarium/blob/main/internal/mcp/code_tools.go), [upstream transfer](https://github.com/FootprintAI/Containarium/tree/main/internal/transfer), and [upstream README roadmap](https://github.com/FootprintAI/Containarium#roadmap). The README lists `agent-box` tier-2 work and a **planned** Q4 2026 OSS v1.0/stable-API milestone. These are intentions, **not** a shipped or guaranteed REST replacement for SSH/stdio; verify an immutable deployed release, not the `main` branch or roadmap alone.
 
-**Architectural rule:** migrate the **outbound management control plane** to typed REST; keep the **inbound BoxWeave MCP** (SSH stdio and authenticated HTTP/OAuth) as a client contract; retain guest SSH execution as a distinct plane. A change of transport does **not** remove the need for independent Box state/readiness evidence. The default Box operation design remains clean-Box/no mandatory `agent-box` install, matching [R-01](BOX_OPERATION_INTERFACE_V1.md). Do not bypass a missing upstream REST capability with direct Incus/root shell.
+**Architectural rule:** **selectively** use typed REST for outbound app management when the deployed runtime contract justifies it; retain upstream MCP for complementary capabilities. Keep **inbound BoxWeave MCP** (SSH stdio and authenticated HTTP/OAuth) as a separate client contract and preserve guest SSH execution. A change of transport does **not** remove the need for independent Box state/readiness evidence. The default Box operation design remains clean-Box/no mandatory `agent-box` install, matching [R-01](BOX_OPERATION_INTERFACE_V1.md). Do not bypass a missing upstream REST capability with direct Incus/root shell.
 
 ### 3.5 One operation boundary without forcing one transport
 
@@ -165,7 +165,7 @@ This is an **architectural preference under a no-compatibility-cost assumption**
 | Decision | What must be proved before approval |
 | --- | --- |
 | REST vs generated gRPC client | Exact deployed API availability, auth/TLS model, endpoint/version contracts, real latency/failure evidence, operational complexity |
-| API-only gateway vs retained upstream MCP compatibility lane | Actual per-tool reachable feature matrix and owner-reviewed treatment of missing MCP-only actions |
+| Selective typed Agent tools vs retained upstream MCP compatibility | Hybrid coexistence is selected; native typed adapters are optional per feature and require parity, policy and diagnostics evidence |
 | Forwarded MCP mutators vs shared coordination | **Option A selected:** per-tool common claim mediation, preserving writes; review inventory, unknown/host-wide tools, cross-entry real conflict tests; record interim unprotected coverage truthfully |
 | Coequal ADR-003 and ADR-010 scope | **Complementary, long-lived records** (MCP/SSH trust and compatibility vs typed REST app management/SSH Executor); clarify overlaps, but no ADR supersession; independently review implementation evidence |
 | Standalone SSH executor vs optional upstream agent-box reuse | Real execution identity/trust, file scopes, streaming, cancellation/reconnect semantics, clean Box requirement |
