@@ -1,3 +1,7 @@
+## v0.46.1 CDN 504 stream installer correction and full reacceptance — 2026-11-05 UTC
+
+[Exact test commands, identity, 774 Python/10-step source checks, fresh official v0.46.0 installer and true nested child](REACCEPTANCE_0461_2026-11-05.md): verified Release CDN 504 can block streamed installer before execution; selected asset API fallback retains exact GitHub asset URL and SHA-256 checks. Modified entrypoint completes official v0.46.0 clean install on new authorized Box; child Python execution and absence, target refusal and tracked-task dedup also L PASS. v0.46.1 CI/published/install proof remains an independent gate. Global R-04, owner-host R-02 reboot, external OAuth/client and upstream shrink are unchanged.
+
 ## v0.46.0 debug_container REST slice — 2026-11-05 UTC
 
 [Selected migration and exact evidence](REST_DEBUG_CONTAINER_0460_2026-11-05.md):

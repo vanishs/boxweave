@@ -1,6 +1,7 @@
 """The host entry must stay inert for help and invalid release digests."""
 from pathlib import Path
 import hashlib
+import email.message
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import re
 import subprocess
 import sys
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,7 +92,9 @@ class BootstrapSafetyTests(unittest.TestCase):
                 metadata=json.dumps(manifest).encode()
                 info={'tag_name':'v'+version,'draft':False,'prerelease':False,'assets':[{
                     'name':'release.json','digest':'sha256:'+hashlib.sha256(metadata).hexdigest(),
-                    'browser_download_url':prefix+'release.json'}]}
+                    'browser_download_url':prefix+'release.json'},
+                    {'name':'online.py','digest':'sha256:'+hashlib.sha256(payload).hexdigest(),
+                     'browser_download_url':prefix+'online.py'}]}
                 mapping={
                     api+'/releases/tags/v'+version:json.dumps(info).encode(),
                     prefix+'release.json':metadata,
@@ -115,6 +119,51 @@ class BootstrapSafetyTests(unittest.TestCase):
                 command=launched.call_args.args[0]
                 self.assertEqual(command[command.index('--version')+1],version)
                 self.assertEqual(command[-2:],['--provider-url','http://127.0.0.1:8080'])
+
+    def test_streamed_504_uses_digest_checked_api_asset(self):
+        source=SCRIPT.read_text()
+        body=re.search(r"<<'PY_DEFAULT_RELEASE'\n(.*?)\nPY_DEFAULT_RELEASE",source,re.S)
+        self.assertIsNotNone(body)
+        code=compile(body.group(1),'streamed','exec')
+        version='0.46.0'
+        api='https://api.github.com/repos/vanishs/boxweave'
+        prefix='https://github.com/vanishs/boxweave/releases/download/v'+version+'/'
+        payload=b'reviewed-streamed-helper'
+        manifest={'format':1,'version':version,'source':'a'*40,
+                  'files':{'online.py':hashlib.sha256(payload).hexdigest()}}
+        metadata=json.dumps(manifest).encode()
+        release={'tag_name':'v'+version,'draft':False,'prerelease':False,
+                 'assets':[{'name':name,'id':aid,'url':api+'/releases/assets/'+str(aid),
+                            'digest':'sha256:'+hashlib.sha256(data).hexdigest(),
+                            'browser_download_url':prefix+name}
+                           for name,aid,data in [('release.json',777,metadata),('online.py',778,payload)]]}
+        mapping={api+'/releases/tags/v'+version:json.dumps(release).encode(),
+                 prefix+'release.json':metadata,
+                 api+'/git/ref/tags/v'+version:json.dumps({'object':{'type':'commit','sha':'a'*40}}).encode(),
+                 api+'/releases/assets/778':payload}
+        class AssetResponse(io.BytesIO):
+            status=200
+            headers=email.message.Message()
+        AssetResponse.headers['Content-Type']='application/octet-stream'
+        for corrupt in (False,True):
+            with self.subTest(corrupt=corrupt):
+                seen=[]
+                def fetch(request,timeout):
+                    seen.append((request.full_url,request.headers.get('Accept')))
+                    if request.full_url==prefix+'online.py':
+                        raise urllib.error.HTTPError(request.full_url,504,'Gateway Timeout',None,None)
+                    data=mapping[request.full_url]
+                    return AssetResponse(data+b'tampered' if corrupt and request.full_url.endswith('/778') else data)
+                with (patch.dict(os.environ,{'BOXWEAVE_REQUESTED_VERSION':version}),
+                      patch.object(sys,'argv',['-','0.43.1']),
+                      patch('urllib.request.urlopen',side_effect=fetch),
+                      patch('subprocess.run',return_value=subprocess.CompletedProcess(['python'],0)) as launched):
+                    with self.assertRaises(SystemExit) as status:
+                        exec(code,{'__name__':'__main__'})
+                self.assertEqual(status.exception.code,2 if corrupt else 0)
+                self.assertIn((api+'/releases/assets/778','application/octet-stream'),seen)
+                if corrupt: launched.assert_not_called()
+                else: launched.assert_called_once()
 
     def test_streamed_version_mismatch_fails_without_launch(self):
         source=SCRIPT.read_text()

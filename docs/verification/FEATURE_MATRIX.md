@@ -1,3 +1,7 @@
+## v0.46.1 full-project reacceptance evidence — 2026-11-05 UTC
+
+[Fresh scope-by-scope T/L/U verification and live installation evidence](REACCEPTANCE_0461_2026-11-05.md): 774 Python and 10-step browser check T PASS for the CDN fallback candidate, fresh official v0.46.0 isolated install/doctor/nesting and sampled Box lifecycle/task gates L PASS. Exact v0.46.1 release/installed acceptance pending. R-04 global, external OAuth, historical UNKNOWN reconciliation, native shrink, owner-host R-02 cold-reboot and real client coverage not globally accepted.
+
 ## v0.44.10 selftest operator plan handoff — 2026-11-05 UTC
 
 [Root-bounded plan read, app-user stdin handoff, typed diagnostics and exact-version test plan](SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md): **selftest permission issue repaired in source**; host private 0700 home and 0600 plan no longer require moving or changing permissions, while strict confirmation, journal and fail-closed controls remain. Targeted selftest tests and exact-source 748 Python + build + 7 Chromium fixture workflows PASS. Full v0.44.10 source/CI/installed acceptance must be separately marked from earlier v0.44.9 evidence. **R-02 owner-host cold-reboot receipt test explicitly DEFERRED by owner**; no restart, source/host storage or global R-04 activation. Default stable v0.43.1 unchanged.

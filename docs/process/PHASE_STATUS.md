@@ -1,3 +1,7 @@
+## 2026-11-05 UTC — v0.46.1 full reacceptance and release-CDN retry hardening (candidate)
+
+[New scoped evidence](../verification/REACCEPTANCE_0461_2026-11-05.md): clean original v0.46.0 773 Python + browser tests, patched first-stage asset API fallback 774 Python + 10-step browser suite PASS, new isolated parent official v0.46.0 clean installation, real nesting and doctor 10/10 L PASS. Whole-product acceptance remains PARTIAL; exact new candidate v0.46.1 publication/installed upgrade pending and operator-host R-02 reboot remains DEFERRED. Stable pin remains v0.43.1.
+
 ## 2026-11-05 UTC — v0.44.10 selftest privacy repair (release gate), R-02 deferred
 
 [Version-scoped P2 repair and test plan](../verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md): root host CLI now reads a bounded operator-owned private plan and pipes it to app user; app revalidates exact plan/hash and journals mutations, preserving pre-dispatch typed refusal. Targeted selftest tests pass. Exact full v0.44.10 CI, official immutable release and independent installed test are separate gates until verified. Owner explicitly **DEFERRED R-02 cold-reboot receipt acceptance**; no owner host restart, global R-04 enablement or historic UNKNOWN change. Stable install pin v0.43.1 remains.

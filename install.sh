@@ -79,7 +79,7 @@ if (( $# == 0 )) || [[ "${1:-}" == --version || "${1:-}" == --provider-url || "$
   # PUBLISHED_RELEASE is intentionally distinct from unreleased source VERSION.
   # This pin must reference release assets that exist and verify upstream.
   BOXWEAVE_REQUESTED_VERSION="$selected_version" python3 - "0.43.1" "${streamed_options[@]}" <<'PY_DEFAULT_RELEASE'
-import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.request
+import hashlib,json,os,pathlib,re,subprocess,sys,tempfile,urllib.error,urllib.request
 version=os.environ.get("BOXWEAVE_REQUESTED_VERSION") or sys.argv[1]
 api="https://api.github.com/repos/vanishs/boxweave"
 prefix="https://github.com/vanishs/boxweave/releases/download/v"+version+"/"
@@ -87,6 +87,24 @@ def get(url,limit=1048576):
     request=urllib.request.Request(url,headers={"User-Agent":"BoxWeave-streamed-installer","Accept":"application/vnd.github+json"})
     with urllib.request.urlopen(request,timeout=60) as response:data=response.read(limit+1)
     if len(data)>limit:raise ValueError("release metadata limit")
+    return data
+def asset_bytes(entry,name,limit):
+    assert entry["browser_download_url"]==prefix+name
+    try:
+        return get(prefix+name,limit)
+    except urllib.error.HTTPError as error:
+        if error.code not in (502,503,504):raise
+    # A release CDN outage must not bypass the release identity or digest gate.
+    asset_id=entry.get("id")
+    assert type(asset_id) is int and asset_id>0
+    asset_url=api+"/releases/assets/"+str(asset_id)
+    assert entry.get("url")==asset_url
+    request=urllib.request.Request(asset_url,headers={
+        "User-Agent":"BoxWeave-streamed-installer","Accept":"application/octet-stream"})
+    with urllib.request.urlopen(request,timeout=60) as response:
+        assert response.status==200 and response.headers.get_content_type()=="application/octet-stream"
+        data=response.read(limit+1)
+    if len(data)>limit:raise ValueError("release asset limit")
     return data
 try:
     if not re.fullmatch(r"0\.[0-9]{1,4}\.[0-9]{1,4}",version):raise ValueError("invalid release version")
@@ -96,7 +114,7 @@ try:
     entry=assets["release.json"];expected=entry.get("digest","")
     assert re.fullmatch("sha256:[a-f0-9]{64}",expected)
     assert entry["browser_download_url"]==prefix+"release.json"
-    metadata=get(entry["browser_download_url"])
+    metadata=asset_bytes(entry,"release.json",1048576)
     assert hashlib.sha256(metadata).hexdigest()==expected[7:]
     manifest=json.loads(metadata)
     assert manifest["format"]==1 and manifest["version"]==version and re.fullmatch("[a-f0-9]{40}",manifest["source"])
@@ -104,7 +122,7 @@ try:
     assert reference["object"]["type"]=="commit" and reference["object"]["sha"]==manifest["source"]
     expected=manifest["files"]["online.py"]
     assert re.fullmatch("[a-f0-9]{64}",expected)
-    payload=get(prefix+"online.py",262144)
+    payload=asset_bytes(assets["online.py"],"online.py",262144)
     assert hashlib.sha256(payload).hexdigest()==expected
     with tempfile.TemporaryDirectory(prefix="boxweave-release-") as folder:
         stage=pathlib.Path(folder);stage.chmod(0o700)
