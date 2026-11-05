@@ -137,5 +137,82 @@ class TrackedTaskTests(unittest.TestCase):
             with self.assertRaisesRegex(tasks.TaskFault,"TASK_SELECTOR_INVALID"):
                 self.store.get(**kwargs)
 
+
+class RecoveryOperatorGatewayTests(unittest.TestCase):
+    def setUp(self):
+        from bwmini.operation_coordination import OperationCoordinator,box_resource
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.path=Path(self.temp.name)
+        self.tasks=tasks.TaskStore(self.path/"tasks.sqlite")
+        (self.path/"tasks.sqlite").touch(mode=0o600)
+        self.tasks.initialize()
+        self.claims=OperationCoordinator(lambda:sqlite3.connect(self.path/"claims.sqlite"))
+        self.claims.initialize()
+        record,_=self.tasks.reserve(KEY,"box1",ID,tasks.command_digest("box1","echo one"))
+        self.op=record["task_id"]
+        self.tasks.advance(self.op,"recorded","dispatch_intent")
+        self.claims.acquire(self.op,ID,"gateway_"+self.op,[box_resource(ID)])
+        self.claims.dispatch_intent(self.op)
+
+    def test_original_gateway_receipt_matches_opaque_original_id(self):
+        original=tasks.original_recovery_receipt(self.op,"gateway_"+self.op,ID,
+                                                  tasks_path=self.path/"tasks.sqlite")
+        self.assertEqual(original["state"],"unknown")
+        self.assertTrue(original["exact_original_task"])
+        self.assertTrue(original["identity_matches_claim"])
+        mismatched=tasks.original_recovery_receipt(self.op,"gateway_"+self.op,"c"*64,
+                                                   tasks_path=self.path/"tasks.sqlite")
+        self.assertFalse(mismatched["identity_matches_claim"])
+        missing=tasks.original_recovery_receipt(self.op,"gateway_"+self.op,ID,
+                                                 tasks_path=self.path/"missing.sqlite")
+        self.assertFalse(missing["exact_original_task"])
+        self.assertEqual(missing["state"],"unverified")
+
+    def test_app_receipts_have_explicit_positive_and_missing_states(self):
+        path=self.path/"state.sqlite";path.touch(mode=0o600)
+        with sqlite3.connect(path) as db:
+            db.execute("CREATE TABLE environment_operations(id TEXT PRIMARY KEY, state TEXT,logical TEXT)")
+            db.execute("INSERT INTO environment_operations VALUES(?,?,?)",(self.op,"unknown","box1"))
+        found=tasks.original_recovery_receipt(self.op,"environment_"+self.op,ID,app_path=path)
+        self.assertEqual(found["state"],"unknown")
+        self.assertTrue(found["exact_original_task"])
+        notfound=tasks.original_recovery_receipt("b"*32,"environment_"+"b"*32,ID,app_path=path)
+        self.assertEqual(notfound["state"],"unverified")
+        self.assertFalse(notfound["exact_original_task"])
+
+    def test_operator_cli_inspect_release_and_audit_with_exact_confirmation(self):
+        import io,json
+        from contextlib import redirect_stdout,redirect_stderr
+        class LocalClaims:
+            def __init__(inner):inner.coordinator=self.claims
+        with patch('bwmini.coordination_bridge.SharedClaims',LocalClaims),patch.object(
+                tasks,'original_recovery_receipt',return_value={"source":"gateway","state":"unknown"}):
+            output=io.StringIO()
+            with redirect_stdout(output):
+                code=tasks.recovery_cli(["inspect",self.op,"--reviewer","test-admin"])
+            self.assertEqual(code,0)
+            review=json.loads(output.getvalue());self.assertEqual(review["operation_id"],self.op)
+            denied=io.StringIO()
+            with redirect_stderr(denied):
+                code=tasks.recovery_cli(["release",self.op,"--reviewer","test-admin",
+                      "--challenge",review["challenge"],"--confirm","RELEASE "+self.op,
+                      "--reason","Test-approved cannot establish outcome"])
+            self.assertEqual(code,2)
+            self.assertIn("RECOVERY_CONFIRMATION_REQUIRED",denied.getvalue())
+            out=io.StringIO()
+            with redirect_stdout(out):
+                code=tasks.recovery_cli(["release",self.op,"--reviewer","test-admin",
+                      "--challenge",review["challenge"],"--confirm","RELEASE "+self.op,
+                      "--reason","Test-approved cannot establish outcome",
+                      "--acknowledge-remote-may-still-run"])
+            self.assertEqual(code,0)
+            self.assertEqual(json.loads(out.getvalue())["released_resources"],1)
+            out=io.StringIO()
+            with redirect_stdout(out):
+                code=tasks.recovery_cli(["audit",self.op,"--reviewer","test-admin"])
+            self.assertEqual(code,0)
+            self.assertEqual(len(json.loads(out.getvalue())["audits"]),1)
+            self.assertEqual(self.tasks.get(task_id=self.op)["state"],"unknown")
+
 if __name__=="__main__":
     unittest.main()

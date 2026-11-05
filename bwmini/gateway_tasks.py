@@ -5,6 +5,7 @@ The shared coordinator belongs to a different minimal DB and will be
 integrated only after verified cross-entry dispatch claims.
 """
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -271,8 +272,113 @@ def provision():
     print(json.dumps({"state":"ready","private_metadata_only":True,
                       "coordination_prepared":True,"coordination_enabled":False}))
 
+def original_recovery_receipt(operation_id, receipt_ref, identity_digest, *, tasks_path=DEFAULT_DB,
+                              app_path=Path("/home/boxweave/boxweave-state/state.sqlite3")):
+    """Best-effort original receipt read, never an authority to re-dispatch.
+
+    A missing/mismatched origin is *explicitly unverified*, never fabricated.
+    The operator's forced decision remains risky even when a receipt exists.
+    """
+    if receipt_ref == "gateway_" + operation_id:
+        try:
+            store = TaskStore(tasks_path)
+            def read(db):
+                row = db.execute("SELECT * FROM gateway_tasks WHERE task_id=?",(operation_id,)).fetchone()
+                if row is None:raise TaskFault("TASK_NOT_FOUND")
+                return row
+            record = store._transaction(read)
+            row = store.row(record)
+            matched = hmac.compare_digest(record[3],identity_digest)
+            return {"source":"gateway", "state":row["state"],
+                    "logical":row["box"],"exact_original_task":True,
+                    "identity_matches_claim":matched, "exit_code":row["exit_code"]}
+        except (TaskFault, OSError):
+            return {"source":"gateway", "state":"unverified",
+                    "exact_original_task":False,"identity_matches_claim":False}
+    table = {"environment_":"environment_operations",
+             "web_":"box_action_receipts", "access_":"access_operations"}
+    for prefix,name in table.items():
+        if receipt_ref != prefix + operation_id:
+            continue
+        try:
+            info=app_path.lstat()
+            parent=app_path.parent.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid()
+                    or info.st_mode&0o077 or info.st_nlink!=1
+                    or not stat.S_ISDIR(parent.st_mode) or parent.st_uid!=os.geteuid()
+                    or parent.st_mode&0o077):
+                raise OSError()
+            db=sqlite3.connect("file:"+quote(str(app_path),safe="/")+"?mode=ro",uri=True)
+            try:
+                cols="state,logical" if name!="access_operations" else "state"
+                row=db.execute(f"SELECT {cols} FROM {name} WHERE id=?",(operation_id,)).fetchone()
+                if row is None:raise OSError()
+                return {"source":prefix[:-1],"state":row[0],
+                        "logical":row[1] if len(row)>1 else None,
+                        "exact_original_task":True,
+                        "identity_matches_claim":False}
+            finally:db.close()
+        except (OSError,sqlite3.Error):
+            return {"source":prefix[:-1],"state":"unverified",
+                    "exact_original_task":False,
+                    "identity_matches_claim":False}
+    return {"source":"unrecognized", "state":"unverified",
+            "exact_original_task":False,"identity_matches_claim":False}
+
+
+def recovery_cli(argv):
+    """Only called by the privileged installed host command (never MCP)."""
+    import argparse
+    import sys
+    if __package__:
+        from .coordination_bridge import SharedClaims
+        from .operation_coordination import CoordinationFault
+    else:
+        from coordination_bridge import SharedClaims
+        from operation_coordination import CoordinationFault
+    parser=argparse.ArgumentParser(prog="sudo boxweave task recover")
+    parser.add_argument("action",choices=("inspect","release","audit"))
+    parser.add_argument("operation_id")
+    parser.add_argument("--reviewer",required=True)
+    parser.add_argument("--challenge")
+    parser.add_argument("--reason")
+    parser.add_argument("--confirm")
+    parser.add_argument("--acknowledge-remote-may-still-run",action="store_true")
+    args=parser.parse_args(argv)
+    try:
+        coord=SharedClaims().coordinator
+        if args.action=="inspect":
+            if args.challenge or args.reason or args.confirm or args.acknowledge_remote_may_still_run:
+                raise CoordinationFault("RECOVERY_ARGUMENT_INVALID")
+            view=coord.status(args.operation_id)
+            source=original_recovery_receipt(args.operation_id,view["receipt_ref"],view["identity_digest"])
+            result=coord.recovery_review(args.operation_id,args.reviewer)
+            result["original_receipt"]=source
+        elif args.action=="release":
+            if not all((args.challenge,args.reason,args.confirm,args.acknowledge_remote_may_still_run)):
+                raise CoordinationFault("RECOVERY_CONFIRMATION_REQUIRED")
+            result=coord.recovery_force_release(args.operation_id,args.reviewer,
+                args.challenge,args.reason,args.confirm,args.acknowledge_remote_may_still_run)
+        else:
+            if args.challenge or args.reason or args.confirm or args.acknowledge_remote_may_still_run:
+                raise CoordinationFault("RECOVERY_ARGUMENT_INVALID")
+            result={"operation_id":args.operation_id,
+                    "audits":coord.recovery_audit(args.operation_id)}
+        print(json.dumps(result,sort_keys=True))
+        return 0
+    except (CoordinationFault,TaskFault) as error:
+        print(json.dumps({"state":"refused","code":error.code}),file=sys.stderr)
+        return 2
+    except (OSError,ValueError):
+        print(json.dumps({"state":"unavailable","code":"RECOVERY_UNAVAILABLE"}),file=sys.stderr)
+        return 2
+
+
 if __name__=="__main__":
     import sys
-    if sys.argv[1:]!=["provision"]:
-        raise SystemExit("TASK_HELPER_PROVISION_ONLY")
-    provision()
+    if sys.argv[1:]==["provision"]:
+        provision()
+    elif len(sys.argv)>2 and sys.argv[1]=="recover":
+        raise SystemExit(recovery_cli(sys.argv[2:]))
+    else:
+        raise SystemExit("TASK_HELPER_PROVISION_OR_RECOVERY_ONLY")

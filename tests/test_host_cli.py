@@ -426,5 +426,35 @@ class RemoteHttpHostCommandTests(unittest.TestCase):
             run.assert_not_called()
 
 
+
+class TaskRecoveryHostBoundaryTests(unittest.TestCase):
+    def test_operator_only_and_strict_subcommand(self):
+        with patch.object(host_cli.os,"geteuid",return_value=1000),patch.object(
+                host_cli.subprocess,"run") as launched:
+            self.assertEqual(host_cli.main(["task","recover","inspect","a"*32]),2)
+            self.assertEqual(host_cli.main(["task","recover","delete-all","a"*32]),2)
+            launched.assert_not_called()
+
+    def test_privileged_host_path_runs_verified_helper_only_as_app_user(self):
+        import stat
+        from types import SimpleNamespace
+        task_id="a"*32
+        def fs_info(path):
+            is_file=str(path).endswith("gateway_tasks.py")
+            return SimpleNamespace(st_mode=(stat.S_IFREG|0o644 if is_file else stat.S_IFDIR|0o755),
+                                   st_uid=0,st_nlink=1)
+        with patch.object(host_cli.os,"geteuid",return_value=0),patch.dict(
+                host_cli.os.environ,{"SUDO_USER":"test-operator"}),patch.object(
+                host_cli.Path,"lstat",fs_info),patch.object(
+                host_cli.subprocess,"run",return_value=SimpleNamespace(returncode=0)) as launch:
+            rc=host_cli.main(["task","recover","inspect",task_id])
+        self.assertEqual(rc,0)
+        argv=launch.call_args[0][0]
+        self.assertEqual(argv[:4],["runuser","-u","boxweave","--"])
+        self.assertIn("gateway_tasks.py",argv[7])
+        self.assertEqual(argv[-2:],["--reviewer","test-operator"])
+        self.assertEqual(launch.call_args.kwargs["timeout"],30)
+
+
 if __name__ == "__main__":
     unittest.main()

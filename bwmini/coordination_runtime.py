@@ -130,9 +130,11 @@ def private_connection(path):
             present = {r[0] for r in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}
             base = {"coordination_operations", "coordination_resources", "coordination_version"}
-            # An additive lease table appears only after explicit reviewed
-            # coordinator provisioning. Neither schema accepts app secrets.
-            if present and present not in (base, base | {"coordination_leases"}):
+            # Only reviewed additive schema generations; a partial or
+            # unexpected table set fails closed, never silently reinitializes.
+            leased = base | {"coordination_leases"}
+            recovered = leased | {"coordination_recovery_reviews", "coordination_recovery_audit"}
+            if present and present not in (base, leased, recovered):
                 raise CoordinationFault("COORDINATION_SCHEMA_UNSUPPORTED")
             if present:
                 row = connection.execute(

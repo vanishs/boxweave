@@ -905,11 +905,15 @@ def main(argv=None):
                   file=sys.stderr)
             return 2
     if argv and argv[0] == "task":
-        if argv[1:] != ["provision"]:
-            print("Usage: sudo boxweave task provision", file=sys.stderr)
+        task_args=argv[1:]
+        recovery=bool(len(task_args)>1 and task_args[0]=="recover"
+                      and task_args[1] in ("inspect","release","audit"))
+        if task_args != ["provision"] and not recovery:
+            print("Usage: sudo boxweave task provision | recover inspect|release|audit OPERATION_ID",
+                  file=sys.stderr)
             return 2
         if os.geteuid() != 0:
-            print("Task provisioning requires administrator approval: sudo boxweave task provision",
+            print("Task recovery and provisioning require sudo administrator approval",
                   file=sys.stderr)
             return 2
         # The root CLI runs only the explicitly reviewed root-owned helper
@@ -924,9 +928,15 @@ def main(argv=None):
             if (not stat.S_ISREG(meta.st_mode) or meta.st_uid!=0
                     or meta.st_mode&0o022 or meta.st_nlink!=1):
                 raise ValueError("TASK_HELPER_UNTRUSTED")
+            reviewer=os.environ.get("SUDO_USER") or "root"
+            if recovery and (not isinstance(reviewer,str) or
+                    not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.@-]{0,63}",reviewer)):
+                raise ValueError("RECOVERY_REVIEWER_INVALID")
+            args=(["provision"] if not recovery else
+                  ["recover",*task_args[1:],"--reviewer",reviewer])
             return subprocess.run(
                 ["runuser", "-u", "boxweave", "--", "/usr/bin/python3",
-                 "-E", "-s", str(helper), "provision"],
+                 "-E", "-s", str(helper), *args],
                 check=False, timeout=30).returncode
         except (OSError, ValueError, subprocess.TimeoutExpired):
             print(json.dumps({"state":"unavailable","code":"TASK_PROVISION_UNAVAILABLE"}),
