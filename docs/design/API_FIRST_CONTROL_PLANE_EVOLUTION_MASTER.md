@@ -13,7 +13,7 @@
 
 This is the parent of three future-looking design records:
 
-1. [Grouped hybrid migration and feature-parity plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) — implemented REST, remaining REST candidates, retained MCP, 1–5 complexity and P0/P1/P2 priorities.
+1. [Grouped hybrid migration and feature-parity plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md) — implemented REST, remaining REST candidates, retained MCP, 1–5 complexity and P0/P1/P2 priorities. Its child [29-tool implementation research](REST_MCP_29_TOOL_MIGRATION_IMPLEMENTATION.md) treats the eight P1 + 21 P2 REST candidates as one source-only development program, including the distinct Agent Gateway outbound path; it is not an accepted release or an authorization to enable R-04.
 2. [Unified operation trace and diagnostics](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) — D1–D4 evolution, request/operation correlation, uncertainty, privacy and live acceptance.
 3. [Candidate ADR-010](ADR/0010-api-first-control-plane-candidate.md) — decision alternatives, reasoning and explicit open gates.
 
