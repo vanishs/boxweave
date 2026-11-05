@@ -1,5 +1,7 @@
 # REST + MCP hybrid control-plane evolution — long-term architecture master
 
+> **2026-11-05 owner update: ABANDON the proposed 29-tool bulk MCP-to-REST implementation**, not the long-term REST+MCP hybrid model. [PR #77](https://github.com/vanishs/boxweave/pull/77) is closed unmerged. Treat the 29-tool implementation study as archived, keep MCP by default for those specialist interfaces and retain existing seven app REST lifecycle methods; any future targeted REST change needs separate evidence and authorization.
+
 > **Status: OWNER-SELECTED LONG-TERM COEXISTENCE DIRECTION / FEATURE-BY-FEATURE IMPLEMENTATION ACCEPTANCE PENDING.** The owner selected Option A and coequal ADR-003/ADR-010 on 2026-11-03; this is not acceptance of universal mediation, an automatic migration or a host/release change.
 > Recorded: 2026-11-03. BoxWeave source baseline: `main` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3` (`VERSION=0.42.11`). Containarium source inspected: `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The installer used Containarium `v0.120.1` **at this historical v0.42.11 analysis baseline**; v0.44.7 requires Containarium >= v0.128.0 and has no automatic maximum-version ceiling. Never assume upstream-main APIs are deployed.
 >
