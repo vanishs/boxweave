@@ -1,5 +1,6 @@
 """Adversarial regressions for safe reacceptance inventory and proof engine."""
 import json
+import zipfile
 from pathlib import Path
 import socket
 import sys
@@ -11,6 +12,7 @@ from unittest.mock import patch
 from bwmini import reacceptance as r
 from bwmini import reacceptance_live as live
 from bwmini import reacceptance_proof as proof
+from bwmini import distribution as dist
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,8 +22,29 @@ def original(reply="pass", *, exit_code=0):
     return {"execution": "completed", "exit_code": exit_code, "stdout": reply}
 
 
+def valid_candidate_fixture(path, source_sha="a"*40):
+    files = {"bwmini/__main__.py": b"fixture",
+             "bwmini/deploy_check.py": b"fixture",
+             "bwmini/reacceptance.py": b"fixture",
+             "bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json": b"{}",
+             "bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md": b"fixture",
+             "requirements.lock": b"",
+             "VERSION": b"0.47.0\n",
+             "web/dist/index.html": b"<html/>"}
+    manifest = {"format": 1, "version": "0.47.0",
+                "platform": dist.PLATFORM,
+                "source": {"commit": source_sha, "state": "clean"},
+                "files": {k: r.digest(v) for k, v in files.items()}}
+    with zipfile.ZipFile(path, "w") as z:
+        for name, raw in files.items():
+            z.writestr(name, raw)
+        z.writestr("manifest.json", json.dumps(manifest).encode())
+    return path
+
+
 def one_action(root, key, classification="read_only"):
-    inv = {"schema_version": 1, "source_sha": "a" * 40, "upstream": {},
+    inv = {"schema_version": 1, "source_sha": "a" * 40,
+           "source_state": "clean", "upstream": {},
            "missing_runtime_contexts": ["authenticated_http_mcp"],
            "actions": [{"key": key, "surface": key.split(":")[0],
                         "name": key.split(":")[1], "features": ["X01"],
@@ -89,6 +112,43 @@ class InventoryTests(unittest.TestCase):
         self.assertTrue(all(i["status"] == "NOT_RUN" for i in x["actions"]))
         self.assertIn("stdio_mcp", x["missing_runtime_contexts"])
         self.assertTrue(all(row["features"] != [] for row in x["actions"]))
+
+    def test_bootstrap_readonly_is_not_fake_full_acceptance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            d = Path(temp) / "run"
+            result = r.bootstrap_readonly(ROOT, d)
+            self.assertEqual(result["named_features"], 49)
+            self.assertEqual(result["attempts"], 0)
+            self.assertEqual(result["counts"]["PASS"], 0)
+            self.assertEqual(result["status"], "UNSEALED_REQUIRE_INDEPENDENT_CASES")
+            self.assertFalse((d / "sealed.json").exists())
+            with self.assertRaisesRegex(r.AcceptanceFault, "RUN_EXISTS"):
+                r.bootstrap_readonly(ROOT, d)
+
+    def test_dirty_worktree_does_not_claim_immutable_source(self):
+        # The local development copy has uncommitted code; a pure checkout in
+        # GitHub CI may be clean. Both must be visibly distinguished.
+        status = r.source_worktree_state(ROOT)
+        self.assertIn(status, ("clean", "modified"))
+        with tempfile.TemporaryDirectory() as temp:
+            self.assertEqual(r.source_worktree_state(temp), "unverified")
+
+    def test_candidate_dirty_source_evidence_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp)
+            d = one_action(p / "run", "host_cli:version")
+            manifest = json.loads((d / "run.json").read_text())
+            inv = json.loads((d / "inventory.json").read_text())
+            inv["source_state"] = "modified"
+            manifest["source_state"] = "modified"
+            (d / "inventory.json").write_text(json.dumps(inv))
+            (d / "run.json").write_text(json.dumps(manifest))
+            package = p / "candidate.zip"
+            package.write_bytes(b"fixture")
+            required = p / "required.json"
+            required.write_text('{"required_actions":["host_cli:version"]}')
+            with self.assertRaisesRegex(r.AcceptanceFault, "WORKTREE_NOT_CLEAN"):
+                r.candidate_manifest(package, "a"*40, required, d)
 
     def test_invalid_source_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -237,9 +297,16 @@ class SpecializedIntegrationTests(unittest.TestCase):
             p = Path(temp)
             d = one_action(p / "run", "host_cli:version")
             package = p / "candidate.zip"
-            package.write_bytes(b"candidate is an intentionally minimal fixture")
+            valid_candidate_fixture(package)
             inv = p / "required.json"
-            inv.write_text('{"required_actions":[]}')
+            inv.write_text('{"required_actions":["host_cli:version"]}')
+            for category, value, exit_code in (
+                ("positive", "pass", 0), ("invalid", "invalid", 2),
+                ("denial", "denied", 2)):
+                r.record_attempt(d, "host_cli:version", category,
+                    original(value, exit_code=exit_code),
+                    expected={"exit_code": exit_code, "contains": value},
+                    observer={"source": "actual_host_response"})
             candidate = r.candidate_manifest(package, "a" * 40, inv, d)
             f = p / "candidate.json"
             f.write_text(json.dumps(candidate))
@@ -248,6 +315,65 @@ class SpecializedIntegrationTests(unittest.TestCase):
             package.write_bytes(b"tampered")
             with self.assertRaisesRegex(r.AcceptanceFault, "BYTES_CHANGED"):
                 r.verify_candidate(f, package)
+
+    def test_candidate_attestation_requires_actual_packaged_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp)
+            d = one_action(p / "run", "host_cli:version")
+            for category, message, exit_code in (
+                ("positive", "pass", 0), ("invalid", "invalid", 2),
+                ("denial", "denied", 2)):
+                r.record_attempt(d, "host_cli:version", category,
+                                 original(message, exit_code=exit_code),
+                                 expected={"exit_code": exit_code, "contains": message},
+                                 observer={"source": "test_host"})
+            inv = p / "required.json"
+            inv.write_text('{"required_actions":["host_cli:version"]}')
+            pkg = valid_candidate_fixture(p / "package.zip", source_sha="b"*40)
+            with self.assertRaisesRegex(r.AcceptanceFault, "SOURCE_OR_BUNDLED_REGISTRY"):
+                r.candidate_manifest(pkg, "a"*40, inv, d)
+            pkg.write_bytes(b"not a real zip")
+            with self.assertRaisesRegex(r.AcceptanceFault, "PACKAGE_CONTENT_INVALID"):
+                r.candidate_manifest(pkg, "a"*40, inv, d)
+
+    def test_candidate_empty_required_gate_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp)
+            d = one_action(p / "run", "host_cli:version")
+            package = p / "candidate.zip"
+            package.write_bytes(b"fixture")
+            inv = p / "required.json"
+            inv.write_text('{"required_actions":[]}')
+            with self.assertRaisesRegex(r.AcceptanceFault, "REQUIRED_GATES_EMPTY"):
+                r.candidate_manifest(package, "a"*40, inv, d)
+
+    def test_candidate_evidence_source_mismatch_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp)
+            d = one_action(p / "run", "host_cli:version")
+            package = p / "candidate.zip"
+            package.write_bytes(b"fixture")
+            inv = p / "required.json"
+            inv.write_text('{"required_actions":["host_cli:version"]}')
+            with self.assertRaisesRegex(r.AcceptanceFault, "EVIDENCE_SOURCE_MISMATCH"):
+                r.candidate_manifest(package, "b"*40, inv, d)
+
+    def test_installed_package_fallback_has_complete_registry_and_provenance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp)
+            (target / "bwmini/reacceptance_data").mkdir(parents=True)
+            for module in ("host_cli.py", "__main__.py", "web.py", "remote_mcp.py"):
+                (target / "bwmini" / module).write_bytes((ROOT / "bwmini" / module).read_bytes())
+            for name in ("REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md",
+                         "REACCEPTANCE_DEPENDENCIES.json"):
+                (target / "bwmini/reacceptance_data" / name).write_bytes(
+                    (ROOT / "docs/verification" / name).read_bytes())
+            (target / "manifest.json").write_text(json.dumps({
+                "source": {"commit": "a"*40, "state": "clean"}}))
+            catalog = r.catalogue(target)
+            self.assertEqual(catalog["source_sha"], "a"*40)
+            self.assertEqual(len(catalog["feature_catalogue"]), 49)
+            self.assertNotEqual(catalog["actions"][0]["features"], [])
 
     def test_compare_ingress_semantics_catches_error_translation(self):
         t = {"logical": "owned-box", "provider_uuid": "a" * 36,

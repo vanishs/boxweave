@@ -6,7 +6,7 @@ Phase 3 originally defined the tasks below. Phase 4 was authorized with its conc
 
 ## Proposed reacceptance execution engineering — RACC-AUTO-01..07 (2026-11-05)
 
-**State:** **DOCUMENTED ONLY / NOT IMPLEMENTED / NO PRODUCT RELEASE OR TEST RUN**. These work items are a proposal for future code development, not a statement of an existing background scheduler, BoxWeave MCP endpoint, CI release gate, safe test identity or extra owner-host permission. They are separate from the historical phase-4 TASK-001..TASK-014 iterations below. The user-facing command remains `Run full BoxWeave reacceptance`.
+**State (v0.47.0 source):** **PARTIALLY IMPLEMENTED, pending installed-release attestation**. The executable `bwmini.reacceptance` inventory/evidence engine, specialized `reacceptance_live` concurrency tool, optional `reacceptance_proof` host adapter and CI false-PASS/help drift gate implement scoped parts of the backlog. A general all-action automatic scheduler, test-Box allocation service, credential provisioning and enforced prepublication CI installed gate are **not shipped**. No new BoxWeave public MCP endpoint or owner-host privilege grant is implied. They are separate from the historical phase-4 TASK-001..TASK-014 iterations below. The user-facing command remains `Run full BoxWeave reacceptance`.
 
 **Authority and detailed developer handoff:** [reacceptance orchestration and adapters](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md); [pinned Containarium v0.128.0 documents and proven optional host capabilities](../verification/UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md); [canonical current manual Agent runbook](FULL_PROJECT_REACCEPTANCE.md); [test evidence schema and cases](../verification/REACCEPTANCE_RUN_TEMPLATE.md).
 

@@ -352,7 +352,11 @@ class OperationCoordinator:
         reviewer = self._reviewer(reviewer)
         with self._transaction() as db:
             value, fingerprint = self._snapshot(db, operation_id)
-            challenge = secrets.token_urlsafe(32)
+            # A base64url token may begin with '-', which argparse interprets
+            # as an option when an operator passes --challenge TOKEN. Prefix a
+            # safe alpha while retaining 248 unpredictable random bits and the
+            # existing 43-character confirmation contract.
+            challenge = "r" + secrets.token_urlsafe(31)
             expires = self.clock() + 300
             db.execute("INSERT OR REPLACE INTO coordination_recovery_reviews "
                        "VALUES(?,?,?,?,?)", (operation_id, reviewer,

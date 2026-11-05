@@ -192,12 +192,16 @@ def ast_host_leaves(source):
 def feature_catalogue(root):
     path = Path(root) / "docs/verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md"
     if not path.exists():
-        return {}
+        path = Path(root) / "bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md"
+    if not path.is_file():
+        raise AcceptanceFault("FEATURE_BASELINE_NOT_BUNDLED_OR_AVAILABLE")
     features = {}
     for line in path.read_text().splitlines():
         match = re.match(r"^\|\s*((?:F|X)\d{2})\s*\|\s*\*\*([^*]+)\*\*", line)
         if match:
             features[match.group(1)] = match.group(2)
+    if len(features) != 49 or not all(k in features for k in ("F01", "F39", "X01", "X10")):
+        raise AcceptanceFault("FEATURE_BASELINE_INCOMPLETE_OR_DRIFTED")
     return features
 
 
@@ -259,12 +263,65 @@ def repo_source(root):
         sha = s.stdout.strip() if s.returncode == 0 else "unknown"
     except OSError:
         sha = "unknown"
+    # Distribution ZIP includes a signed-source-bound package manifest but no .git.
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        manifest = root / "manifest.json"
+        if manifest.is_file():
+            try:
+                packaged = load(manifest)
+                declared = packaged.get("source", {})
+                if (isinstance(declared, dict) and
+                        re.fullmatch(r"[0-9a-f]{40}", str(declared.get("commit", "")))):
+                    sha = declared["commit"]
+            except (OSError, ValueError, TypeError):
+                pass
     return sha, source
+
+
+
+def source_worktree_state(root):
+    """Do not present dirty source code as exact Git HEAD or package bytes."""
+    root = Path(root)
+    manifest_path = root / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = load(manifest_path)
+            files = manifest.get("files")
+            version = manifest.get("source", {}).get("state")
+            critical = ("bwmini/reacceptance.py", "bwmini/host_cli.py",
+                        "bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json",
+                        "bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md")
+            if (version == "clean" and isinstance(files, dict) and
+                    all(name in files and (root / name).is_file()
+                        and digest((root / name).read_bytes()) == files[name]
+                        for name in critical)):
+                return "clean"
+            return "modified_or_unverified_package"
+        except (OSError, KeyError, ValueError, TypeError):
+            return "modified_or_unverified_package"
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain=v1",
+             "--untracked-files=normal"],
+            capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return "unverified"
+        return "clean" if not result.stdout.strip() else "modified"
+    except OSError:
+        return "unverified"
+
 
 
 def load_dependencies(root):
     path = Path(root) / "docs/verification/REACCEPTANCE_DEPENDENCIES.json"
-    return load(path) if path.exists() else {"schema_version": 1, "rules": []}
+    if not path.exists():
+        path = Path(root) / "bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json"
+    if not path.is_file():
+        raise AcceptanceFault("REACCEPTANCE_DEPENDENCIES_NOT_BUNDLED_OR_AVAILABLE")
+    x = load(path)
+    if x.get("schema_version") != 1 or not isinstance(x.get("rules"), list) or not x["rules"]:
+        raise AcceptanceFault("REACCEPTANCE_DEPENDENCIES_INVALID")
+    return x
 
 
 def features_for(action, rules):
@@ -384,6 +441,7 @@ def catalogue(root, *, host_command=None, mcp_command=None, upstream=None,
         current = {x["key"] for x in actions}
         delta = {"added": sorted(current - past), "removed": sorted(past - current)}
     return {"schema_version": SCHEMA, "created_utc": now(), "source_sha": source_sha,
+            "source_state": source_worktree_state(root),
             "source": source, "runtime": runtime, "upstream": upstream_info,
             "feature_catalogue": feature_catalogue(root),
             "impacted_features": impacted(changed or [], rules), "delta": delta,
@@ -421,6 +479,7 @@ def new_run(directory, inventory):
         "schema_version": SCHEMA, "started_utc": now(),
         "run_id": "racc-" + secrets.token_hex(8),
         "source_sha": inventory["source_sha"],
+        "source_state": inventory.get("source_state", "unverified"),
         "upstream_sha": inventory["upstream"].get("sha", "unverified"),
         "role": "single_agent_until_separately_verified",
         "authorization": "read_only_default",
@@ -612,7 +671,8 @@ def verify_run(directory):
     run = load(directory / "run.json")
     if inv.get("schema_version") != SCHEMA or run.get("schema_version") != SCHEMA:
         raise AcceptanceFault("UNKNOWN_EVIDENCE_SCHEMA")
-    if inv.get("source_sha") != run.get("source_sha"):
+    if (inv.get("source_sha") != run.get("source_sha")
+            or inv.get("source_state", "unverified") != run.get("source_state", "unverified")):
         raise AcceptanceFault("EVIDENCE_SOURCE_CHANGED")
     actions = {r["key"]: r for r in inv["actions"]}
     case_refs = {}
@@ -635,7 +695,8 @@ def verify_run(directory):
     if not verdicts:
         counts["EMPTY_CATALOG"] = 1
     return {"schema_version": SCHEMA, "run_id": run["run_id"],
-            "source_sha": run["source_sha"], "counts": counts,
+            "source_sha": run["source_sha"],
+            "source_state": run.get("source_state", "unverified"), "counts": counts,
             "verdicts": verdicts, "findings": findings,
             "verification_mode": "same_agent_until_separately_verified",
             "machine_proven": "source/runtime per-action evidence only; not full system acceptance"}
@@ -675,6 +736,7 @@ def report_markdown(verdict, feature_catalogue=None):
     lines = ["# BoxWeave reacceptance machine evidence report", "",
              "**Run:** " + verdict["run_id"], "**Source:** " + verdict["source_sha"],
              "**Verification:** " + verdict["verification_mode"],
+             "**Source state:** " + verdict.get("source_state", "unverified"),
              "", "This is a **per-action evidence record**, not whole-project PASS.",
              "A zero-failure source test and a catalog alone do not prove installed effects.",
              "", "## Exact counts", "",
@@ -759,6 +821,29 @@ def verify_seal(directory):
 
 
 
+def bootstrap_readonly(root, out, *, host_command=None, mcp_command=None,
+                       upstream=None, previous=None, changed=None):
+    """One bounded discovery + safe-call handoff; intentionally not sealed.
+
+    Agents must add genuinely independent negative/positive/mutation evidence
+    after bootstrap and only then seal. UNKNOWN never triggers a retry.
+    """
+    manifest = catalogue(root, host_command=host_command,
+                         mcp_command=mcp_command, upstream=upstream,
+                         previous=previous, changed=changed)
+    directory = new_run(out, manifest)
+    attempts = safe_capture(directory, host_command, mcp_command)
+    state = verify_run(directory)
+    return {"run": str(directory), "source_sha": manifest["source_sha"],
+            "discovered": len(manifest["actions"]),
+            "named_features": len(manifest["feature_catalogue"]),
+            "attempts": len(attempts), "counts": state["counts"],
+            "missing_runtime_contexts": manifest["missing_runtime_contexts"],
+            "status": "UNSEALED_REQUIRE_INDEPENDENT_CASES",
+            "next": "record real additional cases, then inspect/seal/verify/report"}
+
+
+
 def argv_file(path, mode):
     data = load(path)
     if not isinstance(data, list) or not data or not all(
@@ -834,12 +919,35 @@ def candidate_manifest(package, source_sha, inventory, proof):
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         raise AcceptanceFault("CANDIDATE_SOURCE_INVALID")
     verdict = verify_run(proof)
+    if verdict["source_sha"] != source_sha:
+        raise AcceptanceFault("CANDIDATE_EVIDENCE_SOURCE_MISMATCH")
+    if verdict.get("source_state") != "clean":
+        raise AcceptanceFault("CANDIDATE_EVIDENCE_WORKTREE_NOT_CLEAN")
     required = load(inventory).get("required_actions", [])
+    if not isinstance(required, list) or not required or any(
+            not isinstance(name, str) or not name for name in required):
+        raise AcceptanceFault("CANDIDATE_REQUIRED_GATES_EMPTY_OR_INVALID")
     by_action = {x["key"]: x for x in verdict["verdicts"]}
     for action in required:
         if action not in by_action or by_action[action]["status"] != "PASS":
             raise AcceptanceFault("CANDIDATE_REQUIRED_ACTION_NOT_VERIFIED_" + action)
-    return {"schema_version": SCHEMA, "package_sha256": digest(package.read_bytes()),
+    # A caller-supplied SHA or matching filename is not evidence that the
+    # archive actually contains the tested source. Verify full package member
+    # digests and the package's own pinned source state before attesting.
+    from . import distribution
+    try:
+        package_hash = digest(package.read_bytes())
+        manifest = distribution.verify(package, package_hash)
+    except (distribution.InstallError, OSError, ValueError, KeyError, TypeError,
+            __import__("zipfile").BadZipFile) as exc:
+        raise AcceptanceFault("CANDIDATE_PACKAGE_CONTENT_INVALID") from exc
+    if (manifest["source"] != {"commit": source_sha, "state": "clean"}
+            or not {"bwmini/reacceptance.py",
+                    "bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json",
+                    "bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md"}
+               <= set(manifest["files"])):
+        raise AcceptanceFault("CANDIDATE_PACKAGE_SOURCE_OR_BUNDLED_REGISTRY_MISMATCH")
+    return {"schema_version": SCHEMA, "package_sha256": package_hash,
             "source_sha": source_sha, "verification_run_id": verdict["run_id"],
             "required_actions": required, "required_actions_passed": True,
             "isolation": "MUST_BE_CONFIRMED_BY_SEPARATE_TEST_RUN",
@@ -926,6 +1034,15 @@ def main(argv=None):
     inv.add_argument("--previous")
     inv.add_argument("--changed", action="append", default=[])
     inv.add_argument("--out", required=True)
+    auto = sub.add_parser("bootstrap-readonly",
+                          help="One-step runtime discovery plus allowlisted read-only handoff")
+    auto.add_argument("--root", default=".")
+    auto.add_argument("--host-argv-json")
+    auto.add_argument("--mcp-argv-json")
+    auto.add_argument("--upstream-tree")
+    auto.add_argument("--previous")
+    auto.add_argument("--changed", action="append", default=[])
+    auto.add_argument("--out", required=True)
     begin = sub.add_parser("begin", help="Initialize immutable private run from inventory")
     begin.add_argument("--inventory", required=True)
     begin.add_argument("--out", required=True)
@@ -971,6 +1088,12 @@ def main(argv=None):
             print_json({"written": str(out), "actions": len(value["actions"]),
                         "runtime_contexts_missing": value["missing_runtime_contexts"],
                         "diff": value["delta"]})
+        elif args.command == "bootstrap-readonly":
+            print_json(bootstrap_readonly(
+                args.root, args.out,
+                host_command=argv_file(args.host_argv_json, "host") if args.host_argv_json else None,
+                mcp_command=argv_file(args.mcp_argv_json, "mcp") if args.mcp_argv_json else None,
+                upstream=args.upstream_tree, previous=args.previous, changed=args.changed))
         elif args.command == "begin":
             target = new_run(args.out, load(args.inventory))
             print_json({"run": str(target), "state": "inventory_pinned_NO_PASS"})

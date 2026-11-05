@@ -117,6 +117,9 @@ jobs:
           assert not any(a['status'] == 'PASS' for a in inv['actions']), "Discovery is not acceptance"
           print(f'Reacceptance discovery reviewed: {len(inv["actions"])} source actions; no catalog-only PASS')
           PY_RACC_SURFACE
+          python -m bwmini.reacceptance bootstrap-readonly --root . --out .runtime/reacceptance-ci/read-only-run
+          python -m bwmini.reacceptance seal --run .runtime/reacceptance-ci/read-only-run
+          python -m bwmini.reacceptance verify --run .runtime/reacceptance-ci/read-only-run
 
       - name: Python unit and contract tests (fixtures only)
         run: python -m unittest discover -s tests -v
@@ -180,6 +183,13 @@ jobs:
               for name in sorted(modules):
                   assert hashlib.sha256(archive.read(name)).hexdigest() == manifest['files'][name], f'Digest mismatch: {name}'
               assert {'bwmini/remote_auth.py', 'bwmini/remote_mcp.py'} <= members
+              for name in ('REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md',
+                           'REACCEPTANCE_DEPENDENCIES.json'):
+                  bundled = 'bwmini/reacceptance_data/' + name
+                  expected = Path('docs/verification') / name
+                  assert bundled in members, f'Missing installed feature registry: {bundled}'
+                  assert archive.read(bundled) == expected.read_bytes(), f'Drift in bundled registry: {name}'
+
           print(f'Package contains {len(modules)} verified Python modules')
           PY_PACKAGED_MODULES
       - uses: actions/setup-python@v5

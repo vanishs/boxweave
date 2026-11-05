@@ -180,6 +180,17 @@ class RecoveryOperatorGatewayTests(unittest.TestCase):
         self.assertEqual(notfound["state"],"unverified")
         self.assertFalse(notfound["exact_original_task"])
 
+    def test_recovery_review_challenge_is_always_separate_argv_safe(self):
+        from unittest.mock import patch
+        # Force an RNG token that begins with a '-' option prefix. The
+        # generated challenge must remain safe as --challenge TOKEN (not just
+        # --challenge=TOKEN), preserving 43 characters and the stored digest.
+        with patch("bwmini.operation_coordination.secrets.token_urlsafe",
+                   return_value="-" * 42):
+            review = self.claims.recovery_review(self.op, "test-admin")
+        self.assertEqual(review["challenge"], "r" + "-" * 42)
+        self.assertRegex(review["challenge"], r"^r[A-Za-z0-9_-]{42}$")
+
     def test_operator_cli_inspect_release_and_audit_with_exact_confirmation(self):
         import io,json
         from contextlib import redirect_stdout,redirect_stderr

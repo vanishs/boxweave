@@ -52,6 +52,16 @@ def build(root,wheels,output,commit,source_state):
  for p in public:
   if p.is_file():
    require(not p.is_symlink(),'SYMLINK_SOURCE');files[p.relative_to(root).as_posix()]=p.read_bytes()
+ # Ship the exact reviewed acceptance baseline/contract with the installed app.
+ # These files are static data; never interpreted as test commands or policy.
+ if (root/'bwmini/reacceptance.py').exists():
+  for source, bundled in (
+    ('docs/verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md',
+     'bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md'),
+    ('docs/verification/REACCEPTANCE_DEPENDENCIES.json',
+     'bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json'),
+  ):
+   files[bundled]=regular(root/source)
  for n in ('requirements.lock','VERSION'):files[n]=regular(root/n)
  for p in Path(wheels).glob('*.whl'):files['wheels/'+p.name]=regular(p)
  require(bool([x for x in files if x.startswith('wheels/')]),'OFFLINE_WHEELS_REQUIRED')

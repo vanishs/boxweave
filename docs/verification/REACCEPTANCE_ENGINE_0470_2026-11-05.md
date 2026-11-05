@@ -18,6 +18,20 @@
 
 **No new public HTTP endpoint, generic privileged MCP tool, credentials or production scheduler** was added. Operator still chooses the test Box and Agent roles. The canonical one-sentence trigger is the orchestration contract; the tools are callable primitives that make it more reliable, not a replacement for Finder/Fixer/Verifier.
 
+### Packaged registry and one-call Agent bootstrap
+
+The **production release ZIP now bundles** the pinned 49-feature acceptance baseline and source-to-feature dependency rules under `bwmini/reacceptance_data/`. When the runner operates from the installed application tree without a Git checkout, it reads these embedded reference bytes and derives the source SHA from the immutable ZIP `manifest.json`. Missing/invalid embedded data **fails closed**, rather than silently producing a zero-feature report. Git working trees record `clean` versus `modified`; installed packages verify the critical bundled source/data digests against `manifest.json`. Dirty or unverified worktrees cannot issue a candidate attestation.
+
+For a newly assigned Agent, the safe first call can be a single *read-only* bootstrap:
+
+```bash
+python -m bwmini.reacceptance bootstrap-readonly --root /pinned/source-or-installed/tree   --host-argv-json /private/host.json --mcp-argv-json /private/mcp.json   --out /private/new-reacceptance-run
+```
+
+This performs discovery and the allowlisted actual read-only probes, records immutable original attempts, and leaves the run **unsealed for Finder/Verifier** to import real mutation/negative tests. It never treats bootstrap as full reacceptance; call `record`, `inspect`, `seal`, `verify`, and `report` after the subsequent cases. Existing BoxWeave MCP `connect(exec)` in a test Box is the authorized invocation channel; there is no new generic root execution endpoint.
+
+The candidate attestation now **requires at least one explicitly named required action whose original proof is PASS at the same source SHA**; empty required-action lists and source mismatches fail closed. This attestation still proves only bytes and recorded per-action evidence, not independent installed candidate acceptance unless the separate Verifier has actually performed it.
+
 ## 2. Safe inventory and metadata collection
 
 Run as the **test Box non-root user** from a clean, pinned BoxWeave source checkout (or as the application user within an installed v0.47.0 environment). The script wrapper is included for source checkout convenience; the release package ships the Python modules.
@@ -147,6 +161,10 @@ python -m bwmini.reacceptance candidate-verify \
 This verifies a source-bound byte comparison and required action results. **It cannot by itself claim an installed candidate or independent verifier**: those are separate human/Agent evidence gates and are reported as such. The main CI publishes on a successful main push; retain the existing release workflow, and stage isolated premerge package acceptance before advancing main. Keep `PUBLISHED_RELEASE` unchanged unless the owner separately orders promotion. Never infer release success from a local package check.
 
 ## 5. Built-in adversarial controls and status handling
+
+**Additional defect exposed by the complete source-suite run:** the R-04 UNKNOWN-recovery CLI occasionally rejected a legitimate one-use challenge because upstream-style base64url may begin with `-` and be parsed as an option after `--challenge`. v0.47.0 candidate now prefixes the 43-character challenge with `r` (248 random bits remain) and adds a deterministic regression forcing the RNG to return a leading-dash token. This does **not** force-release a task, change UNKNOWN semantics or replay a remote operation. Verify the final full suite and installed CLI separately before marking the release PASS.
+
+
 
 `python -m bwmini.reacceptance self-test` intentionally tries to pass forged success, modified original log, missing observer, incomplete positive/invalid/denial triad and unverified mutation. **All five must be rejected (status DETECTED)** before trusted report generation. The CI checks this and verifies source/top-level help discovery. Per-action results are never inferred from the number of listed MCP tools. The complete 49-feature report includes each historical function even when its present action evidence is missing; an individual action PASS is not automatically a whole-feature PASS.
 
