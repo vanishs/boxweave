@@ -30,6 +30,21 @@ Record each gate as `PASS / FAIL / PARTIAL / BLOCKED / NOT_RUN`, with artifact/c
 | Closure integrity | Fixed subfinding vs still unexplained original symptom; upstream attribution evidence; deferred and orphaned issues | ... |
 
 
+### Upstream pinned contract and invocation manifest
+
+For every BoxWeave reacceptance, read the [pinned Containarium evidence guide](UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md) and [execution orchestration development plan](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md) and fill in:
+
+| Field | Required observed record |
+| --- | --- |
+| Installed upstream daemon, CLI, MCP and REST identities | Per running process version and source/tag; if not available use U, not current `main` |
+| Declared and runtime routes | Pinned proto RPC and HTTP annotations, native handler, forwarded MCP, actual HTTP response and BoxWeave adapter; unsupported distinguished from missing |
+| Upstream changed paths | Compared installed version and previous upstream version, source paths, affected F/X features and exact test cases |
+| Invocation channel and actor | Outer MCP vs nested installed stdio/SSH vs HTTP/OAuth vs Web vs native Provider host/CLI; access/permission gate |
+| DOCMAP-style dependency | Document or claim, source paths/commit last checked, actual implementing interface, status, evidence and next recheck |
+| Upstream-document confidence | Source-only, verified actual host command, isolated operation, or historical/possibly stale; pinned URL for each imported claim |
+
+**No pass-through trust:** a native proto annotation or upstream design note can choose an adversarial test, but never independently proves the installed route. A BoxWeave MCP 404 proves a problem at that entrypoint, not automatic upstream fault ownership. The reference guide's root-level Proof Pack commands must not be invoked without the exact nested Provider host grant and a reviewed declaration.
+
 ## 2. Dynamic surface inventory (mandatory)
 
 Produce a complete row per **MCP tool and CLI leaf in each actual installed policy/transport** from each available client context, or a detailed machine-generated manifest with a human-readable checked-in summary and immutable digest. A top-level help page or the outer ChatGPT MCP tool list is not a complete installed inventory. Record the discovered total and the unable-to-discover contexts. No hardcoded claim of a fixed MCP tool or Web route count.
@@ -112,6 +127,23 @@ Use the [consolidated prior-scheme functional baseline](REACCEPTANCE_FUNCTIONAL_
 Each row must include whether scheduling was **deterministic (observed barrier)** or **timing-only**. At least one test per changed stateful boundary must show in-flight contention plus subsequent recovery. Where protected host/policy credentials are not authorized, mark exact BLOCKED instead of faking a race. This matrix extends, never substitutes for, individual action triads.
 
 
+### Independent proof and capability-claim annex
+
+Each report must explicitly state **what produced the evidence**, not only who described it.
+
+| Proof / claim dimension | Record and permitted outcome |
+| --- | --- |
+| Case recording mode | Same-Agent CLI capture, independently executed test runner, upstream generated pack, or separately sealed/verified pack (with exact producer Box) |
+| Upstream Proof Pack availability | Not requested, host command missing, blocked (guest-root/declaration/ownership), generated, or sealed and verified; use exact command, Box UUID and manifest digest |
+| Review of declared test commands | Exact pinned child repo commit, `.github/containarium.yml` or fallback `Makefile`, script/side-effect review, permission decision and sensitive-log control |
+| Proof Pack contents when generated | Actual tool exit, per-step exit, duration, log hash/truncation, declaration SHA, source commit and artifact digest; verify seal separately if present |
+| Additional black-box oracle | Actual MCP/CLI/Web request, original exit/protocol outcome, independently read Provider/guest state, denied side-effect count and cleanup; proof pack alone **never grants this** |
+| Claim state | Implemented, opt-in, scoped, design-only, unsupported, unverified; separate this from PASS/FAIL/PARTIAL of a tested behavior |
+| Harness calibration | Deliberately false proof/claim/output must be rejected; case ID, verdict and impact of a missed negative control |
+| Source/claim drift | Whether an upstream claim is outdated vs pinned code; preserve evidence instead of silently adopting its status |
+
+Do **not** confuse upstream `containariumd proof-pack generate` (host-side root-in-child command execution) with remote `containarium` CLI or a BoxWeave MCP tool. There is currently no automatic BoxWeave Proof Pack adapter. If unavailable, use a properly scoped BoxWeave-owned non-root recorder or mark the evidence boundary PARTIAL/BLOCKED.
+
 ## 3. Scenario evidence (black-box-first)
 
 For **every safely runnable discovered MCP tool and CLI leaf**, the required adversarial dimensions are **positive + meaningful authorization/identity denial + malformed/boundary input**, or exact per-action unavailable/unsupported reasoning; combine the entries into risk-weighted scenarios from earlier acceptance schemes. Real authenticated Web positive tests are not replaced by fixtures or a 401. Test-owned mutation requires original identity and independent readback.
@@ -169,6 +201,19 @@ Fix commit / candidate installed artifact / original-repro verification result:
 | 7. Policy and exclusions | Stable pointer unchanged; owner-host/UNKNOWN/network exemptions and release exception, if any | ... |
 
 If a final merge commit modifies the source identity, do not silently treat a previously verified candidate as identical: verify payload equivalence or rerun the affected installed gates. A missing prepublication installed candidate route is a declared gate BLOCKER, not a reason to publish first and call postpublication testing prepublication evidence.
+
+
+### Upstream-difference and execution-mechanism gate summary
+
+| Area | Required explicit statement |
+| --- | --- |
+| Upstream pinned version and delta | Exact last/current tag+SHA; paths changed and cases newly selected |
+| Proof Pack | NOT_USED/BLOCKED/GENERATED/SEALED_VERIFIED and why; cannot substitute for per-action external oracle |
+| Full entrypoints | Enumerate installed native/forwarded MCP, CLI, Web/REST by actual auth/policy; distinguish only-discovered |
+| Runtime automation | Document-only/manual / installed runner with tested version / unavailable — never imply implementation |
+| Attested release | Privately verified candidate before publish if supported; postpublish asset signatures/checksums and installed official smoke separately |
+| Documentation confidence | Claim-state and source dependency references; outdated upstream docs noted as unresolved, not authoritative |
+| Remaining handoff | Orphaned SUSPECT, native/upstream attribution unknown, exact next non-destructive test and permissions |
 
 
 ## 5. Final decision record
