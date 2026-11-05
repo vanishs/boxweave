@@ -99,10 +99,13 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/profiles.py`
 - `bwmini/provider.py`
 - `bwmini/provider_rest.py`
-- `bwmini/resource_size.py`
+- `bwmini/reacceptance.py`
+- `bwmini/reacceptance_live.py`
+- `bwmini/reacceptance_proof.py`
 - `bwmini/remote_auth.py`
 - `bwmini/remote_mcp.py`
 - `bwmini/remote_tls.py`
+- `bwmini/resource_size.py`
 - `bwmini/restore_guard.py`
 - `bwmini/selftest.py`
 - `bwmini/service.py`
@@ -166,11 +169,12 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_operation_coordination.py`
 - `tests/test_operation_leases.py`
 - `tests/test_platform_minimums.py`
-- `tests/test_provider_minimum_versions.py`
 - `tests/test_portable_codex_merge.py`
 - `tests/test_profiles.py`
+- `tests/test_provider_minimum_versions.py`
 - `tests/test_provider_rest.py`
 - `tests/test_public_profiles.py`
+- `tests/test_reacceptance.py`
 - `tests/test_recovery.py`
 - `tests/test_release_metadata.py`
 - `tests/test_remote_mcp.py`
@@ -219,6 +223,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `scripts/model_browser_check.py`
 - `scripts/package_live_check.py`
 - `scripts/phase6_install_check.py`
+- `scripts/reacceptance.py`
 - `scripts/release_profiles_check.py`
 - `scripts/validate.py`
 - `scripts/windows_profile_check.py`

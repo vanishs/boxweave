@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "status": "machine-selection-input-not-an-acceptance-record",
+  "rules": [
+    {"action": "host_cli:*", "features": ["X01"], "source_globs": ["bwmini/host_cli.py", "bwmini/online.py", "bwmini/upstream_version.py"]},
+    {"action": "app_cli:*", "features": ["F04"], "source_globs": ["bwmini/__main__.py"]},
+    {"action": "web_api:*", "features": ["F18", "F19"], "source_globs": ["bwmini/web.py", "web/src/*"]},
+    {"action": "remote_api:*", "features": ["F22", "F23"], "source_globs": ["bwmini/remote_mcp.py", "bwmini/remote_auth.py"]},
+    {"action": "stdio_mcp:*", "features": ["F05"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/mcp_compat.py", "bwmini/provider.py", "bwmini/provider_rest.py"]},
+    {"action": "host_cli:selftest", "features": ["F10", "X02"], "source_globs": ["bwmini/selftest.py", "bwmini/host_cli.py"]},
+    {"action": "app_cli:selftest-*", "features": ["X02"], "source_globs": ["bwmini/selftest.py", "bwmini/__main__.py"]},
+    {"action": "stdio_mcp:compose_*", "features": ["X06"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/provider.py", "docs/verification/UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md"]},
+    {"action": "stdio_mcp:*container*", "features": ["F07", "F08", "F10"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/box_actions.py", "bwmini/nesting.py"]},
+    {"action": "stdio_mcp:*task*", "features": ["F29", "F30"], "source_globs": ["bwmini/gateway_tasks.py", "bwmini/coordination_runtime.py"]},
+    {"action": "stdio_mcp:*diagnos*", "features": ["F36", "F37"], "source_globs": ["bwmini/gate_diagnostics.py", "bwmini/diagnostic_probe.py"]},
+    {"action": "stdio_mcp:*backup*", "features": ["F39"], "source_globs": ["bwmini/restore_guard.py", "bwmini/mcp_gate.py"]},
+    {"action": "stdio_mcp:*restore*", "features": ["F39"], "source_globs": ["bwmini/restore_guard.py"]},
+    {"action": "host_cli:upstream", "features": ["F31"], "source_globs": ["bwmini/upstream_version.py"]},
+    {"action": "host_cli:http", "features": ["F22", "F23"], "source_globs": ["bwmini/http_manage.py"]},
+    {"action": "host_cli:task", "features": ["F29"], "source_globs": ["bwmini/host_cli.py", "bwmini/gateway_tasks.py"]},
+    {"action": "host_cli:job", "features": ["X09"], "source_globs": ["bwmini/jobs.py", "bwmini/host_cli.py"]},
+    {"action": "stdio_mcp:*project*", "features": ["F19", "F20"], "source_globs": ["bwmini/gate_diagnostics.py", "bwmini/web.py"]},
+    {"action": "stdio_mcp:*port*", "features": ["F12", "F13"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/access_provider.py"]},
+    {"action": "stdio_mcp:*sleep*", "features": ["F17"], "source_globs": ["bwmini/auto_sleep.py"]},
+    {"action": "stdio_mcp:*metrics*", "features": ["F16"], "source_globs": ["bwmini/box_reads.py"]},
+    {"action": "stdio_mcp:*logs*", "features": ["F37", "X09"], "source_globs": ["bwmini/box_debug.py", "bwmini/box_reads.py"]},
+    {"action": "stdio_mcp:*agent*", "features": ["X07"], "source_globs": ["bwmini/mcp_gate.py"]},
+    {"action": "stdio_mcp:*run*", "features": ["X09"], "source_globs": ["bwmini/gateway_tasks.py"]},
+    {"action": "stdio_mcp:*security*", "features": ["X08"], "source_globs": ["bwmini/mcp_gate.py"]},
+    {"action": "stdio_mcp:*gpu*", "features": ["X10"], "source_globs": ["bwmini/provider.py"]}
+  ]
+}
+

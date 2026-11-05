@@ -99,6 +99,25 @@ jobs:
           bash -n boxweave.sh
       - name: Install locked Python test dependencies
         run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Reacceptance proof-oracle self-test and CLI surface drift gate
+        run: |
+          python -m bwmini.reacceptance self-test
+          mkdir -p -m 700 .runtime/reacceptance-ci
+          echo '["python","-m","bwmini.host_cli"]' > .runtime/reacceptance-ci/host-argv.json
+          python -m bwmini.reacceptance inventory --root . --host-argv-json .runtime/reacceptance-ci/host-argv.json --out .runtime/reacceptance-ci/inventory.json
+          python - <<'PY_RACC_SURFACE'
+          import json
+          from pathlib import Path
+          inv = json.loads(Path('.runtime/reacceptance-ci/inventory.json').read_text())
+          source = set(inv['source']['host_cli'])
+          advertised = set(inv['runtime']['host_advertised'])
+          hidden = source - advertised
+          assert not hidden, f'Hidden callable top-level host command(s): {sorted(hidden)}'
+          assert len(inv['feature_catalogue']) == 49
+          assert not any(a['status'] == 'PASS' for a in inv['actions']), "Discovery is not acceptance"
+          print(f'Reacceptance discovery reviewed: {len(inv["actions"])} source actions; no catalog-only PASS')
+          PY_RACC_SURFACE
+
       - name: Python unit and contract tests (fixtures only)
         run: python -m unittest discover -s tests -v
       - name: Unified Python client generator grammar and first-line shebang
