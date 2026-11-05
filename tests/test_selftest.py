@@ -453,6 +453,47 @@ class JournalTests(unittest.TestCase):
                               journal=self.journal())
         self.assertEqual(result["state"], "passed")
 
+    def test_second_journal_start_is_atomically_refused(self):
+        """Two independent processes can share this SQLite journal.
+
+        The start operation itself must enforce exclusivity, not rely on
+        a prior unprotected SELECT in the caller.
+        """
+        first = self.journal()
+        first_id = first.start(self.plan, 1999.0)
+        second_plan, _ = selftest.build_plan(now="T")
+        with self.assertRaisesRegex(Fault, "SELFTEST_RUN_UNRECONCILED"):
+            self.journal().start(second_plan, 1999.0)
+        with self.store.db() as db:
+            rows = [dict(row) for row in db.execute(
+                "SELECT id,state,exact_test_box FROM selftest_runs")]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], first_id)
+        self.assertEqual(rows[0]["state"], "running")
+
+    def test_parallel_journal_starts_allow_exactly_one_writer(self):
+        """The SQLite BEGIN IMMEDIATE gate must serialize competing actors."""
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        barrier = Barrier(2, timeout=5)
+        def candidate():
+            plan, _ = selftest.build_plan(now="T")
+            barrier.wait(timeout=5)
+            try:
+                return ("accepted", self.journal().start(plan, 1999.0))
+            except Fault as error:
+                return ("refused", error.code)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(candidate) for _ in range(2)]
+            outcomes = [future.result(timeout=8) for future in futures]
+        self.assertEqual(sorted(kind for kind, _ in outcomes),
+                         ["accepted", "refused"])
+        self.assertEqual([code for kind, code in outcomes if kind == "refused"],
+                         ["SELFTEST_RUN_UNRECONCILED"])
+        with self.store.db() as db:
+            self.assertEqual(db.execute(
+                "SELECT count(*) FROM selftest_runs").fetchone()[0], 1)
+
     def test_double_resolve_is_refused(self):
         journal = self.journal()
         run_id = journal.start(self.plan, 1999.0)

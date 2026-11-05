@@ -279,22 +279,27 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `worker`
 <!-- inventory:app-cli:end -->
 
-### Host CLI command identifiers (8)
+### Host CLI command identifiers (13)
 
 <!-- inventory:host-cli:start -->
 - `box`
 - `client`
 - `doctor`
+- `http`
+- `job`
 - `provenance`
 - `report`
+- `selftest`
 - `setup`
 - `status`
+- `task`
+- `upstream`
 - `version`
 <!-- inventory:host-cli:end -->
 
-The direct `boxweave http` dispatcher is implemented as an early safe host
-command branch rather than an argparse `add_parser` entry; it delegates managed
-configuration and service control to the non-root application account.
+The early-dispatch host command families http, task, selftest, job and upstream
+remain routed through their original privileged handlers. Their argparse
+registrations provide help discovery only, never an alternate execution path.
 
 ### Local Web API routes (method and path) (56)
 

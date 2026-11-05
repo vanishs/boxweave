@@ -458,3 +458,23 @@ class TaskRecoveryHostBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HostCommandDiscoveryTests(unittest.TestCase):
+    def test_global_help_lists_all_intercepted_command_families(self):
+        output = io.StringIO()
+        with patch("sys.stdout", output), self.assertRaises(SystemExit) as result:
+            host_cli.main(["--help"])
+        self.assertEqual(result.exception.code, 0)
+        text = output.getvalue()
+        for family in ("upstream", "client", "http", "task", "job", "selftest"):
+            with self.subTest(family=family):
+                self.assertIn(family, text)
+
+    def test_help_is_read_only_and_does_not_call_public_state(self):
+        output = io.StringIO()
+        with patch("sys.stdout", output), patch.object(host_cli, "public_state",
+                                                         side_effect=AssertionError("unexpected state read")):
+            with self.assertRaises(SystemExit) as result:
+                host_cli.main(["--help"])
+        self.assertEqual(result.exception.code, 0)
