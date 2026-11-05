@@ -1,5 +1,7 @@
 # API-first control-plane evolution — long-term architecture master
 
+> **CURRENT OWNER DISPOSITION (2026-11-05): ABANDONED for bulk REST migration.** The proposed **29-tool (8 P1 + 21 P2) MCP-to-REST implementation program** and universal API-first direction are cancelled; [PR #77](https://github.com/vanishs/boxweave/pull/77) closed unmerged. This archived research does **not** authorize new REST work. Preserve existing 7 app-owned REST lifecycle methods and long-term **REST+MCP coexistence**, with upstream MCP the default for remaining specialist operations. Any future individual REST use requires demonstrable benefit and separately accepted design/verification. Do not mistake this status for abandoning ADR-003, authenticated MCP, or R-04 shared coordination safety work.
+
 > **Status: OWNER-SELECTED LONG-TERM COEXISTENCE DIRECTION / FEATURE-BY-FEATURE IMPLEMENTATION ACCEPTANCE PENDING.** The owner selected Option A and coequal ADR-003/ADR-010 on 2026-11-03; this is not acceptance of universal mediation, an automatic migration or a host/release change.
 > Recorded: 2026-11-03. BoxWeave source baseline: `main` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3` (`VERSION=0.42.11`). Containarium source inspected: `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The installer used Containarium `v0.120.1` **at this historical v0.42.11 analysis baseline**; v0.44.7 requires Containarium >= v0.128.0 and has no automatic maximum-version ceiling. Never assume upstream-main APIs are deployed.
 >
