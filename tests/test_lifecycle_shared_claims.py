@@ -126,6 +126,34 @@ class LifecycleClaimTests(Base):
         self.assertEqual(self.gateway.coordinator.status(oid)["state"],"observed_terminal")
         self.gateway_claim_name(NAME)
 
+    def test_expired_queued_action_never_claims_or_dispatches(self):
+        oid = self.submit()
+        row = self.life.receipt(oid)
+        self.now[0] = row["deadline"] + 1
+        self.assertTrue(self.s.work_one())
+        result = self.life.receipt(oid)
+        self.assertEqual((result["state"], result["code"]),
+                         ("failed", "DEADLINE_EXCEEDED"))
+        with self.assertRaisesRegex(CoordinationFault, "OPERATION_NOT_FOUND"):
+            self.claims.coordinator.status(oid)
+        self.gateway_claim_name(NAME)
+        self.assertEqual(self.provider.writes, [])
+
+    def test_observation_deadline_classifies_claim_as_unknown(self):
+        # A dispatched, acknowledged create must retain its name claim after
+        # deadline; other agents receive RECOVERY_REQUIRED, not RESOURCE_BUSY.
+        self.provider.ready_failures = 100
+        oid, row = self.run_action()
+        self.assertEqual(row["state"], "observing")
+        self.assertEqual(self.claims.coordinator.status(oid)["state"], "dispatch_intent")
+        self.now[0] = row["deadline"] + 1
+        self.assertTrue(self.s.work_one())
+        self.assertEqual(self.life.receipt(oid)["state"], "unknown")
+        self.assertEqual(self.claims.coordinator.status(oid)["state"], "unknown")
+        with self.assertRaisesRegex(CoordinationFault, "RECOVERY_REQUIRED"):
+            self.gateway_claim_name(NAME)
+        self.assertEqual(self.provider.writes, [("create", NAME)])
+
     def test_resize_unverified_keeps_claim_not_false_release(self):
         self.run_action()
         self.provider.no_resources=True

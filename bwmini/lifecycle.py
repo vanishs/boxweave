@@ -358,6 +358,8 @@ class Lifecycle:
         return self.receipt(ident,actor)
 
     def work_one(self):
+        expired = False
+        execute = False
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             row=db.execute("SELECT * FROM environment_operations WHERE state='queued' OR (state='observing' AND next_poll<=?) ORDER BY created,id LIMIT 1",(self.clock(),)).fetchone()
@@ -366,6 +368,7 @@ class Lifecycle:
             job=dict(row)
             now=self.clock()
             if now<job["created"] or now>=job["deadline"]:
+                expired = True
                 code="CLOCK_ROLLBACK" if now<job["created"] else "DEADLINE_EXCEEDED"
                 db.execute("UPDATE environment_operations SET state=?,phase='deadline',code=? WHERE id=?",
                            ("failed" if job["state"]=="queued" else "unknown",code,job["id"]))
@@ -374,10 +377,22 @@ class Lifecycle:
                 diagnostics.emit(self.store, component="lifecycle", phase="deadline", event_type="observed",
                                  outcome="failed", code=code, trace_id=trace,
                                  actor_scope=job["actor"], operation_kind="environment", operation_id=job["id"])
-                return True
-            execute=job["state"]=="queued"
-            if execute:
-                db.execute("UPDATE environment_operations SET state='dispatching',phase='submitted' WHERE id=?",(job["id"],))
+            else:
+                execute=job["state"]=="queued"
+                if execute:
+                    db.execute("UPDATE environment_operations SET state='dispatching',phase='submitted' WHERE id=?",(job["id"],))
+        if expired:
+            # Preserve the original post-dispatch claim as RECOVERY_REQUIRED
+            # after the app receipt is durably marked UNKNOWN. Do not replay.
+            claims=getattr(self,"shared_claims",None)
+            if claims is not None and job["state"]=="observing":
+                try:
+                    claims.unknown(job["id"])
+                except Exception:
+                    # An inaccessible claim store fails closed; the retained
+                    # dispatch-intent claim still prevents an unsafe retry.
+                    pass
+            return True
         trace = diagnostics.trace_for_operation(self.store, job["actor"], "environment", job["id"]) \
             or diagnostics.new_trace_id()
         if execute:
