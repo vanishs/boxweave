@@ -8,11 +8,15 @@ debug_rest_enabled=false debug-only rollback; root-provisioned standalone
 Gateway policy selects REST independently, while existing host tool
 allowlist/protected-mode gates remain intact. 773 Python tests and the 10-step
 fixture validation (including seven browser workflows) passed on the isolated
-developer Box. **T PASS only**. Release provenance, source-bound installed
-REST/SSH/HTTP app/Gateway parity, negative scope and new-Box clean
-installation remain independent L/CI gates; report unavailable lanes as
-BLOCKED, not PASS. No changes to R-04 production policy, parent host or
-stable installer selector.
+developer Box. **T PASS**. The [official v0.46.0 release](https://github.com/vanishs/boxweave/releases/tag/v0.46.0)
+and source-bound CI verify/publish are **PASS**; dedicated isolated
+0.45.0 → 0.46.0 installed upgrade, real Containarium 0.128.0 REST/MCP
+same-Box read parity, installed app summary and selected standalone
+Gateway stdio reads are **scoped L PASS**. The disposable nested child
+and temporary root-owned Gateway opt-in were removed and absence verified.
+Authenticated Web HTTP debug-summary, HTTP MCP OAuth/protected-mode live
+parity and owner-host upgrade remain **U**, not blanket PASS. No changes
+to R-04 production policy, owner host or stable installer selector.
 
 ## v0.44.10 selftest private-plan acceptance (P2), R-02 reboot deferred — 2026-11-05 UTC
 

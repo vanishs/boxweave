@@ -49,8 +49,14 @@ GET /v1/containers/{username}/debug. Inbound Agent interfaces remain MCP.
 | Gateway REST (T) | Existing MCP schema, allowlist first, protected-mode gate, zero upstream MCP calls on REST selection | test_debug_rest.py, test_gateway_protection.py |
 | Token/HTTP safety (T) | Rotation, loopback, unsafe/symlink token, bad JSON, wrong types, 404/auth/no fallback | test_debug_rest.py |
 | Packaging (T) | Standalone stdlib source included in both source/Release/installed lists | test_arch0_boundary_guards.py and CI build |
-| Live installed REST vs MCP (L) | Exact source release installed in authorized disposable host, authenticated same-Box parity + app Web + SSH/HTTP gateway with approved policy | **PENDING independent real installed evidence** |
-| Owner-host deployment (L) | Never inferred from CI or release | **NOT AUTHORIZED / NOT TESTED** |
+| Official Release / CI (CI) | Immutable v0.46.0 tag and full publish | **PASS**: commit `3aa393e8e58fc1d79692214a2e2fd9c79d09055c`; 26 assets, non-draft release; verify and publish succeeded in CI 42015528658 |
+| Installed upgrade / health (L) | Official 0.45.0 → 0.46.0 on a disposable host | **PASS**: `bw-debug-0460-lab`, exit 0, `boxweave status` 0.46.0, `doctor --mcp` overall passed / authenticated read passed |
+| Same-Box Provider REST/MCP (L) | Exact isolated Box and Containarium 0.128.0, both routes authenticated | **PASS (sampled)**: native disposable Incus test Box `bwdebug0460child-container` returned identical running / hostUserExists=false / hostUserShellExists=false through actual `GET /v1/containers/bwdebug0460child/debug` and MCP `debug_container` |
+| Application debug projection (L) | Exact observed incarnation, safe summary, MCP rollback | **PASS (direct installed app path)**: `Provider.observe` identity digest matched, installed `box_debug.summary` returned sensitive_details=withheld and no freeform host fields; setting `debug_rest_enabled=False` in the test process produced equivalent safe MCP summary |
+| Standalone Gateway selected REST (L) | Installed helper, reviewed root-owned policy and MCP stdio | **PASS (sampled)**: Gateway v0.46.0 initialize; tools/list advertised debug_container; tools/call read real Box via selected REST with expected values; invalid `bad/target` denied as DEBUG_REST_TARGET_INVALID |
+| Real Web HTTP authenticated endpoint (L) | Installed Web login + exact Box authorization + GET debug-summary | **UNVERIFIED**: direct installed app summary was tested, not an authenticated Web HTTP request |
+| HTTP MCP ingress / protected Gateway (L) | Real HTTP MCP OAuth and opt-in R-04 protected-mode calls | **UNVERIFIED**: standalone stdio real, protected-mode fixture tests only; no global R-04 activation |
+| Owner-host deployment (L) | Never inferred from CI, release or disposable host | **NOT AUTHORIZED / NOT TESTED** |
 
 **Rollback:** remove or disable the Gateway's root-owned opt-in policy to
 restore future debug calls to the previous MCP path in legacy mode. For the
@@ -86,6 +92,58 @@ proves external SSH reachability.
 - No production-host service restart, listener/firewall/Provider change,
   global R-04 policy activation, public route or stable installer selector
   movement. Keep separate L evidence gates above until actually executed.
+
+## Official v0.46.0 release and installed acceptance — 2026-11-05 UTC
+
+- [Merged PR #78](https://github.com/vanishs/boxweave/pull/78) selected only
+  `debug_container` and kept the owner's independent MCP-first / REST-assisted
+  architecture amendments. The initially failed PR CI run 42012473608 was
+  caused by two missing code-first inventory entries; these were added,
+  the exact CI inventory checker was rerun locally (all 12 inventories
+  matched), and the subsequent PR run 42015184391 **passed**. No failed
+  check was waived.
+- [Official Release v0.46.0](https://github.com/vanishs/boxweave/releases/tag/v0.46.0)
+  published **non-draft, non-prerelease**, 26 assets and immutable tag at
+  `3aa393e8e58fc1d79692214a2e2fd9c79d09055c`, published
+  `2026-11-05T11:04:43Z`. [CI 42015528658](https://github.com/vanishs/boxweave/actions/runs/42015528658)
+  reports both `verify` and `publish` **success**. The separate
+  `PUBLISHED_RELEASE` stable selector remains **0.43.1**.
+- Dedicated outer Box `bw-debug-0460-lab` was created for this test,
+  restarted after its own nesting configuration, and given an official
+  **v0.45.0 baseline installation** (installer exit 0, `doctor --mcp`
+  overall PASS). The exact **official v0.46.0** release installer then
+  completed an in-place upgrade (exit **0**). Actual installed host CLI
+  `boxweave status` reported 0.46.0, `doctor --mcp` reported
+  `overall=passed` and `authenticated_read_passed`; the independently
+  installed root-owned helper `debug_rest.py` existed.
+- A fresh **test-only Incus instance** `bwdebug0460child-container`
+  launched inside this isolated lab. As the installed `boxweave` service
+  user, its existing authenticated Provider client produced **matching**
+  Containarium v0.128.0 results over *actual REST* and *actual upstream MCP*:
+  `containerState=running`, `hostUserExists=false`,
+  `hostUserShellExists=false`. These false values are expected for a
+  directly provisioned test instance without managed host SSH user
+  provisioning and were not misreported as an SSH success.
+- The installed application Provider re-observed the exact test instance
+  digest successfully; its REST safe debug summary omitted raw SSH
+  journal/cause/action/shell fields, marked sensitive details withheld and
+  did **not** claim SSH verified. In the same *in-memory test process*,
+  `debug_rest_enabled=False` selected legacy MCP, producing the same
+  safe summary. No deployed application configuration was changed.
+- For the standalone Agent Gateway, a **temporary root-owned nonsecret**
+  `debug-rest.json` policy selected the one REST read in this isolated
+  lab. Real stdio MCP initialize returned v0.46.0, the tools catalog
+  offered `debug_container`, and the tool call returned expected
+  authenticated live values. A bad logical name was rejected
+  `DEBUG_REST_TARGET_INVALID`. The policy was **removed** immediately
+  after testing; the nested test instance was **deleted**, its absence
+  verified, and `doctor --mcp` rechecked **passed**.
+- **Honest boundary:** current live evidence covers the actual REST
+  Provider endpoint and real Agent stdio Gateway, plus direct installed
+  application safe projection. It does **not** cover an authenticated
+  installed Web HTTP request, remote HTTP MCP OAuth, R-04 protected
+  live policy, owner production host, alternate daemon versions, or
+  cross-host SSH reachability. Those are **U**, not blanket PASS.
 
 **Non-goals:** no debug write operation, no Provider version bump, no
 R-04 policy activation, no Agent MCP-to-REST inbound conversion, no changes
