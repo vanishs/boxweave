@@ -77,7 +77,7 @@ Statuses: PASS is only scoped to tested predicates; PARTIAL denotes incomplete p
 | MCP-067 | boxweave_task_get / F29 | outer-read-batch3.json:ERR INVALID_ARGUMENT: Error code: INVALID_ARGUMENT; Error: McpServerError: TASK_SELECTO; outer-task-batch.json:response | Tracked receipt by key; invalid selector refused; evidence outer-read-batch3.json,outer-task-batch.json | **PARTIAL** |
 | MCP-068 | boxweave_task_list / F29 | outer-read-batch3.json:response; outer-task-batch.json:response | Tracked receipt listing read; evidence outer-read-batch3.json,outer-task-batch.json | **PARTIAL** |
 
-## 19 installed host CLI leaves
+## 19 originally discovered host CLI leaves (plus 7 later-discovered leaves below)
 
 Actual binary: /usr/local/bin/boxweave (0.46.1). Each leaf has normal/invalid invocation or a documented mutation blocker. For privileged host/recovery mutators, syntax rejection is not a positive acceptance.
 
@@ -157,3 +157,20 @@ Installed path: /home/boxweave/boxweave/current/.venv/bin/python -m bwmini ACTIO
 ## Test-owned evidence files
 
 The isolated lab retained the raw JSON batch files outer-read-batch2/3, outer-write-batch1/2, outer-task-batch, outer-compose-batch, outer-lifecycle-batch3, web-http-negative-batch, inner-mcp-local-stdio-responses, installed-host-cli-ledger and installed-app-cli-ledger. No secrets were collected. Next Agent should rerun originally failing cases before any source repair.
+
+
+## 7 additional discovered installed/forwarded CLI leaves
+
+Further source dispatch review discovered upstream and job command families absent from the top-level host help, plus the root-installed online.py installation helper. These are distinct leaves, not covered by the first 19. The source-only CLI help candidate subsequently adds all hidden families to top-level help. It has not been installed as a release.
+
+| ID | Installed leaf | Positive / actual exit | Invalid or denied / actual exit | Decision / next test |
+|---|---|---|---|---|
+| CLI-H-020 | boxweave upstream status | Current local provider baseline=installed=0.128.0, exit0 | upstream invalid exits2 with usage | PARTIAL: version policy checked only for current daemon |
+| CLI-H-021 | boxweave upstream upgrade --version | Positive upgrade NOT RUN: host daemon restart excluded | Malformed version returns UPSTREAM_VERSION_INVALID, exit2 | BLOCKED: separate test-owned Provider host required |
+| CLI-H-022 | boxweave upstream update --version | Positive update NOT RUN: host daemon restart excluded | Malformed version returns UPSTREAM_VERSION_INVALID, exit2 | BLOCKED: separate test-owned Provider host required |
+| CLI-H-023 | boxweave job -- /usr/bin/true | Actual app-user bounded job succeeded exit0, receipt 0ac9f95b96014f30953b80304d734ebc, output_bytes=0 | --budget nonsense refused JOB_BUDGET_INVALID exit2 | PARTIAL: job receipts verified returned id, but failure and timeout branches remain |
+| CLI-H-024 | root-installed online.py install | --help exits0 and advertises stage/version prerequisites | Positive install NOT RUN on retained existing lab | BLOCKED: new clean target and official artifact needed |
+| CLI-H-025 | root-installed online.py enroll | --help exits0; no key changed | Invalid public key refused FULL_PUBLIC_ED25519_KEY_REQUIRED exit2 | BLOCKED: live enrollment/trust mutation excluded |
+| CLI-H-026 | root-installed online.py client-config | --help exits0; required identity/known_hosts options observed | Positive client secret-path registration NOT RUN | BLOCKED: no approved client identity or trust changes |
+
+**Updated audit total:** 68 exposed MCP tool rows + 26 installed host/helper CLI leaves + 36 application CLI modes = **130 action rows**, including blocked and negative-only rows. The installed upstream native Containarium CLI's hundreds of possible leaves are not implied covered; only BoxWeave-owned or direct shipped helpers listed above are accepted as inventoried in this run.
