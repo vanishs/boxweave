@@ -10,6 +10,23 @@ The F01–F39 IDs are the **historical v0.44.9 classification** and provide test
 
 For each mapped entry, test a meaningful positive path, a deliberately malformed/boundary path and an unauthorized/target-mismatch/denial path (or justify why a particular dimension is inapplicable), then independently observe actual state, identity, receipts and cleanup. For each feature, also test stateful combinations and historical defect triggers. The owner-facing final report must list **all feature names**, actual interfaces/commands, intended behavior, concrete tests and observations, status and evidence links, plus what remained untested—never just a summary of passed/failed totals.
 
+### Upstream-aware coverage extensions for existing feature IDs
+
+Read the [pinned Containarium upstream evidence guide](UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md) and [execution architecture plan](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md) before selecting updated cases. Containarium documents are **source and technique references**, not inherited BoxWeave PASS labels. Track the upstream installed daemon/CLI/MCP/REST source and ref, the exact route/handler supported by the runtime, evidence state (implemented / opt-in / scoped / design-only / unverified), and how an upstream version/diff changes the test case and its owner.
+
+| Existing feature group | Additional upstream-derived reacceptance obligation |
+| --- | --- |
+| F01-F03 / release and installer | Upstream `RELEASE-PROCESS.md` rehearsal patterns plus `DRILL-RECORD-TEMPLATE.md`: build-only candidate, installed prepublish check, exact provenance and rollback recovery **only in disposable test lanes** |
+| F05/F24-F28 / Provider, MCP, REST and clients | Proto RPC/HTTP annotation + installed handler + CLI/forwarded MCP transport diff, source vs runtime route availability and typed errors; upstream CLI-first is **not** a BoxWeave architectural migration |
+| F06-F12 / Box/SSH/nesting | Upstream source and SSH retry characterization: exact immutable identity, actual Provider effect/dial counts, stale target no-effect and guest readback |
+| F18-F23 / Web/session/worker | Claim evidence and degradation tests: real authenticated positive, unauthorized no-effect, store readiness vs health, post-recovery fresh action |
+| F29-F33 / R-02/R-04/UNKNOWN | Two-agent barrier, crash-after-intent uncertainty, exact single remote effect, source-level process and installed-client contention; retain original UNKNOWN without retry |
+| F36-F38 / diagnosis | Upstream security CLAIMS and seeded docs-claims failures: distinguish implemented, enabled, design-only and unverified; intentionally invalid proof must be rejected |
+| F39 / backup/restore | Real-host drill template as an **isolated planning reference only**; no direct owner-host restore, reboot or storage action |
+| X01/X02/X05/X06 / CLI, selftest, error mapping, Compose | Compare real installed CLI/help/dispatched commands; capture unique selftest actor outputs; compare declared Compose protobuf routes/native handler vs forwarded MCP 404; preserve upstream attribution uncertainty |
+
+Optional **upstream Proof Pack** supports execution provenance for reviewed source tests, not MCP action coverage or independent Provider side-effect proof; it requires a separately authorized nested Provider host and an owned child, since `containariumd proof-pack generate` executes child commands as root. There is **no direct BoxWeave MCP Proof Pack generator** established by the v0.128.0 documentation/runtime check. The [run template](REACCEPTANCE_RUN_TEMPLATE.md) records proof mode and all missing gates explicitly.
+
 ## Feature-by-feature adversarial acceptance baseline
 
 ### Delivery
