@@ -10,6 +10,42 @@ For **`Run full BoxWeave reacceptance`**, the authoritative procedure is [the mu
 
 Run cross-transport stateful sequences and bounded failure injection in disposable nested environments, including a **known-bad control** proving that the harness detects an incorrect claimed success. Finder and Fixer must not self-certify: prefer an independent Agent to reproduce original black-box findings after installation of the candidate, or report same-Agent fallback. Track feature-by-feature S/T/I/H/X depth, UNSUPPORTED, SUSPECT/NEEDS_REPRO, upstream defects, original UNKNOWN and any unverified external client. The older five-level [v0.44.9 matrix](EVIDENCE_LAYERS_0449.md) is historical test-selection input, never current-version installed acceptance. Full Python/knowledge/frontend/browser regressions still run at the **final release gate** and after integration changes that invalidate prior results.
 
+## 2026-11-05 — executable-acceptance design obligations (specification only)
+
+These are **requirements for future automation and instructions for present manual Agent work**, not evidence that a harness/scheduler or new CI jobs exist. [The canonical runbook](../process/FULL_PROJECT_REACCEPTANCE.md) owns execution order and risk/permissions; [the ledger template](REACCEPTANCE_RUN_TEMPLATE.md) owns per-case artifacts and report fields. Ordinary development tests are still fast and scoped; they do not replace a later installed reacceptance.
+
+### Data-driven inventory, not a hardcoded catalog
+
+Discover runtime contracts from the actual installed SSH/stdio and authorized HTTP MCP handshake, effective policies, recursively reachable host/app CLI dispatcher and executable help, Web route registration/authentication and upstream native capability mapping. A three-way differential between **source dispatch, installed actual callable behavior and advertised help** is required because `add_parser` enumeration previously missed five callable BoxWeave host CLI families (issue #80). Newly exposed names trigger fresh test-row generation; removed names trigger removal/breaking-contract review, not silent dropping. Historical 68 outer MCP or 26 host/36 app CLI totals are observations only.
+
+The future runner should support: (1) a read-only discovery mode requiring no privileged write, (2) isolated write capabilities explicitly granted by target and identity, (3) durable immutable per-attempt output and schema validation, (4) deterministic execution and hard stop on UNKNOWN for that target, (5) a machine-readable missing-dimension/dependency ledger, and (6) a human-friendly function matrix generated from the same evidence. **Until implemented**, Agents must fulfill these manually and report automation absence.
+
+### Tiered isolated test topology
+
+| Profile | Isolated purpose | Gate without required capability |
+| --- | --- | --- |
+| `READ_ONLY` | Catalog/help, health, true missing-target error, static code diff, released asset hash | Inventory PARTIAL if real installed authenticated catalog unavailable |
+| `NESTED_LIVE` | Separate Provider/Incus and test-owned child; create/stop/resize/delete, selftest, original failure replay, guest/Provider oracle | No nesting/verified SSH/runtime means installed gate BLOCKED; source fixture only T |
+| `AUTH_COORD` | Test-scoped Web login/CSRF/OAuth, approved HTTP MCP client, R-02 and **explicit isolated** R-04 protected gateway, concurrent actors | No test-only credentials/policy grant means corresponding positive/security gates BLOCKED |
+| `EXTERNAL_CLIENT` | Native Windows/WSL/SSH/HTTPS client journey and actual traffic; independent client auth | External infrastructure/route/auth missing means X unavailable, not simulated PASS |
+
+These profiles are **deployment requirements**, not pre-created Boxes, credentials, external public listeners or owner-host authorization. Use disjoint original Box identities for competing writers and an outer controller as a read-only observer. The future environment provisioner must refuse host-policy, credential, network, R-02 reboot, original UNKNOWN or external exposure mutations without new approval.
+
+### Deterministic concurrency and partial-effect proof
+
+For each read/check-then-write, durable journal, deduplication or claim state, use a two-party barrier or observable in-flight transition rather than relying on random timing. Source-level process races prove the transaction is serialized; an installed black-box race independently proves real dispatch/policy. Record first admission, second request, exact typed refusal or idempotent receipt, **zero forbidden secondary effect**, original cleanup, and a fresh successful request once contention ends. Prefer changed-boundary pairwise combinations (SSH/HTTP/Web/CLI/Provider, R-02/R-04, setup/update locks) rather than combinatorial explosion. Do not dispatch a second unknown original mutation.
+
+Always capture first immutable raw stdout/stderr/exit/receipt before reading derived JSON. Ambiguous result files must retain both observations and producer/timestamps; a repaired sub-defect and an unexplained symptom remain separate issues. The intentional known-bad assertion must fail and be logged as DETECTED; otherwise mark the harness broken and downgrade related successful claims.
+
+### Source candidate → installed release proof
+
+The intended future release gate is **candidate first**: freeze SHA/build manifest, build an installable candidate, run affected original-repro black-box scenarios in authorized fresh/seeded Boxes, verify exact installed source+runtime, then merge/publish the exact verified payload. Final CI, immutable tag/asset hashes and a post-release official installer check are distinct evidence. A missing secure candidate-install channel is a real BLOCKED gate, not permission to ship unverified source to public GitHub. Preserve stable installer pin separately. For documentation-only changes, do not start a release or re-run expensive product tests.
+
+### Tooling implementation handoff (not already coded)
+
+The build backlog and acceptance criteria live in the runbook as `RACC-AUTO-01` through `RACC-AUTO-07`: inventory diff, case dispatcher/evidence, cross-process stateful probes, isolated environment profiles, candidate-first release gate, cross-ingress comparator, and oracle/report/issue generator. Keep future development in project task tracking when authorized. This documentation revision alone implements **zero new automation** and adds **no privileged execution authority**.
+
+
 ## Layers and evidence
 
 **Latest evidence presentation:** [v0.44.9 five-level matrix](EVIDENCE_LAYERS_0449.md) distinguishes S source evidence, T executed automated tests, I isolated installed live, H actual operator-host live, and X genuine independent external-client execution. These are separate boundaries, not automatic progressive levels or a single coverage metric. A Chromium fixture is not an installed Web/Provider authentication proof; a nested live task does not prove outer-host coordination; an OAuth loopback test is not public client acceptance. Record source version and immutable identity, command/exit, original receipt, Provider effect and cleanup for every promotion.
