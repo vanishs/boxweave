@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -21,10 +21,11 @@ except ImportError:
     import mcp_compat
     import restore_guard
     import resource_size
+    import debug_rest
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.45.0"
+SERVER_INFO_VERSION = "0.46.0"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -283,6 +284,14 @@ GATE_ERROR_CODES = frozenset((
     "COORDINATION_USE_TRACKED_TASK", "COORDINATION_LEASE_DISABLED",
     "LEASE_ARGUMENT_INVALID", "LEASE_TOKEN_INVALID", "LEASE_EXPIRED",
     "COORDINATION_PATCH_DISABLED", "BOX_PATCH_INVALID", "BOX_PATCH_TOO_LARGE",
+    "DEBUG_REST_TARGET_INVALID", "DEBUG_REST_ENDPOINT_INVALID",
+    "DEBUG_REST_TOKEN_PATH_INVALID", "DEBUG_REST_TOKEN_UNAVAILABLE",
+    "DEBUG_REST_TOKEN_UNSAFE", "DEBUG_REST_RESPONSE_INVALID",
+    "DEBUG_REST_RESPONSE_OVERSIZED", "DEBUG_REST_HTTP_REJECTED",
+    "DEBUG_REST_AUTH_REJECTED", "DEBUG_REST_ROUTE_UNVERIFIED",
+    "DEBUG_REST_UNAVAILABLE", "DEBUG_REST_CONFIG_INVALID",
+    "DEBUG_REST_POLICY_UNAVAILABLE", "DEBUG_REST_POLICY_UNSAFE",
+    "DEBUG_REST_POLICY_INVALID",
     "BOX_READ_INVALID", "BOX_PATH_INVALID", "BOX_READ_UNVERIFIED",
 ))
 
@@ -559,8 +568,17 @@ def main():
                 else:
                     message = guard_restore_catalog(message)
                 message = filter_tools(message, permitted)
-                if gateway_protection.enabled():
-                    message = gateway_protection.filter_catalog(message)
+                try:
+                    selected_debug = debug_rest.gateway_config() is not None
+                    if gateway_protection.enabled():
+                        message = gateway_protection.filter_catalog(
+                            message, rest_debug=selected_debug)
+                except debug_rest.DebugRESTError as error:
+                    # A malformed root policy cannot silently downgrade or
+                    # widen the protected forwarded MCP catalog.
+                    print(json.dumps({"jsonrpc":"2.0","id":request.get("id"),
+                        "error":{"code":-32602,"message":str(error)}}), flush=True)
+                    continue
                 print(json.dumps(message), flush=True)
                 continue
             nesting = None
@@ -573,8 +591,23 @@ def main():
                         "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
                     continue
                 try:
+                    debug_config = (debug_rest.gateway_config()
+                                    if params.get("name") == "debug_container" else None)
                     if gateway_protection.enabled():
-                        gateway_protection.check_call(params.get("name"), args)
+                        gateway_protection.check_call(
+                            params.get("name"), args,
+                            rest_debug=debug_config is not None)
+                    if debug_config is not None:
+                        if not isinstance(args, dict) or set(args) != {"username"}:
+                            raise debug_rest.DebugRESTError("DEBUG_REST_TARGET_INVALID")
+                        result = debug_rest.read(debug_config, args["username"])
+                        emit_result(request["id"], result)
+                        # Only success metadata, never journal lines or freeform
+                        # upstream data, enters the Gateway diagnostic journal.
+                        gd.record(params["name"],
+                                  {"result":{"content":[],"isError":False}},
+                                  (time.monotonic()-started)*1000, trace=trace)
+                        continue
                     if params.get("name") == "boxweave_diagnose":
                         if not isinstance(args, dict):
                             raise ValueError("DIAGNOSTIC_SELECTOR_INVALID")

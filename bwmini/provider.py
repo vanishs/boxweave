@@ -44,6 +44,11 @@ class Provider:
         if "provider_api" in config:
             from .provider_rest import RESTClient
             self.rest = RESTClient(config["provider_api"])
+        # Debug-only rollback must not disable existing REST lifecycle.
+        choice = config.get("debug_rest_enabled", True)
+        if type(choice) is not bool:
+            raise Fault("DEBUG_REST_CONFIG_INVALID", 422)
+        self.debug_rest_enabled = self.rest is not None and choice
         self.lifecycle_config = config.get("lifecycle")
         validate_lifecycle_config(self.lifecycle_config, set(config.get("targets", {})))
 

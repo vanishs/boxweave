@@ -53,10 +53,14 @@ def enabled(path=POLICY):
     return value["enabled"]
 
 
-def check_call(name, arguments):
+def check_call(name, arguments, *, rest_debug=False):
     """In protected mode, no direct or unclassified Provider mutations."""
     if not isinstance(name,str) or not isinstance(arguments,dict):
         raise ValueError("COORDINATION_TOOL_UNCLASSIFIED")
+    if name == "debug_container" and rest_debug is True:
+        # Strictly scoped to the selected REST adapter; legacy MCP must not
+        # acquire new rights under protected mode.
+        return
     if name == "boxweave_nesting":
         if arguments.get("action") == "plan":
             return
@@ -68,11 +72,12 @@ def check_call(name, arguments):
     raise ValueError("COORDINATION_TOOL_UNCLASSIFIED")
 
 
-def filter_catalog(message):
+def filter_catalog(message, *, rest_debug=False):
     """Hide forwarded mutators that this Gateway will refuse."""
     result=message.get("result")
     if not isinstance(result,dict) or not isinstance(result.get("tools"),list):
         raise ValueError("UPSTREAM_CATALOG_INVALID")
+    allowed = VISIBLE | ({"debug_container"} if rest_debug is True else set())
     result["tools"]=[t for t in result["tools"]
-                     if isinstance(t,dict) and t.get("name") in VISIBLE]
+                     if isinstance(t,dict) and t.get("name") in allowed]
     return message

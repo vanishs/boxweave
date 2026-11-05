@@ -10,25 +10,37 @@ from .wire_results import text
 
 
 def summary(provider, target):
-    """Read only from the upstream Platform MCP, never run a guest command."""
+    """Read Provider debug without guest commands; only return safe fields."""
     if getattr(provider, "mode", "") != "mcp":
         raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP", 409)
     # The caller must validate target ownership, incarnation and running state
     # through Service.observe_target *before* invoking this helper.
-    with provider.session() as client:
-        tools = client.discover()
-        schema = tools.get("debug_container", {}).get("inputSchema", {})
-        if (not isinstance(schema, dict) or schema.get("type") != "object"
-                or "username" not in schema.get("properties", {})):
+    if (getattr(provider, "rest", None) is not None
+            and getattr(provider, "debug_rest_enabled", True)):
+        body = provider.rest.debug_container(target.logical)
+        # A logical Box name can be recycled between the authorization
+        # read and the debug GET. Reject changed incarnations before any
+        # response reaches Web; this remains read-only and no retry occurs.
+        current = provider.rest.container(target.logical)
+        if (current.get("username") != target.logical
+                or current.get("name") != target.instance
+                or str(current.get("createdAt")) != target.created):
+            raise Fault("TARGET_CHANGED", 409)
+    else:
+        with provider.session() as client:
+            tools = client.discover()
+            schema = tools.get("debug_container", {}).get("inputSchema", {})
+            if (not isinstance(schema, dict) or schema.get("type") != "object"
+                    or "username" not in schema.get("properties", {})):
+                raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
+            result = client.tool("debug_container", {"username": target.logical})
+        raw = text(result)
+        if len(raw) > 32768:
             raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
-        result = client.tool("debug_container", {"username": target.logical})
-    raw = text(result)
-    if len(raw) > 32768:
-        raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
-    try:
-        body = json.loads(raw)
-    except (ValueError, TypeError):
-        raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409) from None
+        try:
+            body = json.loads(raw)
+        except (ValueError, TypeError):
+            raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409) from None
     if not isinstance(body, dict):
         raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
 
