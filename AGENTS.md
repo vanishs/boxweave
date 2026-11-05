@@ -4,6 +4,12 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 
 **Whole-project reacceptance shortcut:** When the owner says **"Run full BoxWeave reacceptance"** (or clearly equivalent), follow [the full-project reacceptance runbook](docs/process/FULL_PROJECT_REACCEPTANCE.md) end to end, subject to the owner's active authorization and the safety boundaries below. The link alone does not initiate tests, host actions, or a release.
 
+## Full reacceptance execution contract (current)
+
+The owner-triggered `Run full BoxWeave reacceptance` invokes **black-box-first, multi-Agent find → fix → independent verify**, not merely `scripts/validate.py`. The Coordinator must follow [the canonical runbook](docs/process/FULL_PROJECT_REACCEPTANCE.md) and its [surface/issue ledger template](docs/verification/REACCEPTANCE_RUN_TEMPLATE.md). Discover **current runtime** SSH/HTTP MCP catalogs, installed host/app CLI commands, installed Web endpoints and actual Provider-facing pathways before selecting scenarios. Classify every exposed action; execute high-risk positive/negative/invalid operations only on specifically authorized test-owned targets, and check side effects via a separate oracle.
+
+Prefer distinct Finder, Fixer and Verifier Agents; assign disjoint disposable Boxes for parallel writers, keep an immutable original black-box repro, and require Verifier to rerun it against the installed candidate. If delegation is unavailable, run staged roles sequentially and label the verification **same-Agent**, never independently accepted. Development fixture tests are change-local and final-release regressions, not acceptance of installed Web/MCP/Provider behavior. Queue CONFIRMED_BUG, SUSPECT/NEEDS_REPRO, UPSTREAM, HARNESS_DEFECT and retained UNKNOWN with executable next-Agent evidence. The owner command requires no different invocation or routine approvals within the existing grant, but creates **no** blanket host/R-04/reboot/credential privilege. A docs-only update to these instructions needs no product version bump or release.
+
 ## Authorized 0.10+ remediation
 
 - The 2026-10-29 owner request authorizes **small, independent commits directly to main**, without a PR, for the remediation R-00–R-09; do not force-push. Confirm the current main SHA before each commit and reject unexpected changes. Never use an unreviewed working tree or wipe unrelated work. Remote repository-only edits via the approved GitHub connection are permitted; lack of a checked-out/test-capable environment must be recorded rather than invented.

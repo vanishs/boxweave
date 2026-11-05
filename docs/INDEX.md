@@ -2,6 +2,8 @@
 
 # BoxWeave v2 knowledge index
 
+**Owner's single-command full reacceptance:** `Run full BoxWeave reacceptance` → [active black-box-first multi-Agent runbook](process/FULL_PROJECT_REACCEPTANCE.md) → [run inventory and next-Agent issue template](verification/REACCEPTANCE_RUN_TEMPLATE.md). Separate Finder/Fixer/Verifier when possible; use installed MCP/CLI/Web operations and independently observed side effects as primary evidence, not merely already-green Python fixtures. Documentation changes do not themselves invoke this workflow, publish a release, or upgrade a host.
+
 **Current architecture decision (2026-11-05): MCP-first + REST-assisted hybrid.** Keep upstream MCP as the default for new/specialist Containarium operations and BoxWeave SSH/HTTP MCP for Agents; retain **seven shipped app-owned REST lifecycle operations**. The universal API-first redesign and bulk **8 P1 + 21 P2** REST migration are **ABANDONED**, not pending tasks. [Authoritative current architecture](design/ARCHITECTURE.md), [updated ADR-010](design/ADR/0010-api-first-control-plane-candidate.md), [archived migration study](design/API_FIRST_PROVIDER_MIGRATION_PLAN.md), [architecture history](design/API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md).
 
 **Current v0.44.9 architecture:** [runtime call chains, ingress guard coverage and P0/P1 acceptance map](design/RUNTIME_CALL_CHAINS_0449.md). This is a source-backed view, **not** global R-04 production acceptance. The authoritative current implementation map is [ARCHITECTURE](design/ARCHITECTURE.md).

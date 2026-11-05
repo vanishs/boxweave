@@ -2,6 +2,10 @@
 
 **Status: active developer working practice, not a shipped product feature.** Owner decision SRC-107 (2026-10-30), supplemented by owner-approved [Agent deployment and testing v1.0](AGENT_TEST_DEPLOYMENT.md) (2026-11-01). Follow [AGENTS.md](../../AGENTS.md), [maintenance](MAINTENANCE.md), [test strategy](../verification/TEST_STRATEGY.md) and [current scope](../product/SCOPE.md). This document **does not grant authorization** to modify a particular host, Box, Provider, SSH identity, tenant, network, credential or deployment.
 
+## Full reacceptance is a separate lane
+
+The short development loop below is for **ordinary coding slices** and begins with focused fixtures to save time. An owner-triggered whole-project audit instead follows [black-box-first multi-Agent reacceptance](FULL_PROJECT_REACCEPTANCE.md) and its [run ledger](../verification/REACCEPTANCE_RUN_TEMPLATE.md): first pin and inventory the **running** MCP/CLI/Web/REST surfaces; have an independent Finder seek observed discrepancies; assign a bounded Fixer; have a separate Verifier rerun the original installed black-box scenario and check Provider/guest/receipt state. Only at final integration/release gates rerun the existing full Python/browser fixtures (unless a targeted code regression requires them earlier). Same-Agent fallback must be disclosed, not represented as independent verification. Preserve SUSPECT findings and calibration failures in the next-Agent queue. This distinction does **not** relax the permission boundaries or evidence requirements below.
+
 ## Goal and actual environment
 
 Keep Agent-led tests flexible while ensuring they are fast, attributable and reproducible. The usual live topology is:
