@@ -1,8 +1,10 @@
-# API-first Provider migration — code inventory, feature parity, Agent work plan
+# REST + MCP hybrid Provider evolution — grouped migration backlog and feature parity
 
+> **2026-11-04 PT / 2026-11-05 UTC decision:** BoxWeave's selected current and long-term model is **REST + MCP hybrid**, **not API-first**. REST is used selectively for typed application-owned Provider management when justified by tested contracts; inbound BoxWeave MCP, upstream MCP compatibility and Box SSH/optional agent-box MCP remain long-lived first-class paths. There is **no blanket target to remove MCP or convert every tool to REST**. Every protected mutation still needs one reviewed identity, claim/dispatch, receipt and UNKNOWN boundary. The `API_FIRST_*` filenames remain unchanged for link compatibility; this document's historical v0.42.11 full-replacement analysis below is not the current mandate. Current grouped decisions are in **section 2.1**.
+>
 > **2026-11-05 v0.44.9 current implementation map:** [Runtime call chains and entrypoint coverage](RUNTIME_CALL_CHAINS_0449.md) and the updated [authoritative architecture](ARCHITECTURE.md) supersede the *historical v0.42.11 source inventory* below for what actually shipped. App-owned basic Containarium REST lifecycle **is implemented** while Agent SSH/HTTP MCP, nesting, specialist network/Guard and guest SSH remain complementary. Global R-04 across authenticated Web/SSH/HTTP is **P0 / PARTIAL**, not a prerequisite already certified by the current REST migration. The v0.44.9 release/isolated installation and owner-host R-02 evidence are scoped separately in [REACCEPTANCE_0449](../verification/REACCEPTANCE_0449_2026-11-05.md).
 >
-> **Status: owner-selected long-term design direction (Option A; coequal ADR-003/ADR-010), while implementation and deployed feature parity require separate acceptance.** Parent: [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Companion: [trace/diagnostics](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md), [candidate ADR](ADR/0010-api-first-control-plane-candidate.md).
+> **Status: owner-selected long-term design direction (Option A; coequal ADR-003/ADR-010), while implementation and deployed feature parity require separate acceptance.** Parent: [hybrid evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md). Companion: [trace/diagnostics](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md), [candidate ADR](ADR/0010-api-first-control-plane-candidate.md).
 > Source-only review: BoxWeave `main`/`VERSION 0.42.11` at `4f5ffe7fae586c79e6d75ed90560ee196e618ec3`; Containarium `main` at `e5deb167c973033d9a847abdcb2420e917095546`. The installer pinned **Containarium 0.120.1 at this historical v0.42.11 analysis baseline**; current v0.44.7 requires Containarium >= 0.128.0 (no upper maximum), and this old source snapshot does not certify current runtime endpoints.
 
 > **2026-11-03 implementation checkpoint (not part of the historical estimates):** App-owned REST lifecycle basics were implemented in v0.42.12 and independently live-checked as part of the v0.43.0 stable promotion. The upstream MCP Agent gateway, specialist Tenant/Guard and nesting features, Box SSH work, and cross-entry mutation mediation are **not** completely migrated or globally accepted. The existing `v0.42.11` analysis below is retained for rationale; use [actual REST evidence](../verification/PROVIDER_REST_A1_04212_2026-11-03.md), [v0.43.0 acceptance](../verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md), and the current [feature ledger](../verification/FEATURE_MATRIX.md) for delivery status. The current v0.44.7 minimum compatible Containarium version is `v0.128.0` with no version maximum; existing newer compatible Providers are not automatically downgraded. The separate owner host must not be upgraded implicitly.
@@ -11,12 +13,12 @@
 
 ## 1. Exact question and answer
 
-How hard would it be for a coding Agent to replace **BoxWeave's own internal Containarium MCP calls** with the **Containarium REST API**?
+Historical full-replacement question: how difficult would it be to replace internal MCP with REST? The **current selected question** is which outbound app management groups merit REST while preserving complementary MCP.
 
 - **Application/Web-side Provider only: medium (rough engineering risk 5/10)**. Provider call sites are relatively localized and existing app services already separate intent, receipts and worker logic. It is still not a search-and-replace: text-vs-JSON contracts, target incarnation, network Guard, partial operations, auth/token rotation and negative tests must be translated.
 - **All upstream MCP dependencies removed while preserving ~99% of behavior: high (rough engineering risk 9/10)**. The current Agent gateway forwards much of an upstream catalogue, applies tool-specific rewrites and policy, and its `connect(exec)`, task/file and agent-box paths are not equivalent to a REST lifecycle endpoint. A new independently implemented Box Executor and Agent-facing tool router would be required.
 - These are **qualitative risk ratings**, not measured effort, deadlines, precise LOC estimates or assurances of a particular Agent's completion rate.
-- The recommended staged route is **REST on the app/provider side first**, while keeping upstream platform MCP and existing client setup alive until a testable replacement exists.
+- **Selected direction:** selective REST for app-owned typed management, permanent MCP for complementary capabilities, and common operation/trace safety regardless of transport; full removal of upstream MCP is a historical comparison only.
 
 ### 1.1 Target channel map — *not* 100% REST
 
@@ -38,22 +40,41 @@ Containarium's published implementation has parallel `containarium` CLI and plat
 
 | Source path | v0.42.11 baseline role (historical) | Future disposition | Relative effort |
 | --- | --- | --- | --- |
-| `bwmini/provider.py` | Platform MCP session; get/list/create/start/stop/delete/resize; identity verification with `connect(exec)` | Typed `ContainariumAPI`; preserve lifecycle/identity interface while moving `hello`/identity exec to Box Executor | Medium |
+| `bwmini/provider.py`, `provider_rest.py` | Basic app lifecycle already uses opt-in REST in v0.44.9; nesting create and guest identity/exec still use MCP | Preserve hybrid routing; extend REST by independently accepted operation, no mandatory SSH Executor rewrite | Low–medium incremental |
 | `bwmini/access_provider.py` | `network_tenant_capabilities`, Guard, tenant policy and passthrough route operations over tool names | Map to authenticated REST network/tenant endpoints; retain revisions, no partial two-Tenant writes, Guard verification | Medium–high |
 | `bwmini/environment_observe.py` | E0/E1 capability and fingerprint probe via MCP catalogue and `get_container` | Separate declared REST contracts, runtime support and actual host storage eligibility | Medium |
 | `bwmini/auto_sleep.py`, `box_debug.py` | MCP `toggle_auto_sleep` and `debug_container` | Typed REST route and structured summary, fail on missing/changed fields | Low–medium |
 | `bwmini/capabilities.py`, `mcp_compat.py` | Platform MCP catalogue and minimum schema drift report | Provider API capability probes and contract fingerprints. Preserve *separate* outbound BoxWeave MCP transport checks | Medium |
 | `bwmini/mcp.py` | Bounded stdio JSON-RPC MCP client | Keep for optional agent-box/compatibility adapters; not needed by standard REST Provider | Low conditional |
-| `bwmini/mcp_gate.py` | 817-line upstream tool relay plus managed key, trust, nesting, D3/D4, restore guard and tracked operations | Eventually replace with native BoxWeave MCP tools calling Operation Core + Provider API + Executor; feature and policy parity first | **Very high** |
-| `bwmini/remote_mcp.py` | Authenticated Agent-facing HTTP MCP, per-request gateway spawn | Preserve HTTP/OAuth behavior; route to new internal tool server only after tested handshake/cancel/error parity | High |
+| `bwmini/mcp_gate.py` | Agent upstream MCP relay, managed trust/nesting, D3/D4 and tasks (historical v0.42.11 line count) | **Keep Gateway and upstream MCP**; implement shared P0 mediation for protected mutators, optionally route individual tools via REST | **Very high for mediation** |
+| `bwmini/remote_mcp.py` | Authenticated Agent-facing HTTP MCP, per-request gateway spawn | Preserve HTTP/OAuth MCP as a permanent inbound transport; any internal router refactor is independently justified | High if changed |
 | `bwmini/agent_box.py` | Optional configured per-Box *separate* MCP for read/write/process/resource actions | Retain as a distinct Box Executor strategy until exact-equivalence proof; do not mistake for platform MCP | Medium–high |
-| `bwmini/box_reads.py`, `box_patch.py`, `gateway_tasks.py` | Fixed commands and tracked metadata around platform `connect(exec)` | Execute through shared Box Executor with bounded results, CAS and crash-safe receipts | High |
+| `bwmini/box_reads.py`, `box_patch.py`, `gateway_tasks.py` | Fixed commands and tracked metadata around platform `connect(exec)` | Keep bounded guest SSH/MCP execution; optional executor work is not a REST migration | High if redesigned |
 | `bwmini/operation_coordination.py`, `coordination_bridge.py`, `coordination_runtime.py`, `gateway_protection.py` | Some claims/leases/mutator protections are optional and path-specific | Canonical shared pre-dispatch boundary for Web, SSH and HTTP Agent paths; no silent bypass | **High** |
 | `bwmini/lifecycle.py`, `access.py`, `box_actions.py`, `service.py` | Durable intent/workers/revisions and business receipts | Preserve semantics while changing adapter; improve convergence/unknown errors, not rewrite automatically | Medium |
-| `bwmini/bootstrap.py`, `online.py`, `host_cli.py`, `distribution.py` | Pinned MCP launcher, credentials, Containarium binaries, install/repair | New API service/principal checks, token rotation and cleanup; independent host rescue path, no provider upgrade | Medium–high |
+| `bwmini/bootstrap.py`, `online.py`, `host_cli.py`, `distribution.py` | MCP launcher, credentials, Containarium binaries, install/repair | Maintain BOTH API and MCP credentials and health checks; retain independent host recovery | Medium–high |
 | `bwmini/gate_diagnostics.py`, `diagnostics.py` | D3 gateway journal, D1/D2 trace/receipts | One correlation model and classified API/SSH/MCP spans; see [diagnostic contract](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) | High if bundled with full gateway refactor |
 
 This inventory is **source reviewed**, not a complete runtime reachability assertion. Re-scan all import/call sites and generated install helper manifests immediately before any implementation.
+
+### 2.1 v0.44.9 remaining REST opportunities, by functional group
+
+**Scope and scoring:** This is a **source-level (S) routing inventory**, not new live acceptance. App-owned `list/get/create/start/stop/delete/resize` through `provider_rest.py` are **already implemented when `provider_api` is configured**; Agent Gateway tools, nesting create, specialist network/Guard and guest commands were not migrated by that work. Ratings: complexity 1 (easy) to 5 (very hard), importance is user/safety impact, and priority P0 (security prerequisite), P1 (recommended next), P2 (later/conditional). REST candidates require a verified **deployed** route/auth/schema/identity, fail/UNKNOWN result and observable postcondition; upstream proto source alone does not certify installed support.
+
+| Group | Functions / modules | Current outbound path | Recommended architecture | Complexity | Importance | Priority |
+| --- | --- | --- | --- | --- | --- | --- |
+| **R1 Tenant / Guard / policy** | `access_provider.py`: native capabilities, Guard, policy read/patch, membership | Specialist MCP; REST already used for some container reads | **Selective REST candidate**; preserve Guard, policy revision and atomic cross-tenant writes | **4/5** | High, security | **P1** |
+| **R2 TCP/UDP passthrough** | `access_provider.py`: route list/add/delete | MCP | **REST candidate** with typed route CRUD; configured != packet-reachable | **3/5** | High | **P1** |
+| **R3 Auto-sleep / debug / metrics** | `auto_sleep.py`, `box_debug.py`; metrics as available | MCP | **REST candidate** only for installed supported routes; wake, diagnostics and redaction tests | **2–3/5** | Medium | **P2** |
+| **R4 Capabilities / E0–E1 observation** | `environment_observe.py`, `capabilities.py`, `mcp_compat.py` | Mixed REST get + MCP discovery | **Hybrid**: REST for Provider facts; MCP catalogue remains for actual MCP compatibility | **3/5** | Medium | **P2** |
+| **R5 Whole-Box backup / restore** | Gateway compatibility, restore guard and service-local key handling | MCP/client-local orchestration, no accepted app-owned REST slice | **Conditional REST candidate** for create/verify/restore; key custody, stopped target, UNKNOWN and identity gates | **5/5** | High, destructive | **P2** |
+| **R6 Snapshots / rollback** | Upstream snapshot capability, no accepted app REST adapter | Conditional upstream MCP or unavailable | **Conditional REST candidate** subject to installed route, storage/ZFS, rollback risk and real evidence | **5/5** | Medium–high | **P2** |
+| **R7 Nested Box create** | `provider.py` `_nesting` composite | Explicit MCP even when REST configured | **Keep MCP** until a demonstrably equivalent REST composite exists; no forced migration | **4/5 if redesigned** | High for nesting | **P2** |
+| **R8 Agent Gateway mutators** | `mcp_gate.py`, SSH/HTTP MCP forwarding and tracked tasks | MCP, opt-in protected mode; global mediation not accepted | **Keep MCP**; P0 operation-claim/UNKNOWN mediation across Web/SSH/HTTP. Per-tool REST is optional | **5/5** | Critical | **P0** |
+
+**Not a REST migration backlog:** `connect(exec)`, bounded Box read/patch, `push/sync`, optional `agent-box` `code_*`, local SSH-key/config effects, and inbound BoxWeave SSH/HTTP MCP. They require independently controlled SSH/MCP/local semantics. The raw upstream Containarium REST/MCP/CLI/Incus surfaces also remain **outside** BoxWeave's R-04 interception guarantee.
+
+**Suggested order:** prove R8 P0 common claims and crash/UNKNOWN behavior independently of protocol changes; then evaluate R2 (small typed write) and R3 (bounded diagnostics), followed by R1 (sensitive cross-tenant policy). R4 can proceed incrementally. R5/R6 need separate destructive/storage/key test gates; R7 remains MCP unless an explicit need emerges. Do not bundle Gateway rewrite, Provider upgrade and restore work. Compare [current call chains](RUNTIME_CALL_CHAINS_0449.md), [architecture](ARCHITECTURE.md), [feature evidence](../verification/FEATURE_MATRIX.md) and [open risks](../verification/OPEN_RISKS.md).
 
 ## 3. API operation mapping
 
@@ -89,7 +110,7 @@ Primary upstream references:
 
 ### 3.2 Nontrivial exceptions — seven design workstreams
 
-1. **Box command execution (`connect(exec)`) and trust.** The upstream platform MCP resolves a target and uses SSH, not generic lifecycle REST command execution. Replace by a tightly controlled SSH executor; observe Box identity first, never accept raw caller hostname/key/user, bind SSH host key, maintain managed key/certificate and capped stdout/stderr/timeouts. HTTP errors are no substitute for SSH error classification.
+1. **Box command execution (`connect(exec)`) and trust.** The upstream platform MCP resolves a target and uses SSH, not generic lifecycle REST command execution. Retain the bounded MCP/SSH path; an independently evaluated SSH executor is optional. Observe Box identity first, never accept raw caller hostname/key/user, bind SSH host key, maintain managed key/certificate and capped stdout/stderr/timeouts. HTTP errors are no substitute for SSH error classification.
 2. **Filesystem, `push`, `sync` and code transfer.** Upstream `push`/`sync` invoke transfer functions, not simple REST uploads; existing BoxWeave file read/patch use `connect(exec)` and optional `agent_box.py`. Design coherent file bytes, paths/roots/symlinks, hashes/CAS, large-file streams, output/size caps, atomic replacement, and clean-Box requirements. SFTP is one option, not a mandatory dependency or automatically authorized endpoint.
 3. **Detached coding runs.** Upstream `code_run`, `code_attach`, `code_status` and related actions connect to `agent-box` over SSH and handle offset/reattach semantics. Track run vs caller request, process survival vs reply recovery, log-offset bounds, cancellation uncertainty, optional in-Box helper presence and separate approval trust; do not imply Agent approval-MCP is a universal approval API.
 4. **Cross-transport authority and SSH identities.** The current gateway injects a server-owned public key on create, checks expected target before connect, and uses a separate app principal from direct-Agent authority. Splitting API and SSH must retain these distinctions, credential rotation and least privilege; do not merge Web cookies, model keys, outbound JWT and remote MCP OAuth tokens.
@@ -109,10 +130,10 @@ These two architectural choices are now **recorded owner directions**, not shipp
 ## 4. Agent-facing compatibility is a separate project
 
 Preserve two different contracts:
-- **Outbound internal Provider:** BoxWeave → Containarium REST (the proposed migration).
+- **Outbound internal Provider:** BoxWeave → Containarium **REST and upstream MCP** per supported operation (selected hybrid).
 - **Inbound public controller:** user Agent → BoxWeave MCP, with SSH stdio or authenticated Streamable HTTP, discovery, pagination, resources, OAuth/login policies and observed errors.
 
-Switching the first **does not imply removing the second**. A complete gateway rewrite must test:
+Changing an outbound operation **does not imply removing either MCP path**. A complete gateway rewrite must test:
 - Registered tool names and schemas; agent-client discovery and access control; pagination and `resources/list/read`.
 - Managed public key injection for newly created Boxes; exact target override denial on connect and file operations.
 - Existing `boxweave_info`, `boxweave_diagnose`, `boxweave_project_diagnose`, Box reads/patches, tracked task lookup/submit and leases, `boxweave_nesting`.
@@ -122,16 +143,16 @@ Switching the first **does not imply removing the second**. A complete gateway r
 
 **Never silently offer all raw REST endpoints as Agent tools**. Tool registration is an authorization decision; read-only hints or upstream schema annotations alone are not sufficient.
 
-## 5. Proposed implementation phases (small, independently accepted)
+## 5. Selective workstreams (historical phase labels, independently accepted)
 
 | Phase | Goal | Done when | Risk |
 | --- | --- | --- | --- |
 | **A0 — Audit only** | Inventory app calls + every gateway catalogue capability; verify deployed API/token/host ownership and Protobuf routes | Explicit per-feature row `MCP`/`REST`/`SSH`/`local-only`/`unsupported`, confidence and test ownership | Low; no mutation |
 | **A1 — Read-only REST proof** | Implement bounded API read client and a few Get/List/metrics/capability probes behind an opt-in adapter | Same exact Box identity and state, direct 401/403/404/timeout classification, empty-list, pagination, no existing-host changes | Medium |
 | **A2 — Application management REST** | Wire lifecycle, Tenant/Guard, routes, auto-sleep through existing service plans/receipts | Fixture + isolated live positive/negative/UNKNOWN, unchanged real authorization and no duplicated writes | Medium–high |
-| **A3 — Box Executor** | Separate SSH/session/file/exec, optional existing agent-box reuse; keep fallback MCP for unmigrated routes | Known identity and trust; stdout/exit7/timeout/unknown; CAS patch/unsafe path/large file, no host-shell escape | High |
+| **A3 — Box Executor (optional)** | Consider separate SSH/session/file/exec only if a new accepted requirement justifies it; keep working bounded MCP | Known identity and trust; stdout/exit7/timeout/unknown; CAS patch/unsafe path/large file, no host-shell escape | High |
 | **A4 — Unified operation gate + trace** | Merge Web and Agent dispatch; **Option A** per-tool mediation of forwarded MCP writes into shared claims, receipts and D1–D4 metadata | Every advertised protected mutator, including upstream MCP compatibility, intercepted before dispatch; crash/UNKNOWN recovery, no duplicate write, same-Box conflicts/different-Box concurrency and redacted correlation proven | Very high |
-| **A5 — Agent MCP native tool router** | Replace forwarding for proven typed tools; retain explicit fallback for unmapped/advanced tools | Inbound discovery, HTTP/SSH parity, capability denial and client-visible accepted tests | Very high |
+| **A5 — Agent MCP selective adapters (optional)** | Add native typed tools when justified; keep upstream MCP compatibility for complementary capabilities | Inbound discovery, HTTP/SSH parity, capability denial and client-visible accepted tests | Very high |
 | **A6 — Full parity/installed release gates** | Test pin matrix, upgrades, failure repair, auth, real Boxes, route/backup ZFS controls in disposable lab | Each feature row has evidence; no unverified high-risk claim; rollback/promotion independently authorized | Very high |
 
 **Sequencing constraint:** A1 and A0 can proceed without any production host upgrade. A2 can ship independently of A5 **if app and gateway write boundaries remain honest**; it must not be marketed as globally coordinated while untracked Agent writes exist. A5 must not precede A3/A4 if its tool routing would bypass required trust/claims.
@@ -157,7 +178,7 @@ Future testing must include at least:
 
 Evidence rubric: **S = source**, **T = fixture/CI**, **L = live task-owned Box/host/client**, **U = unverified**. A complete source test cannot substitute for real installed authorization, timing and network behavior. Block tests requiring unavailable ZFS or a different provider version without substituting unsafe raw Incus/shell shortcuts.
 
-## 7. 99% parity gate and migration acceptance model
+## 7. Per-operation parity gate (historical 99% full-rewrite thought experiment)
 
 Maintain a machine-readable feature ledger during A0/A6 with at minimum:
 
@@ -174,7 +195,7 @@ required_negative_tests: [identity_drift, timeout_after_send]
 actual_evidence: [test-or-report-ref]
 ```
 
-Do not compute 99% across *unverified* features by treating them as passes; separately disclose catalogue breadth and actually exercised workflows. Set a special **zero-loss gate** for security and recovery invariants. A release blocked on an unsupported backend remains blocked rather than calling the hypothetical capability equivalent.
+The historical 99% goal is **not a REST-conversion target**. Any actual migrated operation still requires full security/recovery invariants. Do not compute 99% across *unverified* features by treating them as passes; separately disclose catalogue breadth and actually exercised workflows. Set a special **zero-loss gate** for security and recovery invariants. A release blocked on an unsupported backend remains blocked rather than calling the hypothetical capability equivalent.
 
 ## 8. Reversibility and deployment
 
@@ -186,4 +207,4 @@ Do not compute 99% across *unverified* features by treating them as passes; sepa
 
 ## 9. Future decision checkpoint
 
-The **owner-selected long-term direction** is coequal coexistence of ADR-003's MCP/SSH trust and compatibility with ADR-010's typed REST app management/SSH Executor, plus **Option A** per-mutator common coordination. This choice does not make all ADR-010 APIs implemented or its deployment formally accepted. To promote full runtime adoption, require A0/A1 deployed API/auth evidence, complete MCP catalogue and write-route inventory, real-Box conflict and failure tests, safe SSH confinement, rollback and explicit owner approval of any behavior intentionally retired. Existing deployed interfaces remain authoritative **for their currently implemented scopes**, without making ADR-003 a universally preferred new development route.
+The **owner-selected architecture is long-term REST + MCP hybrid**, with coequal ADR-003 MCP/SSH trust and ADR-010 selective REST app management, plus **Option A** per-mutator common coordination. An independent SSH Executor is an optional design, not a required REST migration. This choice does not make all ADR-010 APIs implemented or its deployment formally accepted. To promote full runtime adoption, require A0/A1 deployed API/auth evidence, complete MCP catalogue and write-route inventory, real-Box conflict and failure tests, safe SSH confinement, rollback and explicit owner approval of any behavior intentionally retired. Existing deployed interfaces remain authoritative **for their currently implemented scopes**, without making ADR-003 a universally preferred new development route.
