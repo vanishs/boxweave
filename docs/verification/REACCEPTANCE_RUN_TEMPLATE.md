@@ -17,7 +17,7 @@
 
 ## 2. Dynamic surface inventory (mandatory)
 
-Produce a complete row per deployed callable action from each available policy/client context, or a compact machine-generated manifest with a checked-in **summary and immutable digest**. Record the discovered total and the unable-to-discover contexts. No hardcoded claim of a fixed MCP tool or Web route count.
+Produce a complete row per **MCP tool and CLI leaf in each actual installed policy/transport** from each available client context, or a detailed machine-generated manifest with a human-readable checked-in summary and immutable digest. A top-level help page or the outer ChatGPT MCP tool list is not a complete installed inventory. Record the discovered total and the unable-to-discover contexts. No hardcoded claim of a fixed MCP tool or Web route count.
 
 | ID | Surface / action | Source / installed seen? | Transport/policy | Read/write/risk | Test case ID or explicit defer reason | State / evidence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -29,9 +29,31 @@ Produce a complete row per deployed callable action from each available policy/c
 
 Surface classification must cover **all** observed entries, even when not safe to execute. Entries exposed only upstream/directly should be marked **outside BoxWeave enforcement**; distinguish them from BoxWeave-owned routes. A missing catalog is a BLOCKED *discovery context*, not proof of an empty catalog.
 
+## 2A. Required **per-action MCP/CLI adversarial execution ledger**
+
+**Every discovered MCP tool and every installed CLI leaf command must appear here individually**, per real installed SSH/HTTP MCP transport, identity/policy and host/app CLI context when different. Enumerate recursively (including hidden `boxweave http`, `boxweave task`, `boxweave selftest` dispatch and `python -m bwmini` modes). The outer ChatGPT-exposed MCP catalog is not a valid replacement for inner installed catalog discovery. **No sampling exception** for low-risk/read-only/forwarded tools.
+
+| ID / function | Actual runtime MCP tool or installed CLI leaf, version and policy | Positive real call/output | Invalid, missing, boundary-input result | Unauthorized/stale/wrong target denial or justified N/A | Independent postcondition, exact exit/receipt and cleanup | PASS/FAIL/PARTIAL/BLOCKED/SKIPPED/UNKNOWN, evidence and next safe step |
+| --- | --- | --- | --- | --- | --- | --- |
+| MCP-... | Exact tool, SSH/HTTP mode, current catalog | Sanitized request, actual reply, case ID | Named case + typed error | Case + observed zero forbidden side effects | Provider UUID/createdAt, guest, receipt, distinct observer | Scope-specific status and proof |
+| CLI-... | Exact executable, subcommand and flags | Actual stdout/stderr, exit and behavior | Exit/error and named case | Auth/permission/target invariant where meaningful | Separate state observation or honest unavailable reason | Status and proof |
+
+For every **safe/authorized/runnable** entry, deliberately attempt real installed positive, malformed/boundary and relevant denial cases, rather than only `tools/list`, `--help`, a single successful call, or fixtures. For read-only tools, positive + absent/invalid target; for mutators verify success and **no forbidden side effect** on denial. A dimension not meaningful for that command is `NOT_APPLICABLE` with a specific reason, not an invented denial. Any individual unsafe/unsupported/unavailable operation receives a **separate named** BLOCKED/SKIPPED/UNKNOWN row with exact authority/dependency blocker and next command. Low priority does not justify skipping. Discovery-only cannot be PASS. An unknown dispatched mutation is preserved, never retried merely to fill the table.
+
+## 2B. Required **owner-facing detailed functional acceptance table**
+
+Use the [consolidated prior-scheme functional baseline](REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md), [historical 39-feature evidence depth](EVIDENCE_LAYERS_0449.md), [call-chain/R-02/R-04 plan](../design/RUNTIME_CALL_CHAINS_0449.md), [test strategy](TEST_STRATEGY.md), feature matrix and new installed surfaces. Reconcile **all historical F01–F39** plus current/new features; historical PASS never grants current PASS. Every tool/CLI leaf must map to one or more named functions and every function back to actual implementing commands/routes.
+
+| Feature ID + understandable purpose | Actual MCP tools/CLI leaves/Web/REST entries | Concrete positive scenario tried/result | Concrete malformed, denied, boundary, concurrency or cross-interface scenario/result | Expected vs **independently observed** effect and receipt | Status, exact installed version and evidence S/T/I/H/X | Untested paths, bug/issue references and smallest next-agent test |
+| --- | --- | --- | --- | --- | --- | --- |
+| Fxx / human-readable feature name | Exact names (no counts-only) | Actual case, command and exit | Actual cases or detailed non-execution reason | Provider/guest/task/Incus independent read | Scoped PASS / PARTIAL / FAIL / BLOCKED / SKIPPED / UNKNOWN | Missing subpaths and next action |
+| Xyy / newly discovered feature | Real entrypoints | Test or explicit not tested | Test or explicit not tested | Real oracle or unavailable | Same | Actual blocker |
+
+**Acceptance of the report requires every named feature row, including passed, failed, blocked, skipped and untested features.** Each row explains **what the feature does, what was intentionally challenged, what occurred and what remains unverified**, so the owner can judge the intended coverage. A tally such as “15/68 tested” or a list of only failures is insufficient. If large, commit the full human-readable table plus the tool/action ledger, link them in the final response, and still display a readable grouped feature summary covering all areas (not only totals).
+
 ## 3. Scenario evidence (black-box-first)
 
-For each risk-critical family, the target is **positive + authorization/identity denial + invalid input**, or precise unavailable/unsupported reasoning. Real authenticated Web positive tests are not replaced by fixtures or a 401. Test-owned mutation requires original identity and independent readback.
+For **every safely runnable discovered MCP tool and CLI leaf**, the required adversarial dimensions are **positive + meaningful authorization/identity denial + malformed/boundary input**, or exact per-action unavailable/unsupported reasoning; combine the entries into risk-weighted scenarios from earlier acceptance schemes. Real authenticated Web positive tests are not replaced by fixtures or a 401. Test-owned mutation requires original identity and independent readback.
 
 | Case | Boundary / workflow | Expected response and remote effect | Actual response/exit | Independent oracle | Source / installed / policy | Result + evidence class |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -67,7 +89,7 @@ Fix commit / candidate installed artifact / original-repro verification result:
 | Metric | Required report |
 | --- | --- |
 | Discovered surfaces | Totals by SSH MCP, HTTP MCP, host/app CLI, Web, REST/Provider; available and blocked contexts |
-| Evaluated capabilities | Positive / denial / invalid / unsupported / not executed counts **by family** |
+| Evaluated capabilities | **Full named owner-facing functional table** and separate **every MCP/CLI leaf** black-box ledger; positive / denial / invalid / unsupported / not-executed details per action and feature, with counts only supplemental |
 | Real-world depth | T fixture vs I/L installed vs H operator host vs X independent client, scoped to exact version |
 | State-machine + fault coverage | Named sequences, independent oracle and injected failures, not just test counts |
 | Known-bad harness check | DETECTED / MISSED / NOT RUN and implication |
