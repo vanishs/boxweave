@@ -1,3 +1,8 @@
+## v0.44.9 corrective acceptance and release gate — 2026-11-05 UTC
+
+[Current deep-source and live outer task checkpoint](../verification/REACCEPTANCE_0449_2026-11-05.md): owner-approved `task provision` on `dev` ready/metadata-only, live tracked-task exact marker, get/list and dedup PASS; no global protected-mode activation. Fixed competing `dispatch_intent` classification to `RECOVERY_REQUIRED` without automatic release or re-execution (fail-before-fix reproduced), and removed ambient installed policy dependence in six Gateway fixture suites. Patched source: 742/742 tests, 10-step knowledge/build/seven-browser lane PASS. P1-02 PARTIAL, P1-03 BLOCKED, P1-04 PARTIAL despite corrected source, P1-05/P1-06 UPSTREAM OPEN. Exact v0.44.9 release CI and installed binary remain separate gates; stable pin v0.43.1 unchanged.
+
+
 ## 2026-11-04 PT / 2026-11-05 UTC — official v0.44.8 six-item P1 checkpoint
 
 [Latest independently installed acceptance and precise blockers](../verification/P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) supersedes the earlier *candidate / pending v0.44.8 install* wording **only for exact gates newly demonstrated**. Source `3ff0a6c7`, [CI](https://github.com/vanishs/boxweave/actions/runs/41956686624) PASS, official installed new isolated parent doctor 10/10, complete 740-case Python+frontend+knowledge validation PASS. P1-01 **PARTIAL / owner-host BLOCKED**, P1-02 **PARTIAL**, P1-03 **BLOCKED**, P1-04 **PARTIAL**, P1-05 **UPSTREAM OPEN**, P1-06 **BoxWeave sampled defense PASS / UPSTREAM OPEN** (native Containarium 0.128.0 accepted disk shrink). Incident claims, owner outer host and stable `PUBLISHED_RELEASE=0.43.1` not changed. No product source changed here, so no new product version was released.

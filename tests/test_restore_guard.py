@@ -9,10 +9,19 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from bwmini import restore_guard as guard
+from bwmini import restore_guard as guard, mcp_gate
 
 
 class RestoreGuardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

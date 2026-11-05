@@ -55,7 +55,7 @@ class LifecycleClaimTests(Base):
         def during(action,logical,spec,timeout):
             active=self.life.receipts()[0]["id"]
             seen.append(self.claims.coordinator.status(active)["state"])
-            with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
+            with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
                 self.gateway_claim_name(NAME)
             return original(action,logical,spec,timeout)
         self.provider.lifecycle_mutate=during
@@ -118,7 +118,7 @@ class LifecycleClaimTests(Base):
         oid,result=self.run_action()
         self.assertEqual(result["state"],"observing")
         self.assertEqual(self.gateway.coordinator.status(oid)["state"],"dispatch_intent")
-        with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
+        with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
             self.gateway_claim_name(NAME)
         self.now[0]+=16
         self.s.worker(once=True)

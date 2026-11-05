@@ -186,8 +186,14 @@ class OperationCoordinator:
                     "JOIN coordination_operations o ON o.operation_id=r.operation_id "
                     "WHERE r.resource=?", (key,)).fetchone()
                 if owner:
+                    # A dispatch_intent is already an uncertain remote write:
+                    # it may still be running or its worker may have died.
+                    # The durable task receipt also presents this as UNKNOWN.
+                    # Require original-outcome reconciliation in either case;
+                    # never release claims or replay the mutation here.
                     raise CoordinationFault(
-                        "RECOVERY_REQUIRED" if owner[0] == "unknown" else "RESOURCE_BUSY")
+                        "RECOVERY_REQUIRED" if owner[0] in ("dispatch_intent", "unknown")
+                        else "RESOURCE_BUSY")
             now = self.clock()
             db.execute("INSERT INTO coordination_operations VALUES (?,?,?,?,?,?)",
                        (operation_id, identity_digest, receipt_ref, "accepted", now, now))

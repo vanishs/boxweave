@@ -48,6 +48,15 @@ class FakeProvider:
         pass
 
 class GatewayTaskIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -177,6 +186,20 @@ class GatewayTaskIntegration(unittest.TestCase):
         self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
         self.assertEqual(replies[0]["error"]["message"],"RESOURCE_BUSY")
         self.assertEqual(self.store.get(request_key="d"*32)["state"],"failed_before_dispatch")
+
+    def test_dispatched_claim_blocks_fresh_task_as_recovery_required(self):
+        identity,scope,logical=app_box(TARGET,SCOPE)
+        self.claims.acquire("1"*32,"web_1",identity,scope,logical)
+        self.claims.dispatch_intent("1"*32)
+        request={"jsonrpc":"2.0","id":24,"method":"tools/call",
+                 "params":{"name":"boxweave_task_submit",
+                           "arguments":{"box":"box1","request_key":"f"*32,
+                                        "exec":"echo must-not-run"}}}
+        provider,replies=self.run_gateway([request])
+        self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+        self.assertEqual(replies[0]["error"]["message"],"RECOVERY_REQUIRED")
+        self.assertEqual(self.claims.coordinator.status("1"*32)["state"],"dispatch_intent")
+        self.assertEqual(self.store.get(request_key="f"*32)["state"],"failed_before_dispatch")
 
     def test_unknown_web_claim_survives_recovered_gateway(self):
         identity,scope,logical=app_box(TARGET,SCOPE)

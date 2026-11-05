@@ -46,7 +46,7 @@ class CoordinatedBoxActionTests(Base):
         def during_dispatch(adapter,action,args,timeout=30):
             self.assertEqual(self.gateway.coordinator.status(self.active)["state"],
                              "dispatch_intent")
-            with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
+            with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
                 self.gateway.acquire("d"*32,"gateway_d",ident,scope,logical)
             return real_execute(adapter,action,args,timeout=timeout)
 

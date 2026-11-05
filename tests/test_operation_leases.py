@@ -27,7 +27,7 @@ class LeaseTests(unittest.TestCase):
     def test_nonleased_operations_continue_without_token(self):
         self.c.acquire("1"*32,IDENTITY_A,"receipt_a",[A])
         self.c.dispatch_intent("1"*32)
-        with self.assertRaisesRegex(CoordinationFault,"RESOURCE_BUSY"):
+        with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):
             self.c.acquire("2"*32,IDENTITY_A,"receipt_b",[A])
         self.c.unknown("1"*32)
         with self.assertRaisesRegex(CoordinationFault,"RECOVERY_REQUIRED"):

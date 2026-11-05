@@ -53,6 +53,16 @@ class CoordinationTests(unittest.TestCase):
         self.assert_code("OPERATION_STATE_CONFLICT",
                          lambda: self.store.cancel_before_dispatch(self.op(1)))
 
+    def test_dispatch_intent_requires_original_outcome_reconciliation(self):
+        # A killed gateway can leave the shared claim in dispatch_intent
+        # while its durable task receipt is surfaced as UNKNOWN.
+        self.store.acquire(self.op(1), A, "gateway_1", [box_resource(A)])
+        self.store.dispatch_intent(self.op(1))
+        self.assert_code("RECOVERY_REQUIRED",
+                         lambda: self.store.acquire(self.op(2), A, "gateway_2", [box_resource(A)]))
+        self.assertEqual(self.store.status(self.op(1))["state"], "dispatch_intent")
+        self.assertEqual(self.store.status(self.op(1))["resources"], [box_resource(A)])
+
     def test_unknown_is_not_lease_expiry_or_failure(self):
         self.store.acquire(self.op(1), A, "mcp_1", [box_resource(A)])
         self.store.dispatch_intent(self.op(1))

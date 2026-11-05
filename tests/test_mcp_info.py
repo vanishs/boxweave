@@ -9,6 +9,15 @@ from bwmini import mcp_gate
 
 
 class GuideTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def test_static_topics_and_invalid_arguments(self):
         data = mcp_gate.boxweave_info({})
         self.assertEqual(set(data["sections"]), set(mcp_gate.INFO_TOPICS))

@@ -1,3 +1,8 @@
+## v0.44.9 deep reacceptance checkpoint — 2026-11-04 PT / 2026-11-05 UTC
+
+[Fresh source, live outer R-02, protected-host fixture fix and R-04 fail-closed classification evidence](REACCEPTANCE_0449_2026-11-05.md). **P1-01 owner-host provision/submit/get/list/dedup PASS**; reboot persistence and independent concurrent distinct-key conflict U. **P1-04 dispatch_intent contender classification repaired T PASS**, same guest write UNKNOWN and original claim retained; full installed cross-entry matrix remains PARTIAL. The current patched source ran 742/742 unit tests, knowledge, frontend and seven Chromium browser fixture flows PASS. P1-02 PARTIAL, P1-03 BLOCKED and P1-05/P1-06 upstream OPEN. Exact v0.44.9 installed acceptance, published source SHA and CI are follow-up gates. Stable pin remains v0.43.1.
+
+
 ## v0.44.8 P1 six-item follow-up — 2026-11-04 PT / 2026-11-05 UTC
 
 **Authoritative new checkpoint:** [P1 remediation and acceptance report](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md), with exact installed SHA, tested environments, exits, Incus/guest effects, original UNKNOWN identity evidence, safe-reconciliation procedure and escalation requirements. Keep historical task rows below unchanged.

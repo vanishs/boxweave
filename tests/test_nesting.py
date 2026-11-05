@@ -153,6 +153,15 @@ class NestingLifecycleTests(Base):
         self.assertFalse(self.provider.writes)
 
 class GateProtocolTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def test_create_strips_extension_and_applies_it_only_after_success(self):
         import struct,base64
         from io import StringIO

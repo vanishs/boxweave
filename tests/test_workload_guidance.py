@@ -15,6 +15,15 @@ def key(letter):
 
 
 class WorkloadIdentityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def test_generated_client_leaves_codex_agents_untouched(self):
         script=client_setup.render(ready_state(),"example-admin")
         for forbidden in ("AGENTS.override.md", "WslGuidance",

@@ -65,6 +65,15 @@ class FakeProcess:
 
 
 class GatewayFlowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Gateway fixture expectations must not depend on the host's
+        # root-installed protected-mode policy. Individual protection
+        # tests explicitly override this default where appropriate.
+        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
+        base.start()
+        cls.addClassCleanup(base.stop)
+
     def exercise(self, request, *, approved=None, registry=None):
         fake = FakeProcess()
         hooks = [patch.object(mcp_gate, "tool_policy", return_value=None),
