@@ -1,0 +1,1292 @@
+{
+  "run_id": "RACC-0461-20261105-B",
+  "observed_date_utc": "2026-11-05",
+  "source_main_sha": "9d8785cdae3cedb3dbe954b4e7e8d7ac91e414c6",
+  "installed_boxweave": {
+    "release": "0.46.1",
+    "source_sha": "2ec04fa1553e4c23a71b5a7fb4f2eab3b305a0b1",
+    "box": "bw-reaccept-1105-b-container",
+    "created_at": "1793892337"
+  },
+  "warning": "Tool catalog is the authorized outer Agent MCP view, not an authenticated tools/list against the inner installed release. Web routes are parsed from installed release decorators, not an authenticated URL-map or exhaustive live route probe; do not promote to runtime PASS.",
+  "catalog": {
+    "outer_mcp": [
+      {
+        "name": "create_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_containers",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "INVENTORY",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "get_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-LIFECYCLE",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "debug_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-DEBUG",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "move_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "resize_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "SC-LIFECYCLE",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "toggle_monitoring",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "set_metrics_export",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "get_metrics_export",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "delete_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "start_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "SC-LIFECYCLE",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "toggle_auto_sleep",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "stop_container",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "SC-LIFECYCLE",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "get_metrics",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "get_system_info",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "INVENTORY",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "check_for_updates",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "upgrade_backend",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "get_upgrade_status",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_backends",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "INVENTORY",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "get_backend",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "backend_validate_gpu",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "security_findings",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "security_sentry_status",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_bad_destinations",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_security_sentry_findings",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "sync_ssh_config",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "code_runs",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "code_logs",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "code_pending",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "connect",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "SC-TASK,SC-LIFECYCLE,SC-NEGATIVE",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "list_routes",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "network_guard_status",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "delete_route",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "add_collaborator",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_collaborators",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "remove_collaborator",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "expose_port",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_passthrough_routes",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "add_passthrough_route",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "delete_passthrough_route",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_recipes",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "deploy_recipe",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "compose_discover",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "compose_enable",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "compose_disable",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "compose_status",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "provision_runners",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_runners",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "remove_runner",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "guardrail_policy_get",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "set_ssh_keys",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "security_process_policy_get",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_miner_signatures",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "terminate_user_sessions",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "network_tenant_capabilities",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "list_network_policies",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "get_network_policy",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "patch_tenant_access",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "boxweave_nesting",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Requires separate test-owned target, explicit policy, specialized dependency or destructive-risk review",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "boxweave_info",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "boxweave_diagnose",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-COMPAT",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "boxweave_project_diagnose",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "boxweave_diagnostic_run",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-PREFLIGHT",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "boxweave_box_read_file",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-READ-GUARDS",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "boxweave_box_list_directory",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "CLASSIFIED_NOT_EXECUTED",
+        "deferral": "Representative read-only sampling; no material user scenario established",
+        "verification": "catalog_only"
+      },
+      {
+        "name": "boxweave_task_submit",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "mutation_or_dual_use",
+        "priority": "P1",
+        "scope": "SC-TASK",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "boxweave_task_get",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-TASK",
+        "deferral": null,
+        "verification": "observed_scoped"
+      },
+      {
+        "name": "boxweave_task_list",
+        "access": "outer ChatGPT MCP runtime catalog",
+        "risk_class": "read_or_diagnostic",
+        "priority": "P2",
+        "scope": "SC-TASK",
+        "deferral": null,
+        "verification": "observed_scoped"
+      }
+    ],
+    "installed_web_route_decorators": [
+      {
+        "method": "GET",
+        "path": "/",
+        "source": "remote_mcp.py",
+        "function": "root_help",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/oauth-authorization-server",
+        "source": "remote_mcp.py",
+        "function": "authorization_server",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/oauth-protected-resource",
+        "source": "remote_mcp.py",
+        "function": "protected_resource",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/oauth-protected-resource/mcp",
+        "source": "remote_mcp.py",
+        "function": "protected_resource",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/authorize",
+        "source": "remote_mcp.py",
+        "function": "authorize",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/authorize",
+        "source": "remote_mcp.py",
+        "function": "approve",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "DELETE",
+        "path": "/mcp",
+        "source": "remote_mcp.py",
+        "function": "mcp",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/mcp",
+        "source": "remote_mcp.py",
+        "function": "mcp",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/mcp",
+        "source": "remote_mcp.py",
+        "function": "mcp",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "DELETE",
+        "path": "/mcp/link/<link>",
+        "source": "remote_mcp.py",
+        "function": "mcp_link",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/mcp/link/<link>",
+        "source": "remote_mcp.py",
+        "function": "mcp_link",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/mcp/link/<link>",
+        "source": "remote_mcp.py",
+        "function": "mcp_link",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/register",
+        "source": "remote_mcp.py",
+        "function": "register",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/token",
+        "source": "remote_mcp.py",
+        "function": "token",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/",
+        "source": "web.py",
+        "function": "index",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/access",
+        "source": "web.py",
+        "function": "access_settings",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/access-operations",
+        "source": "web.py",
+        "function": "access_history",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/access-operations/<oid>",
+        "source": "web.py",
+        "function": "access_receipt",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/access-operations/<oid>/observe",
+        "source": "web.py",
+        "function": "access_observe",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/access-plans/<pid>/confirm",
+        "source": "web.py",
+        "function": "access_confirm",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/access-plans/network",
+        "source": "web.py",
+        "function": "access_network_plan",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/access-plans/port",
+        "source": "web.py",
+        "function": "access_port_plan",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/access/memberships",
+        "source": "web.py",
+        "function": "access_memberships",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/box-action-plans",
+        "source": "web.py",
+        "function": "box_action_plan",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/box-action-plans/<pid>/confirm",
+        "source": "web.py",
+        "function": "box_action_confirm",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/box-action-receipts",
+        "source": "web.py",
+        "function": "box_action_receipts",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/box-action-receipts/<rid>",
+        "source": "web.py",
+        "function": "box_action_receipt",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/boxes/<logical>/agent-box",
+        "source": "web.py",
+        "function": "box_agent_capabilities",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/boxes/<logical>/agent-box/read",
+        "source": "web.py",
+        "function": "box_agent_read",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/boxes/<logical>/agent-box/resource",
+        "source": "web.py",
+        "function": "box_agent_resource",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/boxes/<logical>/debug-summary",
+        "source": "web.py",
+        "function": "box_debug_summary",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/boxes/<logical>/environment",
+        "source": "web.py",
+        "function": "environment_report",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/boxes/<logical>/environment/capture",
+        "source": "web.py",
+        "function": "environment_capture",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/client-profile",
+        "source": "web.py",
+        "function": "public_client_profile",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/environment-captures",
+        "source": "web.py",
+        "function": "environment_captures",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/environment-captures/<ident>",
+        "source": "web.py",
+        "function": "environment_capture_detail",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/environment-captures/compare",
+        "source": "web.py",
+        "function": "environment_compare",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/environment-operations",
+        "source": "web.py",
+        "function": "environment_receipts",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/environment-operations/<oid>",
+        "source": "web.py",
+        "function": "environment_receipt",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/environment-operations/<oid>/observe",
+        "source": "web.py",
+        "function": "environment_observe",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/environment-plans",
+        "source": "web.py",
+        "function": "environment_plan",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/environment-plans/<pid>/confirm",
+        "source": "web.py",
+        "function": "environment_confirm",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/environments",
+        "source": "web.py",
+        "function": "environment_settings",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/graphs",
+        "source": "web.py",
+        "function": "graph_list",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/graphs",
+        "source": "web.py",
+        "function": "graph_create",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/graphs/<gid>",
+        "source": "web.py",
+        "function": "graph_delete",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/graphs/<gid>",
+        "source": "web.py",
+        "function": "graph_get",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/graphs/<gid>",
+        "source": "web.py",
+        "function": "graph_save",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/graphs/<gid>/copies",
+        "source": "web.py",
+        "function": "graph_copy",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/graphs/<gid>/markdown",
+        "source": "web.py",
+        "function": "graph_export",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/login",
+        "source": "web.py",
+        "function": "login",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/logout",
+        "source": "web.py",
+        "function": "logout",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/mcp-capabilities",
+        "source": "web.py",
+        "function": "mcp_capabilities",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/model-wizard",
+        "source": "web.py",
+        "function": "model_wizard",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/model-wizard",
+        "source": "web.py",
+        "function": "model_save",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/model-wizard/confirm",
+        "source": "web.py",
+        "function": "model_confirm",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/model-wizard/handoff",
+        "source": "web.py",
+        "function": "model_handoff",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/operation-history",
+        "source": "web.py",
+        "function": "receipt_history",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/operations",
+        "source": "web.py",
+        "function": "receipts",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/operations/<oid>",
+        "source": "web.py",
+        "function": "receipt",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/operations/<oid>/observations",
+        "source": "web.py",
+        "function": "observations",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/operations/<oid>/reconcile",
+        "source": "web.py",
+        "function": "reconcile",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/plans",
+        "source": "web.py",
+        "function": "plan",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/plans/<pid>/confirm",
+        "source": "web.py",
+        "function": "confirm",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/projects",
+        "source": "web.py",
+        "function": "projects",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/projects",
+        "source": "web.py",
+        "function": "bind",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/projects/<pid>",
+        "source": "web.py",
+        "function": "rebind",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/projects/<pid>/binding",
+        "source": "web.py",
+        "function": "unbind",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/remote-mcp",
+        "source": "web.py",
+        "function": "remote_mcp_info",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/remote-mcp/credentials",
+        "source": "web.py",
+        "function": "remote_mcp_issue",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/remote-mcp/credentials/<ident>",
+        "source": "web.py",
+        "function": "remote_mcp_revoke",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/resources",
+        "source": "web.py",
+        "function": "resources",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/api/session",
+        "source": "web.py",
+        "function": "who",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/tenants/<key>/label",
+        "source": "web.py",
+        "function": "tenant_label",
+        "classification": "write_or_sensitive",
+        "verification": "source_decorator_only"
+      },
+      {
+        "method": "GET",
+        "path": "/assets/<path:asset>",
+        "source": "web.py",
+        "function": "asset",
+        "classification": "read_or_metadata",
+        "verification": "source_decorator_only"
+      }
+    ],
+    "installed_host_cli_help": [
+      "setup",
+      "version",
+      "status",
+      "doctor",
+      "report",
+      "provenance",
+      "box",
+      "client"
+    ],
+    "installed_host_cli_special_dispatch_not_in_global_help": [
+      "http (status,doctor,configure,restart)",
+      "task (provision,recover inspect/release/audit)",
+      "selftest (plan,run)"
+    ],
+    "installed_app_cli_help": [
+      "capabilities",
+      "init-admin",
+      "reset-admin",
+      "serve",
+      "remote-mcp",
+      "remote-https",
+      "remote-caddyfile",
+      "worker",
+      "projects",
+      "receipts",
+      "history",
+      "reconcile",
+      "environments",
+      "environment-plan",
+      "environment-confirm",
+      "environment-receipts",
+      "environment-receipt",
+      "environment-observe",
+      "model-wizard",
+      "model-select",
+      "model-confirm",
+      "model-handoff",
+      "access",
+      "access-memberships",
+      "access-network-plan",
+      "access-port-plan",
+      "access-confirm",
+      "access-receipts",
+      "access-receipt",
+      "access-observe",
+      "tenant-label",
+      "diagnose",
+      "job-run",
+      "job-receipts",
+      "selftest-plan",
+      "selftest-run"
+    ]
+  },
+  "counts": {
+    "outer_mcp": 68,
+    "outer_mcp_read": 39,
+    "outer_mcp_mutation_or_dual": 29,
+    "web_route_method_rows": 75,
+    "host_top_level_cli_help": 8,
+    "host_undocumented_dispatch_families": 3,
+    "app_cli_actions": 36
+  }
+}
