@@ -2,6 +2,8 @@
 
 **Snapshot and meaning.** Review date 2026-11-04 PT / 2026-11-05 UTC. Exact immutable BoxWeave v0.44.9 source/release `0ec0dc81d8cdc69d4fb9a8abaae0615cf41e4f24`, documentation baseline `ea6bfcd81aaeb21dc238db9f47565edb0ba7a466`, and newly committed scoped R-04 installed evidence from `f2ab1954781067740dd84e4784bed040be3433d1` / `e7c2773932fd4eaf104f97372b647aba3afb30c0`. **This is a curated cross-feature evidence index (S/D), not a newly executed real-host test.** References point to scoped historical and v0.44.9 reports; old successful tests do not silently certify v0.44.9 binaries or owner-host processes. [Current authoritative feature ledger](FEATURE_MATRIX.md), [architecture/call graph](../design/RUNTIME_CALL_CHAINS_0449.md), [test methodology](TEST_STRATEGY.md), and [risk owner](OPEN_RISKS.md).
 
+**Issue disposition update (2026-11-05 UTC):** [#76](https://github.com/vanishs/boxweave/issues/76) was closed as currently not reproducible after two fresh upstream 0.128.0 native MCP creates succeeded with immutable Provider/Incus readback, followed by an expected no-side-effect duplicate rejection; no fix/root cause was proven. F34 therefore changes from claimed native defect (!) to **partial / historically ambiguous (~)**. The independently confirmed native shrink defect [#75](https://github.com/vanishs/boxweave/issues/75) remains **! / OPEN / DEFERRED**. The earlier immutable source CI, R-04 test marks and original historical UNKNOWN records are unchanged. No owner host R-04 activation or upstream upgrade occurred.
+
 ## Evidence levels: five independent boundaries
 
 | Level | Acceptance proof | What it cannot prove |
@@ -53,7 +55,7 @@
 | F31 | Coordination — R-04 Web + SSH MCP + HTTP MCP simultaneous | Y | Y | Y | - | - | P0 | Official installed 0.44.9 real pinned SSH MCP, bearer loopback HTTP MCP and seeded-session Web HTTP POST shared claims; same-target lease/in-flight denials and independent Box progress L PASS. Web-owned-first, natural expiry, replacement, complete bypass U | [evidence](REMEDIATION_TEST_QUEUE.md)
 | F32 | Coordination — UNKNOWN/no replay after killed dispatched work | Y | Y | Y | - | - | P0 | Official installed 0.44.9 test-only Gateway SIGKILL after dispatch preserved UNKNOWN and two claims with one observed guest byte; new contenders RECOVERY_REQUIRED/no replay across worker/HTTP restart. Original historical identity/reconciliation remains BLOCKED | [evidence](REMEDIATION_TEST_QUEUE.md)
 | F33 | Coordination — First TRUST_FAILED→READINESS_PENDING→ready | Y | Y | ~ | - | - | P1 | Real new Box creates reached connection_ready, but genuine first failure transition was **not** seen; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
-| F34 | Provider native — Create-after-error authoritative outcome | Y | ~ | ! | - | - | P1 | Historical upstream error despite realized Box; BoxWeave UNKNOWN guarding source tests PASS; new native request correlation absent; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
+| F34 | Provider native — Create-after-error authoritative outcome | Y | ~ | ~ | - | - | P1 | Historical same-name Box after upstream error lacked original dispatch/incarnation proof; latest Containarium 0.128.0 native MCP 2 fresh creates both ACK + independent identities, deliberate duplicate correctly rejected. [Issue #76](https://github.com/vanishs/boxweave/issues/76) CLOSED not-reproducible, not verified fixed; retain BoxWeave UNKNOWN guard | [evidence](OPEN_RISKS.md) 
 | F35 | Provider native — Disk-shrink atomic contract | Y | ~ | ! | - | - | P1 | Containarium 0.128.0 native accepted 10→8 GB config shrink in isolated child and later restored; BoxWeave guard not upstream atomicity; [evidence](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md) |
 | F36 | Diagnostics — D0 Doctor / D2 basic trace & read | Y | Y | Y | ~ | - | P2 | Installed v0.44.9 Doctor 10/10; scoped earlier independent operation tracing, dev diagnosis read; [evidence](REACCEPTANCE_0449_2026-11-05.md) |
 | F37 | Diagnostics — D3 classified faults, D4 privileged read diagnostics | Y | Y | ~ | ~ | - | P2 | Historical positive exact granted service/port and denial real tests; owner dev current negative diagnoses, no full current positive rollout; [evidence](REACCEPTANCE_FULL_RETEST_0427_2026-11-02.md) |
@@ -68,7 +70,7 @@ This table counts the **39 reviewed capability groups above**, not all routes, t
 | --- | ---: | ---: | ---: | ---: |
 | S | 39 | 0 | 0 | 0 |
 | T | 33 | 6 | 0 | 0 |
-| I | 20 | 14 | 2 | 3 |
+| I | 20 | 15 | 1 | 3 |
 | H | 8 | 8 | 0 | 23 |
 | X | 0 | 0 | 0 | 39 |
 

@@ -1,3 +1,7 @@
+## #76 non-reproducible closure / #75 deferred upstream work — 2026-11-05 UTC
+
+[#76](https://github.com/vanishs/boxweave/issues/76) is **closed not planned, *not* upstream fixed** after two successful first-attempt native Containarium 0.128.0 MCP creates with exact Incus identities, plus an intentionally duplicated preexisting name producing expected PROVIDER_REJECTED without identity change. Both new lab children were deleted and their absence verified; historical UNKNOWNs were untouched. Reopen only with an original failed dispatch ID, bounded error, and independently correlated UUID/createdAt. The original older BoxWeave UNKNOWN/no-replay protection remains necessary. [#75](https://github.com/vanishs/boxweave/issues/75) stays **OPEN / DEFERRED**, as existing BoxWeave no-shrink guards work on sampled paths but native 0.128.0 still allowed a config shrink; release notes through upstream v0.130.0 do not explicitly resolve it. No new native shrink test or host upgrade performed during this issue triage.
+
 ## P0 — R-04 UNKNOWN safe recovery closure (merged acceptance item; decision pending)
 
 **Canonical single item:** `R-04 UNKNOWN 安全恢复闭环` (R-04 UNKNOWN safe recovery closure). The earlier descriptions **“UNKNOWN safety boundary — no duplicate write, verify original task identity”** and **“UNKNOWN manual review and controlled recovery”** are **two phases of this one item**, not separately open P0s. Previous evidence keeps its historical meaning; do not count the two descriptions as two independent issues.
