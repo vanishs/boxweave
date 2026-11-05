@@ -984,6 +984,13 @@ def main(argv=None):
         p.add_argument("name")
         p.add_argument("--project", default="default")
     sub.add_parser("client", help="Generate reviewed MCP client setup for Windows, Linux or macOS (no sudo)")
+    # These commands dispatch before argparse's regular subparser path.
+    # Advertise them here without changing their independent authorization checks.
+    sub.add_parser("upstream", help="Inspect or explicitly manage Provider version (sudo for changes)")
+    sub.add_parser("http", help="Managed HTTP MCP status/configuration (sudo for changes)")
+    sub.add_parser("task", help="Provision and inspect/recover tasks (sudo administrator approval)")
+    sub.add_parser("job", help="Run a bounded command as app user (sudo, not root execution)")
+    sub.add_parser("selftest", help="Plan or run a confirmed live nested smoke test")
     if not argv:
         try:
             onboarding(public_state())

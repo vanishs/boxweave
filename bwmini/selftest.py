@@ -70,15 +70,23 @@ class Journal:
         self.run_id = None
 
     def start(self, plan, deadline_epoch):
-        self.run_id = "st-" + secrets.token_hex(8)
+        # The read and the durable intent must be one SQLite write transaction.
+        # A separate preflight SELECT permits two concurrent Agents to both see
+        # "no running selftest" and dispatch distinct create operations.
+        run_id = "st-" + secrets.token_hex(8)
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
+            if db.execute(
+                    "SELECT 1 FROM selftest_runs WHERE state='running' LIMIT 1"
+            ).fetchone() is not None:
+                raise Fault("SELFTEST_RUN_UNRECONCILED", 409)
             db.execute("INSERT INTO selftest_runs VALUES(?,?,?,?,?,?,?,?,?)",
-                       (self.run_id, self.actor, confirmation(plan), plan["box"], "running",
+                       (run_id, self.actor, confirmation(plan), plan["box"], "running",
                         datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                         datetime.datetime.fromtimestamp(deadline_epoch, datetime.timezone.utc)
                         .isoformat(timespec="seconds"), None, "pending"))
-        return self.run_id
+        self.run_id = run_id
+        return run_id
 
     def _mark(self, value):
         with self.store.db() as db:
@@ -132,8 +140,7 @@ def run(provider, plan, budget=900, clock=time.time, sleep=time.sleep, key=None,
         raise Fault("MANAGED_PUBLIC_KEY_REQUIRED", 422)
     deadline = clock() + budget
     if journal is not None:
-        if Journal.unreconciled(journal.store):
-            raise Fault("SELFTEST_RUN_UNRECONCILED")
+        # Journal.start checks active runs under BEGIN IMMEDIATE itself.
         journal.start(plan, deadline)
     steps = []
 
