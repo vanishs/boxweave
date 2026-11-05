@@ -70,7 +70,7 @@ flowchart TB
 
 - `bwmini/provider.py` configures `provider_rest.RESTClient` only when a reviewed `provider_api` block exists. It requires an authenticated loopback URL, restricted token file and typed paths. With an eligible action, application-owned `list/get/create/start/stop/delete/resize` use REST; they still need authoritative post-write observation.
 - `create` with an explicit `_nesting` option uses upstream MCP because that composite is not represented in the current REST create contract. `lifecycle_identity` and fixed guest SSH/hello still use upstream MCP; `access_provider.Wire` obtains Tenant/Guard/route operations through specialized MCP. The Agent-facing Gateway also retains upstream MCP compatibility.
-- Therefore **REST and MCP are coequal, complementary channels today**. The historical future **full** API-first and independent SSH-executor plans are not proof of implemented complete migration.
+- Therefore **REST and MCP are coequal, complementary channels now and in the owner-selected long-term architecture**. Selective REST extension is documented in the [grouped backlog](API_FIRST_PROVIDER_MIGRATION_PLAN.md#21-v0449-remaining-rest-opportunities-by-functional-group); the historical full API-first/independent SSH-executor alternative is not a requirement or proof of implementation.
 
 ## 3. R-02 task durability versus R-04 coordinated mutation
 
