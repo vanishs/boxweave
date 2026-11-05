@@ -1,3 +1,7 @@
+## v0.44.9 official clean install/upgrade acceptance — 2026-11-05 UTC
+
+[Release, full CI, isolated v0.44.8→v0.44.9 installer/doctor and live nested selftest](REACCEPTANCE_0449_2026-11-05.md) **PASS**; source 742 tests + 7 Chromium fixtures PASS. Live official installed selftest created `boxweave-selftest-0f50e2`, executed `hello world`, stopped/deleted it, and left no inner containers; no mutation to original incidents. Selftest operator-owned private plan path returns `SELFTEST_PLAN_INVALID` before dispatch; staging a private app-user-readable plan is a proven workaround, UX diagnostic U. R-04 global, P1-02 original trust race, P1-03 historical recovery and upstream P1-05/06 remain scoped U/BLOCKED/OPEN. Stable v0.43.1 unaffected.
+
 ## v0.44.9 deep reacceptance checkpoint — 2026-11-04 PT / 2026-11-05 UTC
 
 [Fresh source, live outer R-02, protected-host fixture fix and R-04 fail-closed classification evidence](REACCEPTANCE_0449_2026-11-05.md). **P1-01 owner-host provision/submit/get/list/dedup PASS**; reboot persistence and independent concurrent distinct-key conflict U. **P1-04 dispatch_intent contender classification repaired T PASS**, same guest write UNKNOWN and original claim retained; full installed cross-entry matrix remains PARTIAL. The current patched source ran 742/742 unit tests, knowledge, frontend and seven Chromium browser fixture flows PASS. P1-02 PARTIAL, P1-03 BLOCKED and P1-05/P1-06 upstream OPEN. Exact v0.44.9 installed acceptance, published source SHA and CI are follow-up gates. Stable pin remains v0.43.1.

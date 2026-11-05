@@ -1,3 +1,7 @@
+## v0.44.9 release + independently installed upgrade — 2026-11-05 UTC
+
+[Exact source, CI, official v0.44.8→v0.44.9 isolated installation, doctor 10/10 and live create/hello/stop/delete with cleanup](REACCEPTANCE_0449_2026-11-05.md) **PASS**. Follow-up: operator-home selftest plan file is unreadable by app user, yielding typed `SELFTEST_PLAN_INVALID`; app-private owned 0600 plan succeeds. P1-01 real outer tracked task PASS / post-reboot U; P1-02 partial, P1-03 blocked, P1-04 full matrix partial, P1-05/06 upstream open. Stable pin v0.43.1 unchanged; owner outer host not upgraded.
+
 ## v0.44.9 P1 and broad implemented-surface reacceptance — 2026-11-05 UTC
 
 [Authoritative new candidate test and owner-host task ledger](REACCEPTANCE_0449_2026-11-05.md): R-02 outer initialized, live tracked receipt/get/list/dedup L PASS (post-provision cold reboot U); R-04 dispatched-claim competing writer now returns RECOVERY_REQUIRED without releasing/replaying (fail-before-fix + targeted T PASS), full cross-entrypoint matrix still PARTIAL; 742 Python tests, knowledge, frontend and seven browser fixtures T PASS on the patched source under an actually enabled isolated protected policy. P1-02 PARTIAL, P1-03 BLOCKED, P1-05/P1-06 UPSTREAM OPEN. Historic 0.44.8 source/installed evidence remains scoped below. v0.44.9 release/CI and exact installation must be checked separately.
