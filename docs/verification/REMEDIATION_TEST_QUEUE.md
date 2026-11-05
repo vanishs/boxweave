@@ -1,3 +1,18 @@
+## v0.44.8 P1 six-item follow-up — 2026-11-04 PT / 2026-11-05 UTC
+
+**Authoritative new checkpoint:** [P1 remediation and acceptance report](P1_REMEDIATION_ACCEPTANCE_0448_2026-11-04.md), with exact installed SHA, tested environments, exits, Incus/guest effects, original UNKNOWN identity evidence, safe-reconciliation procedure and escalation requirements. Keep historical task rows below unchanged.
+
+| Work item | Current evidence/status | Next executable gate |
+| --- | --- | --- |
+| P1-01 outer R-02 | **PARTIAL / owner-host BLOCKED**; v0.44.8 fresh isolated provisioning twice, real dedup+receipt+restart PASS; outer TASK_TRACKING_UNAVAILABLE | Owner-approved root `sudo boxweave task provision` after installed-state preflight; then live outer tracked task with exact disposable target |
+| P1-02 create SSH trust readiness | **PARTIAL**; v0.44.8 source regressions and live new create PASS; genuine first TRUST_FAILED transition not seen | Reproducible real post-create host-key publication race and TRUST_READINESS_PENDING→connection_ready with same incarnation, one dispatch, original deadline |
+| P1-03 original UNKNOWN | **BLOCKED**; read-only application/claim/Provider UUID correlation and previous deleted 0446 incarnation retained | Correlate original per-operation dispatch traces to immutable Provider request and UUID; any claim or historical Box write needs separate owner approval |
+| P1-04 global R-04 | **PARTIAL**; live protected Gateway/app lease conflict, independent Box task, kill-after-dispatch UNKNOWN and guest side effect | Authenticated installed Web HTTP/HTTP+SSH MCP cross-entry collision, expiry, replacement and active-agent/process restart |
+| P1-05 upstream create-after-error | **UPSTREAM OPEN**; existing BoxWeave source tests PASS, historical raw incident retained | Safely capture new original-request/result/provider-incarnation trace inside a disposable nested Provider without retry/adoption |
+| P1-06 disk shrink | **UPSTREAM OPEN**; BoxWeave installed shrink refusals PASS, new native 0.128.0 successfully shrank 10→8GB in isolated guest, restored | Retain upstream defect; test remaining installed entrypoint combinations and race/atomicity boundary without upstream modification |
+
+**Source/release and authorization:** v0.44.8 `3ff0a6c7`, [CI 41956686624](https://github.com/vanishs/boxweave/actions/runs/41956686624); owner host Provider/network/SSH, original 0446/0447 claims and stable `PUBLISHED_RELEASE=0.43.1` unchanged. No new product code was changed; therefore no new immutable release is required at this checkpoint.
+
 ## 2026-11-04 v0.44.8 candidate: expired observing R-04 claim classification
 
 [Reproduced fail-before-fix and pending release gates](R04_DEADLINE_CLAIM_SYNC_0448_2026-11-04.md). An already acknowledged create could reach application `unknown/DEADLINE_EXCEEDED` via the worker's direct deadline branch while leaving the shared resource coordinator at `dispatch_intent`; another Agent saw RESOURCE_BUSY instead of the more accurate RECOVERY_REQUIRED. New fixture demonstrated that failure, minimal classification-only code change keeps original resource claimed and no command replay. Source-focused 13 PASS; complete source and independent official installed v0.44.8 gates still pending at this checkpoint. Original two UNKNOWN incidents retained; outer host unaffected; upstream Containarium defects only recorded.
