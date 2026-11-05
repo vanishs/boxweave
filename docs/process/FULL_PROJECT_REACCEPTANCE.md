@@ -12,6 +12,19 @@ Apply [AGENTS.md](../../AGENTS.md), [Agent development workflow](AGENT_TEST_WORK
 
 **Proceed end-to-end without asking for routine choices.** If an individual target is unsafe or unavailable, mark the exact gate BLOCKED / SKIPPED / UNKNOWN and continue independent work. Ask the owner only for a new target/permission, a privileged action outside the existing grant, an irreversible decision, or a genuinely indispensable external dependency. No Agent may silently expand authorization.
 
+## 2026-11-05 operational refinement: acceptance must be executable, not just documented
+
+The following are **mandatory Agent procedures now**, not claims that an automated harness, scheduler or CI acceptance gate has been implemented. Execute manually with available tools when necessary and mark unimplemented automation explicitly. The canonical command remains unchanged. The detailed tool-development backlog is at the end of this document.
+
+- **Catalog reconciliation before testing:** compare current source registration/early dispatch, *installed executable and effective help*, and actual SSH/stdio/HTTP MCP `tools/list` plus Web route/Provider reachability. Report differences as candidate defects even if a callable command is absent from help; inspecting `argparse.add_parser` alone cannot discover special dispatch (`#80`). Missing authentication is an inventory blocker, not an empty catalog.
+- **Reproducible behavior over green counts:** prioritize causal counterexamples: original failure, actual remote state, race interleavings, typed errors and later recovery. Healthy `doctor`, 100 repeated serial PASS, or all-green fixture CI cannot establish simultaneous-actor safety (`#83`), functional Compose support (`#79`) or release parity.
+- **No fabricated evidence:** each executable result must have an immutable test-run/case ID and independently observable exit/response and postcondition. A synthetic `CONFIG_OR_RUNTIME_UNAVAILABLE` response exercises preflight only: it cannot be a positive functional acceptance. Track missing evidence separately from unsafe permissions and unsupported capabilities.
+- **Separate shipping gates:** a publishable exact-source candidate must pass its applicable **installed isolated black-box gates before public release**. CI verifies source/fixtures; publishing verifies immutable assets; neither replaces installed candidate behavior. Post-publication checks reconcile tag, manifest, bytes and a bounded official-release install smoke. Do not move stable pin implicitly.
+- **Do not collapse distinct findings:** closing a confirmed root cause does not close an earlier ambiguous symptom unless the evidence establishes causation or independently verifies the symptom is resolved. A `SUSPECT` can remain open with a precise next reproduction after an associated confirmed defect has shipped.
+
+These refinements apply prospectively to new runs. Historic reports keep their original observations and version-scoped classifications.
+
+
 ## Mandatory MCP/CLI full-coverage and owner-visible acceptance contract
 
 **Two independent coverage axes are mandatory, not interchangeable:**
@@ -71,6 +84,13 @@ Build a current **surface ledger** from the deployed system **and** current sour
 
 For **every currently discovered callable endpoint/tool/action**, record name, transport, read/write/destructive class, required authority/policy, expected effect, runtime reachability, function ID(s), test IDs, and acceptance evidence level. Distinguish the outer Agent's tool catalog from actual installed inner SSH and HTTP MCP catalogs and the direct upstream catalog. Newly added/removed/renamed surfaces require explicit source/runtime reconciliation. **Gate: all current MCP and CLI leaf entries discovered and classified, all discovery-blocked contexts separately declared, every discovered action assigned a test plan—not yet a PASS.** Missing catalogs/permissions are explicit BLOCKED inventory rows, never zero features. Use one runtime-derived catalog per supported auth/policy mode; do not hardcode tool counts.
 
+### Phase 1A — detect undisclosed interfaces and coverage drift (mandatory)
+
+Create one comparison table keyed by `transport + effective identity/policy + installed release digest + exact callable action`. For each host CLI family, recurse both human help and runtime/source dispatcher branches, including early interceptors; attempt safe `--help` or deliberately invalid invocation on each discovered leaf, then verify a real positive wherever authorized. A hidden callable command is a **discoverability failure**, not simply an extra row. For each native/forwarded MCP method compare actual schema, route support and error translation, not only matching names. Compare Web's actual registered methods and authenticated route behavior with source decorators; HTTP 401 alone proves denial but not route success.
+
+The inventory gate must flag: (1) source-only, (2) installed-only, (3) installed-but-undocumented, (4) advertised-but-not-callable, (5) catalog differences by transport/policy, (6) Provider capability/REST-route mismatch, and (7) surface unverified due to authority or credentials. Demand an owner-facing reason and a linked scenario for each difference. Do not hardcode the historical 68/26/36 counts or auto-convert a tool catalog to PASS.
+
+
 ### Phase 2 — Independent installed black-box breadth scan (Finder)
 
 Work from **outside** the function under test using the **installed shipped interface**, a clean test-owned identity and a reproducible immutable target. **Execute a separate adversarial black-box case for every current, safely callable MCP tool and installed CLI leaf**, regardless of whether it is low-risk, read-only, forwarded or previously tested by fixtures. For each, seek (a) a real successful call with independently checked postcondition, (b) an unauthorized/target-mismatch or meaningful denial with **no forbidden side effect**, and (c) malformed/missing/boundary input with a stable typed error and CLI exit contract. Mark a dimension NOT_APPLICABLE only when specifically justified. A representative call to one forwarded tool never covers sibling tools. An unexecuted action is BLOCKED/SKIPPED/PARTIAL with concrete reason, not PASS.
@@ -99,11 +119,27 @@ Prioritize risk-weighted **small sequences and pairwise interactions**, not a fa
 
 These are **test designs**, not proof that all paths are supported. Preserve and adapt earlier [five-level F01–F39 acceptance proposals](../verification/EVIDENCE_LAYERS_0449.md), [R-02/R-04 protected and Web-first/SSH-first/HTTP-first call-chain matrix](../design/RUNTIME_CALL_CHAINS_0449.md), [failure-path/client-profile strategy](../verification/TEST_STRATEGY.md), [R-04 UNKNOWN manual recovery](../verification/R04_UNKNOWN_RECOVERY_0450_2026-11-05.md), and [current v0.46.1 incidents](../verification/REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md) into the fresh installed scenarios. The [consolidated functional baseline](../verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md) lists all historical and current themes, including CLI help hidden entries, debug REST parity and selftest. Inspect current contracts before testing; block unsupported or dangerous mutations by exact entry and retain the reason. Do not claim that R-04 or pre-dispatch validation catches direct native Provider writes. Use matrix pairs centered on changed boundaries and prior incident classes rather than indiscriminate Cartesian combinations.
 
+### Phase 3A — deterministic concurrent-actor and state-transition attacks
+
+Every *mutable state machine* with a read/check-then-write decision, durable intent, lock, lease, deduplication or recovery path gets a concurrency case, even if serial smoke succeeds. Prioritize `selftest plan/run`, R-02 submit/dedup, R-04 claims, lifecycle create/delete/resize, installed Web plan/confirm/worker, model or Tenant revision updates and installer/update locks. Create **two distinct actors/requests with different identities and unique immutable output paths**. Prove that the first original operation has entered a specific state (journal row / Provider child UUID / dispatch-intent receipt) **before** issuing a second competing request; do not infer overlap merely from timestamps.
+
+Test the bounded outcomes: exactly one allowed dispatch/effect, typed rejection or documented idempotent receipt for the competing caller, independent proof of **zero forbidden second effects**, original completion/cleanup, and a **new independent operation succeeding after contention ends**. Add one early-vs-late scheduling interleaving and crash/timeout at a known boundary where test-owned isolation and grant permit. Use both source-level cross-process/barrier tests and a real installed two-client probe for claims about process/Agent safety. Five repetitions of the same serial path alone do not establish concurrency behavior. Where precise scheduling cannot be controlled, record a probabilistic observation, not a deterministic proof.
+
+Each invocation gets its own original stdout/stderr, exit, start/end timestamps, request key, journal/task ID and exact Box UUID/createdAt; never share a mutable result-file path between actors. On timeout or `UNKNOWN`, **stop dependent cases**, inspect the original Box/receipt through the outer read-only observer, retain the scene and do not redispatch. Never auto-resolve an original historical `UNKNOWN` to unblock a test.
+
+
 ### Phase 4 — Fault injection **and test-harness calibration** (Finder + specialist)
 
 In **disposable nested environments only**, inject bounded Provider timeout/HTTP 502/503/504, MCP transport loss, credential expiry/rotation, worker crash near dispatch intent, SQLite busy/transaction failure, exact-target trust change, and repeated same-key requests where the runner can observe cause and effect. Record the injection, expected protection, real receipt, and actual remote side-effect count. Never corrupt an original UNKNOWN or owner-host workload; never blindly replay uncertain writes.
 
 Deliberately supply a **known-bad negative control** (for example, a fixture that falsely reports success while the independently read Box state does not change, or a deliberately invalid identity) to verify the **acceptance harness fails**. Use controlled test data, not a production fault or unreviewed code sabotage. A harness that accepts a known-bad case is itself **HARNESS_DEFECT**; related green results must be downgraded until corrected. Do not pretend the presence of a tool such as a property-based/stateful runner proves this phase was run.
+
+### Phase 4A — evidence integrity and oracle calibration
+
+Before accepting a scenario, require a test-owned immutable record of: source/installed/runtime versions, actor/policy/transport, sanitized request, exact original exit and stdout/stderr or protocol response, wall-clock timestamps, independent remote-effect count/readback, error mapping, cleanup and original resource identity. Compare response and receipt against a **separate observation path** (guest files/cgroups, Provider immutable state, Incus list, database journal under approved read permissions). A read through the same potentially faulty wrapper is supporting, not independent, evidence.
+
+The harness must visibly **FAIL a deliberately known-bad assertion** (wrong child identity, falsely expected single side effect, or mismatched guest bytes). Report `DETECTED`/`MISSED`, the test ID, and which other claims lose validity when missed. Calibrate at least one positive and one negative oracle on the current install. Never overwrite the first contradictory output with a later result: preserve both as separate observations, compare artifact inode/path, producer PID and timestamps, and label `SUSPECT` until explained.
+
 
 ### Phase 5 — Triage, repair and hand off without losing uncertainty (Coordinator → Fixer)
 
@@ -120,6 +156,13 @@ For a CONFIRMED_BUG, Fixer first preserves Finder's original **black-box** repro
 
 For SUSPECT and untestable work, create an executable **next-Agent packet** (see template): immutable target/source identity, sanitized raw request/command, expected vs observed, exact response/exit/time, independent readback, trace/receipt links, competing explanations, next **smallest safe** reproduction attempt, authorization/resource blocker, priority and owner. Update [REMEDIATION_TEST_QUEUE](../verification/REMEDIATION_TEST_QUEUE.md) and [OPEN_RISKS](../verification/OPEN_RISKS.md); avoid vague "investigate later" notes.
 
+### Phase 5A — split incident root cause from unresolved symptom
+
+Record the exact original observation, the smallest reproducible sub-finding, and the specific behavior actually repaired as **separate acceptance claims**. For example, a confirmed `selftest` concurrent-start journal race can be closed after installed contention verification, while an earlier `unreconciled`-then-`passed` observation remains a separate `SUSPECT` if no direct causal link or same-symptom reproduction exists. Link but never silently merge independent questions. For upstream-labeled incidents such as Compose route `#79`, record *which native Provider route/version was actually probed*; a Gateway HTTP 404 alone proves the user-visible failure, **not** upstream root cause. Record a concrete upstream-version-change retest trigger without requesting privileged changes now.
+
+Classify suspected defects as BoxWeave, upstream, environment or test-harness only to the supported attribution depth. Preserve original evidence and issue ID; each issue requires a closure predicate and named regression that reproduces the failed condition, not merely an adjacent happy path.
+
+
 ### Phase 6 — Independent reacceptance, integration and release (Verifier + Coordinator)
 
 Verifier executes the **original scenario first** against the **installed candidate**, including the negative/no-side-effect and remote-state oracle; then runs adjacent boundary regressions. A successful unit test, changed source, artifact creation, CI pass or original historic PASS does **not** promote it to installed/external PASS. If independent delegation is unavailable, state the limitation clearly.
@@ -128,11 +171,35 @@ Run **full Python/knowledge/frontend/browser fixtures once at the appropriate fi
 
 Release **one new immutable product version** only when actual applicable release gates pass and the project release process authorizes it; do **not** move the stable/default version pointer. A remaining P0 integrity/security failure blocks a claim of general acceptance or release unless the current approved release policy explicitly permits a scoped exception; document the decision and evidence. Unavailable independent checks can be SKIPPED/BLOCKED while other work proceeds, but must never be manufactured as PASS.
 
+### Phase 6A — exact candidate-first publication gate
+
+For runnable product changes, the preferred order is: (1) freeze a source SHA and artifact digest; (2) run affected source/contract tests; (3) build an **installable candidate package** without publishing its immutable release tag; (4) install it on a separate authorized clean Box or upgrade a deliberately seeded old-release Box, verify installed manifest and running daemon/app/Gateway identity; (5) have Verifier rerun the **original failing black-box case first**, its negative/no-effect oracle, key adjacent stateful tests and post-cleanup recovery; (6) run applicable final CI/frontend/browser and document/release checks; (7) merge and publish the **same verified source-bound bytes** as an immutable new release, only after all applicable hard gates pass; (8) verify published tag/source, asset count, SHA-256 and official installer smoke independently. The official release must not be treated as the *first* installation of the candidate.
+
+If tooling cannot deliver the exact candidate privately/securely to the test Box, do **not** push unpublished unreviewed source to public GitHub as a workaround: record `BLOCKED` and the missing candidate-build/install capability. If post-merge source SHA necessarily changes, verify the final artifact's source and payload equivalence before publication or repeat affected gates. Any waived installed prepublish gate requires an explicit **scope-limited release exception with risk, test blocker and verifier**, never a blanket PASS. A P0 data-integrity/security failure remains a hard stop absent an owner-approved release-policy exception. The operator's production host, R-02 reboot, R-04 activation and stable pin remain excluded.
+
+
 ### Phase 7 — Report and stop (Coordinator)
 
 Provide exact ref/commit, source/installed/published status, number of dynamically inventoried endpoints **by interface and reachability**, **per-entry** positive/denial/invalid black-box paths for all safe MCP tools and CLI leaves, cross-interface/fault scenarios, discovered confirmed bugs (fixed/open), SUSPECT/UPSTREAM/HARNESS findings, independently reverified fixes, untouched deferred gates, original retained UNKNOWN identities, and cleaned/retained test-owned resources. The actual **full named functional acceptance table** must be present, covering each current user capability (including the historical F01–F39 seed), its actual MCP and CLI commands, what was tested and what was not, observed results, and linked raw case IDs. A machine manifest without a human-readable feature table is insufficient. Use **PASS, FAIL, PARTIAL, BLOCKED, SKIPPED, UNKNOWN** for scenario outcome; evidence **S** source, **D** historical, **T** fixture/test, **I/L** isolated installed/live, **H** operator host, **X** independent external client, and **U** unavailable. Always scope each status to exact version and interface.
 
 If no important bugs were found, do **not** announce a blanket all-green outcome: provide **the full detailed named feature list and per-action evidence ledger**, actual behavioral coverage and per-feature missing cases, missing independent oracles, known-bad harness calibration result, and a prioritized next run. Counts alone or a grouped green summary fail the reporting gate. Update the authoritative matrix/risk/queue/status/handoff without rewriting older reports as present-tense evidence. Then stop and await instructions; do not automatically upgrade the owner host or begin another release cycle.
+
+## Automation implementation backlog — **not yet implemented by this document**
+
+These tasks describe future tools. They must **not** be reported as installed, automatically run or already enforcing CI until code, deployment and acceptance evidence exist. The same owner trigger uses available Agent/manual procedures in the interim.
+
+| Work item | Intended deliverable | Minimum measurable completion gate |
+| --- | --- | --- |
+| `RACC-AUTO-01` P0 | Runtime-driven MCP/CLI/Web/REST discovery and differential inventory | Fresh installed inventories per transport/policy; detect a deliberately hidden callable command and newly removed/renamed tool, match every entry to feature/test ID |
+| `RACC-AUTO-02` P0 | Safe test dispatcher + machine evidence schema | For every eligible leaf, run positive/invalid/denial-or-N/A with exact exits and immutable receipts; reject catalog-only and bad-config-only PASS; honor auth and UNKNOWN no-retry |
+| `RACC-AUTO-03` P0 | Bounded concurrency/state-machine harness with scheduling barriers | Two actual isolated processes/Agents; one admission and zero forbidden effects, followed by successful new request, including a reproducible pre-fix failure |
+| `RACC-AUTO-04` P0 | Reusable disposable isolation profiles | Clean install lane; nested Provider lane; scoped auth/Web/R-04 lane, with exact Box identity, ownership, independent observer and safe cleanup; unsupported auth/network gates remain blocked |
+| `RACC-AUTO-05` P0 | Candidate-first build/install/upgrade acceptance gate | Exact artifact digest/source proof; installed original-repro rerun before public release; publish asset/official installer verification afterward, no default pin movement |
+| `RACC-AUTO-06` P1 | Cross-ingress behavior and Provider contract comparator | Same exact target through available MCP/REST/CLI/Web routes, compare error types, receipts and side effects; unsupported operations and bypass paths reported, not assumed equivalent |
+| `RACC-AUTO-07` P1 | Report generator, known-bad oracle gate and issue queue sync | Deterministic human feature table + per-action ledger from raw evidence; enforce evidence/cleanup fields; keep distinct open SUSPECT/UPSTREAM/UNKNOWN findings; generate safe next-agent packets |
+
+Keep development tasks in the canonical project task/risk records when implementation is authorized; this backlog is a specification, **not authorization to execute new host policies, public exposure, credentials or destructive native Provider operations**. During a docs-only run, record that no code/tests/release were created.
+
 
 ## One-sentence invocation
 
