@@ -2,25 +2,36 @@
 
 This file owns the implementation map. [SCOPE](../product/SCOPE.md) owns selected outcomes, [ADR index](ADR/INDEX.md) owns decision status, and code/VERSION own actual schema/runtime versions. Historical design/checkpoint wording is preserved in [ARCHITECTURE_HISTORY](ARCHITECTURE_HISTORY.md).
 
+**Current source snapshot:** v0.44.9. For the detailed source-mapped diagram, ingress-to-Provider table, R-02/R-04 storage and guard boundaries, coverage states, and priority-ordered acceptance gates, see [Runtime entrypoints and call chains — v0.44.9](RUNTIME_CALL_CHAINS_0449.md). The [latest exact-version acceptance](../verification/REACCEPTANCE_0449_2026-11-05.md) must be read separately; diagram arrows are not a production-host runtime attestation.
+
 ```mermaid
 flowchart LR
-  Agent[Windows Codex or ZCode] --> SSH[Native or explicit WSL SSH]
-  SSH --> MCP[Restricted upstream MCP launcher]
-  Browser --> API[Flask / Waitress API]
-  CLI --> Services[Application services / worker]
-  API --> Services
-  API --> Public[Pure public profile / model guidance]
-  Services --> SQLite[(Private local SQLite)]
-  Services --> Adapter[Containarium MCP adapter]
-  Adapter --> MCP
-  MCP --> Workload[Reviewed workload]
+  SSH["Agent SSH / stdio MCP"] --> Gate["BoxWeave MCP Gateway"]
+  HTTP["Agent HTTP MCP"] --> Auth["HTTP MCP auth / relay"] --> Gate
+  Browser["Browser"] --> Web["Web API"]
+  CLI["Application CLI"] --> Service["Application services / worker"]
+  Web --> Service
+  Service --> DB[("App SQLite receipts")]
+  Gate --> Task[("R-02 task SQLite")]
+  Gate -->|"tracked writes claim"| Claims[("R-04 shared claims SQLite")]
+  Service -.->|"only if coordination enabled"| Claims
+  Service -->|"basic lifecycle"| REST["Loopback REST adapter"]
+  Service -->|"nesting, network, SSH / specialist"| MCP["Containarium MCP"]
+  Gate -->|"policy-checked forwarding"| MCP
+  REST --> Daemon["containariumd"]
+  MCP --> Daemon
+  MCP --> GuestSSH["Guest SSH / connect"]
+  Daemon --> Incus["Incus / LXC"]
+  GuestSSH --> Incus
 ```
 
-The application adapter in bwmini/provider.py and access_provider.py uses the configured MCP stdio launcher, typically its own strict SSH identity to the upstream launcher. The app does **not** implement the originally proposed direct REST adapter or borrow the browser session/Agent GLM credential as Provider authority. Underlying upstream MCP may use its own API internally; its protocol names/metadata stay upstream. API/worker share private state; credential files remain outside releases. Direct Agent MCP has broader upstream authority than Web allowlisted plans; single trusted operator is a deliberate boundary.
+The app's `bwmini/provider.py` **has a bounded direct REST adapter** (`provider_rest.py`) when `provider_api` is explicitly configured: basic application lifecycle list/get/create/start/stop/delete/resize goes through authenticated loopback `containariumd` REST where supported. Nesting-enabled create, specialist Tenant/Guard/route operations, and identity/guest command execution still use the upstream MCP path. The standalone Agent gateway retains the upstream MCP tool catalogue subject to explicit policy. SSH/stdio and authenticated HTTP MCP enter the **same** Gateway, but Web/CLI enter independently through application services. This is a deliberate **REST + MCP coexistence** architecture, not completed universal REST replacement.
+
+The Gateway's tracked task path and the app's opt-in shared claims are mediated through the same reviewed-identity coordinator SQLite when configured correctly. Gateway **protected mode** is a separate root-owned tool-policy gate: without it, legacy forwarded Provider mutations are not automatically coordinated. Application `coordination.enabled=true` is independently opt-in; both channels must share trusted Provider scope, target identity, permissions and effective coordination storage. The upstream Provider's own direct CLI/REST/MCP and Incus operations are outside BoxWeave's shared R-04 guarantee. As of the owner-host v0.44.8 checkpoint, `task provision` prepared metadata storage but reported `coordination_enabled=false`; the latest released v0.44.9 has passed independent isolated installation, **not global owner-host protected-mode certification**.
 
 ## Future API-first alternative (design only, 2026-11-03)
 
-The [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) records a **candidate**, not the implemented architecture: retain BoxWeave Agent-facing MCP, consider Containarium REST API for internal management, an independent exact-Box SSH executor, and unified durable operation/diagnostic boundaries. Its [Agent migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md), [D1–D4 trace proposal](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md) and [proposed ADR-010](ADR/0010-api-first-control-plane-candidate.md) do not override this code-first diagram or accepted ADR-003 until separately authorized and implemented.
+The [API-first evolution master](API_FIRST_CONTROL_PLANE_EVOLUTION_MASTER.md) remains an owner-selected **long-term** direction, not a claim of completed migration. One tranche (application-owned basic REST lifecycle) is already implemented as mapped above; an independent exact-Box SSH executor, comprehensive specialist REST parity, and universal shared write interception are **not** complete. Its [Agent migration plan](API_FIRST_PROVIDER_MIGRATION_PLAN.md), [D1–D4 trace plan](UNIFIED_OPERATION_TRACE_DIAGNOSTICS_EVOLUTION.md), and [proposed ADR-010](ADR/0010-api-first-control-plane-candidate.md) must be read alongside the existing MCP architectural contract (ADR-003), not as an implicit replacement.
 
 ## Code-first architecture consolidation checkpoint
 

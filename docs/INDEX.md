@@ -1,8 +1,10 @@
 # BoxWeave v2 knowledge index
 
-**Latest R-04 lifecycle issue and isolated candidate:** [v0.44.7 creation trust-readiness and shared claims](verification/TRUST_READINESS_R04_0447_2026-11-04.md) (real protected-mode reproduced error; bounded retry source and real nested acceptance; exact v0.44.7 release/host upgrade pending).
+**Current v0.44.9 architecture:** [runtime call chains, ingress guard coverage and P0/P1 acceptance map](design/RUNTIME_CALL_CHAINS_0449.md). This is a source-backed view, **not** global R-04 production acceptance. The authoritative current implementation map is [ARCHITECTURE](design/ARCHITECTURE.md).
 
-**Current source/installed reacceptance:** [v0.44.6 four-gate isolated installed acceptance](verification/FOUR_GATE_ISOLATED_ACCEPTANCE_0446_2026-11-04.md) (nested child execution, explicit task tracking, live MCP/REST shrink refusals, Web-shared lifecycle, clean install and upgrade PASS within scope; authenticated installed Web HTTP and owner-host upgrade unverified). Previous [v0.44.3 whole-project evidence](verification/REACCEPTANCE_0443_2026-11-04.md) is historical.\n\nStart here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
+**Latest exact-version evidence:** [v0.44.9 immutable release, independent installed v0.44.8→v0.44.9 upgrade, live nested selftest and outer R-02](verification/REACCEPTANCE_0449_2026-11-05.md). Source 742 Python tests and seven browser fixtures passed; owner host global R-04 is still disabled. See [PHASE_STATUS](process/PHASE_STATUS.md) and [OPEN_RISKS](verification/OPEN_RISKS.md).
+
+Start here, not in a chronological transcript. [PHASE_STATUS](process/PHASE_STATUS.md) owns current gates; [VERSION](../VERSION) owns the product version. This index owns navigation only.
 
 | Containarium minimum-only upgrade and reusable Agent SOP | [v0.128.0 compatibility review](design/CONTAINARIUM_0128_COMPATIBILITY_REVIEW.md), [standard upgrade SOP](process/UPSTREAM_PROVIDER_VERSION_UPGRADE_SOP.md), [v0.43.2 P0 acceptance ledger](verification/CONTAINARIUM_0128_COMPAT_P0_0432_2026-11-03.md): only component version floors, no upper bound; stable pointer unchanged |
 | Find | Authoritative route |
@@ -21,6 +23,7 @@
 | Product goal and selected boundaries | [PRODUCT](product/PRODUCT.md), [SCOPE](product/SCOPE.md) |
 | Required outcomes and acceptance | [REQUIREMENTS](product/REQUIREMENTS.md), [ACCEPTANCE](product/ACCEPTANCE.md) |
 | Actual runtime / module design | [ARCHITECTURE](design/ARCHITECTURE.md), [ADR index and status](design/ADR/INDEX.md) |
+| Transport-to-Provider call graph, R-04 entry coverage and follow-up tests | [Current v0.44.9 runtime call chains](design/RUNTIME_CALL_CHAINS_0449.md) (S; see separate T/L evidence) |
 | Task dependencies | [IMPLEMENTATION_PLAN](process/IMPLEMENTATION_PLAN.md) |
 | REQ/AC → code/tests/evidence | [FEATURE_MATRIX](verification/FEATURE_MATRIX.md), [code-first acceptance baseline](verification/CODE_FIRST_ACCEPTANCE_2026-11-01.md), [latest selftest trust-readiness remediation](verification/SELFTEST_TRUST_RACE_0267_2026-11-01.md), [OAuth transaction deep audit](verification/DEEP_AUDIT_0266_2026-11-01.md), [nesting and partial-create acceptance](verification/NESTING_ACCEPTANCE_0265_2026-11-01.md), [post-v0.26.2 full-project reacceptance](verification/REACCEPTANCE_0262_TO_0264_2026-11-01.md), [previous live ledger](verification/CODE_FIRST_LIVE_ACCEPTANCE_2026-11-01.md) |
 | Host-hop wrapper release and bounded remediation | [v0.42.9 Containarium shell source/test record](verification/CONTAINARIUM_SHELL_PACKAGE_0429.md): managed Provider install, external opt-in, host-hop acceptance still open |
@@ -91,13 +94,13 @@ Use local Markdown links and stable REQ-/AC-/TASK-/ADR-/SRC-/RISK-/DEC-/EXP- IDs
 These environment features are **design-only**; D0–D2 shipped in 0.22.0, while D3/D4 are source-implemented in 0.25.0 with live acceptance separate.
 
 
-## MCP task reliability R1 (design only; not implemented)
+## MCP task reliability R1 (historical design; R-02 implemented with scoped acceptance)
 
-- [Reconnect-recoverable MCP task records, deduplication, bounded result retrieval and UNKNOWN safety](design/MCP_TASK_RELIABILITY_R1.md). Approved design objective: recover known task state/results after reconnect without guaranteeing remote process continuation; no feature implementation or deployment is claimed.
+- [Reconnect-recoverable MCP task records, deduplication, bounded result retrieval and UNKNOWN safety](design/MCP_TASK_RELIABILITY_R1.md). Historical design objective; the later R-02 metadata-only tracked-task implementation now has real owner-host submit/get/list/dedup evidence. It does **not** store guest output or guarantee a terminated process continues; see the current call-chain map and R-02 post-reboot acceptance gap.
 
-## Multi-Agent resource conflict protection (design only; not implemented)
+## Multi-Agent resource conflict protection (historical design; R-04 partial, not globally active)
 
-- [Minimal Box lease and operation conflict protection — shared resources, fail-fast conflicts, 10-minute expiry, UNKNOWN safety, implementation batches and acceptance](design/MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md). Multiple projects keep separate Agents/Boxes; no Git worktrees, Agent runner or automatic task queue.
+- [Minimal Box lease and operation conflict protection — shared resources, fail-fast conflicts, 10-minute expiry, UNKNOWN safety, implementation batches and acceptance](design/MULTI_AGENT_BOX_LEASE_CONFLICT_V1.md). The later R-04 claim/lease code and protected isolated tests exist, but owner-host global enforcement and the authenticated Web/SSH/HTTP concurrency matrix remain **PARTIAL/P0**. Multiple projects keep separate Agents/Boxes; no automatic runner or whole-fleet coordination should be inferred.
 
 ## Installation and first-use onboarding (research/design only)
 
