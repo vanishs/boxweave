@@ -1,3 +1,19 @@
+## v0.46.0 debug_container REST slice — 2026-11-05 UTC
+
+[Selected migration and exact evidence](REST_DEBUG_CONTAINER_0460_2026-11-05.md):
+Web debug-summary now uses the authenticated REST debug GET when
+provider_api is configured, with exact Box identity recheck and its original
+sensitive-field projection. Legacy app MCP remains available via the
+debug_rest_enabled=false debug-only rollback; root-provisioned standalone
+Gateway policy selects REST independently, while existing host tool
+allowlist/protected-mode gates remain intact. 773 Python tests and the 10-step
+fixture validation (including seven browser workflows) passed on the isolated
+developer Box. **T PASS only**. Release provenance, source-bound installed
+REST/SSH/HTTP app/Gateway parity, negative scope and new-Box clean
+installation remain independent L/CI gates; report unavailable lanes as
+BLOCKED, not PASS. No changes to R-04 production policy, parent host or
+stable installer selector.
+
 ## v0.44.10 selftest private-plan acceptance (P2), R-02 reboot deferred — 2026-11-05 UTC
 
 [Current root-to-app plan handoff and security tests](SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md): retain strict one-file owner/type/no-symlink/8192-byte cap, app-user stdin pipe and exact confirmation hash; test 0700 operator home and 0600 plan, missing/symlink/FIFO/oversized/wrong owner, wrong checksum and malformed JSON as no-write refusals, then authorized clean installed live selftest with independent Box absence. The original v0.44.9 refusal is historical. **R-02 outer-host reboot durability is explicitly DEFERRED by owner**; no test may restart dev or resubmit the historical original task. Global R-04 protection remains off on the owner host.

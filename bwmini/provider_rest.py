@@ -193,6 +193,15 @@ class RESTClient:
                 # Evidence capture is always secondary to the actual request.
                 pass
 
+    def debug_container(self, logical):
+        """Single exact-target REST read; preserve bounded upstream shape."""
+        from . import debug_rest
+        try:
+            return debug_rest.validate(
+                self.request("GET", debug_rest.route(logical), timeout=20))
+        except debug_rest.DebugRESTError as exc:
+            raise Fault(str(exc), 409) from None
+
     def inventory(self):
         result = self.request("GET", "/v1/containers", timeout=20)
         rows = result.get("containers", [])
