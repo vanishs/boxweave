@@ -76,6 +76,93 @@ This inventory is **source reviewed**, not a complete runtime reachability asser
 
 **Suggested order:** prove R8 P0 common claims and crash/UNKNOWN behavior independently of protocol changes; then evaluate R2 (small typed write) and R3 (bounded diagnostics), followed by R1 (sensitive cross-tenant policy). R4 can proceed incrementally. R5/R6 need separate destructive/storage/key test gates; R7 remains MCP unless an explicit need emerges. Do not bundle Gateway rewrite, Provider upgrade and restore work. Compare [current call chains](RUNTIME_CALL_CHAINS_0449.md), [architecture](ARCHITECTURE.md), [feature evidence](../verification/FEATURE_MATRIX.md) and [open risks](../verification/OPEN_RISKS.md).
 
+### 2.2 Current MCP tool-by-tool inventory — 58 upstream + 10 BoxWeave tools
+
+**Scope:** 68 tool definitions visible in the authenticated BoxWeave MCP connection at the v0.44.9 review, including **58 upstream Containarium tool names and 10 `boxweave_*` Gateway-owned tools**. Visibility is *not* actual runtime operation acceptance; the separately run `boxweave_diagnose(source=compat)` checked only five core schemas against Containarium 0.128.0, not all 68 outcomes. Different root protected policies and clients may expose fewer tools. The upstream catalogue can contain more tools than this authorized connection shows. This inventory is **source/catalog S plus bounded read-only compatibility check**, with no writes and no complete HTTP/OAuth client acceptance.
+
+The **Agent-facing public interface stays MCP** in every row; the recommendation is solely about whether BoxWeave should implement or extend a **direct outbound REST adapter**, rather than forwarding the upstream MCP tool. `Done` means the **app-owned ordinary lifecycle REST adapter already exists**, **not** that Agent forwarding switched to REST. `Deferred` means there is no current REST migration commitment; `Keep MCP` is an affirmative supported decision, not unfinished work. Complexity is a qualitative **1–5 effort/risk estimate if redesign were attempted**; `N/A` means no sensible REST replacement. `P0 guard` refers to shared claims/UNKNOWN protection **independently of transport**, not urgency to migrate REST.
+
+#### 2.2.1 Upstream Containarium MCP tools (58 individual interfaces)
+
+| No. | MCP interface | Purpose | Recommended outbound handling | Difficulty | Importance | Priority |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `create_container` | Create a Box; nesting composite is special | App normal create already REST; Agent MCP retained | 2/5 | High | Done / P0 guard |
+| 2 | `list_containers` | List Box inventory | App REST done; Agent MCP retained | 1/5 | High | Done |
+| 3 | `get_container` | Read Box state, resources and identity | App REST done; Agent MCP retained | 1/5 | High | Done |
+| 4 | `debug_container` | Diagnose Box/SSH readiness | REST candidate for app diagnostics | 2/5 | Medium | P2 |
+| 5 | `move_container` | Migrate Box across backends | Keep MCP; REST only for a separately scoped migration product | 5/5 | High | Deferred |
+| 6 | `resize_container` | Adjust CPU, RAM or disk | App REST done; Agent MCP retained; preserve no-shrink guard | 3/5 | High | Done / P0 guard |
+| 7 | `toggle_monitoring` | Switch Box OpenTelemetry instrumentation | Optional REST adapter for app monitoring | 2/5 | Medium | P2 |
+| 8 | `set_metrics_export` | Configure host-wide cloud metrics export | Keep specialized MCP; optional host-admin REST only | 4/5 | Medium | Deferred |
+| 9 | `get_metrics_export` | Read host export configuration and health | Optional REST read | 1/5 | Low | P2 |
+| 10 | `delete_container` | Permanently remove Box | App REST done; Agent MCP retained; UNKNOWN never replayed | 3/5 | High | Done / P0 guard |
+| 11 | `start_container` | Start Box | App REST done; Agent MCP retained | 2/5 | High | Done / P0 guard |
+| 12 | `toggle_auto_sleep` | Configure Box idle sleep | REST candidate for app automation | 2/5 | Medium | P2 |
+| 13 | `stop_container` | Stop Box | App REST done; Agent MCP retained | 2/5 | High | Done / P0 guard |
+| 14 | `get_metrics` | Read Box CPU/RAM/disk/network measurements | Optional REST metrics read | 1/5 | Medium | P2 |
+| 15 | `get_system_info` | Read Provider host/system information | Optional REST health read | 1/5 | Medium | P2 |
+| 16 | `check_for_updates` | Check available upstream update | Keep host/operator MCP; REST optional if productized | 2/5 | Medium | Deferred |
+| 17 | `upgrade_backend` | Upgrade a Provider daemon/backend | Keep operator-only MCP and independent host approval; not app REST migration | 5/5 | High | Deferred |
+| 18 | `get_upgrade_status` | Read backend upgrade progress | Keep with operator upgrade lane; REST optional | 2/5 | Medium | Deferred |
+| 19 | `list_backends` | List local/remote Provider backends | Optional REST discovery | 2/5 | Medium | P2 |
+| 20 | `get_backend` | Read one backend and health | Optional REST discovery | 1/5 | Medium | P2 |
+| 21 | `backend_validate_gpu` | Validate actual GPU with disposable workload | Keep privileged MCP; no basic REST CRUD equivalence | 4/5 | Medium | Deferred |
+| 22 | `security_findings` | Read scanner findings | Optional REST read only for future security UI | 2/5 | Medium | P2 |
+| 23 | `security_sentry_status` | Read sentry detection health | Optional REST read only for future security UI | 2/5 | Medium | P2 |
+| 24 | `list_bad_destinations` | Read known-bad network destinations | Keep MCP unless a security dashboard needs REST | 1/5 | Low | Deferred |
+| 25 | `list_security_sentry_findings` | Read sentry-generated security findings | Optional REST read if diagnostics adds it | 2/5 | Medium | P2 |
+| 26 | `sync_ssh_config` | Write SSH aliases on the MCP client machine | Keep MCP/client-local filesystem; not daemon REST equivalent | 5/5 | Medium | Keep MCP |
+| 27 | `code_runs` | List code runs via upstream daemon API | Retain MCP facade; upstream tool already uses API | 2/5 | Medium | Keep MCP |
+| 28 | `code_logs` | Read code-run logs/offsets via upstream daemon API | Retain MCP facade; upstream tool already uses API | 3/5 | Medium | Keep MCP |
+| 29 | `code_pending` | Read pending coding approval requests | Retain MCP facade; preserve approval authority boundary | 4/5 | Medium | Keep MCP |
+| 30 | `connect` | Execute command / connect over exact Box SSH | Keep MCP+SSH; not a generic REST lifecycle call | 5/5 | High | Keep MCP / P0 guard |
+| 31 | `list_routes` | List HTTPS reverse-proxy routes | Optional REST app read | 1/5 | Medium | P2 |
+| 32 | `network_guard_status` | Read network-isolation enforcement state | REST candidate for app-native access checks | 2/5 | High | P1 |
+| 33 | `delete_route` | Remove HTTPS reverse-proxy route | Optional REST app route write; confirm public effect | 3/5 | High | P2 |
+| 34 | `add_collaborator` | Grant another user SSH access | Keep MCP until explicit access-management REST feature; high privilege | 4/5 | High | Deferred |
+| 35 | `list_collaborators` | List permitted SSH collaborators | Optional REST app read | 2/5 | Medium | P2 |
+| 36 | `remove_collaborator` | Revoke collaborator SSH rights | Keep MCP until explicit access-management REST feature | 4/5 | High | Deferred |
+| 37 | `expose_port` | Publish Box HTTP port on public domain | Optional REST route adapter; DNS/TLS effect separately observed | 4/5 | High | P2 |
+| 38 | `list_passthrough_routes` | List raw TCP/UDP forwarding rules | REST candidate for app networking | 1/5 | High | P1 |
+| 39 | `add_passthrough_route` | Create raw TCP/UDP forwarding rule | REST candidate; ownership, conflict and packet proof | 3/5 | High | P1 |
+| 40 | `delete_passthrough_route` | Delete raw TCP/UDP forwarding rule | REST candidate; verify no extra network exposure | 3/5 | High | P1 |
+| 41 | `list_recipes` | List predefined app/GPU deployment recipes | Optional REST catalog read | 1/5 | Low | P2 |
+| 42 | `deploy_recipe` | Deploy recipe as a multi-stage Box/app workflow | Keep MCP until product requires reviewed REST orchestration | 5/5 | Medium | Deferred |
+| 43 | `compose_discover` | Discover guest Compose stacks | Optional REST; server still performs guest-side inspection | 3/5 | Medium | P2 |
+| 44 | `compose_enable` | Enable Compose autostart in a guest | Optional REST with guest systemd and crash checks | 4/5 | Medium | P2 |
+| 45 | `compose_disable` | Disable guest Compose autostart | Optional REST; observe guest-side effect | 3/5 | Medium | P2 |
+| 46 | `compose_status` | Read one guest Compose state | Optional REST read | 2/5 | Medium | P2 |
+| 47 | `provision_runners` | Create, configure and register GitHub runners | Keep orchestration MCP/SSH/GitHub API; not one REST action | 5/5 | Medium | Keep MCP |
+| 48 | `list_runners` | Reconcile Provider and GitHub runner state | Keep orchestration MCP; REST only for partial provider facts | 3/5 | Medium | Keep MCP |
+| 49 | `remove_runner` | Drain, deregister and delete GitHub runner | Keep multi-system orchestrator and UNKNOWN handling | 5/5 | High | Keep MCP |
+| 50 | `guardrail_policy_get` | Read deployment/security guardrail policy | Optional REST read if security UI needed | 2/5 | Medium | P2 |
+| 51 | `set_ssh_keys` | Replace authorized SSH keys and registry entries | Keep MCP until separately reviewed privileged REST adapter | 4/5 | High | Deferred |
+| 52 | `security_process_policy_get` | Read response policy for suspicious processes | Keep MCP; optional future security REST read | 2/5 | Medium | Deferred |
+| 53 | `list_miner_signatures` | Read threat signature catalogue | Keep MCP; optional future security REST read | 1/5 | Low | Deferred |
+| 54 | `terminate_user_sessions` | Terminate user SSH sessions | Keep privileged MCP; no basic REST CRUD shortcut | 4/5 | High | Deferred |
+| 55 | `network_tenant_capabilities` | Detect native Tenant support | REST candidate with deployed capability confirmation | 2/5 | High | P1 |
+| 56 | `list_network_policies` | List Tenant network policies | REST candidate for app Access policy | 2/5 | High | P1 |
+| 57 | `get_network_policy` | Read Tenant policy and full revision | REST candidate; do not omit CAS revision | 2/5 | High | P1 |
+| 58 | `patch_tenant_access` | Atomically grant/revoke cross-Tenant ingress | REST candidate; strict Guard/revision and atomicity checks | 4/5 | High | P1 |
+
+#### 2.2.2 BoxWeave-owned MCP tools (10 individual interfaces)
+
+| No. | MCP interface | Purpose | Recommended outbound handling | Difficulty | Importance | Priority |
+| --- | --- | --- | --- | --- | --- | --- |
+| 59 | `boxweave_nesting` | Inspect/confirm parent Box nesting policy | Keep native MCP; parent-host privilege is not guest/REST CRUD | 4/5 | High | Keep MCP |
+| 60 | `boxweave_info` | Describe BoxWeave architecture/tool workflow | Keep native read-only MCP | N/A | Medium | Keep MCP |
+| 61 | `boxweave_diagnose` | Classified diagnostics and MCP compatibility read | Keep native MCP; can inspect REST and MCP spans | 3/5 | High | Keep MCP |
+| 62 | `boxweave_project_diagnose` | Read approved exact-Box health categories | Keep bounded native MCP; independent authorization | 4/5 | High | Keep MCP |
+| 63 | `boxweave_diagnostic_run` | Run approved read-only diagnostic profiles | Keep native MCP; one profile already tests REST reads | 3/5 | High | Keep MCP |
+| 64 | `boxweave_box_read_file` | Read a small regular file in verified guest home | Keep bounded MCP/SSH, no raw arbitrary REST file proxy | 4/5 | Medium | Keep MCP |
+| 65 | `boxweave_box_list_directory` | List a small verified guest-home directory | Keep bounded MCP/SSH, no arbitrary REST file proxy | 4/5 | Medium | Keep MCP |
+| 66 | `boxweave_task_submit` | Deduplicated tracked guest exec request | Keep native MCP; **P0 common claims/UNKNOWN** across ingress | 5/5 | Critical | P0 safety |
+| 67 | `boxweave_task_get` | Read original durable task receipt | Keep native MCP; no dispatch/retry | 2/5 | High | Keep MCP |
+| 68 | `boxweave_task_list` | List durable task receipts for a Box | Keep native MCP; no dispatch/retry | 2/5 | High | Keep MCP |
+
+**Selective REST first:** prioritize `network_tenant_capabilities`, `network_guard_status`, `list_network_policies`, `get_network_policy`, `patch_tenant_access`, and the three `*passthrough_route*` tools only as **app Provider** transport changes; verify actual Containarium `v0.128.0` declared HTTP routes, installed API/auth, revisions, claims and independent effects. Basic app Box lifecycle is already implemented on REST. After P0 shared mutation coordination has its own proof, a relatively small *first implementation slice* could be the three TCP/UDP passthrough operations, followed by Tenant/Guard. No priority label authorizes writing to an owner host. Specialized tools which are naturally client-local, guest SSH, optional coding agents or GitHub multi-stage workflows remain MCP/SSH/orchestrated.
+
+
 ## 3. API operation mapping
 
 ### 3.1 Straightforward typed management
