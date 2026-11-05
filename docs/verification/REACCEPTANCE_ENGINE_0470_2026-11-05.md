@@ -1,6 +1,6 @@
 # BoxWeave v0.47.0 reacceptance engine — executable acceptance and release gates
 
-**Status:** source candidate implementation and operations guide (2026-11-05). A test environment's actual execution results and CI/release gate status must be recorded below before marking shipped. Product's regular operation and operator-host policies are unchanged. **Canonical owner trigger remains** `Run full BoxWeave reacceptance`.
+**Status:** **v0.47.0 RELEASED and scoped installed-engine acceptance verified** (2026-11-05). This document distinguishes executable engine checks from full feature/action reacceptance; untested MCP/CLI/Web actions are not PASS. Product's regular operation and operator-host policies are unchanged. **Canonical owner trigger remains** `Run full BoxWeave reacceptance`.
 
 **Authorities:** [full runbook](../process/FULL_PROJECT_REACCEPTANCE.md), [architecture and staged milestones](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md), [upstream v0.128.0 reference](UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md), [evidence template](REACCEPTANCE_RUN_TEMPLATE.md), [function baseline](REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md).
 
@@ -168,17 +168,26 @@ This verifies a source-bound byte comparison and required action results. **It c
 
 `python -m bwmini.reacceptance self-test` intentionally tries to pass forged success, modified original log, missing observer, incomplete positive/invalid/denial triad and unverified mutation. **All five must be rejected (status DETECTED)** before trusted report generation. The CI checks this and verifies source/top-level help discovery. Per-action results are never inferred from the number of listed MCP tools. The complete 49-feature report includes each historical function even when its present action evidence is missing; an individual action PASS is not automatically a whole-feature PASS.
 
-### Pre-release and cleanup record (to complete from real test)
+### v0.47.0 official release and scope-specific verification closure — 2026-11-05
 
-| Gate | Evidence / status |
+This table records **actual test evidence**, not the fictional outcome of 235 completed black-box calls. The untested feature/action ledger remains in the private test-owned verification environment; the below source, runtime and publish claims are independently observable.
+
+| Gate | Verified result and boundaries |
 | --- | --- |
-| Source and tests (new toolkit) | Pending actual CI and exact source SHA |
-| Genuine installed runtime catalog | Pending exact candidate install; earlier v0.46.1 catalogue is version-scoped only |
-| Mutation security guards and known-bad controls | Pending final regression/CI and isolated permission denial |
-| Dedicated test-owned real selftest contention | Pending isolated v0.47.0 shipped/candidate run |
-| Optional upstream Proof Pack generation | Pending dedicated approved nested child; not required to publish if explicitly blocked |
-| Candidate package and release digest | Pending exact candidate build/release |
-| Unchanged stable installer pointer | Must still be v0.43.1 |
-| Compose #79 and missing-target #81 | Continue open; not silently fixed by adding this engine |
+| Official source and release | **PASS**: v0.47.0 immutable release tag `575c77f384b3b55b50626b356ecf190738dd80ef`, [PR #85 merged](https://github.com/vanishs/boxweave/pull/85), official [Release v0.47.0](https://github.com/vanishs/boxweave/releases/tag/v0.47.0) non-draft/non-prerelease with **26 assets** |
+| PR and main CI | **PASS**: candidate PR verify job succeeded, [main verify and publish workflow 42125789245](https://github.com/vanishs/boxweave/actions/runs/42125789245) both completed successfully; full isolated source suite **814/814 tests PASS**, documentation knowledge checker **228** documents PASS |
+| Artifact bytes and source | **PASS**: official GitHub `boxweave.zip` asset SHA256 **`02f043c76be1d991b59064a1072d47219d98b30cbe563065db864d5c303645e2`**, identical to privately built, isolated-installed and accepted candidate ZIP; `release.json` asset digest **`29134b74f3002efaea9e2269e1e7b1002cad5881ee7fb9f0ebd1016b10d501b3`** matches the separately built candidate manifest |
+| Official v0.46.2 → v0.47.0 installer | **PASS** in disposable `bw-racc0470-verify-container`, exact outer UUID `f1e555f9-55b1-455c-bccf-3537a13d2610`, createdAt `1793914037`. v0.46.2 official baseline exit **0**; prepublication v0.47.0 application ZIP upgrade exit **0**; official v0.47.0 `install.sh --version 0.47.0` exit **0**. The downloaded installer SHA256 **`9945075e0958c93aa91bc0acfd5de31ba8fe09dccce77bd26ccf774b5fd1bcd5`** was checked before execution |
+| Installed identity and health | **PASS** after official installer: **host CLI v0.47.0** and **app v0.47.0**, both source `575c77f...`; actual installed app archive SHA256 `02f043c...`; `boxweave doctor --mcp` **10/10 required checks PASS**; five hidden CLI help families remain advertised. Upstream daemon v0.128.0 |
+| Installed runtime discovery | **PASS for discovery only**: 68 real installed local-stdio MCP tools, 49 named features, **235 distinct discovered action entries** (includes separate host, app, HTTP/Web source views). In the **official installed** `bootstrap-readonly` evidence run, **4 PARTIAL, 231 BLOCKED, 0 PASS, 0 FAIL** because safe reads do not satisfy full positive/invalid/denied and independent state oracles. Exact bundled data and host source SHA were verified, with `host_source_matches_checkout=true` |
+| Evidence and anti-false-PASS | **PASS** for implementation tests: five seeded invalid claims rejected; installed `seal/verify` returned `VERIFIED` with evidence-root SHA256 **`0edee3a7c081b62fa2de64e4792ed09b256718dd8e2906fcef3a60f9fc97fa0b`**. This is local integrity checking, **not an external signature or independent-Agent attestation** |
+| Isolated two-process selftest black-box | **PASS** in final prepublication candidate, under test-Box-only permission: original `boxweave-selftest-fa6d01` in flight, competitor `boxweave-selftest-31c792` rejected with **exit 2** and no second child, later `boxweave-selftest-633324` **exit 0** and all four steps successful; final Incus child inventory **0**. Earlier pre-hardening candidate also passed a separate 3-actor sequence. This validates the specialist probe, not every R-04 state-machine behavior |
+| Optional upstream Proof Pack | **NOT EXECUTED / CONDITIONALLY BLOCKED**: only host-side `containariumd proof-pack generate --help` and implementation guard regressions were checked. Root-in-disposable-child command execution requires separate reviewed declaration, exact owned child and approval; no pack was generated/sealed or independently verified |
+| Other transports and general action acceptance | **PARTIAL/BLOCKED**: positive authenticated HTTP/Web, external/native clients, upstream route/error parity, and per-MCP/CLI positive/invalid/denied mutation triads remain to be executed by Finder/Verifier during the next **full** reacceptance. No statement of all-68-tool functional PASS is justified |
+| Legacy Compose #79 / missing-target #81 | **UNCHANGED / NOT FIXED HERE**. Preserve the existing upstream-attribution and error-parity issue records; the engine reports/probes these surfaces but does not silently cure their native behavior |
+| Stable installer pin | **UNCHANGED**: `PUBLISHED_RELEASE` is still **0.43.1**. v0.47.0 is available explicitly by version; it is not a default/stable promotion |
+| Test-environment cleanup | Pending explicit independent final Box stop/delete readback, recorded after exact target identity check |
 
-After completing actual tests, record precise PASS, FAIL, PARTIAL, BLOCKED and source SHA here. A docs-only update or unrun command may not be labelled PASS.
+The protected official release remains tied to immutable source `575c77f...`. Any later **documentation-only** verification update to `main` must not relabel this historical tag as the new branch head or replace release assets. The repository release workflow explicitly permits documentation-only updates while preserving the existing version's immutable source and tag.
+
+**Next owner invocation:** keep using `Run full BoxWeave reacceptance`. The engine can do safe read-only discovery and per-action evidence validation, but a separate Finder and Verifier still must execute meaningful black-box cases with real independent postconditions. Count a missing/oracle-less context as BLOCKED/PARTIAL, **never PASS**.
