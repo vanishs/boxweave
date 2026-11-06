@@ -17,7 +17,7 @@ KEY = re.compile(r"[0-9a-f]{32}\Z")
 TASK_LIMIT = 10000
 
 SCHEMA = """
-CREATE TABLE remote_create_tasks(
+CREATE TABLE IF NOT EXISTS remote_create_tasks(
  task_id TEXT PRIMARY KEY,
  request_key TEXT NOT NULL UNIQUE,
  logical TEXT NOT NULL UNIQUE,
@@ -27,7 +27,7 @@ CREATE TABLE remote_create_tasks(
  created REAL NOT NULL,
  updated REAL NOT NULL
 );
-CREATE INDEX remote_create_tasks_updated ON remote_create_tasks(updated);
+CREATE INDEX IF NOT EXISTS remote_create_tasks_updated ON remote_create_tasks(updated);
 """
 
 
