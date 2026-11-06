@@ -95,3 +95,47 @@ ordinary user could not traverse them. The validation now uses only fixed
 read-only `sudo -n /usr/bin/stat` on the strict release-path components,
 with non-following file type, root UID and non-writable mode assertions.
 The original failed probe was preserved as a separate run.
+
+## 2026-11-05 further real baseline and private candidate observations
+
+On the test-owned \`bwracc-mvp-verify\` outer Box, the authorized,
+non-production v0.47.0 \`sudo boxweave selftest\` created an actual nested
+Incus workload \`boxweave-selftest-8376ef-container\`, executed the guest
+\`hello world\`, stopped and deleted the child, and returned \`state=passed\`.
+Subsequent native Incus list was empty. This is actual **v0.47.0**
+L2 installed behavior, not v0.49.0 verification.
+
+The GitHub Actions **PR CI** artifact \`application-candidate\` (run
+\`42153644892\`, artifact ID \`13474380251\`) was downloaded to this isolated
+Box and wrapper SHA-256 matched
+\`c569737a4ba6cf06db361bb580590030e8ab73f0c7b431bec3985e301f31e047\`.
+The internal v0.49.0 \`boxweave.zip\` SHA-256 was
+\`61571f8b05e71eddb0c27af477d7616237d14432a669c3171bbf5b338f28d99c\`,
+matching \`release.json\` and containing no test runner. Its **PR synthetic
+merge source** was \`66e0a2173019d305beecbf1e1fb9dd9580e723dd\`,
+not the eventual main release source. Exact application-only upgrade from
+v0.47.0 to this candidate returned \`ready\`, authenticated MCP read and
+a durable prior SQLite backup. However **host \`boxweave version\` stayed
+v0.47.0**, exposing that the app distribution installer alone does not
+update root-owned Host CLI/Gateway. This is not full host acceptance.
+
+A new scoped \`online.py --private-manifest-sha256\` developer-tested
+entrypoint is being added to enable the **entire host+app source-bound
+candidate installation before public tag creation**. It rejects a changed
+manifest, changed asset, symlinks, extra paths, unsigned directory ownership
+and group-writable files. Its full real host upgrade and separate trusted
+Verifier gate are still NOT ACCEPTED until exercised on a newly built exact
+candidate. Do not reuse this older PR synthetic candidate as the final
+main candidate.
+
+Live read-only installed probe \`racc-readonly-0470-r5\` reached the real
+68-tool installed MCP stdio catalogue, 10 MCP read-only probe attempts and
+81 installed CLI help/readonly evidence entries. The earlier summary counted
+all 91 evidence entries as \`actual_probe_count\`; source code now reports
+read-only attempts and help observations separately. This was PARTIAL:
+mutating oracles were unexecuted, and non-root CLI \`doctor\` lacked required
+privileged read scope (independent \`sudo doctor --mcp\` was 10/10 PASS).
+The \`boxweave_task_get\` positive attempt without an original task ID
+returned \`TASK_SELECTOR_INVALID\`; fixed to BLOCKED selector-required, not
+a product defect. Both errors are retained as original evidence and
+classification regressions.

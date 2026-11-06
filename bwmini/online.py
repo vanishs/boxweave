@@ -129,6 +129,54 @@ def manifest_read(path, version):
     return m
 
 
+
+def verified_private_stage(stage, version, manifest_sha256, *, owner_uid=0):
+    """Read an explicitly pinned, root-owned pre-publication release staging set.
+
+    Only this reviewed install entrypoint may consume private candidate bytes.
+    The SHA256 of the manifest must be provided independently by the caller;
+    the manifest binds the fixed RELEASE_FILES set. This does not run arbitrary
+    staged scripts or permit extra members.
+    """
+    import stat as statmod
+    stage = Path(stage)
+    require(stage.is_absolute() and not stage.is_symlink() and
+            re.fullmatch(r"[a-f0-9]{64}", str(manifest_sha256)),
+            "PRIVATE_RELEASE_PIN_INVALID")
+    for index, path in enumerate((stage, *stage.parents)):
+        meta = path.lstat()
+        # The stage and its immediate parent must be owned by the installer.
+        # Higher ancestors may be trusted root-owned system directories.
+        owner_ok = (meta.st_uid == owner_uid if index < 2
+                    else meta.st_uid in (owner_uid, 0))
+        require(statmod.S_ISDIR(meta.st_mode) and owner_ok and
+                not meta.st_mode & 0o022,
+                "PRIVATE_RELEASE_DIRECTORY_UNTRUSTED")
+    def file_bytes(path, limit):
+        meta = path.lstat()
+        require(statmod.S_ISREG(meta.st_mode) and meta.st_uid == owner_uid and
+                meta.st_nlink == 1 and not meta.st_mode & 0o022 and
+                0 < meta.st_size <= limit,
+                "PRIVATE_RELEASE_FILE_UNTRUSTED")
+        data = path.read_bytes()
+        require(len(data) == meta.st_size, "PRIVATE_RELEASE_FILE_CHANGED")
+        return data
+    manifest_bytes = file_bytes(stage / "release.json", 1_048_576)
+    require(sha(manifest_bytes) == manifest_sha256,
+            "PRIVATE_RELEASE_MANIFEST_DIGEST_MISMATCH")
+    manifest = manifest_read(stage / "release.json", version)
+    require({x.name for x in stage.iterdir()} ==
+            {"release.json", *manifest["files"].keys()},
+            "PRIVATE_RELEASE_UNEXPECTED_STAGE_MEMBER")
+    files = {}
+    for name, digest in sorted(manifest["files"].items()):
+        data = file_bytes(stage / name, 180_000_000 if name == "boxweave.zip" else 8_000_000)
+        require(sha(data) == digest,
+                "PRIVATE_RELEASE_ASSET_DIGEST_MISMATCH:" + name)
+        files[name] = data
+    return manifest, files
+
+
 def current_state():
     path = STATE / "state.json"
     require(path.exists() and not path.is_symlink() and path.stat().st_uid == 0 and not path.stat().st_mode & 0o077,
@@ -552,7 +600,8 @@ def installation_summary(web_port, version, remote_config=None):
     return "\n".join(lines)
 
 def install(stage, version, provider_url=None, provider_secret_file=None, provider_cli=None,
-            repair_containarium_shell=False, upstream_version=None, upstream_latest=False):
+            repair_containarium_shell=False, upstream_version=None, upstream_latest=False,
+            private_manifest_sha256=None):
     require(os.geteuid() == 0, "ROOT_REQUIRED")
     require(sys.platform == "linux" and platform.machine() == "x86_64" and platform.python_implementation() == "CPython" and supported_python(sys.version_info),
             "LINUX_X86_64_CPYTHON_MIN312_REQUIRED")
@@ -564,7 +613,13 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
     print(json.dumps({"nesting_preflight":{"environment":detected.stdout.strip() or "unknown",
                       "parent_nesting":"not_verified","effective_nested_execution":"not_verified",
                       "guidance":"Inside LXC, configure security.nesting=true on the exact parent instance, restart that outer box and verify a child workload. This installer does not change parent policy."}}), flush=True)
-    m = manifest_read(stage / "release.json", version)
+    private_files = None
+    if private_manifest_sha256 is not None:
+        m, private_files = verified_private_stage(stage, version, private_manifest_sha256)
+        require(sha(Path(__file__).read_bytes()) == m["files"]["online.py"],
+                "PRIVATE_ONLINE_INSTALLER_CHANGED")
+    else:
+        m = manifest_read(stage / "release.json", version)
     release_url = "https://github.com/vanishs/boxweave/releases/download/v" + version + "/"
     marker = STATE / "state.json"
     if not marker.exists():
@@ -649,6 +704,10 @@ def install(stage, version, provider_url=None, provider_secret_file=None, provid
             if name == "online.py":
                 require(sha(Path(__file__).read_bytes()) == expected, "ONLINE_INSTALLER_DIGEST_MISMATCH")
                 atomic(release / name, Path(__file__).read_bytes())
+            elif private_files is not None:
+                data = private_files[name]
+                require(sha(data) == expected, "PRIVATE_ASSET_CHANGED_BEFORE_INSTALL")
+                atomic(release / name, data)
             else: download(release_url + name, release / name, expected)
         # This helper is part of the digest-verified release and is loaded only
         # after all its source bytes have passed the release manifest check.
@@ -985,6 +1044,8 @@ def main():
     a=sub.add_parser("install");a.add_argument("--stage",required=True);a.add_argument("--version",required=True)
     a.add_argument("--provider-url");a.add_argument("--provider-secret-file");a.add_argument("--provider-cli")
     a.add_argument("--repair-containarium-shell",action="store_true")
+    a.add_argument("--private-manifest-sha256",
+                   help="Explicit externally trusted manifest SHA256 for root-owned local pre-release stage")
     choice = a.add_mutually_exclusive_group()
     choice.add_argument("--upstream-version")
     choice.add_argument("--upstream-latest", action="store_true")
@@ -992,9 +1053,14 @@ def main():
     a=sub.add_parser("client-config");a.add_argument("--identity",required=True);a.add_argument("--known-hosts",required=True)
     args=p.parse_args()
     try:
-        if args.action=="install":install(Path(args.stage),args.version,args.provider_url,args.provider_secret_file,args.provider_cli,
-                                          repair_containarium_shell=args.repair_containarium_shell,
-                                           upstream_version=args.upstream_version, upstream_latest=args.upstream_latest)
+        if args.action=="install":
+            options={"repair_containarium_shell":args.repair_containarium_shell,
+                     "upstream_version":args.upstream_version,
+                     "upstream_latest":args.upstream_latest}
+            if args.private_manifest_sha256 is not None:
+                options["private_manifest_sha256"]=args.private_manifest_sha256
+            install(Path(args.stage),args.version,args.provider_url,
+                    args.provider_secret_file,args.provider_cli,**options)
         elif args.action=="enroll":enroll(args.public_key)
         else:client_config(args.identity,args.known_hosts)
         return 0

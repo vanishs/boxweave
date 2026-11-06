@@ -26,6 +26,36 @@ Prepare a private application account and an operator-reviewed JSON configuratio
 
 The listener stays127.0.0.1. For a local HTTP test, use an exact loopback HTTP origin and `secure_cookie=false`. For a deployed HTTPS frontend, supply the exact HTTPS origin and `secure_cookie=true`, and configure a separately reviewed TLS reverse proxy to the loopback listener. The installer does not silently create a public Caddy listener, obtain certificates or install a trust root. Public exposure requires its own approval. Existing HTTPS configurations and provider services remain untouched.
 
+## Trusted private candidate installation before public release
+
+A test-owned prepared host may install a complete CI candidate **without first
+publishing a GitHub Release**. This is an explicit administrator action, not a
+normal customer auto-install, and does not grant any test runner host authority.
+The source/CI artifact must be independently selected, with its manifest
+SHA-256 recorded outside the artifact itself. Extract *only* the exact
+`release.json` and the release manifest's complete fixed set of assets to a
+root-owned, non-writable private directory (for example
+`/opt/boxweave-private-candidate`); no arbitrary additional files or links.
+
+After verifying the independent manifest digest, on an authorized disposable
+host only:
+
+```sh
+sudo /usr/bin/python3 /opt/boxweave-private-candidate/online.py install \
+  --stage /opt/boxweave-private-candidate \
+  --version 0.49.0 \
+  --private-manifest-sha256 REVIEWED_EXACT_64_HEX_DIGEST
+```
+
+This refuses altered, symlinked, non-root-owned or writable staged files;
+it verifies every release asset against the pinned manifest. It executes
+the existing host/app installation path without requiring a public tag.
+Normal streamed installs remain bound to immutable published releases.
+The private install still requires all normal host/Provider/app grants and
+must never be run on the operator host for an acceptance experiment.
+Do not equate a successful installation with the separate Finder/Verifier
+scenario evidence or the GitHub release signature gate.
+
 ## Install and first administrator
 
 ```sh

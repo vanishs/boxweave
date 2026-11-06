@@ -5,6 +5,74 @@ from unittest.mock import patch
 from bwmini import online,hostkeys,mcp_gate
 from scripts.build_release_manifest import build
 
+class PrivateCandidateInstallTests(unittest.TestCase):
+    def fixture(self, root):
+        stage = root / "private-stage"
+        stage.mkdir(mode=0o700)
+        stage.chmod(0o700)
+        files = {name: ("fixture:" + name).encode()
+                 for name in online.RELEASE_FILES}
+        for name, content in files.items():
+            target = stage / name
+            target.write_bytes(content)
+            target.chmod(0o600)
+        manifest = {"format": 1, "version": "0.49.0",
+                    "source": "a" * 40,
+                    "files": {name: hashlib.sha256(content).hexdigest()
+                              for name, content in files.items()}}
+        stage.joinpath("release.json").write_text(json.dumps(manifest))
+        stage.joinpath("release.json").chmod(0o600)
+        return stage, hashlib.sha256((stage/"release.json").read_bytes()).hexdigest()
+
+    def test_private_stage_exact_digest_and_owner(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()) as directory:
+            root = Path(directory)
+            stage, pin = self.fixture(root)
+            manifest, files = online.verified_private_stage(
+                stage, "0.49.0", pin, owner_uid=os.getuid())
+            self.assertEqual(len(files), len(online.RELEASE_FILES))
+            self.assertEqual(manifest["source"], "a" * 40)
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_DIRECTORY_UNTRUSTED"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid()+1)
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_MANIFEST_DIGEST_MISMATCH"):
+                online.verified_private_stage(stage, "0.49.0",
+                                              "f" * 64, owner_uid=os.getuid())
+            stage.joinpath("host_cli.py").write_bytes(b"changed")
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_ASSET_DIGEST_MISMATCH"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid())
+
+    def test_private_stage_rejects_world_writable_ancestor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage, pin = self.fixture(Path(directory))
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_DIRECTORY_UNTRUSTED"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid())
+
+    def test_private_stage_refuses_symlink_extra_and_writable_files(self):
+        with tempfile.TemporaryDirectory(dir=Path.home()) as directory:
+            stage, pin = self.fixture(Path(directory))
+            extra = stage / "unreviewed.sh"
+            extra.write_text("echo arbitrary")
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_UNEXPECTED_STAGE_MEMBER"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid())
+            extra.unlink()
+            original = stage / "mcp_gate.py"
+            original.unlink()
+            original.symlink_to(stage / "online.py")
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_FILE_UNTRUSTED"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid())
+            original.unlink()
+            original.write_bytes(b"fixture:mcp_gate.py")
+            original.chmod(0o666)
+            with self.assertRaisesRegex(online.Failure, "PRIVATE_RELEASE_FILE_UNTRUSTED"):
+                online.verified_private_stage(stage, "0.49.0", pin,
+                                              owner_uid=os.getuid())
+
+
 class StreamedInstallTests(unittest.TestCase):
     def key(self):
         blob=struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"x"*32

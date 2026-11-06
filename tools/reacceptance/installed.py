@@ -97,7 +97,17 @@ def inspect_mcp(argv, owned=None):
             rows[key] = {"status": "BLOCKED", "reason":
                          "MUTATING_OR_UNREVIEWED_TOOL_REQUIRES_SCENARIO_AND_GRANT"}
             continue
-        args, blocker = positive_arguments(t.get("inputSchema") or {}, owned)
+        schema = t.get("inputSchema") or {}
+        args, blocker = positive_arguments(schema, owned)
+        # The MCP schema for task_get allows either request_key or task_id
+        # but may advertise no top-level "required". Never submit empty
+        # arguments as though they were a valid positive workload.
+        if name == "boxweave_task_get":
+            blocker = "ORIGINAL_TASK_ID_OR_REQUEST_KEY_REQUIRED"
+        elif (not blocker and isinstance(schema, dict) and
+              (schema.get("anyOf") or schema.get("oneOf") or
+               schema.get("dependentRequired"))):
+            blocker = "COMPOSITE_SCHEMA_NEEDS_REVIEWED_POSITIVE_CASE"
         if blocker:
             rows[key] = {"status": "BLOCKED", "reason": blocker}
             continue
@@ -133,9 +143,30 @@ def inspect_cli(argv):
         invalid = capture(argv + [name, "--racc-unknown-argument"], timeout=15)
         evidence[key] = {"positive": positive, "invalid": invalid}
         good = positive["execution"] == "completed" and positive["exit_code"] == 0
-        rows[key] = {"status": "PARTIAL" if good else "FAIL",
+        text = (positive.get("stdout", "") + " " +
+                positive.get("stderr", "")).upper()
+        needs_admin = not good and name == "doctor" and (
+            "ROOT_REQUIRED" in text or "REQUIRES_ROOT" in text)
+        # Installed public CLI doctor intentionally does not inspect protected
+        # app units without admin. Its JSON uses "not_verified" rather than
+        # literal ROOT_REQUIRED; do not call this a defective installed doctor.
+        if name == "doctor" and not good and not needs_admin:
+            try:
+                payload = json.loads(positive.get("stdout", ""))
+                checks = payload.get("checks", [])
+                needs_admin = (payload.get("state") == "installed_public_descriptor"
+                               and isinstance(checks, list)
+                               and any(isinstance(x, dict) and
+                                       x.get("state") == "not_verified"
+                                       for x in checks))
+            except (TypeError, ValueError, AttributeError):
+                pass
+        rows[key] = {"status": ("PARTIAL" if good else
+                                "BLOCKED" if needs_admin else "FAIL"),
                      "reason": ("READONLY_POSITIVE_NO_INDEPENDENT_ORACLE"
-                                if good else "INSTALLED_CLI_POSITIVE_FAILED"),
+                                if good else
+                                "DOCTOR_REQUIRES_EXPLICIT_ADMIN_READONLY_LANE"
+                                if needs_admin else "INSTALLED_CLI_POSITIVE_FAILED"),
                      "invalid_exit_code": invalid["exit_code"]}
     return {"catalogue": "DISCOVERED", "rows": rows, "evidence": evidence}
 
@@ -173,7 +204,12 @@ def execute(root, out, host=None, mcp=None, owned=None):
                 "status": "PARTIAL_INSTALLED_READONLY_NOT_SYSTEM_ACCEPTANCE"}
     summary = {"schema_version": 1, "source_sha": inv["source_sha"],
                "row_count": len(rows),
-               "actual_probe_count": sum(len(x["evidence"]) for x in (m, cli)),
+               "recorded_evidence_entries": sum(len(x["evidence"]) for x in (m, cli)),
+               "stdio_mcp_positive_attempts": len(m["evidence"]) if m["catalogue"] == "DISCOVERED" else 0,
+               "cli_readonly_positive_attempts": sum(
+                   1 for x in cli["evidence"] if x.startswith("host_cli:")),
+               "cli_help_observations": sum(
+                   1 for x in cli["evidence"] if x.startswith("installed_cli_leaf:")),
                "passed_system_scenarios": 0,
                "has_independent_oracle": False,
                "status": original["status"]}

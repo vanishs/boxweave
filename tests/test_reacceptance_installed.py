@@ -50,6 +50,38 @@ class InstalledReadOnlyTests(unittest.TestCase):
         self.assertFalse(any(x["params"]["name"] == "create_container"
                              for req in calls[1:] for x in req))
 
+    def test_task_get_requires_original_identity_not_empty_positive(self):
+        fake = [{"name": "boxweave_task_get",
+                 "inputSchema": {"type": "object",
+                                 "properties": {"task_id": {"type": "string"},
+                                                "request_key": {"type": "string"}}}}]
+        calls = []
+        def session(argv, requests, **kwargs):
+            calls.append(requests)
+            return {"messages": [{"id": "racc-list", "result": {"tools": fake}}],
+                    "process": {"execution": "completed", "exit_code": 0}}
+        with patch.object(installed, "mcp_session", side_effect=session):
+            r = installed.inspect_mcp(["python3", "-m", "bwmini.mcp_gate"])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(r["rows"]["stdio_mcp:boxweave_task_get"]["status"],
+                         "BLOCKED")
+        self.assertEqual(r["rows"]["stdio_mcp:boxweave_task_get"]["reason"],
+                         "ORIGINAL_TASK_ID_OR_REQUEST_KEY_REQUIRED")
+
+    def test_readonly_public_doctor_is_blocked_not_functional_fail(self):
+        public = {"state": "installed_public_descriptor", "checks":
+                  [{"id": "app_worker_unit", "state": "not_verified"}]}
+        def mock_capture(argv, **kw):
+            if argv[-1] == "doctor":
+                return {"exit_code": 2, "execution": "completed",
+                        "stdout": json.dumps(public), "stderr": ""}
+            return {"exit_code": 2, "execution": "completed",
+                    "stdout": "", "stderr": ""}
+        with patch.object(installed, "help_tree", return_value={}), (
+             patch.object(installed, "capture", side_effect=mock_capture)):
+            result = installed.inspect_cli(["boxweave"])
+        self.assertEqual(result["rows"]["host_cli:doctor"]["status"], "BLOCKED")
+
     def test_stale_target_cannot_be_used_for_real_probe(self):
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaisesRegex(AcceptanceFault, "UNSAFE_READ_ONLY_TARGET"):
