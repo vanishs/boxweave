@@ -1,14 +1,17 @@
-# Agent-managed reacceptance and direct publication (no release workflow)
+# Agent-managed reacceptance and lightweight GitHub CI releases
 
-**Status:** Owner's controlling direction as of 2026-11-05 PT. The old required
-GitHub evidence-submission workflow, signature key, protected environment and
-dedicated runner are **retired** as the default release mechanism. The regular
-main/PR GitHub Actions build/test job may remain as an optional source check and
-candidate producer, but is not an acceptance executor or release authorizer.
-No special GitHub account is required to *record or validate evidence*.
-Publishing a GitHub tag/Release unavoidably needs a repository writer identity;
-use existing authorized Agent/maintainer access, never create or collect extra
-credentials merely to perform acceptance.
+**Current owner decision (2026-11-06 PT):** Restore the original simple
+GitHub Actions publishing model: on a successful `main` push, ordinary CI
+automatically publishes its exact candidate as a GitHub tag and Release.
+The publishing job uses the built-in `GITHUB_TOKEN` with scoped
+`contents: write`; no separate verifier workflow, signature key, special
+account, protected environment, evidence uploader, or dedicated Runner.
+It verifies source SHA, version, assets and hashes, and never changes the
+stable installer pointer. GitHub CI publication is **not** installed acceptance.
+
+Full multi-Agent black-box reacceptance remains an independent owner-invoked
+quality process. Earlier "no release workflow" and "direct Agent publication"
+instructions in this repository are superseded.
 
 ## Single owner instruction
 
@@ -16,8 +19,8 @@ credentials merely to perform acceptance.
 leaves; prioritize real L2/L3 workflows and concurrency/fault boundaries; reproduce
 defects with immutable original attempts; fix and run regressions; obtain the exact
 candidate; hand it to a **different Agent in a separate authorized Box** to
-reproduce and independently observe; repeat until accepted; publish only when
-all applicable mandatory safety/functional release cases pass. Maintain complete
+reproduce and independently observe; repeat until independently accepted.
+Publishing a source-CI Release does not itself establish that verdict. Maintain complete
 named action and feature ledgers; discovery, unit fixtures, synthetic oracles and
 same-Agent rechecks cannot claim installed independent PASS. Unsupported optional
 scenarios need native capability proof, not unsupported-by-assertion.
@@ -64,43 +67,34 @@ scenarios need native capability proof, not unsupported-by-assertion.
    release if any mandatory case is untested, partial, failed, UNKNOWN, false PASS,
    or an applicable release-blocking defect remains. A local checker PASS alone
    does **not** grant release permission. Keep authorized non-release work moving.
-7. After genuine independent acceptance **and** a version-specific release
-   decision under existing owner authorization, the Agent directly creates an
-   immutable tag and draft GitHub Release from the frozen candidate. No release
-   workflow, evidence uploader, new account, signer, or protected environment is
-   necessary. This is a manual Agent operation using existing repository write
-   access, not an unattended release service.
+7. Record full installed acceptance separately; a source-CI GitHub Release
+   does not change any incomplete, failed, or UNKNOWN independent test verdict.
 
-## Direct release checklist (Agent operations, not an Actions gate)
+## Automatic release (ordinary CI, no extra acceptance gate)
 
-- Ensure the clean source SHA is on the intended `main` commit and every
-  `release/` file equals the accepted index. The version must not conflict with
-  an existing tag/Release. Never overwrite an existing public release or
-  relabel another source commit.
-- For a **new** tag, use existing authorized repository credentials to create
-  `refs/tags/vVERSION` at the exact accepted SHA, then create a **draft**
-  GitHub Release with the exact already-accepted asset files. Prefer the
-  repository's existing `gh` command or connected GitHub tool; do not provision
-  a second account or pass tokens via logs.
-- Download the draft assets independently and compare the full filename set and
-  SHA256 index against the frozen candidate. On mismatch keep the draft blocked;
-  never silently replace an immutable published asset.
-- Publish the draft only after exact draft parity. Download public assets
-  again, verify tag SHA/version and every asset byte. Record links and remaining
-  non-release risks. Stable installer selection remains separately authorized.
-
-If no authorized GitHub write path exists, record `PUBLICATION_BLOCKED` but
-do not label the underlying real installed acceptance as failed. Do not bypass
-repository permission checks or fabricate a release. This rule is about release
-authentication, **not** a demand for an extra GitHub authorization step during
-testing.
+- `.github/workflows/ci.yml` first runs its regular `verify` job and
+  generates `application-candidate`. Only a successful `main` push can
+  continue to `publish`; pull requests cannot publish.
+- The publish job checks that `main` has not advanced, validates the
+  `VERSION`, exact source SHA, full asset names and SHA256 hashes, then uses
+  the same-run candidate bytes.
+- `GITHUB_TOKEN` has `contents: write` only for publication. Create
+  `refs/tags/vVERSION` at that exact commit, then a draft GitHub Release.
+  Do not retarget existing tags or replace published files. For a new
+  version, increment `VERSION` and corresponding package versions.
+- Upload all release assets, independently download draft bytes and compare
+  hashes, publish, then download and recheck public bytes. Interrupted
+  drafts may resume without silently replacing existing files.
+- Release notes explicitly distinguish source CI from installed independent
+  acceptance. The stable installation pointer remains unchanged.
 
 ## Scope and inherited safety limits
 
 The original 20-scenario checker is conservative; a missing or genuinely
-unsupported mandatory scenario blocks formal full release acceptance until
-there is genuine proof or a separately reviewed **scope decision**, not a
-faked PASS. A private Agent test report can describe partial installed
+unsupported mandatory scenario blocks **full independent installed acceptance**
+until there is genuine proof or a separately reviewed **scope decision**, not a
+faked PASS. It does not block ordinary source-CI publication, which cannot
+claim installed acceptance. A private Agent test report can describe partial installed
 capabilities without claiming a public release gate passed. The former signed
 workflow design remains historical knowledge; existing product release package
 must not include developer-only `tools/reacceptance` code. R-02 host reboot,
