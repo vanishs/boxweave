@@ -1,3 +1,7 @@
+## 2026-11-05 PT — current Agent-local trust model and outstanding real acceptance
+
+The owner rejected both the protected signed workflow and proposed GitHub account-based recording workflow. [Current release process](../process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md) trusts genuinely separate Agents/Boxes and preserves original/native records privately; the local hash/semantic checker cannot authenticate whether an Agent fabricated observations. This explicit trust reduction must not become a fixture PASS or permission to ignore UNKNOWN. Issue #88 original uncertain Box actions remain frozen; complete real installed scenario acceptance and direct-publication byte verification are still outstanding. GitHub authorization is intrinsic only to writing an actual public tag/Release; it is not an acceptance-evidence prerequisite. Old signer/Runner/environment blockers are no longer mandatory for the newly selected path, but past results stay historically accurate.
+
 ## 2026-11-05 PT — v0.49.1 release trust and deadline boundaries remain open
 
 [Release-gate audit](RACC_0491_RELEASE_GATE_2026-11-05.md) records source fixes
