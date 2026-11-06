@@ -80,8 +80,11 @@ def validate_upstream_payload(payload, schema):
         raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
     if any(name not in payload for name in required):
         raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
-    if schema.get("additionalProperties") is False and any(
-            name not in properties for name in payload):
+    # This is a permanent, non-replayable intent: a typo in an
+    # unadvertised field must not consume the logical Box name.
+    # The live upstream tool catalogue is the allowlist, even if its
+    # JSON Schema omits additionalProperties:false.
+    if any(name not in properties for name in payload):
         raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
 
     def check(value, definition, depth=0):
