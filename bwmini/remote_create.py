@@ -59,6 +59,93 @@ def validated_request(args):
     return logical, key, payload, digest
 
 
+
+def validate_upstream_payload(payload, schema):
+    """Check the advertised upstream JSON-Schema subset before reserving a name.
+
+    This deliberately does NOT claim all Containarium semantic constraints.
+    Unrecognized schema directives remain upstream-owned, while recognized
+    types, required fields, enums and bounds fail before a durable intent.
+    """
+    if (not isinstance(schema, dict) or schema.get("type") != "object"
+            or not isinstance(schema.get("properties"), dict)
+            or not isinstance(payload, dict)):
+        raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+    properties = schema["properties"]
+    if not isinstance(properties.get("username"), dict):
+        raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+    required = schema.get("required", [])
+    if (not isinstance(required, list)
+            or any(not isinstance(name, str) for name in required)):
+        raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+    if any(name not in payload for name in required):
+        raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+    if schema.get("additionalProperties") is False and any(
+            name not in properties for name in payload):
+        raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+
+    def check(value, definition, depth=0):
+        if not isinstance(definition, dict) or depth > 5:
+            raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+        kind = definition.get("type")
+        types = (kind,) if isinstance(kind, str) else kind
+        if not isinstance(types, (list, tuple)) or not types:
+            raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+        validators = {
+            "string": lambda x: isinstance(x, str),
+            "boolean": lambda x: isinstance(x, bool),
+            "integer": lambda x: type(x) is int,
+            "number": lambda x: type(x) in (int, float),
+            "array": lambda x: isinstance(x, list),
+            "object": lambda x: isinstance(x, dict),
+            "null": lambda x: x is None,
+        }
+        if any(k not in validators for k in types):
+            raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+        if not any(validators[k](value) for k in types):
+            raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+        if "enum" in definition and value not in definition["enum"]:
+            raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+        if "minimum" in definition and type(value) in (int, float) and value < definition["minimum"]:
+            raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+        if "maximum" in definition and type(value) in (int, float) and value > definition["maximum"]:
+            raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+        if isinstance(value, str):
+            if "minLength" in definition and len(value) < definition["minLength"]:
+                raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+            if "maxLength" in definition and len(value) > definition["maxLength"]:
+                raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+            if "pattern" in definition:
+                try:
+                    valid = re.search(definition["pattern"], value) is not None
+                except (TypeError, re.error):
+                    raise CreateFault("CREATE_SCHEMA_UNAVAILABLE") from None
+                if not valid:
+                    raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+        if isinstance(value, list):
+            if "minItems" in definition and len(value) < definition["minItems"]:
+                raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+            if "maxItems" in definition and len(value) > definition["maxItems"]:
+                raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+            if "items" in definition:
+                for member in value:
+                    check(member, definition["items"], depth + 1)
+        if isinstance(value, dict):
+            child_fields = definition.get("properties", {})
+            if not isinstance(child_fields, dict):
+                raise CreateFault("CREATE_SCHEMA_UNAVAILABLE")
+            if definition.get("additionalProperties") is False and any(
+                    name not in child_fields for name in value):
+                raise CreateFault("CREATE_UPSTREAM_ARGUMENT_INVALID")
+            for name, member in value.items():
+                if name in child_fields:
+                    check(member, child_fields[name], depth + 1)
+
+    for name, value in payload.items():
+        if name in properties:
+            check(value, properties[name])
+
+
 def task_receipt(row):
     state = row["state"]
     result = {
