@@ -50,14 +50,28 @@ safety primitive, **not** a complete race/fault scheduler; the role handoff does
 label same-Agent/manual verification. Maintain original immutable target UUID,
 createdAt, no-replay UNKNOWN, actual post-state oracle, and non-disruptive cleanup.
 
-**CI/publication change:** normal `main` pushes build a candidate but never publish.
-A separate protected `workflow_dispatch` with a trusted independent signed
-Verifier evidence artifact and exact candidate SHA is required to reach the publish
-job. Without that Verifier producer, configured key and real installed proofs,
-the gate stays **DENIED**, as intended. A repository configuration or workflow
-file alone cannot certify that GitHub protected environments or installed Verifier
-have been exercised. Do not bypass the gate by publishing manually, and never
-move the stable installer pin as part of reacceptance.
+**Current CI/publication (2026-11-06 owner choice):** A successful ordinary
+`main` push `verify` automatically runs `publish` using the exact candidate,
+built-in `GITHUB_TOKEN` and checked immutable tag/assets. There is **no**
+signing/reviewer/evidence `workflow_dispatch` acceptance gate and no special
+Runner or second GitHub account. PR #90 was closed unmerged. This source-CI
+Release cannot itself establish a full independently installed PASS; all
+incomplete/UNKNOWN/blocked scenarios retain their real status. Do not
+implicitly change the stable installer pointer. See
+[the controlling release policy](AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+
+**Create-after-timeout/guest-readiness incident (#92):** The
+[scoped original and v0.49.3 host retest](../verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md)
+shows a prompt `submitted` HTTP receipt, same-ID duplicate request, an
+initially STOPPED/guest-user-missing but eventually successful Box and SSH
+without operator repair. For new high-risk HTTP MCP create tests, separately
+record (a) the original task ID; (b) exact duplicate-no-replay; (c) read-only
+status polling, including `create_container(status_only=true)` when the
+ChatGPT connector hides the standalone status tool; (d) original native
+incarnation; (e) terminal acknowledgement followed by independently verified
+guest/SSH readiness; and (f) every untested cross-entry/restart/nesting
+scenario. Do not mark a transient absence during `submitted` as a terminal
+failure or turn `RUNNING` into independent acceptance.
 
 
 ## v0.49.0 source-only MVP increment (not official release acceptance)
@@ -81,14 +95,13 @@ Run the additional independent verification on a separately authorized Box, usin
 
 Read-only UNKNOWN follow-up is available from the developer checkout via `python scripts/reacceptance.py unknown-inspect --original EXACT_ORIGINAL_EVIDENCE_DIR --grant NEW_PRIVATE_TEST_OWNED_IDENTITY_GRANT --confirm I_AUTHORIZE_TEST_OWNED_LIFECYCLE --out FRESH_INSPECTION_DIR`. It checks a new scoped test-owned grant, the original immutable dispatch intent, UNKNOWN result, raw attempt digest, original native incarnation and current native Incus readback. A found child remains UNKNOWN even when UUID matches; a missing child does not prove the original never existed; identity mismatch is a hard blocker. It never replays, unlocks or deletes. This is not full R-04 operator recovery.
 
-Publication dispatch additionally requires an explicit successful original
-`candidate_run_id` and independently trusted `verifier_run_id`. Both gate
-and publish download the **same** original candidate artifact; a newly
-recompiled ZIP may not substitute for the bytes the Verifier installed.
-The independent Verifier artifact producer, protected key configuration and
-full required installed scenarios remain outstanding. Without them the
-release gate is correctly BLOCKED. The v0.48.0 main merge did not publish a
-formal GitHub Release.
+**Historical signed-release proposal only:** Earlier v0.48/0.49.0
+candidate notes required `candidate_run_id`, `verifier_run_id`, protected
+environment and signing. Those were NOT shipped as the current publish
+contract. Retain them only as historical experiments; a current simple
+main-CI source Release uses its same-run verified candidate bytes and never
+claims full independent installed acceptance.
+
 
 ## Current controlling interpretation — system bug hunting, not tool testing
 
@@ -117,7 +130,7 @@ The following are **mandatory Agent procedures now**, not claims that an automat
 - **Catalog reconciliation before testing:** compare current source registration/early dispatch, *installed executable and effective help*, and actual SSH/stdio/HTTP MCP `tools/list` plus Web route/Provider reachability. Report differences as candidate defects even if a callable command is absent from help; inspecting `argparse.add_parser` alone cannot discover special dispatch (`#80`). Missing authentication is an inventory blocker, not an empty catalog.
 - **Reproducible behavior over green counts:** prioritize causal counterexamples: original failure, actual remote state, race interleavings, typed errors and later recovery. Healthy `doctor`, 100 repeated serial PASS, or all-green fixture CI cannot establish simultaneous-actor safety (`#83`), functional Compose support (`#79`) or release parity.
 - **No fabricated evidence:** each executable result must have an immutable test-run/case ID and independently observable exit/response and postcondition. A synthetic `CONFIG_OR_RUNTIME_UNAVAILABLE` response exercises preflight only: it cannot be a positive functional acceptance. Track missing evidence separately from unsafe permissions and unsupported capabilities.
-- **Separate shipping gates:** a publishable exact-source candidate must pass its applicable **installed isolated black-box gates before public release**. CI verifies source/fixtures; publishing verifies immutable assets; neither replaces installed candidate behavior. Post-publication checks reconcile tag, manifest, bytes and a bounded official-release install smoke. Do not move stable pin implicitly.
+- **Separate evidence from source publication:** ordinary main CI may publish source-bound assets after its normal `verify`; no signed independent verifier gate is configured. To claim **full installed acceptance**, require the applicable isolated black-box tests and independent Verifier evidence. CI and release parity never substitute for installed behavior. Keep original UNKNOWN and stable pin unchanged.
 - **Do not collapse distinct findings:** closing a confirmed root cause does not close an earlier ambiguous symptom unless the evidence establishes causation or independently verifies the symptom is resolved. A `SUSPECT` can remain open with a precise next reproduction after an associated confirmed defect has shipped.
 
 These refinements apply prospectively to new runs. Historic reports keep their original observations and version-scoped classifications.
@@ -308,9 +321,18 @@ Release **one new immutable product version** only when actual applicable releas
 
 ### Phase 6A — exact candidate-first publication gate
 
-For runnable product changes, the preferred order is: (1) freeze a source SHA and artifact digest; (2) run affected source/contract tests; (3) build an **installable candidate package** without publishing its immutable release tag; (4) install it on a separate authorized clean Box or upgrade a deliberately seeded old-release Box, verify installed manifest and running daemon/app/Gateway identity; (5) have Verifier rerun the **original failing black-box case first**, its negative/no-effect oracle, key adjacent stateful tests and post-cleanup recovery; (6) run applicable final CI/frontend/browser and document/release checks; (7) merge and publish the **same verified source-bound bytes** as an immutable new release, only after all applicable hard gates pass; (8) verify published tag/source, asset count, SHA-256 and official installer smoke independently. The official release must not be treated as the *first* installation of the candidate.
+For an independently accepted product change, the preferred order is:
+(1) freeze the source and candidate digest; (2) run focused source/contract
+tests; (3) build an installable candidate; (4) install it on an explicitly
+authorized separate Box and verify its runtime identity; (5) have a different
+Verifier execute the original failing black-box scenario and neighboring
+safety cases; (6) reconcile the full named scenario ledger; (7) merge to
+`main` and independently verify the simple source-CI Release and asset
+parity; (8) check the official upgrade when authorized. **These are gates
+for an installed independent acceptance claim**, not an extra GitHub
+workflow approval before ordinary source publication.
 
-If tooling cannot deliver the exact candidate privately/securely to the test Box, do **not** push unpublished unreviewed source to public GitHub as a workaround: record `BLOCKED` and the missing candidate-build/install capability. If post-merge source SHA necessarily changes, verify the final artifact's source and payload equivalence before publication or repeat affected gates. Any waived installed prepublish gate requires an explicit **scope-limited release exception with risk, test blocker and verifier**, never a blanket PASS. A P0 data-integrity/security failure remains a hard stop absent an owner-approved release-policy exception. The operator's production host, R-02 reboot, R-04 activation and stable pin remain excluded.
+If tooling cannot deliver the exact candidate privately/securely to the test Box, do **not** push unpublished unreviewed source to public GitHub as a workaround: record `BLOCKED` and the missing candidate-build/install capability. If post-merge source SHA necessarily changes, verify the final artifact's source and payload equivalence before publication or repeat affected gates. Any missing installed evidence must remain explicitly **scope-limited BLOCKED/PARTIAL**, never a blanket PASS. A known P0 data-integrity/security risk requires an owner decision before deploying or declaring an installed release accepted. Ordinary source-CI publication is not that deployment or installed acceptance decision. The operator's production host, R-02 reboot, R-04 activation and stable pin remain excluded.
 
 
 ### Phase 6B — Upstream release rehearsal patterns are inspiration, not currently wired BoxWeave CI
