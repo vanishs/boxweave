@@ -186,7 +186,7 @@ class AccessTests(Base):
         upgraded=Store(self.store.path)
         self.assertEqual(upgraded.project(project['id'])['revision'],1)
         self.assertEqual(Models(upgraded).read()['selection']['model'],'GLM-5.3')
-        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],13)
+        with upgraded.db() as db:self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],14)
     def test_membership_read_keeps_account_and_network_identity_distinct(self):
         rows=self.a.memberships()['memberships'];self.assertEqual(rows[0]['account_user'],TARGET.user);self.assertEqual(rows[0]['network_tenant'],'tenant-a')
 
