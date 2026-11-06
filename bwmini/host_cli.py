@@ -16,7 +16,7 @@ import stat
 import subprocess
 import sys
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import build_opener, ProxyHandler
 
 PUBLIC_STATE = Path("/usr/local/lib/boxweave/default/client-public.json")
@@ -138,6 +138,43 @@ def web_observation(port):
         return {"reachable": False, "authenticated": False, "scope": "host_loopback"}
     return {"reachable": code in (200, 401, 403), "http_status": code,
             "authenticated": False, "scope": "host_loopback"}
+
+
+
+def http_mcp_overview():
+    """Read bounded public OAuth metadata on the default loopback port only.
+
+    A response proves local discovery, not external HTTPS reachability, service
+    health, authenticated MCP access, or the state of a custom-port listener.
+    """
+    unknown = {"discovery": "not_detected", "public_url": None}
+    url = "http://127.0.0.1:18844/.well-known/oauth-protected-resource/mcp"
+    try:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(url, timeout=1.5) as response:
+            if response.status != 200:
+                return unknown
+            payload = response.read(4097)
+        if len(payload) > 4096:
+            return unknown
+        data = json.loads(payload)
+        if not isinstance(data, dict):
+            return unknown
+        resource = data.get("resource")
+        if resource == "http://127.0.0.1:18844/mcp":
+            return {"discovery": "reachable", "public_url": None}
+        if (not isinstance(resource, str) or len(resource) > 1024
+                or not resource.isascii() or any(ord(c) < 33 or ord(c) == 127 for c in resource)):
+            return unknown
+        parsed = urlsplit(resource)
+        if (parsed.scheme != "https" or not parsed.netloc or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.path != "/mcp" or parsed.query or parsed.fragment
+                or parsed.port == 0 or resource != "https://" + parsed.netloc + "/mcp"):
+            return unknown
+        return {"discovery": "reachable", "public_url": resource}
+    except (OSError, ValueError, TypeError, HTTPError, URLError):
+        return unknown
 
 
 def service_observation(name):
@@ -607,6 +644,27 @@ def onboarding(info):
     print("  boxweave client")
     print("  boxweave client --help  # More options")
     print("  HTTP MCP recommended; SSH MCP remains an advanced --method ssh option.")
+    print()
+    http = http_mcp_overview()
+    print("==============================================================")
+    print("  HTTP MCP on this host")
+    print("==============================================================")
+    print()
+    print("  Default loopback endpoint: http://127.0.0.1:18844/mcp")
+    print("  Local OAuth discovery: " + (
+        "reachable" if http["discovery"] == "reachable"
+        else "not detected on default port (may be disabled or use a custom port)"))
+    print("  Advertised public MCP URL: " + (
+        http["public_url"] or "not observed on default port"))
+    print("  External HTTPS / authenticated MCP: not verified")
+    print()
+    print("  Check actual managed settings: sudo boxweave http status")
+    print("  Configure public HTTPS origin: sudo boxweave http configure --public-url https://mcp.example.com")
+    print("    Public client endpoint: https://mcp.example.com/mcp")
+    print("  Or keep it loopback-only: sudo boxweave http configure --local-only")
+    print("  Set up a client: boxweave client --method http")
+    print("  A public URL requires separately configured DNS and HTTPS reverse proxy.")
+    print("  The MCP listener remains bound to loopback; no public access is enabled here.")
     print()
     print("Run as your normal Linux SSH/sudo administrator (no sudo for client setup),")
     print("not the boxweave service account. Key enrollment needs admin approval.")
