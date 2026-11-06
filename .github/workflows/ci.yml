@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       verifier_run_id:
-        description: 'Existing separate trusted Verifier workflow run with signed installed evidence'
+        description: 'Successful independent Box acceptance evidence-recording run'
         required: false
         type: string
 permissions:
@@ -236,9 +236,9 @@ jobs:
           path: .runtime/release/
 
   # The regular main push is VERIFY/CANDIDATE ONLY. It can never auto-publish.
-  # A separate trusted Verifier must have installed these exact candidate bytes
-  # in a clean isolated Box, signed its original attempt and oracle evidence,
-  # and uploaded that evidence to its own workflow run.
+  # A distinct Verifier Agent/Box must have installed these exact candidate bytes.
+  # The evidence-recording workflow validates its real original/native reports;
+  # that recording CI run does not itself execute the remote Box tests.
   candidate_gate:
     needs: verify
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.candidate_run_id != '' && inputs.verifier_run_id != ''
@@ -247,7 +247,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-    environment: boxweave-reacceptance-release
     steps:
       - uses: actions/checkout@v4
       - name: Verify original candidate run is a successful main push at this exact SHA
@@ -278,34 +277,28 @@ jobs:
           path: verifier-evidence
           run-id: ${{ inputs.verifier_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify independent installed candidate and signature
+      - name: Validate independently produced Box acceptance evidence
         env:
-          TRUSTED_VERIFIER_PUBLIC_KEY: ${{ vars.REACCEPTANCE_VERIFIER_PUBLIC_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          VERIFIER_RUN_ID: ${{ inputs.verifier_run_id }}
         run: |
           set -euo pipefail
-          [[ -n "$TRUSTED_VERIFIER_PUBLIC_KEY" ]] || { echo 'Protected verifier key not configured; refuse release' >&2; exit 1; }
-          printf '%s\n' "$TRUSTED_VERIFIER_PUBLIC_KEY" > trusted-verifier.pub
           python -m tools.reacceptance.workflow_gate \
             --source "$GITHUB_SHA" \
-            --candidate-run-id "${{ inputs.candidate_run_id }}" \
-            --verifier-run-id "${{ inputs.verifier_run_id }}" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --verifier-run-id "$VERIFIER_RUN_ID" \
             --assets release --attestation verifier-evidence/release-gate.json \
             --context-out trusted-context.json
-          python -m tools.reacceptance.release_gate \
-            --candidate release/boxweave.zip \
-            --release-manifest release/release.json \
-            --attestation verifier-evidence/release-gate.json \
-            --signature verifier-evidence/release-gate.sig \
-            --public-key trusted-verifier.pub \
-            --source "$GITHUB_SHA" --expected-context trusted-context.json
+          python -m tools.reacceptance.box_acceptance check \
+            --assets release --evidence verifier-evidence \
+            --source "$GITHUB_SHA" --context trusted-context.json
 
   publish:
     needs: [verify, candidate_gate]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.candidate_run_id != '' && inputs.verifier_run_id != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: boxweave-reacceptance-release
     permissions:
       actions: read
       contents: write
@@ -323,25 +316,22 @@ jobs:
           path: verifier-evidence
           run-id: ${{ inputs.verifier_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Revalidate exact downloaded publication bytes and independent signature
+      - name: Revalidate exact publication bytes and Box evidence
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TRUSTED_VERIFIER_PUBLIC_KEY: ${{ vars.REACCEPTANCE_VERIFIER_PUBLIC_KEY }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          VERIFIER_RUN_ID: ${{ inputs.verifier_run_id }}
         run: |
           set -euo pipefail
-          [[ -n "$TRUSTED_VERIFIER_PUBLIC_KEY" ]] || exit 1
-          printf '%s\n' "$TRUSTED_VERIFIER_PUBLIC_KEY" > trusted-verifier.pub
           python -m tools.reacceptance.workflow_gate \
             --source "$GITHUB_SHA" \
-            --candidate-run-id "${{ inputs.candidate_run_id }}" \
-            --verifier-run-id "${{ inputs.verifier_run_id }}" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --verifier-run-id "$VERIFIER_RUN_ID" \
             --assets release --attestation verifier-evidence/release-gate.json \
             --context-out trusted-context.json
-          python -m tools.reacceptance.release_gate \
-            --candidate release/boxweave.zip --release-manifest release/release.json \
-            --attestation verifier-evidence/release-gate.json \
-            --signature verifier-evidence/release-gate.sig --public-key trusted-verifier.pub \
-            --source "$GITHUB_SHA" --expected-context trusted-context.json
+          python -m tools.reacceptance.box_acceptance check \
+            --assets release --evidence verifier-evidence \
+            --source "$GITHUB_SHA" --context trusted-context.json
       - name: Publish immutable assets only after draft byte parity
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
