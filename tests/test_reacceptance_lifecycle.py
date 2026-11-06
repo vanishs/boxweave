@@ -86,6 +86,30 @@ class LiveLifecycleTests(unittest.TestCase):
                 outcome=json.loads((Path(d)/"run"/"result.json").read_text())
                 self.assertEqual(outcome["state"],"BLOCKED_PRE_DISPATCH")
 
+    def test_subprocess_timeout_enforces_the_reviewed_240_second_budget(self):
+        # Regression: mcp_session passed 240 to capture, but capture silently
+        # capped it at 120. A native Running child was therefore UNKNOWN.
+        from tools.reacceptance import engine
+        from types import SimpleNamespace
+        fake = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with patch.object(engine.subprocess, "run", return_value=fake) as proc:
+            captured = engine.capture(["/usr/bin/true"], timeout=240,
+                                      max_timeout=300)
+            self.assertEqual(captured["execution"], "completed")
+            self.assertEqual(proc.call_args.kwargs["timeout"], 240)
+            engine.capture(["/usr/bin/true"], timeout=3600,
+                           max_timeout=300)
+            self.assertEqual(proc.call_args.kwargs["timeout"], 300)
+            engine.capture(["/usr/bin/true"], timeout=240)
+            self.assertEqual(proc.call_args.kwargs["timeout"], 120)
+        with patch.object(engine, "capture",
+                return_value={"execution": "completed", "exit_code": 0,
+                              "stdout": "", "stderr": ""}) as proc:
+            engine.mcp_session(["python3", "-m", "bwmini.mcp_gate"], [],
+                               timeout=240)
+            self.assertEqual(proc.call_args.kwargs["max_timeout"], 300)
+            self.assertEqual(proc.call_args.kwargs["timeout"], 240)
+
     def test_slow_real_create_has_bounded_cold_budget(self):
         from tools.reacceptance import lifecycle
         with patch.object(lifecycle, "mcp_session", return_value={

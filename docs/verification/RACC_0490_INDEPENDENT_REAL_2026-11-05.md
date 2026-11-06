@@ -118,3 +118,19 @@ and still requires separate installed Verifier evidence.
 Four adversarial unit tests pass. An actual installation through this
 new wrapper is not yet marked complete: earlier isolated clean/upgrade
 installations used candidate online.py's internal verification directly.
+
+## Confirmed source harness bug: 240-second create budget silently capped at 120
+
+Read-only inspection of the exact Verifier attempt file proves
+`timeout_seconds=240` was only the lifecycle layer's **requested** value;
+actual `process.elapsed_ms=120102` and `execution=UNKNOWN`. The older
+Finder small-child successful create also returned after 119574 ms, close
+to the same hidden cap. The shared `tools/reacceptance/engine.py:capture`
+forced `timeout=min(max(timeout,1),120)`, so `mcp_session(timeout=240)`
+never received the advertised window. **This is a confirmed tester Bug.**
+The new code preserves the 120-second default for ordinary probes, permits
+only the reviewed MCP lane to opt into a hard 300-second ceiling, and checks
+that the actual subprocess timeout for normal cold create is exactly 240.
+This fixes the test budget, but does not prove the upstream Provider and
+Gateway can return an acknowledgment within any bound, nor reclassify the
+original uncertain 49b/iv3-a writes as SUCCESS. They remain frozen.

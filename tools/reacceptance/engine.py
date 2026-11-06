@@ -105,8 +105,15 @@ def sanitize(data):
     return data
 
 
-def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT):
-    """No shell, bounded output. Timeout returns UNKNOWN, never a retry."""
+def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT,
+            max_timeout=120):
+    """No shell, bounded output. Timeout returns UNKNOWN, never a retry.
+
+    Ordinary probes retain the 120-second safety ceiling. The reviewed
+    installed MCP lifecycle lane explicitly opts into max_timeout=300,
+    allowing a real 240-second cold-create budget. Never report a longer
+    effective timeout than was actually enforced.
+    """
     if not isinstance(argv, list) or not argv or any(
             not isinstance(x, str) or not x or len(x) > 4096 for x in argv):
         raise AcceptanceFault("INVALID_EXEC_VECTOR")
@@ -114,7 +121,8 @@ def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT):
     try:
         p = subprocess.run(argv, cwd=cwd, input=input_text, text=True,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           timeout=min(max(timeout, 1), 120), check=False)
+                           timeout=min(max(timeout, 1), min(max(max_timeout, 1), 300)),
+                           check=False)
         state, rc = "completed", p.returncode
         output, errors = p.stdout, p.stderr
     except subprocess.TimeoutExpired as exc:
@@ -354,7 +362,7 @@ def mcp_session(argv, calls, timeout=12):
         *calls,
     ]
     record = capture(argv, input_text="\n".join(json.dumps(x) for x in requests) + "\n",
-                     timeout=timeout, limit=2097152)
+                     timeout=timeout, max_timeout=300, limit=2097152)
     messages = []
     for line in record["stdout"].splitlines():
         try:
