@@ -1,3 +1,7 @@
+## 2026-11-06 UTC — owner-authorized release-gate source implementation
+
+Explicit owner approval received for authorized GitHub submission of distinct Agent/Box installed evidence. PR #90 includes a new data-only `box_acceptance` helper, its 13 fail-closed fixture tests, and updated `independent-verifier.yml` and `ci.yml`. The archive proof carrier records submitted bytes, SHA256 bindings and authoritative workflow context without claiming to run tests. CI result, merge, actual fully compliant independent installed acceptance and any GitHub Release are separate gates; none is implied by the source update. No UNKNOWN replay or stable pin change. The 2026-11-05 review-only records that follow are historical.
+
 ## 2026-11-05 PT — Agent-operated command rectification, inactive trust-policy proposal
 
 Source baseline main 742eaf22a28da89191a47ca6dc0628a0590a5ab3, v0.49.1.
