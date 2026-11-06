@@ -64,3 +64,15 @@ Remaining RACC-SYS-01..09 items are PARTIAL/NOT IMPLEMENTED, especially real
 auto multi-Agent dispatch, full 19 scenario runtime and 100% safe eligible
 MCP/CLI black-box coverage. The normal owner trigger remains
 `Run full BoxWeave reacceptance`.
+
+## Newly reproduced acceptance-tool defect (real installed baseline)
+
+Running the developer `installed-readonly` probe against the genuine
+v0.47.0 `boxweave --help` recursively expanded help choices from a fallback
+root-usage page for unknown CLI subcommands. The initial real attempt exited
+2 with `CLI_SURFACE_DISCOVERY_BUDGET_EXCEEDED` before MCP breadth could run.
+Source mitigation parses only the actual command's usage header, rejects
+fallback help masquerading as a subcommand, and retains a named BLOCKED
+record if a bounded discovery budget is exhausted. A unit regression uses
+root-help fallback to prevent future exponential discovery; an exact installed
+rerun is still separately required before this bug is considered verified.

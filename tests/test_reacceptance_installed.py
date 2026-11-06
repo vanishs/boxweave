@@ -68,6 +68,25 @@ class InstalledReadOnlyTests(unittest.TestCase):
             with self.assertRaises(AcceptanceFault):
                 installed.execute(".", Path(d) / "out")
 
+    def test_help_tree_does_not_recurse_root_fallback(self):
+        from tools.reacceptance import surfaces
+        from unittest.mock import patch
+        seen = []
+        def fake_capture(argv, **kwargs):
+            seen.append(argv)
+            # A poorly behaving installed CLI prints root help even for
+            # an unknown command: its root choices must not recurse again.
+            return {"execution": "completed", "exit_code": 0,
+                    "stdout": "usage: host_cli.py [-h] {alpha,beta} ...\\n\\n"
+                    "positional arguments:\\n  {alpha,beta} ...",
+                    "stderr": ""}
+        with patch.object(surfaces, "capture", side_effect=fake_capture):
+            result = surfaces.help_tree(["boxweave"])
+        self.assertEqual(len(seen), 3)
+        self.assertEqual(set(result), {"<root>", "alpha", "beta"})
+        self.assertEqual(result["alpha"]["reason"],
+                         "HELP_FELL_BACK_TO_DIFFERENT_COMMAND")
+
     def test_process_failure_never_passes(self):
         self.assertEqual(installed.result_kind(None), "NO_JSON_RPC_RESPONSE")
         self.assertEqual(installed.result_kind({"error": {"code": 400}}), "RPC_ERROR")
