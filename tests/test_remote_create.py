@@ -241,6 +241,7 @@ class HTTPCreateTests(unittest.TestCase):
             ({"username": "bad-enum", "os_type": "windows"}, "bad-enum"),
             ({"username": "bad-array", "ssh_keys": "not-a-list"}, "bad-array"),
             ({"username": "bad-min", "idle_stop_minutes": -3}, "bad-min"),
+            ({"username": "bad-typo", "cpu_coutn": "2"}, "bad-typo"),
         ]
         for args, username in bad:
             with self.subTest(username=username):
