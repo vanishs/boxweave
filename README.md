@@ -7,7 +7,7 @@ BoxWeave is a self-hosted control plane for AI coding, remote development enviro
 **Architecture: MCP-first + REST-assisted hybrid (owner decision 2026-11-05).** Agents use BoxWeave's SSH/stdio or authenticated HTTP MCP; upstream Containarium MCP remains the default for new and specialist operations. The application keeps its seven previously implemented authenticated loopback REST lifecycle methods as a scoped auxiliary adapter. The proposed batch migration of 29 additional MCP tools to REST and a universal API-first architecture were abandoned; existing deployed routes were not reversed. [Architecture and safety boundaries](docs/design/ARCHITECTURE.md), [ADR-010](docs/design/ADR/0010-api-first-control-plane-candidate.md).
 
 **HTTP MCP create reliability (v0.49.4):** `create_container` now
-validates the upstream-advertised argument types **before** reserving a
+validates advertised argument keys/types **before** reserving a
 non-replayable Box name. Poll a pending task with
 `boxweave_create_status`, or when that tool is hidden by a capped
 ChatGPT catalogue use `create_container` with only
