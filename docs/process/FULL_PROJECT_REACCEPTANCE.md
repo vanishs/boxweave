@@ -1,3 +1,7 @@
+## 2026-11-05 owner rectification checkpoint
+
+Drive the find/fix/independent-Box-verification loop with existing Agent collaboration and authorized tools; execute missing supported cases manually rather than waiting for a complete automation platform. [The capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) lists tested command forms and their exact limits. [The concrete simplification proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) is review-only: the current signed/environment publication workflow remains enforced pending explicit policy confirmation. This checkpoint invokes no tests, host change or release and does not convert PARTIAL/UNKNOWN to PASS.
+
 # Full-project black-box-first reacceptance and multi-Agent remediation
 
 **Canonical trigger:** `Run full BoxWeave reacceptance.` (the same instruction without the trailing period is equivalent). **Status:** active owner-invoked Agent runbook, **not** evidence of any executed test. Keep the shortcut in [AGENTS.md](../../AGENTS.md); this revision does not itself invoke testing, change a host, bump a version, or publish a release.

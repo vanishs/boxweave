@@ -1,3 +1,7 @@
+## 2026-11-05 PT — simplified release trust model proposed, not applied
+
+[Reviewable proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) would use repository-authorized Agent evidence submission instead of mandatory separate signing and protected environment/Runner infrastructure. The remote-execution truth claim would rely on independent Agent/Box observations, not independent cryptographic attestation. Automatic approval review blocked applying this policy change without exact confirmation; current executable gates are preserved. Actual untested behavior and #88 uncertainty remain real blockers, distinct from optional automation work. [Tool audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) records available capabilities without installed acceptance claims.
+
 ## 2026-11-05 PT — v0.49.1 release trust and deadline boundaries remain open
 
 [Release-gate audit](RACC_0491_RELEASE_GATE_2026-11-05.md) records source fixes

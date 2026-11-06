@@ -1,3 +1,7 @@
+## Current execution priority — Agent-operated reacceptance
+
+Owner requested simplifying the single command around existing tools and actual find/fix/independent installed verification. Execute supported cases manually when an automated driver is missing; general scheduler/Runner/signing product development is not a prerequisite to running tests. The RACC automation packages below are retained engineering references. [Capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) and [review-only trust-policy replacement](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) distinguish existing execution from proposed publication changes. Current machine release gates are unchanged pending explicit policy confirmation.
+
 # Implementation plan — authorized design and iteration status
 
 Current phase6/TASK-0140.9.1: user SRC-084 and Web decision SRC-086; comparison, risk closure and all18 traceability rows complete. Three discovered0.9.0 paths were fixed within phase6.163 tests/build/seven browser/actual generated4-profile setup and independent-copy installation passed;15 old subset tests pass, readiness collection failure retained. Source-level phase7 entry eligible; no phase7 execution. See COMPARISON_REPORT/OPEN_RISKS, which supersede earlier completion prose for the fixed gaps.

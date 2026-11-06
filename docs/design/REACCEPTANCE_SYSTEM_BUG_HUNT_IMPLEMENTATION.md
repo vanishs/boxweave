@@ -1,3 +1,5 @@
+**2026-11-05 disposition:** retained automation engineering reference. The Agent can execute current supported tests through existing tools without completing every automation work package. See [the capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) and [review-only simplification proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md). Proposed removal of mandatory signing/Runner/environment infrastructure is not active until explicit policy confirmation; the executable release gate remains unchanged.
+
 # Reacceptance system-level bug-hunting automation — implementation handoff
 
 **Status:** DESIGN + DEVELOPER TASKS ONLY. No implementation is authorized or claimed by this document. **Owner trigger remains:** `Run full BoxWeave reacceptance`. **Primary goal:** find and fix BoxWeave **system-level defects**, then obtain **independent installed verification**. A passed tool-catalog scan is a prerequisite, not an outcome. **Prepared:** 2026-11-05.

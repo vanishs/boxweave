@@ -1,3 +1,14 @@
+## 2026-11-05 PT — single-command simplification review checkpoint
+
+Owner requested returning to Agent-operated find/fix/independent Box verify/release.
+Existing helpers support most orchestration; [capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md).
+[Concrete workflow/data-carrier proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md)
+is prepared but inactive. Automatic approval review requires explicit confirmation
+before removing mandatory signing/environment/Runner prerequisites. Current gates,
+v0.49.1 source, stable v0.43.1 and original UNKNOWN scenes remain unchanged.
+Do not claim missing repository admin permission: authenticated gh has admin rights.
+No full reacceptance or release was executed in this documentation/draft checkpoint.
+
 ## 2026-11-05 PT — v0.49.1 source release-gate corrections; NOT RELEASED
 
 [Exact source scope, artifact audit and administrator requirements](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md).

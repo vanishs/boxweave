@@ -1,3 +1,7 @@
+## 2026-11-05 PT — simplified command proposal ready for exact policy confirmation
+
+[Tool audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) confirms existing helpers and manual Agent orchestration can perform most work now. [Reviewable proposal and inactive patches](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) retain actual Box verification, UNKNOWN safety and exact candidate/publication bytes while proposing removal of dedicated signing/Runner/environment prerequisites. Automatic approval review blocked applying that trust-policy change; active workflows remain intact. Do not activate the draft or publish until the exact policy confirmation is received. No new test Box or release was created. Original UNKNOWN scenes and stable pin remain unchanged.
+
 ## 2026-11-05 PT — v0.49.1 next executable checkpoint
 
 Read [release-gate corrections and precise administrator setup](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md)

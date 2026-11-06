@@ -1,3 +1,5 @@
+**2026-11-05 single-command rectification:** [existing tool capability audit](knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md) identifies what the Agent can execute now; [reviewable simplification proposal](knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) retains optional automation/signing ideas as knowledge. Actual required tests and current executable publication gates are not changed by this documentation checkpoint.
+
 **v0.44.10 targeted correction:** [selftest private-plan handoff, typed diagnostics, test and release acceptance ledger](verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md); R-02 owner-host reboot test explicitly deferred, no global R-04 activation.
 
 # BoxWeave v2 knowledge index

@@ -1,3 +1,34 @@
+## 2026-11-05 PT — Agent-operated command rectification, inactive trust-policy proposal
+
+Source baseline main 742eaf22a28da89191a47ca6dc0628a0590a5ab3, v0.49.1.
+Owner requested restoring find/fix/independent Box verify/publish using existing
+Agent/tools, with advanced automation retained as knowledge. [Capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md)
+and [concrete review-only proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md).
+
+S: nine actual developer help entrypoints verified in isolated Python3.12 venv,
+exit 0 each, no install/Box writes; unsupported candidate-fetch launcher alias
+returned exit 2 and the supported direct module was verified instead. Real
+Agent collaboration and existing helpers can perform manual supported tests.
+
+T/draft fixture: unwired data-only evidence carrier, 13 tests PASS, exit 0.
+Independent review reproduced a contradictory-original receipt laundering flaw
+not caught by the first 12 tests; fixed by reconstructing derived metadata from
+original bytes while rejecting changed decisions/actors/observations/supplied
+hashes. Direct forged archive regression now rejects before writes. Draft
+workflow shell inputs were changed to quoted environment variables, not direct
+input interpolation. Source/tests are retained as a review-only patch; they
+are not applied, installed or wired into the active release workflow.
+
+BLOCKED exact policy application: automatic approval review rejected removing
+mandatory signature/protected environment/dedicated Runner prerequisites without
+explicit confirmation of that trust-boundary change. Current two executable
+workflows and release_gate.py remain unchanged; no signature check bypass,
+configuration change, real full reacceptance, new Box, tag, Release or stable
+promotion was performed. Original UNKNOWN scenes retained. The owner needs
+only to confirm this precise trust-model replacement after reviewing the draft,
+not manually configure the former infrastructure. Version is unchanged because
+this checkpoint changes documents and retains code only as an inactive patch.
+
 ### PR CI inventory correction
 
 PR #89 initial run 42174508705 failed the code-first inventory drift guard because
