@@ -48,7 +48,7 @@ class CreateJournalTests(unittest.TestCase):
         self.assertEqual(first["task_id"], second["task_id"])
         self.assertEqual(first["request_key"], second["request_key"])
         with self.assertRaisesRegex(CreateFault, "CREATE_NAME_CONFLICT"):
-            self.journal.reserve("a", "a"*32, "0"*64)
+            self.journal.reserve("a", "b"*32, "0"*64)
         with self.assertRaisesRegex(CreateFault, "CREATE_REQUEST_KEY_CONFLICT"):
             self.journal.reserve("b", "a"*32, digest)
         self.journal.complete(first["task_id"], True)
