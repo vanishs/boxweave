@@ -1,14 +1,20 @@
-## 2026-11-06 PT — HTTP MCP create idempotency/async source implementation
+## 2026-11-06 PT — HTTP MCP create and poll: scoped installed vs source coverage
 
-v0.49.3 introduces a private SQLite v14 creation journal and bounded
-background HTTP MCP create dispatch. Identical `username` + payload calls
-return the original durable task ID; different payloads conflict; process
-restart and upstream failures preserve UNKNOWN; a read-only
-`boxweave_create_status` tool reads the receipt. The normal upstream MCP
-permission filter and managed-key injection are retained. **Not installed
-acceptance or proof of #92 resolved** until a live v0.49.3 host test.
-StdIo MCP, app-owned REST, and the Containarium upstream protocol are
-unchanged; cross-interface identity needs future work.
+[Original v0.49.2 negative and installed v0.49.3 positive evidence](HTTP_MCP_CREATE_0493_REAL_2026-11-06.md).
+**H/L PASS:** one ordinary ChatGPT HTTP MCP create returned a durable
+`submitted` receipt, identical replay returned the same task ID, Provider
+eventually showed one Running instance with requested resources, and real
+guest HOME/SSH execution passed. **H transient:** STOPPED, missing guest
+user and TRUST_NOT_READY *during* provisioning; later recovered without
+operator mutation. **U:** independent native dispatch count, service restart,
+cross-interface writes, requested nesting, complete incident #92, full
+Finder/Fixer/Verifier execution. Original old UNKNOWNs frozen.
+
+v0.49.4 new behavior has **S/T only** until host update: validate known
+upstream create JSON Schema rules before reserving the name and allow
+`create_container(status_only=true)` without dispatch when the separate
+`boxweave_create_status` is absent from a capped ChatGPT catalogue.
+Ordinary GitHub source CI publication is never full installed acceptance.
 
 ## 2026-11-05 PT — candidate-first release gate source corrections
 
