@@ -64,6 +64,22 @@ class DistributionTests(unittest.TestCase):
   out=self.root/'complete.zip';d.build(self.source,self.wheels,out,'f'*40,'modified')
   packaged=set(zipfile.ZipFile(out).namelist())
   self.assertTrue({f'bwmini/{p.name}' for p in (self.source/'bwmini').glob('*.py')}<=packaged)
+ def test_developer_runner_never_enters_product_archive(self):
+  for name in d.DEV_ONLY_MODULES:
+   (self.source/'bwmini'/name).write_text('developer-only fixture')
+  out=self.root/'slim.zip'
+  d.build(self.source,self.wheels,out,'f'*40,'clean')
+  with zipfile.ZipFile(out) as archive:
+   members=set(archive.namelist())
+   self.assertTrue({'bwmini/__main__.py','bwmini/deploy_check.py'}<=members)
+   self.assertFalse(any(x.startswith('bwmini/reacceptance') or x.startswith('tools/reacceptance') for x in members))
+  p=self.root/'leaky.zip'
+  with zipfile.ZipFile(out) as src, zipfile.ZipFile(p,'w') as dst:
+   for name in src.namelist():dst.writestr(name,src.read(name))
+   dst.writestr('bwmini/reacceptance.py','leak')
+  with self.assertRaisesRegex(d.InstallError,'DEVELOPER_TEST_CONTENT'):
+   d.verify(p,d.digest(p.read_bytes()))
+
  def test_install_rerun_preserves_settings_and_consistent_database_backup(self):
   first=self.install();current=(self.prefix/'current').resolve();second=self.install()
   self.assertEqual((self.prefix/'current').resolve(),current);self.assertEqual((self.prefix/'config.json').read_bytes(),self.raw)

@@ -1,3 +1,16 @@
+## RACC-SYS-0480 candidate-only engineering risk — 2026-11-05 PT
+
+[Current exact evidence](RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
+The developer-only runner extraction, selective upstream source cache, dynamic
+planning, restricted probes, once-only dispatch ledger and signed release gate
+are **not sufficient** to claim full automated reacceptance. **P0 BLOCKED:**
+no end-to-end real installed v0.48.0 package upgrade, no 100% real installed
+MCP/CLI black-box, no deterministic real multi-actor/fault scenario engine and
+no automatically spawned independent Finder/Fixer/Verifier workers. The candidate
+CI gate is deliberately closed without a configured trusted separate verifier
+and installed original-attempt/oracle evidence. Do not weaken it to release.
+Original R-02/R-04/UNKNOWN, #75 disk shrink and #79 Compose risks unchanged.
+
 ## RACC-0461-20261105-B: v0.46.1 installed scope, CLI discovery defect and unverified ingress
 
 **2026-11-05 RACC-0461-B addendum:** A new disposable 10GB Box proved the outer Gateway disk no-shrink refusal with independent 10GB readback and verified cleanup; native shrink bug #75 remains UPSTREAM OPEN. A separate **P2 upstream error-contract suspicion** now has exact pre-create and post-delete evidence: missing `get_container` returns Containarium HTTP 500/Unknown instead of a structured NotFound, while `debug_container` yields `missing`; native error-mapping diagnosis required. [Full evidence and packet](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md).\n\n[Executed report](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md): official v0.46.1 exists and the **real isolated 0.46.0 → 0.46.1 installed upgrade/doctor** passed, superseding the earlier pending-upgrade statement **only for this exact test-owned Box**. New **CONFIRMED P2**: `boxweave --help` omits three actually available dispatch groups `http`, `task`, `selftest`; queue Fixer/test/installed Verifier and do not represent as fixed. Immediate `connect(exec)` after `start(waitForReady=false)` was temporarily `TRUST_NOT_READY`, then a safe read-only retry succeeded with unchanged incarnation/guest marker: timing observation, not established bug. Do not infer normal authenticated Web, inner HTTP/SSH MCP, public OAuth, R-04 global, owner-host R-02 reboot or direct upstream shrink acceptance from selected L PASS. Historical UNKNOWNs and stable pin untouched.

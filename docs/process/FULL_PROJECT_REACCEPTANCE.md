@@ -2,13 +2,57 @@
 
 **Canonical trigger:** `Run full BoxWeave reacceptance.` (the same instruction without the trailing period is equivalent). **Status:** active owner-invoked Agent runbook, **not** evidence of any executed test. Keep the shortcut in [AGENTS.md](../../AGENTS.md); this revision does not itself invoke testing, change a host, bump a version, or publish a release.
 
+## Source candidate v0.48.0 developer runner and current enforcement boundary
+
+**Status: PARTIAL source implementation, no release or whole-system acceptance.** See
+[the RACC-SYS-01..09 code/evidence checkpoint](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
+Production app ZIP builds from this candidate exclude developer-only reacceptance
+modules/data. The runner remains in a checked-out repository or ephemeral CI/Box
+through `python scripts/reacceptance.py` or `python -m tools.reacceptance.cli`.
+The legacy `python -m bwmini.reacceptance` is compatible **only in the source tree**;
+do not call it from ordinary customer installation. Historical released v0.47.0
+still has the older bundled behavior.
+
+Use the one-sentence trigger unchanged. In an authorized prepared checkout, begin
+with code/source and installed runtime identity; run developer-only `inventory`
+then `plan` to schedule L2/L3 scenarios **before** L1 breadth is exhausted.
+`breadth-safe` records only reviewed read-only probes and per-action blockers.
+`upstream observe/resolve` records daemon, CLI and MCP individually and pins only
+the matching upstream tagged commit (never baseline or floating main).
+`report-system` yields a scenario-first report and complete named appendix,
+**not** independent acceptance. For example:
+
+```sh
+python scripts/reacceptance.py inventory --root . --out .runtime/racc-inventory.json
+python scripts/reacceptance.py plan --inventory .runtime/racc-inventory.json --out .runtime/racc-plan.json
+python scripts/reacceptance.py breadth-safe --root . --out .runtime/racc-breadth.json
+python scripts/reacceptance.py report-system --inventory .runtime/racc-inventory.json --plan .runtime/racc-plan.json --out .runtime/racc-report.md
+python scripts/reacceptance.py upstream observe --out .runtime/racc-installed-versions.json
+```
+
+None of these commands may turn a catalogue, a runtime preflight or a synthetic
+known-bad case into a functional PASS. The once-only ledger is an execution
+safety primitive, **not** a complete race/fault scheduler; the role handoff does
+**not** spawn Agents. Use genuinely distinct workers/Boxes when available; otherwise
+label same-Agent/manual verification. Maintain original immutable target UUID,
+createdAt, no-replay UNKNOWN, actual post-state oracle, and non-disruptive cleanup.
+
+**CI/publication change:** normal `main` pushes build a candidate but never publish.
+A separate protected `workflow_dispatch` with a trusted independent signed
+Verifier evidence artifact and exact candidate SHA is required to reach the publish
+job. Without that Verifier producer, configured key and real installed proofs,
+the gate stays **DENIED**, as intended. A repository configuration or workflow
+file alone cannot certify that GitHub protected environments or installed Verifier
+have been exercised. Do not bypass the gate by publishing manually, and never
+move the stable installer pin as part of reacceptance.
+
 ## Current controlling interpretation — system bug hunting, not tool testing
 
 **Owner clarification (2026-11-05): the primary deliverable is *BoxWeave system-level bug discovery → root-cause repair → separately executed reacceptance*.** Tool enumeration, CLI help, isolated invalid-input calls and proof-engine self-tests remain **necessary L1 coverage accounting** but must not monopolize the campaign or be presented as the goal. Plan and schedule **L2 complete user workflows** and **L3 cross-entry, concurrent, fault and recovery scenarios** early, using actual BoxWeave architecture, high-risk invariants, recent structural diffs and prior incidents. Do not abandon full MCP/CLI discovery; distinguish breadth evidence from system-level assurance.
 
 **The preferred order is:** identify invariants and dangerous state transitions → form causal hypotheses and [scenario graphs](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md) → pin version/permission and allocate isolated actors → start high-value L2/L3 probes in parallel with L1 breadth → preserve original failure → Fixer makes narrow correction → a genuinely independent Verifier repeats the original installed scenario → require exact private candidate before release → report workflow and defects **before** the per-action appendix.
 
-Read the [dedicated low-coupling automation/developer handoff](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md). The ordinary host currently **does** ship the v0.47.0 reacceptance Python modules inside `bwmini`; moving them into **test-side-only tools** is a **planned code migration**, not accomplished by this document. Do not make normal customer installation depend on the new automation, on GitHub access, or on an upstream source checkout. The upstream reference resolver must observe the **running** Containarium version and pull matching **pinned tag/commit source material on demand** into the test workspace; `bwmini/upstream_version.py`'s baseline is not the observed runtime.
+Read the [dedicated low-coupling automation/developer handoff](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md). Released v0.47.0 hosts ship the original reacceptance Python modules inside `bwmini`; the unpublished v0.48.0 candidate extracts them to test-only sources, pending exact package and installed verification. Do not make normal customer installation depend on the new automation, on GitHub access, or on an upstream source checkout. The upstream reference resolver must observe the **running** Containarium version and pull matching **pinned tag/commit source material on demand** into the test workspace; `bwmini/upstream_version.py`'s baseline is not the observed runtime.
 
 ## Mission and acceptance philosophy
 
