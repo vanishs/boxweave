@@ -139,3 +139,44 @@ The \`boxweave_task_get\` positive attempt without an original task ID
 returned \`TASK_SELECTOR_INVALID\`; fixed to BLOCKED selector-required, not
 a product defect. Both errors are retained as original evidence and
 classification regressions.
+
+## 2026-11-05 exact private full-host install and initial live scenario
+
+GitHub PR CI run `42158127216` for source candidate `6495856c` was
+successful. Its private artifact ID `13475447882` was independently fetched
+and wrapper SHA-256 `41d0337fdcd7832eb8fc853eb7801eadfd324f9d806bed7ac0b425b5e3f9c50e`
+verified on the separate isolated nested Box. The exact inner v0.49.0 ZIP
+was `b515ac352af6ac1c59b0a4fc772838ff0c597316f5568755d8d105d7fac181fd`
+and manifest digest `15e87f078d1c28db2acbd4176887ff9b1fad97cd70622b99bfdc87f819df332a`.
+These bytes are bound to temporary PR synthetic source
+`c2e1cf3b8686e8df23fb736d10ff7aac711ecb2b`, NOT the future main SHA.
+
+The test-owned host staged only 23 reviewed root-owned read-only assets plus
+`release.json`, validating every asset and a separately recorded manifest
+hash. An intentionally extra Python `__pycache__` file caused the expected
+`PRIVATE_RELEASE_UNEXPECTED_STAGE_MEMBER` refusal; after deleting ONLY that
+test-created cache and using Python `-B`, verification succeeded. The **full
+root-level private staged upgrade** then finished and independently reported:
+`sudo boxweave version = 0.49.0`; host provenance source equals the private
+candidate `c2e1cf3...`; app `installed.json` version **0.49.0**, archive SHA
+matches the same CI ZIP and source; `sudo boxweave doctor --mcp` **10/10 PASS**.
+The running Containarium remained 0.128.0, no owner host or stable installer
+was touched. This proves one test-owned private host+app upgrade, NOT a
+published release or independent multi-Agent Verifier.
+
+A first new real installed MCP lifecycle scenario was attempted on a unique
+owned child `bwracc-life-49a`. The **test harness** incorrectly launched a
+root-owned release copy of `mcp_gate.py` **as root**, not the deployed public
+Gateway entrypoint running as the `boxweave` account. The original response
+was `-32602 MANAGED_IDENTITY_UNAVAILABLE` and independent native Incus had
+no child. The older executor conservatively recorded
+`MCP_WRITE_RESULT_UNKNOWN_NO_REPLAY`, without retry or cleanup of the original.
+Code inspection showed server-owned SSH public key must have the *effective
+app user's UID*, so the real Gateway must run from
+`/usr/local/lib/boxweave/default/mcp_gate.py` with `sudo -n -u boxweave`
+under the test-owned host. A separate real initialize/tools/list with that
+identity discovered 68 MCP tools. Source runner now binds this exact
+root-controlled readable public path, denies the wrong root launcher and
+classifies the confirmed pre-dispatch identity rejection as BLOCKED rather
+than falsely saying an upstream mutation was UNKNOWN. This is a test harness
+finding; product create success is still pending a **new-target** live rerun.

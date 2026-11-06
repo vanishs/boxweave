@@ -135,6 +135,20 @@ def run(grant, confirmation, mcp_argv, output):
                         {"state": "UNKNOWN_NO_REPLAY", "cause": str(exc)})
             raise AcceptanceFault("UNKNOWN_PROVIDER_READ_NO_REPLAY") from exc
         if not attempt["success_response"]:
+            response = attempt.get("response")
+            error = response.get("error") if isinstance(response, dict) else None
+            # The installed Gateway performs the server-owned key preflight
+            # before forwarding create_container. Confirmed typed local
+            # refusal plus an absent native child is not a Provider timeout.
+            if (tool == "create_container" and isinstance(error, dict)
+                    and error.get("message") == "MANAGED_IDENTITY_UNAVAILABLE"
+                    and observed is None):
+                unique_file(dest / (prefix + ".denied.json"), {
+                    "state": "PRE_DISPATCH_DENIED",
+                    "code": "MANAGED_IDENTITY_UNAVAILABLE",
+                    "independent_native_child": "absent",
+                    "recorded_at": now()})
+                raise AcceptanceFault("MCP_CREATE_IDENTITY_PREFLIGHT_DENIED")
             unique_file(dest / (prefix + ".unknown.json"),
                         {"state": "UNKNOWN_NO_REPLAY",
                          "cause": "MCP_RESPONSE_NOT_ACKNOWLEDGED"})
@@ -161,7 +175,10 @@ def run(grant, confirmation, mcp_argv, output):
         append(3, "start_container", {"username": name}, "running", original_id=identity)
         append(4, "delete_container", {"username": name}, "absent", original_id=identity)
     except AcceptanceFault as exc:
-        unique_file(dest / "result.json", {"state": "UNKNOWN_OR_FAIL",
+        unique_file(dest / "result.json", {
+                    "state": ("BLOCKED_PRE_DISPATCH" if
+                              str(exc) == "MCP_CREATE_IDENTITY_PREFLIGHT_DENIED"
+                              else "UNKNOWN_OR_FAIL"),
                     "reason": str(exc), "child_name": name,
                     "cleanup": "MANUAL_ORIGINAL_IDENTITY_ONLY",
                     "no_automatic_retry": True})

@@ -844,40 +844,25 @@ def bootstrap_readonly(root, out, *, host_command=None, mcp_command=None,
 
 
 
-def trusted_installed_root_mcp(path):
-    # A genuine installed gateway is root-owned/read-only in its release
-    # directory. Never allow arbitrary user-supplied Python through sudo.
+def trusted_installed_public_mcp(path):
+    # Verify the actual installed Host/Gateway's public (root-owned) launcher.
+    # This file is readable by the app user; it must NEVER be executed as root,
+    # because managed_public_key checks its owner against the effective UID.
     p = Path(path)
-    if not re.fullmatch(
-            r"/var/lib/boxweave-default/releases/0[.]\d+[.]\d+-[a-f0-9]{40}/mcp_gate[.]py",
-            str(p)):
+    if str(p) != "/usr/local/lib/boxweave/default/mcp_gate.py":
         return False
-    # The official parent is 0700; unprivileged os.stat will return EACCES.
-    # Run only the fixed read-only system stat with NO symlink following,
-    # never arbitrary root Python or a shell command from test input.
-    for index, entry in enumerate((p, p.parent, p.parent.parent,
-                                   p.parent.parent.parent)):
+    for i, entry in enumerate((p, *p.parents)):
         try:
-            result = subprocess.run(
-                ["sudo", "-n", "/usr/bin/stat", "-c", "%u %a %F",
-                 "--", str(entry)],
-                capture_output=True, text=True, timeout=5, check=False)
-        except (OSError, subprocess.TimeoutExpired):
+            st = entry.lstat()
+        except OSError:
             return False
-        if result.returncode != 0:
-            return False
-        parts = result.stdout.strip().split(" ", 2)
-        if len(parts) != 3 or parts[0] != "0":
-            return False
-        try:
-            mode = int(parts[1], 8)
-        except ValueError:
-            return False
-        if mode & 0o022:
-            return False
-        if parts[2] != ("regular file" if index == 0 else "directory"):
+        import stat as statmod
+        if (st.st_uid != 0 or st.st_mode & 0o022 or
+                (not statmod.S_ISREG(st.st_mode) if i == 0
+                 else not statmod.S_ISDIR(st.st_mode))):
             return False
     return True
+
 
 
 def argv_file(path, mode):
@@ -895,9 +880,6 @@ def argv_file(path, mode):
         if python(data[0]) and data[1:] == ["-m", "bwmini.host_cli"]:
             return data
     elif mode == "mcp":
-        if (len(data) == 4 and data[:2] == ["sudo", "-n"]
-                and python(data[2]) and trusted_installed_root_mcp(data[3])):
-            return data
         if (python(data[0]) and len(data) == 2
                 and Path(data[1]).name == "mcp_gate.py"
                 and Path(data[1]).is_absolute()):
@@ -905,8 +887,7 @@ def argv_file(path, mode):
         if python(data[0]) and data[1:] == ["-m", "bwmini.mcp_gate"]:
             return data
         if (data[:4] == ["sudo", "-n", "-u", "boxweave"] and len(data) == 6
-                and python(data[4]) and Path(data[5]).is_absolute()
-                and Path(data[5]).name == "mcp_gate.py"):
+                and python(data[4]) and trusted_installed_public_mcp(data[5])):
             return data
     raise AcceptanceFault("EXECUTABLE_NOT_ALLOWLISTED_FOR_" + mode.upper())
 

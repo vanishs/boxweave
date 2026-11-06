@@ -64,6 +64,28 @@ class LiveLifecycleTests(unittest.TestCase):
             self.assertIn("resize", answer["not_tested"])
             self.assertTrue((Path(d) / "run" / "04-delete_container.oracle.json").exists())
 
+    def test_confirmed_gateway_preflight_denial_is_not_provider_unknown(self):
+        with tempfile.TemporaryDirectory() as d:
+            grant = self.create_grant(d)
+            def denied(argv,tool,args):
+                return {"tool":tool,"request":args,
+                        "process":{"execution":"completed","exit_code":0},
+                        "response":{"error":{"code":-32602,
+                                             "message":"MANAGED_IDENTITY_UNAVAILABLE"}},
+                        "success_response":False}
+            with patch.object(lifecycle,"native_list",side_effect=[{},{}]), (
+                 patch.object(lifecycle,"one_call",side_effect=denied)) as calls:
+                with self.assertRaisesRegex(AcceptanceFault,"PREFLIGHT_DENIED"):
+                    lifecycle.run(grant,lifecycle.CONFIRM,
+                                  ["sudo","-n","-u","boxweave","python3",
+                                   "/usr/local/lib/boxweave/default/mcp_gate.py"],
+                                  Path(d)/"run")
+                self.assertEqual(calls.call_count,1)
+                self.assertTrue((Path(d)/"run"/"01-create_container.denied.json").is_file())
+                self.assertFalse((Path(d)/"run"/"01-create_container.unknown.json").exists())
+                outcome=json.loads((Path(d)/"run"/"result.json").read_text())
+                self.assertEqual(outcome["state"],"BLOCKED_PRE_DISPATCH")
+
     def test_failed_mcp_write_keeps_original_and_does_not_retry(self):
         with tempfile.TemporaryDirectory() as d:
             grant = self.create_grant(d)

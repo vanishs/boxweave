@@ -134,6 +134,22 @@ class InstalledReadOnlyTests(unittest.TestCase):
             with self.assertRaisesRegex(AcceptanceFault, "EXECUTABLE_NOT_ALLOWLISTED"):
                 engine.argv_file(cfg, "mcp")
 
+    def test_installed_gateway_requires_actual_app_user_policy(self):
+        from tools.reacceptance import engine
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "mcp.json"
+            trusted = "/usr/local/lib/boxweave/default/mcp_gate.py"
+            good = ["sudo","-n","-u","boxweave","python3",trusted]
+            cfg.write_text(json.dumps(good))
+            with patch.object(engine,"trusted_installed_public_mcp",
+                              return_value=True):
+                self.assertEqual(engine.argv_file(cfg, "mcp"), good)
+            cfg.write_text(json.dumps(["sudo","-n","python3",
+                "/var/lib/boxweave-default/releases/0.49.0-" +
+                "f"*40 + "/mcp_gate.py"]))
+            with self.assertRaisesRegex(AcceptanceFault, "EXECUTABLE_NOT_ALLOWLISTED"):
+                engine.argv_file(cfg, "mcp")
+
     def test_process_failure_never_passes(self):
         self.assertEqual(installed.result_kind(None), "NO_JSON_RPC_RESPONSE")
         self.assertEqual(installed.result_kind({"error": {"code": 400}}), "RPC_ERROR")
