@@ -125,7 +125,7 @@ Create one comparison table keyed by `transport + effective identity/policy + in
 The inventory gate must flag: (1) source-only, (2) installed-only, (3) installed-but-undocumented, (4) advertised-but-not-callable, (5) catalog differences by transport/policy, (6) Provider capability/REST-route mismatch, and (7) surface unverified due to authority or credentials. Demand an owner-facing reason and a linked scenario for each difference. Do not hardcode the historical 68/26/36 counts or auto-convert a tool catalog to PASS.
 
 
-**L1 lane design:** Execute a *bounded*, parallelizable inventory and per-entry black-box queue. This is the **breadth safety net**, not the entire reacceptance campaign. Every current eligible MCP/CLI leaf must still receive real positive, malformed/invalid and meaningful denial dimensions when safe/applicable, or have an exact owned-target/authorization/unsupported blocker. A §tools/list§/§--help§ outcome proves discoverability only. Do not postpone L2/L3 scenario execution until the L1 queue drains.
+**L1 lane design:** Execute a *bounded*, parallelizable inventory and per-entry black-box queue. This is the **breadth safety net**, not the entire reacceptance campaign. Every current eligible MCP/CLI leaf must still receive real positive, malformed/invalid and meaningful denial dimensions when safe/applicable, or have an exact owned-target/authorization/unsupported blocker. A `tools/list`/`--help` outcome proves discoverability only. Do not postpone L2/L3 scenario execution until the L1 queue drains.
 
 ### Phase 2 — Independent installed black-box breadth scan (Finder)
 
