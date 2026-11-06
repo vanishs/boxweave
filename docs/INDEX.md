@@ -1,3 +1,5 @@
+**2026-11-05 controlling release approach:** [Agent-managed local reacceptance and direct publication](process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md) requires real independent Agent/Box checks and immutable original evidence, but no release-specific GitHub workflow, special submission account, signer or protected Runner. Existing source CI remains ordinary checks; an Agent directly publishes through existing repository write access only after real full acceptance. The [full-project runbook](process/FULL_PROJECT_REACCEPTANCE.md) remains the detailed black-box test contract; [historical release trust proposal](knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md) is not adopted.
+
 **v0.44.10 targeted correction:** [selftest private-plan handoff, typed diagnostics, test and release acceptance ledger](verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md); R-02 owner-host reboot test explicitly deferred, no global R-04 activation.
 
 # BoxWeave v2 knowledge index
