@@ -18,7 +18,7 @@ from flask import Flask, Response, jsonify, redirect, request
 
 from .remote_auth import RemoteCredentials, RemoteError, TOKEN_PATTERN, valid_url
 from .mcp_gate import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS, SERVER_INFO_VERSION
-from .remote_create import CreateFault, CreateJournal, validated_request
+from .remote_create import CreateFault, CreateJournal, validated_request, validate_upstream_payload
 
 PROTOCOL = "2025-11-25"
 GATE = "/usr/local/lib/boxweave/default/mcp_gate.py"
@@ -65,12 +65,23 @@ def augment_catalog(reply):
                                 "The HTTP gateway also deduplicates the exact username "
                                 "and original parameters if ChatGPT sends a new key.")
             }
+            schema["properties"]["status_only"] = {
+                "type": "boolean",
+                "description": ("Set true with username only to read the prior "
+                                "durable creation receipt without dispatch. "
+                                "Useful when boxweave_create_status is not "
+                                "available in a client's capped tool catalog.")
+            }
             tool["description"] = (
                 tool.get("description", "") +
                 " HTTP MCP: create is asynchronous and durable. The call returns "
-                "a task_id immediately; poll boxweave_create_status. Resending "
+                "a task_id immediately; poll boxweave_create_status or "
+                "call create_container with username and status_only=true "
+                "to READ the original receipt without dispatch. Resending "
                 "a matching request returns the same receipt, never a second "
                 "create. A different request for the same name is refused. "
+                "A succeeded receipt only acknowledges upstream creation; "
+                "the guest account and SSH may still be provisioning. "
                 "An UNKNOWN receipt must be inspected, never replayed."
             )
     if not any(isinstance(t, dict) and t.get("name") == "boxweave_create_status"
@@ -424,6 +435,16 @@ I authorize this client to use BoxWeave MCP tools.</label>
         ident = message["id"]
         args = message["params"].get("arguments")
         try:
+            # Some ChatGPT connectors cap the number of exposed MCP tools,
+            # so the read-only status tool may be absent even after refresh.
+            # Existing create_container can retrieve its own original receipt
+            # without performing or authorizing a second write.
+            if isinstance(args, dict) and args.get("status_only") is True:
+                if set(args) != {"username", "status_only"}:
+                    raise CreateFault("CREATE_SELECTOR_INVALID")
+                return tool_response(ident, journal.get(username=args["username"]))
+            if isinstance(args, dict) and "status_only" in args:
+                raise CreateFault("CREATE_ARGUMENTS_INVALID")
             logical, key, payload, digest = validated_request(args)
             # Protected-mode tool policy is authoritative; never bypass it.
             catalog = bridge({"jsonrpc": "2.0", "id": "bw-create-policy-" +
@@ -431,9 +452,13 @@ I authorize this client to use BoxWeave MCP tools.</label>
                               "params": {}})
             listed = (catalog.get("result", {}).get("tools", [])
                       if isinstance(catalog, dict) else [])
-            if not any(isinstance(t, dict) and t.get("name") == "create_container"
-                       for t in listed):
+            create_tool = next((t for t in listed if isinstance(t, dict)
+                                and t.get("name") == "create_container"), None)
+            if create_tool is None:
                 raise CreateFault("GATE_TOOL_NOT_ALLOWED")
+            # Typed, read-only validation happens before writing the
+            # non-replayable intent. Upstream still owns semantic checks.
+            validate_upstream_payload(payload, create_tool.get("inputSchema"))
             try:
                 journal.get(username=logical)
             except CreateFault as error:
