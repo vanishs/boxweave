@@ -2,6 +2,48 @@
 
 **Published stable v0.27.1 fixes a standalone installer import failure in the v0.27.0 default-managed loopback HTTP MCP rollout.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
+## HTTP MCP create safety (v0.49.3)
+
+Authenticated HTTP MCP **create_container** now acknowledges a durable
+**background creation intent** promptly, rather than holding the ChatGPT HTTP
+request open for the full Containarium provisioning operation. It returns
+`task_id`, server-generated or caller-supplied 32-hex `request_key`,
+`username`, `state=submitted`, and a next action. Use
+`boxweave_create_status` (one of `task_id`, `request_key`, or `username`)
+to read the persisted receipt. `succeeded` means the **upstream MCP
+create_container tool returned a successful acknowledgement**; it does not
+prove a working SSH session. Confirm the original box using `get_container`,
+then verify guest user, keys and SSH readiness separately.
+
+The first accepted `username` and exact argument digest are reserved in the
+private application SQLite database (schema 14), **before** a worker is
+started. An identical later request, including after a client timeout or
+reconnect and even with a different JSON-RPC ID or a newly generated key,
+returns the original receipt. A changed request for the same name, or
+reuse of an explicit key for a different request, returns a tool error and
+cannot execute a second create. Persisted receipts are not deleted or
+automatically recycled, including after box deletion: use a **fresh name**
+for a genuinely new create. No SSH public keys, caller credentials, or raw
+tool output are persisted in this creation journal.
+
+Up to four create workers run concurrently per HTTP MCP listener. Each uses
+the normal gated upstream MCP writer, including the managed SSH public-key
+injection and host tool policy. Its longer background wait is not an
+automatic retry. Service restart, upstream timeout, ambiguous error or
+lost acknowledgement produce a conservative **UNKNOWN** outcome; the task is
+never replayed or silently adopted. Read `get_container` and
+`debug_container` to investigate. An Incus RUNNING state alone is **not**
+proof that provisioning, in-guest user creation, or SSH is complete.
+
+**Scope:** this change implements asynchronous acknowledgement and durable
+deduplication at the **BoxWeave HTTP MCP ingress**, without changing the
+underlying Containarium MCP's synchronous `create_container` contract.
+SSH/stdio clients and Web/REST operations are not migrated to this new
+wrapper; cross-interface exactly-once execution and durable upstream task
+identity still require upstream support. It is not a full independent #92
+root-cause fix. If a protected gateway hides `create_container`, HTTP MCP
+also refuses to enqueue it; the idempotency key never grants permissions.
+
 ## Configure
 
 The authenticated HTTP MCP server now starts automatically at `127.0.0.1:18844`

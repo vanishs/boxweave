@@ -1,3 +1,15 @@
+## 2026-11-06 PT — HTTP MCP create idempotency/async source implementation
+
+v0.49.3 introduces a private SQLite v14 creation journal and bounded
+background HTTP MCP create dispatch. Identical `username` + payload calls
+return the original durable task ID; different payloads conflict; process
+restart and upstream failures preserve UNKNOWN; a read-only
+`boxweave_create_status` tool reads the receipt. The normal upstream MCP
+permission filter and managed-key injection are retained. **Not installed
+acceptance or proof of #92 resolved** until a live v0.49.3 host test.
+StdIo MCP, app-owned REST, and the Containarium upstream protocol are
+unchanged; cross-interface identity needs future work.
+
 ## 2026-11-05 PT — candidate-first release gate source corrections
 
 REQ-008 / AC-008, REQ-016 / AC-016 and REQ-017 / AC-017: [v0.49.1 release-gate evidence and remaining obligations](RACC_0491_RELEASE_GATE_2026-11-05.md).

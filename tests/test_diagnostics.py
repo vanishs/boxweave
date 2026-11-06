@@ -111,7 +111,7 @@ class MigrationTests(unittest.TestCase):
             store = Store(path)
             with store.db() as check:
                 version = check.execute("PRAGMA user_version").fetchone()[0]
-                self.assertEqual(version, 13)
+                self.assertEqual(version, 14)
                 self.assertEqual(check.execute("SELECT count(*) FROM operations").fetchone()[0], 1)
                 self.assertIsNotNone(check.execute(
                     "SELECT sql FROM sqlite_master WHERE name='diagnostic_trace_links'").fetchone())
@@ -126,7 +126,7 @@ class MigrationTests(unittest.TestCase):
             path = Path(tmp) / "state.sqlite3"
             db = sqlite3.connect(path)
             db.execute("CREATE TABLE forward(value TEXT)")
-            db.execute("PRAGMA user_version=14")
+            db.execute("PRAGMA user_version=15")
             db.commit()
             db.close()
             os.chmod(path, 0o600)

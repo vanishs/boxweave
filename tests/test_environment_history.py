@@ -39,12 +39,12 @@ class EnvironmentHistoryTests(unittest.TestCase):
 
     def test_private_v13_schema_and_older_migration(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],13)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],14)
             db.execute("DROP TABLE environment_captures")
             db.execute("PRAGMA user_version=12")
         Store(self.store.path)
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],13)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],14)
             self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE "
                                             "name='environment_captures'").fetchone())
 
@@ -88,7 +88,7 @@ class EnvironmentHistoryTests(unittest.TestCase):
         with self.assertRaises(Fault):
             list_captures(self.store,limit=True)
         with sqlite3.connect(self.store.path) as db:
-            db.execute("PRAGMA user_version=14")
+            db.execute("PRAGMA user_version=15")
         with self.assertRaisesRegex(Fault,"SCHEMA_UNSUPPORTED"):
             Store(self.store.path)
 
