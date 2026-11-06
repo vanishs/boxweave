@@ -66,6 +66,8 @@ cross-entry concurrency or the other 18 scenario families.
 
 Run the additional independent verification on a separately authorized Box, using the *same source-bound CI candidate artifact* and `python scripts/reacceptance.py installed-verifier --candidate EXACT_CI_BOXWEAVE.zip --manifest EXACT_CI_RELEASE.json --source EXACT_SOURCE_COMMIT --out PRIVATE_REPORT [--lifecycle PRIVATE_ACTUAL_VERIFIER_LIFECYCLE --selftest PRIVATE_ACTUAL_VERIFIER_SELFTEST]`. This produces immutable read-only evidence, matched host/app version and checksum findings, and a PARTIAL per-scenario matrix. **It deliberately cannot mint a signed release approval.**
 
+Read-only UNKNOWN follow-up is available from the developer checkout via `python scripts/reacceptance.py unknown-inspect --original EXACT_ORIGINAL_EVIDENCE_DIR --grant NEW_PRIVATE_TEST_OWNED_IDENTITY_GRANT --confirm I_AUTHORIZE_TEST_OWNED_LIFECYCLE --out FRESH_INSPECTION_DIR`. It checks a new scoped test-owned grant, the original immutable dispatch intent, UNKNOWN result, raw attempt digest, original native incarnation and current native Incus readback. A found child remains UNKNOWN even when UUID matches; a missing child does not prove the original never existed; identity mismatch is a hard blocker. It never replays, unlocks or deletes. This is not full R-04 operator recovery.
+
 Publication dispatch additionally requires an explicit successful original
 `candidate_run_id` and independently trusted `verifier_run_id`. Both gate
 and publish download the **same** original candidate artifact; a newly

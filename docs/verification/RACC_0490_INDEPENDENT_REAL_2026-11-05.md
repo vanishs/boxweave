@@ -168,3 +168,17 @@ reclassified, removed, replayed or silently unlocked.
 PR synthetic merge CI builds, not the final main commit. This is convincing
 partial independent *behavior* evidence, but cannot authorize GitHub v0.49.0
 Release without full mandated scenarios and signed exact-main verifier proof.
+
+## Read-only exact-identity UNKNOWN follow-up adapter
+
+tools/reacceptance/unknown_inspect.py, developer-only, checks a fresh
+test-owned grant and immutable original lifecycle request/attempt/native
+oracle/result files. It independently re-reads the native child UUID,
+created_at and status without any MCP write, native delete, retry or lock
+release. It writes an append-only new observer report, treating a matching
+child as SAME_ORIGINAL_SIDE_EFFECT_EXISTS_STILL_UNKNOWN, changed incarnation
+as INCARNATION_CHANGED_HARD_BLOCK, and absent child as
+NOT_PRESENT_AT_LATER_READ_ORIGINAL_UNCERTAIN. In every case,
+release_acceptance=false and cleanup_authorized=false. Five malicious
+fixture tests (including forged success and foreign grant) pass.
+This is evidence for Issue #88, not automatic UNKNOWN resolution.
