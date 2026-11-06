@@ -126,7 +126,7 @@ class MigrationTests(unittest.TestCase):
             path = Path(tmp) / "state.sqlite3"
             db = sqlite3.connect(path)
             db.execute("CREATE TABLE forward(value TEXT)")
-            db.execute("PRAGMA user_version=14")
+            db.execute("PRAGMA user_version=15")
             db.commit()
             db.close()
             os.chmod(path, 0o600)
