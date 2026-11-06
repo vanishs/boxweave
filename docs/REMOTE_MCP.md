@@ -2,7 +2,37 @@
 
 **Published stable v0.27.1 fixes a standalone installer import failure in the v0.27.0 default-managed loopback HTTP MCP rollout.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
-## HTTP MCP create safety (v0.49.3)
+## HTTP MCP create safety (v0.49.3, hardened v0.49.4)
+
+**Observed live:** [v0.49.3 ordinary Box create and same-receipt retry](verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md)
+passed on the owner host after a temporary STOPPED/missing-guest-user
+provisioning phase; the user and SSH were later ready without manual repair.
+This does **not** close the entire upstream #92 incident, prove nested
+configuration, or test in-flight service restart.
+
+**New in v0.49.4:** Before reserving an irreversible Box name, the
+authenticated HTTP wrapper checks known types, required fields, enums,
+lengths and numeric bounds from the currently allowed upstream
+`create_container` JSON Schema. Known invalid arguments return a
+non-dispatching MCP tool error and do **not** consume the Box name.
+Additional upstream semantic constraints remain upstream-owned. A
+reserving/dispatch timeout is still UNKNOWN, never a retry instruction.
+
+If ChatGPT does not display `boxweave_create_status` (some connector
+catalogues are limited in size), call the existing **`create_container`**
+with only `{"username":"ORIGINAL-BOX","status_only":true}`. This is a
+read-only receipt lookup and cannot dispatch or alter a Box. Leave
+`status_only` absent for a real create; supplying false or mixing it
+with resource options is rejected. The dedicated read-only status
+tool remains present for clients that expose the full catalogue.
+
+**Readiness:** An early `get_container=STOPPED`, missing guest user or
+`TRUST_NOT_READY` while `state=submitted` can be temporary provisioning.
+Poll the original receipt without reissuing the write. Even
+`state=succeeded` means only **upstream creation acknowledged**; check the
+actual native incarnation, guest account, home and SSH before calling the
+new Box usable. Repeated failures *after* terminal acknowledgement should
+be recorded as a separate provisioning defect, not repaired silently.
 
 Authenticated HTTP MCP **create_container** now acknowledges a durable
 **background creation intent** promptly, rather than holding the ChatGPT HTTP
