@@ -72,8 +72,8 @@ by itself prove user, SSH, nesting or authorized access.
 ## New v0.49.4 engineering regressions
 
 After this live incident, source fixes address two workflow pitfalls:
-1. Validate the upstream-advertised JSON-Schema type/required/enum/bound
-   subset **before** persisting an irreversible create intent. A known
+1. Validate advertised create keys and the upstream JSON-Schema
+   type/required/enum/bound subset **before** persisting an irreversible create intent. A known
    invalid parameter must not permanently consume an unused Box name.
    This is *not* a substitute for upstream semantic validation.
 2. Allow `create_container(username, status_only=true)` as a **read-only
