@@ -6,6 +6,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      candidate_run_id:
+        description: 'Successful main-push CI run containing the exact verified candidate artifact'
+        required: false
+        type: string
       verifier_run_id:
         description: 'Existing separate trusted Verifier workflow run with signed installed evidence'
         required: false
@@ -237,7 +241,7 @@ jobs:
   # and uploaded that evidence to its own workflow run.
   candidate_gate:
     needs: verify
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.verifier_run_id != ''
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.candidate_run_id != '' && inputs.verifier_run_id != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -246,10 +250,28 @@ jobs:
     environment: boxweave-reacceptance-release
     steps:
       - uses: actions/checkout@v4
+      - name: Verify original candidate run is a successful main push at this exact SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN_ID" > pinned-candidate-run.json
+          python3 - <<'PY_CANDIDATE'
+          import json,os
+          r=json.load(open('pinned-candidate-run.json'))
+          assert r['head_sha'] == os.environ['GITHUB_SHA'], 'Candidate commit mismatch'
+          assert r['head_branch'] == 'main' and r['event'] == 'push', 'Untrusted candidate provenance'
+          assert r['status'] == 'completed' and r['conclusion'] == 'success', 'Original candidate CI not successful'
+          assert r['path'].split('@')[0] == '.github/workflows/ci.yml', 'Candidate from unexpected workflow'
+          PY_CANDIDATE
       - uses: actions/download-artifact@v4
         with:
           name: application-candidate
           path: release
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
           name: reacceptance-installed-verifier
@@ -273,10 +295,11 @@ jobs:
 
   publish:
     needs: [verify, candidate_gate]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.candidate_run_id != '' && inputs.verifier_run_id != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@v4
@@ -286,6 +309,8 @@ jobs:
         with:
           name: application-candidate
           path: release
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish immutable source-bound installer assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
