@@ -844,6 +844,25 @@ def bootstrap_readonly(root, out, *, host_command=None, mcp_command=None,
 
 
 
+def trusted_installed_root_mcp(path):
+    # A genuine installed gateway is root-owned/read-only in its release
+    # directory. Never allow arbitrary user-supplied Python through sudo.
+    p = Path(path)
+    if not re.fullmatch(
+            r"/var/lib/boxweave-default/releases/0[.]\d+[.]\d+-[a-f0-9]{40}/mcp_gate[.]py",
+            str(p)):
+        return False
+    if p.is_symlink() or not p.is_file() or p.resolve() != p:
+        return False
+    for entry in (p, p.parent, p.parent.parent, p.parent.parent.parent):
+        if entry.is_symlink():
+            return False
+        st = entry.stat()
+        if st.st_uid != 0 or st.st_mode & 0o022:
+            return False
+    return True
+
+
 def argv_file(path, mode):
     data = load(path)
     if not isinstance(data, list) or not data or not all(
@@ -859,6 +878,9 @@ def argv_file(path, mode):
         if python(data[0]) and data[1:] == ["-m", "bwmini.host_cli"]:
             return data
     elif mode == "mcp":
+        if (len(data) == 4 and data[:2] == ["sudo", "-n"]
+                and python(data[2]) and trusted_installed_root_mcp(data[3])):
+            return data
         if (python(data[0]) and len(data) == 2
                 and Path(data[1]).name == "mcp_gate.py"
                 and Path(data[1]).is_absolute()):

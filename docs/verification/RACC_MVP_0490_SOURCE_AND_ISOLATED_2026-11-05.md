@@ -76,3 +76,15 @@ fallback help masquerading as a subcommand, and retains a named BLOCKED
 record if a bounded discovery budget is exhausted. A unit regression uses
 root-help fallback to prevent future exponential discovery; an exact installed
 rerun is still separately required before this bug is considered verified.
+
+## Installed MCP privilege boundary discovered in test Box
+
+The first installed MCP stdio probe used a `sudo -u boxweave` launcher and
+failed with permission denied on the root-owned 0600 official release Gateway
+file. An isolated, read-only manual protocol probe under the installed
+root-owned gateway launched with `sudo -n python3` returned a genuine
+68-tool `tools/list` catalogue after initialize. The source-only developer
+argv validator now allows this exceptional exact root-owned immutable release
+path only, rejecting user-controlled Python files or symlinks; it does not
+introduce a new customer endpoint or generic root execution. Installed
+schema-safe per-tool case results still require a separate source rerun.

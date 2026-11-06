@@ -87,6 +87,21 @@ class InstalledReadOnlyTests(unittest.TestCase):
         self.assertEqual(result["alpha"]["reason"],
                          "HELP_FELL_BACK_TO_DIFFERENT_COMMAND")
 
+    def test_reject_untrusted_sudo_python_mcp(self):
+        from tools.reacceptance import engine
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "argv.json"
+            cfg.write_text(json.dumps([
+                "sudo", "-n", "python3", "/tmp/mcp_gate.py"]))
+            with self.assertRaisesRegex(AcceptanceFault, "EXECUTABLE_NOT_ALLOWLISTED"):
+                engine.argv_file(cfg, "mcp")
+            cfg.write_text(json.dumps([
+                "sudo", "-n", "python3",
+                "/var/lib/boxweave-default/releases/0.49.0-" +
+                "f" * 40 + "/mcp_gate.py"]))
+            with self.assertRaisesRegex(AcceptanceFault, "EXECUTABLE_NOT_ALLOWLISTED"):
+                engine.argv_file(cfg, "mcp")
+
     def test_process_failure_never_passes(self):
         self.assertEqual(installed.result_kind(None), "NO_JSON_RPC_RESPONSE")
         self.assertEqual(installed.result_kind({"error": {"code": 400}}), "RPC_ERROR")
