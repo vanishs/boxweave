@@ -1,3 +1,20 @@
+## 2026-11-06 PT — post-0.49.3 HTTP create incident and 0.49.4 hardening
+
+[Scoped installed #92 retest](../verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md):
+v0.49.3 host HTTP create and identical retry used one task ID and yielded one
+real Box; first STOPPED/guest-account-not-ready observations recovered and
+guest SSH exit 0 passed later without manual repair. This is a scoped H/L
+PASS, **not** full #92 resolved, upstream root-cause proof, nesting verification
+or installed end-to-end acceptance of the pending v0.49.4 changes.
+
+v0.49.4 adds checked upstream create argument types before irreversible
+name reservation, safe `status_only=true` lookup on the existing create
+tool when ChatGPT hides the standalone status tool, and a source-CI
+regression guard for the lightweight verify→publish path. #90 remains closed
+unmerged; no release signing/evidence uploader/extra Runner is restored.
+Unreviewed host reboot, cross-entry concurrency, UNKNOWN original tasks
+and the stable installer pin are unchanged.
+
 ## 2026-11-06 PT — lightweight main CI publication reinstated
 
 Owner restored a GitHub Actions `publish` job dependent only on successful
