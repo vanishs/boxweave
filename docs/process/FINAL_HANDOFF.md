@@ -1,3 +1,16 @@
+## 2026-11-06 UTC — v0.49.0 corrected timeout and fresh independent lifecycle PARTIAL
+
+[Latest independent real proof](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md)
+supersedes the earlier Verifier no-lifecycle-success statement **only for a
+new child**. In a separate clean installed Box, real create/stop/start/delete
+MCP receipts and independent same-UUID native oracles passed, with creation
+119517 ms, zero residue of this child and doctor 10/10. The original two
+UNKNOWN children remain frozen. Source bug: advertised 240s creation had
+been silently capped at 120s; this was fixed with a real subprocess budget
+test, full 859 Python PASS, PR CI run 42168214749 success. The independent
+four-operation graph remains PARTIAL, other mandated scenarios and genuine
+signed protected CI release gate remain BLOCKED; v0.49.0 is NOT RELEASED.
+
 ## 2026-11-05 PT / 2026-11-06 UTC — v0.49.0 independent candidate checkpoint
 
 [Scope and exact evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md).

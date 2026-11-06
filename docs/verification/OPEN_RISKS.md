@@ -1,3 +1,14 @@
+## 2026-11-06 follow-up to #88: real independent 4-step partial pass
+
+[Actual separate Verifier evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
+A freshly named child completed four acknowledged MCP lifecycle calls,
+native UUID-stable oracles and exact deletion in a clean independent Box.
+A confirmed **test-harness** 120s clamp was fixed to honor a reviewed
+240s cold-create request. The prior 75s/120s post-dispatch UNKNOWN
+originals remain frozen, and Provider/Gateway transport boundary remains
+an open investigation (#88). Real full 19 graph, negative/denial coverage,
+agent orchestration and protected external signing remain BLOCKED.
+
 ## P0 release blocker: v0.49.0 private live UNKNOWN side effect (#88)
 
 [Exact independent evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md)

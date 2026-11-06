@@ -134,3 +134,37 @@ that the actual subprocess timeout for normal cold create is exactly 240.
 This fixes the test budget, but does not prove the upstream Provider and
 Gateway can return an acknowledgment within any bound, nor reclassify the
 original uncertain 49b/iv3-a writes as SUCCESS. They remain frozen.
+
+## 2026-11-06 independent fresh-target lifecycle after correcting test timeout
+
+This is the **latest** Verifier result; it supersedes only the earlier
+"independent lifecycle remains UNKNOWN" conclusion for **a newly owned target**.
+The original bwracc-iv3-life-a UNKNOWN and Finder 49b UNKNOWN are not
+reclassified, removed, replayed or silently unlocked.
+
+- Original independent new child: bwracc-iv3-life-b-container.
+- Native incarnation: 053bc35b-565d-4707-adcf-cfda67565741, created
+  2026-11-06T05:25:10.610888156Z.
+- Received real MCP success receipts for create (119517 ms), stop
+  (1397 ms), start (516 ms) and delete (4348 ms).
+- The separate native Incus oracle saw exact UUID Running, then Stopped,
+  then Running, then absent. Only the new child was deleted.
+- The new execution was launched from source 23670d3e which corrects the
+  hidden 120-second timeout clamp; actual subprocess ceiling is now 240
+  for cold create, bounded by 300.
+- Fresh independent installed Verifier report confirms Host/App source
+  839d00400d9af759b9837b133dd0ee4761a7ed9e, CI ZIP
+  44f0bbd0924c8d2bdc33cb6e165929fd74614ef01598deff9be38de3a3d780c2,
+  doctor checks 10/10, and SYS-LIFE-01 status **PARTIAL**, since only
+  four lifecycle nodes were covered, not full graph.
+- SYS-JOB-01, SYS-UNKNOWN-01, SYS-UPGRADE-01, SYS-REPORT-01 and
+  SYS-SELFTEST-01 remain BLOCKED; SYS-RELEASE-01 stays PARTIAL.
+  The trusted external signing gate is still DENIED, not approved.
+- GitHub workflow run 42168214749 for 23670d3e succeeded in its
+  verify job; publishing was skipped as expected. Full new Python suite:
+  **859/859 PASS**, code-first registry and 233 knowledge documents PASS.
+
+**Important source boundary:** both genuine isolated installs were from
+PR synthetic merge CI builds, not the final main commit. This is convincing
+partial independent *behavior* evidence, but cannot authorize GitHub v0.49.0
+Release without full mandated scenarios and signed exact-main verifier proof.
