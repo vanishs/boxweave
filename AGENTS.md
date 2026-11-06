@@ -23,6 +23,8 @@ Do not confuse signed fixture evidence or 832 green Python unit tests with
 independent system acceptance or permission to release.
 
 
+**Independent installed Verifier (still PARTIAL):** Use `python -m tools.reacceptance.installed_verifier` from a distinct approved Box to verify CI ZIP bytes against running host CLI, root Gateway provenance, app install SHA and authenticated doctor checks. It emits a named scenario matrix, never a release signature, and intentionally refuses to mark the limited four-step lifecycle and same-actor concurrent selftest as full independent acceptance. Genuine external signing plus all required scenario evidence and protected CI trust configuration are still needed.
+
 **v0.49.0 reacceptance MVP candidate (source-only, not published):**
 The new `tools.reacceptance.installed` captures actual installed read-only
 MCP/host-CLI positive and invalid calls, with exact per-surface blockers.

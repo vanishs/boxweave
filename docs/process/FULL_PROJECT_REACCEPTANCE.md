@@ -64,6 +64,8 @@ Incus oracle and durable no-replay intent. Do not run on the owner host or
 reuse a non-owned guest. This limited path does not test resize, guest exec,
 cross-entry concurrency or the other 18 scenario families.
 
+Run the additional independent verification on a separately authorized Box, using the *same source-bound CI candidate artifact* and `python scripts/reacceptance.py installed-verifier --candidate EXACT_CI_BOXWEAVE.zip --manifest EXACT_CI_RELEASE.json --source EXACT_SOURCE_COMMIT --out PRIVATE_REPORT [--lifecycle PRIVATE_ACTUAL_VERIFIER_LIFECYCLE --selftest PRIVATE_ACTUAL_VERIFIER_SELFTEST]`. This produces immutable read-only evidence, matched host/app version and checksum findings, and a PARTIAL per-scenario matrix. **It deliberately cannot mint a signed release approval.**
+
 Publication dispatch additionally requires an explicit successful original
 `candidate_run_id` and independently trusted `verifier_run_id`. Both gate
 and publish download the **same** original candidate artifact; a newly

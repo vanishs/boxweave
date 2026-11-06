@@ -203,3 +203,17 @@ incarnation. This is a validation budget improvement, not proof that the
 Provider has atomic create/receipt behavior. The original 49b UNKNOWN
 scene is intentionally retained, pending independent reconciliation and
 exact-identity manual cleanup under the owner-authorized test scope.
+
+## Independent installed Verifier source driver (not release signing)
+
+The new developer-only tools/reacceptance/installed_verifier.py inspects the
+same private CI ZIP and manifest installed on a **different Box**, compares
+exact source SHA/version and published app archive digest with root Host CLI
+provenance, and requires ten authenticated system/HTTP/MCP doctor checks.
+Its optional bounded exact-native lifecycle and concurrent selftest evidence
+checkers refuse missing, inconsistent, incomplete or ambiguous results.
+The SYS-LIFE-01 four-step subset and the same-agent two-process concurrency
+check remain **PARTIAL**, not artificially promoted to all 19 scenario PASS.
+No signer key is generated, carried or used; genuine separate protected
+key and trusted Verifier workflow installation, full mandatory scenario
+evidence, release candidate run ID and live gate success still block Release.

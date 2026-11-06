@@ -1,3 +1,19 @@
+## P0 release blocker: v0.49.0 private live UNKNOWN side effect (#88)
+
+[Exact independent evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md)
+and [Issue #88](https://github.com/vanishs/boxweave/issues/88).
+Two isolated installed v0.49.0 host-side MCP create calls timed out at
+75s/240s while native Incus independently showed the exact originally
+requested child Running; no attempt was replayed, no automatic cleanup.
+The Finder did later complete the full four-step limited lifecycle on a
+different uniquely named child, but the independent Verifier's lifecycle
+remained UNKNOWN. Root cause (Provider provisioning/SSH collector vs Gateway
+receipt/stdio lifecycle) is **UNCONFIRMED**. Two test-owned identity-verified
+original UNKNOWN children are preserved in isolated nested providers pending
+authorized operator reconciliation. Mandatory independent full acceptance
+and signature gate are **BLOCKED**, despite 10/10 clean-host doctor and CI
+tests. Do not publish a public v0.49.0 Release or update stable pointer.
+
 ## RACC-SYS-0480 candidate-only engineering risk — 2026-11-05 PT
 
 [Current exact evidence](RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).

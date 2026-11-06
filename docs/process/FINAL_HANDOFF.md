@@ -1,3 +1,15 @@
+## 2026-11-05 PT / 2026-11-06 UTC — v0.49.0 independent candidate checkpoint
+
+[Scope and exact evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
+Draft PR #87, no official release. Isolated Finder old-to-private 0.49
+upgrade and actual owned lifecycle limited path PASS/PARTIAL; installed
+selftest contention refusal/recovery and zero residue verified. Separate
+fresh Verifier install source/ZIP and 10/10 authenticated doctor PASS.
+**Blocker #88**: independent Gateway create timed out but native child
+exists; original UNKNOWN preserved without retry. 19 full scenarios,
+100% eligible mutating MCP/CLI blackbox, independent signed release
+proof and protected CI key are not accepted. Stable v0.43.1 unchanged.
+
 **Current unpublished v0.48.0 candidate (2026-11-05):**
 [read this partial-state evidence and exact remaining work](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
 The preferred execution is system-first `Run full BoxWeave reacceptance` via the

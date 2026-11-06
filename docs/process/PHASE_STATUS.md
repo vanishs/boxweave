@@ -1,3 +1,20 @@
+## 2026-11-05 PT / 2026-11-06 UTC — v0.49.0 MVP verified scopes; NOT PUBLISHED
+
+[New independent and original black-box evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md):
+RACC-SYS developer-only installed MCP/CLI probes, original Finder Box four-step
+create/stop/start/delete real native-oracle path, real installed selftest
+contention denial and subsequent success with zero residue. A separate clean
+Verifier Box installed the exact CI candidate with Host/Gateway/app source
+and package-byte parity, 10/10 authenticated doctor checks. However the
+independent Verifier's first create request timed out with an actually Running
+native Box (Issue #88); **UNKNOWN remains frozen, no retry**. Thus
+independent scenario completion is NOT PASSED. Root-owned manifest-pinned
+private host candidate installation before a public Release is implemented.
+Installed Verifier evidence driver remains PARTIAL and never signs approval.
+Trust-protected external signing, full mandatory scenario cases and a
+post-merge exact main candidate are still missing. PR #87 remains DRAFT,
+main v0.48.0 is an unpublished source and stable v0.43.1 is unchanged.
+
 ## 2026-11-05 PT / 2026-11-06 UTC — v0.48.0 RACC-SYS candidate, NOT RELEASED
 
 [Exact implementation and test checkpoint](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md):
