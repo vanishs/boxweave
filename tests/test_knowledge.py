@@ -30,4 +30,24 @@ class KnowledgeTests(unittest.TestCase):
  def test_cold_start_missing_route_and_outside_link_do_not_pass(self):
   self.index.write_text(self.index.read_text().replace('[install](install.md)','')+'\n[outside](../../outside.md)')
   errors=audit(self.root)['errors'];self.assertIn('Cold-start route missing: run',errors);self.assertTrue(any('Link leaves repository' in e for e in errors))
+class ReleaseWorkflowRegressionTests(unittest.TestCase):
+    """Prevent accidental removal of the owner-selected simple release path."""
+
+    def test_main_source_ci_publishes_without_heavy_acceptance_gate(self):
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/ci.yml").read_text()
+        self.assertIn("\\n  publish:\\n".replace("\\\\n", "\\n"), source)
+        publish = source.split("\\n  publish:\\n".replace("\\\\n", "\\n"), 1)[1]
+        self.assertIn("    needs: verify", publish)
+        self.assertIn("github.event_name == 'push'", publish)
+        self.assertIn("github.ref == 'refs/heads/main'", publish)
+        self.assertIn("      contents: write", publish)
+        self.assertIn("name: application-candidate", publish)
+        self.assertIn("manifest['source'] == os.environ['RELEASE_SHA']", publish)
+        for proof in ("SHA256SUMS", "gh release create", "gh release upload",
+                      "PY_DRAFT_PARITY", "PY_PUBLIC_PARITY", "--draft=false"):
+            self.assertIn(proof, publish)
+        self.assertNotIn("\\n  candidate_gate:\\n".replace("\\\\n", "\\n"), source)
+        self.assertFalse((repo / ".github/workflows/independent-verifier.yml").exists())
+
 if __name__=='__main__':unittest.main()
