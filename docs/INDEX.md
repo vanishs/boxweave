@@ -1,3 +1,11 @@
+**Current v0.49.4 focus:** [v0.49.2 create 500 → v0.49.3
+host-live HTTP retry and SSH readiness report](verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md).
+v0.49.4 source hardens pre-reservation argument validation and enables
+safe `create_container(status_only=true)` as a read-only fallback when
+ChatGPT's tool catalogue omits `boxweave_create_status`. The original
+#92 incident is not fully resolved; independent installed acceptance
+and source-CI publishing remain separate.
+
 **2026-11-06 current release policy:** On successful `main` push CI, the lightweight
 GitHub Actions publish job creates an immutable `vVERSION` tag and Release from
 verified same-run artifacts; no separate signing, reviewer workflow, protected
