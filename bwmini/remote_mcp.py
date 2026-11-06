@@ -8,20 +8,75 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
+import threading
 from urllib.parse import urlencode, urlsplit
 
 from flask import Flask, Response, jsonify, redirect, request
 
 from .remote_auth import RemoteCredentials, RemoteError, TOKEN_PATTERN, valid_url
 from .mcp_gate import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS, SERVER_INFO_VERSION
+from .remote_create import CreateFault, CreateJournal, validated_request
 
 PROTOCOL = "2025-11-25"
 GATE = "/usr/local/lib/boxweave/default/mcp_gate.py"
 METHODS = frozenset(("tools/list", "tools/call", "resources/list", "resources/read",
                      "prompts/list", "prompts/get", "ping"))
 MAX_RESULT = 2_097_152
+
+
+CREATE_STATUS_TOOL = {
+    "name": "boxweave_create_status",
+    "description": ("Read the durable HTTP MCP create receipt by original task_id, "
+                    "request_key or username (exactly one). Read-only; never "
+                    "retries a create. UNKNOWN requires separate inspection."),
+    "inputSchema": {"type": "object", "additionalProperties": False,
+                    "properties": {"task_id": {"type": "string"},
+                                   "request_key": {"type": "string"},
+                                   "username": {"type": "string"}}},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True},
+}
+
+
+def tool_response(ident, value, *, error=False):
+    return {"jsonrpc": "2.0", "id": ident, "result": {
+        "content": [{"type": "text", "text": json.dumps(value, sort_keys=True)}],
+        "isError": error,
+    }}
+
+
+def augment_catalog(reply):
+    """Only modify the authenticated, filtered HTTP catalogue."""
+    result = reply.get("result")
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        return reply
+    tools = result["tools"]
+    for tool in tools:
+        if not isinstance(tool, dict) or tool.get("name") != "create_container":
+            continue
+        schema = tool.get("inputSchema")
+        if isinstance(schema, dict) and isinstance(schema.get("properties"), dict):
+            schema["properties"]["request_key"] = {
+                "type": "string", "pattern": "^[0-9a-f]{32}$",
+                "description": ("Optional stable 32-hex creation intent identifier. "
+                                "The HTTP gateway also deduplicates the exact username "
+                                "and original parameters if ChatGPT sends a new key.")
+            }
+            tool["description"] = (
+                tool.get("description", "") +
+                " HTTP MCP: create is asynchronous and durable. The call returns "
+                "a task_id immediately; poll boxweave_create_status. Resending "
+                "a matching request returns the same receipt, never a second "
+                "create. A different request for the same name is refused. "
+                "An UNKNOWN receipt must be inspected, never replayed."
+            )
+    if not any(isinstance(t, dict) and t.get("name") == "boxweave_create_status"
+               for t in tools):
+        tools.append(dict(CREATE_STATUS_TOOL))
+    return reply
 
 
 def public_origin(value):
@@ -35,7 +90,7 @@ def public_origin(value):
     return value.rstrip("/")
 
 
-def relay(message, gate=GATE):
+def relay(message, gate=GATE, timeout=45):
     """Bounded, isolated stdio invocation: one request, no cross-client state.
 
     The existing gateway owns upstream credentials, tool transforms and the
@@ -59,7 +114,7 @@ def relay(message, gate=GATE):
         # the script directory from sys.path, so every relay would fail.
         completed = subprocess.run([sys.executable, "-E", "-s", gate], input=payload,
                                    text=True, stdout=subprocess.PIPE,
-                                   stderr=subprocess.DEVNULL, timeout=45, check=False)
+                                   stderr=subprocess.DEVNULL, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise RemoteError("upstream_outcome_unknown", 503) from None
     if len(completed.stdout) > MAX_RESULT:
@@ -92,6 +147,13 @@ def create_remote_app(store, config, dispatch=None, clock=None):
         clock = time.time
     credentials = RemoteCredentials(store, resource, clock)
     bridge = dispatch or relay
+    # A background worker may wait longer than the HTTP client. Provider
+    # timeouts still mean UNKNOWN and never trigger an automatic replay.
+    background_bridge = dispatch if dispatch is not None else (
+        lambda message: relay(message, timeout=900))
+    journal = CreateJournal(store, clock)
+    journal.recover_interrupted()
+    create_slots = threading.BoundedSemaphore(4)
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 65536
     origins = frozenset([origin] + list(config.get("allowed_origins", [])))
@@ -327,10 +389,101 @@ I authorize this client to use BoxWeave MCP tools.</label>
                         "error": {"code": -32601, "message": "Method not found"}})
         if "id" not in message or isinstance(message["id"], (dict, list, bool)):
             raise RemoteError("invalid_json_rpc")
+        if method == "tools/call":
+            params = message["params"]
+            if params.get("name") == "boxweave_create_status":
+                reply = handle_create_status(message)
+                return out(reply, headers={"MCP-Protocol-Version": PROTOCOL})
+            if params.get("name") == "create_container":
+                reply = handle_create(message)
+                return out(reply, headers={"MCP-Protocol-Version": PROTOCOL})
         reply = bridge(message)
         if not isinstance(reply, dict) or reply.get("id") != message["id"]:
             raise RemoteError("upstream_protocol_error", 502)
+        if method == "tools/list" and not message["params"].get("cursor"):
+            reply = augment_catalog(reply)
         return out(reply, headers={"MCP-Protocol-Version": PROTOCOL})
+
+    def run_create(task_id, message):
+        try:
+            reply = background_bridge(message)
+            result = reply.get("result") if isinstance(reply, dict) else None
+            ok = (isinstance(result, dict) and result.get("isError") is not True
+                  and "error" not in reply and isinstance(result.get("content"), list))
+            journal.complete(task_id, bool(ok))
+        except Exception:
+            # The original write may still finish upstream. Never retry it.
+            try:
+                journal.complete(task_id, False)
+            except Exception:
+                pass  # Persistent submitted state is UNKNOWN after restart.
+        finally:
+            create_slots.release()
+
+    def handle_create(message):
+        ident = message["id"]
+        args = message["params"].get("arguments")
+        try:
+            logical, key, payload, digest = validated_request(args)
+            # Protected-mode tool policy is authoritative; never bypass it.
+            catalog = bridge({"jsonrpc": "2.0", "id": "bw-create-policy-" +
+                              secrets.token_hex(8), "method": "tools/list",
+                              "params": {}})
+            listed = (catalog.get("result", {}).get("tools", [])
+                      if isinstance(catalog, dict) else [])
+            if not any(isinstance(t, dict) and t.get("name") == "create_container"
+                       for t in listed):
+                raise CreateFault("GATE_TOOL_NOT_ALLOWED")
+            try:
+                journal.get(username=logical)
+            except CreateFault as error:
+                if error.code != "CREATE_TASK_NOT_FOUND":
+                    raise
+                existing = False
+            else:
+                existing = True
+            if existing:
+                receipt, _ = journal.reserve(logical, key, digest)
+                return tool_response(ident, receipt)
+            if not create_slots.acquire(blocking=False):
+                raise CreateFault("CREATE_CAPACITY_BUSY")
+            try:
+                receipt, fresh = journal.reserve(logical, key, digest)
+                if not fresh:
+                    create_slots.release()
+                    return tool_response(ident, receipt)
+                forwarded = {"jsonrpc": "2.0", "id": "bw-create-" +
+                             receipt["task_id"], "method": "tools/call",
+                             "params": {"name": "create_container",
+                                        "arguments": payload}}
+                thread = threading.Thread(target=run_create,
+                                          args=(receipt["task_id"], forwarded),
+                                          name="bw-http-create", daemon=True)
+                try:
+                    thread.start()
+                except RuntimeError:
+                    # Dispatch intent was already committed. Fail safely.
+                    journal.complete(receipt["task_id"], False)
+                    create_slots.release()
+                    receipt = journal.get(task_id=receipt["task_id"])
+                return tool_response(ident, receipt)
+            except BaseException:
+                # A committed intent cannot be safely replayed if the process
+                # stopped between reservation and thread startup.
+                create_slots.release()
+                raise
+        except CreateFault as error:
+            return tool_response(ident, {"code": error.code}, error=True)
+
+    def handle_create_status(message):
+        args = message["params"].get("arguments", {})
+        try:
+            if not isinstance(args, dict) or set(args) - {
+                    "task_id", "request_key", "username"}:
+                raise CreateFault("CREATE_SELECTOR_INVALID")
+            return tool_response(message["id"], journal.get(**args))
+        except CreateFault as error:
+            return tool_response(message["id"], {"code": error.code}, error=True)
 
     @app.route("/mcp", methods=["GET", "POST", "DELETE"])
     def mcp():
