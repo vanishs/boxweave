@@ -69,8 +69,10 @@ or deletes the original incarnation. This is NOT complete 19-scenario
 execution, automatic Agent spawn, full MCP/CLI mutation coverage or independent
 release evidence. `.github/workflows/ci.yml` now accepts the original
 successful main-push candidate run ID and reuses the exact immutable artifact
-for gate and publish; this still REQUIRES a real trusted separate Verifier
-artifact/key/environment. Do not bypass a blocked gate or move the stable pin.
+for gate and publish; that was the **historical v0.49.0 candidate**
+design, superseded by the simple verified main-push Release workflow. Do
+not convert a source-CI Release into an independent installed PASS or move
+the stable pin.
 See [v0.49.0 MVP scope](docs/verification/RACC_MVP_0490_SOURCE_AND_ISOLATED_2026-11-05.md).
 
 ## Full reacceptance execution contract (current)
