@@ -6,6 +6,19 @@ BoxWeave is a self-hosted control plane for AI coding, remote development enviro
 
 **Architecture: MCP-first + REST-assisted hybrid (owner decision 2026-11-05).** Agents use BoxWeave's SSH/stdio or authenticated HTTP MCP; upstream Containarium MCP remains the default for new and specialist operations. The application keeps its seven previously implemented authenticated loopback REST lifecycle methods as a scoped auxiliary adapter. The proposed batch migration of 29 additional MCP tools to REST and a universal API-first architecture were abandoned; existing deployed routes were not reversed. [Architecture and safety boundaries](docs/design/ARCHITECTURE.md), [ADR-010](docs/design/ADR/0010-api-first-control-plane-candidate.md).
 
+**HTTP MCP create reliability (v0.49.4):** `create_container` now
+validates the upstream-advertised argument types **before** reserving a
+non-replayable Box name. Poll a pending task with
+`boxweave_create_status`, or when that tool is hidden by a capped
+ChatGPT catalogue use `create_container` with only
+`{"username":"ORIGINAL-NAME","status_only":true}` (read-only).
+An upstream `succeeded` receipt is not proof of guest SSH readiness:
+the [v0.49.3 real retest](docs/verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md)
+observed temporary STOPPED/missing guest user before eventual SSH PASS.
+Issue #92 remains open for cross-entry, restart and upstream root-cause
+work. PR #90's signed evidence workflow was closed; the ordinary
+main-CI GitHub release remains separate from full installed acceptance.
+
 **Current source version: 0.49.4 (HTTP MCP creation schema preflight and status-only polling, with v0.49.3 live-create evidence; GitHub source-CI publication does not imply full installed independent reacceptance). Default stable installer: v0.43.1.** The immutable v0.43.1 release passed source CI and a separate isolated 0.43.0-to-0.43.1 installed upgrade; the owner's current host installation must be verified independently of source publication. See [release and promotion evidence](docs/verification/STABLE_PROMOTION_0431_2026-11-03.md). The immutable v0.43.0 release passed CI, an isolated Ubuntu 24.04 in-place upgrade from v0.42.12, authenticated live Provider REST/MCP reads, and a real app lifecycle-to-Agent-D2-trace check with cleanup. See [v0.43.0 stable promotion evidence](docs/verification/STABLE_PROMOTION_DC01_0430_2026-11-03.md); this does not certify the current owner host installation, remote OAuth, all Providers, or alternate platforms.
 
 **v0.44.10 selftest operator plan handoff:** The root-owned host CLI reads only an authorized caller- or app-owned regular 8 KiB-or-smaller plan, rejects symlinks and untrusted owner/type, and pipes bytes to the unprivileged app without exposing a private home directory. The application still requires the exact confirmation and journals remote effects; typed missing/unreadable/unsafe/oversized/invalid failures occur before mutation. [Release and acceptance notes](docs/verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md). **Owner-host R-02 post-reboot verification remains explicitly deferred; no host restart or global R-04 activation.**
