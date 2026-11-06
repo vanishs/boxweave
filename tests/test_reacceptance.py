@@ -25,9 +25,6 @@ def original(reply="pass", *, exit_code=0):
 def valid_candidate_fixture(path, source_sha="a"*40):
     files = {"bwmini/__main__.py": b"fixture",
              "bwmini/deploy_check.py": b"fixture",
-             "bwmini/reacceptance.py": b"fixture",
-             "bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json": b"{}",
-             "bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md": b"fixture",
              "requirements.lock": b"",
              "VERSION": b"0.47.0\n",
              "web/dist/index.html": b"<html/>"}
@@ -358,7 +355,7 @@ class SpecializedIntegrationTests(unittest.TestCase):
             with self.assertRaisesRegex(r.AcceptanceFault, "EVIDENCE_SOURCE_MISMATCH"):
                 r.candidate_manifest(package, "b"*40, inv, d)
 
-    def test_installed_package_fallback_has_complete_registry_and_provenance(self):
+    def test_legacy_packaged_registry_source_is_still_readable_in_fixture(self):
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp)
             (target / "bwmini/reacceptance_data").mkdir(parents=True)

@@ -3,6 +3,10 @@ import argparse,fcntl,hashlib,json,os,platform,re,shutil,sqlite3,stat,subprocess
 from pathlib import Path
 
 PLATFORM = 'linux-x86_64-cpython3-min312'
+# Developer-only source shims are never installed on customer machines.
+DEV_ONLY_MODULES = frozenset(('reacceptance.py', 'reacceptance_live.py', 'reacceptance_proof.py'))
+def production_modules(root):
+ return sorted(p for p in (Path(root)/'bwmini').glob('*.py') if p.name not in DEV_ONLY_MODULES)
 
 class InstallError(Exception): pass
 def require(ok,code):
@@ -31,6 +35,7 @@ def verify(archive,sha):
  with zipfile.ZipFile(archive) as z:
   infos=z.infolist();names=[x.filename for x in infos]
   require(len(names)==len(set(names)) and 1<len(names)<=2048,'ARCHIVE_MEMBERS_INVALID')
+  require(not any(x.startswith('bwmini/reacceptance') or x.startswith('tools/reacceptance') for x in names),'DEVELOPER_TEST_CONTENT_IN_PRODUCT')
   require(all(safe_name(x.filename) and not x.is_dir() and x.file_size<=30_000_000 and not stat.S_ISLNK(x.external_attr>>16) for x in infos),'ARCHIVE_PATH_INVALID')
   require(sum(x.file_size for x in infos)<=180_000_000,'ARCHIVE_TOO_LARGE')
   manifest=json.loads(z.read('manifest.json'));require(set(manifest)=={'format','version','platform','source','files'},'MANIFEST_INVALID')
@@ -39,6 +44,7 @@ def verify(archive,sha):
   require(set(manifest['source'])=={'commit','state'} and re.fullmatch('[0-9a-f]{40}',manifest['source']['commit']) is not None and manifest['source']['state'] in ('clean','modified'),'PROVENANCE_INVALID')
   files=manifest['files'];require(isinstance(files,dict) and set(files)|{'manifest.json'}==set(names),'MANIFEST_MEMBERS_MISMATCH')
   require({'bwmini/__main__.py','bwmini/deploy_check.py','requirements.lock','VERSION','web/dist/index.html'}<=set(files),'PACKAGE_INCOMPLETE')
+  require(not any(x.startswith('bwmini/reacceptance') or x.startswith('tools/reacceptance') for x in names),'DEVELOPER_TEST_CONTENT_IN_PRODUCT')
   require(all(n.startswith(('bwmini/','clients/','web/dist/','wheels/')) or n in ('VERSION','requirements.lock','boxweave.sh','install.sh') for n in files),'PACKAGE_CONTENT_INVALID')
   for name,sha256 in files.items():require(re.fullmatch('[0-9a-f]{64}',sha256) is not None and digest(z.read(name))==sha256,'MEMBER_DIGEST_MISMATCH')
   require(z.read('VERSION').decode().strip()==manifest['version'],'VERSION_MISMATCH')
@@ -48,20 +54,11 @@ def build(root,wheels,output,commit,source_state):
  clients=('profile_client.py','README.md','wsl/prepare_identity.py','windows/register-native.ps1','windows/native-package.example.json','windows/prepare-identity.ps1','windows/bootstrap-native.ps1','windows/diagnose-native.ps1','windows/diagnose-connection.ps1','windows/connection.example.json')
  # Package every bwmini source module: a curated list previously omitted new
  # schema/remote modules and produced archives whose Store imports failed.
- public=sorted((root/'bwmini').glob('*.py'))+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
+ public=production_modules(root)+[root/'clients'/n for n in clients]+[root/'boxweave.sh',root/'install.sh']+list((root/'web/dist').rglob('*'))
  for p in public:
   if p.is_file():
    require(not p.is_symlink(),'SYMLINK_SOURCE');files[p.relative_to(root).as_posix()]=p.read_bytes()
- # Ship the exact reviewed acceptance baseline/contract with the installed app.
- # These files are static data; never interpreted as test commands or policy.
- if (root/'bwmini/reacceptance.py').exists():
-  for source, bundled in (
-    ('docs/verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md',
-     'bwmini/reacceptance_data/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md'),
-    ('docs/verification/REACCEPTANCE_DEPENDENCIES.json',
-     'bwmini/reacceptance_data/REACCEPTANCE_DEPENDENCIES.json'),
-  ):
-   files[bundled]=regular(root/source)
+ # Adversarial runner, fixtures and upstream references live in source/CI only.
  for n in ('requirements.lock','VERSION'):files[n]=regular(root/n)
  for p in Path(wheels).glob('*.whl'):files['wheels/'+p.name]=regular(p)
  require(bool([x for x in files if x.startswith('wheels/')]),'OFFLINE_WHEELS_REQUIRED')

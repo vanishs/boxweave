@@ -1,3 +1,11 @@
+**Current unpublished v0.48.0 candidate (2026-11-05):**
+[read this partial-state evidence and exact remaining work](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
+The preferred execution is system-first `Run full BoxWeave reacceptance` via the
+test-only `tools/reacceptance` runner from a prepared checkout. Source Python
+832 PASS, but no independently verified installed v0.48.0 acceptance; the new
+CI publish gate fails closed until signed separate verifier evidence exists.
+Do not call any of RACC-SYS-01..09 complete, and do not move stable pin.
+
 # Final handoff — start without chat history
 
 This is the onboarding/runbook entry, not a second status/risk register. **Next full reacceptance trigger:** follow the [revised exhaustive MCP/CLI black-box runbook](FULL_PROJECT_REACCEPTANCE.md), [one-action/one-feature reporting template](../verification/REACCEPTANCE_RUN_TEMPLATE.md), and [previous F01–F39 + new current feature coverage baseline](../verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md). Every safe installed MCP tool and CLI leaf needs a real adversarial call; all blocked tools and all user-visible features must be reported by **name and tested scenario**, not only counts. This is an instruction for a future owner-triggered run, **not evidence of tests executed by this documentation change.** **Latest (RACC-0461-20261105-B):** [official v0.46.1 installed reacceptance](../verification/REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md) now confirms official tagged release, test-owned v0.46.0→v0.46.1 upgrade exit 0, exact provenance and doctor 10/10, installed live nested MCP selftest+cleanup, and sampled outer Gateway/CLI/Web negatives. This supersedes previous **v0.46.1 release/upgrade pending** wording only for the exact tested environment. P2 CLI help discoverability remains open; global R-04, owner-host R-02 reboot, external OAuth and independent Agent Verifier remain U/PARTIAL. Stable pin 0.43.1 unchanged.

@@ -8,6 +8,20 @@ Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md),
 
 **Shipping boundary:** In **released v0.47.0**, `bwmini/distribution.py` currently bundles `bwmini/reacceptance.py`, `reacceptance_live.py`, `reacceptance_proof.py` and two registry files in the installed application ZIP; these are **not** a resident daemon/public endpoint. The owner requests the **future full runner to run from source/CI/ephemeral test Box instead of normal customer installation**; extraction and packaging exclusion are **pending code tasks**, not done by this document. Do not remove production safety/diagnostic features. The on-demand upstream source resolver must pin **actual observed Containarium daemon/CLI/MCP versions**, not mistake `bwmini/upstream_version.py`'s baseline for the running version; retrieve only needed upstream tag/commit files in the test workspace, without shipping them or executing untrusted upstream instructions. Documentation changes alone do **not** modify customer binaries, publish a version or grant host access.
 
+**Unpublished v0.48.0 candidate update (2026-11-05):** Developer reacceptance code is
+now extracted under `tools/reacceptance`; production ZIP build excludes its source
+shims, test registry/data and fault tools. **Packaging source tests pass, but a
+final built-product and real installed upgrade are NOT yet accepted.**
+`python scripts/reacceptance.py` is the preferred source-checkout launcher;
+v0.47.0 **published** installations retain the old packaged module. Dynamic
+breadth, system graph scheduling, separate Agents, live upstream parity and
+independent installed Verifier are **PARTIAL or NOT IMPLEMENTED**, not DONE.
+Candidate CI disables main auto-publish and fails closed without separately
+signed installed evidence. See
+[the exact scoped checkpoint](docs/verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
+Do not confuse signed fixture evidence or 832 green Python unit tests with
+independent system acceptance or permission to release.
+
 ## Full reacceptance execution contract (current)
 
 The owner-triggered `Run full BoxWeave reacceptance` invokes **black-box-first, multi-Agent find → fix → independent verify**, not merely `scripts/validate.py`. The Coordinator must follow [the canonical runbook](docs/process/FULL_PROJECT_REACCEPTANCE.md) and its [surface/issue ledger template](docs/verification/REACCEPTANCE_RUN_TEMPLATE.md). Discover **current runtime** SSH/HTTP MCP catalogs, installed host/app CLI commands, installed Web endpoints and actual Provider-facing pathways before selecting scenarios. Classify every exposed action, then **adversarially invoke every safe/authorized MCP tool and installed CLI leaf command** (not a representative sample) against exact test-owned targets: actual positive, malformed/boundary and relevant denial paths, with independent state/receipt and no-side-effect oracles. Record every unsafe/unavailable action separately as BLOCKED/SKIPPED/UNKNOWN with precise reason. Distinguish outer ChatGPT MCP catalog from the installed SSH/HTTP MCP catalogs and enumerate special CLI dispatch not shown by top-level help. Map every action to the [historical-plus-current functional acceptance baseline](docs/verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md) and publish **full named functional results** and a per-action ledger, including not-tested functions, not only aggregate pass counts.

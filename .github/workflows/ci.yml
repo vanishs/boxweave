@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      verifier_run_id:
+        description: 'Existing separate trusted Verifier workflow run with signed installed evidence'
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -101,10 +106,10 @@ jobs:
         run: python -m pip install --require-hashes -r requirements-dev.lock
       - name: Reacceptance proof-oracle self-test and CLI surface drift gate
         run: |
-          python -m bwmini.reacceptance self-test
+          python -m tools.reacceptance.cli self-test
           mkdir -p -m 700 .runtime/reacceptance-ci
           echo '["python","-m","bwmini.host_cli"]' > .runtime/reacceptance-ci/host-argv.json
-          python -m bwmini.reacceptance inventory --root . --host-argv-json .runtime/reacceptance-ci/host-argv.json --out .runtime/reacceptance-ci/inventory.json
+          python -m tools.reacceptance.cli inventory --root . --host-argv-json .runtime/reacceptance-ci/host-argv.json --out .runtime/reacceptance-ci/inventory.json
           python - <<'PY_RACC_SURFACE'
           import json
           from pathlib import Path
@@ -117,10 +122,12 @@ jobs:
           assert not any(a['status'] == 'PASS' for a in inv['actions']), "Discovery is not acceptance"
           print(f'Reacceptance discovery reviewed: {len(inv["actions"])} source actions; no catalog-only PASS')
           PY_RACC_SURFACE
-          python -m bwmini.reacceptance bootstrap-readonly --root . --out .runtime/reacceptance-ci/read-only-run
-          python -m bwmini.reacceptance seal --run .runtime/reacceptance-ci/read-only-run
-          python -m bwmini.reacceptance verify --run .runtime/reacceptance-ci/read-only-run
+          python -m tools.reacceptance.cli bootstrap-readonly --root . --out .runtime/reacceptance-ci/read-only-run
+          python -m tools.reacceptance.cli seal --run .runtime/reacceptance-ci/read-only-run
+          python -m tools.reacceptance.cli verify --run .runtime/reacceptance-ci/read-only-run
 
+      - name: External reacceptance automation fail-closed regressions
+        run: python -m unittest tests.test_reacceptance_system -v
       - name: Python unit and contract tests (fixtures only)
         run: python -m unittest discover -s tests -v
       - name: Unified Python client generator grammar and first-line shebang
@@ -173,7 +180,8 @@ jobs:
           python - <<'PY_PACKAGED_MODULES'
           import hashlib, json, zipfile
           from pathlib import Path
-          modules = {p.as_posix() for p in Path('bwmini').glob('*.py')}
+          from bwmini.distribution import production_modules
+          modules = {p.as_posix() for p in production_modules('.')}
           with zipfile.ZipFile('.runtime/release/boxweave.zip') as archive:
               members = set(archive.namelist())
               missing = modules - members
@@ -183,14 +191,12 @@ jobs:
               for name in sorted(modules):
                   assert hashlib.sha256(archive.read(name)).hexdigest() == manifest['files'][name], f'Digest mismatch: {name}'
               assert {'bwmini/remote_auth.py', 'bwmini/remote_mcp.py'} <= members
-              for name in ('REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md',
-                           'REACCEPTANCE_DEPENDENCIES.json'):
-                  bundled = 'bwmini/reacceptance_data/' + name
-                  expected = Path('docs/verification') / name
-                  assert bundled in members, f'Missing installed feature registry: {bundled}'
-                  assert archive.read(bundled) == expected.read_bytes(), f'Drift in bundled registry: {name}'
+              assert not any(name.startswith(('bwmini/reacceptance', 'tools/reacceptance'))
+                             for name in members), 'Developer test runner/data leaked into customer ZIP'
+              assert not any(name.startswith(('bwmini/reacceptance', 'tools/reacceptance'))
+                             for name in manifest['files']), 'Developer module in release manifest'
 
-          print(f'Package contains {len(modules)} verified Python modules')
+          print(f'Product ZIP contains {len(modules)} verified production Python modules; test suite excluded')
           PY_PACKAGED_MODULES
       - uses: actions/setup-python@v5
         with:
@@ -225,9 +231,49 @@ jobs:
           name: application-candidate
           path: .runtime/release/
 
-  publish:
+  # The regular main push is VERIFY/CANDIDATE ONLY. It can never auto-publish.
+  # A separate trusted Verifier must have installed these exact candidate bytes
+  # in a clean isolated Box, signed its original attempt and oracle evidence,
+  # and uploaded that evidence to its own workflow run.
+  candidate_gate:
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.verifier_run_id != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    environment: boxweave-reacceptance-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-candidate
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: reacceptance-installed-verifier
+          path: verifier-evidence
+          run-id: ${{ inputs.verifier_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify independent installed candidate and signature
+        env:
+          TRUSTED_VERIFIER_PUBLIC_KEY: ${{ vars.REACCEPTANCE_VERIFIER_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          [[ -n "$TRUSTED_VERIFIER_PUBLIC_KEY" ]] || { echo 'Protected verifier key not configured; refuse release' >&2; exit 1; }
+          printf '%s\n' "$TRUSTED_VERIFIER_PUBLIC_KEY" > trusted-verifier.pub
+          python -m tools.reacceptance.release_gate \
+            --candidate release/boxweave.zip \
+            --release-manifest release/release.json \
+            --attestation verifier-evidence/release-gate.json \
+            --signature verifier-evidence/release-gate.sig \
+            --public-key trusted-verifier.pub \
+            --source "$GITHUB_SHA"
+
+  publish:
+    needs: [verify, candidate_gate]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

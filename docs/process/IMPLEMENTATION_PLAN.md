@@ -23,6 +23,18 @@ Phase 3 originally defined the tasks below. Phase 4 was authorized with its conc
 
 **Shipping gate:** Phase 4 must prove the publish workflow **cannot** publish before an independent candidate-installed original-repro acceptance. Current CI source/fixture checks are not that gate. No fake multi-Agent independence; if a separate Agent cannot actually be spawned, record manual/sequential mode. No docs-only commit changes product version, stable pin, authorized host policies or Release.
 
+### v0.48.0 candidate implementation checkpoint (NOT RELEASED)
+
+[Source, test evidence, and explicit RACC-SYS-01..09 partial-state table](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md)
+is the controlling **new** implementation snapshot. Off-host package/exclusion
+tests, observed-version upstream resolver, graph planner, safe breadth inventory,
+once-only safety ledger, manual role handoff, candidate deny-by-default gate,
+scenario-first report and negative controls are present in candidate source.
+**Do not mark any RACC-SYS item fully implemented:** installed package acceptance,
+real multi-actor fault execution, full dynamic MCP/CLI black-box and actual
+independent multi-Agent/release producer are still missing. No public release,
+host production policy or stable pin was changed.
+
 ## Proposed reacceptance execution engineering — RACC-AUTO-01..07 (2026-11-05)
 
 **State (v0.47.0 source):** **PARTIALLY IMPLEMENTED, pending installed-release attestation**. The executable `bwmini.reacceptance` inventory/evidence engine, specialized `reacceptance_live` concurrency tool, optional `reacceptance_proof` host adapter and CI false-PASS/help drift gate implement scoped parts of the backlog. A general all-action automatic scheduler, test-Box allocation service, credential provisioning and enforced prepublication CI installed gate are **not shipped**. No new BoxWeave public MCP endpoint or owner-host privilege grant is implied. They are separate from the historical phase-4 TASK-001..TASK-014 iterations below. The user-facing command remains `Run full BoxWeave reacceptance`.

@@ -1,3 +1,15 @@
+## 2026-11-05 PT / 2026-11-06 UTC — v0.48.0 RACC-SYS candidate, NOT RELEASED
+
+[Exact implementation and test checkpoint](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md):
+source-only developer runner extracted out of customer ZIP, version-pinned
+upstream references, scenario-first planning, restricted breadth probes,
+once-only UNKNOWN freeze, signed candidate release deny gate and 17 adversarial
+regressions. Full isolated checkout Python regression **832/832 PASS** after
+fixing candidate version metadata drift. **No actual v0.48.0 install, independent
+Verifier, 100% MCP/CLI black-box or all-Agent automation accepted.** Ordinary
+main push public publishing now blocked in proposed CI; separate signed
+installed Verifier artifact is mandatory. Stable v0.43.1 remains unchanged.
+
 ## 2026-11-05 UTC — official v0.46.1 published and installed upgrade L PASS (same-Agent scoped reacceptance)
 
 [Second exact v0.46.1 black-box report](../verification/REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md) supersedes the prior `v0.46.1 published/upgrade pending` statement for this isolated test parent only: official 25-asset release, source tag `2ec04fa`, real `bw-reaccept-1105-b` official v0.46.0→v0.46.1 upgrade exit 0, release-matching provenance, installed doctor 10/10, real nested MCP selftest and cleanup, sampled gateway/resource/CLI/auth-negative checks PASS. Dynamic [surface catalog](../verification/REACCEPTANCE_0461_2026-11-05_BLACKBOX_SURFACES.json) classifies outer 68 MCP entries and installed-source 75 Web method-routes without claiming full inner runtime positives. New P2 CLI global help discoverability bug remains OPEN. Same-Agent only; whole-project state PARTIAL. R-02 owner reboot remains DEFERRED, R-04 globally PARTIAL, stable pin 0.43.1 unchanged. No new version was published by this documentation-only run.
