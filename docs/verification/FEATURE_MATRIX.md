@@ -1,3 +1,12 @@
+## 2026-11-05 PT — candidate-first release gate source corrections
+
+REQ-008 / AC-008, REQ-016 / AC-016 and REQ-017 / AC-017: [v0.49.1 release-gate evidence and remaining obligations](RACC_0491_RELEASE_GATE_2026-11-05.md).
+Exact original CI wrapper/26 assets verified without candidate execution;
+source signature/graph/context/asset/no-replay calibration is scoped T.
+New candidate install, full independent scenarios, protected signer and live
+publish gate remain U/BLOCKED. [Issue #88 latency investigation](RACC_0491_CREATE_LATENCY_2026-11-05.md)
+is read-only original-scene evidence, not acknowledged create or recovery PASS.
+
 ## 2026-11-05 UTC — v0.46.1 official installed scope (RACC-0461-20261105-B)
 
 [Installed release black-box evidence](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md): selected v0.46.1 official upgrade/doctor, live nested MCP selftest and verified cleanup **L PASS**; scoped outer Gateway tracked dedup/refusals, test-owned lifecycle+cgroup, CLI generator and unauthenticated Web/HTTP MCP checks **L PASS**. The [runtime-outer vs installed-source inventory](REACCEPTANCE_0461_2026-11-05_BLACKBOX_SURFACES.json) is classified but does not prove inner authenticated tools/list or live positive Web flows. One **P2 CLI global help discoverability defect OPEN**, no independent Verifier. Prior v0.46.1 pending-installed statements are superseded solely for the exact isolated upgrade; whole-project R-04/R-02/external paths remain U/PARTIAL/DEFERRED. Stable pin unchanged.

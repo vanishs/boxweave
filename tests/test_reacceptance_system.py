@@ -189,6 +189,8 @@ class ReleaseGateTests(unittest.TestCase):
         pieces = {"bwmini/__main__.py": b"fixture",
                   "bwmini/deploy_check.py": b"fixture", "requirements.lock": b"",
                   "VERSION": b"0.48.0\n", "web/dist/index.html": b"<html/>"}
+        pieces.update({"bwmini/" + name: b"fixture helper " + name.encode()
+                       for name in release_gate.RELEASE_FILES if name != "boxweave.zip"})
         manifest = {"format": 1, "version": "0.48.0",
                     "platform": distribution.PLATFORM,
                     "source": {"commit": self.source, "state": "clean"},
@@ -200,8 +202,14 @@ class ReleaseGateTests(unittest.TestCase):
             z.writestr("manifest.json", json.dumps(manifest))
         self.package_sha = hashlib.sha256(self.package.read_bytes()).hexdigest()
         self.release = self.root / "release.json"
+        assets = {"boxweave.zip": self.package_sha}
+        for name in release_gate.RELEASE_FILES:
+            if name != "boxweave.zip":
+                data = pieces["bwmini/" + name]
+                (self.root / name).write_bytes(data)
+                assets[name] = hashlib.sha256(data).hexdigest()
         self.release.write_text(json.dumps(
-            {"source": self.source, "files": {"boxweave.zip": self.package_sha}}))
+            {"format": 1, "version": "0.48.0", "source": self.source, "files": assets}))
         self.private = self.root / "private.pem"
         self.public = self.root / "public.pem"
         subprocess.run(["openssl", "genpkey", "-algorithm", "RSA",
@@ -217,13 +225,14 @@ class ReleaseGateTests(unittest.TestCase):
                "verifier_actor_id": verifier_id}
         receipt = {"schema_version": 1, "decision": "APPROVED",
                    "source_sha": self.source, "candidate_sha256": self.package_sha,
-                   "finder": {"actor_id": "finder-1", "box_uuid": "1"*36,
+                   "release_manifest_sha256": hashlib.sha256(self.release.read_bytes()).hexdigest(),
+                   "finder": {"actor_id": "finder-1", "box_uuid": "11111111-1111-4111-8111-111111111111",
                               "created_at": "1793900000"},
-                   "verifier": {"actor_id": verifier_id, "box_uuid": "2"*36,
+                   "verifier": {"actor_id": verifier_id, "box_uuid": "22222222-2222-4222-8222-222222222222",
                                 "created_at": "1793900100",
                                 "clean_installed_candidate": True,
                                 "installed_candidate_sha256": self.package_sha},
-                   "scenarios": {sid: dict(row) for sid in release_gate.MANDATORY}}
+                   "scenarios": {sid: dict(row) for sid in release_gate.FULL_SCENARIOS}}
         if change:
             change(receipt)
         for sid, values in receipt["scenarios"].items():
@@ -235,6 +244,16 @@ class ReleaseGateTests(unittest.TestCase):
                     ("installed_report_sha256", "installed-report.json", verifier_id)):
                 data = {"schema_version": 1, "scenario_id": sid, "actor_id": actor,
                         "candidate_sha256": self.package_sha if actor == verifier_id else "original"}
+                if key == "original_attempt_sha256":
+                    data["process"] = {"execution": "completed", "exit_code": 2,
+                        "stdout_sha256": "a" * 64, "stderr_sha256": "b" * 64}
+                else:
+                    data.update(status="PASS", proof_kind="installed_blackbox")
+                if key == "oracle_sha256":
+                    data.update(independent_native=True, observed_expected_effect=True)
+                if key == "installed_report_sha256":
+                    data.update(full_graph_complete=True, unresolved=[],
+                        nodes={node: "PASS" for node in release_gate.REQUIRED_NODES[sid]})
                 contents = json.dumps(data, sort_keys=True).encode()
                 (folder / filename).write_bytes(contents)
                 values[key] = hashlib.sha256(contents).hexdigest()
@@ -249,6 +268,25 @@ class ReleaseGateTests(unittest.TestCase):
         receipt, signature = args or self.signed()
         return release_gate.accept(self.package, self.release, receipt, signature,
                                    self.public, self.source)
+
+    def test_release_gate_tracks_every_canonical_scenario(self):
+        import re
+        seed = ROOT / "docs/verification/REACCEPTANCE_SYSTEM_SCENARIOS.md"
+        canonical = set(re.findall(r"^\| `(SYS-(?:[A-Z]+-)+[0-9]{2})` P[01]", seed.read_text(), re.M))
+        discovered = {row["id"] for row in scenarios.seed_rows(seed)}
+        self.assertEqual(discovered, canonical, "Scenario parser silently dropped a canonical scenario")
+        self.assertTrue(release_gate.MANDATORY <= canonical)
+        self.assertEqual(release_gate.FULL_SCENARIOS, canonical)
+        self.assertEqual(set(release_gate.REQUIRED_NODES), canonical)
+        self.assertTrue(all(len(nodes) >= 3 for nodes in release_gate.REQUIRED_NODES.values()))
+
+    def test_seven_mvp_scenarios_cannot_authorize_full_release(self):
+        mvp = {"SYS-LIFE-01", "SYS-JOB-01", "SYS-UNKNOWN-01", "SYS-SELFTEST-01",
+               "SYS-UPGRADE-01", "SYS-RELEASE-01", "SYS-REPORT-01"}
+        a, b = self.signed(lambda d: d.update(scenarios={sid: row for sid, row in d["scenarios"].items()
+                                                       if sid in mvp}))
+        with self.assertRaisesRegex(AcceptanceFault, "FULL_SCENARIO_ACCOUNTING_REQUIRED"):
+            self.check(a, b)
 
     def test_signed_independent_full_scenario_receipt_accepts_exact_bytes(self):
         approved = self.check()
@@ -270,11 +308,11 @@ class ReleaseGateTests(unittest.TestCase):
             self.check(report, sig)
 
     def test_signed_same_actor_and_missing_scenario_rejected(self):
-        a, b = self.signed(lambda d: d["verifier"].update(box_uuid="1"*36))
+        a, b = self.signed(lambda d: d["verifier"].update(box_uuid="11111111-1111-4111-8111-111111111111"))
         with self.assertRaisesRegex(AcceptanceFault, "SAME_ACTOR"):
             self.check(a, b)
         a, b = self.signed(lambda d: d["scenarios"].pop("SYS-RELEASE-01"))
-        with self.assertRaisesRegex(AcceptanceFault, "REQUIRED_SCENARIO_NOT_VERIFIED"):
+        with self.assertRaisesRegex(AcceptanceFault, "FULL_SCENARIO_ACCOUNTING_REQUIRED"):
             self.check(a, b)
 
     def test_signed_missing_oracle_and_invalid_install_rejected(self):
@@ -284,6 +322,162 @@ class ReleaseGateTests(unittest.TestCase):
             self.check(a, b)
         a, b = self.signed(lambda d: d["verifier"].update(clean_installed_candidate=False))
         with self.assertRaisesRegex(AcceptanceFault, "CLEAN_INSTALL_UNPROVEN"):
+            self.check(a, b)
+
+    def resign_case(self, sid, filename, change):
+        report, signature = self.signed()
+        path = self.root / "cases" / sid / filename
+        data = json.loads(path.read_text())
+        change(data)
+        path.write_text(json.dumps(data, sort_keys=True))
+        field = {"original-attempt.json": "original_attempt_sha256",
+                 "oracle.json": "oracle_sha256",
+                 "installed-report.json": "installed_report_sha256"}[filename]
+        receipt = json.loads(report.read_text())
+        receipt["scenarios"][sid][field] = hashlib.sha256(path.read_bytes()).hexdigest()
+        report.write_text(json.dumps(receipt, sort_keys=True))
+        subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(self.private),
+                "-out", str(signature), str(report)], check=True, capture_output=True)
+        return report, signature
+
+    def test_signed_partial_failed_and_metadata_only_proofs_never_pass(self):
+        for change in (lambda d: d.update(status="PARTIAL"),
+                       lambda d: d.update(status="FAIL"),
+                       lambda d: d.update(proof_kind="fixture")):
+            with self.subTest(change=change):
+                a, b = self.resign_case("SYS-LIFE-01", "installed-report.json", change)
+                with self.assertRaisesRegex(AcceptanceFault, "NOT_INSTALLED_PASS"):
+                    self.check(a, b)
+        a, b = self.resign_case("SYS-LIFE-01", "installed-report.json",
+            lambda d: d.update(nodes={"create": "PASS", "stop": "PASS", "start": "PASS", "delete": "PASS"}))
+        with self.assertRaisesRegex(AcceptanceFault, "GRAPH_INCOMPLETE"):
+            self.check(a, b)
+        a, b = self.resign_case("SYS-LIFE-01", "oracle.json",
+            lambda d: d.update(observed_expected_effect=False))
+        with self.assertRaisesRegex(AcceptanceFault, "EFFECT_ORACLE_MISSING"):
+            self.check(a, b)
+        a, b = self.resign_case("SYS-JOB-01", "original-attempt.json", lambda d: d.pop("process"))
+        with self.assertRaisesRegex(AcceptanceFault, "PROCESS_EVIDENCE_MISSING"):
+            self.check(a, b)
+
+    def test_required_scenario_override_cannot_weaken_gate(self):
+        a, b = self.signed()
+        with self.assertRaisesRegex(AcceptanceFault, "CANNOT_BE_WEAKENED"):
+            release_gate.accept(self.package, self.release, a, b, self.public,
+                                self.source, required={"SYS-LIFE-01"})
+
+    def test_external_asset_mutation_or_manifest_rebinding_rejected(self):
+        a, b = self.signed()
+        (self.root / "online.py").write_bytes(b"changed executable")
+        with self.assertRaisesRegex(AcceptanceFault, "ASSET_DIGEST_MISMATCH"):
+            self.check(a, b)
+        manifest = json.loads(self.release.read_text())
+        manifest["files"]["online.py"] = hashlib.sha256(b"changed executable").hexdigest()
+        self.release.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(AcceptanceFault, "HELPER_CANDIDATE_MISMATCH"):
+            self.check(a, b)
+
+    def test_signed_manifest_binding_is_required(self):
+        a, b = self.signed(lambda d: d.update(release_manifest_sha256="f" * 64))
+        with self.assertRaisesRegex(AcceptanceFault, "VERIFIER_RELEASE_MANIFEST_MISMATCH"):
+            self.check(a, b)
+
+    def test_truthy_clean_install_string_refused(self):
+        a, b = self.signed(lambda d: d["verifier"].update(clean_installed_candidate="false"))
+        with self.assertRaisesRegex(AcceptanceFault, "CLEAN_INSTALL_UNPROVEN"):
+            self.check(a, b)
+
+    def test_signature_cannot_be_reused_for_other_workflow_run(self):
+        context = {"candidate_run_id": 101, "candidate_run_attempt": 1, "candidate_artifact_id": 202,
+                   "candidate_artifact_digest": "sha256:" + "a" * 64,
+                   "verifier_run_id": 303, "verifier_run_attempt": 1}
+        a, b = self.signed(lambda d: d.update(workflow=context))
+        self.assertIn("APPROVED", release_gate.accept(self.package, self.release,
+            a, b, self.public, self.source, expected_context=context)["decision"])
+        with self.assertRaisesRegex(AcceptanceFault, "WORKFLOW_CONTEXT_MISMATCH"):
+            release_gate.accept(self.package, self.release, a, b, self.public,
+                self.source, expected_context=dict(context, verifier_run_id=304))
+
+    def test_workflow_context_requires_all_attempts_and_exact_numeric_types(self):
+        context = {"candidate_run_id": 101, "candidate_run_attempt": 1,
+                   "candidate_artifact_id": 202,
+                   "candidate_artifact_digest": "sha256:" + "a" * 64,
+                   "verifier_run_id": 303, "verifier_run_attempt": 1}
+        a, b = self.signed(lambda d: d.update(workflow=context))
+        invalid = [dict(context, candidate_run_attempt=True),
+                   dict(context, candidate_run_id="101"),
+                   dict(context, candidate_artifact_id=0),
+                   dict(context, candidate_artifact_digest="a" * 64),
+                   {key: value for key, value in context.items() if key != "candidate_run_attempt"}]
+        for values in invalid:
+            with self.subTest(values=values), self.assertRaisesRegex(
+                    AcceptanceFault, "EXPECTED_WORKFLOW_CONTEXT_INVALID"):
+                release_gate.accept(self.package, self.release, a, b,
+                    self.public, self.source, expected_context=values)
+        for field in ("candidate_run_attempt", "verifier_run_attempt"):
+            changed = dict(context, **{field: 2})
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    AcceptanceFault, "WORKFLOW_CONTEXT_MISMATCH"):
+                release_gate.accept(self.package, self.release, a, b,
+                    self.public, self.source, expected_context=changed)
+        a, b = self.signed(lambda d: d.update(workflow=dict(context, candidate_run_attempt=True)))
+        with self.assertRaisesRegex(AcceptanceFault, "WORKFLOW_CONTEXT_MISMATCH"):
+            release_gate.accept(self.package, self.release, a, b,
+                self.public, self.source, expected_context=context)
+
+    def test_applicable_extra_failure_or_unknown_cannot_authorize_release(self):
+        for status in ("FAIL", "UNKNOWN", "PARTIAL", "BLOCKED"):
+            a, b = self.signed(lambda d: d["scenarios"]["SYS-BACKUP-01"].update(status=status))
+            with self.subTest(status=status), self.assertRaises(AcceptanceFault):
+                self.check(a, b)
+
+    def test_unsupported_feature_requires_exact_native_capability_evidence(self):
+        sid = "SYS-BACKUP-01"
+        folder = self.root / "cases" / sid
+        folder.mkdir(parents=True)
+        response_path = folder / "capability-response.json"
+        stdout, stderr = "", "Unsupported capability: whole-box encrypted backup"
+        response = {"execution": "completed", "exit_code": 2, "stdout": stdout, "stderr": stderr,
+                    "stdout_sha256": hashlib.sha256(stdout.encode()).hexdigest(),
+                    "stderr_sha256": hashlib.sha256(stderr.encode()).hexdigest()}
+        response_path.write_text(json.dumps(response))
+        proof = {"schema_version": 1, "scenario_id": sid, "actor_id": "verifier-2",
+                 "candidate_sha256": self.package_sha, "result": "UNSUPPORTED",
+                 "independent_native": True, "channel": "native_cli",
+                 "capability": "whole-box encrypted backup",
+                 "observed_response_sha256": hashlib.sha256(response_path.read_bytes()).hexdigest()}
+        path = folder / "capability.json"
+        path.write_text(json.dumps(proof))
+
+        def issue():
+            return self.signed(lambda d: d["scenarios"][sid].update(status="BLOCKED",
+                applicability="unsupported", reason="Installed native Provider lacks whole-box encrypted backup",
+                capability_evidence_sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+
+        a, b = issue()
+        result = self.check(a, b)
+        self.assertEqual(result["unsupported_scenarios"], [sid])
+        self.assertFalse(result["full_system_acceptance"])
+        response_path.unlink()
+        with self.assertRaisesRegex(AcceptanceFault, "NATIVE_RESPONSE_MISSING"):
+            self.check(a, b)
+        response_path.write_text('{"execution":"completed"}')
+        with self.assertRaisesRegex(AcceptanceFault, "NATIVE_RESPONSE_BYTES_MISMATCH"):
+            self.check(a, b)
+        response_path.write_text(json.dumps(dict(response, stderr="changed output")))
+        proof["observed_response_sha256"] = hashlib.sha256(response_path.read_bytes()).hexdigest()
+        path.write_text(json.dumps(proof))
+        a, b = issue()
+        with self.assertRaisesRegex(AcceptanceFault, "NATIVE_OUTPUT_BYTES_MISMATCH"):
+            self.check(a, b)
+        response_path.write_text(json.dumps(dict(response, exit_code=True)))
+        proof["observed_response_sha256"] = hashlib.sha256(response_path.read_bytes()).hexdigest()
+        path.write_text(json.dumps(proof))
+        a, b = issue()
+        with self.assertRaisesRegex(AcceptanceFault, "NATIVE_PROCESS_INCOMPLETE"):
+            self.check(a, b)
+        path.write_text('{"result":"UNSUPPORTED"}')
+        with self.assertRaisesRegex(AcceptanceFault, "CAPABILITY_BYTES_MISMATCH"):
             self.check(a, b)
 
     def test_wrong_source_and_release_manifest_refused(self):

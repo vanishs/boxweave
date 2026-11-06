@@ -281,180 +281,117 @@ jobs:
       - name: Verify independent installed candidate and signature
         env:
           TRUSTED_VERIFIER_PUBLIC_KEY: ${{ vars.REACCEPTANCE_VERIFIER_PUBLIC_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           [[ -n "$TRUSTED_VERIFIER_PUBLIC_KEY" ]] || { echo 'Protected verifier key not configured; refuse release' >&2; exit 1; }
           printf '%s\n' "$TRUSTED_VERIFIER_PUBLIC_KEY" > trusted-verifier.pub
+          python -m tools.reacceptance.workflow_gate \
+            --source "$GITHUB_SHA" \
+            --candidate-run-id "${{ inputs.candidate_run_id }}" \
+            --verifier-run-id "${{ inputs.verifier_run_id }}" \
+            --assets release --attestation verifier-evidence/release-gate.json \
+            --context-out trusted-context.json
           python -m tools.reacceptance.release_gate \
             --candidate release/boxweave.zip \
             --release-manifest release/release.json \
             --attestation verifier-evidence/release-gate.json \
             --signature verifier-evidence/release-gate.sig \
             --public-key trusted-verifier.pub \
-            --source "$GITHUB_SHA"
+            --source "$GITHUB_SHA" --expected-context trusted-context.json
 
   publish:
     needs: [verify, candidate_gate]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.candidate_run_id != '' && inputs.verifier_run_id != ''
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    environment: boxweave-reacceptance-release
     permissions:
       actions: read
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: application-candidate
           path: release
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish immutable source-bound installer assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: reacceptance-installed-verifier
+          path: verifier-evidence
+          run-id: ${{ inputs.verifier_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Revalidate exact downloaded publication bytes and independent signature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRUSTED_VERIFIER_PUBLIC_KEY: ${{ vars.REACCEPTANCE_VERIFIER_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          [[ -n "$TRUSTED_VERIFIER_PUBLIC_KEY" ]] || exit 1
+          printf '%s\n' "$TRUSTED_VERIFIER_PUBLIC_KEY" > trusted-verifier.pub
+          python -m tools.reacceptance.workflow_gate \
+            --source "$GITHUB_SHA" \
+            --candidate-run-id "${{ inputs.candidate_run_id }}" \
+            --verifier-run-id "${{ inputs.verifier_run_id }}" \
+            --assets release --attestation verifier-evidence/release-gate.json \
+            --context-out trusted-context.json
+          python -m tools.reacceptance.release_gate \
+            --candidate release/boxweave.zip --release-manifest release/release.json \
+            --attestation verifier-evidence/release-gate.json \
+            --signature verifier-evidence/release-gate.sig --public-key trusted-verifier.pub \
+            --source "$GITHUB_SHA" --expected-context trusted-context.json
+      - name: Publish immutable assets only after draft byte parity
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           version=$(python3 -c 'import json; print(json.load(open("release/release.json"))["version"])')
-          source=$(python3 -c 'import json; print(json.load(open("release/release.json"))["source"])')
-          test "$source" = "$GITHUB_SHA"
           tag="v$version"
-          upload_verified() {
-            local file="$1" name attempt
-            name=$(basename "$file")
-            for attempt in 1 2 3 4; do
-              if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-                return 0
-              fi
-              if gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY"; then
-                return 0
-              fi
-              sleep $((attempt * 5))
-            done
-            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"
-          }
-          create_verified_tag() {
-            # API ref creation requires contents:write, not a workflow-file git push.
-            # Never move an existing version tag, even after a partial release.
-            local actual
-            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' >/dev/null 2>&1; then
-              actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')
-              [[ "$actual" == "$GITHUB_SHA" ]] || {
-                echo "Immutable tag already targets $actual; expected $GITHUB_SHA" >&2; return 1;
-              }
-            else
-              gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
-            fi
-            actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')
-            [[ "$actual" == "$GITHUB_SHA" ]]
-          }
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # gh release create can leave an authenticated-only draft and no
-            # git tag when asset publication fails (HTTP 502). Recover only a
-            # draft with the same source lineage; never retarget published data.
-            if ! git show-ref --verify --quiet "refs/tags/v$version"; then
-              draft=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-              [[ "$draft" == "true" ]] || { echo 'Published release has no verified tag; refuse' >&2; exit 1; }
-              original=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
-              if [[ "$original" != "$GITHUB_SHA" ]]; then
-                git merge-base --is-ancestor "$original" "$GITHUB_SHA"
-                changes=$(git diff --name-only "$original" "$GITHUB_SHA")
-                [[ -n "$changes" ]] || exit 1
-                while IFS= read -r changed; do
-                  case "$changed" in .github/workflows/ci.yml) ;; *)
-                    echo "Draft retarget has runnable-source change: $changed" >&2
-                    exit 1
-                  ;; esac
-                done <<< "$changes"
-                existing_assets=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets|length')
-                [[ "$existing_assets" == "0" ]] || { echo 'Retained draft assets require manual inspection' >&2; exit 1; }
-                gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
-              fi
-              create_verified_tag
-            fi
-            existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --jq '.object.sha')
-            if [[ "$existing" != "$GITHUB_SHA" ]]; then
-              # A published version is immutable. Documentation-only and this
-              # CI-publishing fix need validation, but no replacement release.
-              # Any runnable-source or packaging change must bump VERSION.
-              git merge-base --is-ancestor "$existing" "$GITHUB_SHA"
-              files=$(git diff --name-only "$existing" "$GITHUB_SHA")
-              [[ -n "$files" ]] || { echo 'Changed source without release change'; exit 1; }
-              while IFS= read -r file; do
-                case "$file" in
-                  docs/*.md|README.md|AGENTS.md|clients/README.md|.github/workflows/ci.yml) ;;
-                  PUBLISHED_RELEASE)
-                    [[ "$(cat PUBLISHED_RELEASE)" == "$version" ]] || { echo 'Stable pin must match the already published source version' >&2; exit 1; } ;;
-                  install.sh)
-                    # Only a change to the embedded default release pin is permitted.
-                    # All executable installer logic must stay byte-identical to the published tag.
-                    OLD_RELEASE_REF="$existing" RELEASE_VERSION="$version" python3 - <<'PY_RELEASE_PIN'
-          import os, re, subprocess
-          from pathlib import Path
-          baseline = subprocess.check_output(['git', 'show', os.environ['OLD_RELEASE_REF'] + ':install.sh'], text=True)
-          pattern = r'python3 - "(0\.[0-9]+\.[0-9]+)" "\$\{streamed_options\[@\]\}" <<\x27PY_DEFAULT_RELEASE\x27'
-          match = re.search(pattern, baseline)
-          if match is None:
-              raise SystemExit('Published installer release pin not found')
-          expected = baseline[:match.start(1)] + os.environ['RELEASE_VERSION'] + baseline[match.end(1):]
-          if Path('install.sh').read_text() != expected:
-              raise SystemExit('Installer changed beyond the published stable version pin')
-          PY_RELEASE_PIN
-                    ;;
-                  *) echo "Version bump required for source change: $file" >&2; exit 1 ;;
-                esac
-              done <<< "$files"
-              echo "Documentation/CI-only update validated; preserving immutable release v$version."
-              exit 0
-            fi
-            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets' > release-state.json
-            for file in release/*; do
-              name=$(basename "$file")
-              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))) else 1)' "$name"; then
-                upload_verified "$file"
-              fi
-            done
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > tag-state.json 2>/dev/null; then
+            actual=$(python3 -c 'import json; print(json.load(open("tag-state.json"))["object"]["sha"])')
+            [[ "$actual" == "$GITHUB_SHA" ]] || { echo 'Immutable tag source mismatch' >&2; exit 1; }
           else
-            # GitHub can reject a release creation for a previously missing tag.
-            # Publish the immutable tag first, always bound to the verified CI SHA.
-            tag="v$version"
-            create_verified_tag
-            # Some release API failures happen after the server has accepted
-            # the request. Recheck the original tag before retrying, and keep
-            # uploads idempotent on an interrupted publish.
-            for attempt in 1 2 3 4; do
-              if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-                break
-              fi
-              if gh release create "$tag" --draft --verify-tag --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BoxWeave $version" --notes "Source-bound installer assets built after static, unit, frontend and fixture-browser validation. Live acceptance is recorded separately in repository documentation."; then
-                break
-              fi
-              if [[ "$attempt" == 4 ]]; then
-                echo 'Release creation incomplete; retain the tag and inspect original state' >&2
-                exit 1
-              fi
-              sleep $((attempt * 8))
-            done
-            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets' > release-state.json
-            for file in release/*; do
-              name=$(basename "$file")
-              if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))) else 1)' "$name"; then
-                upload_verified "$file"
-              fi
-            done
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" > /dev/null
           fi
-          # Draft releases return HTTP 404 from the releases/tags lookup.
-          # Confirm complete assets and verified tag identity before publishing.
-          expected=$(find release -maxdepth 1 -type f | wc -l | tr -d ' ')
-          actual=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets|length')
-          [[ "$expected" -gt 0 && "$actual" -eq "$expected" ]] || {
-            echo "Draft asset mismatch: expected $expected, observed $actual" >&2; exit 1;
-          }
-          if [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "true" ]]; then
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$tag" --draft --verify-tag --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "BoxWeave $version" \
+              --notes "Exact source-bound CI candidate with independent signed installed acceptance. Stable installation selection is unchanged."
           fi
-          [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "false" ]] || {
-            echo 'Release remains draft after publication request' >&2; exit 1;
-          }
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft > release-state.json
+          python3 - <<'PY_ASSET_NAMES'
+          import json
+          from tools.reacceptance.workflow_gate import ASSETS
+          state=json.load(open('release-state.json'))
+          assert {a['name'] for a in state['assets']} <= ASSETS, 'Unexpected existing release assets'
+          PY_ASSET_NAMES
+          if [[ "$(python3 -c 'import json; print(str(json.load(open("release-state.json"))["isDraft"]).lower())')" == "false" ]]; then
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir existing-public-readback
+            python3 - <<'PY_EXISTING_PARITY'
+          from tools.reacceptance.workflow_gate import asset_index
+          assert asset_index('existing-public-readback') == asset_index('release'), 'Immutable published assets differ'
+          PY_EXISTING_PARITY
+            exit 0
+          fi
+          for file in release/*; do
+            name=$(basename "$file")
+            if ! python3 -c 'import json,sys;sys.exit(0 if any(a["name"]==sys.argv[1] for a in json.load(open("release-state.json"))["assets"]) else 1)' "$name"; then
+              gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir draft-readback
+          python3 - <<'PY_DRAFT_PARITY'
+          from tools.reacceptance.workflow_gate import asset_index
+          assert asset_index('draft-readback') == asset_index('release'), 'Draft asset bytes differ; refuse publication'
+          PY_DRAFT_PARITY
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir public-readback
+          python3 - <<'PY_PUBLIC_PARITY'
+          from tools.reacceptance.workflow_gate import asset_index
+          assert asset_index('public-readback') == asset_index('release'), 'Published asset bytes differ'
+          PY_PUBLIC_PARITY
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" == "$GITHUB_SHA" ]]
+          [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "false" ]]

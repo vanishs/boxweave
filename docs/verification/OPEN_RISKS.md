@@ -1,3 +1,15 @@
+## 2026-11-05 PT — v0.49.1 release trust and deadline boundaries remain open
+
+[Release-gate audit](RACC_0491_RELEASE_GATE_2026-11-05.md) records source fixes
+for unchecked Verifier run origin, incomplete signed asset binding and modifying
+published assets before parity. New source regressions do not establish live
+protected signing or installed acceptance. No protected environments were found;
+owner will arrange provisioning. Full scenario drivers remain incomplete.
+[Issue #88 evidence](RACC_0491_CREATE_LATENCY_2026-11-05.md) independently observes
+continued provisioning after timeout, pins the separate upstream client deadline,
+and records the source-only HTTP relay deadline. Original acknowledgement and
+recovery remain UNKNOWN; no original target mutation or release acceptance.
+
 ## #88 exact read-only recheck, unchanged original UNKNOWN (2026-11-06)
 
 The developer-only tool read back the original Finder and independent

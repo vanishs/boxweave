@@ -1,3 +1,14 @@
+## 2026-11-05 PT — v0.49.1 source release-gate corrections; NOT RELEASED
+
+[Exact source scope, artifact audit and administrator requirements](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md).
+Independent source review confirmed missing Verifier provenance/whole-asset binding
+and unsafe mutation of published assets; source gates now reject those paths.
+The new separate install/inspection workflow remains deliberately PARTIAL and
+cannot sign or approve incomplete graphs. Administrator provisioning is being
+arranged; protected environment/signer, complete scenario drivers, new exact-main
+candidate, installed acceptance and live gate calibration remain BLOCKED.
+Original UNKNOWN targets and stable v0.43.1 selection remain unchanged.
+
 ## 2026-11-06 UTC — original UNKNOWN read-only independent recheck, still BLOCKED
 
 [Case-by-case evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md):

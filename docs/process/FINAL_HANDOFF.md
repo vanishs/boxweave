@@ -1,3 +1,13 @@
+## 2026-11-05 PT — v0.49.1 next executable checkpoint
+
+Read [release-gate corrections and precise administrator setup](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md)
+and [Issue #88 latency evidence](../verification/RACC_0491_CREATE_LATENCY_2026-11-05.md).
+New runnable source requires a new exact main candidate; do not reuse the v0.49.0
+artifact or tag it as changed source. The limited independent worker exits 2 and
+retains one original intent per Box; never delete its marker to replay UNKNOWN.
+Finish real scenario drivers and protected signing before publication. Owner
+will arrange independent runner/environment provisioning. Stable pin unchanged.
+
 ## 2026-11-06 UTC — v0.49.0 corrected timeout and fresh independent lifecycle PARTIAL
 
 [Latest independent real proof](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md)
