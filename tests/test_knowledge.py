@@ -36,8 +36,9 @@ class ReleaseWorkflowRegressionTests(unittest.TestCase):
     def test_main_source_ci_publishes_without_heavy_acceptance_gate(self):
         repo = Path(__file__).resolve().parents[1]
         source = (repo / ".github/workflows/ci.yml").read_text()
-        self.assertIn("\\n  publish:\\n".replace("\\\\n", "\\n"), source)
-        publish = source.split("\\n  publish:\\n".replace("\\\\n", "\\n"), 1)[1]
+        needle = "\n  publish:\n"
+        self.assertIn(needle, source)
+        publish = source.split(needle, 1)[1]
         self.assertIn("    needs: verify", publish)
         self.assertIn("github.event_name == 'push'", publish)
         self.assertIn("github.ref == 'refs/heads/main'", publish)
@@ -47,7 +48,7 @@ class ReleaseWorkflowRegressionTests(unittest.TestCase):
         for proof in ("SHA256SUMS", "gh release create", "gh release upload",
                       "PY_DRAFT_PARITY", "PY_PUBLIC_PARITY", "--draft=false"):
             self.assertIn(proof, publish)
-        self.assertNotIn("\\n  candidate_gate:\\n".replace("\\\\n", "\\n"), source)
+        self.assertNotIn("\n  candidate_gate:\n", source)
         self.assertFalse((repo / ".github/workflows/independent-verifier.yml").exists())
 
 if __name__=='__main__':unittest.main()
