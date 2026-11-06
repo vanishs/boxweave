@@ -1,3 +1,11 @@
+### PR CI inventory correction
+
+PR #89 initial run 42174508705 failed the code-first inventory drift guard because
+five newly added regression test files were not yet listed. This is a documentation
+inventory omission, not a successful CI result. The exact five paths are now listed;
+the guard is preserved and re-executed locally before the follow-up CI run. No
+runnable source, acceptance policy or stable pointer was changed by this correction.
+
 ### Integrated source result
 
 The final integrated Python suite after full-matrix and Web-plan accounting changes
