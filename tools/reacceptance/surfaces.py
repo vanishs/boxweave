@@ -36,16 +36,36 @@ def help_tree(argv):
         leaves[" ".join(path) if path else "<root>"] = row
         if result["execution"] != "completed" or result["exit_code"] != 0:
             continue
-        # argparse exposes the installed parser's command sets in {a,b,...}.
-        # Source-discovered early dispatch remains a separate inventory path.
-        for match in re.finditer(r"\{([a-zA-Z0-9_,-]+)\}", result["stdout"]):
+        # Extract ONLY the command alternatives in the *usage* header.
+        # Many CLIs repeat {root,choices} in the positional help section,
+        # or return root help for unknown subcommands; recursing into either
+        # turns a real installed inventory into an exponential false tree.
+        header = result["stdout"].split("\n\n", 1)[0]
+        usage = " ".join(header.split())
+        if not usage.startswith("usage: "):
+            row["reason"] = "NO_INSTALLED_USAGE_HEADER"
+            continue
+        if path:
+            command = usage.split(" ", 2)
+            claimed = command[2] if len(command) > 2 else ""
+            first = claimed.split(" ", 1)[0] if claimed else ""
+            if first != path[0] or not all(
+                    re.search(r"(?<![a-z0-9_-])" + re.escape(piece) +
+                              r"(?![a-z0-9_-])", claimed)
+                    for piece in path):
+                row["reason"] = "HELP_FELL_BACK_TO_DIFFERENT_COMMAND"
+                continue
+        for match in re.finditer(r"\{([a-zA-Z0-9_,-]+)\}", usage):
             for part in match.group(1).split(","):
                 if re.fullmatch(r"[a-z][a-z0-9_-]{0,48}", part):
                     child = path + (part,)
                     if child not in seen and len(child) <= MAX_DEPTH:
                         queue.append(child)
     if queue:
-        raise AcceptanceFault("CLI_SURFACE_DISCOVERY_BUDGET_EXCEEDED")
+        leaves["<discovery-overflow>"] = {
+            "status": "BLOCKED", "reason": "CLI_DISCOVERY_BUDGET_EXCEEDED",
+            "unvisited_count": len(queue),
+            "help_is_not_a_functional_positive": True}
     return leaves
 
 

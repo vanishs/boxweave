@@ -22,6 +22,23 @@ signed installed evidence. See
 Do not confuse signed fixture evidence or 832 green Python unit tests with
 independent system acceptance or permission to release.
 
+
+**Independent installed Verifier (still PARTIAL):** Use `python -m tools.reacceptance.installed_verifier` from a distinct approved Box to verify CI ZIP bytes against running host CLI, root Gateway provenance, app install SHA and authenticated doctor checks. It emits a named scenario matrix, never a release signature, and intentionally refuses to mark the limited four-step lifecycle and same-actor concurrent selftest as full independent acceptance. Genuine external signing plus all required scenario evidence and protected CI trust configuration are still needed.
+
+**v0.49.0 reacceptance MVP candidate (source-only, not published):**
+The new `tools.reacceptance.installed` captures actual installed read-only
+MCP/host-CLI positive and invalid calls, with exact per-surface blockers.
+The `tools.reacceptance.lifecycle` explicit opt-in, test-owned nested-Provider
+driver captures durable pre-dispatch intent and independent native Incus
+post-state for create/stop/start/delete. UNKNOWN never automatically retries
+or deletes the original incarnation. This is NOT complete 19-scenario
+execution, automatic Agent spawn, full MCP/CLI mutation coverage or independent
+release evidence. `.github/workflows/ci.yml` now accepts the original
+successful main-push candidate run ID and reuses the exact immutable artifact
+for gate and publish; this still REQUIRES a real trusted separate Verifier
+artifact/key/environment. Do not bypass a blocked gate or move the stable pin.
+See [v0.49.0 MVP scope](docs/verification/RACC_MVP_0490_SOURCE_AND_ISOLATED_2026-11-05.md).
+
 ## Full reacceptance execution contract (current)
 
 The owner-triggered `Run full BoxWeave reacceptance` invokes **black-box-first, multi-Agent find → fix → independent verify**, not merely `scripts/validate.py`. The Coordinator must follow [the canonical runbook](docs/process/FULL_PROJECT_REACCEPTANCE.md) and its [surface/issue ledger template](docs/verification/REACCEPTANCE_RUN_TEMPLATE.md). Discover **current runtime** SSH/HTTP MCP catalogs, installed host/app CLI commands, installed Web endpoints and actual Provider-facing pathways before selecting scenarios. Classify every exposed action, then **adversarially invoke every safe/authorized MCP tool and installed CLI leaf command** (not a representative sample) against exact test-owned targets: actual positive, malformed/boundary and relevant denial paths, with independent state/receipt and no-side-effect oracles. Record every unsafe/unavailable action separately as BLOCKED/SKIPPED/UNKNOWN with precise reason. Distinguish outer ChatGPT MCP catalog from the installed SSH/HTTP MCP catalogs and enumerate special CLI dispatch not shown by top-level help. Map every action to the [historical-plus-current functional acceptance baseline](docs/verification/REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md) and publish **full named functional results** and a per-action ledger, including not-tested functions, not only aggregate pass counts.

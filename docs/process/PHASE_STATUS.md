@@ -1,3 +1,43 @@
+## 2026-11-06 UTC — original UNKNOWN read-only independent recheck, still BLOCKED
+
+[Case-by-case evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md):
+a new test-only grant-bound, read-only unknown-inspect checked original
+MCP attempt digests and current native Incus identity on two outer Boxes.
+Both original unknown children still exist under precisely their original
+UUID/created-at. Neither result was upgraded to PASS or automatically
+retried/deleted. Five adversarial tester regressions PASS; all mandatory
+independent release scenarios and protected signer remain BLOCKED.
+
+## 2026-11-06 UTC — v0.49.0 corrected timeout and fresh independent lifecycle PARTIAL
+
+[Latest independent real proof](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md)
+supersedes the earlier Verifier no-lifecycle-success statement **only for a
+new child**. In a separate clean installed Box, real create/stop/start/delete
+MCP receipts and independent same-UUID native oracles passed, with creation
+119517 ms, zero residue of this child and doctor 10/10. The original two
+UNKNOWN children remain frozen. Source bug: advertised 240s creation had
+been silently capped at 120s; this was fixed with a real subprocess budget
+test, full 859 Python PASS, PR CI run 42168214749 success. The independent
+four-operation graph remains PARTIAL, other mandated scenarios and genuine
+signed protected CI release gate remain BLOCKED; v0.49.0 is NOT RELEASED.
+
+## 2026-11-05 PT / 2026-11-06 UTC — v0.49.0 MVP verified scopes; NOT PUBLISHED
+
+[New independent and original black-box evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md):
+RACC-SYS developer-only installed MCP/CLI probes, original Finder Box four-step
+create/stop/start/delete real native-oracle path, real installed selftest
+contention denial and subsequent success with zero residue. A separate clean
+Verifier Box installed the exact CI candidate with Host/Gateway/app source
+and package-byte parity, 10/10 authenticated doctor checks. However the
+independent Verifier's first create request timed out with an actually Running
+native Box (Issue #88); **UNKNOWN remains frozen, no retry**. Thus
+independent scenario completion is NOT PASSED. Root-owned manifest-pinned
+private host candidate installation before a public Release is implemented.
+Installed Verifier evidence driver remains PARTIAL and never signs approval.
+Trust-protected external signing, full mandatory scenario cases and a
+post-merge exact main candidate are still missing. PR #87 remains DRAFT,
+main v0.48.0 is an unpublished source and stable v0.43.1 is unchanged.
+
 ## 2026-11-05 PT / 2026-11-06 UTC — v0.48.0 RACC-SYS candidate, NOT RELEASED
 
 [Exact implementation and test checkpoint](../verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md):

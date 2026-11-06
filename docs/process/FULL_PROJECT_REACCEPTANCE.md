@@ -46,6 +46,37 @@ file alone cannot certify that GitHub protected environments or installed Verifi
 have been exercised. Do not bypass the gate by publishing manually, and never
 move the stable installer pin as part of reacceptance.
 
+
+## v0.49.0 source-only MVP increment (not official release acceptance)
+
+Use `python scripts/reacceptance.py installed-readonly --root . --out
+.runtime/racc-readonly --host-argv-json HOST.json --mcp-argv-json MCP.json` in
+an authorized prepared checkout and available installed runtime. This probes
+reviewed nonmutating tools and records real response bytes; positive results
+remain PARTIAL without an independent oracle. Every other discovered entry
+is marked BLOCKED, not silently excluded.
+
+For a separate **explicitly authorized test-owned nested-Provider host** only,
+`python scripts/reacceptance.py lifecycle --grant PRIVATE_GRANT.json --confirm
+I_AUTHORIZE_TEST_OWNED_LIFECYCLE --mcp-argv-json MCP.json --out PRIVATE_RUN`
+attempts the bounded SYS-LIFE-01 create/stop/start/delete path with native
+Incus oracle and durable no-replay intent. Do not run on the owner host or
+reuse a non-owned guest. This limited path does not test resize, guest exec,
+cross-entry concurrency or the other 18 scenario families.
+
+Run the additional independent verification on a separately authorized Box, using the *same source-bound CI candidate artifact* and `python scripts/reacceptance.py installed-verifier --candidate EXACT_CI_BOXWEAVE.zip --manifest EXACT_CI_RELEASE.json --source EXACT_SOURCE_COMMIT --out PRIVATE_REPORT [--lifecycle PRIVATE_ACTUAL_VERIFIER_LIFECYCLE --selftest PRIVATE_ACTUAL_VERIFIER_SELFTEST]`. This produces immutable read-only evidence, matched host/app version and checksum findings, and a PARTIAL per-scenario matrix. **It deliberately cannot mint a signed release approval.**
+
+Read-only UNKNOWN follow-up is available from the developer checkout via `python scripts/reacceptance.py unknown-inspect --original EXACT_ORIGINAL_EVIDENCE_DIR --grant NEW_PRIVATE_TEST_OWNED_IDENTITY_GRANT --confirm I_AUTHORIZE_TEST_OWNED_LIFECYCLE --out FRESH_INSPECTION_DIR`. It checks a new scoped test-owned grant, the original immutable dispatch intent, UNKNOWN result, raw attempt digest, original native incarnation and current native Incus readback. A found child remains UNKNOWN even when UUID matches; a missing child does not prove the original never existed; identity mismatch is a hard blocker. It never replays, unlocks or deletes. This is not full R-04 operator recovery.
+
+Publication dispatch additionally requires an explicit successful original
+`candidate_run_id` and independently trusted `verifier_run_id`. Both gate
+and publish download the **same** original candidate artifact; a newly
+recompiled ZIP may not substitute for the bytes the Verifier installed.
+The independent Verifier artifact producer, protected key configuration and
+full required installed scenarios remain outstanding. Without them the
+release gate is correctly BLOCKED. The v0.48.0 main merge did not publish a
+formal GitHub Release.
+
 ## Current controlling interpretation — system bug hunting, not tool testing
 
 **Owner clarification (2026-11-05): the primary deliverable is *BoxWeave system-level bug discovery → root-cause repair → separately executed reacceptance*.** Tool enumeration, CLI help, isolated invalid-input calls and proof-engine self-tests remain **necessary L1 coverage accounting** but must not monopolize the campaign or be presented as the goal. Plan and schedule **L2 complete user workflows** and **L3 cross-entry, concurrent, fault and recovery scenarios** early, using actual BoxWeave architecture, high-risk invariants, recent structural diffs and prior incidents. Do not abandon full MCP/CLI discovery; distinguish breadth evidence from system-level assurance.

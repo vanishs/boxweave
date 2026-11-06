@@ -26,6 +26,58 @@ Prepare a private application account and an operator-reviewed JSON configuratio
 
 The listener stays127.0.0.1. For a local HTTP test, use an exact loopback HTTP origin and `secure_cookie=false`. For a deployed HTTPS frontend, supply the exact HTTPS origin and `secure_cookie=true`, and configure a separately reviewed TLS reverse proxy to the loopback listener. The installer does not silently create a public Caddy listener, obtain certificates or install a trust root. Public exposure requires its own approval. Existing HTTPS configurations and provider services remain untouched.
 
+## Trusted private candidate installation before public release
+
+A test-owned prepared host may install a complete CI candidate **without first
+publishing a GitHub Release**. This is an explicit administrator action, not a
+normal customer auto-install, and does not grant any test runner host authority.
+The source/CI artifact must be independently selected, with its manifest
+SHA-256 recorded outside the artifact itself. Extract *only* the exact
+`release.json` and the release manifest's complete fixed set of assets to a
+root-owned, non-writable private directory (for example
+`/opt/boxweave-private-candidate`); no arbitrary additional files or links.
+
+Before executing ANY candidate-supplied Python, use the developer-only
+`tools.reacceptance.private_installer` module from a separately reviewed
+**root-owned, non-writable source checkout** (not from the candidate stage),
+on the exact test-owned disposable Box. Pin its source revision outside the
+artifact. Example, from that trusted checkout:
+
+```sh
+sudo /usr/bin/python3 -B -m tools.reacceptance.private_installer \
+  --stage /opt/boxweave-private-candidate \
+  --version 0.49.0 \
+  --source REVIEWED_EXACT_40_HEX_COMMIT \
+  --manifest-sha256 REVIEWED_EXACT_64_HEX_DIGEST \
+  --out /var/lib/boxweave-private-preflight
+```
+
+This is a *no-install preflight*. It verifies the fixed release file set,
+root ownership and all parent directories, hashes every file **including
+the candidate's online.py** and checks the ZIP's clean source commitment.
+A mismatched value refuses before candidate code executes.
+
+To apply the **same** exact candidate, supply `--apply`, a fresh
+`--out` directory, a separately reviewed root-owned private `--grant`
+JSON bound to the disposable Box identity (`scope` =
+`test_owned_private_candidate_install_only`, `approved` = `true`,
+`hostname`, `machine_id`, `outer_uuid`, `outer_created_at`,
+`expires_epoch`), and
+`--confirm I_AUTHORIZE_EXACT_PRIVATE_INSTALL_IN_TEST_BOX`.
+The runner retains a dispatch-intent record and never automatically
+replays a timed-out installation. Verify installed Host, Gateway and
+application independently afterward.
+
+The same strict manifest/file validation also remains inside the normal
+candidate host installer. This is the pre-execution defense, not a
+replacement for a protected independent release attestation.
+
+Normal streamed installs remain bound to immutable published releases.
+The private install still requires all normal host/Provider/app grants and
+must never be run on the operator host for an acceptance experiment.
+Do not equate a successful installation with the separate Finder/Verifier
+scenario evidence or the GitHub release signature gate.
+
 ## Install and first administrator
 
 ```sh

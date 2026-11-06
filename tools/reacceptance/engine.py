@@ -105,8 +105,15 @@ def sanitize(data):
     return data
 
 
-def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT):
-    """No shell, bounded output. Timeout returns UNKNOWN, never a retry."""
+def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT,
+            max_timeout=120):
+    """No shell, bounded output. Timeout returns UNKNOWN, never a retry.
+
+    Ordinary probes retain the 120-second safety ceiling. The reviewed
+    installed MCP lifecycle lane explicitly opts into max_timeout=300,
+    allowing a real 240-second cold-create budget. Never report a longer
+    effective timeout than was actually enforced.
+    """
     if not isinstance(argv, list) or not argv or any(
             not isinstance(x, str) or not x or len(x) > 4096 for x in argv):
         raise AcceptanceFault("INVALID_EXEC_VECTOR")
@@ -114,7 +121,8 @@ def capture(argv, *, timeout=8, cwd=None, input_text=None, limit=LIMIT):
     try:
         p = subprocess.run(argv, cwd=cwd, input=input_text, text=True,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           timeout=min(max(timeout, 1), 120), check=False)
+                           timeout=min(max(timeout, 1), min(max(max_timeout, 1), 300)),
+                           check=False)
         state, rc = "completed", p.returncode
         output, errors = p.stdout, p.stderr
     except subprocess.TimeoutExpired as exc:
@@ -354,7 +362,7 @@ def mcp_session(argv, calls, timeout=12):
         *calls,
     ]
     record = capture(argv, input_text="\n".join(json.dumps(x) for x in requests) + "\n",
-                     timeout=timeout, limit=2097152)
+                     timeout=timeout, max_timeout=300, limit=2097152)
     messages = []
     for line in record["stdout"].splitlines():
         try:
@@ -844,6 +852,27 @@ def bootstrap_readonly(root, out, *, host_command=None, mcp_command=None,
 
 
 
+def trusted_installed_public_mcp(path):
+    # Verify the actual installed Host/Gateway's public (root-owned) launcher.
+    # This file is readable by the app user; it must NEVER be executed as root,
+    # because managed_public_key checks its owner against the effective UID.
+    p = Path(path)
+    if str(p) != "/usr/local/lib/boxweave/default/mcp_gate.py":
+        return False
+    for i, entry in enumerate((p, *p.parents)):
+        try:
+            st = entry.lstat()
+        except OSError:
+            return False
+        import stat as statmod
+        if (st.st_uid != 0 or st.st_mode & 0o022 or
+                (not statmod.S_ISREG(st.st_mode) if i == 0
+                 else not statmod.S_ISDIR(st.st_mode))):
+            return False
+    return True
+
+
+
 def argv_file(path, mode):
     data = load(path)
     if not isinstance(data, list) or not data or not all(
@@ -866,8 +895,7 @@ def argv_file(path, mode):
         if python(data[0]) and data[1:] == ["-m", "bwmini.mcp_gate"]:
             return data
         if (data[:4] == ["sudo", "-n", "-u", "boxweave"] and len(data) == 6
-                and python(data[4]) and Path(data[5]).is_absolute()
-                and Path(data[5]).name == "mcp_gate.py"):
+                and python(data[4]) and trusted_installed_public_mcp(data[5])):
             return data
     raise AcceptanceFault("EXECUTABLE_NOT_ALLOWLISTED_FOR_" + mode.upper())
 

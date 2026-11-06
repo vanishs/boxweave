@@ -1,3 +1,40 @@
+## #88 exact read-only recheck, unchanged original UNKNOWN (2026-11-06)
+
+The developer-only tool read back the original Finder and independent
+Verifier unknown cases and independently observed their original Incus
+UUIDs still Running; neither was replayed or cleaned. See
+[RACC-0490 evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
+Known test harness 120s cap is fixed; the Provider/Gateway latency and
+eventual bounded receipt behavior still need root-cause investigation.
+Automatic release and unknown recovery remain blocked.
+
+## 2026-11-06 follow-up to #88: real independent 4-step partial pass
+
+[Actual separate Verifier evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
+A freshly named child completed four acknowledged MCP lifecycle calls,
+native UUID-stable oracles and exact deletion in a clean independent Box.
+A confirmed **test-harness** 120s clamp was fixed to honor a reviewed
+240s cold-create request. The prior 75s/120s post-dispatch UNKNOWN
+originals remain frozen, and Provider/Gateway transport boundary remains
+an open investigation (#88). Real full 19 graph, negative/denial coverage,
+agent orchestration and protected external signing remain BLOCKED.
+
+## P0 release blocker: v0.49.0 private live UNKNOWN side effect (#88)
+
+[Exact independent evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md)
+and [Issue #88](https://github.com/vanishs/boxweave/issues/88).
+Two isolated installed v0.49.0 host-side MCP create calls timed out at
+75s/240s while native Incus independently showed the exact originally
+requested child Running; no attempt was replayed, no automatic cleanup.
+The Finder did later complete the full four-step limited lifecycle on a
+different uniquely named child, but the independent Verifier's lifecycle
+remained UNKNOWN. Root cause (Provider provisioning/SSH collector vs Gateway
+receipt/stdio lifecycle) is **UNCONFIRMED**. Two test-owned identity-verified
+original UNKNOWN children are preserved in isolated nested providers pending
+authorized operator reconciliation. Mandatory independent full acceptance
+and signature gate are **BLOCKED**, despite 10/10 clean-host doctor and CI
+tests. Do not publish a public v0.49.0 Release or update stable pointer.
+
 ## RACC-SYS-0480 candidate-only engineering risk — 2026-11-05 PT
 
 [Current exact evidence](RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
