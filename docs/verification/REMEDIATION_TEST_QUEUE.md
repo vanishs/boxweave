@@ -1,3 +1,7 @@
+## 2026-11-05 PT — Agent-only acceptance and direct release pivot
+
+PR #90 (added GitHub evidence workflow/account-based submission) was closed unmerged following the owner's clarification. The new candidate deletes dedicated Verifier/release workflow jobs, leaves ordinary CI as source/fixture checks, adds a developer-only local asset+original-case consistency checker and six negative/false-PASS fixture tests, and records an Agent-run independent Box and direct publication SOP. The checker emits **no** release authorization and cannot certify remote Agent honesty. Live full-system installed tests, #88 original UNKNOWN reconciliation, CI, merge and actual public Release remain separate gates; no prior PASS is inferred. See [current no-workflow process](../process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md). Earlier workflow proposal checkpoints below remain archival.
+
 ### PR CI inventory correction
 
 PR #89 initial run 42174508705 failed the code-first inventory drift guard because

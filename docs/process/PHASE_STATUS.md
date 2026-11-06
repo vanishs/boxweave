@@ -1,3 +1,7 @@
+## 2026-11-05 PT — owner revised release design to no workflow / no special submitter
+
+The owner rejected both the earlier signed protected release workflow and PR #90's evidence-recording workflow; PR #90 was closed **unmerged**. The replacement development branch uses Agent-local Finder/Fixer/distinct Verifier execution and a lightweight read-only consistency checker, removes the dedicated Verifier Actions workflow and CI release jobs, and documents direct Agent publication using existing repository write rights. No additional GitHub account is needed to submit acceptance evidence; any public GitHub Release still inherently requires write authorization. CI/source changes are not installed acceptance or publication. Original UNKNOWN children and stable installation pointer remain unchanged. Details: [current local runbook](AGENT_MANAGED_ACCEPTANCE_RELEASE.md). Historical signed-gate notes below are superseded, not retroactively reclassified.
+
 ## 2026-11-05 PT — v0.49.1 source release-gate corrections; NOT RELEASED
 
 [Exact source scope, artifact audit and administrator requirements](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md).

@@ -1,3 +1,7 @@
+## 2026-11-05 PT — owner revised: no GitHub release/evidence workflow
+
+PR #90 was closed unmerged after the owner declined the added GitHub evidence-recording workflow and account requirement. The new source proposal keeps ordinary CI validation only, relies on actual separate Agent/Box executions and privately retained original/native observations, and uses [local acceptance + direct Agent release](AGENT_MANAGED_ACCEPTANCE_RELEASE.md). The small offline evidence checker is consistency-only; it does not run or certify remote tests, perform GitHub authentication, or publish. Once actual complete acceptance is obtained, an Agent with existing repository write access can release the exact bytes without any specialized workflow; do not invent missing authorization. No production install, original UNKNOWN replay, stable pin change or release was performed in this replan. Older signed workflow notes below are historical.
+
 ## 2026-11-05 PT — v0.49.1 next executable checkpoint
 
 Read [release-gate corrections and precise administrator setup](../verification/RACC_0491_RELEASE_GATE_2026-11-05.md)
