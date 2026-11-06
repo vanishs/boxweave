@@ -4,6 +4,16 @@
 
 **Reference set:** [pinned Containarium upstream reading guide](../verification/UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md). Treat native upstream `v0.128.0` and future installed versions as different contracts; reading upstream `main` never verifies a running daemon. Current BoxWeave architecture is **MCP-first + REST-assisted**, not Containarium's CLI-first design.
 
+## 2026-11-05 architectural update — system-first and off-host tooling
+
+The owner has clarified that **automated bug discovery and causal repair at the BoxWeave system level** outrank isolated MCP/CLI invocation totals. **Keep L1 all-eligible-tool accountability** but move L2 complete stateful workflows and L3 cross-entry concurrency/failure/recovery scenarios to the *front* of the campaign. Use [scenario matrix](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md). The new [RACC-SYS-01..09 implementation handoff](REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md) is **authoritative for remaining coding/packaging/release-gate tasks**; the remainder of this existing document remains valuable interface/role reference, not evidence that those new tasks are implemented.
+
+**Current shipping fact:** v0.47.0 includes the `bwmini.reacceptance`, `reacceptance_live`, `reacceptance_proof` modules plus their data in the customer installed app ZIP. They are not a permanent Agent or root MCP server. **Target:** extract full acceptance engine to repo/CI or an explicitly temporary test-Box tool bundle and **exclude it from ordinary customer assets**, without changing production MCP/Web/CLI/diagnostic behavior. Do not claim this migration is already done.
+
+**Upstream contract resolver:** resolve actual running Containarium daemon/CLI/MCP process identity first; a BoxWeave `BASELINE` or minimum provider version is insufficient. Read only required exact GitHub release-tag/commit source/docs into an isolated test workspace/cache on demand. Historical v0.128.0 links remain illustrative; no dependency on the network, GitHub repo content, root Proof Pack or upstream scripts is allowed in ordinary product startup. Never silently substitute `main`.
+
+**Automation responsibilities:** external scenario planner and test dispatcher; real role-aware Finder→Fixer→independent Verifier handoff; private candidate-installed acceptance that blocks publication if failed or unexecuted. Existing v0.47.0 implementation is **only** an inventory/evidence/specialist probe foundation. Reusable test-case schemas must deny unapproved writes, privilege escalation, leaked credentials and automatic retry of already-dispatched UNKNOWN.
+
 ## 1. Problem, non-goals and required outcome
 
 The v0.46.1 reacceptance enumerated 68 installed local-stdio MCP names, 26 host/helper CLI leaves and 36 app modes, but numerous individual results remained PARTIAL/BLOCKED; many calls came through the **outer** Gateway and did not prove the installed **inner** transport. The run found hidden callable host commands (#80), real Compose 404 (#79), inconsistent missing-target errors (#81), and an ambiguous selftest observation (#83). Subsequent v0.46.2 work found a reproducible concurrency admission race that repeated serial selftests could not reveal. The existing 130-row ledger was valuable for accountability, but it was **not 130 PASS**.

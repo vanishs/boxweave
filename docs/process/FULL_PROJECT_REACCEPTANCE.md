@@ -2,6 +2,14 @@
 
 **Canonical trigger:** `Run full BoxWeave reacceptance.` (the same instruction without the trailing period is equivalent). **Status:** active owner-invoked Agent runbook, **not** evidence of any executed test. Keep the shortcut in [AGENTS.md](../../AGENTS.md); this revision does not itself invoke testing, change a host, bump a version, or publish a release.
 
+## Current controlling interpretation — system bug hunting, not tool testing
+
+**Owner clarification (2026-11-05): the primary deliverable is *BoxWeave system-level bug discovery → root-cause repair → separately executed reacceptance*.** Tool enumeration, CLI help, isolated invalid-input calls and proof-engine self-tests remain **necessary L1 coverage accounting** but must not monopolize the campaign or be presented as the goal. Plan and schedule **L2 complete user workflows** and **L3 cross-entry, concurrent, fault and recovery scenarios** early, using actual BoxWeave architecture, high-risk invariants, recent structural diffs and prior incidents. Do not abandon full MCP/CLI discovery; distinguish breadth evidence from system-level assurance.
+
+**The preferred order is:** identify invariants and dangerous state transitions → form causal hypotheses and [scenario graphs](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md) → pin version/permission and allocate isolated actors → start high-value L2/L3 probes in parallel with L1 breadth → preserve original failure → Fixer makes narrow correction → a genuinely independent Verifier repeats the original installed scenario → require exact private candidate before release → report workflow and defects **before** the per-action appendix.
+
+Read the [dedicated low-coupling automation/developer handoff](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md). The ordinary host currently **does** ship the v0.47.0 reacceptance Python modules inside `bwmini`; moving them into **test-side-only tools** is a **planned code migration**, not accomplished by this document. Do not make normal customer installation depend on the new automation, on GitHub access, or on an upstream source checkout. The upstream reference resolver must observe the **running** Containarium version and pull matching **pinned tag/commit source material on demand** into the test workspace; `bwmini/upstream_version.py`'s baseline is not the observed runtime.
+
 ## Mission and acceptance philosophy
 
 Find real regressions in the **currently installed/exposed BoxWeave product**; reproduce them, repair them, and independently reverify the fixed behavior. Preserve uncertain findings for the next Agent. The objective is **defect discovery and independently observed behavior**, not a large count of familiar green tests. **All current MCP tools and installed CLI leaf commands must receive individual adversarial black-box test attempts or exact per-command safety/dependency blockers, followed by a detailed owner-reviewable feature list.** Catalog discovery or classification alone is never acceptance.
@@ -86,6 +94,19 @@ Diff the exact upstream `proto`/MCP/server/CLI/Incus/SSH and release paths again
 
 For source revisions at or after v0.47.0, have the Coordinator use the **already packaged, non-root-by-default execution engine** from an authorized test-owned Box: `python -m bwmini.reacceptance bootstrap-readonly --root <exact-source-or-installed-tree> --out <new-private-run-path>`, optionally with **reviewed** installed host/stdio MCP argv JSON vectors and a pinned upstream tree. This produces real discovery and bounded safe reads, leaves the run open for Finder's other cases and never certifies a functional PASS from a catalogue. Agents must then import executed cases with `record`, independently inspect write effects, `seal` and `verify` after all eligible cases, and use `report` for the full 49-feature/action ledger. If an installed older version lacks these modules, follow the manual documented process; do not claim the v0.47.0 runner exists there.
 
+### Phase 0B — Invariant-driven test selection and independent scenario allocation (mandatory, before breadth)
+
+The Coordinator must build an **initial system-level hypothesis board** *before* mechanically testing every tool:
+
+1. Read the current BoxWeave call chains, mutable-state/journal boundaries, MCP↔REST↔CLI/Web adapters, current architecture/policy gates, source delta, historically unresolved bug reports and live Provider capabilities. Map **at least one expected invariant** to every proposed workflow and **at least one independent oracle** to each mutation.
+2. Select high-risk scenarios from [SYS-LIFE / SYS-JOB / SYS-COORD / SYS-UNKNOWN / SYS-SSH / SYS-WEB / SYS-UPGRADE / SYS-COMPOSE and other seeded scenario families](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md). Write test-owned target identities, actor boundaries, deterministic schedule/barrier, failure window, expected allowed/forbidden effect, cleanup and scope of permission. Generate new hypotheses from **current code changes**, not only known issues.
+3. Allocate independent test Boxes/actors to L2 and L3 **immediately**, alongside the general L1 catalog/breadth lane. When a high-confidence counterexample appears, preserve it and begin Fixer investigation without waiting to finish the entire catalog. The Coordinator continues the independent remaining test inventory or explicitly hands it to another Agent.
+4. Mark the plan as `PLANNED`, not PASS. Do not claim a separate Finder/Verifier Agent exists merely because a role was named in a Markdown file. No separate actor available → `SAME_AGENT` downgrade or exact BLOCKED independent verification.
+
+**Risk allocation guidance:** prioritize substantive work at roughly **L1 20% / L2 40% / L3 40%** (adjustable for current risk). Preserve **100% inventory accountability** and actual authorized L1 attempts, but measure success primarily by new reproducible system counterexamples and completed independently verified workflows—not tool-call count.
+
+
+
 ### Phase 1 — Dynamically inventory **what users can actually call** (Finder)
 
 Build a current **surface ledger** from the deployed system **and** current source:
@@ -104,6 +125,8 @@ Create one comparison table keyed by `transport + effective identity/policy + in
 The inventory gate must flag: (1) source-only, (2) installed-only, (3) installed-but-undocumented, (4) advertised-but-not-callable, (5) catalog differences by transport/policy, (6) Provider capability/REST-route mismatch, and (7) surface unverified due to authority or credentials. Demand an owner-facing reason and a linked scenario for each difference. Do not hardcode the historical 68/26/36 counts or auto-convert a tool catalog to PASS.
 
 
+**L1 lane design:** Execute a *bounded*, parallelizable inventory and per-entry black-box queue. This is the **breadth safety net**, not the entire reacceptance campaign. Every current eligible MCP/CLI leaf must still receive real positive, malformed/invalid and meaningful denial dimensions when safe/applicable, or have an exact owned-target/authorization/unsupported blocker. A §tools/list§/§--help§ outcome proves discoverability only. Do not postpone L2/L3 scenario execution until the L1 queue drains.
+
 ### Phase 2 — Independent installed black-box breadth scan (Finder)
 
 Work from **outside** the function under test using the **installed shipped interface**, a clean test-owned identity and a reproducible immutable target. **Execute a separate adversarial black-box case for every current, safely callable MCP tool and installed CLI leaf**, regardless of whether it is low-risk, read-only, forwarded or previously tested by fixtures. For each, seek (a) a real successful call with independently checked postcondition, (b) an unauthorized/target-mismatch or meaningful denial with **no forbidden side effect**, and (c) malformed/missing/boundary input with a stable typed error and CLI exit contract. Mark a dimension NOT_APPLICABLE only when specifically justified. A representative call to one forwarded tool never covers sibling tools. An unexecuted action is BLOCKED/SKIPPED/PARTIAL with concrete reason, not PASS.
@@ -113,6 +136,8 @@ Cover the **real installed** SSH MCP and HTTP MCP clients when available; instal
 Prefer an independent postcondition oracle: exact Provider immutable UUID/createdAt/state, guest-observed result/cgroup, operation/task/claim receipts, separately read SQLite state (bounded/no secrets), and independently verified cleanup. A returned `success`, HTTP 2xx or `doctor 10/10` alone does not prove the requested effect. When the native Provider behaves incorrectly, label **UPSTREAM** separately from BoxWeave error handling.
 
 **Gate:** deliver the one-row-per-MCP/CLI-leaf black-box ledger, **with concrete per-action** positive/denial/invalid outcomes, native/forwarded/transport provenance, independent oracle, test case and limits; **also deliver the owner-facing detailed function list**. Confirm every safe/authorized/runnable tool and CLI leaf was actually invoked, every missing case or catalog is explicitly BLOCKED/PARTIAL, and no history/fixture green was promoted. Produce ranked failures and unresolved questions even when no defects are confirmed; do not replace this phase with `scripts/validate.py`.
+
+**L2/L3 is the primary hunt:** Follow the [system scenario matrix](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md), actual branch/Provider capabilities and change-impact graph. Test an entire **operation sequence** with independently checked intermediate states, not five unrelated green calls; then inject a **specific failure boundary or second actor**. The original failure and all Provider effects/receipts must remain traceable through Fixer and separately running Verifier.
 
 ### Phase 3 — Stateful and cross-interface adversarial scenarios (Finder + specialist)
 
@@ -205,11 +230,19 @@ If tooling cannot deliver the exact candidate privately/securely to the test Box
 Upstream [`RELEASE-PROCESS.md`](https://github.com/FootprintAI/Containarium/blob/v0.128.0/docs/RELEASE-PROCESS.md) documents build-only workflow dispatch before publishing. **Do not invoke its repository's workflows for a BoxWeave release** or assume BoxWeave already has the same publication-free capability. Use the approved BoxWeave release pipeline and candidate-first gate above. The [execution development plan](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md) defines the future publish-free adapter and acceptance conditions; until built, mark missing private candidate gate explicitly and avoid inventing a PASS. Upstream `distros-py-release.yml` workflow-dispatch is a **publishing path**, not a rehearsal.
 
 
+**Reporting order:** (1) system-invariant and **full workflow** matrix, with original counterexamples, risk, fix commit and independent verifier; (2) unresolved SUSPECT / UNKNOWN / upstream ownership; (3) candidate release gate and whether tests ran on the exact installed candidate; (4) full named feature coverage; **then** (5) the exhaustive MCP/CLI leaf/action appendix. An action returned 200/PASS is **not** a complete workflow PASS; a 235-row inventory is not 235 tests. State how many genuinely novel system-level bug hypotheses were executed and what remains untested.
+
 ### Phase 7 — Report and stop (Coordinator)
 
 Provide exact ref/commit, source/installed/published status, number of dynamically inventoried endpoints **by interface and reachability**, **per-entry** positive/denial/invalid black-box paths for all safe MCP tools and CLI leaves, cross-interface/fault scenarios, discovered confirmed bugs (fixed/open), SUSPECT/UPSTREAM/HARNESS findings, independently reverified fixes, untouched deferred gates, original retained UNKNOWN identities, and cleaned/retained test-owned resources. The actual **full named functional acceptance table** must be present, covering each current user capability (including the historical F01–F39 seed), its actual MCP and CLI commands, what was tested and what was not, observed results, and linked raw case IDs. A machine manifest without a human-readable feature table is insufficient. Use **PASS, FAIL, PARTIAL, BLOCKED, SKIPPED, UNKNOWN** for scenario outcome; evidence **S** source, **D** historical, **T** fixture/test, **I/L** isolated installed/live, **H** operator host, **X** independent external client, and **U** unavailable. Always scope each status to exact version and interface.
 
 If no important bugs were found, do **not** announce a blanket all-green outcome: provide **the full detailed named feature list and per-action evidence ledger**, actual behavioral coverage and per-feature missing cases, missing independent oracles, known-bad harness calibration result, and a prioritized next run. Counts alone or a grouped green summary fail the reporting gate. Update the authoritative matrix/risk/queue/status/handoff without rewriting older reports as present-tense evidence. Then stop and await instructions; do not automatically upgrade the owner host or begin another release cycle.
+
+### New system-level and low-coupling automation handoff (supersedes an interface-count-only roadmap)
+
+The [implementation work packages `RACC-SYS-01..09`](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md) now own the unfinished engineering: remove test-only runner/data from normal shipping **after characterization**, on-demand exact installed-version upstream source resolution, invariant/scenario planner, all eligible MCP+CLI black-box dispatcher, deterministic stateful/failed-operation executor, real multi-Agent Finder/Fixer/Verifier coordinator and **enforced pre-publication installed-candidate release gate**, with scenario-first report/evidence persistence. Earlier `RACC-AUTO-01..07` are historical partial components; **none** of these full new capabilities is automatically implemented by editing instructions. Do not ship generic root host execution or update the stable installer selector.
+
+
 
 ## Automation implementation backlog — **not yet implemented by this document**
 

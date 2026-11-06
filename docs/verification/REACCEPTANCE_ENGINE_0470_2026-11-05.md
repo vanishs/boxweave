@@ -4,6 +4,16 @@
 
 **Authorities:** [full runbook](../process/FULL_PROJECT_REACCEPTANCE.md), [architecture and staged milestones](../design/REACCEPTANCE_EXECUTION_ORCHESTRATION_PLAN.md), [upstream v0.128.0 reference](UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md), [evidence template](REACCEPTANCE_RUN_TEMPLATE.md), [function baseline](REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md).
 
+## Current deployment reality and future decoupling — historical v0.47.0 versus proposed runner
+
+**Fact about the immutable v0.47.0 release:** `bwmini/distribution.py` packs the entire `bwmini/*.py` app tree, so `bwmini/reacceptance.py`, `bwmini/reacceptance_live.py`, `bwmini/reacceptance_proof.py` and the `bwmini/reacceptance_data` feature registry are **inside the customer application ZIP and installed app directory**. They **do not** add a resident background Agent, general host exec permission or a public MCP endpoint. This document remains authoritative for what **v0.47.0 actually shipped**.
+
+**Future decision, NOT YET IMPLEMENTED:** the owner's reacceptance should grow as a *low-coupling, external* Agent/CI/short-lived-test-Box toolset. [Developer tasks `RACC-SYS-01..09`](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md) include extracting the runner and fault/proof adapters from normal product packaging, keeping production diagnostics and installed MCP/Web/CLI behavior unchanged. [System-level scenario matrix](REACCEPTANCE_SYSTEM_SCENARIOS.md) replaces isolated tool-call counts as the primary test selection/reporting emphasis. Do not reinterpret a docs-only update as removing already released modules.
+
+**Upstream reference plan:** on demand, in the test workspace, read only needed documents/contracts from the exact **observed running** Containarium release tag and its immutable commit. `bwmini/upstream_version.py`'s 0.128.0 baseline is not necessarily the running version; no GitHub runtime dependency or upstream source bundle is needed by normal BoxWeave users. Upstream Proof Pack stays an explicitly authorized optional nested-host operation, not a default production feature.
+
+**Independent execution/release gaps:** the existing v0.47.0 engine proves its own limited discovery, receipts and specialized scenarios. It has **not** implemented universal black-box mutation triads, a real automatic distinct-agent Finder/Fixer/Verifier scheduler or a hardened enforceable pre-publication candidate gate for every future release. The development handoff owns those missing capabilities; the historical release evidence below stays unchanged.
+
 ## 1. Delivered source components and explicit boundaries
 
 | RACC item | Actual executable source | Supported scope | Boundaries / evidence |

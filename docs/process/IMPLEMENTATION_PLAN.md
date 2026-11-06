@@ -4,6 +4,25 @@ Current phase6/TASK-0140.9.1: user SRC-084 and Web decision SRC-086; comparison,
 
 Phase 3 originally defined the tasks below. Phase 4 was authorized with its concrete scope (SRC-030); current progress is in the table at the end, not an assertion that all original completion conditions passed. After TASK-005 the developer must accept the minimum system before phase 5. Included release features are not dropped because the first slice is small.
 
+## Current priority: RACC-SYS-01..09 — system bug-hunting automation and lightweight packaging
+
+**Owner decision (2026-11-05):** Reacceptance must be an Agent-operated, **system-level BoxWeave bug-finding → fixing → independently verified acceptance campaign**. The original `RACC-AUTO-01..07` are legacy partial v0.47.0 milestones and are **not** sufficient completion of full automation. [Authoritative implementation handoff](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md) defines the new `RACC-SYS-01..09` work packages, their dependencies, failure gates and exact acceptance requirements. [Scenario/architecture invariant seed](../verification/REACCEPTANCE_SYSTEM_SCENARIOS.md) provides test graphs. The canonical single trigger stays `Run full BoxWeave reacceptance`.
+
+| Phase | Priority | Planned code delivery — **not shipped merely by this documentation** |
+| --- | --- | --- |
+| M0 | P0 | Capture v0.47.0 production-package/module behavior; discover actual installed upstream versions and current real MCP/CLI catalogs; document old CLI report compatibility |
+| M1 | P0 | `RACC-SYS-01` test-only runner extraction from normal customer ZIP; `RACC-SYS-02` on-demand upstream release-tag/commit source resolver and integrity cache |
+| M2 | P0 | `RACC-SYS-03` scenario/invariant risk planner; `RACC-SYS-04` dynamic all-eligible-MCP/CLI black-box executor (positive, invalid, meaningful denied/no-effect with exact blockers) |
+| M3 | P0 | `RACC-SYS-05` deterministic multi-step, multi-actor and fault/recovery scenario runner; `RACC-SYS-06` **real** Coordinator/Finder/Fixer/independent Verifier work assignment and protected handoff |
+| M4 | P0 | `RACC-SYS-07` enforced exact-candidate independent installed gate **before** any public release/tag, including negative bypass proof |
+| M5 | P1 | `RACC-SYS-08` scenario-first owner report + action appendix + durable incident queue; `RACC-SYS-09` harness known-bad/security/load calibration |
+
+**Current fact:** v0.47.0's `bwmini/distribution.py` intentionally packages all `bwmini/*.py` and the reacceptance registry, so the existing engine is installed on ordinary BoxWeave hosts. Its migration to `tools/reacceptance` + disposable CI/Box execution is a **source/packaging change for the implementing Agent**, not completed here. Retain real production diagnostics and behavior, validate clean install/upgrade and preserve published v0.47.0 artifacts.
+
+**Upstream version rule:** `bwmini/upstream_version.py` `BASELINE = "0.128.0"` is not the observed running daemon. Resolve per-component runtime versions first; retrieve only needed pinned GitHub release-tag/commit source/docs to test workspace; no vendor Git cache in product, no auto-upgrade or execution of upstream docs/scripts. **This is not a proposal to replace the owner-approved MCP-first + REST-assisted product architecture.**
+
+**Shipping gate:** Phase 4 must prove the publish workflow **cannot** publish before an independent candidate-installed original-repro acceptance. Current CI source/fixture checks are not that gate. No fake multi-Agent independence; if a separate Agent cannot actually be spawned, record manual/sequential mode. No docs-only commit changes product version, stable pin, authorized host policies or Release.
+
 ## Proposed reacceptance execution engineering — RACC-AUTO-01..07 (2026-11-05)
 
 **State (v0.47.0 source):** **PARTIALLY IMPLEMENTED, pending installed-release attestation**. The executable `bwmini.reacceptance` inventory/evidence engine, specialized `reacceptance_live` concurrency tool, optional `reacceptance_proof` host adapter and CI false-PASS/help drift gate implement scoped parts of the backlog. A general all-action automatic scheduler, test-Box allocation service, credential provisioning and enforced prepublication CI installed gate are **not shipped**. No new BoxWeave public MCP endpoint or owner-host privilege grant is implied. They are separate from the historical phase-4 TASK-001..TASK-014 iterations below. The user-facing command remains `Run full BoxWeave reacceptance`.

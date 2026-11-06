@@ -1,0 +1,61 @@
+# BoxWeave system-level reacceptance scenarios and invariants
+
+**Status:** actively required **scenario-selection reference**; scenarios are **not** claims of execution, PASS, system permissions or new product features. Use with [canonical runbook](../process/FULL_PROJECT_REACCEPTANCE.md), [runtime function baseline](REACCEPTANCE_FUNCTIONAL_COVERAGE_BASELINE.md), [run ledger](REACCEPTANCE_RUN_TEMPLATE.md) and [developer handoff](../design/REACCEPTANCE_SYSTEM_BUG_HUNT_IMPLEMENTATION.md).
+
+## Why these scenarios come first
+
+**Goal: discover BoxWeave bugs, fix root causes and independently reaccept.** It is not enough to exercise 68 individual tool names. Inventory every real eligible MCP/CLI leaf as a separate **L1** obligation; schedule scenario graphs early to test **L2 actual user workflows** and **L3 concurrent/cross-interface/degraded states**. Every scenario must use only installed supported routes, authorized exact disposable targets and real independent state/receipt observations.
+
+### Core system invariants (use as assertion IDs)
+
+| Invariant | A real counterexample / independently observable failure |
+| --- | --- |
+| `INV-ID` — immutable identity | A stale logical name/recreated Box is changed despite a different Provider UUID or createdAt |
+| `INV-EFFECT` — exactly once / no forbidden effect | Duplicate submit creates two effects, denial mutates remote state, timeout causes automatic retry |
+| `INV-STATE` — coherent multi-layer state | MCP reports stopped but native Provider/guest shows running; worker receipt contradicts durable job state |
+| `INV-BOUNDARY` — auth and coordination not bypassable | Native/forwarded/CLI/Web pathway writes around an active BoxWeave claim or wrong tenant policy |
+| `INV-RECOVERY` — bounded recovery | Crashed, failed or UNKNOWN operation is silently replayed; unrelated Box progress remains blocked after recovery |
+| `INV-PERSIST` — legitimate durable data | Stop/start or approved upgrade discards workload files, task identity, claim/receipt without a documented migration |
+| `INV-CLEANUP` — no orphaned resources | After an explicitly owned test object is deleted, child, mount, reservation, task or exposed route persists |
+| `INV-TRANSPORT` — truthful contract | One supported transport reports success while another reads no effect, or typed errors hide a mutating partial result |
+| `INV-PROVENANCE` — traceable installed bytes | Release, candidate, running app, host CLI and upstream versions are conflated or unverified |
+| `INV-EVIDENCE` — cannot fake acceptance | Original stdout/exit is replaced by later green retry, tampered evidence still passes, or same-Agent verifies itself as independent |
+
+## System scenario seed matrix
+
+The planner should generate **multiple test cases and varied call orderings** for each applicable family. The entrypoints below are **examples**: use actual installed schemas and proven supported paths; a source annotation or tool name does not guarantee callable runtime support.
+
+| ID / priority | Actual user journey and adversarial combination | Main invariant(s) | Required independent oracle | Safety and limits |
+| --- | --- | --- | --- | --- |
+| `SYS-LIFE-01` P0 | Create via outer MCP → inspect installed CLI and Provider → resize via supported MCP → query Incus/guest CPU/memory → stop via CLI → start via MCP → connect/exec/read → delete → post-delete read | ID, STATE, CLEANUP | Actual Provider UUID, createdAt, limits, guest marker, no residue | Unique test-owned incarnation; not arbitrary production Box |
+| `SYS-LIFE-02` P0 | Create → interleave stop, resize and delete from two actors; one in-flight barrier; concurrently try stale UUID / same logical name reused | ID, EFFECT, RECOVERY | Single allowed remote mutation and denied/no-effect count | Never destroy replacement Box; UNKNOWN freezes that target |
+| `SYS-JOB-01` P0 | R-02 submit key K + command A via one client; identical key/body from second client; K + command B conflict; original receipt and effect counts | EFFECT, STATE, PERSIST | Durable original task ID, request key, **exactly one** independent guest effect | **No operator-host reboot**; cold reboot remains separately approved/deferred |
+| `SYS-COORD-01` P0 | Two agents submit incompatible write to same exact Box through different **actually protected** gateways; confirm one wins, one typed conflict, then later unrelated Box progresses | BOUNDARY, EFFECT, RECOVERY | Claim record, Provider state before/after, competitor denial and recovery | R-04 protection requires explicit isolated enablement; no production policy change |
+| `SYS-UNKNOWN-01` P0 | Inject bounded network loss/response timeout **after** dispatch and **before** client receipt; read original task/journal/Provider status; attempt no replay | EFFECT, RECOVERY | Original unresolved attempt + independent Provider/receipt status | Preserve UNKNOWN. Do not reissue mutation to “see if it works” |
+| `SYS-SELFTEST-01` P0 | Start two distinct installed selftest plans with an actual observed in-flight barrier; verify competitor refusal, original cleanup, fresh subsequent run | EFFECT, CLEANUP | Incus child existence/absence, exact selftest receipt and exit codes | Only explicitly owned nested Provider test Box |
+| `SYS-UPGRADE-01` P0 | Official baseline install → private candidate upgrade → service restart → CLI/Web/MCP/Provider re-read → rollback on introduced failure → official bytes match after release | PROVENANCE, PERSIST, RECOVERY | Installed manifest and running process, downloaded artifact SHA, persisted test marker, health | Only disposable host; candidate tested **before** immutable tag/public publish |
+| `SYS-UPSTREAM-01` P0 | Installed daemon version differs from BoxWeave minimum baseline; fetch exact tagged upstream source on test side → compare declared route and live MCP/REST/native behavior | TRANSPORT, PROVENANCE | Installed daemon/CLI/MCP version outputs, exact tag/commit and real route result | Read-only upstream references; no silent upgrade/build/root Proof Pack |
+| `SYS-COMPOSE-01` P0 | Place valid Compose file in owned guest → test forwarded MCP discovery → compare installed native CLI/handler/REST route independently → optional start/status/stop if capability confirmed | TRANSPORT, STATE | Guest file, actual native capability, MCP/REST request+error, no surprise resource | Preserve #79 as possible upstream or forwarding defect until native isolation |
+| `SYS-AUTH-01` P0 | Web/API unauthenticated reads/writes → login → CSRF/Origin denial → authorized positive → logout and stale session denied | BOUNDARY, EFFECT | HTTP status+cookies metadata (no secret), real session/worker state, no side effect | Test-only credentials never logged/uploaded |
+| `SYS-SSH-01` P0 | Register authorized real client → connect/exec → native guest marker → SSH host-hop loss/retry → recovery → transport/identity comparison | TRANSPORT, EFFECT, RECOVERY | Direct guest/Provider marker plus counts of upstream attempts | No host SSH config edits without scope; missing shell vs guest SSH distinct |
+| `SYS-REST-01` P0 | Supported MCP operation then same Box via REST read/CLI read; reverse order on isolated test-owned object; compare error semantics for missing/wrong incarnation | TRANSPORT, ID, STATE | Independent Provider readback and logs, typed request/response | Only actual supported routes; never assume every MCP action has REST equivalent |
+| `SYS-WEB-PLAN-01` P1 | Two browser/HTTP actors plan→confirm competing revisions → worker/receipt → observe exactly one Provider effect; compare to CLI/MCP read | EFFECT, STATE, BOUNDARY | Durable plan/revision/task receipts and actual Provider state | Authorized test-only browser tokens, no bulk system resets |
+| `SYS-NEST-01` P1 | Outer BoxWeave creates nesting-enabled child host → inner MCP starts workload → parent stop/start → inner state/guest marker persists → delete nested child and parent | ID, PERSIST, CLEANUP | Outer and inner **different** UUIDs, Incus/guest readback and no orphan | Depth/resource caps; parent reboot only test-owned |
+| `SYS-NET-01` P1 | Create owned Box → optional network/port/SSH exposure through supported BoxWeave route → compare anonymous and authorized reachability → revoke/delete → check no exposure | BOUNDARY, CLEANUP | Actual route/firewall/port state and network observation | Never expose public prod ports for testing |
+| `SYS-SEC-01` P1 | Query disabled/opt-in security modules → unauthorized mutation or invalid policy → enable only within separately granted test scope → inspect findings and rollback | BOUNDARY, TRANSPORT | Real enabled state, independent logs, denied side effects | Disabled 503 ≠ “zero findings” or a working positive |
+| `SYS-BACKUP-01` P1 | Isolated backup/restore/reopen within exact capability and ownership; compare restored guest markers, timestamps, identity and rollback semantics | PERSIST, ID, CLEANUP | Actual restored Provider/guest state | No operator-host restore, reboot, storage shrink or unbounded snapshots |
+| `SYS-REPORT-01` P0 | Fixture says exit 0 but Provider effect absent → verify classifier FAIL; external worker changes original log → digest failure; source dirty → candidate gate refuses | EVIDENCE, PROVENANCE | Known-bad control rejection and immutable original artifact | This validates harness only; not a product functional PASS |
+| `SYS-RELEASE-01` P0 | Candidate install and independent Verifier repro fails → ensure **publish impossible**; fix/retest → approve same exact digest → release tag/official installer verification | PROVENANCE, EVIDENCE | GitHub workflow gate, candidate digest, clean installed verifier report and public assets | No publish-before-candidate; no stable pin shift |
+| `SYS-DIFF-01` P1 | Compare older installed BoxWeave & newer candidate against actual upstream version; deliberately select path changed by large structural refactor | TRANSPORT, STATE, RECOVERY | Both releases/Provider version identity and same independent oracle | Never call a legacy unsupported route positive |
+
+## Prioritization and orchestration rules
+
+1. **Read architecture and recent changes first:** source call graph, forwarding vs native boundaries, state machines, migrations, concurrency, history/issues, installed capability changes, then assign scenarios. Do not mechanically test every tool first and stop because the budget is exhausted.
+2. **Generate scenario variations:** baseline positive, invalid/missing/wrong incarnation, denied/no-effect, concurrency, failure between dispatch/acknowledgment, recovery and cleanup. Use graph reachability: a valid scenario must exercise at least one independently observable intermediate effect **and** one downstream consumer or state transition.
+3. **Separate roles and evidence:** Finder creates first original failure; Fixer changes source/candidate; Verifier re-runs the *same original scenario* on isolated installed candidate with own Provider/guest observation. Label shared-agent replay as `SAME_AGENT`, not independent.
+4. **Run L1 breadth concurrently on independent disposable targets** where permitted. Every eligible MCP/CLI leaf must appear in the action appendix with actual attempted dimensions or exact reason blocked. L1 results do not grant L2/L3 PASS.
+5. **Avoid overfitting to known issues:** use historical #79/#81/#83 and R-02/R-04 as high-value seed, but add fresh changed-path scenarios and at least one hypothesis not derived from old reports. If only previously known bugs appear, report the novelty gap.
+6. **If any mutating operation becomes UNKNOWN,** stop writes to that exact incarnation, record original attempt, conduct safe independent readback, and continue only on unrelated targets. Never “repair” by guessing or blindly retrying the mutation.
+7. **Report scenarios first:** for each SYS ID provide the real feature, entrypoint chain, hypothesis, initial & final remote state, issue or counterexample, Fixer commit, independent Verifier result, cleanup and incomplete dimensions. Put action inventory, missing triads and tool counts in the second section/appendix.
+
+**Do not convert this seed matrix to PASS without real execution.** Adding or reviewing it is a documentation-only change with no test or release effect.

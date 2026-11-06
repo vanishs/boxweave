@@ -2,6 +2,12 @@
 
 **Status: acceptance-plan seed, not a newly executed test or current-version PASS.** This document merges the earlier [39-feature evidence-depth view](EVIDENCE_LAYERS_0449.md), [runtime entrypoint/call-chain and R-02/R-04 plan](../design/RUNTIME_CALL_CHAINS_0449.md), [test strategy and four client profiles](TEST_STRATEGY.md), [FEATURE_MATRIX](FEATURE_MATRIX.md) and [current outstanding risks](OPEN_RISKS.md). [The canonical full reacceptance runbook](../process/FULL_PROJECT_REACCEPTANCE.md) controls execution and [the run ledger template](REACCEPTANCE_RUN_TEMPLATE.md) controls outputs.
 
+## Current selection rule — workflows first, action mapping second
+
+**The purpose of this functional baseline is to locate the BoxWeave system behaviors most likely to break**, not to turn each MCP or CLI name into an isolated green test. Read [the current system-level scenario and invariant matrix](REACCEPTANCE_SYSTEM_SCENARIOS.md) and [canonical runbook](../process/FULL_PROJECT_REACCEPTANCE.md) before selecting tests. Map every feature to (a) an actual user workflow, (b) potential cross-interface bypass/race/degraded-state boundaries, (c) a real independent Provider/guest/receipt oracle and (d) a post-fix independent Verifier. **L1 full current MCP/CLI leaf coverage remains required**, but a leaf result never implies whole-feature PASS.
+
+Use recent BoxWeave source diffs, old incidents and **observed running Containarium** (not a compiled compatibility minimum) to rank L2/L3 scenarios. The v0.128.0 upstream references in this document are **historical examples**; future runs fetch source/docs at the actual version's pinned GitHub release tag/commit into a private test workspace. Normal customer releases do not need those downloaded reference files or a test harness.
+
 ## How to use this seed
 
 At every new run, **reconcile the complete current discovered MCP and CLI leaf-command catalogs against these feature rows**, plus Web/REST exposed actions and new version changes. Every MCP/CLI leaf gets its **own** black-box test-case record and a mapping to one or more functional IDs. Every functional ID maps back to all current implementing entrypoints and cross-entrypoint/sequence cases. Many-to-many is deliberate: 68 outer tools are not 68 feature groups; 39 historical feature groups are not a substitute for discovering today's tools.

@@ -2,6 +2,20 @@
 
 **Status:** workflow template only; not a claim that any test has run. For each invocation of [the full-project reacceptance runbook](../process/FULL_PROJECT_REACCEPTANCE.md), create a concise version-scoped report in `docs/verification/` (and sanitized test artifacts in existing approved locations). Keep prior reports immutable in meaning; do not overwrite historic PASS, UNKNOWN or incident evidence.
 
+## Owner-facing reporting order — system-level results first
+
+**The user wants actionable BoxWeave bug discovery, not a tool-call completion leaderboard.** Each fresh run report opens with (1) workflow/invariant scenario results, original failed boundaries and newly found defects, (2) Fixer causal repair and **actually separate Verifier** evidence, (3) unresolved SUSPECT/UNKNOWN and risks, (4) privately installed candidate/release gate, then (5) **full named functional table and all MCP/CLI action detail**. This is an ordering rule; do **not** remove the existing exhaustive L1 evidence obligations.
+
+Use [system scenario matrix](REACCEPTANCE_SYSTEM_SCENARIOS.md) as the default L2/L3 seed. Populate a new scenario register:
+
+| Scenario / invariant / current risk | Exact MCP↔CLI↔Web/REST steps and actor identities | Original target UUID+createdAt / observed in-flight barrier | Expected vs independently observed effects and recovery | Actual original failure and root-cause confidence | Fix SHA / Verifier separate Box + original-repro result | Status + evidence digest / smallest missing test |
+| --- | --- | --- | --- | --- | --- | --- |
+| `SYS-LIFE-01` / `INV-ID` / P0 | Real supported actions, ordered/parallel edges | Test-owned immutable target; not a guessed name | Provider+guest+receipt before/after; zero forbidden effect | CONFIRMED / SUSPECT / no issue with counterevidence | Separate actor result **or `SAME_AGENT`**, never implied independence | PASS / FAIL / PARTIAL / BLOCKED / UNKNOWN plus source |
+
+**No aggregate scenario PASS from individual leaf PASS.** A scenario is PASS only when **all required state transitions, independent oracles, recovery and cleanup** have been observed for the exact version and authorized target. Partial coverage remains PARTIAL with the most relevant missing boundary. L1 leaf inventory is still mandatory as the supporting appendix.
+
+**Test runtime provenance and low coupling:** record exact BoxWeave release/source/installed binary, external runner version+location (`repo checkout` / `CI` / `ephemeral test Box` / legacy v0.47.0 installed module), actual Containarium daemon/CLI/MCP process versions, compatibility baseline **separately**, pinned upstream GitHub tag+peeled commit/path digests/cache mode and whether any source was unavailable. An upstream release source archive/document is reference material, **not** installed runtime verification or executable test authority. Document whether customer ZIP still contains legacy v0.47.0 harness; do not invent a completed migration.
+
 ## 1. Run manifest
 
 | Field | Required value |
