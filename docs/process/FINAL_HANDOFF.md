@@ -1,3 +1,15 @@
+## 2026-11-06 — simplified GitHub Releases restored
+
+The owner selected the original lightweight workflow: ordinary main CI
+verifies/builds the candidate, then a publish job creates an immutable tag,
+uploads the exact assets, and verifies draft/public SHA256 parity using the
+built-in GitHub Actions token. No extra evidence/signing/reviewer workflow or
+dedicated Runner. The independent system reacceptance remains separately
+owner-invoked and must not be called PASS on source CI alone. The stable
+installer pointer remains unchanged. See
+[controlling release contract](AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+Older no-workflow/direct-Agent instructions are historical.
+
 ## 2026-11-05 PT — owner revised: no GitHub release/evidence workflow
 
 PR #90 was closed unmerged after the owner declined the added GitHub evidence-recording workflow and account requirement. The new source proposal keeps ordinary CI validation only, relies on actual separate Agent/Box executions and privately retained original/native observations, and uses [local acceptance + direct Agent release](AGENT_MANAGED_ACCEPTANCE_RELEASE.md). The small offline evidence checker is consistency-only; it does not run or certify remote tests, perform GitHub authentication, or publish. Once actual complete acceptance is obtained, an Agent with existing repository write access can release the exact bytes without any specialized workflow; do not invent missing authorization. No production install, original UNKNOWN replay, stable pin change or release was performed in this replan. Older signed workflow notes below are historical.

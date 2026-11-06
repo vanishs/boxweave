@@ -1,6 +1,15 @@
-## 2026-11-05 controlling implementation: Agent-local, no publication workflow
+## 2026-11-06 controlling publication policy
 
-The owner replaced the former signed-GitHub gate **and** the draft GitHub evidence-recording alternative with [the low-coupling Agent-managed path](AGENT_MANAGED_ACCEPTANCE_RELEASE.md). Existing Agents and distinct authorized Boxes execute the real find/fix/independent-verify loop, preserve original data and native post-state, and review immutable candidate bytes locally. Normal CI still builds/tests but **does not authorize or execute publication**. No special GitHub evidence submitter, dedicated Runner, extra signing key or protected environment is needed. Once all applicable prepublication behavior truly passes, the Agent uses existing repository write authority to create and verify the official tag and GitHub Release directly; a GitHub write identity is inherent to publishing, not an extra test gate. The optional `python -m tools.reacceptance.local_acceptance` checks strict report/asset consistency but cannot authenticate the remote truth claim or authorize release. Prior signed-workflow and workflow-dispatch sections below document historical implementation **only** and do not override this current contract. Keep original UNKNOWN no-replay, package SHA256 parity, release immutability, separate Agent/Box, scope limits, owner-host permissions, and no automatic stable pin promotion.
+The owner restored the **simple automatic GitHub main-CI release** used before
+the signed verifier gate. On a successful `main` push, ordinary CI publishes
+the source-bound release with GitHub's built-in write-scoped token. It does not
+require acceptance evidence, a signer, a special account, protected environment,
+or a dedicated Runner. The independent multi-Agent black-box reacceptance
+defined below remains required before asserting **full installed acceptance**,
+but is no longer a GitHub source-release publication gate. Preserve genuine
+FAILED/PARTIAL/UNKNOWN statuses and original evidence. See
+[the current owner decision](AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+All previous "no publication workflow / direct Agent" guidance is superseded.
 
 # Full-project black-box-first reacceptance and multi-Agent remediation
 

@@ -1,4 +1,14 @@
-**2026-11-05 owner decision — current release contract (supersedes historical signed-gate instructions below):** No dedicated reacceptance GitHub workflow, evidence uploader, special GitHub submitter, signer key, registered Runner, or protected environment is required. Follow [Agent-managed acceptance and direct release](docs/process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md): existing Agents perform genuine Finder/Fixer/independent-Verifier work in distinct authorized Boxes, keep original/native evidence locally, review exact candidate/asset hashes with the optional developer-only `tools.reacceptance.local_acceptance`, then an already-authorized Agent may publish a GitHub Release directly after complete real acceptance. GitHub writes inherently require existing repo write access, but testing does not require an additional account. The checker never authenticates remote truth, runs tests or authorizes publication. Keep UNKNOWN no-replay and host boundaries; do not release on PARTIAL/BLOCKED. The old dedicated signed workflow is version-scoped history, not the active release route.
+**2026-11-06 owner decision — release contract:** The ordinary `main` GitHub Actions
+CI is again the automated source-release path: after `verify` succeeds, its
+`publish` job uses scoped `GITHUB_TOKEN` to create the immutable
+`vVERSION` tag and GitHub Release with exact verified CI assets. No signed
+acceptance workflow, protected environment, dedicated Runner, separate account,
+or direct Agent release tooling is required. A source-CI Release is **not**
+independent installed reacceptance; retain all true scenario verdicts and
+UNKNOWN identities. Do not change the stable installer pointer. Current
+publication policy: [Agent-managed acceptance and lightweight CI release](docs/process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+Any older "do not publish on PARTIAL" instruction governs a **claim of full
+independent installed acceptance**, not publication of CI-built source assets.
 
 # BoxWeave contributor and AGENT operating rules
 

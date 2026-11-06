@@ -225,6 +225,135 @@ jobs:
           name: application-candidate
           path: .runtime/release/
 
-  # Static and fixture-safe checks end here. Publication is Agent-managed after
-  # genuine independent installed Box verification; no Actions release gate,
-  # signer, dedicated runner, or evidence-submission job is required.
+  # Original lightweight behavior: publish a new, immutable version after
+  # successful main CI. This is source-CI publication, not installed acceptance.
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: boxweave-main-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-candidate
+          path: release
+      - name: Verify source-bound release assets
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY_RELEASE'
+          import hashlib, json, os, re
+          from pathlib import Path
+
+          release = Path('release')
+          manifest = json.loads((release / 'release.json').read_text())
+          version = Path('VERSION').read_text().strip()
+          assert re.fullmatch(r'0\.\d+\.\d+', version), 'Invalid release version'
+          assert manifest['format'] == 1 and manifest['version'] == version
+          assert manifest['source'] == os.environ['RELEASE_SHA'], 'Candidate source mismatch'
+          assert isinstance(manifest['files'], dict) and manifest['files']
+          expected = set(manifest['files']) | {'release.json', 'SHA256SUMS', 'install.sh'}
+          actual = {p.name for p in release.iterdir() if p.is_file()}
+          assert expected == actual, 'Release asset set mismatch'
+          for name, digest in manifest['files'].items():
+              assert name in actual and re.fullmatch(r'[0-9a-f]{64}', digest), 'Invalid asset digest'
+              assert hashlib.sha256((release / name).read_bytes()).hexdigest() == digest, name
+          sums = {}
+          for line in (release / 'SHA256SUMS').read_text().splitlines():
+              digest, separator, name = line.partition('  ')
+              assert separator and name not in sums and re.fullmatch(r'[0-9a-f]{64}', digest)
+              sums[name] = digest
+          assert set(sums) == actual - {'SHA256SUMS'}, 'SHA256SUMS filename mismatch'
+          for name, digest in sums.items():
+              assert hashlib.sha256((release / name).read_bytes()).hexdigest() == digest, name
+          print(f'v{version}: {len(actual)} source-bound assets verified')
+          PY_RELEASE
+      - name: Publish immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(cat VERSION)
+          tag="v$version"
+
+          # An outdated main run must never publish after a newer push.
+          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [[ "$current" != "$GITHUB_SHA" ]]; then
+            echo "Main has advanced; skip obsolete candidate $GITHUB_SHA"
+            exit 0
+          fi
+
+          # Release tags are immutable; never retarget a published version.
+          if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
+            [[ "$actual" == "$GITHUB_SHA" ]] || {
+              echo "Version $tag already belongs to another commit; bump VERSION" >&2
+              exit 1
+            }
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --verify-tag --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "BoxWeave $version" \
+              --notes "Source-bound GitHub CI build. Installed independent reacceptance is separate and not implied by this release. Stable installer selection remains unchanged."
+          fi
+
+          # A repeated run may resume an interrupted draft but may not replace
+          # any existing asset, or silently modify a published release.
+          if [[ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "false" ]]; then
+            mkdir -p release-readback
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir release-readback
+            python3 - <<'PY_PARITY'
+          import hashlib
+          from pathlib import Path
+          def digests(directory):
+              return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in Path(directory).iterdir() if p.is_file()}
+          assert digests('release-readback') == digests('release'), 'Existing release asset mismatch'
+          PY_PARITY
+            echo "$tag is already published with identical assets"
+            exit 0
+          fi
+
+          for file in release/*; do
+            name=$(basename "$file")
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              continue
+            fi
+            gh release upload "$tag" "$file" --repo "$GITHUB_REPOSITORY"
+          done
+
+          mkdir -p draft-readback
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir draft-readback
+          python3 - <<'PY_DRAFT_PARITY'
+          import hashlib
+          from pathlib import Path
+          def digests(directory):
+              return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in Path(directory).iterdir() if p.is_file()}
+          assert digests('draft-readback') == digests('release'), 'Draft release asset mismatch'
+          PY_DRAFT_PARITY
+
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          mkdir -p public-readback
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir public-readback
+          python3 - <<'PY_PUBLIC_PARITY'
+          import hashlib
+          from pathlib import Path
+          def digests(directory):
+              return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in Path(directory).iterdir() if p.is_file()}
+          assert digests('public-readback') == digests('release'), 'Public release asset mismatch'
+          PY_PUBLIC_PARITY
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')" == "$GITHUB_SHA" ]]
+          echo "Published $tag at $GITHUB_SHA with exact release assets"

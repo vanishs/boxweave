@@ -1,4 +1,10 @@
-**2026-11-05 controlling release approach:** [Agent-managed local reacceptance and direct publication](process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md) requires real independent Agent/Box checks and immutable original evidence, but no release-specific GitHub workflow, special submission account, signer or protected Runner. Existing source CI remains ordinary checks; an Agent directly publishes through existing repository write access only after real full acceptance. The [full-project runbook](process/FULL_PROJECT_REACCEPTANCE.md) remains the detailed black-box test contract; [historical signed-gate evidence](verification/RACC_0491_RELEASE_GATE_2026-11-05.md) is not adopted.
+**2026-11-06 current release policy:** On successful `main` push CI, the lightweight
+GitHub Actions publish job creates an immutable `vVERSION` tag and Release from
+verified same-run artifacts; no separate signing, reviewer workflow, protected
+Runner or extra account. Full independent Finder/Fixer/Verifier acceptance stays
+a separate owner-invoked process and is never implied by source publication.
+See [current publication and acceptance contract](process/AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+Previous "direct Agent only / no workflow" paragraphs below are historical.
 
 **v0.44.10 targeted correction:** [selftest private-plan handoff, typed diagnostics, test and release acceptance ledger](verification/SELFTEST_PLAN_HANDOFF_04410_2026-11-05.md); R-02 owner-host reboot test explicitly deferred, no global R-04 activation.
 

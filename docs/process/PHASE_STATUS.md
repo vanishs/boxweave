@@ -1,3 +1,15 @@
+## 2026-11-06 PT — lightweight main CI publication reinstated
+
+Owner restored a GitHub Actions `publish` job dependent only on successful
+ordinary `verify` on a main push. Version, exact source SHA, manifest and all
+asset hashes are checked before immutable tag/draft creation, full draft
+readback, publication and public readback. No special release gate, verifier
+runner, signer, evidence uploader, extra account or stable pointer change.
+CI success is source-level evidence only; independent installed acceptance
+and unresolved incidents retain their actual separate statuses.
+See [current release policy](AGENT_MANAGED_ACCEPTANCE_RELEASE.md).
+The previous no-workflow guidance below is superseded.
+
 ## 2026-11-05 PT — owner revised release design to no workflow / no special submitter
 
 The owner rejected both the earlier signed protected release workflow and PR #90's evidence-recording workflow; PR #90 was closed **unmerged**. The replacement development branch uses Agent-local Finder/Fixer/distinct Verifier execution and a lightweight read-only consistency checker, removes the dedicated Verifier Actions workflow and CI release jobs, and documents direct Agent publication using existing repository write rights. No additional GitHub account is needed to submit acceptance evidence; any public GitHub Release still inherently requires write authorization. CI/source changes are not installed acceptance or publication. Original UNKNOWN children and stable installation pointer remain unchanged. Details: [current local runbook](AGENT_MANAGED_ACCEPTANCE_RELEASE.md). Historical signed-gate notes below are superseded, not retroactively reclassified.
