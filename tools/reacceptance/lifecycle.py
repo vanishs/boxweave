@@ -23,7 +23,15 @@ from .engine import (AcceptanceFault, argv_file, capture, load, mcp_session,
 SCOPE = "test_owned_nested_lifecycle_only"
 CONFIRM = "I_AUTHORIZE_TEST_OWNED_LIFECYCLE"
 NAME = re.compile(r"^bwracc-[a-z0-9-]{5,36}$")
-MAX_SECONDS = 75
+# Cold Provider creates have legitimately exceeded 75 seconds. Keep an explicit
+# bounded budget per action and preserve UNKNOWN on any later timeout.
+ACTION_TIMEOUT = {
+    "create_container": 240,
+    "stop_container": 120,
+    "start_container": 120,
+    "delete_container": 180,
+}
+CHILD_RESOURCES = {"cpu": "1", "memory": "1GB", "disk": "8GB"}
 
 
 def grant_read(path, confirm):
@@ -83,10 +91,13 @@ def incarnation(row):
 
 
 def one_call(argv, tool, arguments):
+    if tool not in ACTION_TIMEOUT:
+        raise AcceptanceFault("UNREVIEWED_LIFECYCLE_ACTION")
+    timeout = ACTION_TIMEOUT[tool]
     p = mcp_session(argv, [{"jsonrpc": "2.0", "id": "racc-lifecycle",
                             "method": "tools/call",
                             "params": {"name": tool, "arguments": arguments}}],
-                    timeout=MAX_SECONDS)
+                    timeout=timeout)
     response = next((x for x in p["messages"] if
                      x.get("id") == "racc-lifecycle"), None)
     result = response.get("result", {}) if isinstance(response, dict) else {}
@@ -95,6 +106,7 @@ def one_call(argv, tool, arguments):
                isinstance(result, dict) and result.get("isError") is not True and
                isinstance(result.get("content"), list))
     return {"tool": tool, "request": arguments, "attempted_at": now(),
+            "timeout_seconds": timeout,
             "response": response, "process": p["process"],
             "success_response": bool(success)}
 
@@ -167,7 +179,8 @@ def run(grant, confirmation, mcp_argv, output):
         return oracle
 
     try:
-        created = append(1, "create_container", {"username": name}, "running")
+        created = append(1, "create_container",
+                         {"username": name, **CHILD_RESOURCES}, "running")
         identity = created["incarnation"]
         if not identity:
             raise AcceptanceFault("CREATED_CHILD_IDENTITY_UNAVAILABLE")

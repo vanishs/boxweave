@@ -86,6 +86,23 @@ class LiveLifecycleTests(unittest.TestCase):
                 outcome=json.loads((Path(d)/"run"/"result.json").read_text())
                 self.assertEqual(outcome["state"],"BLOCKED_PRE_DISPATCH")
 
+    def test_slow_real_create_has_bounded_cold_budget(self):
+        from tools.reacceptance import lifecycle
+        with patch.object(lifecycle, "mcp_session", return_value={
+                "messages": [{"id":"racc-lifecycle",
+                              "result":{"content":[]}}],
+                "process":{"execution":"completed","exit_code":0}}) as session:
+            result = lifecycle.one_call(["sudo", "-n", "-u", "boxweave",
+                 "python3", "/usr/local/lib/boxweave/default/mcp_gate.py"],
+                 "create_container",
+                 {"username":"bwracc-budget-cold", **lifecycle.CHILD_RESOURCES})
+        self.assertEqual(session.call_args.kwargs["timeout"], 240)
+        self.assertEqual(result["timeout_seconds"], 240)
+        self.assertTrue(result["success_response"])
+        self.assertEqual(lifecycle.CHILD_RESOURCES["memory"], "1GB")
+        with self.assertRaisesRegex(AcceptanceFault, "UNREVIEWED_LIFECYCLE_ACTION"):
+            lifecycle.one_call(["python3"], "unreviewed_write", {})
+
     def test_failed_mcp_write_keeps_original_and_does_not_retry(self):
         with tempfile.TemporaryDirectory() as d:
             grant = self.create_grant(d)

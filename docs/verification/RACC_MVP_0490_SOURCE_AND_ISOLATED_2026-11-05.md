@@ -180,3 +180,26 @@ root-controlled readable public path, denies the wrong root launcher and
 classifies the confirmed pre-dispatch identity rejection as BLOCKED rather
 than falsely saying an upstream mutation was UNKNOWN. This is a test harness
 finding; product create success is still pending a **new-target** live rerun.
+
+## 2026-11-05 actual Gateway identity corrected; first normal lifecycle timeout
+
+A *new*, uniquely named authorized child `bwracc-life-49b` was dispatched
+through the correct `sudo -n -u boxweave /usr/bin/python3
+/usr/local/lib/boxweave/default/mcp_gate.py` installed Gateway. The native
+provider **created** `bwracc-life-49b-container`, independent UUID
+`7c11f1c0-f58f-49f4-bd62-a2f5d429bd30` at
+`2026-11-06T03:55:10.549479732Z`, status Running, CPU=4, memory=4GB.
+The harness's original per-call 75-second bound expired without a confirmed
+MCP reply. It preserved the original request/UNKNOWN and refused to run
+subsequent stop/start/delete. This is an **observed post-dispatch unknown**;
+no second create, native destructive cleanup or product PASS is claimed.
+The original failed read-only/tester identity scenario remains immutable.
+
+A follow-up developer-only implementation changes the **normal cold create
+budget to 240 seconds**, with bounded stop/start=120 and delete=180, and
+explicitly requests a small `1 CPU / 1GB / 8GB` test-owned child. Any
+future timeout still remains UNKNOWN and cannot be retried on the original
+incarnation. This is a validation budget improvement, not proof that the
+Provider has atomic create/receipt behavior. The original 49b UNKNOWN
+scene is intentionally retained, pending independent reconciliation and
+exact-identity manual cleanup under the owner-authorized test scope.
