@@ -1,15 +1,24 @@
-## 2026-11-06 PT — #92 mitigated at HTTP MCP ingress in v0.49.3 source
+## 2026-11-06 PT — #92 HTTP MCP v0.49.3 real retest and v0.49.4 hardening
 
-The existing #92 live v0.49.2 reproduction (HTTP 500 `already exists`
-while the instance was Running) remains valid evidence. v0.49.3 adds a
-durable one-dispatch HTTP MCP create journal and background response;
-an identical ChatGPT retry no longer executes another upstream creation.
-This is **source-only until deployed and independently retested**. UNKNOWN
-after upstream timeout or service restart remains UNKNOWN, and raw Incus
-RUNNING does not establish guest readiness. Underlying Containarium MCP
-remains synchronous; other ingress paths and an upstream durable creation ID
-are not solved. Do not close #92 until an installed original-create test
-confirms one underlying dispatch and independent SSH readiness.
+[Exact scoped original failure and retest](HTTP_MCP_CREATE_0493_REAL_2026-11-06.md).
+**H/L PASS** on the owner host at installed v0.49.3: an ordinary
+`create_container` promptly acknowledged `submitted`; a repeated identical
+HTTP request returned the same original task ID, with one observed native
+Box; later `succeeded` was followed by guest identity, HOME and SSH exit 0.
+An initial STOPPED instance, missing guest user and transient TRUST_NOT_READY
+resolved *without* repair while the original create was still provisioning.
+The original v0.49.2 HTTP 500 + already-present instance remains evidence.
+
+**#92 remains OPEN/PARTIAL:** not a trace of every underlying upstream
+dispatch; cross-entry same-name races, interrupted worker recovery, requested
+nesting, older failed guest identities and the original Containarium cause
+remain unverified. Raw RUNNING is not readiness, and UPSTREAM_CREATE_ACKNOWLEDGED
+does not authenticate guest SSH. No retry of historical UNKNOWN.
+
+v0.49.4 adds **source/CI-only** schema validation before irreversible
+HTTP name reservation and a read-only `create_container(status_only=true)`
+fallback when ChatGPT's capped connector hides the distinct status tool.
+Do not infer v0.49.4 installed PASS from v0.49.3 evidence.
 
 ## 2026-11-05 PT — current Agent-local trust model and outstanding real acceptance
 
