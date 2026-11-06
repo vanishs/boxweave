@@ -1,0 +1,55 @@
+name: Independent installed candidate Verifier
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful main-push CI run with the exact original candidate
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: independent-installed-verifier
+  cancel-in-progress: false
+jobs:
+  installed:
+    if: github.ref == 'refs/heads/main'
+    # Administratively provisioned ephemeral runner INSIDE a distinct authorized
+    # disposable Box. Never label an operator host or the Finder Box this way.
+    runs-on: [self-hosted, linux, x64, boxweave-independent-verifier]
+    environment: boxweave-independent-verifier
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Pin original successful main candidate before any installation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          set -euo pipefail
+          python3 -m tools.reacceptance.candidate_fetch \
+            --candidate-run-id "$CANDIDATE_RUN_ID" --source "$GITHUB_SHA" \
+            --out original-candidate > candidate-origin.json
+      - name: Install once in the exact independently approved test Box and inspect
+        # The admin-owned identity/expiry grant is not a repository credential.
+        # No signer key or publishing token is present on this runner.
+        run: |
+          set -euo pipefail
+          sudo -n /usr/bin/python3 -m tools.reacceptance.verifier_worker \
+            --assets "$GITHUB_WORKSPACE/original-candidate" --source "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --grant /etc/boxweave-reacceptance/install-grant.json \
+            --out "/var/lib/boxweave-reacceptance/original-worker" \
+            --public-report "$GITHUB_WORKSPACE/installed-summary.json"
+      - name: Preserve non-secret partial report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reacceptance-partial-installed-verifier
+          path: installed-summary.json
+          if-no-files-found: warn
+  # Intentionally no signer/publisher: the current worker exits 2 on incomplete
+  # mandatory scenarios. Never rename the PARTIAL artifact to release evidence.

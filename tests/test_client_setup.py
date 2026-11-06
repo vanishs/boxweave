@@ -502,6 +502,10 @@ class HttpFirstClientTests(unittest.TestCase):
         script=home/"setup.py"
         script.write_text(self.script(app,replace))
         env=os.environ.copy()
+        # A developer's inherited overrides must never redirect fixture writes
+        # to their actual client configuration outside this temporary home.
+        env.pop("CODEX_HOME",None)
+        env.pop("COPILOT_HOME",None)
         env.update(HOME=str(home),USERPROFILE=str(home))
         return subprocess.run([sys.executable,str(script)],env=env,cwd=home,
                               capture_output=True,text=True,timeout=10)
@@ -583,6 +587,22 @@ class HttpFirstClientTests(unittest.TestCase):
                     self.assertEqual(p.returncode,0,p.stderr)
                     self.assertIn("manual_import_required",p.stdout)
                     self.assertIn(self.URL,p.stdout)
+
+    def test_inherited_client_home_cannot_redirect_fixture_configuration(self):
+        with tempfile.TemporaryDirectory() as owned, tempfile.TemporaryDirectory() as foreign:
+            home=Path(owned)
+            target=home/".codex/config.toml"
+            target.parent.mkdir()
+            target.write_text('[mcp_servers.boxweave]\ncommand = "ssh"\n')
+            unrelated=Path(foreign)/"config.toml"
+            sentinel='[mcp_servers.boxweave]\nurl = "'+self.URL+'"\n'
+            unrelated.write_text(sentinel)
+            with patch.dict(os.environ,{"CODEX_HOME":foreign}):
+                result=self.run_script("codex",home)
+            self.assertEqual(result.returncode,2,result.stderr)
+            self.assertIn("BOXWEAVE_ENTRY_CONFLICT",result.stderr)
+            self.assertEqual(unrelated.read_text(),sentinel)
+            self.assertEqual(target.read_text(),'[mcp_servers.boxweave]\ncommand = "ssh"\n')
 
     def test_codex_toml_scoped_replace_keeps_unrelated_sections(self):
         with tempfile.TemporaryDirectory() as td:

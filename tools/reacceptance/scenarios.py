@@ -86,10 +86,10 @@ def seed_rows(path):
     content = Path(path).read_text(encoding="utf-8")
     rows = []
     for line in content.splitlines():
-        if not re.match(r"^\| `SYS-[A-Z]+-[0-9][0-9]`", line):
+        if not re.match(r"^\| `SYS-[A-Z]+(?:-[A-Z]+)*-[0-9][0-9]`", line):
             continue
         cells = [x.strip() for x in line.strip().strip("|").split("|")]
-        match = re.match(r"`(SYS-[A-Z]+-[0-9]{2})` (P[01])", cells[0])
+        match = re.match(r"`(SYS-[A-Z]+(?:-[A-Z]+)*-[0-9]{2})` (P[01])", cells[0])
         if match and len(cells) >= 5:
             rows.append({"id": match.group(1), "priority": match.group(2),
                          "journey": cells[1], "invariants": cells[2],

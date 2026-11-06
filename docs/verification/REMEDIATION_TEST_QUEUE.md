@@ -1,3 +1,68 @@
+### Integrated source result
+
+The final integrated Python suite after full-matrix and Web-plan accounting changes
+passed **894 tests**, exit 0 (`/tmp/boxweave-0491-integrated-unittest.log`). Any later
+small proof-validation correction is verified by its focused suite and CI separately.
+Knowledge check passed 235 documents, exit 0. Both workflow YAML files parsed and
+20 embedded run blocks passed `bash -n`. This is source/fixture evidence only.
+
+### Final source integration addendum
+
+A subsequent complete suite passed **889 tests**, exit 0, in
+`/tmp/boxweave-0491-complete-unittest.log`. Independent Verifier Agent ran
+44 focused tests, exit 0, parsed both workflows and syntax-checked all run blocks.
+Its mocked original published-release repro now exits 1 with zero external writes.
+The Agent found sudo would drop run identity; worker now requires positive integer
+run/attempt CLI arguments rather than inventing a manual actor. Four worker safety
+checks passed after this correction. A further confirmed harness defect silently
+omitted SYS-WEB-PLAN-01; the parser and a canonical-ID regression now account for
+all 20 named scenarios, leaving its unimplemented graph BLOCKED. The full-matrix
+release gate preserves seven mandatory scenarios and refuses applicable non-PASS;
+unsupported optional cases require hash-bound native capability evidence and are
+explicitly excluded from full-system acceptance. Final integrated suite/CI results
+must be appended after those last changes. Local generated action ledger records
+68 outer catalog and 167 source-only entries without claiming installed coverage.
+
+## 2026-11-05 PT — v0.49.1 release gate correction checkpoint (PARTIAL)
+
+Base main `e3d745a19badc48e2df116de315807b51815348a`, source candidate 0.49.1,
+modified worktree; [full scope/admin/scenario report](RACC_0491_RELEASE_GATE_2026-11-05.md)
+and [original #88 read-only latency evidence](RACC_0491_CREATE_LATENCY_2026-11-05.md).
+REQ-008/016/017 -> RACC-SYS-07/09 -> `release_gate.py`, `workflow_gate.py`,
+`candidate_fetch.py`, `signing_preflight.py`, `verifier_worker.py` and official workflows.
+
+- T/source, WSL1 non-root: isolated `/tmp/boxweave-0491-venv` Python 3.12,
+  dependencies installed with `pip install --require-hashes -r requirements-dev.lock`, exit 0.
+- T/source: `python -m unittest discover -s tests -p 'test_*.py' -q`, **887 tests PASS**,
+  exit 0, `/tmp/boxweave-0491-final-unittest.log`. One subsequently added isolated
+  inherited-client-home regression passed separately, exit 0; fetcher bounded-read
+  tests rerun after that source correction, 3 PASS, exit 0.
+- T/source: architecture boundary guards, 4 PASS, exit 0. Initial unprepared system
+  Python lacked Werkzeug; prepared run corrected the environment, not a product fix.
+  An intermediate full run exposed stale Gateway version metadata (corrected) and
+  inherited CODEX_HOME in fixture subprocesses (now cleared only in the child).
+- T/source: focused candidate/provenance/signing/evidence/worker suites, 40 PASS,
+  exit 0 before the later fixture test. Tests reject forged/partial case evidence,
+  altered installer/checksum/wrapper, wrong run attempts and UNKNOWN install replay.
+- T/artifact: `python -m tools.reacceptance.candidate_fetch --candidate-run-id 42170666520
+  --source e3d745a19badc48e2df116de315807b51815348a --out /tmp/boxweave-main-42170666520-audit`,
+  exit 0; original wrapper digest matches owner pin, 26 assets and embedded helper
+  equality validated, clean exact v0.49.0 source. No downloaded candidate code executed.
+- T/read-only original incident: separate Finder Agent connected to historical
+  the original independent Verifier Box for environment-dependent evidence only, identity/hello
+  exit 0, native original incarnation unchanged. No mutation/replay/unlock/cleanup.
+  Package work continued after timeout; upstream 120s and BoxWeave HTTP45s are
+  separate source deadline boundaries. Exact original response still UNKNOWN.
+- T/docs: `python scripts/check_knowledge.py`, exit 0, 235 documents before final
+  authority updates; final result must be rechecked after staging.
+
+U/BLOCKED: no new independent candidate installation, full graph/race/fault campaign,
+protected signing producer/key/environment, live failed/approved official gate,
+new candidate CI, tag, Release or public asset parity. The limited new install worker
+intentionally returns PARTIAL/exit2 and never signs. Original UNKNOWN resources
+retained; no new live resources created. Stable v0.43.1 unchanged. Owner will arrange
+administrator provisioning; exact setup and next executable checks are in the report.
+
 ## 2026-11-05 UTC — official v0.46.1 installed black-box reacceptance (RACC-0461-20261105-B)
 
 **RACC-0461-B addendum:** [Disposable disk-shrink/no-side-effect and deleted-target results](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md): fresh 10GB task Box `bw-racc-0461-shrink`, createdAt 1793901733; `resize_container(9GB)` refused `RESOURCE_DISK_SHRINK_REFUSED`, independently remained 10GB; Box stopped/deleted and list absent. New **UPSTREAM/NEEDS_TRIAGE P2**: absent Box `get_container` maps native `Instance not found` to HTTP 500/UNAVAILABLE, while `debug_container` reports missing; check native Provider error conversion read-only before assigning fix owner. No upstream shrink bypass attempted.\n\n[New original black-box report](REACCEPTANCE_0461_2026-11-05_BLACKBOX_RUN2.md) and [68-tool/75-Web-decorator surface manifest](REACCEPTANCE_0461_2026-11-05_BLACKBOX_SURFACES.json): original official 0.46.0 → 0.46.1 in-place test Box upgrade **exit 0**, exact tag provenance and **doctor 10/10**; installed v0.46.1 nested MCP selftest create→hello→stop→delete **exit 0**, zero residual children; wrong confirmation exit 2 and no child. Outer Gateway tracked dedup, changed-body refusal, safe file/target refusals, Provider/cgroup resize, stop/start persistence, CLI client generator and unauthenticated Web/HTTP-MCP negatives L PASS scoped. Known-bad 0-byte oracle detected against a real 1-byte guest marker. **New P2 source/UI gap:** installed `boxweave --help` hides callable `http`, `task`, `selftest` entrypoints; Fixer+independent installed Verifier still required. First post-start `TRUST_NOT_READY` with waitForReady=false was transient and is not a confirmed defect. **Still U:** inner authenticated SSH/HTTP-MCP tools/list, Web positive admin flows, external OAuth/client, owner-host R-02 reboot, global R-04 claims and native upstream #75. No new product release/stable pin update or owner-host policy changes.
