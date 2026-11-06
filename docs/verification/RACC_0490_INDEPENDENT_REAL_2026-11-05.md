@@ -182,3 +182,29 @@ NOT_PRESENT_AT_LATER_READ_ORIGINAL_UNCERTAIN. In every case,
 release_acceptance=false and cleanup_authorized=false. Five malicious
 fixture tests (including forged success and foreign grant) pass.
 This is evidence for Issue #88, not automatic UNKNOWN resolution.
+
+## 2026-11-06 exact native UNKNOWN reconciliation on two isolated hosts
+
+The new read-only unknown-inspect command was executed after a fresh,
+exact test-owned grant on both original post-dispatch UNKNOWN cases.
+It re-read original durable lab/intent/attempt/oracle/result files and native
+Incus state; originals were NOT overwritten.
+
+- Finder original bwracc-life-49b: recorded UUID
+  7c11f1c0-f58f-49f4-bd62-a2f5d429bd30 equals current native UUID.
+- Independent Verifier original bwracc-iv3-life-a: recorded UUID
+  95328612-e76c-418d-b70a-c9c7874ce656 equals current native UUID.
+- Both separate output packets classify
+  SAME_ORIGINAL_SIDE_EFFECT_EXISTS_STILL_UNKNOWN,
+  no replay performed, no cleanup authorized and no release acceptance.
+- A changed native incarnation and later absence are handled as separate
+  BLOCKED observations and never imply a successful originally acknowledged
+  create or absence of earlier side effects.
+- This is **read-only incident inspection**, not manual lock release.
+  Do not delete, retry or start either original Box as part of a general
+  automated reacceptance campaign. An authorized operator must inspect
+  exact task/lease state and identity separately before recovery.
+
+The actual data is on the originating Finder/Verifier Boxes in distinct
+private evidence directories; this Markdown records only non-secret
+observations and selected exact identity fields. Issue #88 remains open.

@@ -1,3 +1,13 @@
+## 2026-11-06 UTC — original UNKNOWN read-only independent recheck, still BLOCKED
+
+[Case-by-case evidence](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md):
+a new test-only grant-bound, read-only unknown-inspect checked original
+MCP attempt digests and current native Incus identity on two outer Boxes.
+Both original unknown children still exist under precisely their original
+UUID/created-at. Neither result was upgraded to PASS or automatically
+retried/deleted. Five adversarial tester regressions PASS; all mandatory
+independent release scenarios and protected signer remain BLOCKED.
+
 ## 2026-11-06 UTC — v0.49.0 corrected timeout and fresh independent lifecycle PARTIAL
 
 [Latest independent real proof](../verification/RACC_0490_INDEPENDENT_REAL_2026-11-05.md)

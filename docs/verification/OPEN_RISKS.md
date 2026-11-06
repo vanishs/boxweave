@@ -1,3 +1,13 @@
+## #88 exact read-only recheck, unchanged original UNKNOWN (2026-11-06)
+
+The developer-only tool read back the original Finder and independent
+Verifier unknown cases and independently observed their original Incus
+UUIDs still Running; neither was replayed or cleaned. See
+[RACC-0490 evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
+Known test harness 120s cap is fixed; the Provider/Gateway latency and
+eventual bounded receipt behavior still need root-cause investigation.
+Automatic release and unknown recovery remain blocked.
+
 ## 2026-11-06 follow-up to #88: real independent 4-step partial pass
 
 [Actual separate Verifier evidence](RACC_0490_INDEPENDENT_REAL_2026-11-05.md).
