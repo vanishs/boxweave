@@ -37,19 +37,41 @@ SHA-256 recorded outside the artifact itself. Extract *only* the exact
 root-owned, non-writable private directory (for example
 `/opt/boxweave-private-candidate`); no arbitrary additional files or links.
 
-After verifying the independent manifest digest, on an authorized disposable
-host only:
+Before executing ANY candidate-supplied Python, use the developer-only
+`tools.reacceptance.private_installer` module from a separately reviewed
+**root-owned, non-writable source checkout** (not from the candidate stage),
+on the exact test-owned disposable Box. Pin its source revision outside the
+artifact. Example, from that trusted checkout:
 
 ```sh
-sudo /usr/bin/python3 /opt/boxweave-private-candidate/online.py install \
+sudo /usr/bin/python3 -B -m tools.reacceptance.private_installer \
   --stage /opt/boxweave-private-candidate \
   --version 0.49.0 \
-  --private-manifest-sha256 REVIEWED_EXACT_64_HEX_DIGEST
+  --source REVIEWED_EXACT_40_HEX_COMMIT \
+  --manifest-sha256 REVIEWED_EXACT_64_HEX_DIGEST \
+  --out /var/lib/boxweave-private-preflight
 ```
 
-This refuses altered, symlinked, non-root-owned or writable staged files;
-it verifies every release asset against the pinned manifest. It executes
-the existing host/app installation path without requiring a public tag.
+This is a *no-install preflight*. It verifies the fixed release file set,
+root ownership and all parent directories, hashes every file **including
+the candidate's online.py** and checks the ZIP's clean source commitment.
+A mismatched value refuses before candidate code executes.
+
+To apply the **same** exact candidate, supply `--apply`, a fresh
+`--out` directory, a separately reviewed root-owned private `--grant`
+JSON bound to the disposable Box identity (`scope` =
+`test_owned_private_candidate_install_only`, `approved` = `true`,
+`hostname`, `machine_id`, `outer_uuid`, `outer_created_at`,
+`expires_epoch`), and
+`--confirm I_AUTHORIZE_EXACT_PRIVATE_INSTALL_IN_TEST_BOX`.
+The runner retains a dispatch-intent record and never automatically
+replays a timed-out installation. Verify installed Host, Gateway and
+application independently afterward.
+
+The same strict manifest/file validation also remains inside the normal
+candidate host installer. This is the pre-execution defense, not a
+replacement for a protected independent release attestation.
+
 Normal streamed installs remain bound to immutable published releases.
 The private install still requires all normal host/Provider/app grants and
 must never be run on the operator host for an acceptance experiment.

@@ -115,7 +115,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/wire_results.py`
 <!-- inventory:python-modules:end -->
 
-### Python unittest files (72)
+### Python unittest files (73)
 
 <!-- inventory:unit-tests:start -->
 - `tests/test_access.py`
@@ -178,6 +178,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_reacceptance_installed.py`
 - `tests/test_reacceptance_installed_verifier.py`
 - `tests/test_reacceptance_lifecycle.py`
+- `tests/test_reacceptance_private_installer.py`
 - `tests/test_reacceptance_system.py`
 - `tests/test_recovery.py`
 - `tests/test_release_metadata.py`

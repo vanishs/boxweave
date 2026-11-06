@@ -1,6 +1,6 @@
 """One-shot source-tree developer CLI; keeps legacy commands available."""
 import sys
-from . import engine, scenarios, report, upstream, release_gate, surfaces, installed, lifecycle, installed_verifier
+from . import engine, scenarios, report, upstream, release_gate, surfaces, installed, lifecycle, installed_verifier, private_installer
 
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
@@ -10,6 +10,8 @@ def main(argv=None):
         return report.main(args[1:])
     if args and args[0] == "upstream":
         return upstream.main(args[1:])
+    if args and args[0] == "private-install":
+        return private_installer.main(args[1:])
     if args and args[0] == "installed-verifier":
         return installed_verifier.main(args[1:])
     if args and args[0] == "lifecycle":

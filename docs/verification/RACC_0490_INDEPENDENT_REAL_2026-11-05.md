@@ -103,3 +103,18 @@ created; bwracc-mvp-iv3 briefly lacked the guest user, then recovered
 through its normal asynchronous provisioning. The connector correctly
 refused SSH with TRUST_NOT_READY. Do not bypass that protection or count
 those as a passing clean Verifier until actual access is restored.
+
+## Developer-only trusted pre-execution installer hardening
+
+New tools/reacceptance/private_installer.py runs from an independently
+reviewed root-owned developer checkout and checks an out-of-band candidate
+manifest digest, source commit, root-only parent chain, exact fixed asset
+list, each asset including candidate online.py, and product ZIP embedded
+provenance *before* allowing candidate script execution.
+Without an explicit exact test-owned grant plus confirmation it is a
+preflight-only reader. Authorized apply writes durable dispatch intent before
+a bounded host install, preserves post-dispatch UNKNOWN without replay,
+and still requires separate installed Verifier evidence.
+Four adversarial unit tests pass. An actual installation through this
+new wrapper is not yet marked complete: earlier isolated clean/upgrade
+installations used candidate online.py's internal verification directly.
