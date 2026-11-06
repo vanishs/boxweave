@@ -111,7 +111,7 @@ class MigrationTests(unittest.TestCase):
             store = Store(path)
             with store.db() as check:
                 version = check.execute("PRAGMA user_version").fetchone()[0]
-                self.assertEqual(version, 13)
+                self.assertEqual(version, 14)
                 self.assertEqual(check.execute("SELECT count(*) FROM operations").fetchone()[0], 1)
                 self.assertIsNotNone(check.execute(
                     "SELECT sql FROM sqlite_master WHERE name='diagnostic_trace_links'").fetchone())
