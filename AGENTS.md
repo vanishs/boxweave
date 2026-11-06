@@ -10,6 +10,27 @@ publication policy: [Agent-managed acceptance and lightweight CI release](docs/p
 Any older "do not publish on PARTIAL" instruction governs a **claim of full
 independent installed acceptance**, not publication of CI-built source assets.
 
+**2026-11-06 current engineering/verification status (v0.49.4):** The
+v0.49.3 host-live HTTP MCP create/dedup/guest SSH test has a
+[version-scoped report](docs/verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md).
+A temporary STOPPED/guest-user-missing state during a `submitted` create
+is not terminal failure; check the *original* receipt, then independently
+verify the guest. The HTTP MCP client tool catalogue can omit
+`boxweave_create_status`: v0.49.4 also exposes the safe read-only
+`create_container(username, status_only=true)` variant. Invalid upstream
+argument types are checked before a permanent name reservation, not
+afterwards. These v0.49.4 fixes require new installed verification.
+
+**Release and reacceptance precedence:** PR #90's signing/evidence workflow
+was closed unmerged. The lightweight `main` `verify → publish` workflow is
+live and creates source-bound Releases without a separate verifier approval
+gate. A full installed independent PASS still needs real distinct Verifier
+evidence, but is NOT implied by, or an additional prerequisite for, the
+ordinary GitHub source release. Older v0.48/0.49.0 paragraphs below about a
+mandatory signed candidate release gate or blocked public publication are
+**historical only**. Do not misinterpret them as present-day commands.
+The default stable installer selector remains a separate operator action.
+
 # BoxWeave contributor and AGENT operating rules
 
 Start at [docs/INDEX.md](docs/INDEX.md), [current scope](docs/product/SCOPE.md), [current status](docs/process/PHASE_STATUS.md), [FINAL_HANDOFF](docs/process/FINAL_HANDOFF.md), and [OPEN_RISKS](docs/verification/OPEN_RISKS.md). Read [DOCUMENT_AUTHORITY.json](docs/process/DOCUMENT_AUTHORITY.json) before updating documentation. Code, comments, documentation, command help, machine output and Git commit messages must be **English**; conversational replies to the requester may use their language. **Do not copy the requester's language into project artifacts or generated user-facing text; preserve standard technical terminology.**
@@ -28,14 +49,15 @@ final built-product and real installed upgrade are NOT yet accepted.**
 v0.47.0 **published** installations retain the old packaged module. Dynamic
 breadth, system graph scheduling, separate Agents, live upstream parity and
 independent installed Verifier are **PARTIAL or NOT IMPLEMENTED**, not DONE.
-Candidate CI disables main auto-publish and fails closed without separately
-signed installed evidence. See
+At that historical v0.48.0 checkpoint, candidate CI temporarily
+disabled auto-publish; current main CI has restored lightweight publication.
+See
 [the exact scoped checkpoint](docs/verification/RACC_SYSTEM_0480_CANDIDATE_2026-11-05.md).
 Do not confuse signed fixture evidence or 832 green Python unit tests with
 independent system acceptance or permission to release.
 
 
-**Independent installed Verifier (still PARTIAL):** Use `python -m tools.reacceptance.installed_verifier` from a distinct approved Box to verify CI ZIP bytes against running host CLI, root Gateway provenance, app install SHA and authenticated doctor checks. It emits a named scenario matrix, never a release signature, and intentionally refuses to mark the limited four-step lifecycle and same-actor concurrent selftest as full independent acceptance. Genuine external signing plus all required scenario evidence and protected CI trust configuration are still needed.
+**Independent installed Verifier (still PARTIAL):** Use `python -m tools.reacceptance.installed_verifier` from a distinct approved Box to verify CI ZIP bytes against running host CLI, root Gateway provenance, app install SHA and authenticated doctor checks. It emits a named scenario matrix, never a release signature, and intentionally refuses to mark the limited four-step lifecycle and same-actor concurrent selftest as full independent acceptance. Genuine independent scenario evidence is still needed for a claim of full installed acceptance; external signing and protected CI trust are no longer publication requirements.
 
 **v0.49.0 reacceptance MVP candidate (source-only, not published):**
 The new `tools.reacceptance.installed` captures actual installed read-only
@@ -47,8 +69,10 @@ or deletes the original incarnation. This is NOT complete 19-scenario
 execution, automatic Agent spawn, full MCP/CLI mutation coverage or independent
 release evidence. `.github/workflows/ci.yml` now accepts the original
 successful main-push candidate run ID and reuses the exact immutable artifact
-for gate and publish; this still REQUIRES a real trusted separate Verifier
-artifact/key/environment. Do not bypass a blocked gate or move the stable pin.
+for gate and publish; that was the **historical v0.49.0 candidate**
+design, superseded by the simple verified main-push Release workflow. Do
+not convert a source-CI Release into an independent installed PASS or move
+the stable pin.
 See [v0.49.0 MVP scope](docs/verification/RACC_MVP_0490_SOURCE_AND_ISOLATED_2026-11-05.md).
 
 ## Full reacceptance execution contract (current)

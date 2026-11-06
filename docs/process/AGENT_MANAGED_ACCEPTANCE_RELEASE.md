@@ -63,12 +63,35 @@ scenarios need native capability proof, not unsupported-by-assertion.
    GitHub, authenticates external Agent claims, signs data or publishes. Its
    positive verdict is `LOCAL_EVIDENCE_CONSISTENT_NOT_RELEASE_AUTHORIZATION`.
    The verifying Agent must manually confirm evidence is genuine and complete.
-6. Coordinator reviews the actual functional ledger and incident queue: block
-   release if any mandatory case is untested, partial, failed, UNKNOWN, false PASS,
-   or an applicable release-blocking defect remains. A local checker PASS alone
-   does **not** grant release permission. Keep authorized non-release work moving.
+6. Coordinator reviews the actual functional ledger and incident queue:
+   block a **full independent installed acceptance claim** if any mandatory
+   case is untested, partial, failed, UNKNOWN, false PASS or an applicable
+   safety defect remains. A local checker PASS alone does **not** authorize
+   an installed PASS. This evidence decision is **separate** from the ordinary
+   source-CI GitHub Release. Keep other authorized work moving.
 7. Record full installed acceptance separately; a source-CI GitHub Release
    does not change any incomplete, failed, or UNKNOWN independent test verdict.
+
+## HTTP MCP async-create acceptance (incident #92)
+
+For `create_container` through ChatGPT HTTP MCP, verify the **original
+one-dispatch receipt** and exact duplicate/replay, then read-only poll the
+original operation; a later RPC ID is not a reliable idempotency identity.
+`boxweave_create_status` is not always advertised by capped client
+tool catalogs. The v0.49.4 fallback is `create_container` with only
+`username` and `status_only=true`; this must not write or reserve a name.
+Test invalid upstream-typed arguments before reservation: the wrong type
+must not leave a permanent tombstone for a never-dispatched Box.
+
+While `state=submitted`, a transient STOPPED instance, missing guest user
+or `TRUST_NOT_READY` is not a terminal failure. After upstream
+`succeeded`, independently verify exact native Box, in-guest username/HOME,
+SSH and any explicitly requested nesting. Do not equate native RUNNING or
+an upstream acknowledgement with end-to-end readiness. Preserve the exact
+original UNKNOWN task and Incus incarnation and never replay it.
+
+The [real v0.49.3 scoped report](../verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md)
+is **not** proof of v0.49.4 installed behavior or of #92's full root cause.
 
 ## Automatic release (ordinary CI, no extra acceptance gate)
 

@@ -8,7 +8,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 
 from bwmini.remote_auth import RemoteCredentials
-from bwmini.remote_create import CreateFault, CreateJournal, validated_request
+from bwmini.remote_create import CreateFault, CreateJournal, validated_request, validate_upstream_payload
 from bwmini.remote_mcp import create_remote_app
 from bwmini.store import Store
 
@@ -110,7 +110,17 @@ class HTTPCreateTests(unittest.TestCase):
                 return {"jsonrpc": "2.0", "id": msg["id"], "result": {
                     "tools": [{"name": name,
                                "inputSchema": {"type": "object",
-                                               "properties": {"username": {"type": "string"}}}}
+                                               "properties": {
+                                                   "username": {"type": "string"},
+                                                   "cpu": {"type": "string"},
+                                                   "memory": {"type": "string"},
+                                                   "disk": {"type": "string"},
+                                                   "enable_podman": {"type": "boolean"},
+                                                   "idle_stop_minutes": {"type": "integer", "minimum": 0},
+                                                   "os_type": {"type": "string", "enum": ["", "ubuntu", "rocky9", "rhel9"]},
+                                                   "ssh_keys": {"type": "array", "items": {"type": "string"}},
+                                               },
+                                               "required": ["username"]}}
                               for name in names]}}
             if msg["method"] == "tools/call":
                 self.upstream.append(msg)
@@ -198,10 +208,71 @@ class HTTPCreateTests(unittest.TestCase):
         self.assertIn("boxweave_create_status", names)
         create = next(x for x in listed if x["name"] == "create_container")
         self.assertIn("request_key", create["inputSchema"]["properties"])
+        self.assertIn("status_only", create["inputSchema"]["properties"])
         unauthenticated = self.call("create_container", {"username": "no-auth"},
                                     token=False)
         self.assertEqual(unauthenticated.status_code, 401)
         self.assertEqual(self.upstream, [])
+
+    def test_status_only_uses_existing_tool_without_retransmitting_or_catalog(self):
+        first = self.call("create_container", {"username": "status-only", "cpu": "1"})
+        receipt = self.result(first)
+        self.assertTrue(self.started.wait(2))
+        self.allow_create = False  # The protected gateway may later hide writes.
+        read = self.call("create_container", {
+            "username": "status-only", "status_only": True}, ident=404)
+        self.assertEqual(read.status_code, 200)
+        self.assertEqual(self.result(read)["task_id"], receipt["task_id"])
+        self.assertEqual(len(self.upstream), 1)
+        invalid = self.call("create_container", {
+            "username": "status-only", "status_only": True, "cpu": "2"})
+        self.assertEqual(self.result(invalid)["code"], "CREATE_SELECTOR_INVALID")
+        self.assertEqual(len(self.upstream), 1)
+        unseen = self.call("create_container", {
+            "username": "never-created", "status_only": True})
+        self.assertEqual(self.result(unseen)["code"], "CREATE_TASK_NOT_FOUND")
+        with self.assertRaisesRegex(CreateFault, "CREATE_TASK_NOT_FOUND"):
+            CreateJournal(self.store).get(username="never-created")
+
+    def test_invalid_upstream_types_do_not_burn_non_replayable_name(self):
+        bad = [
+            ({"username": "bad-cpu", "cpu": 4}, "bad-cpu"),
+            ({"username": "bad-bool", "enable_podman": "yes"}, "bad-bool"),
+            ({"username": "bad-enum", "os_type": "windows"}, "bad-enum"),
+            ({"username": "bad-array", "ssh_keys": "not-a-list"}, "bad-array"),
+            ({"username": "bad-min", "idle_stop_minutes": -3}, "bad-min"),
+            ({"username": "bad-typo", "cpu_coutn": "2"}, "bad-typo"),
+        ]
+        for args, username in bad:
+            with self.subTest(username=username):
+                result = self.call("create_container", args)
+                self.assertEqual(result.status_code, 200)
+                self.assertTrue(result.json["result"]["isError"])
+                self.assertEqual(self.result(result)["code"],
+                                 "CREATE_UPSTREAM_ARGUMENT_INVALID")
+                with self.assertRaisesRegex(CreateFault, "CREATE_TASK_NOT_FOUND"):
+                    CreateJournal(self.store).get(username=username)
+        self.assertEqual(self.upstream, [])
+        # A corrected request with the SAME name is still allowed.
+        corrected = self.call("create_container", {"username": "bad-cpu", "cpu": "1"})
+        self.assertEqual(self.result(corrected)["state"], "submitted")
+        self.assertTrue(self.started.wait(2))
+        self.assertEqual(len(self.upstream), 1)
+
+    def test_upstream_schema_subset_rejects_unknown_type_without_dispatch(self):
+        with self.assertRaisesRegex(CreateFault, "CREATE_SCHEMA_UNAVAILABLE"):
+            validate_upstream_payload({"username": "x"}, {
+                "type": "object", "properties": {"username": {"type": "future"}}})
+        with self.assertRaisesRegex(CreateFault, "CREATE_UPSTREAM_ARGUMENT_INVALID"):
+            validate_upstream_payload({"username": "x", "extra": "y"}, {
+                "type": "object", "additionalProperties": False,
+                "properties": {"username": {"type": "string"}},
+                "required": ["username"]})
+        with self.assertRaisesRegex(CreateFault, "CREATE_UPSTREAM_ARGUMENT_INVALID"):
+            validate_upstream_payload({"username": "x", "idle_stop_minutes": True}, {
+                "type": "object", "properties": {
+                    "username": {"type": "string"},
+                    "idle_stop_minutes": {"type": "integer"}}})
 
     def test_status_selector_errors_are_mcp_results_not_http_500(self):
         invalid = self.call("boxweave_create_status", {
