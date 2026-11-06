@@ -1,13 +1,6 @@
-## 2026-11-05 PT — single-command simplification review checkpoint
+## 2026-11-06 UTC — release trust replacement authorized and implemented in PR #90
 
-Owner requested returning to Agent-operated find/fix/independent Box verify/release.
-Existing helpers support most orchestration; [capability audit](../knowledge/REACCEPTANCE_TOOL_CAPABILITY_AUDIT_2026-11-05.md).
-[Concrete workflow/data-carrier proposal](../knowledge/REACCEPTANCE_SIMPLIFICATION_REVIEW.md)
-is prepared but inactive. Automatic approval review requires explicit confirmation
-before removing mandatory signing/environment/Runner prerequisites. Current gates,
-v0.49.1 source, stable v0.43.1 and original UNKNOWN scenes remain unchanged.
-Do not claim missing repository admin permission: authenticated gh has admin rights.
-No full reacceptance or release was executed in this documentation/draft checkpoint.
+The owner approved Agent+separate-Box original real evidence submitted by an authorized GitHub account. The PR now contains the evidence carrier, recording workflow, updated official candidate/release gate, and new negative tests. The compulsory signer key, special Runner and GitHub protected-environment approval are removed from the default source workflow. Exact source/asset bytes, original receipts and native oracles, applicable complete scenario requirements, UNKNOWN protections and immutable draft/public parity still block unsafe release. **The change is an implementation checkpoint, not evidence of real full-system acceptance or a published product version.** CI and merge must be verified separately; the original UNKNOWN targets and stable pin remain unchanged. The older signed-gate paragraphs below are historical snapshots.
 
 ## 2026-11-05 PT — v0.49.1 source release-gate corrections; NOT RELEASED
 
