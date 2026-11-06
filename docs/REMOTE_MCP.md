@@ -11,7 +11,7 @@ This does **not** close the entire upstream #92 incident, prove nested
 configuration, or test in-flight service restart.
 
 **New in v0.49.4:** Before reserving an irreversible Box name, the
-authenticated HTTP wrapper checks known types, required fields, enums,
+authenticated HTTP wrapper checks advertised keys, known types, required fields, enums,
 lengths and numeric bounds from the currently allowed upstream
 `create_container` JSON Schema. Known invalid arguments return a
 non-dispatching MCP tool error and do **not** consume the Box name.
