@@ -1,55 +1,76 @@
-name: Independent installed candidate Verifier
+name: Record independent Box acceptance
 on:
   workflow_dispatch:
     inputs:
       candidate_run_id:
-        description: Successful main-push CI run with the exact original candidate
+        description: Successful main CI run whose exact original bytes were tested
+        required: true
+        type: string
+      evidence_bundle_b64:
+        description: Bounded sanitized independently produced Box evidence; no secrets
         required: true
         type: string
 permissions:
   contents: read
   actions: read
-concurrency:
-  group: independent-installed-verifier
-  cancel-in-progress: false
 jobs:
-  installed:
+  record:
     if: github.ref == 'refs/heads/main'
-    # Administratively provisioned ephemeral runner INSIDE a distinct authorized
-    # disposable Box. Never label an operator host or the Finder Box this way.
-    runs-on: [self-hosted, linux, x64, boxweave-independent-verifier]
-    environment: boxweave-independent-verifier
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Pin original successful main candidate before any installation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Authenticate report submitter and retrieve original candidate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         run: |
           set -euo pipefail
-          python3 -m tools.reacceptance.candidate_fetch \
-            --candidate-run-id "$CANDIDATE_RUN_ID" --source "$GITHUB_SHA" \
-            --out original-candidate > candidate-origin.json
-      - name: Install once in the exact independently approved test Box and inspect
-        # The admin-owned identity/expiry grant is not a repository credential.
-        # No signer key or publishing token is present on this runner.
+          python - <<'PY_SUBMITTER'
+          import json,os,re
+          from pathlib import Path
+          from urllib.parse import quote
+          from tools.reacceptance.workflow_gate import api,REPOSITORY
+          actor=os.environ['GITHUB_ACTOR']
+          permission=api('repos/'+REPOSITORY+'/collaborators/'+quote(actor,safe='')+'/permission')
+          assert permission.get('permission') in ('admin','maintain','write'), 'Unauthorized report submitter'
+          event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          run_id=event['inputs']['candidate_run_id']
+          assert re.fullmatch(r'[1-9][0-9]{0,19}',run_id)
+          from tools.reacceptance.candidate_fetch import fetch
+          origin=fetch(run_id,os.environ['GITHUB_SHA'],'original-candidate')
+          context={k:origin[k] for k in ('candidate_run_id','candidate_run_attempt','candidate_artifact_id','candidate_artifact_digest')}
+          context.update(verifier_run_id=int(os.environ['GITHUB_RUN_ID']),verifier_run_attempt=int(os.environ['GITHUB_RUN_ATTEMPT']))
+          Path('trusted-context.json').write_text(json.dumps(context,sort_keys=True))
+          PY_SUBMITTER
+      - name: Read bounded evidence as data without logging the payload
         run: |
           set -euo pipefail
-          sudo -n /usr/bin/python3 -m tools.reacceptance.verifier_worker \
-            --assets "$GITHUB_WORKSPACE/original-candidate" --source "$GITHUB_SHA" \
-            --workflow-run-id "$GITHUB_RUN_ID" --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --grant /etc/boxweave-reacceptance/install-grant.json \
-            --out "/var/lib/boxweave-reacceptance/original-worker" \
-            --public-report "$GITHUB_WORKSPACE/installed-summary.json"
-      - name: Preserve non-secret partial report
-        if: always()
-        uses: actions/upload-artifact@v4
+          python - <<'PY_INPUT' | python -m tools.reacceptance.box_acceptance unpack --out verifier-evidence
+          import json,os,sys
+          from pathlib import Path
+          event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          encoded=event['inputs']['evidence_bundle_b64']
+          assert isinstance(encoded,str) and len(encoded)<=55000
+          sys.stdout.write(encoded)
+          PY_INPUT
+      - name: Bind recording context and validate original Box evidence
+        run: |
+          set -euo pipefail
+          python -m tools.reacceptance.box_acceptance stamp-context \
+            --assets original-candidate --evidence verifier-evidence \
+            --source "$GITHUB_SHA" --context trusted-context.json
+          python -m tools.reacceptance.box_acceptance check \
+            --assets original-candidate --evidence verifier-evidence \
+            --source "$GITHUB_SHA" --context trusted-context.json
+      - uses: actions/upload-artifact@v4
         with:
-          name: reacceptance-partial-installed-verifier
-          path: installed-summary.json
-          if-no-files-found: warn
-  # Intentionally no signer/publisher: the current worker exits 2 on incomplete
-  # mandatory scenarios. Never rename the PARTIAL artifact to release evidence.
+          name: reacceptance-installed-verifier
+          path: verifier-evidence/
+          if-no-files-found: error
+# This workflow records/checks submitted observations. It does not execute
+# remote Box tests, sign, approve human decisions or publish a release.
