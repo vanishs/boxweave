@@ -88,3 +88,10 @@ argv validator now allows this exceptional exact root-owned immutable release
 path only, rejecting user-controlled Python files or symlinks; it does not
 introduce a new customer endpoint or generic root execution. Installed
 schema-safe per-tool case results still require a separate source rerun.
+
+The initial root-path check also uncovered an EACCES false negative:
+the verified installed release parent directories are root-owned 0700, so the
+ordinary user could not traverse them. The validation now uses only fixed
+read-only `sudo -n /usr/bin/stat` on the strict release-path components,
+with non-following file type, root UID and non-writable mode assertions.
+The original failed probe was preserved as a separate run.

@@ -852,13 +852,30 @@ def trusted_installed_root_mcp(path):
             r"/var/lib/boxweave-default/releases/0[.]\d+[.]\d+-[a-f0-9]{40}/mcp_gate[.]py",
             str(p)):
         return False
-    if p.is_symlink() or not p.is_file() or p.resolve() != p:
-        return False
-    for entry in (p, p.parent, p.parent.parent, p.parent.parent.parent):
-        if entry.is_symlink():
+    # The official parent is 0700; unprivileged os.stat will return EACCES.
+    # Run only the fixed read-only system stat with NO symlink following,
+    # never arbitrary root Python or a shell command from test input.
+    for index, entry in enumerate((p, p.parent, p.parent.parent,
+                                   p.parent.parent.parent)):
+        try:
+            result = subprocess.run(
+                ["sudo", "-n", "/usr/bin/stat", "-c", "%u %a %F",
+                 "--", str(entry)],
+                capture_output=True, text=True, timeout=5, check=False)
+        except (OSError, subprocess.TimeoutExpired):
             return False
-        st = entry.stat()
-        if st.st_uid != 0 or st.st_mode & 0o022:
+        if result.returncode != 0:
+            return False
+        parts = result.stdout.strip().split(" ", 2)
+        if len(parts) != 3 or parts[0] != "0":
+            return False
+        try:
+            mode = int(parts[1], 8)
+        except ValueError:
+            return False
+        if mode & 0o022:
+            return False
+        if parts[2] != ("regular file" if index == 0 else "directory"):
             return False
     return True
 
