@@ -163,12 +163,14 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
     try:
         rest.request("GET", "/v1/containers/"+body["username"], timeout=20)
     except rest_wire.WireFault as error:
-        # Containarium 0.128 mislabels an exact Incus absent-instance reply
-        # as HTTP 500 / gRPC Unknown. This compatibility exception is confined
-        # to the create preflight; generic 500s still block all writes.
-        known_missing = (error.code == "API_TARGET_NOT_FOUND" or (
-            error.code == "API_HTTP_REJECTED"
-            and getattr(error, "legacy_missing_instance", False)))
+        # The centralized adapter returns *standard* gRPC NotFound / HTTP
+        # 404 only for validated typed Provider replies or the exact v0.128
+        # compatibility signature. A bare HTTP 404 can be a missing API route
+        # and must not license an irreversible create.
+        known_missing = (
+            error.grpc_code is rest_wire.rest_status.GRPCCode.NOT_FOUND
+            and error.http_status == 404
+            and error.status_origin in ("grpc", "compatibility"))
         if not known_missing:
             raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
     else:
