@@ -328,54 +328,66 @@ class LifecycleTests(Base):
         self.assertEqual(self.provider.inspect_count,count)
 
 class AdapterContractTests(Base):
+    """The app may use MCP for guest identity, never for migrated lifecycle."""
+
     def configured(self):
         import sys
-        p=Provider({"provider":"containarium","backend":"dev","project":"default",
-                    "launcher":[sys.executable],"targets":{TARGET.logical:TARGET.data()}})
+        return Provider({"provider":"containarium","backend":"dev","project":"default",
+                         "launcher":[sys.executable],
+                         "targets":{TARGET.logical:TARGET.data()}})
+
+    def with_rest(self):
+        from bwmini.provider_rest import RESTClient
+        p=self.configured()
+        p.rest=RESTClient({"url":"http://127.0.0.1:18080",
+                           "token_file":"/tmp/no-credential-read"})
         return p
+
     def test_inventory_requires_complete_unique_count_before_absence(self):
-        p=self.configured()
-        class Session:
-            raw=""
-            def __enter__(self):return self
-            def __exit__(self,*args):pass
-            def discover(self):return {}
-            def tool(self,*args):return {"content":[{"type":"text","text":self.raw}]}
-        session=Session();p.session=lambda *args:session
-        session.raw="Found 1 container(s):\n\n   Username: existing\n"
+        p=self.with_rest(); replies=[{"containers":[{"username":"existing"}],
+                                      "unreachableBackends":[],"totalCount":1}]
+        calls=[]
+        def request(method,route,body=None,timeout=30):
+            calls.append((method,route))
+            return replies[0]
+        p.rest.request=request
+        p.session=lambda *args: self.fail("MCP inventory is forbidden")
         self.assertEqual(p.lifecycle_inventory(),{"existing"})
-        for raw in ["unknown error","Found 2 container(s):\n   Username: existing",
-                    "Found 2 container(s):\n   Username: existing\n   Username: existing\n",
-                    '{"containers":[],"nextCursor":"more"}']:
-            session.raw=raw
-            with self.assertRaisesRegex(Fault,"INVENTORY_CONTRACT_UNSUPPORTED"):p.lifecycle_inventory()
+        self.assertEqual(calls,[("GET","/v1/containers")])
+        for value in (
+            {"containers":[],"nextCursor":"more"},
+            {"containers":[{"username":"existing"}],"totalCount":2},
+            {"containers":[{"username":"existing"},{"username":"existing"}]},
+            {"containers":[],"unreachableBackends":[{"id":"offline"}]},
+        ):
+            with self.subTest(value=value):
+                replies[0]=value
+                with self.assertRaisesRegex(Fault,"INVENTORY_CONTRACT_UNSUPPORTED"):
+                    p.lifecycle_inventory()
+
     def test_mutation_arguments_always_include_full_key_and_never_force(self):
-        from unittest.mock import patch
-        p=self.configured();calls=[]
-        class Session:
-            def __init__(self,*args):pass
-            def __enter__(self):return self
-            def __exit__(self,*args):pass
-            def discover(self):
-                props={k:{} for k in ["username","cpu","memory","disk","image","ssh_keys","enable_podman","force","waitForReady"]}
-                return {n:{"inputSchema":{"properties":props}} for n in ["create_container","start_container","stop_container","delete_container"]}
-            def tool(self,n,args):calls.append((n,args))
+        p=self.with_rest();calls=[]
+        def request(method,route,body=None,timeout=30):
+            calls.append((method,route,body))
+            return {"container":{"username":NAME,"state":"CONTAINER_STATE_CREATING"}}
+        p.rest.request=request
+        p.session=lambda *args: self.fail("MCP lifecycle is forbidden")
         spec=LifecycleFixture().lifecycle_config
-        with patch("bwmini.provider.MCP",Session):
-            for action in ("create","stop","start","delete"):p.lifecycle_mutate(action,NAME,spec,1800)
-        self.assertEqual(calls[0][1]["ssh_keys"],[PUBLIC])
-        self.assertIs(calls[0][1]["enable_podman"],False)
-        self.assertIs(calls[1][1]["force"],False)
-        self.assertIs(calls[2][1]["waitForReady"],False)
-        self.assertIs(calls[3][1]["force"],False)
-    def test_unsupported_create_key_contract_fails_without_tool_call(self):
-        from unittest.mock import patch
+        for action in ("create","stop","start","delete"):
+            p.lifecycle_mutate(action,NAME,spec,1800)
+        self.assertEqual([m for m,_,_ in calls],["POST","POST","POST","DELETE"])
+        self.assertEqual(calls[0][1],"/v1/containers")
+        self.assertEqual(calls[0][2]["sshKeys"],[PUBLIC])
+        self.assertIs(calls[0][2]["enablePodman"],False)
+        self.assertIs(calls[0][2]["async"],True)
+        self.assertEqual(calls[1][2],{"force":False})
+        self.assertEqual(calls[2][2],{"waitForReady":False})
+        self.assertIsNone(calls[3][2])
+
+    def test_missing_rest_fails_closed_without_mcp_create_or_read(self):
         p=self.configured()
-        class Session:
-            def __init__(self,*args):pass
-            def __enter__(self):return self
-            def __exit__(self,*args):pass
-            def discover(self):return {"create_container":{"inputSchema":{"properties":{"username":{}}}}}
-            def tool(self,*args):raise AssertionError("Must not create without explicit key")
-        with patch("bwmini.provider.MCP",Session),self.assertRaisesRegex(Fault,"CONTRACT_UNSUPPORTED"):
+        p.session=lambda *args: self.fail("Legacy lifecycle MCP fallback forbidden")
+        with self.assertRaisesRegex(Fault,"PROVIDER_API_REQUIRED"):
+            p.lifecycle_inventory()
+        with self.assertRaisesRegex(Fault,"PROVIDER_API_REQUIRED"):
             p.lifecycle_mutate("create",NAME,LifecycleFixture().lifecycle_config,60)

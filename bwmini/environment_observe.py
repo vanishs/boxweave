@@ -10,7 +10,6 @@ import re
 import time
 
 from .domain import Fault, Target
-from .wire_results import text
 
 _ACTIONS = ("snapshot_list", "snapshot_create", "snapshot_delete",
             "snapshot_restore", "clone_instance", "clone_snapshot",
@@ -41,7 +40,7 @@ def _sha(obj):
         separators=(",",":"), ensure_ascii=True).encode()).hexdigest()
 
 def observe_exact(config, logical, payload, catalog, observed_at=None):
-    """Accept a verified MCP observation, not an arbitrary requested target."""
+    """Accept the REST-observed exact target plus specialist MCP capability hints."""
     if not isinstance(config,dict):
         raise Fault("ENVIRONMENT_SCOPE_INVALID")
     targets=config.get("targets")
@@ -143,23 +142,15 @@ class EnvironmentInspector:
         targets=config.get("targets")
         if not isinstance(targets,dict) or logical not in targets:
             raise Fault("TARGET_NOT_ALLOWED",403)
+        # REST is mandatory for migrated container identity and resource
+        # reads. MCP discovery remains authorized only for unmigrated
+        # snapshot/clone capability candidates, never get_container.
+        rest=getattr(self.provider,"rest",None)
+        if rest is None:
+            raise Fault("PROVIDER_API_REQUIRED",422)
+        payload={"container":rest.container(logical)}
         with self.provider.session() as m:
             catalog=m.discover()
             if not isinstance(catalog,dict) or len(catalog)>256:
                 raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
-            tool=catalog.get("get_container")
-            spec=tool.get("inputSchema") if isinstance(tool,dict) else None
-            if (not isinstance(spec,dict) or not isinstance(spec.get("properties"),dict)
-                    or not isinstance(spec["properties"].get("username"),dict)):
-                raise Fault("ENVIRONMENT_READ_UNSUPPORTED")
-            if getattr(self.provider, "rest", None) is None:
-                result=m.tool("get_container",{"username":logical})
-                try:
-                    payload=json.loads(text(result))
-                except (ValueError,TypeError):
-                    raise Fault("ENVIRONMENT_OBSERVATION_UNVERIFIED") from None
-            else:
-                # Preserve the separate MCP capability discovery contract;
-                # retrieve the actual Box state through the typed REST API.
-                payload={"container":self.provider.rest.container(logical)}
         return observe_exact(config,logical,payload,catalog)

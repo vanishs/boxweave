@@ -175,3 +175,44 @@ def validate_read_result(tool, result, *, username=None):
             import debug_rest
         return debug_rest.validate(result)
     raise RouteFault("REST_TOOL_UNSUPPORTED")
+
+
+# Canonical BoxWeave-owned MCP descriptors for REST-migrated operations.
+# Never trust an upstream MCP tool catalogue to describe or authorize them.
+MIGRATED_TOOLS = frozenset(_NAMES)
+
+def mcp_tool_catalog():
+    def spec(fields, *, required=()):
+        return {"type":"object","properties":fields,"required":list(required),
+                "additionalProperties":False}
+    logical={"type":"string","pattern":"^[a-z][a-z0-9-]{0,62}$"}
+    string={"type":"string","minLength":1,"maxLength":512}
+    boolean={"type":"boolean"}
+    create={"username":logical}
+    create.update({k:dict(string) for k in _STR})
+    create.update({k:dict(boolean) for k in _BOOL})
+    create["idle_stop_minutes"]={"type":"integer","minimum":0,"maximum":2147483647}
+    create["ssh_keys"]={"type":"array","items":dict(string),"maxItems":16}
+    create["gpus"]={"type":"array","items":dict(string),"maxItems":16}
+    create["isolation"]={"type":"string","enum":["container","vm",""]}
+    create["os_type"]={"type":"string","enum":["ubuntu","rocky9","rhel9","windows2022",""]}
+    create["enable_nesting"]={"type":"boolean"}
+    entries=(
+        ("list_containers",spec({}),True),
+        ("get_container",spec({"username":logical},required=("username",)),True),
+        ("debug_container",spec({"username":logical},required=("username",)),True),
+        ("create_container",spec(create,required=("username",)),False),
+        ("start_container",spec({"username":logical,"waitForReady":boolean,
+                                 "wait_for_ready":boolean},required=("username",)),False),
+        ("stop_container",spec({"username":logical,"force":boolean},
+                                required=("username",)),False),
+        ("delete_container",spec({"username":logical,"force":boolean},
+                                  required=("username",)),False),
+        ("resize_container",spec({"username":logical,
+                                  "cpu":string,"memory":string,"disk":string},
+                                  required=("username",)),False),
+    )
+    return [{"name":name,"description":"BoxWeave managed REST "+name.replace("_"," "),
+             "inputSchema":schema,
+             "annotations":{"readOnlyHint":readonly,"destructiveHint":not readonly}}
+            for name,schema,readonly in entries]

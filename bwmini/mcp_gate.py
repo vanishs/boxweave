@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest, gateway_create, rest_mutations
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, gateway_rest, gateway_create, rest_mutations
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -21,14 +21,13 @@ except ImportError:
     import mcp_compat
     import restore_guard
     import resource_size
-    import debug_rest
     import gateway_rest
     import gateway_create
     import rest_mutations
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.50.2"
+SERVER_INFO_VERSION = "0.50.3"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -194,58 +193,51 @@ def guard_restore_catalog(message):
 
 
 def catalog(message):
-    if "result" not in message: return message
-    for tool in message["result"].get("tools", []):
-        if tool.get("name") == "create_container":
-            tool["description"] = (
-                "Create an isolated Linux development Box for coding and testing. "
-                "BoxWeave injects its own managed workload SSH public key; "
-                "ssh_keys is optional and accepts only additional authorized Ed25519 "
-                "public keys. Never supply client transport keys, fingerprints or "
-                "private keys. Check existing Boxes first. After creation use "
-                "connect(exec) for commands. If creation times out, check state "
-                "before retry; diagnose connection failures with debug_container."
-            )
-            schema = tool["inputSchema"]
-            schema["required"] = [field for field in schema.get("required", []) if field != "ssh_keys"]
-            schema["properties"].setdefault("ssh_keys", {})["description"] = (
-                "Optional additional authorized full Ed25519 public keys. The "
-                "BoxWeave MCP host automatically supplies its own managed workload "
-                "public key. Do not pass client transport keys, fingerprints or private keys.")
-            tool["inputSchema"]["properties"]["enable_nesting"] = {
-                "type":"boolean",
-                "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
-        elif tool.get("name") == "connect":
-            tool["description"] = (
-                "Connect to a managed Box by logical username or a registry-verified "
-                "displayed <username>-container name with exact-target SSH trust. "
-                "Optional exec runs one command inside the Box and returns "
-                "stdout/stderr/exit_code; omit exec for human SSH instructions. "
-                "Commands may mutate the Box. Host/user overrides inconsistent "
-                "with the registered target are rejected."
-            )
-        elif tool.get("name") == "list_containers":
-            tool["description"] = (
-                "Read-only list of existing Boxes, state, IP and resources. "
-                "Check before creating a development/test Box."
-            )
-        elif tool.get("name") == "delete_container":
-            tool["description"] = (
-                "Permanently delete a Box and its data. Destructive: obtain "
-                "explicit authorization and verify target; after a timeout "
-                "inspect state instead of blindly retrying."
-            )
-    message = guard_restore_catalog(message)
-    extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, gd.COORD_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
+    if "result" not in message:
+        return message
+    message=guard_restore_catalog(message)
+    tools=message["result"].get("tools")
+    if not isinstance(tools,list):
+        raise ValueError("UPSTREAM_CATALOG_INVALID")
+    rest={t["name"]:t for t in gateway_rest.rest_routes.mcp_tool_catalog()}
+    # Source-controlled REST schemas, not forwarded MCP tool definitions.
+    rest["create_container"]["description"]=(
+        "Create an isolated development Box using one durable REST intent. "
+        "BoxWeave automatically supplies its managed workload SSH public key; extra "
+        "ssh_keys are optional. A CREATING response is not guest-ready. "
+        "If a result is UNKNOWN, inspect the original task without retrying.")
+    rest["create_container"]["inputSchema"]["properties"]["ssh_keys"]["description"]=(
+        "Optional additional authorized Ed25519 public keys. The server automatically supplies "
+        "its own managed workload SSH public key.")
+    rest["list_containers"]["description"]=(
+        "Read-only REST inventory of existing Boxes and their resources.")
+    rest["delete_container"]["description"]=(
+        "Permanently delete an exactly identified Box using one tracked REST "
+        "intent; do not retry an UNKNOWN outcome.")
+    chosen=set()
+    converted=[]
+    for tool in tools:
+        if not isinstance(tool,dict):
+            continue
+        name=tool.get("name")
+        if name in rest:
+            if name not in chosen:
+                converted.append(rest[name])
+                chosen.add(name)
+            continue
+        if name=="connect":
+            tool["description"]=(
+                "Connect to a managed Box by exact-target logical name or displayed "
+                "name with pinned SSH trust. Exec remains MCP and may mutate "
+                "the guest. Host and user overrides are refused.")
+        converted.append(tool)
+    # A missing upstream MCP descriptor cannot hide an implemented REST route.
+    converted.extend(tool for name,tool in rest.items() if name not in chosen)
+    extras=(LEASE_TOOL,PATCH_TOOL) if gateway_protection.enabled() else ()
+    converted.extend((NESTING_TOOL,INFO_TOOL,gd.DIAG_TOOL,gd.PROJECT_TOOL,
+                      gd.COORD_TOOL,*box_reads.TOOLS,*gateway_tasks.TOOLS,*extras))
+    message["result"]["tools"]=converted
     return message
-
-def nesting_plan(logical, wanted, observed):
-    plan = nesting_invoke({"action":"plan","logical":logical,"nesting":wanted})
-    target = plan["target"]
-    if target["name"] != observed["name"] or target["created"] != str(observed["createdAt"]):
-        raise ValueError("TARGET_CHANGED")
-    return plan
 
 REGISTRY = Path("/var/lib/boxweave-default/public/targets.json")
 LAUNCHER = "/usr/local/lib/boxweave/boxweave/launcher"
@@ -269,6 +261,11 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
     "COORDINATOR_SELECTOR_INVALID",
     "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
+    "INVALID_ARGUMENT", "NOT_FOUND", "ALREADY_EXISTS", "FAILED_PRECONDITION",
+    "RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "UNKNOWN",
+    "PERMISSION_DENIED", "UNAUTHENTICATED", "ABORTED", "INTERNAL",
+    "REST_APP_CONFIG_UNVERIFIED", "REST_APP_COORDINATION_NOT_ALIGNED",
+    "REST_STATE_DB_UNSAFE", "REST_STATE_DB_UNAVAILABLE",
     "RESTORE_APPROVAL_REQUIRED", "RESTORE_KEY_OR_POLICY_UNSAFE", "RESTORE_ARGUMENT_INVALID",
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
@@ -486,40 +483,6 @@ def filter_tools(message, allowed):
                        isinstance(t, dict) and t.get("name") in allowed]
     return message
 
-def annotate_failed_create(message, args):
-    """Preserve upstream error while making post-commit ambiguity explicit.
-
-    This path does not inspect, retry, adopt or modify the target. An original
-    name readback through get_container is required before any decision.
-    """
-    if not isinstance(message, dict) or not isinstance(args, dict):
-        return message
-    logical = args.get("username")
-    if (not isinstance(logical, str) or
-            re.fullmatch(r"[a-z][a-z0-9-]{0,62}", logical) is None):
-        return message
-    failed = "error" in message or (
-        isinstance(message.get("result"), dict) and
-        message["result"].get("isError") is True)
-    if not failed:
-        return message
-    evidence = {"state": "unknown", "code": "CREATE_OUTCOME_UNVERIFIED",
-                "logical": logical, "inspect": "get_container",
-                "retry": "not_authorized"}
-    if isinstance(message.get("error"), dict):
-        error = message["error"]
-        if error.get("data") is None:
-            error["data"] = {"boxweave_create": evidence}
-        elif isinstance(error["data"], dict):
-            error["data"].setdefault("boxweave_create", evidence)
-    else:
-        result = message.get("result")
-        if isinstance(result, dict) and isinstance(result.get("content"), list):
-            result["content"].insert(0, {"type": "text",
-                                       "text": json.dumps({"boxweave_create": evidence})})
-    return message
-
-
 def main():
     permitted = tool_policy()
     process = subprocess.Popen([LAUNCHER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -541,28 +504,11 @@ def main():
             "isError": False}}), flush=True)
 
     def container(logical, ident):
-        selected_rest = gateway_rest.policy()
-        if selected_rest is not None:
-            value = gateway_rest.execute_read(
-                selected_rest, "get_container", {"username": logical})
-            return value["container"]
-        internal = "boxweave-nesting-" + str(ident)
-        send({"jsonrpc":"2.0","id":internal,"method":"tools/call",
-              "params":{"name":"get_container","arguments":{"username":logical}}})
-        result = reply(internal, False).get("result")
-        if not isinstance(result, dict) or result.get("isError"):
-            raise ValueError("TARGET_READ_FAILED")
-        try:
-            blocks = [b["text"] for b in result["content"]
-                      if isinstance(b, dict) and b.get("type") == "text"]
-            if len(blocks) != 1:
-                raise ValueError()
-            observed = json.loads(blocks[0])["container"]
-            if not isinstance(observed, dict):
-                raise ValueError()
-            return observed
-        except (TypeError, KeyError, ValueError, UnicodeError):
-            raise ValueError("TARGET_READ_FAILED") from None
+        # Native exact-target, trust and nesting preflights must use the
+        # migrated REST read. Never tunnel get_container via upstream MCP.
+        config=gateway_rest.policy()
+        return gateway_rest.execute_read(
+            config, "get_container", {"username": logical})["container"]
     upstream_mcp_version = "not_verified"
     try:
         for line in sys.stdin:
@@ -577,14 +523,17 @@ def main():
                     message = guard_restore_catalog(message)
                 message = filter_tools(message, permitted)
                 try:
-                    selected_rest = gateway_rest.policy()
-                    selected_debug = (
-                        debug_rest.gateway_config() is not None or
-                        selected_rest is not None)
+                    try:
+                        selected_rest = gateway_rest.policy()
+                    except gateway_rest.GatewayRESTFault:
+                        # Missing REST credentials must not disable discovery
+                        # of unrelated specialist MCP tools. All migrated
+                        # calls still fail closed when actually invoked.
+                        selected_rest = None
+                    selected_debug = selected_rest is not None
                     protected = gateway_protection.enabled()
-                    coordinated_rest = bool(
-                        protected and selected_rest is not None and
-                        selected_rest["mode"] == "coordinated")
+                    coordinated_rest = (selected_rest is not None and
+                                        selected_rest["mode"] == "coordinated")
                     if protected:
                         message = gateway_protection.filter_catalog(
                             message, rest_debug=selected_debug,
@@ -612,7 +561,7 @@ def main():
                                     if not any(t.get("name") == tool["name"]
                                                for t in message["result"]["tools"]):
                                         message["result"]["tools"].append(dict(tool))
-                except (debug_rest.DebugRESTError, gateway_rest.GatewayRESTFault) as error:
+                except gateway_rest.GatewayRESTFault as error:
                     # A malformed root policy cannot silently downgrade or
                     # widen the protected forwarded MCP catalog.
                     print(json.dumps({"jsonrpc":"2.0","id":request.get("id"),
@@ -620,7 +569,6 @@ def main():
                     continue
                 print(json.dumps(message), flush=True)
                 continue
-            nesting = None
             started = time.monotonic()
             trace = secrets.token_hex(16)
             if request.get("method") == "tools/call":
@@ -630,22 +578,27 @@ def main():
                         "error":{"code":-32601,"message":"GATE_TOOL_NOT_ALLOWED"}}), flush=True)
                     continue
                 try:
-                    debug_config = (debug_rest.gateway_config()
-                                    if params.get("name") == "debug_container" else None)
-                    rest_config = gateway_rest.policy()
+                    name=params.get("name")
+                    migrated = name in gateway_rest.ROUTED
+                    rest_state_tool = name in (
+                        "boxweave_rest_status", "boxweave_create_status")
+                    # Unmigrated MCP tools remain usable independently of
+                    # the REST app binding. Only migrated tools may read the
+                    # binding, and may never fall back to MCP if it is absent.
+                    rest_config = (gateway_rest.policy()
+                                   if migrated or rest_state_tool else None)
                     protected = gateway_protection.enabled()
-                    coordinated_rest = bool(
-                        protected and rest_config is not None and
-                        rest_config["mode"] == "coordinated")
+                    coordinated_rest = (rest_config is not None and
+                                        rest_config["mode"] == "coordinated")
                     if protected:
                         gateway_protection.check_call(
                             params.get("name"), args,
-                            rest_debug=debug_config is not None or rest_config is not None,
+                            rest_debug=rest_config is not None,
                             coordinated_rest=coordinated_rest)
                     if rest_config is not None and params.get("name") == "create_container":
                         receipt = gateway_create.dispatch(
                             rest_config, args, request.get("id"),
-                            normalize=managed_create_arguments, protected=protected)
+                            normalize=managed_create_arguments, protected=True)
                         emit_result(request["id"], receipt)
                         gd.record("create_container", {
                             "result": {"content": [], "isError": False}},
@@ -658,7 +611,7 @@ def main():
                             validated_resize_arguments(args)
                         receipt = rest_mutations.dispatch(
                             rest_config, params["name"], args,
-                            protected=protected)
+                            protected=True)
                         emit_result(request["id"], receipt)
                         gd.record(params["name"],
                                   {"result":{"content":[],"isError":False}},
@@ -690,17 +643,6 @@ def main():
                         emit_result(request["id"], value)
                         gd.record(params["name"],
                                   {"result": {"content": [], "isError": False}},
-                                  (time.monotonic()-started)*1000, trace=trace)
-                        continue
-                    if debug_config is not None:
-                        if not isinstance(args, dict) or set(args) != {"username"}:
-                            raise debug_rest.DebugRESTError("DEBUG_REST_TARGET_INVALID")
-                        result = debug_rest.read(debug_config, args["username"])
-                        emit_result(request["id"], result)
-                        # Only success metadata, never journal lines or freeform
-                        # upstream data, enters the Gateway diagnostic journal.
-                        gd.record(params["name"],
-                                  {"result":{"content":[],"isError":False}},
                                   (time.monotonic()-started)*1000, trace=trace)
                         continue
                     if params.get("name") == "boxweave_diagnose":
@@ -930,48 +872,6 @@ def main():
                         print(json.dumps({"jsonrpc":"2.0","id":request["id"],"result":{
                             "content":[{"type":"text","text":json.dumps(value)}]}}), flush=True)
                         continue
-                    if params.get("name") == "create_container":
-                        args = managed_create_arguments(args)
-                        params["arguments"] = args
-                        if "enable_nesting" in args:
-                            if (any(args.get(k) for k in ("backend_id","pool","region"))
-                                    or args.get("isolation") not in (None,"","container")
-                                    or args.get("os_type") not in (None,"","ubuntu")):
-                                raise ValueError("LOCAL_UBUNTU_NESTING_ONLY")
-                            nesting = args.pop("enable_nesting")
-                            if type(nesting) is not bool: raise ValueError("NESTING_BOOLEAN_REQUIRED")
-                    if params.get("name") == "resize_container":
-                        validated_resize_arguments(args)
-                        if args.get("disk") not in (None, ""):
-                            logical = args.get("username")
-                            if (not isinstance(logical, str) or
-                                    re.fullmatch(r"[a-z][a-z0-9-]{0,62}", logical) is None):
-                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED")
-                            # Upstream 0.128.0 acknowledged a 25GB->24GB shrink,
-                            # contradicting its advertised disk-grow-only contract.
-                            # Do a read-only authoritative preflight. An invalid
-                            # response must never be treated as zero size.
-                            internal = "boxweave-disk-" + secrets.token_hex(12)
-                            send({"jsonrpc":"2.0", "id":internal, "method":"tools/call",
-                                  "params":{"name":"get_container",
-                                            "arguments":{"username":logical}}})
-                            observed = reply(internal, False)
-                            result = observed.get("result")
-                            if (not isinstance(result, dict) or result.get("isError") or
-                                    not isinstance(result.get("content"), list)):
-                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED")
-                            try:
-                                blocks = [b["text"] for b in result["content"]
-                                          if isinstance(b, dict) and b.get("type") == "text"]
-                                if len(blocks) != 1:
-                                    raise ValueError()
-                                row = json.loads(blocks[0])["container"]
-                                if row["username"] != logical:
-                                    raise ValueError()
-                                current = row["resources"]["disk"]
-                            except (KeyError, TypeError, ValueError, UnicodeError):
-                                raise ValueError("RESOURCE_DISK_SIZE_UNVERIFIED") from None
-                            resource_size.require_nonshrinking_disk(args["disk"], current)
                     if params.get("name") == "connect":
                         if not isinstance(args, dict):
                             raise ValueError("EXACT_MANAGED_TARGET_REQUIRED")
@@ -996,9 +896,11 @@ def main():
                                   trace=trace, local_denial=reason)
                     print(json.dumps(error_result), flush=True)
                     continue
+            # Only genuinely unmigrated upstream MCP functions reach this
+            # relay. All eight migrated methods have returned above.
             send(request)
             if "id" in request:
-                if nesting is None and request.get("method") == "initialize":
+                if request.get("method") == "initialize":
                     message = reply(request["id"], False)
                     result = message.get("result")
                     if isinstance(result, dict):
@@ -1013,51 +915,18 @@ def main():
                                      "description":SERVER_DESCRIPTION})
                         result["instructions"] = SERVER_INSTRUCTIONS
                     print(json.dumps(message), flush=True)
-                elif nesting is None:
+                else:
                     try:
                         message = reply(request["id"], False)
                     except (ValueError, OSError):
-                        # Record an uncertain upstream response; never replay
-                        # the operation or replace its original failure.
                         if request.get("method") == "tools/call":
                             gd.record(request.get("params", {}).get("name", ""),
                                       {"error": {"code": -32603}},
                                       (time.monotonic() - started) * 1000, trace=trace)
                         raise
                     if request.get("method") == "tools/call":
-                        if params.get("name") == "create_container":
-                            message = annotate_failed_create(message, args)
                         gd.record(request.get("params", {}).get("name", ""), message,
                                   (time.monotonic() - started) * 1000, trace=trace)
-                    print(json.dumps(message), flush=True)
-                else:
-                    message = annotate_failed_create(reply(request["id"], False), args)
-                    if "error" not in message and not message.get("result", {}).get("isError"):
-                        try:
-                            logical = args["username"]
-                            plan = nesting_plan(logical, nesting, container(logical, request["id"]))
-                            value = nesting_invoke({"action":"apply","logical":logical,"nesting":nesting,
-                                                    "expected":plan["expected"],"confirm":plan["target"]["name"]})
-                            message["result"]["content"].append({"type":"text","text":json.dumps({"boxweave_nesting":value})})
-                        except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
-                            detail = str(error) if str(error) in GATE_ERROR_CODES else "NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE"
-                            # Preserve the upstream *successful creation* receipt.
-                            # A JSON-RPC error hides that a real Box exists and can
-                            # prompt a client to retry a non-idempotent create.
-                            # The post-create setting may have applied even if its
-                            # verification failed: report UNKNOWN, never "false".
-                            partial = {"state": "partial", "box_created": True,
-                                       "requested_nesting": nesting,
-                                       "nesting_outcome": "not_verified",
-                                       "code": detail, "username": args["username"],
-                                       "next_action": "Inspect the original Box; do not repeat create_container."}
-                            result = message["result"]
-                            result["content"] = [{"type": "text",
-                                                  "text": json.dumps({"boxweave_nesting": partial})}
-                                                 ] + result.get("content", [])
-                            result["isError"] = True
-                    gd.record(request.get("params", {}).get("name", ""), message,
-                              (time.monotonic() - started) * 1000, trace=trace)
                     print(json.dumps(message), flush=True)
     finally:
         if process.poll() is None:

@@ -70,8 +70,11 @@ class ProtectedGatewayTests(unittest.TestCase):
         self.assertEqual(provider.sent,[])
         self.assertEqual(len(replies),len(calls))
         self.assertEqual(replies[0]["error"]["message"],"COORDINATION_USE_TRACKED_TASK")
+        # Migrated operations require the app-owned REST binding. Without
+        # that binding they fail closed rather than forwarding MCP writes.
         self.assertTrue(all(r["error"]["message"] in
-            ("COORDINATION_USE_TRACKED_TASK","COORDINATION_TOOL_UNCLASSIFIED")
+            ("COORDINATION_USE_TRACKED_TASK","COORDINATION_TOOL_UNCLASSIFIED",
+             "REST_APP_CONFIG_UNVERIFIED")
             for r in replies))
 
     def test_advertised_catalog_drops_unclassified_provider_mutators(self):

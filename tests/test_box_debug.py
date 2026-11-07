@@ -7,52 +7,57 @@ from test_slice import TARGET, Base, PASSWORD, HASH
 from bwmini.web import create_app
 
 
-class FakeClient:
-    def __init__(self, response, schema=None):
-        self.response = response
-        self.requested = []
-        self.schema = ({"type": "object", "properties": {"username": {"type": "string"}}}
-                       if schema is None else schema)
-    def __enter__(self): return self
-    def __exit__(self, *_): return False
-    def discover(self):
-        return {"debug_container": {"inputSchema": self.schema}}
-    def tool(self, name, args):
-        self.requested.append((name, args))
-        return {"content": [{"type": "text", "text": json.dumps(self.response)}]}
-
+class FakeRest:
+    def __init__(self,response):
+        self.response=response
+        self.requested=[]
+    def debug_container(self,logical):
+        self.requested.append(("debug_container",logical))
+        return self.response
+    def container(self,logical):
+        self.requested.append(("get_container",logical))
+        return {"username":TARGET.logical,"name":TARGET.instance,
+                "createdAt":TARGET.created}
 
 class FakeProvider:
-    mode = "mcp"
-    def __init__(self, client):
-        self.client = client
-    def session(self): return self.client
+    mode="mcp"
+    def __init__(self,rest):
+        self.rest=rest
+    def session(self):
+        raise AssertionError("debug_container must never fall back to MCP")
 
 
 class SummaryTests(unittest.TestCase):
     def test_safe_summary_drops_ssh_logs_and_raw_causes(self):
-        client = FakeClient({"containerState": "running", "hostUserExists": True,
-            "hostUserShellExists": False, "recentSshdRejections": ["SECRET"],
-            "likelyCause": "SENSITIVE", "nextActions": ["private"], "hostUserShell": "/bin/private"})
-        result = summary(FakeProvider(client), TARGET)
-        self.assertEqual(result["host_user_exists"], True)
-        self.assertEqual(result["host_user_shell_exists"], False)
-        self.assertEqual(client.requested, [("debug_container", {"username": TARGET.logical})])
-        self.assertNotIn("SECRET", json.dumps(result))
-        self.assertNotIn("SENSITIVE", json.dumps(result))
+        rest=FakeRest({"containerState":"running","hostUserExists":True,
+            "hostUserShellExists":False,"recentSshdRejections":["SECRET"],
+            "likelyCause":"SENSITIVE","nextActions":["private"],
+            "hostUserShell":"/bin/private"})
+        result=summary(FakeProvider(rest),TARGET)
+        self.assertTrue(result["host_user_exists"])
+        self.assertFalse(result["host_user_shell_exists"])
+        self.assertEqual(rest.requested,[
+            ("debug_container",TARGET.logical),("get_container",TARGET.logical)])
+        self.assertNotIn("SECRET",json.dumps(result))
+        self.assertNotIn("SENSITIVE",json.dumps(result))
         self.assertFalse(result["boxweave_host_ssh_verified"])
 
-    def test_invalid_schema_and_response_fail_closed(self):
-        for payload, schema in (
-            ({}, {}),
-            ({"containerState": "running", "hostUserExists": "yes"}, None),
-        ):
-            with self.subTest(payload=payload), self.assertRaises(Fault):
-                summary(FakeProvider(FakeClient(payload, schema)), TARGET)
+    def test_missing_rest_and_invalid_response_fail_closed(self):
+        with self.assertRaisesRegex(Fault,"PROVIDER_API_REQUIRED"):
+            summary(FakeProvider(None),TARGET)
+        # Missing optional fields are redacted as unverified, not invented
+        # success. Invalid explicitly typed fields must fail closed.
+        empty=summary(FakeProvider(FakeRest({})),TARGET)
+        self.assertEqual(empty["container_state"],"unverified")
+        self.assertIsNone(empty["host_user_exists"])
+        with self.assertRaisesRegex(Fault,"DEBUG_CONTRACT_UNSUPPORTED"):
+            summary(FakeProvider(FakeRest({
+                "containerState":"running","hostUserExists":"yes"})),TARGET)
 
     def test_unknown_upstream_state_never_claimed_healthy(self):
-        result = summary(FakeProvider(FakeClient({"containerState": "error: private detail"})), TARGET)
-        self.assertEqual(result["container_state"], "unverified")
+        result=summary(FakeProvider(FakeRest({
+            "containerState":"error: private detail"})),TARGET)
+        self.assertEqual(result["container_state"],"unverified")
 
 
 class DebugWebTests(Base):

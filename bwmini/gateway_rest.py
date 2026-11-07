@@ -1,8 +1,9 @@
-"""Root-published opt-in REST selector for the standalone Agent gateway.
+"""Mandatory REST boundary for the eight migrated Agent Gateway tools.
 
-A same-user Token is never exported over MCP. No incoming request can pick URL,
-HTTP verb, credential path or authorization mode. This does not grant new MCP
-permissions: Gateway's allowlist and protected R-04 checks run first.
+The reviewed application configuration is the sole credential/Provider source.
+No operator switch, request field or upstream MCP fallback can select a second
+transport for migrated lifecycle methods. Unmigrated specialist tools retain
+the separately protected MCP launcher.
 """
 import json
 import os
@@ -15,7 +16,7 @@ except ImportError:
     import rest_wire
     import rest_routes
 
-POLICY = Path("/var/lib/boxweave-default/public/lifecycle-rest.json")
+POLICY = Path("/home/boxweave/boxweave/config.json")
 ROUTED = frozenset(rest_routes._NAMES)
 WRITES = frozenset(("create_container", "start_container", "stop_container",
                     "delete_container", "resize_container"))
@@ -35,87 +36,49 @@ def _unique(pairs):
 
 
 def policy(path=POLICY):
-    """Only exact administrator-owned immutable policy selects REST.
+    """Load the one installed application REST binding; never return MCP mode.
 
-    Missing default policy retains legacy behavior; an *unsafe* present
-    policy fails closed. This is not a publicly callable configurator.
+    Missing, stale, unsafe or uncoordinated configuration fails closed. In
+    particular, old lifecycle-rest.json feature switches are ignored.
     """
     path = Path(path)
     try:
-        before = path.lstat()
-    except FileNotFoundError:
-        if path == POLICY:
-            return None
-        raise GatewayRESTFault("REST_POLICY_UNAVAILABLE") from None
-    try:
-        parent = path.parent.lstat()
-        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0
-                or parent.st_mode & 0o022
-                or not stat.S_ISREG(before.st_mode) or before.st_uid != 0
-                or before.st_mode & 0o022 or before.st_nlink != 1
-                or not 10 <= before.st_size <= 2048):
-            raise GatewayRESTFault("REST_POLICY_UNSAFE")
+        info=path.lstat()
+        parent=path.parent.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or info.st_uid != os.geteuid() or info.st_mode & 0o077
+                or not 10 <= info.st_size <= 65536
+                or not stat.S_ISDIR(parent.st_mode)
+                or parent.st_uid != os.geteuid() or parent.st_mode & 0o022):
+            raise GatewayRESTFault("REST_APP_CONFIG_UNVERIFIED")
         with path.open("rb") as stream:
-            raw = stream.read(2049)
-        if len(raw) > 2048:
-            raise GatewayRESTFault("REST_POLICY_UNSAFE")
-        now = path.lstat()
-        if (before.st_dev, before.st_ino) != (now.st_dev, now.st_ino):
-            raise GatewayRESTFault("REST_POLICY_UNSAFE")
-        value = json.loads(raw, object_pairs_hook=_unique)
+            app=json.loads(stream.read(65537), object_pairs_hook=_unique)
+        again=path.lstat()
+        if (info.st_dev,info.st_ino)!=(again.st_dev,again.st_ino):
+            raise GatewayRESTFault("REST_APP_CONFIG_UNVERIFIED")
     except (OSError, UnicodeError, ValueError) as exc:
-        if isinstance(exc, GatewayRESTFault):
+        if isinstance(exc,GatewayRESTFault):
             raise
-        raise GatewayRESTFault("REST_POLICY_INVALID") from None
-    if (not isinstance(value, dict)
-            or set(value) != ({"version", "enabled", "mode", "url", "token_file"}
-                                 | ({"state_db", "app_config"} if value.get("mode") == "coordinated" else set()))
-            or type(value["version"]) is not int or value["version"] != 1
-            or type(value["enabled"]) is not bool
-            or value["mode"] not in ("read", "coordinated")):
-        raise GatewayRESTFault("REST_POLICY_INVALID")
+        raise GatewayRESTFault("REST_APP_CONFIG_UNVERIFIED") from None
+    if (not isinstance(app,dict) or app.get("mode")!="mcp"
+            or app.get("coordination")!={"enabled":True}
+            or not isinstance(app.get("database"),str)
+            or not isinstance(app.get("provider_api"),dict)):
+        raise GatewayRESTFault("REST_APP_COORDINATION_NOT_ALIGNED")
     try:
-        rest_wire.Client({"url": value["url"], "token_file": value["token_file"]})
+        api=app["provider_api"]
+        rest_wire.Client(api)
+        from . import gateway_create
+    except ImportError:
+        import gateway_create
+        api=app["provider_api"]
+        rest_wire.Client(api)
     except rest_wire.WireFault as exc:
         raise GatewayRESTFault(exc.code) from None
-    if value["enabled"] and value["mode"] == "coordinated":
-        try:
-            from . import gateway_create
-        except ImportError:
-            import gateway_create
-        # The app store is the only durable receipt owner. Confirm Web/CLI
-        # explicitly opted into the same R-04 coordination core and Provider.
-        gateway_create.checked_app_store(value["state_db"])
-        app = value["app_config"]
-        if not isinstance(app, str) or not app.startswith(
-                "/home/boxweave/boxweave/") or ".." in Path(app).parts:
-            raise GatewayRESTFault("REST_APP_CONFIG_INVALID")
-        path = Path(app)
-        try:
-            info = path.lstat()
-            parent = path.parent.lstat()
-            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                    or info.st_uid != os.geteuid() or info.st_mode & 0o077
-                    or not 10 <= info.st_size <= 65536
-                    or not stat.S_ISDIR(parent.st_mode)
-                    or parent.st_uid != os.geteuid()
-                    or parent.st_mode & 0o022):
-                raise ValueError()
-            with path.open("rb") as stream:
-                app_config = json.loads(stream.read(65537), object_pairs_hook=_unique)
-            again = path.lstat()
-            if (info.st_dev,info.st_ino) != (again.st_dev,again.st_ino):
-                raise ValueError()
-        except (ValueError, OSError, UnicodeError):
-            raise GatewayRESTFault("REST_APP_CONFIG_UNVERIFIED") from None
-        if (not isinstance(app_config,dict) or
-                app_config.get("mode") != "mcp" or
-                app_config.get("coordination") != {"enabled":True} or
-                app_config.get("database") != value["state_db"] or
-                app_config.get("provider_api") != {
-                    "url":value["url"], "token_file":value["token_file"]}):
-            raise GatewayRESTFault("REST_APP_COORDINATION_NOT_ALIGNED")
-    return value if value["enabled"] else None
+    gateway_create.checked_app_store(app["database"])
+    return {"mode":"coordinated","url":api["url"],
+            "token_file":api["token_file"],"state_db":app["database"],
+            "app_config":str(path)}
 
 
 def selected(name, configuration):

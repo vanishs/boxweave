@@ -2,6 +2,35 @@
 
 **Published stable v0.27.1 fixes a standalone installer import failure in the v0.27.0 default-managed loopback HTTP MCP rollout.** The default streamed installer targets the published stable release; publishing does not deploy it to existing hosts. Existing SSH/stdio MCP remains supported. Remote MCP is opt-in, uses a separate loopback listener, and does not install or administer Cloudflare/OpenAI Tunnel.
 
+## Current v0.50.3 REST-only lifecycle contract
+
+All eight migrated Containarium operations — `list_containers`,
+`get_container`, `debug_container`, `create_container`,
+`start_container`, `stop_container`, `delete_container`, and
+`resize_container` — use the **same authenticated REST protocol** in
+the application and SSH/HTTP Agent Gateway. They never fall back to
+upstream Containarium MCP. The old `lifecycle-rest.json` and
+`debug-rest.json` selection switches are ignored/retired; the
+Gateway validates the single reviewed app `config.json` Provider
+binding and the installer provisions the shared R-04 coordination
+store for protected writes. Missing/unsafe/uncoordinated configuration
+is a denial, not permission to use legacy MCP.
+
+HTTP MCP remains an authenticated *ingress* and can still use its
+durable task wrapper. `create_container` stores a single irreversible
+intent, then invokes one REST `POST /v1/containers` with `async=true`
+through the protected Gateway. `submitted` means reserved/queued;
+`accepted` means Containarium acknowledged `CREATING`, **not** a
+ready guest. A separate read-only observer must attest the same guest
+identity and any requested nesting postcondition before declaring
+success. Timeout, response loss, or ambiguous outcome becomes
+`UNKNOWN` and can never trigger an automatic duplicate create.
+Unmigrated specialist operations (including `connect/exec`) continue
+to use the authenticated upstream MCP path.
+
+The v0.49.3/v0.49.4 create discussion below is **historical evidence**,
+not current v0.50.3 transport or readiness semantics.
+
 ## HTTP MCP create safety (v0.49.3, hardened v0.49.4)
 
 **Observed live:** [v0.49.3 ordinary Box create and same-receipt retry](verification/HTTP_MCP_CREATE_0493_REAL_2026-11-06.md)

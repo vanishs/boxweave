@@ -1,8 +1,8 @@
 
-"""Bounded, opt-in Containarium REST control-plane for BoxWeave's app Provider.
+"""Mandatory Containarium REST lifecycle control-plane for BoxWeave's app.
 
-Only the app's own basic lifecycle is migrated. The independent Agent-facing
-platform MCP and fixed-command Box SSH/exec remain separate, observable paths.
+All migrated reads and writes use REST. Only unmigrated specialist operations
+and fixed-command Box SSH/exec retain MCP. No lifecycle MCP fallback exists.
 REST acknowledgements are not final Box-state or readiness evidence.
 """
 import contextlib

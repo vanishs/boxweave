@@ -1,8 +1,8 @@
 """One-shot, provider-identity-bound REST mutation receipts for Agent MCP.
 
 Web/CLI already use the same REST transport and R-04 SharedClaims. This
-root-owned adapter is only enabled when the app's exact config and Gateway
-protected coordination share the same reviewed scope and private claim store.
+application-bound adapter requires verified R-04 coordination, immutable
+Provider identity, and one durable intent for every migrated write.
 """
 import hashlib
 import json

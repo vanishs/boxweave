@@ -34,6 +34,45 @@ class GatewayRESTTests(unittest.TestCase):
         with self.assertRaises(gateway_rest.GatewayRESTFault):
             gateway_rest.execute_read(self.config,"create_container",{})
 
+    def test_single_app_rest_binding_replaces_legacy_selector(self):
+        # Only the verified app-owned private config selects Provider REST.
+        # A legacy root lifecycle-rest.json toggle can no longer opt out.
+        from bwmini import rest_routes
+        expected={"list_containers","get_container","debug_container",
+                  "create_container","start_container","stop_container",
+                  "delete_container","resize_container"}
+        self.assertEqual(rest_routes.MIGRATED_TOOLS,expected)
+        self.assertEqual({t["name"] for t in rest_routes.mcp_tool_catalog()},
+                         expected)
+        config=self.root/"config.json"
+        secret=self.root/"secret"
+        secret.write_text("a"*70)
+        secret.chmod(0o400)
+        binding={"mode":"mcp","coordination":{"enabled":True},
+                 "database":str(self.state.path),
+                 "provider_api":{"url":"http://127.0.0.1:18080",
+                                 "token_file":str(secret)}}
+        config.write_text(json.dumps(binding))
+        config.chmod(0o600)
+        obsolete=self.root/"lifecycle-rest.json"
+        obsolete.write_text('{"version":1,"enabled":false,"mode":"read"}')
+        result=gateway_rest.policy(config)
+        self.assertEqual(result["mode"],"coordinated")
+        self.assertEqual(result["state_db"],str(self.state.path))
+        self.assertEqual(result["url"],"http://127.0.0.1:18080")
+        self.assertNotIn("enabled",result)
+        config.write_text(json.dumps({**binding,
+                                      "coordination":{"enabled":False}}))
+        with self.assertRaisesRegex(
+                gateway_rest.GatewayRESTFault,
+                "REST_APP_COORDINATION_NOT_ALIGNED"):
+            gateway_rest.policy(config)
+        config.unlink()
+        with self.assertRaisesRegex(
+                gateway_rest.GatewayRESTFault,
+                "REST_APP_CONFIG_UNVERIFIED"):
+            gateway_rest.policy(config)
+
     def test_single_rest_create_and_cross_interface_duplicate(self):
         calls = []
         class Rest:

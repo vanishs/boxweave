@@ -76,7 +76,18 @@ class GatewayFlowTests(unittest.TestCase):
 
     def exercise(self, request, *, approved=None, registry=None):
         fake = FakeProcess()
-        hooks = [patch.object(mcp_gate, "tool_policy", return_value=None),
+        def rest_read(_config,tool,args):
+            self.assertEqual(tool,"get_container")
+            if args.get("username")!="demo":
+                raise mcp_gate.gateway_rest.GatewayRESTFault("NOT_FOUND")
+            return {"container":{"name":"demo-container","createdAt":"123",
+                       "username":"demo","network":{"ipAddress":"10.203.0.2"},
+                       "state":"CONTAINER_STATE_RUNNING"}}
+        hooks = [patch.object(mcp_gate.gateway_rest,"policy",
+                              return_value={"mode":"coordinated"}),
+                 patch.object(mcp_gate.gateway_rest,"execute_read",
+                              side_effect=rest_read),
+                 patch.object(mcp_gate, "tool_policy", return_value=None),
                  patch.object(mcp_gate.subprocess, "Popen", return_value=fake),
                  patch.object(mcp_gate.sys, "stdin",
                               io.StringIO("\n".join(json.dumps(x) for x in
@@ -109,10 +120,8 @@ class GatewayFlowTests(unittest.TestCase):
                      "params":{"name":"connect","arguments":{"box":box,"exec":"id -un"}}}
                 output,sent=self.exercise(req,registry=registry)
                 self.assertNotIn("error",output[-1])
-                self.assertEqual([x["params"]["name"] for x in sent],
-                                 ["get_container","connect"])
-                self.assertEqual(sent[0]["params"]["arguments"],{"username":"demo"})
-                self.assertEqual(sent[1]["params"]["arguments"],{"box":"demo","exec":"id -un"})
+                self.assertEqual([x["params"]["name"] for x in sent],["connect"])
+                self.assertEqual(sent[0]["params"]["arguments"],{"box":"demo","exec":"id -un"})
 
     def test_connect_unknown_and_colliding_targets_do_not_forward(self):
         import time
@@ -139,9 +148,8 @@ class GatewayFlowTests(unittest.TestCase):
         req={"jsonrpc":"2.0","id":23,"method":"tools/call",
              "params":{"name":"connect","arguments":{"box":"missing-container","exec":"true"}}}
         out,sent=self.exercise(req,registry=registry)
-        self.assertEqual(len(sent),1)
-        self.assertEqual(sent[0]["params"]["arguments"],{"username":"missing"})
-        self.assertEqual(out[-1]["error"]["message"],"TARGET_READ_FAILED")
+        self.assertEqual(sent,[])
+        self.assertEqual(out[-1]["error"]["message"],"NOT_FOUND")
 
     def test_compat_uses_only_read_only_catalog(self):
         request = {"jsonrpc": "2.0", "id": 12, "method": "tools/call",

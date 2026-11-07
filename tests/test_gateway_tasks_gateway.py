@@ -73,7 +73,14 @@ class GatewayTaskIntegration(unittest.TestCase):
         provider=FakeProvider()
         inbox=io.StringIO("".join(json.dumps(x)+"\n" for x in requests))
         out=io.StringIO()
-        with patch.object(mcp_gate,"tool_policy",return_value=allowed), \
+        observed={"container":{"username":"box1","name":"box1-container",
+                               "createdAt":123,"state":"CONTAINER_STATE_RUNNING",
+                               "network":{"ipAddress":"10.100.0.2"}}}
+        with patch.object(mcp_gate.gateway_rest,"policy",
+                          return_value={"mode":"coordinated"}), \
+             patch.object(mcp_gate.gateway_rest,"execute_read",
+                          return_value=observed), \
+             patch.object(mcp_gate,"tool_policy",return_value=allowed), \
              patch.object(mcp_gate,"trusted_registry",return_value={"scope":SCOPE}), \
              patch.object(mcp_gate,"trusted",return_value=None), \
              patch.object(mcp_gate.subprocess,"Popen",return_value=provider), \
@@ -120,7 +127,7 @@ class GatewayTaskIntegration(unittest.TestCase):
               "params":{"name":"boxweave_box_lease","arguments":a}}
         with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
             provider,out=self.run_gateway([call(1,{"box":"box1","action":"acquire"})])
-            self.assertEqual([x["params"]["name"] for x in provider.sent],["get_container"])
+            self.assertEqual(provider.sent,[])
             data=json.loads(out[0]["result"]["content"][0]["text"])
             self.assertEqual(data["state"],"leased")
             self.assertEqual(len(data["lease_token"]),43)
@@ -147,7 +154,7 @@ class GatewayTaskIntegration(unittest.TestCase):
         with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
             provider,out=self.run_gateway([call])
         self.assertEqual([x["params"]["name"] for x in provider.sent],
-                         ["get_container","connect"])
+                         ["connect"])
         sent=provider.sent[-1]["params"]["arguments"]["exec"]
         self.assertTrue(sent.startswith("python3 -c "))
         self.assertNotIn("x=2\n",sent)
@@ -157,8 +164,7 @@ class GatewayTaskIntegration(unittest.TestCase):
                          "observed_terminal")
         with patch.object(mcp_gate.gateway_protection,"enabled",return_value=True):
             provider,out=self.run_gateway([call])
-        self.assertEqual(provider.sent[0]["params"]["name"],"get_container")
-        self.assertEqual([x["params"]["name"] for x in provider.sent].count("connect"),0)
+        self.assertEqual(provider.sent,[])
         self.assertEqual(json.loads(out[0]["result"]["content"][0]["text"])["task_id"],row["task_id"])
 
     def test_patch_without_protection_never_dispatches(self):

@@ -1,5 +1,7 @@
 # BoxWeave
 
+**v0.50.3:** The eight REST-migrated read/lifecycle methods use the authenticated REST adapter in both app and Agent Gateway. The legacy MCP forwarding path and separate REST selector for these methods have been removed. The installer provisions R-04 shared claims and enables app coordination for the migration. UNKNOWN outcomes remain locked and are never automatically retried. Unmigrated MCP tools, including guest connect/exec, remain supported. The stable installer pointer is unchanged.
+
 **Your agents. Your machines. Connected.**
 
 BoxWeave is a self-hosted control plane for AI coding, remote development environments, and an independent Web console. Containarium and Incus manage the underlying containers.

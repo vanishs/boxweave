@@ -1,8 +1,7 @@
 """Bounded Containarium debug_container REST read, standalone Gateway safe.
 
 Shared stdlib-only validation and request code. This module provides exactly
-one fixed GET route; it is never a generic HTTP proxy. The separate Agent
-Gateway requires a root-provisioned, nonsecret opt-in policy.
+one fixed GET route; it is never a generic HTTP proxy. The Agent Gateway now uses the mandatory application REST binding.
 """
 import json
 import os
@@ -13,7 +12,6 @@ import urllib.error
 import urllib.request
 import urllib.parse
 
-GATEWAY_CONFIG = Path("/var/lib/boxweave-default/public/debug-rest.json")
 _TARGET = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 _MAX_BYTES = 32768
 
@@ -136,40 +134,3 @@ def read(config, username, *, opener=None):
         raise DebugRESTError("DEBUG_REST_RESPONSE_INVALID") from None
 
 
-def gateway_config(path=GATEWAY_CONFIG):
-    """Missing root policy keeps legacy MCP. Unsafe policy fails closed."""
-    path = Path(path)
-    try:
-        info = path.lstat()
-    except FileNotFoundError:
-        if path == GATEWAY_CONFIG:
-            return None
-        raise DebugRESTError("DEBUG_REST_POLICY_UNAVAILABLE") from None
-    try:
-        parent = path.parent.lstat()
-        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0
-                or parent.st_mode & 0o022
-                or not stat.S_ISREG(info.st_mode) or info.st_uid != 0
-                or info.st_mode & 0o022 or info.st_nlink != 1
-                or not 10 <= info.st_size <= 2048):
-            raise DebugRESTError("DEBUG_REST_POLICY_UNSAFE")
-        with path.open("rb") as stream:
-            data = stream.read(2049)
-        if len(data) > 2048:
-            raise DebugRESTError("DEBUG_REST_POLICY_UNSAFE")
-        fresh = path.lstat()
-        if (fresh.st_ino, fresh.st_dev) != (info.st_ino, info.st_dev):
-            raise DebugRESTError("DEBUG_REST_POLICY_UNSAFE")
-        cfg = json.loads(data, object_pairs_hook=unique_pairs)
-    except (OSError, UnicodeError, ValueError) as error:
-        if isinstance(error, DebugRESTError):
-            raise
-        raise DebugRESTError("DEBUG_REST_POLICY_INVALID") from None
-    if (not isinstance(cfg, dict) or set(cfg) !=
-            {"version", "url", "token_file", "enabled"}
-            or type(cfg["version"]) is not int or cfg["version"] != 1
-            or type(cfg["enabled"]) is not bool):
-        raise DebugRESTError("DEBUG_REST_POLICY_INVALID")
-    endpoint(cfg["url"])
-    token_path(cfg["token_file"])
-    return {"url": cfg["url"], "token_file": cfg["token_file"]} if cfg["enabled"] else None
