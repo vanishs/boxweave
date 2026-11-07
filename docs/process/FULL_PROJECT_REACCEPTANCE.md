@@ -15,6 +15,25 @@ All previous "no publication workflow / direct Agent" guidance is superseded.
 
 **Canonical trigger:** `Run full BoxWeave reacceptance.` (the same instruction without the trailing period is equivalent). **Status:** active owner-invoked Agent runbook, **not** evidence of any executed test. Keep the shortcut in [AGENTS.md](../../AGENTS.md); this revision does not itself invoke testing, change a host, bump a version, or publish a release.
 
+## v0.49.6 source inventory and prepared test targets
+
+The [2026-11-06 inventory correction and fixture procedure](../verification/REACCEPTANCE_INVENTORY_0496_2026-11-06.md)
+supersedes **only** prior heuristics for discovered HTTP/CLI counts and action-to-feature labels.
+Capture actual Flask route decorators rather than any `.get()` expression; reject CLI
+help fallbacks and option-value alternatives as callable leaves. The feature mapping
+is machine-readable, specific-to-action and **selection only**; `UNMAPPED` requires
+review and never earns functional coverage. Old PR #100 counts remain historical.
+
+Before a target-dependent positive MCP probe, obtain the real **inner** test-owned
+Box and verify its native UUID/createdAt, or record **BLOCKED prerequisite missing**.
+Do not call a failed probe a product FAIL merely because the runner passed an empty
+or wrong Box name. The existing development-only nested lifecycle command accepts
+an explicitly approved `--with-readonly-breadth` flag to create one disposable
+child, run nonmutating breadth against that native-attested incarnation, then
+continue its original stop/start/delete native-oracle sequence. This never changes
+normal customer installation, automates the owner host, replays an UNKNOWN, or
+replaces independent Agent verification.
+
 ## Source candidate v0.48.0 developer runner and current enforcement boundary
 
 **Status: PARTIAL source implementation, no release or whole-system acceptance.** See
