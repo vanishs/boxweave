@@ -350,11 +350,22 @@ def load_dependencies(root):
 
 
 def features_for(action, rules):
-    tags = set()
+    """Use the most specific declared match; generic transport rules are fallback.
+
+    A broad web_api:* or stdio_mcp:* rule must not silently label unrelated
+    features. Equal-specificity matches may intentionally share a feature.
+    """
+    matched = []
     for rule in rules:
-        if fnmatch.fnmatchcase(action, rule.get("action", "")):
-            tags.update(rule.get("features", []))
-    return sorted(tags) or ["UNMAPPED"]
+        pattern = rule.get("action", "")
+        if fnmatch.fnmatchcase(action, pattern):
+            specificity = len(re.sub(r"[?*\[\]]", "", pattern))
+            matched.append((specificity, rule))
+    if not matched:
+        return ["UNMAPPED"]
+    strongest = max(score for score, _ in matched)
+    return sorted({feature for score, rule in matched if score == strongest
+                   for feature in rule.get("features", [])}) or ["UNMAPPED"]
 
 
 def impacted(paths, rules):
