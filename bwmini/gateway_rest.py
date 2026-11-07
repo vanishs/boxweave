@@ -67,7 +67,8 @@ def policy(path=POLICY):
             raise
         raise GatewayRESTFault("REST_POLICY_INVALID") from None
     if (not isinstance(value, dict)
-            or set(value) != {"version", "enabled", "mode", "url", "token_file"}
+            or set(value) != ({"version", "enabled", "mode", "url", "token_file"}
+                                 | ({"state_db"} if value.get("mode") == "coordinated" else set()))
             or type(value["version"]) is not int or value["version"] != 1
             or type(value["enabled"]) is not bool
             or value["mode"] not in ("read", "coordinated")):
@@ -76,6 +77,10 @@ def policy(path=POLICY):
         rest_wire.Client({"url": value["url"], "token_file": value["token_file"]})
     except rest_wire.WireFault as exc:
         raise GatewayRESTFault(exc.code) from None
+    if value["enabled"] and value["mode"] == "coordinated":
+        from . import gateway_create
+        # The app store is the only durable create receipt owner.
+        gateway_create.checked_app_store(value["state_db"])
     return value if value["enabled"] else None
 
 
