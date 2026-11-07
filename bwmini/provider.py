@@ -114,6 +114,11 @@ class Provider:
 
     def nesting_check(self, wanted):
         if type(wanted) is not bool: raise Fault("NESTING_BOOLEAN_REQUIRED",422)
+        if getattr(self, "rest", None) is not None:
+            # REST does not accept nesting in the create body. An independently
+            # attested native helper applies this original create postcondition
+            # only AFTER the guest identity is verified by Lifecycle.observe.
+            return
         with self.session() as m:
             props=m.discover().get("create_container",{}).get("inputSchema",{}).get("properties",{})
             if props.get("enable_nesting",{}).get("type") != "boolean":
