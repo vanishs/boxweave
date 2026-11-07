@@ -79,3 +79,24 @@ The initial local Web administrator is generated inside the non-root app process
 ## Running inside LXC
 
 Parent must allow nesting. Inspect the exact outer instance from its parent management connection; never infer its name from guest hostname. Tested mount-capability transitions required outer restart. Installer reports parent policy unverified and never changes it. [Operator guide](NESTING.md).
+
+## v0.50.4 R-04 native-scope heartbeat and create failure phases
+
+The root-owned `boxweave-scope.service/timer` attests the installed host
+identity and native local Incus daemon every ten seconds, publishing the
+separate `/var/lib/boxweave-default/public/scope.json`. Shared operation
+claims require this attestation to be at most 45 seconds old; absent/stale
+proof still fails closed. This heartbeat does not authenticate guest SSH.
+
+The separate `boxweave-trust.timer` still generates `targets.json` with
+exact native instance and public SSH host-key observations. Its sweep
+batches three public-key reads into one native guest operation, with at
+most eight workers. The guest SSH trust freshness bound remains unchanged.
+
+A local, source-verified zero-Provider-POST refusal is retained in the
+original create journal with the public state `failed_before_dispatch`;
+the name is still reserved and is **never** automatically retried.
+An interrupted process or any ambiguous post-dispatch operation retains
+`UNKNOWN`. Original historical task rows are not migrated/reclassified.
+Operators can inspect both independent systemd timers and their last result
+without exposing the contents of the trust registry.

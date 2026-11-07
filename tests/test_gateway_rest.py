@@ -148,6 +148,43 @@ class GatewayRESTTests(unittest.TestCase):
         self.assertEqual(SharedClaims(claims_file).coordinator.status(
             "e"*32)["state"],"accepted")
 
+    def test_stale_scope_is_proven_no_post_and_never_replayed(self):
+        from bwmini.remote_create import validated_request
+        from bwmini.operation_coordination import CoordinationFault
+        args={"username":"nesting-probe","enable_nesting":True,"cpu":"1"}
+        _,_,_,digest=validated_request(args)
+        original,fresh=CreateJournal(self.state).reserve(
+            "nesting-probe","a"*32,digest)
+        self.assertTrue(fresh)
+        methods=[]
+        class REST:
+            def __init__(self,config):pass
+            def request(self,method,route,body=None,timeout=30):
+                methods.append(method)
+                if method=="GET":
+                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404,upstream_http_status=404,status_origin="grpc")
+                raise AssertionError("Unexpected Provider POST")
+        with (patch("bwmini.rest_wire.Client",REST),
+              patch("bwmini.coordination_bridge.published_scope",
+                    side_effect=CoordinationFault("COORDINATION_SCOPE_UNVERIFIED"))):
+            result=gateway_create.dispatch(
+                self.config,args,"bw-create-"+original["task_id"],
+                normalize=lambda v:{**v,"ssh_keys":["ssh-ed25519 AAA"]},
+                protected=True)
+        self.assertEqual(methods,["GET"])
+        self.assertEqual(result["state"],"failed_before_dispatch")
+        self.assertEqual(result["code"],"COORDINATION_SCOPE_UNVERIFIED")
+        self.assertFalse(result["upstream_acknowledged"])
+        journal=CreateJournal(self.state)
+        journal.recover_interrupted()
+        journal.complete(original["task_id"],False)
+        self.assertEqual(journal.get(task_id=original["task_id"]),result)
+        repeat,fresh=journal.reserve("nesting-probe","b"*32,digest)
+        self.assertFalse(fresh)
+        self.assertEqual(repeat["task_id"],original["task_id"])
+
     def test_post_response_loss_frozen_and_duplicate_is_not_retried(self):
         calls=[]
         class Broken:

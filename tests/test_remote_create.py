@@ -61,6 +61,27 @@ class CreateJournalTests(unittest.TestCase):
         self.journal.complete(task, True)
         self.assertEqual(self.journal.get(task_id=task)["state"], "accepted")
 
+    def test_no_post_failure_immutable_and_never_rewrites_unknown(self):
+        _,_,_,digest=validated_request({"username":"no-post"})
+        first,_=self.journal.reserve("no-post","a"*32,digest)
+        self.assertFalse(self.journal.fail_before_dispatch(
+            first["task_id"],"COORDINATION_SCOPE_UNVERIFIED",
+            username="wrong",digest=digest))
+        self.assertTrue(self.journal.fail_before_dispatch(
+            first["task_id"],"COORDINATION_SCOPE_UNVERIFIED",
+            username="no-post",digest=digest))
+        result=self.journal.get(task_id=first["task_id"])
+        self.assertEqual(result["state"],"failed_before_dispatch")
+        self.journal.complete(first["task_id"],False)
+        self.journal.recover_interrupted()
+        self.assertEqual(self.journal.get(task_id=first["task_id"]),result)
+        second,_=self.journal.reserve("already-dispatched",None,"b"*64)
+        self.assertTrue(self.journal.begin_dispatch(second["task_id"],"b"*64))
+        self.assertFalse(self.journal.fail_before_dispatch(
+            second["task_id"],"COORDINATION_SCOPE_UNVERIFIED"))
+        self.journal.recover_interrupted()
+        self.assertEqual(self.journal.get(task_id=second["task_id"])["state"],"unknown")
+
     def test_one_name_one_dispatch_regardless_of_retry_key(self):
         _, _, _, digest = validated_request({"username": "a", "cpu": "1"})
         first, fresh = self.journal.reserve("a", "a"*32, digest)
@@ -221,6 +242,30 @@ class HTTPCreateTests(unittest.TestCase):
         self.assertEqual(len(self.upstream), 0)
         with self.assertRaisesRegex(CreateFault, "CREATE_TASK_NOT_FOUND"):
             CreateJournal(self.store).get(username="blocked")
+
+    def test_known_gateway_local_refusal_stays_no_post_after_restart(self):
+        def dispatch(message):
+            self.assertEqual(message["method"],"tools/call")
+            return {"jsonrpc":"2.0","id":message["id"],
+                    "error":{"code":-32602,
+                             "message":"REST_APP_CONFIG_UNVERIFIED"}}
+        app=create_remote_app(self.store,{},dispatch=dispatch)
+        client=app.test_client()
+        response=client.post("/mcp",headers=self.headers,json={
+            "jsonrpc":"2.0","id":310,"method":"tools/call",
+            "params":{"name":"create_container",
+                      "arguments":{"username":"unconfigured-scope"}}})
+        self.assertEqual(response.status_code,200)
+        task=self.result(response)["task_id"]
+        for _ in range(200):
+            result=CreateJournal(self.store).get(task_id=task)
+            if result["state"]!="submitted":
+                break
+            time.sleep(.01)
+        self.assertEqual(result["state"],"failed_before_dispatch")
+        self.assertEqual(result["code"],"REST_APP_CONFIG_UNVERIFIED")
+        CreateJournal(self.store).recover_interrupted()
+        self.assertEqual(CreateJournal(self.store).get(task_id=task),result)
 
     def test_catalog_and_authentication(self):
         payload = {"jsonrpc": "2.0", "id": 4, "method": "tools/list",
