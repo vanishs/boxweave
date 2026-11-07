@@ -1,7 +1,7 @@
 """App-owned durable create receipt available to reviewed Agent gateway.
 
 This adapter accesses ONLY the installed application SQLite file selected by
-the trusted root policy. No JWT/private key, JSON payload, CLI commands or
+the reviewed application REST binding. No JWT/private key, JSON payload, CLI commands or
 foreign path is stored in the journal.
 """
 import contextlib
