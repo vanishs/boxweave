@@ -54,6 +54,73 @@ else:
             self.assertFalse(invoked.exists())
             self.assertTrue(rows["selftest"]["help_is_not_a_functional_positive"])
 
+    def test_real_http_route_extraction_ignores_arbitrary_get_calls(self):
+        from tools.reacceptance.engine import source_web_routes
+        with tempfile.TemporaryDirectory() as t:
+            script = Path(t) / "api.py"
+            script.write_text('''def make_app():
+    from flask import Flask, request
+    app = Flask(__name__)
+    @app.get("/api/real")
+    def real():
+        return request.headers.get("Authorization")
+    @app.post("/api/submit")
+    def submit():
+        return request.form.get("code_verifier")
+    @app.route("/mcp", methods=["GET", "POST"])
+    def both():
+        return request.args.get("not-a-route")
+    return app
+''')
+            routes = source_web_routes(script)
+        self.assertEqual(routes, ["GET /api/real", "GET /mcp",
+                                  "POST /api/submit", "POST /mcp"])
+        self.assertFalse(any("Authorization" in r or "code_verifier" in r
+                             for r in routes))
+
+    def test_installed_help_never_expands_option_value_sets_or_fallback(self):
+        from unittest.mock import patch
+        calls = []
+        usages = {
+            (): "usage: boxweave [-h] {setup,http,box}",
+            ("setup",): "usage: boxweave setup [-h] [--mode {ssh,https,local}] [--format {text,json}]",
+            ("http",): "usage: boxweave http [-h] {status,doctor,configure,restart}",
+            ("box",): "usage: boxweave box [-h] {inspect,diagnose}",
+            ("box", "inspect"): "usage: boxweave box inspect [-h]",
+            ("box", "diagnose"): "usage: boxweave box diagnose [-h]",
+        }
+        def fake_capture(argv, **kw):
+            key = tuple(argv[1:-1])
+            calls.append(key)
+            return {"execution": "completed", "exit_code": 0,
+                    "stdout": usages.get(key, usages[("http",)]) + "\\n\\n",
+                    "stderr": ""}
+        with patch.object(surfaces, "capture", side_effect=fake_capture):
+            discovered = surfaces.help_tree(["boxweave"])
+        self.assertNotIn("setup ssh", discovered)
+        self.assertNotIn("setup text", discovered)
+        self.assertNotIn("http configure configure", discovered)
+        self.assertTrue(discovered["box inspect"]["confirmed"])
+        self.assertFalse(discovered["http configure"]["confirmed"])
+        self.assertLess(len(calls), 20)
+
+    def test_feature_mapping_is_specific_not_blanket_web_or_remote(self):
+        from tools.reacceptance.engine import catalogue
+        catalog = catalogue(ROOT)
+        actions = {r["key"]: r["features"] for r in catalog["actions"]}
+        self.assertNotIn("web_api:GET Authorization", actions)
+        self.assertNotIn("web_api:GET code_verifier", actions)
+        self.assertEqual(actions["web_api:GET /api/graphs"], ["F21"])
+        self.assertEqual(actions["web_api:POST /api/login"], ["F18"])
+        self.assertEqual(actions["web_api:GET /api/model-wizard"], ["F22"])
+        self.assertEqual(actions["remote_api:POST /authorize"], ["F25"])
+        self.assertEqual(actions["remote_api:POST /mcp"], ["F25"])
+        self.assertEqual(actions["stdio_mcp:create_container"], ["F07", "F34"]) if (
+            "stdio_mcp:create_container" in actions) else None
+        self.assertFalse([r["key"] for r in catalog["actions"]
+                          if r["surface"] in ("web_api", "remote_api")
+                          and r["features"] == ["UNMAPPED"]])
+
     def test_catalogue_falls_back_to_blocked_not_fake_pass(self):
         r = surfaces.breadth(ROOT)
         self.assertTrue(r["rows"])
