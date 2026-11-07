@@ -472,19 +472,17 @@ I authorize this client to use BoxWeave MCP tools.</label>
             if isinstance(args, dict) and "status_only" in args:
                 raise CreateFault("CREATE_ARGUMENTS_INVALID")
             logical, key, payload, digest = validated_request(args)
-            # Protected-mode tool policy is authoritative; never bypass it.
-            catalog = bridge({"jsonrpc": "2.0", "id": "bw-create-policy-" +
-                              secrets.token_hex(8), "method": "tools/list",
-                              "params": {}})
-            listed = (catalog.get("result", {}).get("tools", [])
-                      if isinstance(catalog, dict) else [])
-            create_tool = next((t for t in listed if isinstance(t, dict)
-                                and t.get("name") == "create_container"), None)
-            if create_tool is None:
+            # Use the *local* immutable REST schema and the same root-owned
+            # allowlist as the stdio Gateway. Never consult an upstream MCP
+            # tools/list endpoint for migrated create authorization.
+            from . import mcp_gate, rest_routes
+            allowed = mcp_gate.tool_policy()
+            if allowed is not None and "create_container" not in allowed:
                 raise CreateFault("GATE_TOOL_NOT_ALLOWED")
-            # Validate against BoxWeave's REST-owned schema before
-            # recording any non-replayable create intent.
-            validate_upstream_payload(payload, create_tool.get("inputSchema"))
+            schema = next(t["inputSchema"] for t in
+                          rest_routes.mcp_tool_catalog()
+                          if t["name"] == "create_container")
+            validate_upstream_payload(payload, schema)
             try:
                 journal.get(username=logical)
             except CreateFault as error:
