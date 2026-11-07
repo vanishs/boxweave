@@ -82,7 +82,9 @@ def reserve(original, request_id, config):
     if isinstance(request_id, str) and request_id.startswith("bw-create-"):
         task_id = request_id[len("bw-create-"):]
         existing = store.get(task_id=task_id)
-        if existing["username"] != logical or existing["state"] != "submitted":
+        if (existing["username"] != logical or
+                existing["state"] != "submitted" or
+                existing["code"] != "REST_GATE_PENDING"):
             return existing, False, payload
         with store.store.db() as db:
             row = db.execute(
@@ -149,7 +151,11 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
         claims.dispatch_intent(task)
         if not ledger.begin_dispatch(task, original_digest):
             return ledger.get(task_id=task)
-    except Exception:
+    except Exception as error:
+        # Another simultaneous invocation of this exact task may already own
+        # its claim. Never demote its receipt or create a second side effect.
+        if getattr(error, "code", None) == "OPERATION_EXISTS":
+            return ledger.get(task_id=task)
         ledger.freeze(task)
         raise GatewayRESTFault("REST_CREATE_PREDISPATCH_UNVERIFIED") from None
     try:
