@@ -4,6 +4,27 @@
 **Owner:** BoxWeave. **Baseline:** `v0.49.6` / Containarium `v0.128.0`.  
 **Scope:** reuse **already implemented** Containarium REST operations through *every* BoxWeave ingress; retain upstream MCP for other capabilities. Do **not** reopen the abandoned bulk 8+21 MCP-to-REST study.
 
+## v0.50.3 implementation update — REST mandatory for migrated operations
+
+**Current source contract (not installed acceptance):** The eight fixed
+REST-migrated Box operations in Section 2 now have only one outbound
+Containarium transport from both the application and Agent Gateway:
+authenticated REST through the app-owned loopback Provider binding.
+`mcp_gate.py` no longer sends the eight methods to upstream MCP or
+reads their upstream MCP schemas. `box_debug.summary()` likewise has
+no MCP fallback. There is no functional root
+`lifecycle-rest.json`/`debug-rest.json` routing switch and no
+`debug_rest_enabled` bypass. The installer enables the shared
+R-04 app coordination config and provisions the claim database before
+activation; unsafe/incomplete binding fails closed. The upstream
+MCP launcher continues only for unmigrated tools and guest connect/exec.
+
+The original requirements for immutable identity, one dispatch,
+`CREATING` vs guest-ready, UNKNOWN non-replay, source-bound
+release and independent installed verification are unchanged.
+The historical pre-v0.50.3 discussion below describes the migration
+motivation; it is not the current runtime path.
+
 ## 1. Verified baseline and mismatch
 
 The app-owned `bwmini/provider_rest.py` currently implements loopback/authenticated:
