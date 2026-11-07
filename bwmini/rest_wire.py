@@ -151,7 +151,11 @@ def request(owner, method, path, body=None, timeout=30):
                 else "API_CONFLICT" if error.code == 409
                 else "API_RATE_LIMITED" if error.code == 429
                 else "API_HTTP_REJECTED")
-        raise WireFault(code, grpc_code=semantic.grpc_code,
+        # Preserve true HTTP error semantics for application responses.
+        # A denied redirect is a bad upstream gateway response, not a 302
+        # instruction to a Web/MCP client.
+        public_http = semantic.http_status if semantic.http_status >= 400 else 502
+        raise WireFault(code, status=public_http, grpc_code=semantic.grpc_code,
                         http_status=semantic.http_status,
                         upstream_http_status=semantic.upstream_http_status,
                         status_origin=semantic.origin) from None
