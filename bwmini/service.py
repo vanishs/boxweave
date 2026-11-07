@@ -30,6 +30,24 @@ class Service:
         from .box_actions import BoxActions
         self.box_actions = BoxActions(self)
 
+    def provider_rest_receipt(self, task_id):
+        """Read one original Agent REST task from the same app-owned DB.
+
+        This is exposed only through existing authenticated Web/CLI operators,
+        never as a path to create/retry/modify a Provider operation.
+        """
+        from .remote_create import CreateJournal, CreateFault
+        from .rest_mutations import MutationJournal
+        try:
+            return CreateJournal(self.store).get(task_id=task_id)
+        except CreateFault as exc:
+            if exc.code != "CREATE_TASK_NOT_FOUND":
+                raise Fault("REST_TASK_SELECTOR_INVALID", 422) from None
+        try:
+            return MutationJournal(self.store).get(task_id=task_id)
+        except ValueError as exc:
+            raise Fault("REST_TASK_NOT_FOUND", 404) from None
+
     def observe_target(self, logical):
         if self.lifecycle.config is not None and logical in self.lifecycle.config["allowed_names"]:
             try:
