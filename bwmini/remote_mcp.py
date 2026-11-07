@@ -411,7 +411,7 @@ I authorize this client to use BoxWeave MCP tools.</label>
         reply = bridge(message)
         if not isinstance(reply, dict) or reply.get("id") != message["id"]:
             raise RemoteError("upstream_protocol_error", 502)
-        if method == "tools/list" and not message["params"].get("cursor"):
+        if method == "tools/list" and not message.get("params", {}).get("cursor"):
             reply = augment_catalog(reply)
         return out(reply, headers={"MCP-Protocol-Version": PROTOCOL})
 
