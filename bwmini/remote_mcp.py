@@ -379,6 +379,10 @@ I authorize this client to use BoxWeave MCP tools.</label>
                 or "result" in message or "error" in message):
             raise RemoteError("invalid_json_rpc")
         method = message["method"]
+        # These RPC methods require a params object. Report a typed client
+        # error rather than leaking a KeyError as an HTTP 500.
+        if method in ("initialize", "tools/call") and "params" not in message:
+            raise RemoteError("invalid_json_rpc")
         if method == "initialize":
             if "id" not in message:
                 raise RemoteError("invalid_json_rpc")
