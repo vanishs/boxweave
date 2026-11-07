@@ -90,7 +90,7 @@ class AsyncObserveTests(unittest.TestCase):
             if request["action"] == "plan":
                 return {"target": target, "expected": {"id": "expected"}}
             return {"state": "configured", "target": target}
-        with patch("bwmini.async_create_observer.nesting.invoke", side_effect=native), \\
+        with patch("bwmini.async_create_observer.nesting.invoke", side_effect=native), \
              patch("bwmini.async_create_observer.coordination_bridge.SharedClaims"):
             self.assertTrue(observe_one(self.store, self.provider, self.clock))
         self.assertEqual(calls, ["plan", "apply"])
@@ -99,7 +99,7 @@ class AsyncObserveTests(unittest.TestCase):
     def test_crash_after_nesting_intent_does_not_replay_native_write(self):
         ident = self.prepare(nesting=True)
         self.assertTrue(self.journal.begin_nesting(ident))
-        with patch("bwmini.async_create_observer.nesting.invoke") as native, \\
+        with patch("bwmini.async_create_observer.nesting.invoke") as native, \
              patch("bwmini.async_create_observer.coordination_bridge.SharedClaims"):
             observe_one(self.store, self.provider, self.clock)
         native.assert_not_called()
