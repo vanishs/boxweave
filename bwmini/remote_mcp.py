@@ -482,8 +482,8 @@ I authorize this client to use BoxWeave MCP tools.</label>
                                 and t.get("name") == "create_container"), None)
             if create_tool is None:
                 raise CreateFault("GATE_TOOL_NOT_ALLOWED")
-            # Typed, read-only validation happens before writing the
-            # non-replayable intent. Upstream still owns semantic checks.
+            # Validate against BoxWeave's REST-owned schema before
+            # recording any non-replayable create intent.
             validate_upstream_payload(payload, create_tool.get("inputSchema"))
             try:
                 journal.get(username=logical)
