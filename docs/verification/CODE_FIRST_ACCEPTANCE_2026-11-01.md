@@ -296,6 +296,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `model-select`
 - `model-wizard`
 - `projects`
+- `provider-rest-receipt`
 - `receipts`
 - `reconcile`
 - `remote-caddyfile`
