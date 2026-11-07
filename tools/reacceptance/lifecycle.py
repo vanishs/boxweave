@@ -184,6 +184,25 @@ def run(grant, confirmation, mcp_argv, output, *, with_readonly_breadth=False):
         identity = created["incarnation"]
         if not identity:
             raise AcceptanceFault("CREATED_CHILD_IDENTITY_UNAVAILABLE")
+        if with_readonly_breadth:
+            # The child has a fresh native UUID/createdAt oracle; unlike an
+            # arbitrary --read-only-target name, this is a verified fixture.
+            # A read-only exception is evidence, not permission to skip cleanup.
+            from .installed import inspect_mcp
+            try:
+                report = inspect_mcp(mcp_argv, name, verified_target={
+                    "logical": name, "provider_uuid": identity["uuid"],
+                    "created_at": identity["created_at"], "test_owned": True})
+                unique_file(dest / "readonly-breadth.json", report)
+            except (AcceptanceFault, OSError, ValueError) as exc:
+                unique_file(dest / "readonly-breadth-blocked.json", {
+                    "status": "BLOCKED", "reason": str(exc), "recorded_at": now()})
+            # A competing writer could replace the fixture during the probe.
+            # Never continue into stop/delete against a changed incarnation.
+            after = native_list().get(name + "-container")
+            if after is None or incarnation(after) != identity or (
+                    str(after.get("status", "")).lower() != "running"):
+                raise AcceptanceFault("TEST_FIXTURE_IDENTITY_CHANGED_NO_MORE_WRITES")
         append(2, "stop_container", {"username": name}, "stopped", original_id=identity)
         append(3, "start_container", {"username": name}, "running", original_id=identity)
         append(4, "delete_container", {"username": name}, "absent", original_id=identity)
