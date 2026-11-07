@@ -70,7 +70,10 @@ def args_key(tool, args):
     if len(raw) > 8192:
         raise GatewayRESTFault("REST_OPERATION_TOO_LARGE")
     digest = hashlib.sha256(raw.encode()).hexdigest()
-    return supplied or digest[:32], digest, without
+    # No caller key is NOT a permanent identity: legitimate later operations
+    # (stop -> start -> stop) must remain possible. Pending/UNKNOWN writes
+    # still deduplicate by exact name, action and payload below.
+    return supplied or secrets.token_hex(16), digest, without
 
 
 class MutationJournal:
@@ -102,6 +105,19 @@ class MutationJournal:
             raise GatewayRESTFault("REST_REQUEST_KEY_CONFLICT")
         return receipt(row)
 
+    def active(self, logical, action, digest):
+        # This read is an early convenience only; reserve repeats the check
+        # within BEGIN IMMEDIATE to serialize competing Agent invocations.
+        with self.store.db() as db:
+            row = db.execute("SELECT * FROM remote_rest_tasks WHERE logical=? "
+                             "AND state IN ('submitted','accepted','unknown') "
+                             "ORDER BY created,task_id LIMIT 1", (logical,)).fetchone()
+        if row is None:
+            return None
+        if row["action"] != action or row["payload_sha256"] != digest:
+            raise GatewayRESTFault("REST_OPERATION_PENDING")
+        return receipt(row)
+
     def reserve(self, key, digest, tool, row, identity, spec):
         logical = rest_routes.logical_name(row["username"])
         action = tool.removesuffix("_container")
@@ -122,6 +138,15 @@ class MutationJournal:
                 if prior["payload_sha256"] != digest or prior["logical"] != logical:
                     raise GatewayRESTFault("REST_REQUEST_KEY_CONFLICT")
                 return receipt(prior), False
+            active = db.execute(
+                "SELECT * FROM remote_rest_tasks WHERE logical=? "
+                "AND state IN ('submitted','accepted','unknown') "
+                "ORDER BY created,task_id LIMIT 1", (logical,)).fetchone()
+            if active is not None:
+                if (active["action"] == action and
+                        active["payload_sha256"] == digest):
+                    return receipt(active), False
+                raise GatewayRESTFault("REST_OPERATION_PENDING")
             if db.execute("SELECT count(*) FROM remote_rest_tasks").fetchone()[0] >= MAX_TASKS:
                 raise GatewayRESTFault("REST_TASK_JOURNAL_FULL")
             task = secrets.token_hex(16)
@@ -199,6 +224,9 @@ def dispatch(configuration, tool, args, *, protected):
     prior = ledger.check_key(key,logical,tool.removesuffix("_container"),digest)
     if prior is not None:
         return prior
+    active = ledger.active(logical,tool.removesuffix("_container"),digest)
+    if active is not None:
+        return active
     rest = rest_wire.Client({k:configuration[k] for k in ("url","token_file")})
     try:
         observed = rest.request(
