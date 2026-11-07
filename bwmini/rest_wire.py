@@ -13,50 +13,35 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    from . import rest_status
+except ImportError:
+    import rest_status
+
 
 class WireFault(Exception):
-    def __init__(self, code, status=409, *, legacy_missing_instance=False):
+    def __init__(self, code, status=409, *, grpc_code=None, http_status=None,
+                 upstream_http_status=None, status_origin="unclassified"):
+        # .code is the *existing internal transport/audit* error classification.
+        # .grpc_code/.http_status are standard Provider status semantics;
+        # callers must never infer business absence from .code alone.
         self.code, self.status = code, status
-        # Only create preflight can opt into this version-specific signal.
-        self.legacy_missing_instance = legacy_missing_instance
+        self.grpc_code = grpc_code
+        self.http_status = http_status
+        self.upstream_http_status = upstream_http_status
+        self.status_origin = status_origin
         super().__init__(code)
 
 
 def _legacy_incus_instance_absent(error, method, path):
-    """Match the observed Containarium 0.128 GET-500 body, not generic 500s.
-
-    Require an exact, target-bound message in both upstream JSON fields.
-    Unknown error text, changed formats and larger bodies fail closed.
-    """
-    match = re.fullmatch(r"/v1/containers/([a-z][a-z0-9-]{0,62})", path)
-    if error.code != 500 or method != "GET" or match is None:
+    """Backward-compatible test helper; classification lives in rest_status."""
+    if error.code != 500:
         return False
     try:
         raw = error.read(4097)
-        if len(raw) > 4096:
-            return False
-        def unique(pairs):
-            value = {}
-            for key, item in pairs:
-                if key in value:
-                    raise ValueError("duplicate JSON key")
-                value[key] = item
-            return value
-
-        payload = json.loads(raw, object_pairs_hook=unique)
-    except (ValueError, UnicodeError, OSError):
+    except (OSError, TimeoutError):
         return False
-    if not isinstance(payload, dict) or set(payload) != {"error", "code", "message"}:
-        return False
-    logical = match.group(1)
-    detail = (
-        'failed to get container: failed to get container: '
-        'Failed to fetch instance "' + logical +
-        '-container" in project "default": Instance not found'
-    )
-    return (type(payload["code"]) is int and payload["code"] == 500
-            and payload["message"] == detail
-            and payload["error"] == "rpc error: code = Unknown desc = " + detail)
+    return rest_status.normalize(method, path, error.code, raw).origin == "compatibility"
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -151,9 +136,13 @@ def request(owner, method, path, body=None, timeout=30):
             code = "API_RESPONSE_RECEIVED"
             return value
     except urllib.error.HTTPError as error:
-        # Keep HTTP 500 classified as rejected; attach a bounded compatibility
-        # hint which only the create preflight is allowed to consume.
-        legacy_missing = _legacy_incus_instance_absent(error, method, path)
+        # Centralized status conversion is read-only: no retries, no mutation
+        # replay, and no response bodies/credentials are surfaced to callers.
+        try:
+            raw_error = error.read(4097)
+        except (OSError, TimeoutError):
+            raw_error = b""
+        semantic = rest_status.normalize(method, path, error.code, raw_error)
         code = ("API_AUTH_REJECTED" if error.code in (401, 403)
                 else "API_TARGET_NOT_FOUND" if error.code == 404 and
                 method == "GET" and re.fullmatch(
@@ -162,7 +151,10 @@ def request(owner, method, path, body=None, timeout=30):
                 else "API_CONFLICT" if error.code == 409
                 else "API_RATE_LIMITED" if error.code == 429
                 else "API_HTTP_REJECTED")
-        raise WireFault(code, legacy_missing_instance=legacy_missing) from None
+        raise WireFault(code, grpc_code=semantic.grpc_code,
+                        http_status=semantic.http_status,
+                        upstream_http_status=semantic.upstream_http_status,
+                        status_origin=semantic.origin) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
         raise WireFault(code) from None
