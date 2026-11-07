@@ -87,28 +87,41 @@ class EnvTests(unittest.TestCase):
         with self.assertRaises(Fault):
             observe_exact(CONFIG,"phasebox",bad,CATALOG)
 
-    def test_authenticated_adapter_read_only(self):
+    def test_authenticated_adapter_reads_rest_and_only_discovers_specialists(self):
+        class Rest:
+            def __init__(self): self.calls=[]
+            def container(self,logical):
+                self.calls.append(logical)
+                return CONTAINER["container"]
         class Provider:
             config=CONFIG
-            def __init__(self,client):self.client=client
-            def session(self):return self.client
-        client=FakeMCP(CATALOG,CONTAINER)
-        report=EnvironmentInspector(Provider(client)).report("phasebox")
+            def __init__(self,client):
+                self.client=client
+                self.rest=Rest()
+            def session(self): return self.client
+        # The upstream MCP need not advertise get_container anymore.
+        client=FakeMCP({"list_container_snapshots":{"name":
+                         "list_container_snapshots"}},CONTAINER)
+        provider=Provider(client)
+        report=EnvironmentInspector(provider).report("phasebox")
         self.assertEqual(report["observation"]["cpu"],"1")
-        self.assertEqual(client.calls,["initialize+tools/list",
-                                       ("get_container",{"username":"phasebox"})])
+        self.assertEqual(provider.rest.calls,["phasebox"])
+        self.assertEqual(client.calls,["initialize+tools/list"])
+        self.assertEqual(report["capabilities"]["snapshot_list"]["state"],
+                         "not_verified")
         self.assertEqual(len(report["target_identity_digest"]),64)
 
-    def test_untrusted_catalog_shapes_and_scope_fail_typed_without_guest_write(self):
+    def test_untrusted_catalog_and_scope_fail_without_guest_write(self):
+        class Rest:
+            def container(self,logical): return CONTAINER["container"]
         class Provider:
             config=CONFIG
+            rest=Rest()
             def __init__(self,catalog):self.catalog=catalog
             def session(self):return FakeMCP(self.catalog,CONTAINER)
-        for bad in (None, [], {"get_container":False},
-                    {"get_container":{"inputSchema":None}},
-                    {"get_container":{"inputSchema":{"properties":{"username":"arbitrary"}}}}):
-            with self.subTest(bad=bad),self.assertRaisesRegex(Fault,
-                    "ENVIRONMENT_READ_UNSUPPORTED"):
+        for bad in (None, [], dict.fromkeys(range(257)), "untrusted"):
+            with self.subTest(bad=str(bad)[:30]),self.assertRaisesRegex(
+                    Fault,"ENVIRONMENT_READ_UNSUPPORTED"):
                 EnvironmentInspector(Provider(bad)).report("phasebox")
         with self.assertRaisesRegex(Fault,"ENVIRONMENT_SCOPE_INVALID"):
             observe_exact(None,"phasebox",CONTAINER,CATALOG)
@@ -138,9 +151,11 @@ class EnvTests(unittest.TestCase):
         with self.assertRaisesRegex(Fault,"ENVIRONMENT_TARGET_CHANGED"):
             diff_fingerprints({},{})
 
-    def test_refuses_unverified_get_schema(self):
+    def test_missing_rest_never_downgrades_to_mcp_get(self):
         class Provider:
             config=CONFIG
-            def session(self):return FakeMCP({"get_container":{"name":"get_container"}},CONTAINER)
-        with self.assertRaisesRegex(Fault,"ENVIRONMENT_READ_UNSUPPORTED"):
+            rest=None
+            def session(self):
+                raise AssertionError("Legacy get_container MCP must never run")
+        with self.assertRaisesRegex(Fault,"PROVIDER_API_REQUIRED"):
             EnvironmentInspector(Provider()).report("phasebox")
