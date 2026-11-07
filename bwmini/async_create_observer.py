@@ -5,11 +5,23 @@ nesting postcondition, after native instance + guest SSH identity are attested.
 No original create is ever retried, including across worker crashes.
 """
 from .domain import Fault
+from datetime import datetime, timezone
+import re
 from .remote_create import CreateJournal, CreateFault
 from . import coordination_bridge, nesting
 
 _READY = "CONTAINER_STATE_RUNNING"
 _DEADLINE_SECONDS = 1800
+
+
+def _created_epoch(value):
+    try:
+        if re.fullmatch(r"[0-9]{9,12}", str(value)):
+            return float(value)
+        return datetime.fromisoformat(str(value).replace("Z","+00:00")).astimezone(
+            timezone.utc).timestamp()
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _hold_unknown(journal, task):
@@ -46,8 +58,12 @@ def observe_one(store, provider, clock):
     target = current["target"]
     # The only name that can have been created by an ordinary Containarium
     # user operation. This is necessary, not sufficient, identity evidence.
+    created = _created_epoch(target.created)
     if (target.logical != logical or target.instance != logical + "-container"
-            or target.user != logical or not target.created):
+            or target.user != logical or created is None
+            or created < item["created"]-30 or created > clock()+30):
+        # A pre-existing same-name instance is NOT the original accepted
+        # create. Never adopt it merely because SSH now succeeds.
         _hold_unknown(journal, task)
         return True
     try:
