@@ -139,7 +139,15 @@ def execute_read(configuration, tool, args):
     except rest_routes.RouteFault as exc:
         raise GatewayRESTFault(str(exc)) from None
     except rest_wire.WireFault as exc:
-        raise GatewayRESTFault(exc.code) from None
+        # Expose standard Provider semantics, never parse the raw HTTP body.
+        if exc.grpc_code is not None:
+            code = exc.grpc_code.name
+        elif (exc.upstream_http_status is not None
+              and exc.upstream_http_status >= 400):
+            code = "UNKNOWN"
+        else:
+            code = exc.code
+        raise GatewayRESTFault(code) from None
 
 
 def plan_write(configuration, tool, args):

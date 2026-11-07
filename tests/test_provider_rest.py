@@ -196,13 +196,13 @@ class ProviderRESTTests(unittest.TestCase):
         self.queue(urllib.error.HTTPError(
             self.config["url"] + "/v1/containers/work", 401, "secret", {},
             io.BytesIO(b'{"error":"sensitive"}')))
-        with self.assertRaisesRegex(Fault, "API_AUTH_REJECTED"):
+        with self.assertRaisesRegex(Fault, "UNAUTHENTICATED"):
             self.rest.mutate("stop", "work", {}, timeout=30)
         self.queue(urllib.error.URLError("network secret"))
-        with self.assertRaisesRegex(Fault, "API_OUTCOME_UNKNOWN"):
+        with self.assertRaisesRegex(Fault, "UNKNOWN"):
             self.rest.mutate("delete", "work", {}, timeout=30)
         self.queue(urllib.error.URLError("network secret"))
-        with self.assertRaisesRegex(Fault, "API_READ_UNAVAILABLE"):
+        with self.assertRaisesRegex(Fault, "UNAVAILABLE"):
             self.rest.inventory()
 
     def test_nesting_create_stays_rest_and_defers_postcondition_until_ready(self):

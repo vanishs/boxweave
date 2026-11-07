@@ -41,7 +41,11 @@ class GatewayRESTTests(unittest.TestCase):
                 self.cfg = cfg
             def request(self, method, uri, body=None, timeout=30):
                 if method == "GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 calls.append((method,uri,body))
                 return {"container":{"username":"wip-unique",
                                      "state":"CONTAINER_STATE_CREATING"}}
@@ -83,7 +87,11 @@ class GatewayRESTTests(unittest.TestCase):
             def request(self,method,uri,body=None,timeout=30):
                 calls.append(method)
                 if method=="GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 raise AssertionError("REST write bypassed shared claim")
         with (patch("bwmini.rest_wire.Client",Client),
               patch("bwmini.coordination_bridge.published_scope",
@@ -107,7 +115,11 @@ class GatewayRESTTests(unittest.TestCase):
             def __init__(self, cfg): pass
             def request(self,method,uri,body=None,timeout=30):
                 if method == "GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 calls.append((method,uri))
                 raise rest_wire.WireFault("API_OUTCOME_UNKNOWN")
         class Claims:
@@ -209,11 +221,14 @@ class GatewayRESTTests(unittest.TestCase):
         with self.assertRaises(rest_wire.WireFault) as ctx:
             rest_wire.request(Owner(), "GET", route)
         self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
-        self.assertTrue(ctx.exception.legacy_missing_instance)
+        self.assertIs(ctx.exception.grpc_code, rest_wire.rest_status.GRPCCode.NOT_FOUND)
+        self.assertEqual(ctx.exception.http_status, 404)
+        self.assertEqual(ctx.exception.upstream_http_status, 500)
+        self.assertEqual(ctx.exception.status_origin, "compatibility")
         with self.assertRaises(rest_wire.WireFault) as ctx:
             rest_wire.request(Owner(), "POST", route)
         self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
-        self.assertFalse(ctx.exception.legacy_missing_instance)
+        self.assertIsNot(ctx.exception.grpc_code, rest_wire.rest_status.GRPCCode.NOT_FOUND)
 
     def test_create_preflight_accepts_only_typed_legacy_hint(self):
         calls = []
@@ -222,9 +237,15 @@ class GatewayRESTTests(unittest.TestCase):
                 pass
             def request(self, method, uri, body=None, timeout=30):
                 calls.append(method)
+                if method == "GET" and uri == "/v1/containers":
+                    return {"containers": [], "unreachableBackends": [],
+                            "totalCount": 0}
                 if method == "GET":
                     raise rest_wire.WireFault(
-                        "API_HTTP_REJECTED", legacy_missing_instance=True)
+                        "API_HTTP_REJECTED",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=500,
+                        status_origin="compatibility")
                 return {"container": {
                     "username": "wip-unique",
                     "state": "CONTAINER_STATE_CREATING"}}
@@ -245,7 +266,7 @@ class GatewayRESTTests(unittest.TestCase):
                 normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
                 protected=True)
         self.assertEqual(result["state"], "accepted")
-        self.assertEqual(calls, ["GET", "POST"])
+        self.assertEqual(calls, ["GET", "GET", "POST"])
 
     def test_create_preflight_does_not_accept_generic_500(self):
         calls = []
@@ -263,3 +284,67 @@ class GatewayRESTTests(unittest.TestCase):
                     normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
                     protected=True)
         self.assertEqual(calls, ["GET"])
+
+    def test_create_preflight_bare_http_404_is_not_target_absence(self):
+        """A missing endpoint must not be mistaken for an absent Box."""
+        calls = []
+        class Rest:
+            def __init__(self, cfg):
+                pass
+            def request(self, method, uri, body=None, timeout=30):
+                calls.append(method)
+                if method == "GET":
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND", status=404,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="unclassified")
+                raise AssertionError("Unverified 404 dispatched a create")
+        with patch("bwmini.rest_wire.Client", Rest):
+            with self.assertRaisesRegex(
+                    ValueError, "REST_CREATE_PREFLIGHT_UNVERIFIED"):
+                gateway_create.dispatch(
+                    self.config, {"username": "wip-unique"}, 7,
+                    normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                    protected=True)
+        self.assertEqual(calls, ["GET"])
+
+    def test_legacy_500_missing_requires_complete_backend_inventory(self):
+        """No mutation when any peer is unreachable or identity is occupied."""
+        for inventory, expected in (
+            ({"containers": [], "unreachableBackends": [{"id": "down"}],
+              "totalCount": 0}, "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [{"username": "wip-unique"}],
+              "unreachableBackends": [], "totalCount": 1},
+             "REST_RESOURCE_EXISTS"),
+            ({"containers": [], "totalCount": 0},
+             "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [], "unreachableBackends": [],
+              "totalCount": 1}, "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [{"username":"dup"}, {"username":"dup"}],
+              "unreachableBackends": [], "totalCount": 2},
+             "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+        ):
+            with self.subTest(inventory=inventory):
+                calls = []
+                class Rest:
+                    def __init__(self, cfg):
+                        pass
+                    def request(self, method, uri, body=None, timeout=30):
+                        calls.append((method, uri))
+                        if method == "GET" and uri == "/v1/containers":
+                            return inventory
+                        if method == "GET":
+                            raise rest_wire.WireFault(
+                                "API_HTTP_REJECTED",
+                                grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                                http_status=404, upstream_http_status=500,
+                                status_origin="compatibility")
+                        raise AssertionError("Unsafe create POST after partial inventory")
+                with patch("bwmini.rest_wire.Client", Rest):
+                    with self.assertRaisesRegex(ValueError, expected):
+                        gateway_create.dispatch(
+                            self.config, {"username": "wip-unique"}, 7,
+                            normalize=lambda x: {
+                                **x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                            protected=True)
+                self.assertEqual([method for method, _ in calls], ["GET", "GET"])

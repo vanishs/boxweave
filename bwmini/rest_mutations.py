@@ -233,7 +233,14 @@ def dispatch(configuration, tool, args, *, protected):
             "GET","/v1/containers/"+logical,timeout=20)
         row = rest_routes.validate_read_result(
             "get_container",observed,username=logical)["container"]
-    except (rest_wire.WireFault, rest_routes.RouteFault):
+    except rest_wire.WireFault as exc:
+        # A verified, typed NotFound is an informative pre-dispatch denial.
+        # All other failures remain unverified; never reserve or write.
+        if (exc.grpc_code is rest_wire.rest_status.GRPCCode.NOT_FOUND
+                and exc.status_origin in ("grpc", "compatibility")):
+            raise GatewayRESTFault("NOT_FOUND") from None
+        raise GatewayRESTFault("REST_TARGET_UNVERIFIED") from None
+    except rest_routes.RouteFault:
         raise GatewayRESTFault("REST_TARGET_UNVERIFIED") from None
     state = row.get("state")
     if (tool == "start_container" and state != "CONTAINER_STATE_STOPPED"

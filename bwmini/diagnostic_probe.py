@@ -78,7 +78,7 @@ def run(profile, config_path, persisted_path, *, reader=read_config,
                 provider.rest.inventory()
                 checks.append(check("rest_inventory", "passed", "REST_AUTHENTICATED_READ_PASSED"))
             except Fault as exc:
-                code = ("REST_AUTH_REJECTED" if exc.code == "API_AUTH_REJECTED"
+                code = ("REST_AUTH_REJECTED" if exc.code in ("API_AUTH_REJECTED", "UNAUTHENTICATED", "PERMISSION_DENIED")
                         else "REST_READ_UNAVAILABLE")
                 checks.append(check("rest_inventory",
                                     "failed" if code == "REST_AUTH_REJECTED" else "not_verified",

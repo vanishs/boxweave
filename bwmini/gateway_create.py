@@ -163,14 +163,40 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
     try:
         rest.request("GET", "/v1/containers/"+body["username"], timeout=20)
     except rest_wire.WireFault as error:
-        # Containarium 0.128 mislabels an exact Incus absent-instance reply
-        # as HTTP 500 / gRPC Unknown. This compatibility exception is confined
-        # to the create preflight; generic 500s still block all writes.
-        known_missing = (error.code == "API_TARGET_NOT_FOUND" or (
-            error.code == "API_HTTP_REJECTED"
-            and getattr(error, "legacy_missing_instance", False)))
+        # The centralized adapter returns *standard* gRPC NotFound / HTTP
+        # 404 only for validated typed Provider replies or the exact v0.128
+        # compatibility signature. A bare HTTP 404 can be a missing API route
+        # and must not license an irreversible create.
+        known_missing = (
+            error.grpc_code is rest_wire.rest_status.GRPCCode.NOT_FOUND
+            and error.http_status == 404
+            and error.status_origin in ("grpc", "compatibility"))
         if not known_missing:
             raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+        if error.status_origin == "compatibility":
+            # In upstream v0.128 GetContainer ignores peer list failures.
+            # The legacy 500 text alone is therefore not proof that this
+            # Box is absent on every backend. Independently check the full
+            # REST inventory, including unreachable peers and pending boxes,
+            # before allowing a permanent create intent.
+            try:
+                inventory = rest.request("GET", "/v1/containers", timeout=20)
+                rest_routes.validate_read_result("list_containers", inventory)
+                if (not isinstance(inventory.get("unreachableBackends"), list)
+                        or "totalCount" not in inventory):
+                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+                names = [
+                    rest_routes.logical_name(row["username"])
+                    for row in inventory["containers"]
+                ]
+                if len(names) != len(set(names)):
+                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+            except (rest_wire.WireFault, rest_routes.RouteFault,
+                    KeyError, TypeError, ValueError):
+                raise GatewayRESTFault(
+                    "REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+            if body["username"] in names:
+                raise GatewayRESTFault("REST_RESOURCE_EXISTS")
     else:
         raise GatewayRESTFault("REST_RESOURCE_EXISTS")
     # Everything above is validated before the permanent no-replay intent.

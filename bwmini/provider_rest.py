@@ -126,7 +126,27 @@ class RESTClient:
         try:
             return rest_wire.request(self, method, path, body, timeout)
         except rest_wire.WireFault as exc:
-            raise Fault(exc.code, exc.status) from None
+            # App-facing Provider failures use canonical gRPC status names
+            # and their grpc-gateway HTTP mappings when classification is
+            # authoritative. Ambiguous failures retain the old transport
+            # classification; no application code inspects upstream text.
+            if exc.grpc_code is not None:
+                fault = Fault(exc.grpc_code.name, exc.http_status)
+            elif (exc.upstream_http_status is not None
+                  and exc.upstream_http_status >= 400):
+                # A bare HTTP 400/404/409/500 does not identify an
+                # authoritative gRPC code. Expose canonical UNKNOWN, while
+                # retaining the original HTTP status as diagnostic metadata.
+                fault = Fault("UNKNOWN", 500)
+            else:
+                # Local route/configuration/response-contract faults are
+                # BoxWeave errors, not claims about Provider semantics.
+                fault = Fault(exc.code, exc.status)
+            fault.grpc_code = exc.grpc_code
+            fault.http_status = exc.http_status
+            fault.upstream_http_status = exc.upstream_http_status
+            fault.status_origin = exc.status_origin
+            raise fault from None
 
     def debug_container(self, logical):
         """Single exact-target REST read; preserve bounded upstream shape."""
