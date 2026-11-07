@@ -16,7 +16,7 @@ _DEADLINE_SECONDS = 1800
 
 def _created_epoch(value):
     try:
-        if re.fullmatch(r"[0-9]{9,12}", str(value)):
+        if re.fullmatch(r"[0-9]{1,12}", str(value)):
             return float(value)
         return datetime.fromisoformat(str(value).replace("Z","+00:00")).astimezone(
             timezone.utc).timestamp()
