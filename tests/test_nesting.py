@@ -108,27 +108,30 @@ class NestingBoundaryTests(unittest.TestCase):
         self.assertIn("boxweave_info", {t["name"] for t in out["result"]["tools"]})
         self.assertNotIn("enable_nesting",original["result"]["tools"][0]["inputSchema"]["properties"])
 
-    def test_provider_never_substitutes_podman_for_missing_nesting_capability(self):
+    def test_rest_create_keeps_nesting_independent_of_podman(self):
+        from bwmini.provider_rest import RESTClient
         calls=[]
-        class Peer:
-            def __init__(self,*a):pass
-            def __enter__(self):return self
-            def __exit__(self,*a):pass
-            def discover(self):
-                return {"create_container":{"inputSchema":{"properties":{k:{"type":"boolean"} if k in ("enable_podman","enable_nesting") else {} for k in props}}}}
-            def tool(self,n,a):calls.append((n,a));return {"content":[]}
-        provider=object.__new__(Provider);provider.argv=["/fixture"]
-        spec={"cpu":"1","memory":"1GB","disk":"8GB","ssh_public_key":PUBLIC,"_nesting":True}
-        props={"username","cpu","memory","disk","image","ssh_keys","enable_podman"}
-        with patch("bwmini.provider.MCP",Peer):
-            with self.assertRaises(Fault):provider.lifecycle_mutate("create","work",spec,60)
-            self.assertFalse(calls)
-            props.add("enable_nesting")
+        provider=object.__new__(Provider)
+        provider.argv=["/fixture"]
+        provider.rest=RESTClient({"url":"http://127.0.0.1:18080",
+                                  "token_file":"/tmp/no-read"})
+        provider.rest.request=lambda method,route,body=None,timeout=30: (
+            calls.append((method,route,body)) or
+            {"container":{"username":"work","state":"CONTAINER_STATE_CREATING"}})
+        spec={"cpu":"1","memory":"1GB","disk":"8GB",
+              "ssh_public_key":PUBLIC,"_nesting":True}
+        with patch("bwmini.provider.MCP",
+                   side_effect=AssertionError("legacy MCP create forbidden")):
             provider.lifecycle_mutate("create","work",spec,60)
-            self.assertTrue(calls[-1][1]["enable_nesting"])
-            self.assertFalse(calls[-1][1]["enable_podman"])
-            provider.lifecycle_mutate("create","work",{k:v for k,v in spec.items() if k!="_nesting"},60)
-            self.assertNotIn("enable_nesting",calls[-1][1])
+        self.assertEqual(len(calls),1)
+        method,route,body=calls[0]
+        self.assertEqual((method,route),("POST","/v1/containers"))
+        self.assertIs(body["enablePodman"],False)
+        self.assertNotIn("enable_nesting",body)
+        self.assertIs(body["async"],True)
+        with self.assertRaisesRegex(Fault,"NESTING_BOOLEAN_REQUIRED"):
+            provider.lifecycle_mutate("create","work",{**spec,"_nesting":"true"},60)
+        self.assertEqual(len(calls),1)
 
 class NestingLifecycleTests(Base):
     def setUp(self):
@@ -153,147 +156,117 @@ class NestingLifecycleTests(Base):
         self.assertFalse(self.provider.writes)
 
 class GateProtocolTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Gateway fixture expectations must not depend on the host's
-        # root-installed protected-mode policy. Individual protection
-        # tests explicitly override this default where appropriate.
-        base = patch.object(mcp_gate.gateway_protection, "enabled", return_value=False)
-        base.start()
-        cls.addClassCleanup(base.stop)
+    """The eight migrated lifecycle tools never send upstream MCP calls."""
 
-    def test_create_strips_extension_and_applies_it_only_after_success(self):
-        import struct,base64
-        from io import StringIO
-        from types import SimpleNamespace
-        key="ssh-ed25519 "+base64.b64encode(struct.pack(">I",11)+b"ssh-ed25519"+struct.pack(">I",32)+b"x"*32).decode()
-        request={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_container",
-                    "arguments":{"username":"work","ssh_keys":[key],"enable_podman":False,"enable_nesting":True}}}
-        observed={"name":"work-container","createdAt":"123","username":"work"}
-        plan={"target":{"name":"work-container","created":"123"},"expected":{"identity":"pinned"}}
-        for failure in (False,True):
-            upstream=[{"jsonrpc":"2.0","id":1,**({"error":{"code":-1,"message":"creation failed"}} if failure else {"result":{"content":[]}})}]
-            if not failure:upstream.append({"jsonrpc":"2.0","id":"boxweave-nesting-1","result":{"content":[{"type":"text","text":json.dumps({"container":observed})}]}})
-            sent=io.BytesIO()
-            process=SimpleNamespace(stdin=sent,stdout=io.BytesIO("".join(json.dumps(x)+"\n" for x in upstream).encode()),poll=lambda:0)
-            class KeepBytes(io.BytesIO):
-                def close(self):pass
-            process.stdin=KeepBytes()
-            output=StringIO()
-            with patch.object(mcp_gate.sys,"stdin",StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=process),patch.object(mcp_gate,"managed_public_key",return_value=key),patch.object(mcp_gate,"nesting_invoke",side_effect=[plan,{"nesting":True}]) as invoke:
-                mcp_gate.main()
-            forwarded=json.loads(process.stdin.getvalue().splitlines()[0])
-            self.assertNotIn("enable_nesting",forwarded["params"]["arguments"])
-            self.assertFalse(forwarded["params"]["arguments"]["enable_podman"])
-            self.assertEqual(invoke.call_count,0 if failure else 2)
-            reply=json.loads(output.getvalue())
-            if failure:self.assertIn("error",reply)
-            else:self.assertTrue(json.loads(reply["result"]["content"][-1]["text"])["boxweave_nesting"]["nesting"])
-
-    def peer(self,upstream):
+    def peer(self):
         from types import SimpleNamespace
         class KeepBytes(io.BytesIO):
-            def close(self):pass
-        return SimpleNamespace(stdin=KeepBytes(),stdout=io.BytesIO("".join(json.dumps(x)+"\n" for x in upstream).encode()),
+            def close(self): pass
+        return SimpleNamespace(stdin=KeepBytes(),stdout=io.BytesIO(),
                                poll=lambda:0)
 
-    def test_failed_create_preserves_upstream_error_and_exposes_safe_unknown(self):
-        request = {"jsonrpc": "2.0", "id": 15, "method": "tools/call",
-                   "params": {"name": "create_container",
-                              "arguments": {"username": "work", "enable_nesting": False}}}
-        original = {"jsonrpc": "2.0", "id": 15,
-                    "error": {"code": -32000, "message": "upstream create failed"}}
-        output = io.StringIO()
-        peer = self.peer([original])
-        with (patch.object(mcp_gate.sys, "stdin", io.StringIO(json.dumps(request)+"\n")),
-              patch.object(mcp_gate.sys, "stdout", output),
-              patch.object(mcp_gate.subprocess, "Popen", return_value=peer),
-              patch.object(mcp_gate, "managed_public_key", return_value="ssh-ed25519 AAAA")):
-            mcp_gate.main()
-        reply = json.loads(output.getvalue())
-        self.assertEqual(reply["error"]["code"], -32000)
-        self.assertEqual(reply["error"]["message"], "upstream create failed")
-        record = reply["error"]["data"]["boxweave_create"]
-        self.assertEqual((record["state"], record["logical"], record["retry"]),
-                         ("unknown", "work", "not_authorized"))
-        self.assertEqual(record["inspect"], "get_container")
-        sent = [json.loads(line) for line in peer.stdin.getvalue().splitlines()]
-        self.assertEqual(len(sent), 1)
-        self.assertEqual(sent[0]["params"]["name"], "create_container")
-
-    def test_failed_create_result_annotation_is_not_success(self):
-        reply = {"jsonrpc": "2.0", "id": 1,
-                 "result": {"isError": True,
-                            "content": [{"type": "text", "text": "remote error"}]}}
-        annotated = mcp_gate.annotate_failed_create(reply, {"username": "work"})
-        self.assertTrue(annotated["result"]["isError"])
-        self.assertEqual(annotated["result"]["content"][1]["text"], "remote error")
-        self.assertEqual(json.loads(annotated["result"]["content"][0]["text"])
-                         ["boxweave_create"]["code"], "CREATE_OUTCOME_UNVERIFIED")
-        self.assertEqual(mcp_gate.annotate_failed_create(
-            {"result": {"isError": False, "content": []}},
-            {"username": "work"})["result"]["content"], [])
-        self.assertNotIn("data", mcp_gate.annotate_failed_create(
-            {"error": {"code": -1}}, {"username": "../unsafe"})["error"])
-
-    def test_nesting_helper_gap_is_named_not_masked_as_trust_gate(self):
-        request={"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"boxweave_nesting",
-                    "arguments":{"action":"inspect","logical":"work"}}}
-        observed={"container":{"name":"work-container","createdAt":"123","username":"work"}}
-        upstream=[{"jsonrpc":"2.0","id":"boxweave-nesting-7","result":{"content":[{"type":"text","text":json.dumps(observed)}]}}]
+    def gateway(self,requests,*,config=None,rest_response=None,create_response=None):
+        if config is None:
+            config={"mode":"coordinated"}
+        process=self.peer()
         output=io.StringIO()
-        with patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=self.peer(upstream)),patch.object(mcp_gate,"nesting_invoke",side_effect=ValueError("NESTING_HELPER_UNAVAILABLE")):
-            mcp_gate.main()
-        reply=json.loads(output.getvalue())
-        self.assertIn("NESTING_HELPER_UNAVAILABLE",reply["error"]["message"])
-        self.assertNotIn("TRUST_OR_WORKLOAD_KEY_GATE",reply["error"]["message"])
-
-    def test_nesting_partial_preserves_upstream_created_receipt(self):
-        request={"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"create_container",
-                    "arguments":{"username":"work","enable_nesting":True}}}
-        receipt={"type":"text","text":"Created work-container; running at 10.100.0.20"}
-        observed={"container":{"name":"work-container","createdAt":"123","username":"work"}}
-        upstream=[{"jsonrpc":"2.0","id":12,"result":{"content":[receipt]}},
-                  {"jsonrpc":"2.0","id":"boxweave-nesting-12","result":{"content":[{"type":"text","text":json.dumps(observed)}]}}]
-        process=self.peer(upstream)
-        output=io.StringIO()
-        with (patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),
+        incoming=io.StringIO("".join(json.dumps(x)+"\n" for x in requests))
+        calls=[]
+        def create(cfg,args,rpc_id,*,normalize,protected):
+            calls.append(("create",dict(args),protected))
+            return create_response or {"task_id":"a"*32,"state":"accepted",
+                                      "guest_user_and_ssh_verified":False}
+        def mutate(cfg,name,args,*,protected):
+            calls.append((name,dict(args),protected))
+            return {"task_id":"b"*32,"state":"accepted"}
+        def read(cfg,name,args):
+            calls.append((name,dict(args),True))
+            return rest_response or {"container":{"name":"work-container",
+                     "createdAt":"123","username":"work"}}
+        with (patch.object(mcp_gate.sys,"stdin",incoming),
               patch.object(mcp_gate.sys,"stdout",output),
               patch.object(mcp_gate.subprocess,"Popen",return_value=process),
-              patch.object(mcp_gate,"managed_public_key",return_value="ssh-ed25519 AAAA"),
-              patch.object(mcp_gate,"nesting_invoke",side_effect=ValueError("SECRET_NON_ALLOWLIST"))):
+              patch.object(mcp_gate,"tool_policy",return_value=None),
+              patch.object(mcp_gate.gateway_protection,"enabled",return_value=False),
+              patch.object(mcp_gate.gateway_rest,"policy",return_value=config),
+              patch.object(mcp_gate.gateway_rest,"execute_read",side_effect=read),
+              patch.object(mcp_gate.gateway_create,"dispatch",side_effect=create),
+              patch.object(mcp_gate.rest_mutations,"dispatch",side_effect=mutate),
+              patch.object(mcp_gate.gd,"record")):
             mcp_gate.main()
-        reply=json.loads(output.getvalue())
-        self.assertTrue(reply["result"]["isError"])
-        self.assertEqual(reply["result"]["content"][1],receipt)
-        partial=json.loads(reply["result"]["content"][0]["text"])["boxweave_nesting"]
-        self.assertTrue(partial["box_created"])
-        self.assertEqual(partial["nesting_outcome"],"not_verified")
-        self.assertEqual(partial["code"],"NESTING_CONFIGURATION_UNVERIFIED_INSPECT_ORIGINAL_INSTANCE")
-        self.assertNotIn("SECRET_NON_ALLOWLIST",json.dumps(reply))
+        replies=[json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(process.stdin.getvalue(),b"")
+        return replies,calls
 
-    def test_created_box_survives_nesting_helper_gap_without_recreation(self):
-        request={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_container",
-                    "arguments":{"username":"work","enable_nesting":True}}}
-        observed={"name":"work-container","createdAt":"123","username":"work"}
-        plan={"target":{"name":"work-container","created":"123"},"expected":{"identity":"pinned"}}
-        upstream=[{"jsonrpc":"2.0","id":1,"result":{"content":[]}},
-                  {"jsonrpc":"2.0","id":"boxweave-nesting-1","result":{"content":[{"type":"text","text":json.dumps({"container":observed})}]}}]
-        process=self.peer(upstream)
+    def test_create_keeps_nesting_in_single_rest_intent(self):
+        request={"jsonrpc":"2.0","id":1,"method":"tools/call",
+                 "params":{"name":"create_container",
+                           "arguments":{"username":"work","enable_nesting":True}}}
+        replies,calls=self.gateway([request])
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0],("create",{"username":"work",
+                            "enable_nesting":True},True))
+        receipt=json.loads(replies[0]["result"]["content"][0]["text"])
+        self.assertEqual(receipt["state"],"accepted")
+        self.assertFalse(receipt["guest_user_and_ssh_verified"])
+
+    def test_unknown_receipt_is_not_a_failure_or_automatic_retry(self):
+        request={"jsonrpc":"2.0","id":2,"method":"tools/call",
+                 "params":{"name":"create_container",
+                           "arguments":{"username":"work","enable_nesting":True}}}
+        replies,calls=self.gateway([request],create_response={
+            "task_id":"a"*32,"state":"unknown",
+            "code":"UPSTREAM_CREATE_OUTCOME_UNKNOWN"})
+        receipt=json.loads(replies[0]["result"]["content"][0]["text"])
+        self.assertEqual(receipt["state"],"unknown")
+        self.assertEqual(len(calls),1)
+        self.assertNotIn("error",replies[0])
+
+    def test_migrated_reads_and_mutations_never_forward_mcp(self):
+        names=("list_containers","get_container","debug_container",
+               "start_container","stop_container","delete_container",
+               "resize_container")
+        requests=[{"jsonrpc":"2.0","id":i+1,"method":"tools/call",
+                   "params":{"name":name,"arguments":(
+                       {} if name=="list_containers" else
+                       {"username":"work","cpu":"2"} if name=="resize_container" else
+                       {"username":"work"})}}
+                  for i,name in enumerate(names)]
+        replies,calls=self.gateway(requests)
+        self.assertEqual(len(replies),len(names))
+        self.assertTrue(all("result" in reply for reply in replies))
+        self.assertEqual([name for name,_,_ in calls],list(names))
+        self.assertTrue(all(protected for _,_,protected in calls))
+
+    def test_nesting_helper_failure_preserves_typed_error_with_rest_identity(self):
+        request={"jsonrpc":"2.0","id":7,"method":"tools/call",
+                 "params":{"name":"boxweave_nesting",
+                           "arguments":{"action":"inspect","logical":"work"}}}
+        with patch.object(mcp_gate,"nesting_invoke",
+                          side_effect=ValueError("NESTING_HELPER_UNAVAILABLE")):
+            replies,calls=self.gateway([request])
+        self.assertEqual(replies[0]["error"]["message"],
+                         "NESTING_HELPER_UNAVAILABLE")
+        self.assertEqual(calls[0][0],"get_container")
+
+    def test_unavailable_rest_refuses_create_without_upstream_mcp(self):
+        request={"jsonrpc":"2.0","id":7,"method":"tools/call",
+                 "params":{"name":"create_container",
+                           "arguments":{"username":"work"}}}
+        process=self.peer()
         output=io.StringIO()
-        with patch.object(mcp_gate.sys,"stdin",io.StringIO(json.dumps(request)+"\n")),patch.object(mcp_gate.sys,"stdout",output),patch.object(mcp_gate.subprocess,"Popen",return_value=process),patch.object(mcp_gate,"managed_public_key",return_value="ssh-ed25519 AAAA"),patch.object(mcp_gate,"nesting_invoke",side_effect=[plan,ValueError("NESTING_HELPER_UNAVAILABLE")]):
+        with (patch.object(mcp_gate.sys,"stdin",
+                           io.StringIO(json.dumps(request)+"\n")),
+              patch.object(mcp_gate.sys,"stdout",output),
+              patch.object(mcp_gate.subprocess,"Popen",return_value=process),
+              patch.object(mcp_gate,"tool_policy",return_value=None),
+              patch.object(mcp_gate.gateway_protection,"enabled",return_value=False),
+              patch.object(mcp_gate.gateway_rest,"policy",
+                           side_effect=mcp_gate.gateway_rest.GatewayRESTFault(
+                               "REST_APP_CONFIG_UNVERIFIED")),
+              patch.object(mcp_gate.gd,"record")):
             mcp_gate.main()
-        forwarded=[json.loads(line) for line in process.stdin.getvalue().splitlines()]
-        self.assertEqual(sum(message.get("method")=="tools/call" and message["params"]["name"]=="create_container"
-                             for message in forwarded),1)
+        self.assertEqual(process.stdin.getvalue(),b"")
         reply=json.loads(output.getvalue())
-        self.assertNotIn("error", reply)
-        self.assertTrue(reply["result"]["isError"])
-        partial=json.loads(reply["result"]["content"][0]["text"])["boxweave_nesting"]
-        self.assertEqual(partial["state"], "partial")
-        self.assertTrue(partial["box_created"])
-        self.assertTrue(partial["requested_nesting"])
-        self.assertEqual(partial["nesting_outcome"], "not_verified")
-        self.assertEqual(partial["username"], "work")
-        self.assertEqual(partial["code"], "NESTING_HELPER_UNAVAILABLE")
-        self.assertIn("do not repeat", partial["next_action"])
+        self.assertEqual(reply["error"]["message"],
+                         "REST_APP_CONFIG_UNVERIFIED")
