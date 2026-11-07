@@ -102,7 +102,7 @@ def execute_read(configuration, tool, args):
         raise GatewayRESTFault("REST_READ_NOT_ALLOWED")
     try:
         method, route, body = rest_routes.route(tool, args)
-        result = rest_wire.Client(configuration).request(method, route, body, timeout=20)
+        result = rest_wire.Client({k: configuration[k] for k in ("url", "token_file")}).request(method, route, body, timeout=20)
         return rest_routes.validate_read_result(
             tool, result, username=args.get("username") if isinstance(args, dict) else None)
     except rest_routes.RouteFault as exc:
