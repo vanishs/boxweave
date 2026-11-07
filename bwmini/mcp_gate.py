@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -22,6 +22,7 @@ except ImportError:
     import restore_guard
     import resource_size
     import debug_rest
+    import gateway_rest
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
@@ -538,6 +539,11 @@ def main():
             "isError": False}}), flush=True)
 
     def container(logical, ident):
+        selected_rest = gateway_rest.policy()
+        if selected_rest is not None:
+            value = gateway_rest.execute_read(
+                selected_rest, "get_container", {"username": logical})
+            return value["container"]
         internal = "boxweave-nesting-" + str(ident)
         send({"jsonrpc":"2.0","id":internal,"method":"tools/call",
               "params":{"name":"get_container","arguments":{"username":logical}}})
@@ -569,7 +575,9 @@ def main():
                     message = guard_restore_catalog(message)
                 message = filter_tools(message, permitted)
                 try:
-                    selected_debug = debug_rest.gateway_config() is not None
+                    selected_debug = (
+                        debug_rest.gateway_config() is not None or
+                        gateway_rest.policy() is not None)
                     if gateway_protection.enabled():
                         message = gateway_protection.filter_catalog(
                             message, rest_debug=selected_debug)
@@ -593,10 +601,20 @@ def main():
                 try:
                     debug_config = (debug_rest.gateway_config()
                                     if params.get("name") == "debug_container" else None)
+                    rest_config = gateway_rest.policy()
                     if gateway_protection.enabled():
                         gateway_protection.check_call(
                             params.get("name"), args,
-                            rest_debug=debug_config is not None)
+                            rest_debug=debug_config is not None or rest_config is not None)
+                    if rest_config is not None and params.get("name") in (
+                            "list_containers", "get_container", "debug_container"):
+                        value = gateway_rest.execute_read(
+                            rest_config, params["name"], args)
+                        emit_result(request["id"], value)
+                        gd.record(params["name"],
+                                  {"result": {"content": [], "isError": False}},
+                                  (time.monotonic()-started)*1000, trace=trace)
+                        continue
                     if debug_config is not None:
                         if not isinstance(args, dict) or set(args) != {"username"}:
                             raise debug_rest.DebugRESTError("DEBUG_REST_TARGET_INVALID")
