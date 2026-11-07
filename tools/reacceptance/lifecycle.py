@@ -111,7 +111,7 @@ def one_call(argv, tool, arguments):
             "success_response": bool(success)}
 
 
-def run(grant, confirmation, mcp_argv, output):
+def run(grant, confirmation, mcp_argv, output, *, with_readonly_breadth=False):
     approved = grant_read(grant, confirmation)
     name = approved["child_name"]
     dest = Path(output)
