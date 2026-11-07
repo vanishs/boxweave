@@ -201,6 +201,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_shared_claims.py`
 - `tests/test_slice.py`
 - `tests/test_ssh_keepalive.py`
+- `tests/test_unified_rest_contract.py`
 - `tests/test_upstream_version_manager.py`
 - `tests/test_workload_guidance.py`
 <!-- inventory:unit-tests:end -->
