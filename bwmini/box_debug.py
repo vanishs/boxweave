@@ -4,9 +4,7 @@ The upstream debug_container response may include SSH journal lines, raw shell
 paths and remediation strings. This module deliberately refuses to surface
 those contents in Web/API responses.
 """
-import json
 from .domain import Fault
-from .wire_results import text
 
 
 def summary(provider, target):
@@ -15,32 +13,18 @@ def summary(provider, target):
         raise Fault("LIVE_DIAGNOSTIC_REQUIRES_MCP", 409)
     # The caller must validate target ownership, incarnation and running state
     # through Service.observe_target *before* invoking this helper.
-    if (getattr(provider, "rest", None) is not None
-            and getattr(provider, "debug_rest_enabled", True)):
-        body = provider.rest.debug_container(target.logical)
-        # A logical Box name can be recycled between the authorization
-        # read and the debug GET. Reject changed incarnations before any
-        # response reaches Web; this remains read-only and no retry occurs.
-        current = provider.rest.container(target.logical)
-        if (current.get("username") != target.logical
-                or current.get("name") != target.instance
-                or str(current.get("createdAt")) != target.created):
-            raise Fault("TARGET_CHANGED", 409)
-    else:
-        with provider.session() as client:
-            tools = client.discover()
-            schema = tools.get("debug_container", {}).get("inputSchema", {})
-            if (not isinstance(schema, dict) or schema.get("type") != "object"
-                    or "username" not in schema.get("properties", {})):
-                raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
-            result = client.tool("debug_container", {"username": target.logical})
-        raw = text(result)
-        if len(raw) > 32768:
-            raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
-        try:
-            body = json.loads(raw)
-        except (ValueError, TypeError):
-            raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409) from None
+    if getattr(provider, "rest", None) is None:
+        # debug_container is one of the eight REST-migrated operations.
+        # Missing REST is an error, never permission to try upstream MCP.
+        raise Fault("PROVIDER_API_REQUIRED", 422)
+    body = provider.rest.debug_container(target.logical)
+    # A logical Box name can be recycled between the authorization read
+    # and the debug GET. Pin the exact original instance incarnation.
+    current = provider.rest.container(target.logical)
+    if (current.get("username") != target.logical
+            or current.get("name") != target.instance
+            or str(current.get("createdAt")) != target.created):
+        raise Fault("TARGET_CHANGED", 409)
     if not isinstance(body, dict):
         raise Fault("DEBUG_CONTRACT_UNSUPPORTED", 409)
 
