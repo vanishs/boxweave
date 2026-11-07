@@ -194,9 +194,13 @@ def run(grant, confirmation, mcp_argv, output, *, with_readonly_breadth=False):
                     "logical": name, "provider_uuid": identity["uuid"],
                     "created_at": identity["created_at"], "test_owned": True})
                 unique_file(dest / "readonly-breadth.json", report)
-            except (AcceptanceFault, OSError, ValueError) as exc:
+            except Exception as exc:
+                # A read-only probe bug cannot skip the native identity recheck
+                # or leave a confirmed test child behind unnecessarily.
+                # Save only the exception class, never unredacted credentials.
                 unique_file(dest / "readonly-breadth-blocked.json", {
-                    "status": "BLOCKED", "reason": str(exc), "recorded_at": now()})
+                    "status": "BLOCKED", "reason": "READONLY_PROBE_EXCEPTION",
+                    "exception_type": type(exc).__name__, "recorded_at": now()})
             # A competing writer could replace the fixture during the probe.
             # Never continue into stop/delete against a changed incarnation.
             after = native_list().get(name + "-container")
