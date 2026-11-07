@@ -205,24 +205,25 @@ class ProviderRESTTests(unittest.TestCase):
         with self.assertRaisesRegex(Fault, "API_READ_UNAVAILABLE"):
             self.rest.inventory()
 
-    def test_mcp_special_nesting_not_silently_sent_to_rest(self):
+    def test_nesting_create_stays_rest_and_defers_postcondition_until_ready(self):
         p = self.provider()
         p.rest.opener.open = self.send
-        with patch("bwmini.provider.MCP") as fake:
-            tool = fake.return_value.__enter__.return_value
-            tool.discover.return_value = {
-                "create_container": {"inputSchema": {"properties": {
-                    "username": {}, "cpu": {}, "memory": {}, "disk": {},
-                    "image": {}, "ssh_keys": {}, "enable_podman": {},
-                    "enable_nesting": {"type": "boolean"}}}}}
+        self.queue({"container": {"username": "work",
+                                  "state": "CONTAINER_STATE_CREATING"}})
+        with patch("bwmini.provider.MCP", side_effect=AssertionError("MCP used")):
+            p.nesting_check(True)
             p.lifecycle_mutate("create", "work", {
                 "cpu": "2", "memory": "2GB", "disk": "20GB",
                 "ssh_public_key": "ssh-ed25519 AAAtest", "_nesting": True
             }, 30)
-            tool.tool.assert_called_once()
-            self.assertEqual(tool.tool.call_args.args[0], "create_container")
-            self.assertEqual(tool.tool.call_args.args[1]["enable_nesting"], True)
-        self.assertEqual(self.sent, [])
+        self.assertEqual(len(self.sent), 1)
+        method, uri, raw, _, _ = self.sent[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(uri.endswith("/v1/containers"))
+        body = json.loads(raw)
+        self.assertIs(body["async"], True)
+        self.assertNotIn("enableNesting", body)
+        self.assertNotIn("enable_nesting", body)
 
     def test_trace_correlates_without_persisting_secrets(self):
         self.rest.store = Store(self.root / "state.sqlite3")
