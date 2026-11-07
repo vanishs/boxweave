@@ -33,6 +33,10 @@ EVENT_LIMIT = 25
 # labelled FAILED. Never infer a local refusal from an upstream error payload.
 # Mutating tools and ambiguous post-dispatch errors deliberately remain UNKNOWN.
 LOCAL_DENIAL_CODES = {
+    "create_container": frozenset(("REST_CREATE_PREFLIGHT_UNVERIFIED",
+        "REST_RESOURCE_EXISTS", "REST_CREATE_PREDISPATCH_UNVERIFIED",
+        "COORDINATION_SCOPE_UNVERIFIED", "REST_APP_CONFIG_UNVERIFIED",
+        "REST_APP_COORDINATION_NOT_ALIGNED", "REST_STATE_DB_UNSAFE")),
     "boxweave_box_read_file": frozenset(("BOX_READ_INVALID", "BOX_PATH_INVALID",
                                          "BOX_READ_UNVERIFIED")),
     "boxweave_box_list_directory": frozenset(("BOX_READ_INVALID", "BOX_PATH_INVALID",

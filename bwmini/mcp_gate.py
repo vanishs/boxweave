@@ -27,7 +27,7 @@ except ImportError:
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
-SERVER_INFO_VERSION = "0.50.3"
+SERVER_INFO_VERSION = "0.50.4"
 SERVER_DESCRIPTION = (
     "BoxWeave is a self-hosted environment control plane for AI coding agents. "
     "Use isolated Linux Boxes to execute code, build and test projects, manage "
@@ -600,9 +600,15 @@ def main():
                             rest_config, args, request.get("id"),
                             normalize=managed_create_arguments, protected=True)
                         emit_result(request["id"], receipt)
-                        gd.record("create_container", {
-                            "result": {"content": [], "isError": False}},
-                            (time.monotonic()-started)*1000, trace=trace)
+                        if receipt.get("state")=="failed_before_dispatch":
+                            gd.record("create_container",
+                                      {"error":{"code":-32602}},
+                                      (time.monotonic()-started)*1000,
+                                      trace=trace,local_denial=receipt["code"])
+                        else:
+                            gd.record("create_container", {
+                                "result": {"content": [], "isError": False}},
+                                (time.monotonic()-started)*1000, trace=trace)
                         continue
                     if rest_config is not None and params.get("name") in (
                             "start_container", "stop_container",
