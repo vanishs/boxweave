@@ -24,6 +24,42 @@ class InstalledReadOnlyTests(unittest.TestCase):
         self.assertEqual(installed.positive_arguments(
             {"required": ["password"], "properties": {}}, "racc-owned-1")[0], None)
 
+    def test_optional_target_is_not_a_false_positive(self):
+        schema = {"properties": {"username": {"type": "string"}}}
+        args, reason = installed.positive_arguments(schema, None)
+        self.assertIsNone(args)
+        self.assertEqual(reason, "VERIFIED_TEST_OWNED_TARGET_REQUIRED")
+
+    def test_caller_supplied_name_cannot_be_treated_as_verified_target(self):
+        fake = [{"name": "get_container", "inputSchema": {
+            "properties": {"username": {"type": "string"}}}}]
+        calls = []
+        def session(argv, requests, **kw):
+            calls.append(requests)
+            if requests[0]["method"] == "tools/list":
+                return {"messages": [{"id": "racc-list", "result": {
+                    "tools": fake}}], "process": {"execution": "completed", "exit_code": 0}}
+            return {"messages": [{"id": "racc-mvp", "result": {
+                "content": []}}], "process": {"execution": "completed", "exit_code": 0,
+                                               "stdout_sha256": "0", "stderr_sha256": "0"}}
+        with patch.object(installed, "mcp_session", side_effect=session):
+            result = installed.inspect_mcp(["mcp"], owned="bwracc-owned-123")
+        self.assertEqual(result["rows"]["stdio_mcp:get_container"]["status"], "BLOCKED")
+        self.assertEqual(result["rows"]["stdio_mcp:get_container"]["reason"],
+                         "INDEPENDENT_TEST_TARGET_ORACLE_REQUIRED")
+        self.assertEqual(len(calls), 1)
+        with patch.object(installed, "mcp_session", side_effect=session):
+            with self.assertRaisesRegex(AcceptanceFault, "NOT_VERIFIED"):
+                installed.inspect_mcp(["mcp"], owned="bwracc-owned-123",
+                                      verified_target={"logical": "a", "test_owned": True})
+            good = installed.inspect_mcp(["mcp"], owned="bwracc-owned-123",
+                                         verified_target={
+                                             "logical": "bwracc-owned-123",
+                                             "provider_uuid": "a" * 36,
+                                             "created_at": "2026-11-06T00:00:00Z",
+                                             "test_owned": True})
+        self.assertEqual(good["rows"]["stdio_mcp:get_container"]["status"], "PARTIAL")
+
     def test_runtime_catalog_blocks_all_unreviewed_mutators(self):
         fake = [{"name": "create_container", "inputSchema": {}},
                 {"name": "list_containers", "inputSchema": {}},
