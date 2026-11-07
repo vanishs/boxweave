@@ -15,7 +15,7 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(value["count"], 3)
         self.assertEqual(value["authorization"], "not_established_by_discovery")
         self.assertEqual(value["direct_agent_gateway"], "not_checked")
-        self.assertEqual(value["tools"][0]["app_mapping"], "typed_adapter")
+        self.assertEqual(value["tools"][0]["app_mapping"], "migrated_rest_not_mcp")
         self.assertEqual(value["tools"][1]["risk_hint"], "sensitive_review")
         self.assertEqual(value["tools"][2]["app_mapping"], "not_integrated")
         self.assertEqual(len(value["tools"][0]["schema_sha256"]), 64)
