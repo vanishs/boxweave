@@ -78,7 +78,10 @@ def policy(path=POLICY):
     except rest_wire.WireFault as exc:
         raise GatewayRESTFault(exc.code) from None
     if value["enabled"] and value["mode"] == "coordinated":
-        from . import gateway_create
+        try:
+            from . import gateway_create
+        except ImportError:
+            import gateway_create
         # The app store is the only durable create receipt owner.
         gateway_create.checked_app_store(value["state_db"])
     return value if value["enabled"] else None
