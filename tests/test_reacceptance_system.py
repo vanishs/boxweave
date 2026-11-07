@@ -160,6 +160,44 @@ else:
             self.assertEqual(run.reserve("c" * 32, {"op": "read"}, b)["state"],
                              "RESERVED_ONLY_NEEDS_APPROVED_EXECUTOR")
 
+    def test_opt_in_readonly_fixture_runs_only_after_native_create_identity(self):
+        from tools.reacceptance import lifecycle, installed
+        from unittest.mock import patch
+        uuid = "a" * 8 + "-" + "b" * 4 + "-" + "c" * 4 + "-" + "d" * 4 + "-" + "e" * 12
+        name = "bwracc-verified-12345"
+        identity = {"uuid": uuid, "created_at": "2026-11-06T20:00:00Z"}
+        def child(status):
+            return {"name": name + "-container", "status": status,
+                    "created_at": identity["created_at"],
+                    "config": {"volatile.uuid": uuid}}
+        calls = []
+        def one_call(argv, tool, args):
+            calls.append(tool)
+            return {"success_response": True, "response": {
+                "result": {"content": []}}, "process": {"execution": "completed"}}
+        observed = [{}, {name + "-container": child("Running")},
+                    {name + "-container": child("Running")},
+                    {name + "-container": child("Stopped")},
+                    {name + "-container": child("Running")}, {}]
+        with tempfile.TemporaryDirectory() as t:
+            with patch.object(lifecycle, "grant_read", return_value={
+                    "child_name": name, "outer_uuid": uuid,
+                    "outer_created_at": "1794000000"}), (
+                 patch.object(lifecycle, "native_list", side_effect=observed)), (
+                 patch.object(lifecycle, "one_call", side_effect=one_call)), (
+                 patch.object(installed, "inspect_mcp", return_value={"catalogue": "DISCOVERED",
+                     "rows": {"stdio_mcp:get_container": {"status": "PARTIAL"}}}) as probe):
+                result = lifecycle.run("private-grant", lifecycle.CONFIRM,
+                                      ["fake-mcp"], Path(t) / "output",
+                                      with_readonly_breadth=True)
+            self.assertEqual(calls, ["create_container", "stop_container",
+                                     "start_container", "delete_container"])
+            self.assertEqual(result["readonly_breadth"],
+                             "PARTIAL_PRIVATE_EVIDENCE_NOT_ACCEPTANCE")
+            self.assertTrue((Path(t) / "output/readonly-breadth.json").exists())
+            self.assertEqual(probe.call_args.kwargs["verified_target"]["provider_uuid"], uuid)
+            self.assertFalse(result.get("full_acceptance", False))
+
     def test_foreign_target_never_reserved(self):
         with tempfile.TemporaryDirectory() as path:
             run = execution.OnceOnly(path)
