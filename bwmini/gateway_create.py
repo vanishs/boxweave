@@ -133,6 +133,17 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
             "create_container", key_injected, async_create=True)
     except rest_routes.RouteFault as exc:
         raise GatewayRESTFault(str(exc)) from None
+    # Confirm the exact target name is not already occupied before recording
+    # the non-replayable write intent. A failed/partial read is NEVER absence.
+    rest = rest_wire.Client(
+        {k: configuration[k] for k in ("url","token_file")})
+    try:
+        rest.request("GET", "/v1/containers/"+body["username"], timeout=20)
+    except rest_wire.WireFault as error:
+        if error.code != "API_TARGET_NOT_FOUND":
+            raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+    else:
+        raise GatewayRESTFault("REST_RESOURCE_EXISTS")
     # Everything above is validated before the permanent no-replay intent.
     receipt, fresh, payload = reserve(original, rpc_id, configuration)
     if not fresh:
@@ -161,8 +172,7 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
         ledger.freeze(task)
         raise GatewayRESTFault("REST_CREATE_PREDISPATCH_UNVERIFIED") from None
     try:
-        response = rest_wire.Client({k: configuration[k] for k in ("url", "token_file")}).request(
-            method, route, body, timeout=45)
+        response = rest.request(method, route, body, timeout=45)
         target = response.get("container")
         if (not isinstance(target, dict) or
                 target.get("username") != receipt["username"] or
