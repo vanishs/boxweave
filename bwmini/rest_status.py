@@ -55,6 +55,9 @@ _HTTP = {
 }
 _GRPC_NAMES = {"".join(s.capitalize() for s in item.name.split("_")): item
                for item in GRPCCode if item is not GRPCCode.OK}
+# grpc-go formats code 1 as "Canceled" (single l), while Python's standard
+# StatusCode enum uses CANCELLED; accept both spellings, same canonical value.
+_GRPC_NAMES["Canceled"] = GRPCCode.CANCELLED
 _GRPC_LINE = re.compile(r"rpc error: code = ([A-Za-z]+) desc = ([\s\S]*)\Z")
 _GET = re.compile(r"/v1/containers/([a-z][a-z0-9-]{0,62})\Z")
 # Unambiguous HTTP authentication/availability statuses; 400, 404, 409, 500
