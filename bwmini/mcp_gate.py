@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest, gateway_create
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -23,6 +23,7 @@ except ImportError:
     import resource_size
     import debug_rest
     import gateway_rest
+    import gateway_create
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
@@ -575,13 +576,23 @@ def main():
                     message = guard_restore_catalog(message)
                 message = filter_tools(message, permitted)
                 try:
+                    selected_rest = gateway_rest.policy()
                     selected_debug = (
                         debug_rest.gateway_config() is not None or
-                        gateway_rest.policy() is not None)
-                    if gateway_protection.enabled():
+                        selected_rest is not None)
+                    protected = gateway_protection.enabled()
+                    coordinated_rest = bool(
+                        protected and selected_rest is not None and
+                        selected_rest["mode"] == "coordinated")
+                    if protected:
                         message = gateway_protection.filter_catalog(
-                            message, rest_debug=selected_debug)
-                except debug_rest.DebugRESTError as error:
+                            message, rest_debug=selected_debug,
+                            coordinated_rest=coordinated_rest)
+                    if selected_rest is not None and selected_rest["mode"] == "read":
+                        message["result"]["tools"] = [
+                            tool for tool in message["result"]["tools"]
+                            if tool.get("name") not in gateway_rest.WRITES]
+                except (debug_rest.DebugRESTError, gateway_rest.GatewayRESTFault) as error:
                     # A malformed root policy cannot silently downgrade or
                     # widen the protected forwarded MCP catalog.
                     print(json.dumps({"jsonrpc":"2.0","id":request.get("id"),
@@ -602,10 +613,31 @@ def main():
                     debug_config = (debug_rest.gateway_config()
                                     if params.get("name") == "debug_container" else None)
                     rest_config = gateway_rest.policy()
-                    if gateway_protection.enabled():
+                    protected = gateway_protection.enabled()
+                    coordinated_rest = bool(
+                        protected and rest_config is not None and
+                        rest_config["mode"] == "coordinated")
+                    if protected:
                         gateway_protection.check_call(
                             params.get("name"), args,
-                            rest_debug=debug_config is not None or rest_config is not None)
+                            rest_debug=debug_config is not None or rest_config is not None,
+                            coordinated_rest=coordinated_rest)
+                    if rest_config is not None and params.get("name") == "create_container":
+                        receipt = gateway_create.dispatch(
+                            rest_config, args, request.get("id"),
+                            normalize=managed_create_arguments, protected=protected)
+                        emit_result(request["id"], receipt)
+                        gd.record("create_container", {
+                            "result": {"content": [], "isError": False}},
+                            (time.monotonic()-started)*1000, trace=trace)
+                        continue
+                    if rest_config is not None and params.get("name") in (
+                            "start_container", "stop_container",
+                            "delete_container", "resize_container"):
+                        # Never route a selected REST capability back to the
+                        # old upstream MCP writer. These require a separate
+                        # exact-identity tracked operation and R-04 release.
+                        raise gateway_rest.GatewayRESTFault("REST_TRACKED_OPERATION_REQUIRED")
                     if rest_config is not None and params.get("name") in (
                             "list_containers", "get_container", "debug_container"):
                         value = gateway_rest.execute_read(
