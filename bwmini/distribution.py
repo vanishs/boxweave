@@ -265,6 +265,18 @@ def install(archive,sha,prefix,config=None,activate=False,quiesced=False):
   p=subprocess.run([str(environment/'bin/python'),'-m','pip','install','--no-index','--no-deps','--require-hashes','--only-binary=:all:','--find-links',str(release/'wheels'),'-r',str(release/'requirements.lock')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=300)
   require(p.returncode==0,'OFFLINE_DEPENDENCIES_FAILED')
   mark('quiesced')
+  if (c.get('mode')=='mcp' and 'provider_api' in c and
+      c.get('coordination')=={'enabled':True}):
+   # One app-owned R-04 claim database is mandatory for REST writes
+   # across Web, SSH and HTTP. Only verified release code under the
+   # application UID may provision it; Gateway requests never do so.
+   import pwd
+   require(pwd.getpwuid(os.geteuid()).pw_name=='boxweave',
+           'COORDINATION_OWNER_REQUIRED')
+   provision=subprocess.run([str(environment/'bin/python'),'-m',
+                             'bwmini.gateway_tasks','provision'],
+                            cwd=release,capture_output=True,text=True,timeout=30)
+   require(provision.returncode==0,'COORDINATION_PROVISION_FAILED')
   database=Path(c['database']);database.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
   with Path(str(database)+'.worker').open('a') as worker_lock:
    try:fcntl.flock(worker_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
