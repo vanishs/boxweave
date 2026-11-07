@@ -80,6 +80,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/environment_observe.py`
 - `bwmini/gate_diagnostics.py`
 - `bwmini/gateway_protection.py`
+- `bwmini/gateway_rest.py`
 - `bwmini/gateway_tasks.py`
 - `bwmini/graphs.py`
 - `bwmini/host_cli.py`
@@ -107,6 +108,8 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/remote_mcp.py`
 - `bwmini/remote_tls.py`
 - `bwmini/resource_size.py`
+- `bwmini/rest_routes.py`
+- `bwmini/rest_wire.py`
 - `bwmini/restore_guard.py`
 - `bwmini/selftest.py`
 - `bwmini/service.py`
