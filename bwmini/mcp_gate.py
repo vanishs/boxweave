@@ -236,6 +236,16 @@ def catalog(message):
                 "inspect state instead of blindly retrying."
             )
     message = guard_restore_catalog(message)
+    # REST-migrated tools use BoxWeave's pinned schemas, never the upstream
+    # MCP catalogue. The eight old forwarded descriptors are discarded.
+    items=message.get("result",{}).get("tools")
+    if not isinstance(items,list):
+        raise ValueError("UPSTREAM_CATALOG_INVALID")
+    message["result"]["tools"]=[tool for tool in items
+        if isinstance(tool,dict) and tool.get("name") not in
+        gateway_rest.rest_routes.MIGRATED_TOOLS]
+    message["result"]["tools"].extend(
+        gateway_rest.rest_routes.mcp_tool_catalog())
     extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
     message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, gd.COORD_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
     return message
@@ -269,6 +279,11 @@ GATE_ERROR_CODES = frozenset((
     "PROJECT_DIAG_NOT_AUTHORIZED", "PROJECT_TARGET_CHANGED",
     "COORDINATOR_SELECTOR_INVALID",
     "DIAGNOSTIC_POLICY_UNSAFE", "DIAGNOSTIC_STORAGE_UNSAFE",
+    "INVALID_ARGUMENT", "NOT_FOUND", "ALREADY_EXISTS", "FAILED_PRECONDITION",
+    "RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "UNKNOWN",
+    "PERMISSION_DENIED", "UNAUTHENTICATED", "ABORTED", "INTERNAL",
+    "REST_APP_CONFIG_UNVERIFIED", "REST_APP_COORDINATION_NOT_ALIGNED",
+    "REST_STATE_DB_UNSAFE", "REST_STATE_DB_UNAVAILABLE",
     "RESTORE_APPROVAL_REQUIRED", "RESTORE_KEY_OR_POLICY_UNSAFE", "RESTORE_ARGUMENT_INVALID",
     "PROJECT_COMMAND_UNAVAILABLE",
     "TRUST_REGISTRY_UNAVAILABLE", "TRUST_OBSERVATION_STALE",
@@ -582,9 +597,7 @@ def main():
                         debug_rest.gateway_config() is not None or
                         selected_rest is not None)
                     protected = gateway_protection.enabled()
-                    coordinated_rest = bool(
-                        protected and selected_rest is not None and
-                        selected_rest["mode"] == "coordinated")
+                    coordinated_rest = selected_rest["mode"] == "coordinated"
                     if protected:
                         message = gateway_protection.filter_catalog(
                             message, rest_debug=selected_debug,
@@ -634,9 +647,7 @@ def main():
                                     if params.get("name") == "debug_container" else None)
                     rest_config = gateway_rest.policy()
                     protected = gateway_protection.enabled()
-                    coordinated_rest = bool(
-                        protected and rest_config is not None and
-                        rest_config["mode"] == "coordinated")
+                    coordinated_rest = rest_config["mode"] == "coordinated"
                     if protected:
                         gateway_protection.check_call(
                             params.get("name"), args,
@@ -645,7 +656,7 @@ def main():
                     if rest_config is not None and params.get("name") == "create_container":
                         receipt = gateway_create.dispatch(
                             rest_config, args, request.get("id"),
-                            normalize=managed_create_arguments, protected=protected)
+                            normalize=managed_create_arguments, protected=True)
                         emit_result(request["id"], receipt)
                         gd.record("create_container", {
                             "result": {"content": [], "isError": False}},
@@ -658,7 +669,7 @@ def main():
                             validated_resize_arguments(args)
                         receipt = rest_mutations.dispatch(
                             rest_config, params["name"], args,
-                            protected=protected)
+                            protected=True)
                         emit_result(request["id"], receipt)
                         gd.record(params["name"],
                                   {"result":{"content":[],"isError":False}},
