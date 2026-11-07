@@ -233,8 +233,13 @@ class GatewayDebugTests(unittest.TestCase):
               patch.object(mcp_gate.sys,"stdin",incoming),
               patch.object(mcp_gate,"tool_policy",return_value=permitted),
               patch.object(mcp_gate.gateway_protection,"enabled",return_value=protected),
-              patch.object(mcp_gate.debug_rest,"gateway_config",return_value=cfg),
-              patch.object(mcp_gate.debug_rest,"read",return_value=response) as rest,
+              patch.object(mcp_gate.gateway_rest,"policy",
+                           side_effect=(lambda: {"mode":"coordinated"} if cfg is not None
+                           else (_ for _ in ()).throw(
+                               mcp_gate.gateway_rest.GatewayRESTFault(
+                                   "REST_APP_CONFIG_UNVERIFIED")))),
+              patch.object(mcp_gate.gateway_rest,"execute_read",
+                           return_value=response) as rest,
               patch.object(mcp_gate.gd,"record") as recorded,
               redirect_stdout(out)):
             mcp_gate.main()
@@ -253,15 +258,14 @@ class GatewayDebugTests(unittest.TestCase):
             self.assertNotIn("private ssh",str(recorded.call_args))
             self.assertNotIn("private cause",str(recorded.call_args))
 
-    def test_not_selected_keeps_legacy_and_protected_refuses(self):
+    def test_missing_rest_never_downgrades_debug_to_mcp(self):
         call={"jsonrpc":"2.0","id":7,"method":"tools/call",
               "params":{"name":"debug_container","arguments":{"username":"work"}}}
-        provider,out,_,_=self.run_gateway([call],None)
-        self.assertEqual(len(provider.sent),1)
-        self.assertEqual(out[0]["result"]["content"][0]["text"],"legacy")
-        provider,out,_,_=self.run_gateway([call],None,protected=True)
-        self.assertEqual(provider.sent,[])
-        self.assertEqual(out[0]["error"]["message"],"COORDINATION_TOOL_UNCLASSIFIED")
+        for protected in (False,True):
+            provider,out,rest,_=self.run_gateway([call],None,protected=protected)
+            self.assertEqual(provider.sent,[])
+            self.assertEqual(out[0]["error"]["message"],"REST_APP_CONFIG_UNVERIFIED")
+            rest.assert_not_called()
 
     def test_host_allowlist_denies_before_rest_and_catalog_respects_policy(self):
         call={"jsonrpc":"2.0","id":7,"method":"tools/call",
