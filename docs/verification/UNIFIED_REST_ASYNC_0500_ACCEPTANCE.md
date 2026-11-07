@@ -1,5 +1,7 @@
 # Unified existing REST control paths and asynchronous creation — v0.50.0
 
+**2026-11-07 installed isolation update:** Official v0.50.0 was installed successfully and the actual coordinated Gateway was exercised, but **real REST async create and R-04 complete acceptance FAILED**: missing-target REST preflight received HTTP 500; a competing resize under an active lease returned a generic error and persisted a blocking UNKNOWN receipt. See the [version-scoped installed live report](UNIFIED_REST_ASYNC_0500_INSTALLED_2026-11-07.md) and [issues #104](https://github.com/vanishs/boxweave/issues/104), [#105](https://github.com/vanishs/boxweave/issues/105). No full independent multi-Agent PASS, external HTTP/OAuth proof or stable-pointer promotion is claimed.
+
 **Evidence state:** implementation/source fixtures in candidate branch; installed host / independent multi-Agent reacceptance **NOT YET PASS**. This file is not a native installation certificate.
 
 ## Scope and actual paths
