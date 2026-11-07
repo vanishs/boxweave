@@ -216,6 +216,12 @@ class Service:
             return True
         if self.lifecycle.work_one():
             return True
+        # Same installed app worker observes Agent async creates. It never
+        # resends the original create; successful readiness is independently
+        # proven through the installed Provider identity channel.
+        from . import async_create_observer
+        if async_create_observer.observe_one(self.store, self.provider, self.clock):
+            return True
         if self.box_actions.work_one():
             return True
         with self.store.db() as db:
