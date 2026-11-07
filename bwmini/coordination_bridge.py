@@ -25,7 +25,7 @@ else:
         tenant_resource, port_resource)
 
 DEFAULT_CLAIMS = Path("/home/boxweave/.boxweave/claims.sqlite3")
-PUBLIC_SCOPE = Path("/var/lib/boxweave-default/public/targets.json")
+PUBLIC_SCOPE = Path("/var/lib/boxweave-default/public/scope.json")
 _SCOPE_KEYS = {"provider", "backend", "project"}
 
 def checked_scope(value):
@@ -35,18 +35,22 @@ def checked_scope(value):
     return value
 
 def published_scope(path=PUBLIC_SCOPE, *, now=time.time):
-    """Only a recently root-published scope; never app-supplied scope metadata."""
+    """Only the fast native-daemon-verified root heartbeat; no guest SSH scan."""
     try:
         parent=path.parent.lstat()
         meta=path.lstat()
         if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid!=0 or parent.st_mode&0o022
                 or not stat.S_ISREG(meta.st_mode) or meta.st_uid!=0
-                or meta.st_mode&0o022 or meta.st_nlink!=1 or meta.st_size>2_097_152):
+                or meta.st_mode&0o022 or meta.st_nlink!=1
+                or not 10<=meta.st_size<=4096):
             raise CoordinationFault("COORDINATION_SCOPE_UNVERIFIED")
         value=json.loads(path.read_text())
-        if (not isinstance(value,dict)
+        if (not isinstance(value,dict) or set(value)!={"observed_at","scope"}
                 or type(value.get("observed_at")) not in (int,float)
                 or not 0<=now()-value["observed_at"]<=45):
+            raise CoordinationFault("COORDINATION_SCOPE_UNVERIFIED")
+        again=path.lstat()
+        if again.st_dev!=meta.st_dev or again.st_ino!=meta.st_ino:
             raise CoordinationFault("COORDINATION_SCOPE_UNVERIFIED")
         return checked_scope(value.get("scope"))
     except (OSError, UnicodeError, ValueError, TypeError):

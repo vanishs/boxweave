@@ -1,5 +1,7 @@
 # BoxWeave
 
+**v0.50.4:** R-04 native scope freshness is independently attested by a root-only 10-second timer, not by the potentially lengthy SSH host-key sweep. The guest host-key scan is bounded-parallel and retains strict exact-target validation. Proven zero-POST create refusals receive durable `failed_before_dispatch` status, never a false UNKNOWN; genuine dispatch uncertainty and historical UNKNOWN remain non-replayable. The stable installer pointer is unchanged.
+
 **v0.50.3:** The eight REST-migrated read/lifecycle methods use the authenticated REST adapter in both app and Agent Gateway. The legacy MCP forwarding path and separate REST selector for these methods have been removed. The installer provisions R-04 shared claims and enables app coordination for the migration. UNKNOWN outcomes remain locked and are never automatically retried. Unmigrated MCP tools, including guest connect/exec, remain supported. The stable installer pointer is unchanged.
 
 **Your agents. Your machines. Connected.**

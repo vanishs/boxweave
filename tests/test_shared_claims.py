@@ -114,8 +114,8 @@ class SharedClaimsTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
 
     def test_public_scope_requires_root_published_file(self):
-        scope_file=Path(self.tmp.name)/"targets.json"
-        scope_file.write_text(json.dumps({"observed_at":100.,"scope":SCOPE,"targets":{}}))
+        scope_file=Path(self.tmp.name)/"scope.json"
+        scope_file.write_text(json.dumps({"observed_at":100.,"scope":SCOPE}))
         self.assert_code("COORDINATION_SCOPE_UNVERIFIED",
                          lambda:published_scope(scope_file,now=lambda:110.))
         # The trusted root writer is tested through a bounded synthetic
@@ -126,7 +126,8 @@ class SharedClaimsTests(unittest.TestCase):
             if path in (scope_file,scope_file.parent):
                 from types import SimpleNamespace
                 return SimpleNamespace(st_uid=0,st_mode=stat.st_mode,
-                                       st_size=stat.st_size,st_nlink=stat.st_nlink)
+                                       st_size=stat.st_size,st_nlink=stat.st_nlink,
+                                       st_dev=stat.st_dev,st_ino=stat.st_ino)
             return stat
         scope_file.parent.chmod(0o755)
         scope_file.chmod(0o644)

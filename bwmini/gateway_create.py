@@ -156,49 +156,63 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
                 rpc_id != "bw-create-"+prior["task_id"] or
                 prior["code"] != "REST_GATE_PENDING"):
             return prior
+    # HTTP pre-reserved durable tasks can expose definitive local
+    # no-POST refusals without misrepresenting them as UNKNOWN. The
+    # journal CAS proves the original arguments and pending dispatch phase.
+    def refused_before_post(code):
+        if (isinstance(rpc_id,str) and rpc_id.startswith("bw-create-")):
+            task_id=rpc_id[len("bw-create-"):]
+            if ledger.fail_before_dispatch(task_id,code,
+                                          username=body["username"],digest=digest):
+                return ledger.get(task_id=task_id)
+        raise GatewayRESTFault(code)
+
     # Confirm the exact target name is not already occupied before recording
     # the non-replayable write intent. A failed/partial read is NEVER absence.
-    rest = rest_wire.Client(
-        {k: configuration[k] for k in ("url","token_file")})
     try:
-        rest.request("GET", "/v1/containers/"+body["username"], timeout=20)
-    except rest_wire.WireFault as error:
-        # The centralized adapter returns *standard* gRPC NotFound / HTTP
-        # 404 only for validated typed Provider replies or the exact v0.128
-        # compatibility signature. A bare HTTP 404 can be a missing API route
-        # and must not license an irreversible create.
-        known_missing = (
-            error.grpc_code is rest_wire.rest_status.GRPCCode.NOT_FOUND
-            and error.http_status == 404
-            and error.status_origin in ("grpc", "compatibility"))
-        if not known_missing:
-            raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
-        if error.status_origin == "compatibility":
-            # In upstream v0.128 GetContainer ignores peer list failures.
-            # The legacy 500 text alone is therefore not proof that this
-            # Box is absent on every backend. Independently check the full
-            # REST inventory, including unreachable peers and pending boxes,
-            # before allowing a permanent create intent.
-            try:
-                inventory = rest.request("GET", "/v1/containers", timeout=20)
-                rest_routes.validate_read_result("list_containers", inventory)
-                if (not isinstance(inventory.get("unreachableBackends"), list)
-                        or "totalCount" not in inventory):
-                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
-                names = [
-                    rest_routes.logical_name(row["username"])
-                    for row in inventory["containers"]
-                ]
-                if len(names) != len(set(names)):
-                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
-            except (rest_wire.WireFault, rest_routes.RouteFault,
-                    KeyError, TypeError, ValueError):
-                raise GatewayRESTFault(
-                    "REST_CREATE_PREFLIGHT_UNVERIFIED") from None
-            if body["username"] in names:
-                raise GatewayRESTFault("REST_RESOURCE_EXISTS")
-    else:
-        raise GatewayRESTFault("REST_RESOURCE_EXISTS")
+        rest = rest_wire.Client(
+            {k: configuration[k] for k in ("url","token_file")})
+        try:
+            rest.request("GET", "/v1/containers/"+body["username"], timeout=20)
+        except rest_wire.WireFault as error:
+            # The centralized adapter returns *standard* gRPC NotFound / HTTP
+            # 404 only for validated typed Provider replies or the exact v0.128
+            # compatibility signature. A bare HTTP 404 can be a missing API route
+            # and must not license an irreversible create.
+            known_missing = (
+                error.grpc_code is rest_wire.rest_status.GRPCCode.NOT_FOUND
+                and error.http_status == 404
+                and error.status_origin in ("grpc", "compatibility"))
+            if not known_missing:
+                raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+            if error.status_origin == "compatibility":
+                # In upstream v0.128 GetContainer ignores peer list failures.
+                # The legacy 500 text alone is therefore not proof that this
+                # Box is absent on every backend. Independently check the full
+                # REST inventory, including unreachable peers and pending boxes,
+                # before allowing a permanent create intent.
+                try:
+                    inventory = rest.request("GET", "/v1/containers", timeout=20)
+                    rest_routes.validate_read_result("list_containers", inventory)
+                    if (not isinstance(inventory.get("unreachableBackends"), list)
+                            or "totalCount" not in inventory):
+                        raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+                    names = [
+                        rest_routes.logical_name(row["username"])
+                        for row in inventory["containers"]
+                    ]
+                    if len(names) != len(set(names)):
+                        raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+                except (rest_wire.WireFault, rest_routes.RouteFault,
+                        KeyError, TypeError, ValueError):
+                    raise GatewayRESTFault(
+                        "REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+                if body["username"] in names:
+                    raise GatewayRESTFault("REST_RESOURCE_EXISTS")
+        else:
+            raise GatewayRESTFault("REST_RESOURCE_EXISTS")
+    except GatewayRESTFault as error:
+        return refused_before_post(str(error))
     # Everything above is validated before the permanent no-replay intent.
     receipt, fresh, payload = reserve(original, rpc_id, configuration)
     if not fresh:
@@ -215,16 +229,32 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
         claims = coordination_bridge.SharedClaims()
         claims.acquire_environment(task, "gateway_" + task, scope,
                                    "create", receipt["username"], None, {})
-        # Commit shared R-04 dispatch intent BEFORE any Provider write.
+    except Exception as error:
+        # No dispatch intent, let alone REST POST, has occurred in this
+        # invocation. Existing claim contention is not a Provider outcome.
+        if getattr(error, "code", None) == "OPERATION_EXISTS":
+            return ledger.get(task_id=task)
+        code = ("COORDINATION_SCOPE_UNVERIFIED" if
+                getattr(error, "code", None) == "COORDINATION_SCOPE_UNVERIFIED"
+                else "REST_CREATE_PREDISPATCH_UNVERIFIED")
+        if ledger.fail_before_dispatch(task,code,
+                                       username=receipt["username"],
+                                       digest=original_digest):
+            return ledger.get(task_id=task)
+        ledger.freeze(task)
+        raise GatewayRESTFault("REST_CREATE_PREDISPATCH_UNVERIFIED") from None
+    try:
+        # After this durable dispatch marker, a crash is necessarily
+        # ambiguous. Never classify a lost worker as a no-POST failure.
         claims.dispatch_intent(task)
         if not ledger.begin_dispatch(task, original_digest):
             return ledger.get(task_id=task)
-    except Exception as error:
-        # Another simultaneous invocation of this exact task may already own
-        # its claim. Never demote its receipt or create a second side effect.
-        if getattr(error, "code", None) == "OPERATION_EXISTS":
-            return ledger.get(task_id=task)
+    except Exception:
         ledger.freeze(task)
+        try:
+            claims.unknown(task)
+        except Exception:
+            pass
         raise GatewayRESTFault("REST_CREATE_PREDISPATCH_UNVERIFIED") from None
     try:
         response = rest.request(method, route, body, timeout=45)

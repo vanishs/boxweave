@@ -1,5 +1,5 @@
 """Trusted local-Incus public host-key reconciliation for a dedicated MCP account."""
-import datetime, hashlib, ipaddress, json, os, platform, pwd, re, subprocess, sys, tempfile, time
+import concurrent.futures, datetime, hashlib, ipaddress, json, os, platform, pwd, re, subprocess, sys, tempfile, time
 from pathlib import Path
 
 PUBLIC = Path("/var/lib/boxweave-default/public")
@@ -34,27 +34,51 @@ def reconcile():
     account = pwd.getpwnam("boxweave")
     PUBLIC.mkdir(parents=True, exist_ok=True); PUBLIC.chmod(0o755)
     inventory = json.loads(command(["incus", "--force-local", "--project", "default", "list", "--format", "json"]))
-    targets, lines = {}, []
-    for item in inventory:
-        if not eligible(item): continue
-        addresses = (item.get("state", {}).get("network", {}).get("eth0", {}).get("addresses", []))
-        ips = [a["address"] for a in addresses if a.get("family") == "inet" and a.get("scope") == "global"
-               and ipaddress.ip_address(a["address"]).is_private]
-        if len(ips) != 1: continue
-        name = item["name"]; logical = name[:-10]; keys = []
+    # Each native guest read returns exactly three fixed *public* host keys.
+    # Bounded concurrency keeps unrelated or slow Boxes from serially
+    # delaying publication for every other Box on busy hosts.
+    def sample(item):
+        if not eligible(item):
+            return None
+        addresses = item.get("state", {}).get("network", {}).get("eth0", {}).get("addresses", [])
+        ips = [a["address"] for a in addresses if a.get("family") == "inet"
+               and a.get("scope") == "global" and ipaddress.ip_address(a["address"]).is_private]
+        if len(ips) != 1:
+            return None
+        name = item["name"]
         try:
-            for kind, algorithm in (("ed25519", "ssh-ed25519"), ("ecdsa", "ecdsa-sha2-nistp256"), ("rsa", "ssh-rsa")):
-                raw = command(["incus", "--force-local", "--project", "default", "exec", name, "--",
-                               "cat", "/etc/ssh/ssh_host_" + kind + "_key.pub"])
-                fields = raw.split()
-                if len(fields) < 2 or fields[0] != algorithm: raise ValueError("PUBLIC_HOST_KEY_INVALID")
+            raw = command(["incus", "--force-local", "--project", "default", "exec", name, "--",
+                           "cat", "/etc/ssh/ssh_host_ed25519_key.pub",
+                           "/etc/ssh/ssh_host_ecdsa_key.pub",
+                           "/etc/ssh/ssh_host_rsa_key.pub"])
+            rows = raw.splitlines()
+            if len(rows) != 3:
+                return None
+            keys=[]
+            for row, algorithm in zip(rows,("ssh-ed25519","ecdsa-sha2-nistp256","ssh-rsa")):
+                fields=row.split()
+                if len(fields) < 2 or fields[0] != algorithm:
+                    return None
                 keys.append(" ".join(fields[:2]))
-        except (subprocess.SubprocessError, ValueError):
-            continue
-        created = int(datetime.datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")).timestamp())
-        targets[logical] = {"name": name, "user": logical, "ip": ips[0], "created": str(created),
-                            "uuid": item.get("config", {}).get("volatile.uuid"), "keys": keys}
-        lines += [ips[0] + " " + key for key in keys]
+            created = int(datetime.datetime.fromisoformat(
+                item["created_at"].replace("Z","+00:00")).timestamp())
+            logical=name[:-10]
+            return logical, {"name":name,"user":logical,"ip":ips[0],
+                             "created":str(created),
+                             "uuid":item.get("config",{}).get("volatile.uuid"),
+                             "keys":keys}, [ips[0]+" "+key for key in keys]
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+            return None
+    targets, lines = {}, []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        for item in pool.map(sample, inventory):
+            if item is None:
+                continue
+            logical, record, entries=item
+            if logical in targets:
+                raise ValueError("DUPLICATE_MANAGED_TARGET")
+            targets[logical]=record
+            lines.extend(entries)
     sshdir = HOME / ".ssh"
     if sshdir.is_symlink(): raise ValueError("UNSAFE_SSH_DIRECTORY")
     sshdir.mkdir(mode=0o700, exist_ok=True)

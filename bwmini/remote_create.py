@@ -15,6 +15,16 @@ import time
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 KEY = re.compile(r"[0-9a-f]{32}\Z")
 TASK_LIMIT = 10000
+# These codes are emitted only after BoxWeave has proved zero Provider POST.
+# Never infer this state from a timeout, loss of worker process or arbitrary
+# upstream response. Frozen names remain non-replayable even in this state.
+PREDISPATCH_FAILURE_CODES = frozenset((
+    "REST_CREATE_PREFLIGHT_UNVERIFIED", "REST_RESOURCE_EXISTS",
+    "REST_CREATE_PREDISPATCH_UNVERIFIED", "COORDINATION_SCOPE_UNVERIFIED",
+    "REST_APP_CONFIG_UNVERIFIED", "REST_APP_COORDINATION_NOT_ALIGNED",
+    "REST_STATE_DB_UNSAFE",
+))
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS remote_create_tasks(
@@ -186,6 +196,8 @@ def task_receipt(row):
     # Retain the old SQLite CHECK constraint and migration compatibility.
     if state == "submitted" and row["code"] == "REST_CREATE_ACCEPTED":
         state = "accepted"
+    elif state == "submitted" and row["code"] in PREDISPATCH_FAILURE_CODES:
+        state = "failed_before_dispatch"
     result = {
         "task_id": row["task_id"],
         "request_key": row["request_key"],
@@ -201,6 +213,10 @@ def task_receipt(row):
                           "not guest ready. Never resend a create.")
     elif state == "succeeded":
         result["next"] = "Read get_container, then independently check guest SSH readiness."
+    elif state == "failed_before_dispatch":
+        result["next"] = ("No Provider POST was dispatched for this task. "
+                          "The original name remains reserved; inspect or "
+                          "resolve the failure without replaying the original request.")
     else:
         result["next"] = ("Outcome unknown. Read get_container and debug_container; "
                           "do not repeat create, delete, or adopt automatically.")
@@ -217,7 +233,10 @@ class CreateJournal:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state='unknown', "
                        "code='PROCESS_RESTART_UNKNOWN', updated=? "
-                       "WHERE state='submitted' AND code!='REST_CREATE_ACCEPTED'", (self.clock(),))
+                       "WHERE state='submitted' AND code!='REST_CREATE_ACCEPTED' "
+                       "AND code NOT IN (" +
+                       ",".join("?" for _ in PREDISPATCH_FAILURE_CODES) + ")",
+                       (self.clock(), *sorted(PREDISPATCH_FAILURE_CODES)))
 
     def reserve(self, logical, request_key, digest):
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
@@ -253,6 +272,35 @@ class CreateJournal:
             row = db.execute("SELECT * FROM remote_create_tasks WHERE task_id=?",
                              (task_id,)).fetchone()
             return task_receipt(row), True
+
+    def fail_before_dispatch(self, task_id, code, *, username=None, digest=None):
+        """Persist proof that THIS request did not reach Provider REST POST.
+
+        Only a still-pending original receipt is eligible. Any recorded
+        dispatch intent/accepted/UNKNOWN or historical row is immutable.
+        Never free its name or silently permit another create.
+        """
+        if code not in PREDISPATCH_FAILURE_CODES:
+            raise CreateFault("CREATE_RESULT_INVALID")
+        if not isinstance(task_id, str) or KEY.fullmatch(task_id) is None:
+            raise CreateFault("CREATE_SELECTOR_INVALID")
+        if digest is not None and (not isinstance(digest,str)
+                or re.fullmatch(r"[0-9a-f]{64}",digest) is None):
+            raise CreateFault("CREATE_ARGUMENTS_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT logical,payload_sha256,state,code "
+                           "FROM remote_create_tasks WHERE task_id=?",
+                           (task_id,)).fetchone()
+            if (row is None or (username is not None and row["logical"]!=username)
+                    or (digest is not None and row["payload_sha256"]!=digest)
+                    or row["state"]!="submitted" or row["code"]!="REST_GATE_PENDING"):
+                return False
+            db.execute("UPDATE remote_create_tasks SET code=?,updated=? "
+                       "WHERE task_id=? AND state='submitted' "
+                       "AND code='REST_GATE_PENDING'",
+                       (code,self.clock(),task_id))
+            return True
 
     def begin_dispatch(self, task_id, digest):
         """Atomically bind exactly one outbound invocation to this intent.
@@ -391,11 +439,12 @@ class CreateJournal:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state=?, code=?, updated=? "
                        "WHERE task_id=? AND state='submitted' "
-                       "AND code!='REST_CREATE_ACCEPTED'",
+                       "AND code!='REST_CREATE_ACCEPTED' AND code NOT IN (" +
+                       ",".join("?" for _ in PREDISPATCH_FAILURE_CODES) + ")",
                        ("succeeded" if succeeded else "unknown",
                         "UPSTREAM_CREATE_ACKNOWLEDGED" if succeeded
                         else "UPSTREAM_CREATE_OUTCOME_UNKNOWN",
-                        self.clock(), task_id))
+                        self.clock(), task_id, *sorted(PREDISPATCH_FAILURE_CODES)))
 
     def get(self, *, task_id=None, request_key=None, username=None):
         keys = [(name, value) for name, value in

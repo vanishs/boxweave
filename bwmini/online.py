@@ -20,7 +20,7 @@ PROVIDER_ASSETS = {
     "containarium": "74560e96c4216cfb83218499682c816a9db78e4f367a4c194a587d650b83f696",
     "mcp-server": "d1c645843ef2989fc5bff53ec57b6612ff931e3b94c9f42d040ee8d7c065b0ba",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "debug_rest.py", "gateway_rest.py", "gateway_create.py", "rest_mutations.py", "rest_wire.py", "rest_status.py", "rest_routes.py", "remote_create.py", "resource_size.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py", "upstream_version.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "scope_heartbeat.py", "mcp_gate.py", "debug_rest.py", "gateway_rest.py", "gateway_create.py", "rest_mutations.py", "rest_wire.py", "rest_status.py", "rest_routes.py", "remote_create.py", "resource_size.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py", "upstream_version.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 # The upstream main at e5deb167 and v0.120.1 contain the identical wrapper.
@@ -908,7 +908,7 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py","debug_rest.py","gateway_rest.py","gateway_create.py","rest_mutations.py","rest_wire.py","rest_status.py","rest_routes.py","remote_create.py","resource_size.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py","upstream_version.py"):
+        for name in ("online.py","hostkeys.py", "scope_heartbeat.py","mcp_gate.py","debug_rest.py","gateway_rest.py","gateway_create.py","rest_mutations.py","rest_wire.py","rest_status.py","rest_routes.py","remote_create.py","resource_size.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py","upstream_version.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
@@ -930,6 +930,15 @@ store.admin(generate_password_hash(password))
         atomic(candidate, payload, 0o440)
         run(["visudo","-cf",str(candidate)], deadline)
         atomic(sudoers, payload, 0o440); old["managed_files"][str(sudoers)] = sha(payload)
+        # This small independent heartbeat must not await 45+ guest SSH
+        # host-key reads. R-04 scope and guest SSH trust remain separate.
+        scope_service = b"[Unit]\nDescription=Attest native R-04 Provider scope\n[Service]\nType=oneshot\nUMask=0077\nExecStart=/usr/bin/python3 /usr/local/lib/boxweave/default/scope_heartbeat.py\n"
+        scope_timer = b"[Unit]\nDescription=Refresh native Provider scope heartbeat\n[Timer]\nOnBootSec=5s\nOnUnitInactiveSec=10s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n"
+        for name,payload in (("boxweave-scope.service",scope_service),
+                             ("boxweave-scope.timer",scope_timer)):
+            target=UNIT_DIR/name
+            require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_SCOPE_UNIT")
+            atomic(target,payload,0o644);old["managed_files"][str(target)]=sha(payload)
         sync_service = b"[Unit]\nDescription=Synchronize Incus-authenticated public host keys\n[Service]\nType=oneshot\nUMask=0077\nExecStart=/usr/bin/python3 /usr/local/lib/boxweave/default/hostkeys.py\n"
         sync_timer = b"[Unit]\nDescription=Refresh trusted workload host keys\n[Timer]\nOnBootSec=15s\nOnUnitInactiveSec=15s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n"
         for name,payload in (("boxweave-trust.service",sync_service),("boxweave-trust.timer",sync_timer)):
@@ -938,6 +947,8 @@ store.admin(generate_password_hash(password))
             atomic(target,payload,0o644);old["managed_files"][str(target)]=sha(payload)
         atomic(marker,json.dumps(old,sort_keys=True).encode())
         run(["systemctl","daemon-reload"],deadline)
+        run(["systemctl","start","boxweave-scope.service"],deadline)
+        run(["systemctl","enable","--now","boxweave-scope.timer"],deadline)
         run(["systemctl","start","boxweave-trust.service"],deadline)
         run(["systemctl","enable","--now","boxweave-trust.timer"],deadline)
         # Existing sshd configuration/host identity is observed, never rewritten.
