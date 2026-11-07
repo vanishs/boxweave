@@ -363,7 +363,8 @@ class CreateJournal:
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET code='REST_CREATE_ACCEPTED', "
-                       "updated=? WHERE task_id=? AND state='submitted'",
+                       "updated=? WHERE task_id=? AND state='submitted' "
+                       "AND code='REST_GATE_DISPATCH_INTENT'",
                        (self.clock(), task_id))
 
     def complete(self, task_id, succeeded):
@@ -371,7 +372,8 @@ class CreateJournal:
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state=?, code=?, updated=? "
-                       "WHERE task_id=? AND state='submitted'",
+                       "WHERE task_id=? AND state='submitted' "
+                       "AND code!='REST_CREATE_ACCEPTED'",
                        ("succeeded" if succeeded else "unknown",
                         "UPSTREAM_CREATE_ACKNOWLEDGED" if succeeded
                         else "UPSTREAM_CREATE_OUTCOME_UNKNOWN",
