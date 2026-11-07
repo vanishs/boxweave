@@ -194,60 +194,50 @@ def guard_restore_catalog(message):
 
 
 def catalog(message):
-    if "result" not in message: return message
-    for tool in message["result"].get("tools", []):
-        if tool.get("name") == "create_container":
-            tool["description"] = (
-                "Create an isolated Linux development Box for coding and testing. "
-                "BoxWeave injects its own managed workload SSH public key; "
-                "ssh_keys is optional and accepts only additional authorized Ed25519 "
-                "public keys. Never supply client transport keys, fingerprints or "
-                "private keys. Check existing Boxes first. After creation use "
-                "connect(exec) for commands. If creation times out, check state "
-                "before retry; diagnose connection failures with debug_container."
-            )
-            schema = tool["inputSchema"]
-            schema["required"] = [field for field in schema.get("required", []) if field != "ssh_keys"]
-            schema["properties"].setdefault("ssh_keys", {})["description"] = (
-                "Optional additional authorized full Ed25519 public keys. The "
-                "BoxWeave MCP host automatically supplies its own managed workload "
-                "public key. Do not pass client transport keys, fingerprints or private keys.")
-            tool["inputSchema"]["properties"]["enable_nesting"] = {
-                "type":"boolean",
-                "description":"Independent nesting setting applied after successful creation, without installing Podman or restarting. Omit to retain upstream behavior."}
-        elif tool.get("name") == "connect":
-            tool["description"] = (
-                "Connect to a managed Box by logical username or a registry-verified "
-                "displayed <username>-container name with exact-target SSH trust. "
-                "Optional exec runs one command inside the Box and returns "
-                "stdout/stderr/exit_code; omit exec for human SSH instructions. "
-                "Commands may mutate the Box. Host/user overrides inconsistent "
-                "with the registered target are rejected."
-            )
-        elif tool.get("name") == "list_containers":
-            tool["description"] = (
-                "Read-only list of existing Boxes, state, IP and resources. "
-                "Check before creating a development/test Box."
-            )
-        elif tool.get("name") == "delete_container":
-            tool["description"] = (
-                "Permanently delete a Box and its data. Destructive: obtain "
-                "explicit authorization and verify target; after a timeout "
-                "inspect state instead of blindly retrying."
-            )
-    message = guard_restore_catalog(message)
-    # REST-migrated tools use BoxWeave's pinned schemas, never the upstream
-    # MCP catalogue. The eight old forwarded descriptors are discarded.
-    items=message.get("result",{}).get("tools")
-    if not isinstance(items,list):
+    if "result" not in message:
+        return message
+    message=guard_restore_catalog(message)
+    tools=message["result"].get("tools")
+    if not isinstance(tools,list):
         raise ValueError("UPSTREAM_CATALOG_INVALID")
-    message["result"]["tools"]=[tool for tool in items
-        if isinstance(tool,dict) and tool.get("name") not in
-        gateway_rest.rest_routes.MIGRATED_TOOLS]
-    message["result"]["tools"].extend(
-        gateway_rest.rest_routes.mcp_tool_catalog())
-    extras=(LEASE_TOOL, PATCH_TOOL) if gateway_protection.enabled() else ()
-    message["result"].setdefault("tools", []).extend((NESTING_TOOL, INFO_TOOL, gd.DIAG_TOOL, gd.PROJECT_TOOL, gd.COORD_TOOL, *box_reads.TOOLS, *gateway_tasks.TOOLS, *extras))
+    rest={t["name"]:t for t in gateway_rest.rest_routes.mcp_tool_catalog()}
+    # Source-controlled REST schemas, not forwarded MCP tool definitions.
+    rest["create_container"]["description"]=(
+        "Create an isolated development Box using one durable REST intent. "
+        "BoxWeave supplies its managed workload SSH public key; extra "
+        "ssh_keys are optional. A CREATING response is not guest-ready. "
+        "If a result is UNKNOWN, inspect the original task without retrying.")
+    rest["create_container"]["inputSchema"]["properties"]["ssh_keys"]["description"]=(
+        "Optional additional authorized Ed25519 public keys. The server supplies "
+        "its own managed workload SSH public key.")
+    rest["list_containers"]["description"]=(
+        "Read-only REST inventory of existing Boxes and their resources.")
+    rest["delete_container"]["description"]=(
+        "Permanently delete an exactly identified Box using one tracked REST "
+        "intent; do not retry an UNKNOWN outcome.")
+    chosen=set()
+    converted=[]
+    for tool in tools:
+        if not isinstance(tool,dict):
+            continue
+        name=tool.get("name")
+        if name in rest:
+            if name not in chosen:
+                converted.append(rest[name])
+                chosen.add(name)
+            continue
+        if name=="connect":
+            tool["description"]=(
+                "Connect to a managed Box by exact logical name or displayed "
+                "name with pinned SSH trust. Exec remains MCP and may mutate "
+                "the guest. Host and user overrides are refused.")
+        converted.append(tool)
+    # A missing upstream MCP descriptor cannot hide an implemented REST route.
+    converted.extend(tool for name,tool in rest.items() if name not in chosen)
+    extras=(LEASE_TOOL,PATCH_TOOL) if gateway_protection.enabled() else ()
+    converted.extend((NESTING_TOOL,INFO_TOOL,gd.DIAG_TOOL,gd.PROJECT_TOOL,
+                      gd.COORD_TOOL,*box_reads.TOOLS,*gateway_tasks.TOOLS,*extras))
+    message["result"]["tools"]=converted
     return message
 
 REGISTRY = Path("/var/lib/boxweave-default/public/targets.json")
@@ -543,7 +533,8 @@ def main():
                         selected_rest = None
                     selected_debug = selected_rest is not None
                     protected = gateway_protection.enabled()
-                    coordinated_rest = selected_rest["mode"] == "coordinated"
+                    coordinated_rest = (selected_rest is not None and
+                                        selected_rest["mode"] == "coordinated")
                     if protected:
                         message = gateway_protection.filter_catalog(
                             message, rest_debug=selected_debug,
