@@ -167,6 +167,30 @@ class CanonicalProviderErrorTests(unittest.TestCase):
                      "token_file":"/tmp/placeholder-not-read"},
                     "list_containers", {})
 
+    def test_unclassified_http_errors_expose_canonical_unknown_not_private_transport_codes(self):
+        # An untyped HTTP response cannot safely prove NOT_FOUND/CONFLICT.
+        for upstream in (400, 404, 409, 500):
+            with self.subTest(upstream=upstream):
+                unknown = rest_wire.WireFault(
+                    "API_HTTP_REJECTED", status=upstream, grpc_code=None,
+                    http_status=upstream, upstream_http_status=upstream,
+                    status_origin="unclassified")
+                app = object.__new__(provider_rest.RESTClient)
+                with patch.object(rest_wire, "request", side_effect=unknown):
+                    with self.assertRaises(Fault) as caught:
+                        app.request("GET", "/v1/containers/demo")
+                self.assertEqual(caught.exception.code, "UNKNOWN")
+                self.assertEqual(caught.exception.status, 500)
+                self.assertIsNone(caught.exception.grpc_code)
+                self.assertEqual(caught.exception.upstream_http_status, upstream)
+                with patch.object(rest_wire.Client, "request", side_effect=unknown):
+                    with self.assertRaisesRegex(
+                            gateway_rest.GatewayRESTFault, "^UNKNOWN$"):
+                        gateway_rest.execute_read(
+                            {"url":"http://127.0.0.1:18080",
+                             "token_file":"/tmp/placeholder-not-read"},
+                            "list_containers", {})
+
     def test_transport_loss_is_standard_unavailable_for_reads_unknown_for_writes(self):
         class Owner:
             url = "http://127.0.0.1:18080"

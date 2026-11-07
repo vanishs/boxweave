@@ -32,10 +32,14 @@ translate an unclassified 500 into a guessed 404. A `NormalizedError` carries:
 
 The app RESTClient returns a normal domain Fault with the standard gRPC name
 and mapped HTTP status when one exists; it preserves the upstream HTTP status
-as metadata. The Agent gateway returns the same standard gRPC name for
-recognized Provider read failures. Internal `API_*` symbols remain
-**transport/audit diagnostics and indeterminate fallback classifications**,
-not the Provider's application-facing semantic protocol.
+as metadata. For ambiguous upstream HTTP 400/404/409/500 without a
+validated gRPC code, both app and Agent readers expose canonical
+`UNKNOWN / 500` while recording the original upstream HTTP status and
+`grpc_code=None` as evidence; unknown does **not** authorize retries or
+prove that a target is missing. The Agent gateway returns the standard
+gRPC name for recognized Provider read failures. Internal `API_*`
+symbols remain transport/audit and local validation diagnostics, not a
+new application-facing Provider error protocol.
 
 An actual HTTP 404 with **no typed gRPC envelope** might mean the API route
 rather than the target does not exist. Consequently an irreversible create

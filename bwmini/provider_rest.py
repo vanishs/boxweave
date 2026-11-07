@@ -132,7 +132,15 @@ class RESTClient:
             # classification; no application code inspects upstream text.
             if exc.grpc_code is not None:
                 fault = Fault(exc.grpc_code.name, exc.http_status)
+            elif (exc.upstream_http_status is not None
+                  and exc.upstream_http_status >= 400):
+                # A bare HTTP 400/404/409/500 does not identify an
+                # authoritative gRPC code. Expose canonical UNKNOWN, while
+                # retaining the original HTTP status as diagnostic metadata.
+                fault = Fault("UNKNOWN", 500)
             else:
+                # Local route/configuration/response-contract faults are
+                # BoxWeave errors, not claims about Provider semantics.
                 fault = Fault(exc.code, exc.status)
             fault.grpc_code = exc.grpc_code
             fault.http_status = exc.http_status
