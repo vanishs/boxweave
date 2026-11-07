@@ -76,6 +76,12 @@ class MutationTests(unittest.TestCase):
             task_id=first["task_id"])
         self.assertEqual(status["state"],"succeeded")
         self.assertTrue(status["verified"])
+        # The next intentional stop after another start is a fresh operation;
+        # an omitted key must not pin the old succeeded receipt forever.
+        later = self.execute()
+        self.assertNotEqual(later["task_id"], first["task_id"])
+        self.assertEqual([m for m,_,_ in self.outbound],
+                         ["GET","POST","GET","POST"])
 
     def test_lost_post_receipt_keeps_unknown_and_does_not_retry(self):
         self.fail=True
