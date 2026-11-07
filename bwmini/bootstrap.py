@@ -296,7 +296,8 @@ def apply(args, artifacts):
                   "launcher": [str(launcher)], "provider_api": {"url": args.provider_url,
                   "token_file": str(token)}, "targets": {}, "host": "127.0.0.1", "port": args.port,
                   "origin": "http://127.0.0.1:" + str(args.port), "secure_cookie": False,
-                  "operation_timeout": 60}
+                  "operation_timeout": 60,
+                  "coordination": {"enabled": True}}
         config_path = stage / "application.json"
         argv = ["runuser", "-u", user, "--", "env", "XDG_RUNTIME_DIR=" + runtime,
                 "/usr/bin/python3", str(stage / "distribution"), "install", "--package",
@@ -323,7 +324,13 @@ def apply(args, artifacts):
                         "PROVIDER_API_CONFIG_CONFLICT")
             else:
                 previous["provider_api"] = config["provider_api"]
-                atomic(saved_config, encoded(previous), 0o600, owner)
+            # Migrated lifecycle writes now require a shared R-04 claim store.
+            # The installer provisions it before service activation.
+            require(previous.get("coordination") in (
+                    None, {"enabled": False}, {"enabled": True}),
+                    "COORDINATION_CONFIG_REVIEW_REQUIRED")
+            previous["coordination"] = {"enabled": True}
+            atomic(saved_config, encoded(previous), 0o600, owner)
         # App installer output is bounded public state, but keep it private on disk.
         with (folder / "application-install.log").open("wb") as log:
             result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
