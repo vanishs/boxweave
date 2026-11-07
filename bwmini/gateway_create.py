@@ -12,10 +12,12 @@ import stat
 
 try:
     from .remote_create import CreateJournal, CreateFault, validated_request
-    from .gateway_rest import GatewayRESTFault
 except ImportError:
     from remote_create import CreateJournal, CreateFault, validated_request
-    from gateway_rest import GatewayRESTFault
+
+
+class GatewayRESTFault(ValueError):
+    pass
 
 
 def checked_app_store(path):
