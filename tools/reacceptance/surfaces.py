@@ -19,6 +19,38 @@ MAX_DEPTH = 3
 MAX_LEAVES = 250
 
 
+def usage_children(usage, path):
+    """Only a top-level positional choice after the *exact* command prefix.
+
+    Ignore --mode {ssh,https,local} and other option value sets, and refuse
+    generic root help returned by a child or an unknown argument.
+    """
+    if not usage.startswith("usage: "):
+        return None
+    text = usage[7:].strip().split(" ", 1)
+    rest = text[1].strip() if len(text) == 2 else ""
+    for piece in path:
+        if rest != piece and not rest.startswith(piece + " "):
+            return None
+        rest = rest[len(piece):].lstrip()
+    depth = 0
+    for index, char in enumerate(rest):
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth = max(0, depth - 1)
+        elif char == "{" and depth == 0:
+            end = rest.find("}", index + 1)
+            if end < 0:
+                return []
+            options = rest[index + 1:end]
+            if not re.fullmatch(r"[a-zA-Z0-9_,-]+", options):
+                return []
+            return [s for s in options.split(",")
+                    if re.fullmatch(r"[a-z][a-z0-9_-]{0,48}", s)]
+    return []
+
+
 def help_tree(argv):
     if not isinstance(argv, list) or not argv:
         raise AcceptanceFault("HOST_COMMAND_INVALID")
@@ -32,40 +64,28 @@ def help_tree(argv):
         seen.add(path)
         result = capture(argv + list(path) + ["--help"], timeout=12)
         row = {"argv_suffix": list(path) + ["--help"], "process": result,
-               "help_is_not_a_functional_positive": True}
+               "help_is_not_a_functional_positive": True, "confirmed": False}
         leaves[" ".join(path) if path else "<root>"] = row
         if result["execution"] != "completed" or result["exit_code"] != 0:
             continue
-        # Extract ONLY the command alternatives in the *usage* header.
-        # Many CLIs repeat {root,choices} in the positional help section,
-        # or return root help for unknown subcommands; recursing into either
-        # turns a real installed inventory into an exponential false tree.
         header = result["stdout"].split("\n\n", 1)[0]
         usage = " ".join(header.split())
-        if not usage.startswith("usage: "):
-            row["reason"] = "NO_INSTALLED_USAGE_HEADER"
+        choices = usage_children(usage, path)
+        if choices is None:
+            row["reason"] = ("NO_INSTALLED_USAGE_HEADER" if not
+                             usage.startswith("usage: ") else
+                             "HELP_FELL_BACK_TO_DIFFERENT_COMMAND")
             continue
-        if path:
-            command = usage.split(" ", 2)
-            claimed = command[2] if len(command) > 2 else ""
-            first = claimed.split(" ", 1)[0] if claimed else ""
-            if first != path[0] or not all(
-                    re.search(r"(?<![a-z0-9_-])" + re.escape(piece) +
-                              r"(?![a-z0-9_-])", claimed)
-                    for piece in path):
-                row["reason"] = "HELP_FELL_BACK_TO_DIFFERENT_COMMAND"
-                continue
-        for match in re.finditer(r"\{([a-zA-Z0-9_,-]+)\}", usage):
-            for part in match.group(1).split(","):
-                if re.fullmatch(r"[a-z][a-z0-9_-]{0,48}", part):
-                    child = path + (part,)
-                    if child not in seen and len(child) <= MAX_DEPTH:
-                        queue.append(child)
+        row["confirmed"] = True
+        for part in choices:
+            child = path + (part,)
+            if child not in seen and len(child) <= MAX_DEPTH:
+                queue.append(child)
     if queue:
         leaves["<discovery-overflow>"] = {
             "status": "BLOCKED", "reason": "CLI_DISCOVERY_BUDGET_EXCEEDED",
             "unvisited_count": len(queue),
-            "help_is_not_a_functional_positive": True}
+            "help_is_not_a_functional_positive": True, "confirmed": False}
     return leaves
 
 
