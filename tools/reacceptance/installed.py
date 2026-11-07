@@ -132,7 +132,7 @@ def inspect_cli(argv):
     tree = help_tree(argv)
     rows, evidence = {}, {}
     for leaf, help_result in tree.items():
-        if leaf == "<root>":
+        if leaf == "<root>" or help_result.get("confirmed") is False:
             continue
         key = "installed_cli_leaf:" + leaf
         rows[key] = {"status": "PARTIAL", "reason": "HELP_ONLY_NO_POSITIVE"}
