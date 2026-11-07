@@ -1,6 +1,6 @@
 """Durable, one-dispatch HTTP MCP create receipts.
 
-The existing MCP gateway remains the only Provider writer. An accepted name
+The coordinated REST Gateway is the only migrated create writer. An accepted name
 is consumed forever until an operator explicitly chooses a different name:
 neither HTTP retries nor process restarts can replay an ambiguous create.
 Only bounded metadata and SHA256 of the arguments are retained, never keys
