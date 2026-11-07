@@ -269,8 +269,17 @@ class ProtocolTests(unittest.TestCase):
         return Provider({"provider":"containarium","backend":"dev","project":"default",
                          "launcher":[sys.executable,PEER,mode],"targets":{"fixture-box":TARGET.data()}})
 
-    def test_provider_identity_and_hello_using_synthetic_peer(self):
-        p=self.provider();self.assertEqual(p.observe("fixture-box"),TARGET)
+    def test_provider_rest_identity_and_mcp_guest_hello(self):
+        p=self.provider()
+        class RestIdentity:
+            def container(self,logical):
+                self_name=TARGET.logical
+                assert logical==self_name
+                return {"name":TARGET.instance,"username":TARGET.logical,
+                        "createdAt":TARGET.created,
+                        "state":"CONTAINER_STATE_RUNNING"}
+        p.rest=RestIdentity()
+        self.assertEqual(p.observe("fixture-box"),TARGET)
         self.assertEqual(p.hello(TARGET,"/home/fixture-box",10)["exit_code"],0)
 
     def test_identity_mismatch_prevents_hello(self):
