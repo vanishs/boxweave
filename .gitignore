@@ -1,0 +1,16 @@
+# Build and local development output
+/bin/
+/dist/
+/build/
+/coverage/
+*.test
+*.out
+*.log
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+.runtime/
+.tmp/
