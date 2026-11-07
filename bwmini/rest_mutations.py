@@ -250,3 +250,66 @@ def dispatch(configuration, tool, args, *, protected):
         try: claims.unknown(task_id)
         except Exception: pass
     return ledger.get(task_id=task_id)
+
+
+def observe_one(store, provider, clock=time.time):
+    """Independent, read-only app worker reconciliation for one accepted write.
+
+    Never resends original POST/PUT/DELETE and never adopts a different Box
+    incarnation under the same logical username.
+    """
+    journal=MutationJournal(store, clock=clock)
+    item=journal.poll()
+    if item is None:
+        return False
+    task=item["task_id"]
+    if clock() >= item["created"]+1800 or getattr(provider,"rest",None) is None:
+        journal.unknown(task)
+        try: coordination_bridge.SharedClaims().unknown(task)
+        except Exception: pass
+        return True
+    try:
+        observed=provider.lifecycle_inspect(item["logical"])
+    except Exception:
+        return True  # Failed reads are never proof of a desired state.
+    spec=json.loads(item["spec_json"])
+    if observed is None:
+        verified=item["action"]=="delete"
+    else:
+        target=observed["target"]
+        if (target.logical != item["logical"] or
+                target.instance != item["instance_name"] or
+                target.created != item["instance_created"]):
+            journal.unknown(task)
+            try: coordination_bridge.SharedClaims().unknown(task)
+            except Exception: pass
+            return True
+        if item["action"]=="start":
+            verified=observed["state"]=="CONTAINER_STATE_RUNNING"
+            if verified and spec.get("waitForReady"):
+                try:
+                    identity=provider.lifecycle_identity(target, timeout=30)
+                    verified=(isinstance(identity,dict)
+                              and identity.get("exit_code")==0
+                              and identity.get("user")==target.user
+                              and identity.get("hostname")==target.hostname)
+                except Exception:
+                    verified=False
+        elif item["action"]=="stop":
+            verified=observed["state"]=="CONTAINER_STATE_STOPPED"
+        elif item["action"]=="resize":
+            resources=observed.get("resources")
+            verified=(isinstance(resources,dict)
+                      and all(resources.get(k)==v for k,v in spec.items()))
+        else:
+            verified=False
+    if not verified:
+        return True
+    journal.ready(task)
+    try:
+        coordination_bridge.SharedClaims().observed_terminal(
+            task,"gateway_"+task)
+    except Exception:
+        # No implicit release when the shared claim store is unavailable.
+        pass
+    return True
