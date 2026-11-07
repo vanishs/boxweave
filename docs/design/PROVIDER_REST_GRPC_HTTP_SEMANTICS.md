@@ -79,7 +79,15 @@ Only when all are true:
 
 All other HTTP 500 responses stay failures, including `not found` text from
 other operations, other projects, other instances, peer discovery failures and
-unrecognized JSON. Existing upstream #931 shows that even Incus text
+unrecognized JSON. **Additional create-preflight corroboration:** because
+v0.128.0 GetContainer ignores peer-list failures, a `compatibility` result
+also triggers a fresh authenticated `GET /v1/containers`; that list must
+validate successfully, have a matching complete total count, contain an
+explicit empty `unreachableBackends` array, contain no duplicate names, and
+not contain the requested username. Any partial read, unreachable peer, or
+occupied name prevents POST and task reservation. A typed upstream gRPC
+NotFound response requires no provider-specific second-read workaround.
+Existing upstream #931 shows that even Incus text
 `Instance not found` can be transient; this exception is a **temporary
 operator-approved compatibility compromise**, not a safe general oracle.
 
