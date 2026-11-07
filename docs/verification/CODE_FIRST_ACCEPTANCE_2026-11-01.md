@@ -365,6 +365,7 @@ registrations provide help discovery only, never an alternate execution path.
 - `GET /api/operations/<oid>`
 - `GET /api/operations/<oid>/observations`
 - `GET /api/projects`
+- `GET /api/provider-rest-tasks/<task_id>`
 - `GET /api/remote-mcp`
 - `GET /api/resources`
 - `GET /api/session`
