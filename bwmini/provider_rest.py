@@ -126,7 +126,19 @@ class RESTClient:
         try:
             return rest_wire.request(self, method, path, body, timeout)
         except rest_wire.WireFault as exc:
-            raise Fault(exc.code, exc.status) from None
+            # App-facing Provider failures use canonical gRPC status names
+            # and their grpc-gateway HTTP mappings when classification is
+            # authoritative. Ambiguous failures retain the old transport
+            # classification; no application code inspects upstream text.
+            if exc.grpc_code is not None:
+                fault = Fault(exc.grpc_code.name, exc.http_status)
+            else:
+                fault = Fault(exc.code, exc.status)
+            fault.grpc_code = exc.grpc_code
+            fault.http_status = exc.http_status
+            fault.upstream_http_status = exc.upstream_http_status
+            fault.status_origin = exc.status_origin
+            raise fault from None
 
     def debug_container(self, logical):
         """Single exact-target REST read; preserve bounded upstream shape."""
