@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import diagnostics, resource_size, rest_wire
+from . import diagnostics, resource_size, rest_wire, rest_routes
 from .domain import Fault
 
 _TARGET = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
@@ -163,43 +163,56 @@ class RESTClient:
         return row
 
     def mutate(self, action, logical, spec, timeout):
+        """All app lifecycle mutations use the same exact route contract.
+
+        Create is an asynchronously *accepted* REST write. The lifecycle worker
+        must observe the original guest before reporting completion; a lost
+        REST acknowledgement remains UNKNOWN and is never dispatched twice.
+        """
         logical = checked_logical(logical)
         if action == "create":
-            body = {
+            if "_nesting" in spec and type(spec["_nesting"]) is not bool:
+                raise Fault("NESTING_BOOLEAN_REQUIRED", 422)
+            args = {
                 "username": logical,
-                "resources": {name: spec[name] for name in ("cpu", "memory", "disk")},
-                "image": "images:ubuntu/24.04",
-                "enablePodman": False,
-                "sshKeys": [spec["ssh_public_key"]]}
+                "cpu": spec["cpu"], "memory": spec["memory"], "disk": spec["disk"],
+                "image": "images:ubuntu/24.04", "enable_podman": False,
+                "ssh_keys": [spec["ssh_public_key"]],
+            }
             if spec.get("_network_tenant") is not None:
-                body["networkTenant"] = spec["_network_tenant"]
-            # The upstream MCP adds enable_nesting as an out-of-band
-            # capability: it is deliberately NOT a REST create field.
-            route, method = "/v1/containers", "POST"
-        elif action == "start":
-            route, method, body = "/v1/containers/" + logical + "/start", "POST", {"waitForReady": False}
-        elif action == "stop":
-            route, method, body = "/v1/containers/" + logical + "/stop", "POST", {"force": False}
-        elif action == "delete":
-            route, method, body = "/v1/containers/" + logical, "DELETE", None
-        elif action == "resize":
-            body = spec.get("_resize")
-            if not isinstance(body, dict) or not body or set(body) - {"cpu", "memory", "disk"}:
-                raise Fault("RESIZE_SPEC_INVALID", 422)
-            if body.get("disk") not in (None, ""):
-                # The Provider's advertised grow-only promise is not enforced
-                # by its 0.128.0 response. Observe the current authenticated
-                # target before any write; refuse ambiguous sizes or shrinks.
-                row = self.container(logical)
-                try:
-                    current = row["resources"]["disk"]
-                except (KeyError, TypeError):
-                    raise Fault("RESOURCE_DISK_SIZE_UNVERIFIED", 422) from None
-                try:
-                    resource_size.require_nonshrinking_disk(body["disk"], current)
-                except ValueError as exc:
-                    raise Fault(str(exc), 422) from None
-            route, method = "/v1/containers/" + logical + "/resize", "PUT"
+                args["network_tenant"] = spec["_network_tenant"]
+            try:
+                method, route, body = rest_routes.route(
+                    "create_container", args, async_create=True)
+            except rest_routes.RouteFault as exc:
+                raise Fault(str(exc), 422) from None
+        elif action in ("start", "stop", "delete", "resize"):
+            args = {"username": logical}
+            if action == "resize":
+                extra = spec.get("_resize")
+                if not isinstance(extra, dict) or not extra or set(extra) - {
+                        "cpu", "memory", "disk"}:
+                    raise Fault("RESIZE_SPEC_INVALID", 422)
+                if extra.get("disk") not in (None, ""):
+                    row = self.container(logical)
+                    try:
+                        current = row["resources"]["disk"]
+                    except (KeyError, TypeError):
+                        raise Fault("RESOURCE_DISK_SIZE_UNVERIFIED", 422) from None
+                    try:
+                        resource_size.require_nonshrinking_disk(extra["disk"], current)
+                    except ValueError as exc:
+                        raise Fault(str(exc), 422) from None
+                args.update(extra)
+            elif action == "start":
+                args["waitForReady"] = False
+            elif action == "stop":
+                args["force"] = False
+            try:
+                method, route, body = rest_routes.route(
+                    action + "_container", args, async_create=False)
+            except rest_routes.RouteFault as exc:
+                raise Fault(str(exc), 422) from None
         else:
-            raise Fault("ACTION_NOT_ALLOWED")
+            raise Fault("ACTION_NOT_ALLOWED", 422)
         return self.request(method, route, body=body, timeout=timeout)
