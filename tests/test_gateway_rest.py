@@ -281,3 +281,26 @@ class GatewayRESTTests(unittest.TestCase):
                     normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
                     protected=True)
         self.assertEqual(calls, ["GET"])
+
+    def test_create_preflight_bare_http_404_is_not_target_absence(self):
+        """A missing endpoint must not be mistaken for an absent Box."""
+        calls = []
+        class Rest:
+            def __init__(self, cfg):
+                pass
+            def request(self, method, uri, body=None, timeout=30):
+                calls.append(method)
+                if method == "GET":
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND", status=404,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="unclassified")
+                raise AssertionError("Unverified 404 dispatched a create")
+        with patch("bwmini.rest_wire.Client", Rest):
+            with self.assertRaisesRegex(
+                    ValueError, "REST_CREATE_PREFLIGHT_UNVERIFIED"):
+                gateway_create.dispatch(
+                    self.config, {"username": "wip-unique"}, 7,
+                    normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                    protected=True)
+        self.assertEqual(calls, ["GET"])
