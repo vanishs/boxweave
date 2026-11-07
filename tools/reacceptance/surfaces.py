@@ -159,9 +159,14 @@ def breadth(root, host_command=None, mcp_command=None, *, http=None):
                          "reason": "NOT_ON_REVIEWED_READONLY_AUTOCALL_ALLOWLIST"}
             continue
         schema = tool.get("inputSchema") or {}
-        if schema.get("required"):
+        props = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        if (not isinstance(schema, dict) or not isinstance(props, dict)
+                or schema.get("required") or any(
+                    x in props for x in ("username", "box", "logical"))
+                or schema.get("anyOf") or schema.get("oneOf")):
             rows[key] = {"status": "BLOCKED", "surface": "stdio_mcp",
-                         "reason": "REQUIRED_EXACT_TEST_TARGET_INPUT_MISSING"}
+                         "reason": "REVIEWED_TEST_PRECONDITIONS_REQUIRED",
+                         "setup": "USE_ISOLATED_LIFECYCLE_WITH_READONLY_BREADTH"}
             continue
         positive = attempt_mcp(mcp_command, name, {})
         malformed = attempt_mcp(mcp_command, name, {"__racc_unknown_field__": {"invalid": True}})
