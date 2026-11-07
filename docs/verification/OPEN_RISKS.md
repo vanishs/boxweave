@@ -24,6 +24,7 @@
 | O-018 | **DESIGN** | Public MCP HTTPS endpoint and application-domain DNS/certificate strategy, including nested access and port 80/443 ownership without exposing local Incus/Caddy administration. |
 | O-019 | **VALIDATE** | SDK/module compatibility, required Incus API Extensions and tested minimum supported Incus capabilities; official Go client dependency must not be confused with a hard maximum daemon version. |
 | O-020 | **DESIGN** | Resource ownership registry and local state recovery when SQLite is missing/corrupted; preserve fail-closed behavior and decide how a human can recover without automatic adoption. |
+| O-021 | **DECISION NEEDED** | Deleting a Box that hosts a nested BoxWeave may erase an entire descendant tree. Define how the parent detects this, what confirmation or refusal is required, and how to retain evidence when the inner layer is unreachable. Do not silently cascade destructive cleanup while undecided. |
 
 No unresolved choice permits MCP operation against unowned resources or bypass of the parental layer boundary.
 
