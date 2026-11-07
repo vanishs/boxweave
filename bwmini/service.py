@@ -222,6 +222,9 @@ class Service:
         from . import async_create_observer
         if async_create_observer.observe_one(self.store, self.provider, self.clock):
             return True
+        from . import rest_mutations
+        if rest_mutations.observe_one(self.store, self.provider, self.clock):
+            return True
         if self.box_actions.work_one():
             return True
         with self.store.db() as db:
@@ -305,6 +308,10 @@ class Service:
                 raise Fault("WORKER_ALREADY_RUNNING")
             self.recover()
             self.lifecycle.recover()
+            # A lost pre-ack Agent write is UNKNOWN. Accepted writes resume
+            # by observation only, never by dispatch from this worker.
+            from .rest_mutations import MutationJournal
+            MutationJournal(self.store).recover()
             self.access.recover()
             self.box_actions.recover()
             while True:
