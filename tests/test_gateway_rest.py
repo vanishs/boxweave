@@ -39,7 +39,9 @@ class GatewayRESTTests(unittest.TestCase):
         class Rest:
             def __init__(self, cfg):
                 self.cfg = cfg
-            def request(self, method, uri, body, timeout):
+            def request(self, method, uri, body=None, timeout=30):
+                if method == "GET":
+                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
                 calls.append((method,uri,body))
                 return {"container":{"username":"wip-unique",
                                      "state":"CONTAINER_STATE_CREATING"}}
@@ -69,7 +71,9 @@ class GatewayRESTTests(unittest.TestCase):
         calls=[]
         class Broken:
             def __init__(self, cfg): pass
-            def request(self,method,uri,body,timeout):
+            def request(self,method,uri,body=None,timeout=30):
+                if method == "GET":
+                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
                 calls.append((method,uri))
                 raise rest_wire.WireFault("API_OUTCOME_UNKNOWN")
         class Claims:
