@@ -22,5 +22,7 @@ Status: **accepted design goals**, not implemented or tested facts.
 | R-016 | No mandatory Incus storage backend is imposed, and optional storage features are capability-gated. |
 | R-017 | Version scheme is 1.X.Y, where X is feature increments and Y patches. Release identity is immutable; a source release is not installed acceptance. |
 | R-018 | Project artifacts are English; Agents converse in the requester's language, preserving technical identifiers. |
+| R-019 | The runtime is Go, using the official MCP Go SDK for public Streamable HTTP MCP and the official Incus Go client for native management; no extra intermediary controller or public REST management service is introduced. |
+| R-020 | The same install/upgrade/capability-check process works at each supported nesting layer without seizing parent resources; any necessary parent-side permission is explicit and separately authorized. |
 
 See [acceptance cases](../verification/ACCEPTANCE.md) and detailed [security](../design/SECURITY.md), [operations](../design/OPERATIONS.md), and [nesting](../design/NESTING.md).

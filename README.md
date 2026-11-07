@@ -13,6 +13,6 @@ Core promises:
 
 Start with [documentation index](docs/INDEX.md), [product scope](docs/product/SCOPE.md), [requirements](docs/product/REQUIREMENTS.md), [architecture](docs/design/ARCHITECTURE.md), [security boundaries](docs/design/SECURITY.md), and [Agent rules](AGENTS.md).
 
-No Containarium dependency is planned. The proposed implementation stack is Go with the official Incus Go client and official MCP Go SDK; **the earlier Python choice has not been explicitly superseded by the owner**, so language selection is an open implementation decision. Irrespective of language, public management remains HTTP MCP only.
+**Confirmed implementation stack:** Go, the official MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`), and the official Incus Go client (`github.com/lxc/incus/v7/client` and its typed API models). Containarium is not a dependency. Incus's native SDK transport is internal; BoxWeave exposes **no public REST management API**. SDK versions and feature support must be validated before implementation. See [technology stack](docs/design/TECH_STACK.md).
 
 Version policy: `1.X.Y`; `X` increases for a completed feature increment and resets `Y` to zero; `Y` increases for a patch to existing behavior. See [versioning](docs/process/VERSIONING.md).

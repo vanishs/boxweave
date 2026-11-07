@@ -37,6 +37,8 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-018 | Installed v1 binary, exact version, fresh installation and upgrade verified independently, not inferred from CI | I + V |
 | A-019 | Unknown/foreign Incus Instance, host file, raw API, unmanaged route/forward and privileges denied with no side effects | I + V |
 | A-020 | Every installed MCP tool and local maintenance CLI leaf gets valid, invalid and relevant denial scenarios or named blocker | I + V |
+| A-021 | Production runtime builds with the official MCP Go SDK and official Incus Go client; native Exec, Operation, ACL and Unix-socket behavior are tested against the observed Incus daemon rather than assumed | T + I |
+| A-022 | A nested installation performs its own bootstrap without taking parent admin credentials or mutating parent services; parent permission deficits are correctly reported | N + V |
 
 ## Required adversarial combinations
 

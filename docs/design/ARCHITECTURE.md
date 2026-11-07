@@ -39,17 +39,20 @@ Do not build a second public management protocol, Web control plane, remotely ca
 1. **Public transport adapter:** official MCP protocol implementation, request/response schemas, authentication and filtering. It must not itself perform unchecked host or Incus mutations.
 2. **Domain/policy layer:** Box identities, ownership, planned state, ACL rules, published routes and ports, allowed configuration updates and operation contracts.
 3. **Operation store and reconciliation:** local SQLite WAL plus locking and transactional updates. Durable intents precede any external effect. Persist original upstream operation identity where available.
-4. **Incus adapter:** native API via the official Go Incus client is the preferred approach. A thin SDK adaptation layer enables compatibility checks, typed errors and independent native reads.
+4. **Incus adapter:** use the official Go Incus client and typed Incus API models. A narrow SDK adapter enables compatibility checks, native error mapping, resource ownership validation and independent native reads.
 5. **Caddy adapter:** dedicated BoxWeave-owned Caddy process/configuration where feasible; only BoxWeave-managed route namespace, local-only Admin API. Reconcile desired SQLite records into Caddy live configuration.
 6. **Privileged boundary:** service privilege separation or a constrained local helper owns necessary Incus/host setup privileges. Public MCP never accesses unrestricted Incus socket, Caddy Admin API or host shell.
 7. **Host-local CLI:** bootstrap password, diagnostics, upgrades, recovery, version display, credential reset; never a public management endpoint.
 
-## Technology selection
+## Confirmed technology selection
 
-- **Recommended, not yet owner-ratified:** Go runtime, official `github.com/lxc/incus/v7/client` and official `github.com/modelcontextprotocol/go-sdk`.
-- **Previously selected:** Python for the original rewrite proposal; no explicit owner message later finalized a switch to Go.
-- Do not implement language-specific production code before recording the final choice in an ADR. The external MCP protocol and domain contracts must not depend on it.
-- Caddy Admin API, SQLite, systemd and Incus remain implementation targets, not exposed management surfaces.
+- **Language:** Go. The owner's Go decision supersedes the earlier Python proposal.
+- **Public MCP protocol:** official `github.com/modelcontextprotocol/go-sdk`, using Streamable HTTP; the SDK is an embedded library, not another running MCP proxy.
+- **Native container integration:** official Incus Go client `github.com/lxc/incus/v7/client` and the matching typed API package. Use Incus's local Unix socket where privileges permit; do not expose Incus's native API publicly.
+- **State and integrations:** local SQLite journal, Caddy Admin API, Linux/systemd; the exact implementation libraries and version compatibility are verified in the first development slice.
+- **No secondary controller:** no Containarium layer, arbitrary Incus CLI subprocess wrapper for core operations, or separate public REST/gRPC management service.
+
+See [technology stack](TECH_STACK.md).
 
 ## Security invariants
 

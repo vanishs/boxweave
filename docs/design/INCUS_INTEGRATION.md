@@ -4,7 +4,7 @@
 
 Incus's stable foundation is its native management API. The Incus CLI and the official Go client use that API. **BoxWeave external management remains HTTP MCP only**; an internal Incus API or Unix-socket call is not a second BoxWeave public REST API.
 
-Prefer the official Go Incus client if the owner accepts Go. It provides native Instances, Exec, Operation, network ACL and file/snapshot APIs. Python wrappers (including pyincusd) are community-maintained and may not abstract websocket Exec completely. The project should not write a second generic Incus REST implementation without a demonstrable need.
+**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Prefer local Unix socket access through a properly restricted local security boundary. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, ACL and snapshot APIs, but each BoxWeave-needed feature still requires real integration verification.
 
 ## Runtime capabilities
 
@@ -22,9 +22,9 @@ Prefer the official Go Incus client if the owner accepts Go. It provides native 
 
 Unrestricted Incus admin socket access can confer broad host powers. Use restricted Incus identities where workable, and a narrow local privileged service with an allowlist for any essential setup actions. Treat this as a real OS/process privilege boundary, not merely JSON validation in an all-powerful public HTTP process.
 
-## Implementation-language decision still open
+## Selected Go and MCP integrations
 
-The requester initially chose Python, later requested a Go/Python comparison and was advised to prefer Go because Incus officially maintains Go client code. This is a **recommendation**, not an explicit replacement decision. Record the final runtime language and MCP SDK selection before source implementation begins. The v1 specification itself is language-neutral.
+The v1 implementation language is **Go**. The HTTP MCP server uses the official `github.com/modelcontextprotocol/go-sdk` library; the native Incus adapter uses the official `github.com/lxc/incus/v7/client` library. Both SDKs are linked into BoxWeave; neither is a separate service or a public REST interface. Compile against a reviewed compatible release and validate the actual daemon's `api_extensions`; never equate a successful compile with complete feature coverage. See [technology stack](TECH_STACK.md).
 
 ## Compatibility and tests
 

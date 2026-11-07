@@ -8,6 +8,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What is in/out? | [Scope](product/SCOPE.md) |
 | What must work? | [Requirements](product/REQUIREMENTS.md) |
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |
+| Which runtime and SDKs are required? | [Go technology stack](design/TECH_STACK.md) |
 | Which MCP tools are planned? | [MCP catalog](design/MCP_TOOLS.md) |
 | What may an MCP client touch? | [Security and ownership](design/SECURITY.md) |
 | How does nesting work? | [Nesting](design/NESTING.md) |

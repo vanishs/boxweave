@@ -11,7 +11,7 @@ Applies to every coding Agent, regardless of product, model, language, host, or 
 
 ## Product and trust boundaries
 
-5. **MCP-only public management.** Expose Streamable HTTP MCP. Do not add a public REST management API, Web console, SSH management surface, or generic host shell. The host-local maintenance CLI is not a remote administration interface.
+5. **Go and official SDKs; MCP-only public management.** Implement BoxWeave in Go with the official MCP Go SDK and official Incus Go client. Expose only Streamable HTTP MCP for public administration. Do not add a public REST management API, Web console, SSH management surface, generic host shell or a second Incus wrapper service. The host-local maintenance CLI is not a remote administration interface.
 6. **Operate on owned resources only.** Authenticate first; then independently verify durable ownership and the current native identity for every sensitive read or mutation. Never allow MCP to administer unrelated host files, processes, Incus resources, networking, or Caddy configuration. Unknown ownership fails closed.
 7. **No raw privileged pass-through.** MCP callers cannot supply arbitrary host paths, Incus settings, upstream URLs/IPs, Caddy Admin API payloads, privileged devices, host mounts, or commands for host execution. Derive targets from verified Box identities and enforce policy in code, not prompts.
 8. **Recursive parity is mandatory.** An inner BoxWeave has the same functional contract as the outer one, without artificial depth limits or inherited parent credentials. Report unsupported kernel/Incus capabilities honestly; never weaken the parent boundary.

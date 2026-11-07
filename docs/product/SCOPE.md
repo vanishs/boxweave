@@ -2,6 +2,7 @@
 
 ## Fixed requirements
 
+- Implementation in Go using the official MCP Go SDK and official Incus Go client/module.
 - Single host per BoxWeave instance, no distributed controller or cluster scheduling.
 - No dependency on Containarium, no v0.x compatibility requirement, no automatic old state migration.
 - Public management protocol: authenticated Streamable HTTP MCP only. No public REST management endpoints and no Web console. The only interactive initial experience is local super-administrator credential bootstrap.

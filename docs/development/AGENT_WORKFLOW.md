@@ -12,7 +12,7 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 
 ## Engineering standards
 
-- Use typed Go structs/enums or equivalent type-safe models for tool and native API payloads. Do not pass raw Incus/Caddy config from MCP clients or model outcomes as arbitrary strings.
+- Implement runtime code in Go with the official MCP Go SDK and official Incus Go client; use typed Go structs/enums for tool and native API payloads. Do not pass raw Incus/Caddy config from MCP clients or model outcomes as arbitrary strings.
 - Keep MCP transport/auth, domain policy, durable operation journal and native adapters independent. Test the domain service without an MCP transport where possible.
 - Check real native identity and local ownership before each sensitive read or mutation. Guest Exec is not host Exec.
 - Validate the original result, negative/refusal behavior, and postcondition on the actual Incus/Caddy system. Do not equate API success with applied state.

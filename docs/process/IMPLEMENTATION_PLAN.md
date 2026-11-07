@@ -4,7 +4,7 @@
 
 | Order | Slice | Main proof before claiming complete |
 |---|---|---|
-| 0 | Ratify language/SDK and native capability matrix; freeze typed MCP schemas and ownership rules | Explicit decision, native Incus version/feature probe, reviewed security threat model |
+| 0 | Lock compatible official Go SDK revisions, native Incus capability matrix, privilege-boundary threat model and typed MCP schemas | Pinned module graph, compiled SDK smoke test, real native Incus version/extension probe, reviewed ownership invariants |
 | 1 | Build process/service, local install/status/recovery CLI, super-admin bootstrap, TLS-authenticated HTTP MCP and restricted local privileges | Authenticated external MCP read; foreign resources and raw host requests denied |
 | 2 | SQLite identity/ownership model and durable async operation journal | Crash-after-dispatch, duplicate requests, conflict, UNKNOWN recovery without replay |
 | 3 | Box lifecycle, safe update fields, Incus Exec and verified native status | Create/start/Exec/stop/delete on exact owned UUID; denial and independent post-read |
