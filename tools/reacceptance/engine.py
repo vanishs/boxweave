@@ -214,27 +214,44 @@ def feature_catalogue(root):
 
 
 def source_web_routes(source):
+    """Discover only actual Flask @app route declarations, not arbitrary .get().
+
+    Method calls like request.headers.get("Authorization") are not HTTP routes.
+    This is a source declaration index, never an installed-route acceptance.
+    """
     tree = ast.parse(Path(source).read_text())
     found = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if node.func.attr not in ("get", "post", "put", "delete", "route"):
-            continue
-        if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
-            continue
-        if node.func.attr == "route":
-            methods = ["UNKNOWN"]
-            for kw in node.keywords:
-                if kw.arg == "methods":
-                    try:
-                        methods = ast.literal_eval(kw.value)
-                    except (ValueError, TypeError):
-                        pass
-        else:
-            methods = [node.func.attr.upper()]
-        for m in methods:
-            found.add(str(m).upper() + " " + node.args[0].value)
+        for decorator in node.decorator_list:
+            if not (isinstance(decorator, ast.Call)
+                    and isinstance(decorator.func, ast.Attribute)
+                    and isinstance(decorator.func.value, ast.Name)
+                    and decorator.func.value.id == "app"
+                    and decorator.func.attr in ("get", "post", "put", "patch", "delete", "route")
+                    and decorator.args
+                    and isinstance(decorator.args[0], ast.Constant)
+                    and isinstance(decorator.args[0].value, str)
+                    and decorator.args[0].value.startswith("/")):
+                continue
+            if decorator.func.attr != "route":
+                methods = [decorator.func.attr.upper()]
+            else:
+                methods = ["GET"]
+                for kw in decorator.keywords:
+                    if kw.arg == "methods":
+                        try:
+                            methods = ast.literal_eval(kw.value)
+                        except (ValueError, TypeError):
+                            raise AcceptanceFault("DYNAMIC_HTTP_METHODS_REQUIRE_REVIEW") from None
+                if not isinstance(methods, (list, tuple)) or not methods:
+                    raise AcceptanceFault("INVALID_HTTP_METHODS")
+            for method in methods:
+                if not isinstance(method, str) or method.upper() not in (
+                        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"):
+                    raise AcceptanceFault("UNREVIEWED_HTTP_METHOD")
+                found.add(method.upper() + " " + decorator.args[0].value)
     return sorted(found)
 
 
@@ -333,11 +350,22 @@ def load_dependencies(root):
 
 
 def features_for(action, rules):
-    tags = set()
+    """Use the most specific declared match; generic transport rules are fallback.
+
+    A broad web_api:* or stdio_mcp:* rule must not silently label unrelated
+    features. Equal-specificity matches may intentionally share a feature.
+    """
+    matched = []
     for rule in rules:
-        if fnmatch.fnmatchcase(action, rule.get("action", "")):
-            tags.update(rule.get("features", []))
-    return sorted(tags) or ["UNMAPPED"]
+        pattern = rule.get("action", "")
+        if fnmatch.fnmatchcase(action, pattern):
+            specificity = len(re.sub(r"[?*\[\]]", "", pattern))
+            matched.append((specificity, rule))
+    if not matched:
+        return ["UNMAPPED"]
+    strongest = max(score for score, _ in matched)
+    return sorted({feature for score, rule in matched if score == strongest
+                   for feature in rule.get("features", [])}) or ["UNMAPPED"]
 
 
 def impacted(paths, rules):

@@ -111,7 +111,7 @@ def one_call(argv, tool, arguments):
             "success_response": bool(success)}
 
 
-def run(grant, confirmation, mcp_argv, output):
+def run(grant, confirmation, mcp_argv, output, *, with_readonly_breadth=False):
     approved = grant_read(grant, confirmation)
     name = approved["child_name"]
     dest = Path(output)
@@ -184,6 +184,29 @@ def run(grant, confirmation, mcp_argv, output):
         identity = created["incarnation"]
         if not identity:
             raise AcceptanceFault("CREATED_CHILD_IDENTITY_UNAVAILABLE")
+        if with_readonly_breadth:
+            # The child has a fresh native UUID/createdAt oracle; unlike an
+            # arbitrary --read-only-target name, this is a verified fixture.
+            # A read-only exception is evidence, not permission to skip cleanup.
+            from .installed import inspect_mcp
+            try:
+                report = inspect_mcp(mcp_argv, name, verified_target={
+                    "logical": name, "provider_uuid": identity["uuid"],
+                    "created_at": identity["created_at"], "test_owned": True})
+                unique_file(dest / "readonly-breadth.json", report)
+            except Exception as exc:
+                # A read-only probe bug cannot skip the native identity recheck
+                # or leave a confirmed test child behind unnecessarily.
+                # Save only the exception class, never unredacted credentials.
+                unique_file(dest / "readonly-breadth-blocked.json", {
+                    "status": "BLOCKED", "reason": "READONLY_PROBE_EXCEPTION",
+                    "exception_type": type(exc).__name__, "recorded_at": now()})
+            # A competing writer could replace the fixture during the probe.
+            # Never continue into stop/delete against a changed incarnation.
+            after = native_list().get(name + "-container")
+            if after is None or incarnation(after) != identity or (
+                    str(after.get("status", "")).lower() != "running"):
+                raise AcceptanceFault("TEST_FIXTURE_IDENTITY_CHANGED_NO_MORE_WRITES")
         append(2, "stop_container", {"username": name}, "stopped", original_id=identity)
         append(3, "start_container", {"username": name}, "running", original_id=identity)
         append(4, "delete_container", {"username": name}, "absent", original_id=identity)
@@ -200,6 +223,8 @@ def run(grant, confirmation, mcp_argv, output):
               "limited_coverage": "CREATE_STOP_START_DELETE",
               "not_tested": ["resize", "guest exec", "cross-interface auth"],
               "oracle": "NATIVE_INCUS_EXACT_INCARNATION",
+              "readonly_breadth": ("PARTIAL_PRIVATE_EVIDENCE_NOT_ACCEPTANCE"
+                                   if with_readonly_breadth else "NOT_REQUESTED"),
               "outer_uuid": approved["outer_uuid"],
               "child_name": name, "completed_at": now()}
     unique_file(dest / "result.json", result)
@@ -212,10 +237,13 @@ def main(argv=None):
     p.add_argument("--confirm", required=True)
     p.add_argument("--mcp-argv-json", required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--with-readonly-breadth", action="store_true",
+                   help="Only with the verified disposable nested child; no extra writes")
     args = p.parse_args(argv)
     try:
         result = run(args.grant, args.confirm,
-                     argv_file(args.mcp_argv_json, "mcp"), args.out)
+                     argv_file(args.mcp_argv_json, "mcp"), args.out,
+                     with_readonly_breadth=args.with_readonly_breadth)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (AcceptanceFault, OSError, ValueError, KeyError) as exc:

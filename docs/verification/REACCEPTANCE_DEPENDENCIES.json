@@ -1,33 +1,1532 @@
 {
   "schema_version": 1,
   "status": "machine-selection-input-not-an-acceptance-record",
+  "mapping_policy": "explicit action-to-feature associations only; unmatched actions remain UNMAPPED (not PASS); most specific pattern wins",
   "rules": [
-    {"action": "host_cli:*", "features": ["X01"], "source_globs": ["bwmini/host_cli.py", "bwmini/online.py", "bwmini/upstream_version.py"]},
-    {"action": "app_cli:*", "features": ["F04"], "source_globs": ["bwmini/__main__.py"]},
-    {"action": "web_api:*", "features": ["F18", "F19"], "source_globs": ["bwmini/web.py", "web/src/*"]},
-    {"action": "remote_api:*", "features": ["F22", "F23"], "source_globs": ["bwmini/remote_mcp.py", "bwmini/remote_auth.py"]},
-    {"action": "stdio_mcp:*", "features": ["F05"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/mcp_compat.py", "bwmini/provider.py", "bwmini/provider_rest.py"]},
-    {"action": "host_cli:selftest", "features": ["F10", "X02"], "source_globs": ["bwmini/selftest.py", "bwmini/host_cli.py"]},
-    {"action": "app_cli:selftest-*", "features": ["X02"], "source_globs": ["bwmini/selftest.py", "bwmini/__main__.py"]},
-    {"action": "stdio_mcp:compose_*", "features": ["X06"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/provider.py", "docs/verification/UPSTREAM_CONTAINARIUM_REACCEPTANCE_GUIDE.md"]},
-    {"action": "stdio_mcp:*container*", "features": ["F07", "F08", "F10"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/box_actions.py", "bwmini/nesting.py"]},
-    {"action": "stdio_mcp:*task*", "features": ["F29", "F30"], "source_globs": ["bwmini/gateway_tasks.py", "bwmini/coordination_runtime.py"]},
-    {"action": "stdio_mcp:*diagnos*", "features": ["F36", "F37"], "source_globs": ["bwmini/gate_diagnostics.py", "bwmini/diagnostic_probe.py"]},
-    {"action": "stdio_mcp:*backup*", "features": ["F39"], "source_globs": ["bwmini/restore_guard.py", "bwmini/mcp_gate.py"]},
-    {"action": "stdio_mcp:*restore*", "features": ["F39"], "source_globs": ["bwmini/restore_guard.py"]},
-    {"action": "host_cli:upstream", "features": ["F31"], "source_globs": ["bwmini/upstream_version.py"]},
-    {"action": "host_cli:http", "features": ["F22", "F23"], "source_globs": ["bwmini/http_manage.py"]},
-    {"action": "host_cli:task", "features": ["F29"], "source_globs": ["bwmini/host_cli.py", "bwmini/gateway_tasks.py"]},
-    {"action": "host_cli:job", "features": ["X09"], "source_globs": ["bwmini/jobs.py", "bwmini/host_cli.py"]},
-    {"action": "stdio_mcp:*project*", "features": ["F19", "F20"], "source_globs": ["bwmini/gate_diagnostics.py", "bwmini/web.py"]},
-    {"action": "stdio_mcp:*port*", "features": ["F12", "F13"], "source_globs": ["bwmini/mcp_gate.py", "bwmini/access_provider.py"]},
-    {"action": "stdio_mcp:*sleep*", "features": ["F17"], "source_globs": ["bwmini/auto_sleep.py"]},
-    {"action": "stdio_mcp:*metrics*", "features": ["F16"], "source_globs": ["bwmini/box_reads.py"]},
-    {"action": "stdio_mcp:*logs*", "features": ["F37", "X09"], "source_globs": ["bwmini/box_debug.py", "bwmini/box_reads.py"]},
-    {"action": "stdio_mcp:*agent*", "features": ["X07"], "source_globs": ["bwmini/mcp_gate.py"]},
-    {"action": "stdio_mcp:*run*", "features": ["X09"], "source_globs": ["bwmini/gateway_tasks.py"]},
-    {"action": "stdio_mcp:*security*", "features": ["X08"], "source_globs": ["bwmini/mcp_gate.py"]},
-    {"action": "stdio_mcp:*gpu*", "features": ["X10"], "source_globs": ["bwmini/provider.py"]}
+    {
+      "action": "host_cli:*",
+      "features": [
+        "X01"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli_leaves:*",
+      "features": [
+        "X01"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:version",
+      "features": [
+        "F01"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:status",
+      "features": [
+        "F04"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:doctor",
+      "features": [
+        "F04"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:provenance",
+      "features": [
+        "F04"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:report",
+      "features": [
+        "F36"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:setup",
+      "features": [
+        "F27"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:box",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:client",
+      "features": [
+        "F27"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:upstream",
+      "features": [
+        "F05"
+      ],
+      "source_globs": [
+        "bwmini/upstream_version.py",
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:http",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/http_manage.py",
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:task",
+      "features": [
+        "F29"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:job",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli:selftest",
+      "features": [
+        "X02"
+      ],
+      "source_globs": [
+        "bwmini/selftest.py",
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli_leaves:box inspect",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "host_cli_leaves:box diagnose",
+      "features": [
+        "F36"
+      ],
+      "source_globs": [
+        "bwmini/host_cli.py"
+      ]
+    },
+    {
+      "action": "app_cli:capabilities",
+      "features": [
+        "F04"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:init-admin",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:reset-admin",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:serve",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:remote-mcp",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:remote-https",
+      "features": [
+        "F26"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:remote-caddyfile",
+      "features": [
+        "F26"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:worker",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:projects",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:receipts",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:history",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:reconcile",
+      "features": [
+        "F32"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environments",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environment-plan",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environment-confirm",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environment-receipts",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environment-receipt",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:environment-observe",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:model-wizard",
+      "features": [
+        "F22"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:model-select",
+      "features": [
+        "F22"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:model-confirm",
+      "features": [
+        "F22"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:model-handoff",
+      "features": [
+        "F22"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-memberships",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-network-plan",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-port-plan",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-confirm",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-receipts",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-receipt",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:access-observe",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:tenant-label",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:diagnose",
+      "features": [
+        "F38"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:job-run",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:job-receipts",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:selftest-plan",
+      "features": [
+        "X02"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "app_cli:selftest-run",
+      "features": [
+        "X02"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py"
+      ]
+    },
+    {
+      "action": "web_api:* /",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /assets/*",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/client-profile",
+      "features": [
+        "F27"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/model-wizard*",
+      "features": [
+        "F22"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/login",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/session",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/logout",
+      "features": [
+        "F18"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/boxes/*/environment*",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/environment-captures*",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/boxes/*/debug-summary",
+      "features": [
+        "X03"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/remote-mcp*",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/mcp-capabilities",
+      "features": [
+        "F24",
+        "F28"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/boxes/*/agent-box*",
+      "features": [
+        "F12"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/box-action-plans*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/box-action-receipts*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/resources",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/projects*",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/plans*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/operations*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/operation-history",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/environments",
+      "features": [
+        "F20"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/environment-plans*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/environment-operations*",
+      "features": [
+        "F19"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/access",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/access/*",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/access-plans*",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/access-operations*",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/tenants*",
+      "features": [
+        "F23"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "web_api:* /api/graphs*",
+      "features": [
+        "F21"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "web/src/*"
+      ]
+    },
+    {
+      "action": "remote_api:* /",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /.well-known/*",
+      "features": [
+        "F25",
+        "F26"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /register",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /authorize",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /token",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /mcp",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "remote_api:* /mcp/link/*",
+      "features": [
+        "F25"
+      ],
+      "source_globs": [
+        "bwmini/remote_mcp.py",
+        "bwmini/remote_auth.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:add_collaborator",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:add_passthrough_route",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:backend_validate_gpu",
+      "features": [
+        "X10"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_box_list_directory",
+      "features": [
+        "F12"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_box_read_file",
+      "features": [
+        "F12"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_diagnose",
+      "features": [
+        "F36"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_diagnostic_run",
+      "features": [
+        "F38"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_info",
+      "features": [
+        "F24"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_nesting",
+      "features": [
+        "F13"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_project_diagnose",
+      "features": [
+        "F37"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_task_get",
+      "features": [
+        "F29"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_task_list",
+      "features": [
+        "F29"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_task_submit",
+      "features": [
+        "F29",
+        "F30"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:check_for_updates",
+      "features": [
+        "F05"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:code_logs",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:code_pending",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:code_runs",
+      "features": [
+        "X09"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:compose_disable",
+      "features": [
+        "X06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:compose_discover",
+      "features": [
+        "X06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:compose_enable",
+      "features": [
+        "X06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:compose_status",
+      "features": [
+        "X06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:connect",
+      "features": [
+        "F11"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:create_container",
+      "features": [
+        "F07",
+        "F34"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:debug_container",
+      "features": [
+        "X03"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:delete_container",
+      "features": [
+        "F07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:delete_passthrough_route",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:delete_route",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:deploy_recipe",
+      "features": [
+        "X10"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:expose_port",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_backend",
+      "features": [
+        "X10"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_container",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_metrics",
+      "features": [
+        "F17"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_metrics_export",
+      "features": [
+        "F17"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_network_policy",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_system_info",
+      "features": [
+        "F05"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:get_upgrade_status",
+      "features": [
+        "F05"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:guardrail_policy_get",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_backends",
+      "features": [
+        "X10"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_bad_destinations",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_collaborators",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_containers",
+      "features": [
+        "F06"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_miner_signatures",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_network_policies",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_passthrough_routes",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_recipes",
+      "features": [
+        "X10"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_routes",
+      "features": [
+        "F15"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_runners",
+      "features": [
+        "X07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:list_security_sentry_findings",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:move_container",
+      "features": [
+        "F07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:network_guard_status",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:network_tenant_capabilities",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:patch_tenant_access",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:provision_runners",
+      "features": [
+        "X07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:remove_collaborator",
+      "features": [
+        "F14"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:remove_runner",
+      "features": [
+        "X07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:resize_container",
+      "features": [
+        "F08",
+        "F09"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:security_findings",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:security_process_policy_get",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:security_sentry_status",
+      "features": [
+        "X08"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:set_metrics_export",
+      "features": [
+        "F17"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:set_ssh_keys",
+      "features": [
+        "F11"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:start_container",
+      "features": [
+        "F07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:stop_container",
+      "features": [
+        "F07"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:sync_ssh_config",
+      "features": [
+        "F11"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:terminate_user_sessions",
+      "features": [
+        "F11"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:toggle_auto_sleep",
+      "features": [
+        "F16"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:toggle_monitoring",
+      "features": [
+        "F17"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:upgrade_backend",
+      "features": [
+        "F05"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/provider.py"
+      ]
+    }
   ]
 }
-

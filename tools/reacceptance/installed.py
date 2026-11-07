@@ -47,17 +47,20 @@ def positive_arguments(schema, owned):
         return None, "INVALID_RUNTIME_SCHEMA"
     args = {}
     for prop in required:
-        if prop == "username" and owned:
-            args[prop] = owned
-        elif prop == "box" and owned:
+        if prop in ("username", "box", "logical") and owned:
             args[prop] = owned
         else:
             return None, "REQUIRES_REVIEWED_SAFE_INPUT_" + str(prop)
-    # A target can be supplied only for reviewed read-only endpoints.
+    # An optional target property is still a prerequisite for a meaningful
+    # positive test; an empty request otherwise produces a misleading FAIL.
+    if not owned and any(k in props for k in ("username", "box", "logical")):
+        return None, "VERIFIED_TEST_OWNED_TARGET_REQUIRED"
     if owned and "username" in props and "username" not in args:
         args["username"] = owned
     if owned and "box" in props and "box" not in args:
         args["box"] = owned
+    if owned and "logical" in props and "logical" not in args:
+        args["logical"] = owned
     return args, None
 
 
@@ -72,7 +75,21 @@ def result_kind(msg):
     return "INVALID_RPC_RESPONSE"
 
 
-def inspect_mcp(argv, owned=None):
+def inspect_mcp(argv, owned=None, *, verified_target=None):
+    """Do not equate a caller-supplied name with a real test-owned target.
+
+    The optional identity is supplied by the isolated lifecycle executor only
+    after independent native Incus readback, not by untrusted MCP responses.
+    """
+    trusted = (isinstance(verified_target, dict) and owned is not None
+               and verified_target.get("test_owned") is True
+               and verified_target.get("logical") == owned
+               and isinstance(verified_target.get("provider_uuid"), str)
+               and bool(verified_target["provider_uuid"])
+               and isinstance(verified_target.get("created_at"), str)
+               and bool(verified_target["created_at"]))
+    if verified_target is not None and not trusted:
+        raise AcceptanceFault("TEST_TARGET_IDENTITY_NOT_VERIFIED")
     if not argv:
         return {"catalogue": "NOT_CONFIGURED", "rows": {}, "evidence": {}}
     session = mcp_session(argv, [{
@@ -98,7 +115,12 @@ def inspect_mcp(argv, owned=None):
                          "MUTATING_OR_UNREVIEWED_TOOL_REQUIRES_SCENARIO_AND_GRANT"}
             continue
         schema = t.get("inputSchema") or {}
-        args, blocker = positive_arguments(schema, owned)
+        args, blocker = positive_arguments(schema, owned if trusted else None)
+        props = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        target_fields = isinstance(props, dict) and any(
+            key in props for key in ("username", "box", "logical"))
+        if target_fields and owned and not trusted:
+            blocker = "INDEPENDENT_TEST_TARGET_ORACLE_REQUIRED"
         # The MCP schema for task_get allows either request_key or task_id
         # but may advertise no top-level "required". Never submit empty
         # arguments as though they were a valid positive workload.
@@ -116,9 +138,10 @@ def inspect_mcp(argv, owned=None):
         invalid = probe_call(argv, name, {"__racc_unknown_field__": "invalid"})
         evidence[key] = {"positive": pos, "invalid": invalid}
         outcome = result_kind(pos["response"])
-        rows[key] = {"status": "PARTIAL" if outcome == "RPC_RESULT" else "FAIL",
+        rows[key] = {"status": "PARTIAL" if outcome == "RPC_RESULT" else "BLOCKED",
                      "reason": ("READONLY_POSITIVE_AND_INVALID_NO_INDEPENDENT_ORACLE"
-                                if outcome == "RPC_RESULT" else "READONLY_POSITIVE_FAILED"),
+                                if outcome == "RPC_RESULT" else
+                                "SUSPECT_READONLY_ERROR_NEEDS_PRECONDITION_TRIAGE"),
                      "positive_kind": outcome,
                      "invalid_kind": result_kind(invalid["response"])}
     return {"catalogue": "DISCOVERED", "rows": rows, "evidence": evidence,
@@ -132,7 +155,7 @@ def inspect_cli(argv):
     tree = help_tree(argv)
     rows, evidence = {}, {}
     for leaf, help_result in tree.items():
-        if leaf == "<root>":
+        if leaf == "<root>" or help_result.get("confirmed") is False:
             continue
         key = "installed_cli_leaf:" + leaf
         rows[key] = {"status": "PARTIAL", "reason": "HELP_ONLY_NO_POSITIVE"}
