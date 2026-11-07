@@ -140,9 +140,10 @@ def inspect_mcp(argv, owned=None, *, verified_target=None):
         invalid = probe_call(argv, name, {"__racc_unknown_field__": "invalid"})
         evidence[key] = {"positive": pos, "invalid": invalid}
         outcome = result_kind(pos["response"])
-        rows[key] = {"status": "PARTIAL" if outcome == "RPC_RESULT" else "FAIL",
+        rows[key] = {"status": "PARTIAL" if outcome == "RPC_RESULT" else "BLOCKED",
                      "reason": ("READONLY_POSITIVE_AND_INVALID_NO_INDEPENDENT_ORACLE"
-                                if outcome == "RPC_RESULT" else "READONLY_POSITIVE_FAILED"),
+                                if outcome == "RPC_RESULT" else
+                                "SUSPECT_READONLY_ERROR_NEEDS_PRECONDITION_TRIAGE"),
                      "positive_kind": outcome,
                      "invalid_kind": result_kind(invalid["response"])}
     return {"catalogue": "DISCOVERED", "rows": rows, "evidence": evidence,
