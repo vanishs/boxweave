@@ -100,7 +100,7 @@ class CanonicalProviderErrorTests(unittest.TestCase):
             }).encode()),
             ("GET", route, 500, body.replace(b"Instance not found", b"not found")),
             ("GET", route, 500, body[:-1] + b',"code":500}'),
-            ("GET", route, 500, body + b" "),
+            ("GET", route, 500, body + b"x"),
             ("GET", route, 500, body + b"x" * 4097),
         ]
         for method, path, http, raw in bad:
