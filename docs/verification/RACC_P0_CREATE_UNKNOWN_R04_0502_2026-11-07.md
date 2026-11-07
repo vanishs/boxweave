@@ -18,6 +18,8 @@ The entrypoint tested was **external authenticated HTTP MCP**; that does *not* e
 
 **Strongly suggested route:** HTTP MCP ingress → legacy forwarded upstream MCP, **not necessarily** Gateway REST, on this updated host. The actual root-owned Gateway policy and request-level transport trace were not independently inspected. Consequently this live test **does not prove the new centralized REST adapter failed**, nor accept the untested opt-in Gateway REST write path. It does demonstrate #92/#88's real user-facing create/UNKNOWN symptom on the currently available MCP surface. Any next Agent testing the v0.50.2 REST adapter must explicitly verify the separate Gateway REST opt-in and compare exact routing before claiming REST installed acceptance.
 
+**Source-backed nesting mechanism (not a live trace proof):** In v0.50.2 `mcp_gate.py`'s **legacy forwarded create** path, the Gateway removes `enable_nesting` before forwarding to Containarium, then invokes `nesting_plan` and `nesting_invoke(action=apply)` **only after a successful upstream create response**. A timeout/unknown result before that branch can therefore leave a real new Box at `nesting=false` even after the guest becomes ready. This precisely fits the observed symptoms, but the runtime outbound selection and individual native write/ack timing remain unverified. Upstream v0.128.0 `ContainerServer.CreateContainer` separately documents `req.Async` as returning a `CREATING` response before its background work; do not claim this live 130-second MCP result proves a REST async-create regression.
+
 ## P0 issue #92 — created Box with partial postconditions
 
 | Assertion | Observed v0.50.2 black-box evidence | Verdict |
