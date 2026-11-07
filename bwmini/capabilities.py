@@ -8,15 +8,14 @@ import hashlib
 import json
 import re
 from .domain import Fault
+from . import rest_routes
 
 # Tools invoked by the current application adapters or deployment checks.
 # Reviewed at the source baseline; this is not a permission/allowlist.
 APP_TOOLS = frozenset({
-    "get_container", "list_containers", "connect", "create_container",
-    "start_container", "stop_container", "delete_container", "resize_container",
-    "network_tenant_capabilities", "network_guard_status", "get_network_policy",
-    "patch_tenant_access", "list_passthrough_routes", "add_passthrough_route",
-    "delete_passthrough_route", "get_system_info",
+    "connect", "network_tenant_capabilities", "network_guard_status",
+    "get_network_policy", "patch_tenant_access", "list_passthrough_routes",
+    "add_passthrough_route", "delete_passthrough_route", "get_system_info",
 })
 
 # Advisory only, never used to authorize calls. Keep separate from enforcement.
@@ -49,7 +48,8 @@ def classify(catalogue):
         entries.append({
             "name": name,
             "source": "platform",
-            "app_mapping": "typed_adapter" if name in APP_TOOLS else "not_integrated",
+            "app_mapping": ("migrated_rest_not_mcp" if name in rest_routes.MIGRATED_TOOLS
+                            else "typed_adapter" if name in APP_TOOLS else "not_integrated"),
             "schema": "object_advertised" if compatible else "unverified",
             "schema_sha256": digest,
             "risk_hint": "sensitive_review" if name in SENSITIVE_TOOLS else "unclassified",
