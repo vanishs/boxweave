@@ -52,7 +52,7 @@ class GatewayRESTTests(unittest.TestCase):
         args={"username":"wip-unique","cpu":"1"}
         def add_key(x):
             return {**x, "ssh_keys":["ssh-ed25519 AAA"]}
-        with patch("bwmini.gateway_create.rest_wire.Client", Rest), \
+        with patch("bwmini.rest_wire.Client", Rest), \
              patch("bwmini.coordination_bridge.published_scope",
                    return_value={"provider":"containarium","backend":"dev",
                                  "project":"default"}), \
@@ -82,7 +82,7 @@ class GatewayRESTTests(unittest.TestCase):
             def unknown(self,*a):pass
         args={"username":"wip-unique"}
         key=lambda x: {**x,"ssh_keys":["ssh-ed25519 AAA"]}
-        with patch("bwmini.gateway_create.rest_wire.Client",Broken), \
+        with patch("bwmini.rest_wire.Client",Broken), \
              patch("bwmini.coordination_bridge.published_scope",
                    return_value={"provider":"containarium","backend":"dev",
                                  "project":"default"}), \
