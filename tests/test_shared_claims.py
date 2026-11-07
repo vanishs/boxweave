@@ -126,7 +126,8 @@ class SharedClaimsTests(unittest.TestCase):
             if path in (scope_file,scope_file.parent):
                 from types import SimpleNamespace
                 return SimpleNamespace(st_uid=0,st_mode=stat.st_mode,
-                                       st_size=stat.st_size,st_nlink=stat.st_nlink)
+                                       st_size=stat.st_size,st_nlink=stat.st_nlink,
+                                       st_dev=stat.st_dev,st_ino=stat.st_ino)
             return stat
         scope_file.parent.chmod(0o755)
         scope_file.chmod(0o644)
