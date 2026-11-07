@@ -53,11 +53,16 @@ def positive_arguments(schema, owned):
             args[prop] = owned
         else:
             return None, "REQUIRES_REVIEWED_SAFE_INPUT_" + str(prop)
-    # A target can be supplied only for reviewed read-only endpoints.
+    # An optional target property is still a prerequisite for a meaningful
+    # positive test; an empty request otherwise produces a misleading FAIL.
+    if not owned and any(k in props for k in ("username", "box", "logical")):
+        return None, "VERIFIED_TEST_OWNED_TARGET_REQUIRED"
     if owned and "username" in props and "username" not in args:
         args["username"] = owned
     if owned and "box" in props and "box" not in args:
         args["box"] = owned
+    if owned and "logical" in props and "logical" not in args:
+        args["logical"] = owned
     return args, None
 
 
