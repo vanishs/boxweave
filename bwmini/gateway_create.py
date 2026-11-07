@@ -133,6 +133,28 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
             "create_container", key_injected, async_create=True)
     except rest_routes.RouteFault as exc:
         raise GatewayRESTFault(str(exc)) from None
+    # For a second invocation, consult the original durable receipt BEFORE
+    # observing current Provider state. A newly created Box must not mask the
+    # idempotent status of the original single dispatch.
+    ledger = journal(configuration)
+    digest = validated_request(original)[3]
+    try:
+        prior = ledger.get(username=body["username"])
+    except CreateFault as exc:
+        if exc.code != "CREATE_TASK_NOT_FOUND":
+            raise
+        prior = None
+    if prior is not None:
+        with ledger.store.db() as db:
+            saved = db.execute(
+                "SELECT payload_sha256 FROM remote_create_tasks WHERE task_id=?",
+                (prior["task_id"],)).fetchone()
+        if saved is None or saved["payload_sha256"] != digest:
+            raise GatewayRESTFault("CREATE_NAME_CONFLICT")
+        if (not isinstance(rpc_id,str) or
+                rpc_id != "bw-create-"+prior["task_id"] or
+                prior["code"] != "REST_GATE_PENDING"):
+            return prior
     # Confirm the exact target name is not already occupied before recording
     # the non-replayable write intent. A failed/partial read is NEVER absence.
     rest = rest_wire.Client(
