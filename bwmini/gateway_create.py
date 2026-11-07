@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+from urllib.parse import quote
 
 try:
     from .remote_create import CreateJournal, CreateFault, validated_request
@@ -48,7 +49,7 @@ class AppStore:
         checked_app_store(str(self.path))
         try:
             db = sqlite3.connect(
-                "file:" + self.path.as_posix() + "?mode=rw",
+                "file:" + quote(str(self.path), safe="/") + "?mode=rw",
                 uri=True, timeout=3)
             db.row_factory = sqlite3.Row
             db.execute("PRAGMA foreign_keys=ON")
