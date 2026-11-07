@@ -127,7 +127,7 @@ def breadth(root, host_command=None, mcp_command=None, *, http=None):
     if host_command:
         cli = help_tree(host_command)
         for name, result in cli.items():
-            if name == "<root>":
+            if name == "<root>" or result.get("confirmed") is False:
                 continue
             key = "installed_cli_leaf:" + name
             rows[key] = {"status": "PARTIAL", "reason": "HELP_ONLY_NOT_A_FUNCTIONAL_TEST",
