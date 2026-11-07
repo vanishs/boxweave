@@ -201,6 +201,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_remote_create.py`
 - `tests/test_remote_mcp.py`
 - `tests/test_rest_mutations.py`
+- `tests/test_rest_task_status.py`
 - `tests/test_restore_guard.py`
 - `tests/test_selftest.py`
 - `tests/test_setup_guide.py`
