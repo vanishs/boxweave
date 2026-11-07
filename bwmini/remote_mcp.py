@@ -425,7 +425,25 @@ I authorize this client to use BoxWeave MCP tools.</label>
             result = reply.get("result") if isinstance(reply, dict) else None
             ok = (isinstance(result, dict) and result.get("isError") is not True
                   and "error" not in reply and isinstance(result.get("content"), list))
-            journal.complete(task_id, bool(ok))
+            if ok:
+                # An opt-in unified REST Gateway can acknowledge asynchronous
+                # CREATING. Do not promote that to succeeded or guest-ready.
+                content = result.get("content", [])
+                accepted = None
+                if len(content) == 1 and isinstance(content[0], dict) and isinstance(
+                        content[0].get("text"), str):
+                    try:
+                        accepted = json.loads(content[0]["text"])
+                    except (ValueError, TypeError):
+                        pass
+                if (isinstance(accepted, dict)
+                        and accepted.get("state") == "accepted"
+                        and accepted.get("task_id") == task_id):
+                    journal.accept(task_id)
+                else:
+                    journal.complete(task_id, True)
+            else:
+                journal.complete(task_id, False)
         except Exception:
             # The original write may still finish upstream. Never retry it.
             try:
