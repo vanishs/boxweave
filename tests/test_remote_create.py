@@ -211,8 +211,12 @@ class HTTPCreateTests(unittest.TestCase):
         self.assertEqual(len(self.upstream), 1)
 
     def test_policy_refusal_is_before_persistent_intent(self):
-        self.allow_create = False
-        fail = self.call("create_container", {"username": "blocked"})
+        from unittest.mock import patch
+        # The root allowlist is authoritative; migrated create must not
+        # consult upstream MCP tools/list for this security decision.
+        with patch("bwmini.mcp_gate.tool_policy",
+                   return_value=frozenset({"get_container"})):
+            fail = self.call("create_container", {"username": "blocked"})
         self.assertEqual(self.result(fail)["code"], "GATE_TOOL_NOT_ALLOWED")
         self.assertEqual(len(self.upstream), 0)
         with self.assertRaisesRegex(CreateFault, "CREATE_TASK_NOT_FOUND"):
