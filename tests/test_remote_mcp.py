@@ -132,6 +132,16 @@ class RemoteTests(unittest.TestCase):
         self.assertEqual(self.call(token, payload=malformed).status_code, 400)
         self.assertEqual(self.calls, [no_params])
 
+    def test_required_rpc_params_missing_is_client_error(self):
+        token = self.auth.issue("api", "missing required params")
+        for method in ("initialize", "tools/call"):
+            request = {"jsonrpc": "2.0", "id": 92, "method": method}
+            with self.subTest(method=method):
+                reply = self.call(token, payload=request)
+                self.assertEqual(reply.status_code, 400)
+                self.assertEqual(reply.json["error"], "invalid_json_rpc")
+        self.assertEqual(self.calls, [])
+
     def test_bad_headers_origin_and_version_fail_before_dispatch(self):
         token = self.auth.issue("api", "fixture")
         self.assertEqual(self.call(token, headers={"Origin": "https://evil.test"}).status_code, 403)
