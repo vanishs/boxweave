@@ -233,10 +233,13 @@ def main(argv=None):
     p.add_argument("--confirm", required=True)
     p.add_argument("--mcp-argv-json", required=True)
     p.add_argument("--out", required=True)
+    p.add_argument("--with-readonly-breadth", action="store_true",
+                   help="Only with the verified disposable nested child; no extra writes")
     args = p.parse_args(argv)
     try:
         result = run(args.grant, args.confirm,
-                     argv_file(args.mcp_argv_json, "mcp"), args.out)
+                     argv_file(args.mcp_argv_json, "mcp"), args.out,
+                     with_readonly_breadth=args.with_readonly_breadth)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (AcceptanceFault, OSError, ValueError, KeyError) as exc:
