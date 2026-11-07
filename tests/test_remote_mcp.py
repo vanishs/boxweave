@@ -56,7 +56,7 @@ class RemoteTests(unittest.TestCase):
 
     def test_schema_migration_to_v12(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 14)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 15)
         self.assertIsNotNone(Store(self.store.path))
 
     def test_default_loopback_discovery_and_no_anonymous_access(self):

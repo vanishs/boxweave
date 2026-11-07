@@ -21,7 +21,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action",choices=["capabilities","init-admin","reset-admin","serve","remote-mcp","remote-https","remote-caddyfile","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
+    p.add_argument("action",choices=["capabilities","init-admin","reset-admin","serve","remote-mcp","remote-https","remote-caddyfile","worker","projects","receipts","history","reconcile","environments","environment-plan","environment-confirm","environment-receipts","environment-receipt","environment-observe","provider-rest-receipt","model-wizard","model-select","model-confirm","model-handoff","access","access-memberships","access-network-plan","access-port-plan","access-confirm","access-receipts","access-receipt","access-observe","tenant-label","diagnose","job-run","job-receipts","selftest-plan","selftest-run"])
     p.add_argument("--config",required=True)
     p.add_argument("--once",action="store_true")
     p.add_argument("--limit", type=int, default=20)
@@ -84,7 +84,7 @@ def main():
         p.error("--environment-action is only supported for environment-plan")
     if a.plan is not None and a.action not in ("environment-confirm","selftest-run"):
         p.error("--plan is only supported for environment-confirm and selftest-run")
-    if (a.action in ("reconcile","environment-receipt","environment-observe")) != (a.operation is not None):
+    if (a.action in ("reconcile","environment-receipt","environment-observe","provider-rest-receipt")) != (a.operation is not None):
         p.error("reconcile requires --operation; other actions do not accept it")
     if a.action != "history" and (a.cursor is not None or a.limit != 20):
         p.error("--limit and --cursor are supported only for history")
@@ -95,6 +95,13 @@ def main():
             provider=Provider(c) if c.get("mode")=="mcp" else Fixture(Target(**c["target"])) if c.get("mode")=="fixture" else None
             if provider is None:raise Fault("EXPLICIT_MODE_REQUIRED",422)
             print(json.dumps(snapshot(provider),indent=2,sort_keys=True))
+            return 0
+        if a.action=="provider-rest-receipt":
+            if not isinstance(a.operation, str):
+                raise Fault("REST_TASK_SELECTOR_INVALID", 422)
+            _,service=load(a.config)
+            print(json.dumps(service.provider_rest_receipt(a.operation),
+                             sort_keys=True,indent=2))
             return 0
         if a.action=="diagnose":
             c=read_config(a.config)

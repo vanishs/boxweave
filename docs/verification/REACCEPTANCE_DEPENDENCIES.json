@@ -1527,6 +1527,56 @@
         "bwmini/mcp_gate.py",
         "bwmini/provider.py"
       ]
+    },
+    {
+      "action": "app_cli:provider-rest-receipt",
+      "features": [
+        "F19",
+        "F34"
+      ],
+      "source_globs": [
+        "bwmini/__main__.py",
+        "bwmini/service.py",
+        "bwmini/remote_create.py",
+        "bwmini/rest_mutations.py"
+      ]
+    },
+    {
+      "action": "web_api:GET /api/provider-rest-tasks/*",
+      "features": [
+        "F19",
+        "F34"
+      ],
+      "source_globs": [
+        "bwmini/web.py",
+        "bwmini/service.py",
+        "bwmini/remote_create.py",
+        "bwmini/rest_mutations.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_create_status",
+      "features": [
+        "F07",
+        "F34"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/remote_create.py",
+        "bwmini/gateway_create.py"
+      ]
+    },
+    {
+      "action": "stdio_mcp:boxweave_rest_status",
+      "features": [
+        "F19",
+        "F30"
+      ],
+      "source_globs": [
+        "bwmini/mcp_gate.py",
+        "bwmini/rest_mutations.py",
+        "bwmini/coordination_bridge.py"
+      ]
     }
   ]
 }

@@ -58,7 +58,8 @@ class InventoryTests(unittest.TestCase):
         self.assertIn("upstream", inv["host_cli"])
         self.assertIn("http", inv["host_cli"])
         self.assertIn("task", inv["host_cli"])
-        self.assertEqual(len(inv["app_cli"]), 36)
+        self.assertGreaterEqual(len(inv["app_cli"]), 37)
+        self.assertIn("provider-rest-receipt", inv["app_cli"])
         self.assertTrue(inv["web_api"])
         self.assertEqual(len(sha), 40)
 

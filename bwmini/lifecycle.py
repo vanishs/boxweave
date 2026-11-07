@@ -240,7 +240,8 @@ class Lifecycle:
                       result.get("outcome")=="observed_desired_state" and
                       (job["action"]!="resize" or result.get("verification")=="observed") and
                       not (job["action"]=="create" and
-                           "_nesting" in json.loads(job["spec"])))
+                           "_nesting" in json.loads(job["spec"]) and
+                           result.get("nesting_configured") is not True))
             try:
                 if verified:
                     claims.observed_terminal(job["id"],"environment_"+job["id"])
@@ -275,6 +276,11 @@ class Lifecycle:
         if job["state"]=="observing" and (self.clock()<job["created"] or self.clock()>=job["deadline"]):
             self.save(job,"unknown","deadline","DEADLINE_EXCEEDED")
             return self.receipt(ident,actor)
+        # A recorded post-create nesting write may have reached native Incus.
+        # Recovery can only observe it. Never perform the same write again.
+        if job["state"] == "observing" and job["phase"] == "nesting_apply_intent":
+            self.save(job, "unknown", "nesting_outcome_unknown", "NESTING_POSTCREATE_UNKNOWN")
+            return self.receipt(ident, actor)
         target = Target(**json.loads(job["target"])) if job["target"] else None
         try:
             from .provider_rest import trace_operation
@@ -330,10 +336,50 @@ class Lifecycle:
                     if remaining<=0:
                         raise Fault("DEADLINE_EXCEEDED")
                     identity=self.provider.lifecycle_identity(target,remaining)
+                    selected_spec=json.loads(job["spec"])
+                    nesting_configured=False
+                    if (job["action"]=="create" and "_nesting" in selected_spec
+                            and getattr(self.provider, "rest", None) is not None):
+                        from . import nesting
+                        requested=selected_spec["_nesting"]
+                        plan=nesting.invoke({"action":"plan","logical":job["logical"],
+                                            "nesting":requested})
+                        original=plan["target"]
+                        if (original["name"] != target.instance or
+                                original["created"] != target.created or
+                                original["logical"] != job["logical"]):
+                            raise Fault("TARGET_CHANGED")
+                        if original["nesting"] != requested:
+                            # Durable second-stage intent before a privileged write.
+                            # Crash or error MUST freeze; no retry via polling.
+                            self.save(job,"observing","nesting_apply_intent",
+                                      "NESTING_INTENT_RECORDED",target=target)
+                            try:
+                                applied=nesting.invoke({
+                                    "action":"apply","logical":job["logical"],
+                                    "nesting":requested,"expected":plan["expected"],
+                                    "confirm":original["name"]})
+                            except Exception:
+                                self.save(job,"unknown","nesting_outcome_unknown",
+                                          "NESTING_POSTCREATE_UNKNOWN",target=target)
+                                return self.receipt(ident,actor)
+                            if (applied.get("state")!="configured" or
+                                    applied.get("target",{}).get("uuid")!=original["uuid"] or
+                                    applied.get("target",{}).get("created")!=target.created or
+                                    applied.get("target",{}).get("nesting")!=requested):
+                                self.save(job,"unknown","nesting_outcome_unknown",
+                                          "NESTING_POSTCREATE_UNKNOWN",target=target)
+                                return self.receipt(ident,actor)
+                        nesting_configured=True
                     self.save(job,"succeeded","connection_ready","OK",target=target,result={
                         "resource_state":value["state"],"readiness":"identity_verified",
-                        "identity":identity,"network_tenant":value.get("network_tenant"),"account_user":target.user,"observed_podman":value.get("podman_enabled"),
-                        "requested_podman":False,"requested_nesting":json.loads(job["spec"]).get("_nesting"),"effective_nested_execution":"not_verified","nesting_restart_guidance":"Restart this configured box before relying on a changed nesting capability; verify child MCP execution separately." if "_nesting" in json.loads(job["spec"]) else None,"remote_cleanup":"unverified","outcome":"observed_desired_state"})
+                        "identity":identity,"network_tenant":value.get("network_tenant"),
+                        "account_user":target.user,"observed_podman":value.get("podman_enabled"),
+                        "requested_podman":False,"requested_nesting":selected_spec.get("_nesting"),
+                        "nesting_configured":nesting_configured,
+                        "effective_nested_execution":"not_verified",
+                        "nesting_restart_guidance":"Restart this configured box before relying on a changed nesting capability; verify child MCP execution separately." if "_nesting" in selected_spec else None,
+                        "remote_cleanup":"unverified","outcome":"observed_desired_state"})
         except Fault as error:
             if error.code=="STATE_UNAVAILABLE":
                 raise

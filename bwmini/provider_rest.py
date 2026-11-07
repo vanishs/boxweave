@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import diagnostics, resource_size
+from . import diagnostics, resource_size, rest_wire, rest_routes
 from .domain import Fault
 
 _TARGET = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
@@ -121,77 +121,12 @@ class RESTClient:
             operation_id=op_id, elapsed_ms=elapsed)
 
     def request(self, method, path, body=None, timeout=30):
-        if method not in ("GET", "POST", "PUT", "DELETE"):
-            raise Fault("PROVIDER_API_METHOD_DENIED", 422)
-        if (not isinstance(path, str) or not path.startswith("/v1/") or
-                "//" in path or ".." in path or "?" in path or
-                not 1 <= len(path) <= 192):
-            raise Fault("PROVIDER_API_ROUTE_DENIED", 422)
-        if type(timeout) not in (int, float) or not 0 < timeout <= 1800:
-            raise Fault("DEADLINE_EXCEEDED")
-        raw = None
-        if body is not None:
-            raw = json.dumps(body, ensure_ascii=True, separators=(",", ":")).encode()
-            if len(raw) > 65536:
-                raise Fault("PROVIDER_API_REQUEST_TOO_LARGE", 422)
-        # A local credential failure is proven pre-dispatch. Never emit its bytes.
-        credential = self._credential()
-        request = urllib.request.Request(
-            self.url + path, data=raw, method=method,
-            headers={"Authorization": "Bearer " + credential,
-                     "Content-Type": "application/json", "Accept": "application/json"})
-        del credential
-        started = time.monotonic()
-        is_write = method != "GET"
-        code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
+        # Transport and failure taxonomy are shared with the standalone Agent
+        # REST gateway. App Fault remains the existing public error contract.
         try:
-            with self.opener.open(request, timeout=timeout) as response:
-                if not 200 <= response.status < 300:
-                    raise Fault("PROVIDER_API_UNEXPECTED_STATUS")
-                payload = response.read(_RESPONSE_LIMIT + 1)
-                if len(payload) > _RESPONSE_LIMIT:
-                    raise Fault("PROVIDER_API_RESPONSE_TOO_LARGE")
-                if payload.strip():
-                    try:
-                        # Deny duplicate keys in security-critical API structures.
-                        def unique(pairs):
-                            result = {}
-                            for key, value in pairs:
-                                if key in result:
-                                    raise ValueError("duplicate")
-                                result[key] = value
-                            return result
-                        result = json.loads(payload, object_pairs_hook=unique)
-                    except (ValueError, UnicodeError):
-                        raise Fault("PROVIDER_API_RESPONSE_INVALID") from None
-                    if not isinstance(result, dict):
-                        raise Fault("PROVIDER_API_RESPONSE_INVALID")
-                else:
-                    result = {}
-                code = "API_RESPONSE_RECEIVED"
-                return result
-        except urllib.error.HTTPError as error:
-            code = ("API_AUTH_REJECTED" if error.code in (401, 403)
-                    else "API_TARGET_NOT_FOUND" if error.code == 404 and
-                    method == "GET" and re.fullmatch(r"/v1/containers/[a-z][a-z0-9-]{0,62}", path)
-                    else "API_ROUTE_UNSUPPORTED" if error.code == 404
-                    else "API_CONFLICT" if error.code == 409
-                    else "API_RATE_LIMITED" if error.code == 429
-                    else "API_HTTP_REJECTED")
-            # Do not parse/log freeform upstream error bodies or assume a rejected
-            # write had no side effects; Operation Core must classify UNKNOWN.
-            raise Fault(code, 409) from None
-        except (urllib.error.URLError, TimeoutError, OSError):
-            code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
-            raise Fault(code, 409) from None
-        finally:
-            try:
-                self._event(method, path, None, code,
-                            min(3600000, max(0, int((time.monotonic() - started) * 1000))),
-                            is_write)
-            except Exception:
-                # Evidence capture is always secondary to the actual request.
-                pass
+            return rest_wire.request(self, method, path, body, timeout)
+        except rest_wire.WireFault as exc:
+            raise Fault(exc.code, exc.status) from None
 
     def debug_container(self, logical):
         """Single exact-target REST read; preserve bounded upstream shape."""
@@ -228,43 +163,56 @@ class RESTClient:
         return row
 
     def mutate(self, action, logical, spec, timeout):
+        """All app lifecycle mutations use the same exact route contract.
+
+        Create is an asynchronously *accepted* REST write. The lifecycle worker
+        must observe the original guest before reporting completion; a lost
+        REST acknowledgement remains UNKNOWN and is never dispatched twice.
+        """
         logical = checked_logical(logical)
         if action == "create":
-            body = {
+            if "_nesting" in spec and type(spec["_nesting"]) is not bool:
+                raise Fault("NESTING_BOOLEAN_REQUIRED", 422)
+            args = {
                 "username": logical,
-                "resources": {name: spec[name] for name in ("cpu", "memory", "disk")},
-                "image": "images:ubuntu/24.04",
-                "enablePodman": False,
-                "sshKeys": [spec["ssh_public_key"]]}
+                "cpu": spec["cpu"], "memory": spec["memory"], "disk": spec["disk"],
+                "image": "images:ubuntu/24.04", "enable_podman": False,
+                "ssh_keys": [spec["ssh_public_key"]],
+            }
             if spec.get("_network_tenant") is not None:
-                body["networkTenant"] = spec["_network_tenant"]
-            # The upstream MCP adds enable_nesting as an out-of-band
-            # capability: it is deliberately NOT a REST create field.
-            route, method = "/v1/containers", "POST"
-        elif action == "start":
-            route, method, body = "/v1/containers/" + logical + "/start", "POST", {"waitForReady": False}
-        elif action == "stop":
-            route, method, body = "/v1/containers/" + logical + "/stop", "POST", {"force": False}
-        elif action == "delete":
-            route, method, body = "/v1/containers/" + logical, "DELETE", None
-        elif action == "resize":
-            body = spec.get("_resize")
-            if not isinstance(body, dict) or not body or set(body) - {"cpu", "memory", "disk"}:
-                raise Fault("RESIZE_SPEC_INVALID", 422)
-            if body.get("disk") not in (None, ""):
-                # The Provider's advertised grow-only promise is not enforced
-                # by its 0.128.0 response. Observe the current authenticated
-                # target before any write; refuse ambiguous sizes or shrinks.
-                row = self.container(logical)
-                try:
-                    current = row["resources"]["disk"]
-                except (KeyError, TypeError):
-                    raise Fault("RESOURCE_DISK_SIZE_UNVERIFIED", 422) from None
-                try:
-                    resource_size.require_nonshrinking_disk(body["disk"], current)
-                except ValueError as exc:
-                    raise Fault(str(exc), 422) from None
-            route, method = "/v1/containers/" + logical + "/resize", "PUT"
+                args["network_tenant"] = spec["_network_tenant"]
+            try:
+                method, route, body = rest_routes.route(
+                    "create_container", args, async_create=True)
+            except rest_routes.RouteFault as exc:
+                raise Fault(str(exc), 422) from None
+        elif action in ("start", "stop", "delete", "resize"):
+            args = {"username": logical}
+            if action == "resize":
+                extra = spec.get("_resize")
+                if not isinstance(extra, dict) or not extra or set(extra) - {
+                        "cpu", "memory", "disk"}:
+                    raise Fault("RESIZE_SPEC_INVALID", 422)
+                if extra.get("disk") not in (None, ""):
+                    row = self.container(logical)
+                    try:
+                        current = row["resources"]["disk"]
+                    except (KeyError, TypeError):
+                        raise Fault("RESOURCE_DISK_SIZE_UNVERIFIED", 422) from None
+                    try:
+                        resource_size.require_nonshrinking_disk(extra["disk"], current)
+                    except ValueError as exc:
+                        raise Fault(str(exc), 422) from None
+                args.update(extra)
+            elif action == "start":
+                args["waitForReady"] = False
+            elif action == "stop":
+                args["force"] = False
+            try:
+                method, route, body = rest_routes.route(
+                    action + "_container", args, async_create=False)
+            except rest_routes.RouteFault as exc:
+                raise Fault(str(exc), 422) from None
         else:
-            raise Fault("ACTION_NOT_ALLOWED")
+            raise Fault("ACTION_NOT_ALLOWED", 422)
         return self.request(method, route, body=body, timeout=timeout)

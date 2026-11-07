@@ -114,6 +114,11 @@ class Provider:
 
     def nesting_check(self, wanted):
         if type(wanted) is not bool: raise Fault("NESTING_BOOLEAN_REQUIRED",422)
+        if getattr(self, "rest", None) is not None:
+            # REST does not accept nesting in the create body. An independently
+            # attested native helper applies this original create postcondition
+            # only AFTER the guest identity is verified by Lifecycle.observe.
+            return
         with self.session() as m:
             props=m.discover().get("create_container",{}).get("inputSchema",{}).get("properties",{})
             if props.get("enable_nesting",{}).get("type") != "boolean":
@@ -176,9 +181,11 @@ class Provider:
     def lifecycle_mutate(self, action, logical, spec, timeout):
         if timeout<=0:
             raise Fault("DEADLINE_EXCEEDED")
-        # A create with _nesting is a special upstream MCP composite; this
-        # cannot be represented by ContainerService.CreateContainer REST.
-        if getattr(self, "rest", None) is not None and (action != "create" or "_nesting" not in spec):
+        # Nesting is intentionally not a Containarium REST create field.
+        # When REST is configured, ALL app lifecycle writes use REST; the
+        # approved nesting postcondition is applied only after the original
+        # instance/guest identity has been independently verified by lifecycle.
+        if getattr(self, "rest", None) is not None:
             return self.rest.mutate(action,logical,spec,timeout)
         tool={"create":"create_container","start":"start_container","stop":"stop_container","delete":"delete_container","resize":"resize_container"}.get(action)
         if tool is None:

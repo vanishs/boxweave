@@ -31,6 +31,37 @@ CREATE INDEX IF NOT EXISTS remote_create_tasks_updated ON remote_create_tasks(up
 """
 
 
+EXTRA_SCHEMA = """
+CREATE TABLE IF NOT EXISTS remote_create_options(
+ task_id TEXT PRIMARY KEY REFERENCES remote_create_tasks(task_id),
+ requested_nesting INTEGER CHECK(requested_nesting IN (0,1)),
+ postcondition TEXT NOT NULL DEFAULT 'not_started'
+   CHECK(postcondition IN ('not_started','intent','configured','unknown')),
+ instance_uuid TEXT,
+ instance_created TEXT,
+ last_probe_at REAL NOT NULL DEFAULT 0,
+ source TEXT NOT NULL CHECK(source IN ('http','ssh','web'))
+);
+CREATE TABLE IF NOT EXISTS remote_rest_tasks(
+ task_id TEXT PRIMARY KEY,
+ request_key TEXT NOT NULL UNIQUE,
+ logical TEXT NOT NULL,
+ action TEXT NOT NULL CHECK(action IN ('start','stop','delete','resize')),
+ payload_sha256 TEXT NOT NULL,
+ identity_digest TEXT NOT NULL,
+ instance_name TEXT NOT NULL,
+ instance_created TEXT NOT NULL,
+ spec_json TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('submitted','accepted','succeeded','unknown')),
+ code TEXT NOT NULL,
+ created REAL NOT NULL,
+ updated REAL NOT NULL,
+ last_probe_at REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS remote_rest_tasks_poll
+ ON remote_rest_tasks(state,last_probe_at);
+"""
+
 class CreateFault(Exception):
     def __init__(self, code):
         self.code = code
@@ -151,17 +182,23 @@ def validate_upstream_payload(payload, schema):
 
 def task_receipt(row):
     state = row["state"]
+    # REST 'CREATING' is only an accepted intent, NEVER a ready/complete Box.
+    # Retain the old SQLite CHECK constraint and migration compatibility.
+    if state == "submitted" and row["code"] == "REST_CREATE_ACCEPTED":
+        state = "accepted"
     result = {
         "task_id": row["task_id"],
         "request_key": row["request_key"],
         "username": row["logical"],
         "state": state,
         "code": row["code"],
-        "upstream_acknowledged": state == "succeeded",
-        "guest_user_and_ssh_verified": False,
+        "upstream_acknowledged": state in ("accepted", "succeeded"),
+        "guest_user_and_ssh_verified": (state == "succeeded"
+                                         and row["code"] == "REST_GUEST_READY"),
     }
-    if state == "submitted":
-        result["next"] = "Poll boxweave_create_status; never resend a create."
+    if state in ("submitted", "accepted"):
+        result["next"] = ("Poll boxweave_create_status; accepted is provisioning, "
+                          "not guest ready. Never resend a create.")
     elif state == "succeeded":
         result["next"] = "Read get_container, then independently check guest SSH readiness."
     else:
@@ -180,7 +217,7 @@ class CreateJournal:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state='unknown', "
                        "code='PROCESS_RESTART_UNKNOWN', updated=? "
-                       "WHERE state='submitted'", (self.clock(),))
+                       "WHERE state='submitted' AND code!='REST_CREATE_ACCEPTED'", (self.clock(),))
 
     def reserve(self, logical, request_key, digest):
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
@@ -212,17 +249,149 @@ class CreateJournal:
                        "(task_id, request_key, logical, payload_sha256, state, "
                        "code, created, updated) VALUES(?,?,?,?,?,?,?,?)",
                        (task_id, key, logical, digest, "submitted",
-                        "DISPATCH_INTENT_RECORDED", now, now))
+                        "REST_GATE_PENDING", now, now))
             row = db.execute("SELECT * FROM remote_create_tasks WHERE task_id=?",
                              (task_id,)).fetchone()
             return task_receipt(row), True
+
+    def begin_dispatch(self, task_id, digest):
+        """Atomically bind exactly one outbound invocation to this intent.
+
+        Historical rows are NEVER eligible; an old submitted intent might
+        already have reached upstream before a process failed. No replay.
+        """
+        if not isinstance(task_id, str) or KEY.fullmatch(task_id) is None:
+            raise CreateFault("CREATE_SELECTOR_INVALID")
+        if not isinstance(digest, str) or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+            raise CreateFault("CREATE_ARGUMENTS_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state,code,payload_sha256 FROM "
+                             "remote_create_tasks WHERE task_id=?", (task_id,)).fetchone()
+            if row is None or row["payload_sha256"] != digest:
+                raise CreateFault("CREATE_TASK_MISMATCH")
+            if row["state"] != "submitted" or row["code"] != "REST_GATE_PENDING":
+                return False
+            db.execute("UPDATE remote_create_tasks SET code='REST_GATE_DISPATCH_INTENT', "
+                       "updated=? WHERE task_id=? AND state='submitted' "
+                       "AND code='REST_GATE_PENDING'", (self.clock(), task_id))
+            return True
+
+    def intent_options(self, task_id, *, nesting=None, source="http"):
+        if nesting is not None and type(nesting) is not bool:
+            raise CreateFault("NESTING_BOOLEAN_REQUIRED")
+        if source not in ("http", "ssh", "web"):
+            raise CreateFault("CREATE_SOURCE_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            state = db.execute(
+                "SELECT state,code FROM remote_create_tasks WHERE task_id=?",
+                (task_id,)).fetchone()
+            if state is None or state["state"] != "submitted":
+                raise CreateFault("CREATE_TASK_NOT_DISPATCHABLE")
+            existing = db.execute(
+                "SELECT requested_nesting,source FROM remote_create_options "
+                "WHERE task_id=?", (task_id,)).fetchone()
+            setting = None if nesting is None else int(nesting)
+            if existing is not None:
+                if (existing["requested_nesting"] != setting or
+                        existing["source"] != source):
+                    raise CreateFault("CREATE_OPTIONS_CONFLICT")
+                return
+            db.execute(
+                "INSERT INTO remote_create_options(task_id,requested_nesting,source) "
+                "VALUES(?,?,?)", (task_id, setting, source))
+
+    def accepted_observation(self, interval=15):
+        # Persisted, cross-process read-only poll throttle. No worker can
+        # accidentally multiply upstream calls after a restart.
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT t.task_id,t.logical,t.created,o.requested_nesting,"
+                "o.postcondition,o.instance_uuid,o.instance_created "
+                "FROM remote_create_tasks AS t JOIN remote_create_options AS o "
+                "ON o.task_id=t.task_id WHERE t.state='submitted' AND "
+                "t.code='REST_CREATE_ACCEPTED' AND o.last_probe_at<=? "
+                "ORDER BY t.created,t.task_id LIMIT 1",
+                (self.clock()-interval,)).fetchone()
+            if row is not None:
+                db.execute("UPDATE remote_create_options SET last_probe_at=? "
+                           "WHERE task_id=?", (self.clock(), row["task_id"]))
+        return dict(row) if row is not None else None
+
+    def freeze(self, task_id, code="UPSTREAM_CREATE_OUTCOME_UNKNOWN"):
+        if code not in ("UPSTREAM_CREATE_OUTCOME_UNKNOWN",
+                        "NESTING_POSTCREATE_UNKNOWN",
+                        "READINESS_OUTCOME_UNKNOWN"):
+            raise CreateFault("CREATE_RESULT_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE remote_create_tasks SET state='unknown',code=?,"
+                       "updated=? WHERE task_id=? AND state='submitted'",
+                       (code, self.clock(), task_id))
+
+    def mark_ready(self, task_id):
+        """Only caller-supplied independent live guest proof may mark ready."""
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT requested_nesting,postcondition FROM remote_create_options "
+                "WHERE task_id=?", (task_id,)).fetchone()
+            if (row is None or (row["requested_nesting"] is not None
+                                and row["postcondition"] != "configured")):
+                raise CreateFault("CREATE_POSTCONDITION_UNVERIFIED")
+            db.execute("UPDATE remote_create_tasks SET state='succeeded',"
+                       "code='REST_GUEST_READY',updated=? WHERE task_id=? "
+                       "AND state='submitted' AND code='REST_CREATE_ACCEPTED'",
+                       (self.clock(), task_id))
+
+    def begin_nesting(self, task_id):
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT postcondition FROM remote_create_options WHERE task_id=?",
+                (task_id,)).fetchone()
+            if row is None or row["postcondition"] != "not_started":
+                return False
+            db.execute("UPDATE remote_create_options SET postcondition='intent' "
+                       "WHERE task_id=? AND postcondition='not_started'", (task_id,))
+            return True
+
+    def finish_nesting(self, task_id, uuid, created):
+        if not isinstance(uuid, str) or not uuid or not isinstance(created, str) or not created:
+            raise CreateFault("NESTING_IDENTITY_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE remote_create_options SET postcondition='configured',"
+                       "instance_uuid=?,instance_created=? WHERE task_id=? "
+                       "AND postcondition='intent'", (uuid, created, task_id))
+
+    def nesting_already_set(self, task_id, uuid, created):
+        if not uuid or not created:
+            raise CreateFault("NESTING_IDENTITY_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE remote_create_options SET postcondition='configured',"
+                       "instance_uuid=?,instance_created=? WHERE task_id=? "
+                       "AND postcondition='not_started'", (uuid, created, task_id))
+
+    def accept(self, task_id):
+        """Record only a durable upstream acceptance, never terminal success."""
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE remote_create_tasks SET code='REST_CREATE_ACCEPTED', "
+                       "updated=? WHERE task_id=? AND state='submitted' "
+                       "AND code='REST_GATE_DISPATCH_INTENT'",
+                       (self.clock(), task_id))
 
     def complete(self, task_id, succeeded):
         # A timeout, server restart, or journal race cannot become a success.
         with self.store.db() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state=?, code=?, updated=? "
-                       "WHERE task_id=? AND state='submitted'",
+                       "WHERE task_id=? AND state='submitted' "
+                       "AND code!='REST_CREATE_ACCEPTED'",
                        ("succeeded" if succeeded else "unknown",
                         "UPSTREAM_CREATE_ACKNOWLEDGED" if succeeded
                         else "UPSTREAM_CREATE_OUTCOME_UNKNOWN",

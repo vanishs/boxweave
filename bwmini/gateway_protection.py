@@ -17,7 +17,7 @@ _GATEWAY_READ = frozenset((
     "boxweave_info", "boxweave_diagnose", "boxweave_project_diagnose",
     "boxweave_diagnostic_run",
     "boxweave_box_read_file", "boxweave_box_list_directory",
-    "boxweave_task_get", "boxweave_task_list",
+    "boxweave_task_get", "boxweave_task_list", "boxweave_create_status", "boxweave_rest_status",
 ))
 _TRACKED_WRITE = frozenset(("boxweave_task_submit", "boxweave_box_lease", "boxweave_box_patch"))
 _KNOWN_SPECIAL = frozenset(("boxweave_nesting",))
@@ -53,10 +53,15 @@ def enabled(path=POLICY):
     return value["enabled"]
 
 
-def check_call(name, arguments, *, rest_debug=False):
+def check_call(name, arguments, *, rest_debug=False, coordinated_rest=False):
     """In protected mode, no direct or unclassified Provider mutations."""
     if not isinstance(name,str) or not isinstance(arguments,dict):
         raise ValueError("COORDINATION_TOOL_UNCLASSIFIED")
+    if name in ("create_container", "start_container", "stop_container",
+                "delete_container", "resize_container") and coordinated_rest is True:
+        # The selected REST gateway must acquire the exact shared R-04 claim
+        # and commit one durable dispatch intent before reaching the Provider.
+        return
     if name == "debug_container" and rest_debug is True:
         # Strictly scoped to the selected REST adapter; legacy MCP must not
         # acquire new rights under protected mode.
@@ -72,12 +77,15 @@ def check_call(name, arguments, *, rest_debug=False):
     raise ValueError("COORDINATION_TOOL_UNCLASSIFIED")
 
 
-def filter_catalog(message, *, rest_debug=False):
+def filter_catalog(message, *, rest_debug=False, coordinated_rest=False):
     """Hide forwarded mutators that this Gateway will refuse."""
     result=message.get("result")
     if not isinstance(result,dict) or not isinstance(result.get("tools"),list):
         raise ValueError("UPSTREAM_CATALOG_INVALID")
-    allowed = VISIBLE | ({"debug_container"} if rest_debug is True else set())
+    allowed = (VISIBLE | ({"debug_container"} if rest_debug is True else set())
+               | ({"create_container", "start_container", "stop_container",
+                   "delete_container", "resize_container"}
+                  if coordinated_rest is True else set()))
     result["tools"]=[t for t in result["tools"]
                      if isinstance(t,dict) and t.get("name") in allowed]
     return message

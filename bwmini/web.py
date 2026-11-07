@@ -330,6 +330,12 @@ def create_app(service, origin, dist, secure=True, clock=time.time, remote_confi
     def reconcile(oid):
         body([])
         return jsonify(service.reconcile(oid))
+    @app.get("/api/provider-rest-tasks/<task_id>")
+    def provider_rest_task_status(task_id):
+        # Same app-owned durable receipt the SSH/HTTP MCP tool returns.
+        # Existing /api/* session authentication guards this read-only path.
+        return jsonify(service.provider_rest_receipt(task_id))
+
     @app.get("/api/environments")
     def environment_settings():
         return jsonify(service.lifecycle.settings())

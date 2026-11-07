@@ -59,6 +59,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/access_provider.py`
 - `bwmini/agent_box.py`
 - `bwmini/app_runtime.py`
+- `bwmini/async_create_observer.py`
 - `bwmini/auto_sleep.py`
 - `bwmini/bootstrap.py`
 - `bwmini/box_actions.py`
@@ -79,7 +80,9 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/environment_history.py`
 - `bwmini/environment_observe.py`
 - `bwmini/gate_diagnostics.py`
+- `bwmini/gateway_create.py`
 - `bwmini/gateway_protection.py`
+- `bwmini/gateway_rest.py`
 - `bwmini/gateway_tasks.py`
 - `bwmini/graphs.py`
 - `bwmini/host_cli.py`
@@ -107,6 +110,9 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/remote_mcp.py`
 - `bwmini/remote_tls.py`
 - `bwmini/resource_size.py`
+- `bwmini/rest_mutations.py`
+- `bwmini/rest_routes.py`
+- `bwmini/rest_wire.py`
 - `bwmini/restore_guard.py`
 - `bwmini/selftest.py`
 - `bwmini/service.py`
@@ -124,6 +130,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_agent_source_bundle.py`
 - `tests/test_arch0_boundary_guards.py`
 - `tests/test_arch0_contracts.py`
+- `tests/test_async_create_observer.py`
 - `tests/test_bindings.py`
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
@@ -147,6 +154,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_gate_diagnostics.py`
 - `tests/test_gateway_compat_restore_flow.py`
 - `tests/test_gateway_protection.py`
+- `tests/test_gateway_rest.py`
 - `tests/test_gateway_tasks.py`
 - `tests/test_gateway_tasks_gateway.py`
 - `tests/test_graphs.py`
@@ -192,12 +200,15 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_release_metadata.py`
 - `tests/test_remote_create.py`
 - `tests/test_remote_mcp.py`
+- `tests/test_rest_mutations.py`
+- `tests/test_rest_task_status.py`
 - `tests/test_restore_guard.py`
 - `tests/test_selftest.py`
 - `tests/test_setup_guide.py`
 - `tests/test_shared_claims.py`
 - `tests/test_slice.py`
 - `tests/test_ssh_keepalive.py`
+- `tests/test_unified_rest_contract.py`
 - `tests/test_upstream_version_manager.py`
 - `tests/test_workload_guidance.py`
 <!-- inventory:unit-tests:end -->
@@ -285,6 +296,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `model-select`
 - `model-wizard`
 - `projects`
+- `provider-rest-receipt`
 - `receipts`
 - `reconcile`
 - `remote-caddyfile`
@@ -353,6 +365,7 @@ registrations provide help discovery only, never an alternate execution path.
 - `GET /api/operations/<oid>`
 - `GET /api/operations/<oid>/observations`
 - `GET /api/projects`
+- `GET /api/provider-rest-tasks/<task_id>`
 - `GET /api/remote-mcp`
 - `GET /api/resources`
 - `GET /api/session`

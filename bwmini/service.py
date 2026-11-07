@@ -30,6 +30,24 @@ class Service:
         from .box_actions import BoxActions
         self.box_actions = BoxActions(self)
 
+    def provider_rest_receipt(self, task_id):
+        """Read one original Agent REST task from the same app-owned DB.
+
+        This is exposed only through existing authenticated Web/CLI operators,
+        never as a path to create/retry/modify a Provider operation.
+        """
+        from .remote_create import CreateJournal, CreateFault
+        from .rest_mutations import MutationJournal
+        try:
+            return CreateJournal(self.store).get(task_id=task_id)
+        except CreateFault as exc:
+            if exc.code != "CREATE_TASK_NOT_FOUND":
+                raise Fault("REST_TASK_SELECTOR_INVALID", 422) from None
+        try:
+            return MutationJournal(self.store).get(task_id=task_id)
+        except ValueError as exc:
+            raise Fault("REST_TASK_NOT_FOUND", 404) from None
+
     def observe_target(self, logical):
         if self.lifecycle.config is not None and logical in self.lifecycle.config["allowed_names"]:
             try:
@@ -216,6 +234,15 @@ class Service:
             return True
         if self.lifecycle.work_one():
             return True
+        # Same installed app worker observes Agent async creates. It never
+        # resends the original create; successful readiness is independently
+        # proven through the installed Provider identity channel.
+        from . import async_create_observer
+        if async_create_observer.observe_one(self.store, self.provider, self.clock):
+            return True
+        from . import rest_mutations
+        if rest_mutations.observe_one(self.store, self.provider, self.clock):
+            return True
         if self.box_actions.work_one():
             return True
         with self.store.db() as db:
@@ -299,6 +326,10 @@ class Service:
                 raise Fault("WORKER_ALREADY_RUNNING")
             self.recover()
             self.lifecycle.recover()
+            # A lost pre-ack Agent write is UNKNOWN. Accepted writes resume
+            # by observation only, never by dispatch from this worker.
+            from .rest_mutations import MutationJournal
+            MutationJournal(self.store).recover()
             self.access.recover()
             self.box_actions.recover()
             while True:

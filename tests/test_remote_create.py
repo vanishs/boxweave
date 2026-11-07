@@ -25,7 +25,7 @@ class CreateJournalTests(unittest.TestCase):
 
     def test_migration_is_durable_without_storing_args_or_keys(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 14)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 15)
         logical, key, args, digest = validated_request({
             "username": "test-a", "cpu": "1", "request_key": "a"*32,
             "ssh_keys": ["ssh-ed25519 public-material-fixture"]})
@@ -38,6 +38,28 @@ class CreateJournalTests(unittest.TestCase):
                 "SELECT * FROM remote_create_tasks"))
         self.assertNotIn("public-material-fixture", text)
         self.assertNotIn("ssh-ed25519", text)
+
+    def test_rest_async_acceptance_is_not_ready_and_restart_is_observation_only(self):
+        receipt, fresh = self.journal.reserve("async-one", None, "a" * 64)
+        self.assertTrue(fresh)
+        task = receipt["task_id"]
+        self.assertTrue(self.journal.begin_dispatch(task, "a" * 64))
+        self.journal.accept(task)
+        ack = self.journal.get(task_id=task)
+        self.assertEqual(ack["state"], "accepted")
+        self.assertTrue(ack["upstream_acknowledged"])
+        self.assertFalse(ack["guest_user_and_ssh_verified"])
+        self.assertEqual(ack["code"], "REST_CREATE_ACCEPTED")
+        # Crash after async acceptance is still a partially observed write,
+        # not proof that the same native guest finished provisioning.
+        CreateJournal(Store(self.store.path)).recover_interrupted()
+        recovered = CreateJournal(Store(self.store.path)).get(task_id=task)
+        self.assertEqual(recovered["state"], "accepted")
+        self.assertEqual(recovered["code"], "REST_CREATE_ACCEPTED")
+        self.assertFalse(self.journal.begin_dispatch(task, "a" * 64))
+        # No HTTP completion can turn an accepted create into a ready Box.
+        self.journal.complete(task, True)
+        self.assertEqual(self.journal.get(task_id=task)["state"], "accepted")
 
     def test_one_name_one_dispatch_regardless_of_retry_key(self):
         _, _, _, digest = validated_request({"username": "a", "cpu": "1"})
