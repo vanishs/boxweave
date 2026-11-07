@@ -59,6 +59,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/access_provider.py`
 - `bwmini/agent_box.py`
 - `bwmini/app_runtime.py`
+- `bwmini/async_create_observer.py`
 - `bwmini/auto_sleep.py`
 - `bwmini/bootstrap.py`
 - `bwmini/box_actions.py`
@@ -128,6 +129,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_agent_source_bundle.py`
 - `tests/test_arch0_boundary_guards.py`
 - `tests/test_arch0_contracts.py`
+- `tests/test_async_create_observer.py`
 - `tests/test_bindings.py`
 - `tests/test_bootstrap.py`
 - `tests/test_box_actions.py`
