@@ -318,12 +318,23 @@ class WireTests(Base):
         self.assertEqual(session.calls[-2][1]['target_ip'],'10.9.0.2');self.assertNotIn('force',session.calls[-2][1])
     def test_shared_create_passes_native_key_and_never_encryption_tenant(self):
         from test_lifecycle import PUBLIC
+        from bwmini.provider_rest import RESTClient
         p=self.provider();calls=[]
-        class Session:
-            def __init__(self,*a):pass
-            def __enter__(self):return self
-            def __exit__(self,*a):pass
-            def discover(self):return {'create_container':{'inputSchema':{'properties':{k:{} for k in ['username','cpu','memory','disk','image','ssh_keys','enable_podman','network_tenant']}}}}
-            def tool(self,name,args):calls.append((name,args))
-        with patch('bwmini.provider.MCP',Session):p.lifecycle_mutate('create','approved-new',{'cpu':'1','memory':'1GB','disk':'8GB','ssh_public_key':PUBLIC,'_network_tenant':'tenant-a'},60)
-        args=calls[0][1];self.assertEqual(args['network_tenant'],'tenant-a');self.assertNotIn('tenant_id',args);self.assertEqual(args['ssh_keys'],[PUBLIC]);self.assertFalse(args['enable_podman'])
+        p.rest=RESTClient({"url":"http://127.0.0.1:18080",
+                           "token_file":"/tmp/no-credential-read"})
+        def request(method,route,body=None,timeout=30):
+            calls.append((method,route,body))
+            return {"container":{"username":"approved-new",
+                                 "state":"CONTAINER_STATE_CREATING"}}
+        p.rest.request=request
+        with patch.object(p,"session",side_effect=AssertionError("MCP must not create")):
+            p.lifecycle_mutate('create','approved-new',{'cpu':'1','memory':'1GB',
+                'disk':'8GB','ssh_public_key':PUBLIC,'_network_tenant':'tenant-a'},60)
+        self.assertEqual(len(calls),1)
+        method,route,args=calls[0]
+        self.assertEqual((method,route),("POST","/v1/containers"))
+        self.assertEqual(args['networkTenant'],'tenant-a')
+        self.assertNotIn('tenantId',args)
+        self.assertEqual(args['sshKeys'],[PUBLIC])
+        self.assertIs(args['enablePodman'],False)
+        self.assertIs(args['async'],True)
