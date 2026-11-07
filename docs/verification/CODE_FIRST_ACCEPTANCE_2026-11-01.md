@@ -153,6 +153,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `tests/test_gate_diagnostics.py`
 - `tests/test_gateway_compat_restore_flow.py`
 - `tests/test_gateway_protection.py`
+- `tests/test_gateway_rest.py`
 - `tests/test_gateway_tasks.py`
 - `tests/test_gateway_tasks_gateway.py`
 - `tests/test_graphs.py`
