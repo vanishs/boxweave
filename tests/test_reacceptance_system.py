@@ -180,13 +180,16 @@ else:
                     {name + "-container": child("Stopped")},
                     {name + "-container": child("Running")}, {}]
         with tempfile.TemporaryDirectory() as t:
-            with patch.object(lifecycle, "grant_read", return_value={
+            with (
+                patch.object(lifecycle, "grant_read", return_value={
                     "child_name": name, "outer_uuid": uuid,
-                    "outer_created_at": "1794000000"}), (
-                 patch.object(lifecycle, "native_list", side_effect=observed)), (
-                 patch.object(lifecycle, "one_call", side_effect=one_call)), (
-                 patch.object(installed, "inspect_mcp", return_value={"catalogue": "DISCOVERED",
-                     "rows": {"stdio_mcp:get_container": {"status": "PARTIAL"}}}) as probe):
+                    "outer_created_at": "1794000000"}),
+                patch.object(lifecycle, "native_list", side_effect=observed),
+                patch.object(lifecycle, "one_call", side_effect=one_call),
+                patch.object(installed, "inspect_mcp", return_value={
+                    "catalogue": "DISCOVERED",
+                    "rows": {"stdio_mcp:get_container": {"status": "PARTIAL"}}}) as probe,
+            ):
                 result = lifecycle.run("private-grant", lifecycle.CONFIRM,
                                       ["fake-mcp"], Path(t) / "output",
                                       with_readonly_breadth=True)
