@@ -39,6 +39,25 @@ class CreateJournalTests(unittest.TestCase):
         self.assertNotIn("public-material-fixture", text)
         self.assertNotIn("ssh-ed25519", text)
 
+    def test_rest_async_acceptance_is_not_ready_and_restart_is_unknown(self):
+        receipt, fresh = self.journal.reserve("async-one", None, "a" * 64)
+        self.assertTrue(fresh)
+        task = receipt["task_id"]
+        self.journal.accept(task)
+        ack = self.journal.get(task_id=task)
+        self.assertEqual(ack["state"], "accepted")
+        self.assertTrue(ack["upstream_acknowledged"])
+        self.assertFalse(ack["guest_user_and_ssh_verified"])
+        self.assertEqual(ack["code"], "REST_CREATE_ACCEPTED")
+        # Crash after async acceptance is still a partially observed write,
+        # not proof that the same native guest finished provisioning.
+        CreateJournal(Store(self.store.path)).recover_interrupted()
+        frozen = CreateJournal(Store(self.store.path)).get(task_id=task)
+        self.assertEqual(frozen["state"], "unknown")
+        self.assertEqual(frozen["code"], "PROCESS_RESTART_UNKNOWN")
+        self.journal.complete(task, True)
+        self.assertEqual(self.journal.get(task_id=task)["state"], "unknown")
+
     def test_one_name_one_dispatch_regardless_of_retry_key(self):
         _, _, _, digest = validated_request({"username": "a", "cpu": "1"})
         first, fresh = self.journal.reserve("a", "a"*32, digest)
