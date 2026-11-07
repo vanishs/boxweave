@@ -189,6 +189,14 @@ tools and Box state. An enabled gateway allowlist must permit
 
 ## Verification and exclusions
 
+If an OAuth-connected client fails to refresh its MCP tools, use the
+[bounded operator troubleshooting flow](TROUBLESHOOTING.md#remote-mcp-client-connects-but-cannot-refresh-tools).
+It checks metadata separately from authenticated `tools/list` **without**
+optional `params`, and restricts log handling to reviewed, redacted local
+operator observation. This is a normal DevOps troubleshooting procedure,
+not an additional installed diagnostics service or a live-acceptance claim.
+
+
 Check authorized initialize/tools/list, wrong-Origin rejection, OAuth authorization, actual HTTPS/TLS and revocation with a standalone real client before claiming external readiness. A tunnel's Healthy label is not MCP proof. A 2026-11-01 owner-operated Cloudflare Quick Tunnel and ChatGPT OAuth workflow reached real `list_containers` results (four running boxes); this does not validate a production TLS deployment, a complete Box tool workflow, or all other client apps. The v0.24.2 browser header change was verified by fixture CI; v0.24.3 adds the managed-Caddy header and local-status regression tests. Both require a separately installed release for source-to-runtime parity. Network/host installation or public port changes require separate explicit approval. For a timed-out mutating MCP tool call, completion is UNKNOWN; never automatically retry.
 
 See [architecture](design/REMOTE_MCP_MASTER.md), [development phases](process/REMOTE_MCP_HANDOFF.md), [verification](verification/REMOTE_MCP_TEST_PLAN.md).

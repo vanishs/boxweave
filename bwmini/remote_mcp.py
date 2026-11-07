@@ -379,6 +379,10 @@ I authorize this client to use BoxWeave MCP tools.</label>
                 or "result" in message or "error" in message):
             raise RemoteError("invalid_json_rpc")
         method = message["method"]
+        # These RPC methods require a params object. Report a typed client
+        # error rather than leaking a KeyError as an HTTP 500.
+        if method in ("initialize", "tools/call") and "params" not in message:
+            raise RemoteError("invalid_json_rpc")
         if method == "initialize":
             if "id" not in message:
                 raise RemoteError("invalid_json_rpc")
@@ -411,7 +415,7 @@ I authorize this client to use BoxWeave MCP tools.</label>
         reply = bridge(message)
         if not isinstance(reply, dict) or reply.get("id") != message["id"]:
             raise RemoteError("upstream_protocol_error", 502)
-        if method == "tools/list" and not message["params"].get("cursor"):
+        if method == "tools/list" and not message.get("params", {}).get("cursor"):
             reply = augment_catalog(reply)
         return out(reply, headers={"MCP-Protocol-Version": PROTOCOL})
 
