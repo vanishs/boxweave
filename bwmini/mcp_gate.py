@@ -204,11 +204,11 @@ def catalog(message):
     # Source-controlled REST schemas, not forwarded MCP tool definitions.
     rest["create_container"]["description"]=(
         "Create an isolated development Box using one durable REST intent. "
-        "BoxWeave supplies its managed workload SSH public key; extra "
+        "BoxWeave automatically supplies its managed workload SSH public key; extra "
         "ssh_keys are optional. A CREATING response is not guest-ready. "
         "If a result is UNKNOWN, inspect the original task without retrying.")
     rest["create_container"]["inputSchema"]["properties"]["ssh_keys"]["description"]=(
-        "Optional additional authorized Ed25519 public keys. The server supplies "
+        "Optional additional authorized Ed25519 public keys. The server automatically supplies "
         "its own managed workload SSH public key.")
     rest["list_containers"]["description"]=(
         "Read-only REST inventory of existing Boxes and their resources.")
@@ -228,7 +228,7 @@ def catalog(message):
             continue
         if name=="connect":
             tool["description"]=(
-                "Connect to a managed Box by exact logical name or displayed "
+                "Connect to a managed Box by exact-target logical name or displayed "
                 "name with pinned SSH trust. Exec remains MCP and may mutate "
                 "the guest. Host and user overrides are refused.")
         converted.append(tool)
