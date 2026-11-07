@@ -120,6 +120,9 @@ def plan(inventory, seed, changed=()):
                 "identity": "test_owned_exact_uuid_created_at_REQUIRED",
                 "depends_on": [] if i == 0 else [sid + ":" + str(i)],
                 "input": "schema_bound_arguments_REQUIRED_AT_EXECUTION",
+                "prerequisites": (["test_owned_exact_native_incarnation_REQUIRED"]
+                                  if channel == "stdio_mcp" and name not in
+                                  ("list_containers", "get_system_info") else []),
                 "postcondition": "independent_provider_or_receipt_read_REQUIRED"})
         missing = sorted({n["action_key"] for n in nodes if not n["callable_in_inventory"]})
         hit = [p for p in changed if any(p.startswith(prefix)
