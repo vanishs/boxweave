@@ -153,16 +153,22 @@ class DebugTransportTests(unittest.TestCase):
         with self.assertRaisesRegex(Fault, "TARGET_CHANGED"):
             summary(p, TARGET)
 
-    def test_app_debug_only_rollback_does_not_disable_lifecycle_rest(self):
+    def test_deprecated_debug_switch_cannot_restore_mcp_debug(self):
         cfg = {"provider":"containarium", "backend":"dev", "project":"default",
                "launcher":[sys.executable], "targets":{},
                "provider_api":self.cfg, "debug_rest_enabled":False}
         p = Provider(cfg)
         self.assertIsNotNone(p.rest)
-        self.assertFalse(p.debug_rest_enabled)
-        cfg["debug_rest_enabled"] = "false"
-        with self.assertRaisesRegex(Fault, "DEBUG_REST_CONFIG_INVALID"):
-            Provider(cfg)
+        current={"username":TARGET.logical,"name":TARGET.instance,
+                 "createdAt":TARGET.created}
+        with (patch.object(p.rest,"debug_container",return_value=SENSITIVE),
+              patch.object(p.rest,"container",return_value=current),
+              patch.object(p,"session",side_effect=AssertionError(
+                   "MCP debug fallback forbidden"))):
+            summary(p,TARGET)
+        cfg["debug_rest_enabled"]="false"
+        p=Provider(cfg)
+        self.assertIsNotNone(p.rest)
 
     def test_app_failure_does_not_fallback_to_mcp(self):
         p = type("P", (), {"mode":"mcp", "rest":RESTClient(self.cfg)})()
@@ -172,32 +178,14 @@ class DebugTransportTests(unittest.TestCase):
         with self.assertRaises(Fault):
             summary(p,TARGET)
 
-    def test_root_policy_disabled_missing_and_unsafe_fail_closed(self):
-        self.assertIsNone(debug_rest.gateway_config())
-        with tempfile.TemporaryDirectory() as tmp:
-            policy = Path(tmp)/"debug-rest.json"
-            policy.write_text(json.dumps({"version":1,"url":self.cfg["url"],
-                "token_file":self.cfg["token_file"],"enabled":True}))
-            policy.chmod(0o644)
-            with self.assertRaisesRegex(debug_rest.DebugRESTError,"DEBUG_REST_POLICY_UNSAFE"):
-                debug_rest.gateway_config(policy)
-            class Meta:
-                def __init__(self, original):
-                    self.st_mode=original.st_mode
-                    self.st_uid=0
-                    self.st_nlink=original.st_nlink
-                    self.st_size=original.st_size
-                    self.st_ino=original.st_ino
-                    self.st_dev=original.st_dev
-            original = Path.lstat
-            def as_root(path):
-                item = original(path)
-                return Meta(item) if path in (policy, policy.parent) else item
-            with patch.object(Path,"lstat",as_root):
-                self.assertEqual(debug_rest.gateway_config(policy), self.cfg)
-                policy.write_text('{"version":1,"enabled":true,"url":"http://evil","token_file":"x"}')
-                with self.assertRaises(debug_rest.DebugRESTError):
-                    debug_rest.gateway_config(policy)
+    def test_legacy_debug_policy_absent_from_runtime(self):
+        # Debug no longer has a per-tool root selector. The gateway uses
+        # the same application REST policy as the other seven methods.
+        from bwmini import gateway_rest
+        self.assertFalse(hasattr(debug_rest,"gateway_config"))
+        self.assertFalse(hasattr(debug_rest,"GATEWAY_CONFIG"))
+        self.assertEqual(gateway_rest.POLICY,
+                         Path("/home/boxweave/boxweave/config.json"))
 
 
 class FakeProvider:
