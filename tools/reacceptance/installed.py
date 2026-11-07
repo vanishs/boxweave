@@ -116,9 +116,9 @@ def inspect_mcp(argv, owned=None, *, verified_target=None):
             continue
         schema = t.get("inputSchema") or {}
         args, blocker = positive_arguments(schema, owned if trusted else None)
-        target_fields = isinstance(schema, dict) and isinstance(
-            schema.get("properties", {}), dict) and any(
-                key in schema["properties"] for key in ("username", "box", "logical"))
+        props = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        target_fields = isinstance(props, dict) and any(
+            key in props for key in ("username", "box", "logical"))
         if target_fields and owned and not trusted:
             blocker = "INDEPENDENT_TEST_TARGET_ORACLE_REQUIRED"
         # The MCP schema for task_get allows either request_key or task_id
