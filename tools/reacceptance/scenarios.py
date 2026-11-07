@@ -150,6 +150,14 @@ def plan(inventory, seed, changed=()):
             "scenario_count": len(ranked), "scenarios": ranked,
             "action_inventory_count": len(actual),
             "action_breadth_executed": 0,
+            "fixture_preparation": {
+                "state": "REQUIRES_EXPLICIT_TEST_OWNED_ISOLATED_GRANT",
+                "executor": "tools.reacceptance.lifecycle --with-readonly-breadth",
+                "preconditions": ["exact_outer_UUID_createdAt", "private_owner_grant",
+                                  "unique_bwracc_child_name", "authorized_nested_Incus"],
+                "effect_boundary": "ONE_CREATE_THEN_READONLY_PROBES_THEN_STOP_START_DELETE",
+                "unknown_policy": "FROZEN_NO_RETRY_OR_AUTOCLEANUP",
+                "full_acceptance": False},
             "overall": "NOT_ACCEPTED_PLAN_ONLY"}
 
 
