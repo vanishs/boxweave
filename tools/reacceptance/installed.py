@@ -77,7 +77,21 @@ def result_kind(msg):
     return "INVALID_RPC_RESPONSE"
 
 
-def inspect_mcp(argv, owned=None):
+def inspect_mcp(argv, owned=None, *, verified_target=None):
+    """Do not equate a caller-supplied name with a real test-owned target.
+
+    The optional identity is supplied by the isolated lifecycle executor only
+    after independent native Incus readback, not by untrusted MCP responses.
+    """
+    trusted = (isinstance(verified_target, dict) and owned is not None
+               and verified_target.get("test_owned") is True
+               and verified_target.get("logical") == owned
+               and isinstance(verified_target.get("provider_uuid"), str)
+               and bool(verified_target["provider_uuid"])
+               and isinstance(verified_target.get("created_at"), str)
+               and bool(verified_target["created_at"]))
+    if verified_target is not None and not trusted:
+        raise AcceptanceFault("TEST_TARGET_IDENTITY_NOT_VERIFIED")
     if not argv:
         return {"catalogue": "NOT_CONFIGURED", "rows": {}, "evidence": {}}
     session = mcp_session(argv, [{
