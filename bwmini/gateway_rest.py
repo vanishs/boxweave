@@ -5,6 +5,7 @@ HTTP verb, credential path or authorization mode. This does not grant new MCP
 permissions: Gateway's allowlist and protected R-04 checks run first.
 """
 import json
+import os
 from pathlib import Path
 import stat
 
@@ -68,7 +69,7 @@ def policy(path=POLICY):
         raise GatewayRESTFault("REST_POLICY_INVALID") from None
     if (not isinstance(value, dict)
             or set(value) != ({"version", "enabled", "mode", "url", "token_file"}
-                                 | ({"state_db"} if value.get("mode") == "coordinated" else set()))
+                                 | ({"state_db", "app_config"} if value.get("mode") == "coordinated" else set()))
             or type(value["version"]) is not int or value["version"] != 1
             or type(value["enabled"]) is not bool
             or value["mode"] not in ("read", "coordinated")):
@@ -82,8 +83,38 @@ def policy(path=POLICY):
             from . import gateway_create
         except ImportError:
             import gateway_create
-        # The app store is the only durable create receipt owner.
+        # The app store is the only durable receipt owner. Confirm Web/CLI
+        # explicitly opted into the same R-04 coordination core and Provider.
         gateway_create.checked_app_store(value["state_db"])
+        app = value["app_config"]
+        if not isinstance(app, str) or not app.startswith(
+                "/home/boxweave/boxweave/") or ".." in Path(app).parts:
+            raise GatewayRESTFault("REST_APP_CONFIG_INVALID")
+        path = Path(app)
+        try:
+            info = path.lstat()
+            parent = path.parent.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != os.geteuid() or info.st_mode & 0o077
+                    or not 10 <= info.st_size <= 65536
+                    or not stat.S_ISDIR(parent.st_mode)
+                    or parent.st_uid != os.geteuid()
+                    or parent.st_mode & 0o022):
+                raise ValueError()
+            with path.open("rb") as stream:
+                app_config = json.loads(stream.read(65537), object_pairs_hook=_unique)
+            again = path.lstat()
+            if (info.st_dev,info.st_ino) != (again.st_dev,again.st_ino):
+                raise ValueError()
+        except (ValueError, OSError, UnicodeError):
+            raise GatewayRESTFault("REST_APP_CONFIG_UNVERIFIED") from None
+        if (not isinstance(app_config,dict) or
+                app_config.get("mode") != "mcp" or
+                app_config.get("coordination") != {"enabled":True} or
+                app_config.get("database") != value["state_db"] or
+                app_config.get("provider_api") != {
+                    "url":value["url"], "token_file":value["token_file"]}):
+            raise GatewayRESTFault("REST_APP_COORDINATION_NOT_ALIGNED")
     return value if value["enabled"] else None
 
 
