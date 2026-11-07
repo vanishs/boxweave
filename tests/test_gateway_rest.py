@@ -67,6 +67,40 @@ class GatewayRESTTests(unittest.TestCase):
         self.assertIs(calls[0][2]["async"],True)
         self.assertFalse(one["guest_user_and_ssh_verified"])
 
+    def test_r04_web_name_claim_blocks_gateway_create_before_rest_post(self):
+        from bwmini.coordination_bridge import SharedClaims
+        from bwmini.coordination_runtime import private_connection
+        from bwmini.operation_coordination import OperationCoordinator
+        claims_file=self.root/"claims.sqlite3"
+        claims_file.touch(mode=0o600)
+        OperationCoordinator(
+            lambda:private_connection(claims_file)).initialize()
+        web=SharedClaims(claims_file)
+        scope={"provider":"containarium","backend":"dev","project":"default"}
+        calls=[]
+        class Client:
+            def __init__(self,config):pass
+            def request(self,method,uri,body=None,timeout=30):
+                calls.append(method)
+                if method=="GET":
+                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                raise AssertionError("REST write bypassed shared claim")
+        with (patch("bwmini.rest_wire.Client",Client),
+              patch("bwmini.coordination_bridge.published_scope",
+                    return_value=scope),
+              patch("bwmini.coordination_bridge.SharedClaims",
+                    side_effect=lambda:SharedClaims(claims_file))):
+            web.acquire_environment("e"*32,"environment_"+"e"*32,
+                                    scope,"create","wip-unique",None,{})
+            with self.assertRaisesRegex(ValueError,"REST_CREATE_PREDISPATCH_UNVERIFIED"):
+                gateway_create.dispatch(
+                    self.config,{"username":"wip-unique"},7,
+                    normalize=lambda x:{**x,"ssh_keys":["ssh-ed25519 AAA"]},
+                    protected=True)
+        self.assertEqual(calls,["GET"])
+        self.assertEqual(SharedClaims(claims_file).coordinator.status(
+            "e"*32)["state"],"accepted")
+
     def test_post_response_loss_frozen_and_duplicate_is_not_retried(self):
         calls=[]
         class Broken:
