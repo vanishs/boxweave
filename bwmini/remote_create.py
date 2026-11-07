@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS remote_create_options(
    CHECK(postcondition IN ('not_started','intent','configured','unknown')),
  instance_uuid TEXT,
  instance_created TEXT,
+ last_probe_at REAL NOT NULL DEFAULT 0,
  source TEXT NOT NULL CHECK(source IN ('http','ssh','web'))
 );
 """
@@ -198,7 +199,7 @@ class CreateJournal:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE remote_create_tasks SET state='unknown', "
                        "code='PROCESS_RESTART_UNKNOWN', updated=? "
-                       "WHERE state='submitted'", (self.clock(),))
+                       "WHERE state='submitted' AND code!='REST_CREATE_ACCEPTED'", (self.clock(),))
 
     def reserve(self, logical, request_key, digest):
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
@@ -283,15 +284,22 @@ class CreateJournal:
                 "INSERT INTO remote_create_options(task_id,requested_nesting,source) "
                 "VALUES(?,?,?)", (task_id, setting, source))
 
-    def accepted_observation(self):
+    def accepted_observation(self, interval=15):
+        # Persisted, cross-process read-only poll throttle. No worker can
+        # accidentally multiply upstream calls after a restart.
         with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 "SELECT t.task_id,t.logical,t.created,o.requested_nesting,"
                 "o.postcondition,o.instance_uuid,o.instance_created "
                 "FROM remote_create_tasks AS t JOIN remote_create_options AS o "
                 "ON o.task_id=t.task_id WHERE t.state='submitted' AND "
-                "t.code='REST_CREATE_ACCEPTED' ORDER BY t.created,t.task_id LIMIT 1"
-            ).fetchone()
+                "t.code='REST_CREATE_ACCEPTED' AND o.last_probe_at<=? "
+                "ORDER BY t.created,t.task_id LIMIT 1",
+                (self.clock()-interval,)).fetchone()
+            if row is not None:
+                db.execute("UPDATE remote_create_options SET last_probe_at=? "
+                           "WHERE task_id=?", (self.clock(), row["task_id"]))
         return dict(row) if row is not None else None
 
     def freeze(self, task_id, code="UPSTREAM_CREATE_OUTCOME_UNKNOWN"):
