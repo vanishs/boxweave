@@ -79,6 +79,7 @@ The lists enumerate all Python app modules, Python unittest files, client helper
 - `bwmini/environment_history.py`
 - `bwmini/environment_observe.py`
 - `bwmini/gate_diagnostics.py`
+- `bwmini/gateway_create.py`
 - `bwmini/gateway_protection.py`
 - `bwmini/gateway_rest.py`
 - `bwmini/gateway_tasks.py`
