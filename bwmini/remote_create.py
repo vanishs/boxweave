@@ -151,6 +151,10 @@ def validate_upstream_payload(payload, schema):
 
 def task_receipt(row):
     state = row["state"]
+    # REST 'CREATING' is only an accepted intent, NEVER a ready/complete Box.
+    # Retain the old SQLite CHECK constraint and migration compatibility.
+    if state == "submitted" and row["code"] == "REST_CREATE_ACCEPTED":
+        state = "accepted"
     result = {
         "task_id": row["task_id"],
         "request_key": row["request_key"],
@@ -160,8 +164,9 @@ def task_receipt(row):
         "upstream_acknowledged": state == "succeeded",
         "guest_user_and_ssh_verified": False,
     }
-    if state == "submitted":
-        result["next"] = "Poll boxweave_create_status; never resend a create."
+    if state in ("submitted", "accepted"):
+        result["next"] = ("Poll boxweave_create_status; accepted is provisioning, "
+                          "not guest ready. Never resend a create.")
     elif state == "succeeded":
         result["next"] = "Read get_container, then independently check guest SSH readiness."
     else:
@@ -216,6 +221,14 @@ class CreateJournal:
             row = db.execute("SELECT * FROM remote_create_tasks WHERE task_id=?",
                              (task_id,)).fetchone()
             return task_receipt(row), True
+
+    def accept(self, task_id):
+        """Record only a durable upstream acceptance, never terminal success."""
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE remote_create_tasks SET code='REST_CREATE_ACCEPTED', "
+                       "updated=? WHERE task_id=? AND state='submitted'",
+                       (self.clock(), task_id))
 
     def complete(self, task_id, succeeded):
         # A timeout, server restart, or journal race cannot become a success.
