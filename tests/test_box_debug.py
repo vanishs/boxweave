@@ -45,10 +45,14 @@ class SummaryTests(unittest.TestCase):
     def test_missing_rest_and_invalid_response_fail_closed(self):
         with self.assertRaisesRegex(Fault,"PROVIDER_API_REQUIRED"):
             summary(FakeProvider(None),TARGET)
-        for payload in ({}, {"containerState":"running",
-                              "hostUserExists":"yes"}):
-            with self.subTest(payload=payload),self.assertRaises(Fault):
-                summary(FakeProvider(FakeRest(payload)),TARGET)
+        # Missing optional fields are redacted as unverified, not invented
+        # success. Invalid explicitly typed fields must fail closed.
+        empty=summary(FakeProvider(FakeRest({})),TARGET)
+        self.assertEqual(empty["container_state"],"unverified")
+        self.assertIsNone(empty["host_user_exists"])
+        with self.assertRaisesRegex(Fault,"DEBUG_CONTRACT_UNSUPPORTED"):
+            summary(FakeProvider(FakeRest({
+                "containerState":"running","hostUserExists":"yes"})),TARGET)
 
     def test_unknown_upstream_state_never_claimed_healthy(self):
         result=summary(FakeProvider(FakeRest({
