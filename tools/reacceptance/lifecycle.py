@@ -219,6 +219,8 @@ def run(grant, confirmation, mcp_argv, output, *, with_readonly_breadth=False):
               "limited_coverage": "CREATE_STOP_START_DELETE",
               "not_tested": ["resize", "guest exec", "cross-interface auth"],
               "oracle": "NATIVE_INCUS_EXACT_INCARNATION",
+              "readonly_breadth": ("PARTIAL_PRIVATE_EVIDENCE_NOT_ACCEPTANCE"
+                                   if with_readonly_breadth else "NOT_REQUESTED"),
               "outer_uuid": approved["outer_uuid"],
               "child_name": name, "completed_at": now()}
     unique_file(dest / "result.json", result)
