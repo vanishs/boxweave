@@ -264,7 +264,11 @@ class SharedAccessClaimTests(AccessTests):
 class WireTests(Base):
     def provider(self):
         from bwmini.provider import Provider
-        return Provider({'provider':'containarium','backend':'dev','project':'default','launcher':[sys.executable],'targets':{TARGET.logical:TARGET.data()}})
+        return Provider({'provider':'containarium','backend':'dev',
+                         'project':'default','launcher':[sys.executable],
+                         'targets':{TARGET.logical:TARGET.data()},
+                         'provider_api':{'url':'http://127.0.0.1:18080',
+                                         'token_file':'/tmp/no-credential-read'}})
     def session(self,values):
         class Session:
             calls=[]
@@ -272,7 +276,7 @@ class WireTests(Base):
             def __exit__(self,*args):pass
             def discover(self):
                 props={k:{} for k in ['external_port','protocol','target_ip','target_port','container_name','description','changes','network_tenant']}
-                return {k:{'inputSchema':{'properties':props}} for k in ['network_tenant_capabilities','network_guard_status','get_network_policy','patch_tenant_access','create_container','list_passthrough_routes','add_passthrough_route','delete_passthrough_route']}
+                return {k:{'inputSchema':{'properties':props}} for k in ['network_tenant_capabilities','network_guard_status','get_network_policy','patch_tenant_access','list_passthrough_routes','add_passthrough_route','delete_passthrough_route']}
             def tool(self,name,args):
                 self.calls.append((name,args));value=values[name]
                 if isinstance(value,Exception):raise value
