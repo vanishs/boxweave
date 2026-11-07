@@ -35,7 +35,15 @@ def _legacy_incus_instance_absent(error, method, path):
         raw = error.read(4097)
         if len(raw) > 4096:
             return False
-        payload = json.loads(raw)
+        def unique(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError("duplicate JSON key")
+                value[key] = item
+            return value
+
+        payload = json.loads(raw, object_pairs_hook=unique)
     except (ValueError, UnicodeError, OSError):
         return False
     if not isinstance(payload, dict) or set(payload) != {"error", "code", "message"}:
