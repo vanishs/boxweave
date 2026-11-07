@@ -217,10 +217,33 @@ class CreateJournal:
                        "(task_id, request_key, logical, payload_sha256, state, "
                        "code, created, updated) VALUES(?,?,?,?,?,?,?,?)",
                        (task_id, key, logical, digest, "submitted",
-                        "DISPATCH_INTENT_RECORDED", now, now))
+                        "REST_GATE_PENDING", now, now))
             row = db.execute("SELECT * FROM remote_create_tasks WHERE task_id=?",
                              (task_id,)).fetchone()
             return task_receipt(row), True
+
+    def begin_dispatch(self, task_id, digest):
+        """Atomically bind exactly one outbound invocation to this intent.
+
+        Historical rows are NEVER eligible; an old submitted intent might
+        already have reached upstream before a process failed. No replay.
+        """
+        if not isinstance(task_id, str) or KEY.fullmatch(task_id) is None:
+            raise CreateFault("CREATE_SELECTOR_INVALID")
+        if not isinstance(digest, str) or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+            raise CreateFault("CREATE_ARGUMENTS_INVALID")
+        with self.store.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state,code,payload_sha256 FROM "
+                             "remote_create_tasks WHERE task_id=?", (task_id,)).fetchone()
+            if row is None or row["payload_sha256"] != digest:
+                raise CreateFault("CREATE_TASK_MISMATCH")
+            if row["state"] != "submitted" or row["code"] != "REST_GATE_PENDING":
+                return False
+            db.execute("UPDATE remote_create_tasks SET code='REST_GATE_DISPATCH_INTENT', "
+                       "updated=? WHERE task_id=? AND state='submitted' "
+                       "AND code='REST_GATE_PENDING'", (self.clock(), task_id))
+            return True
 
     def accept(self, task_id):
         """Record only a durable upstream acceptance, never terminal success."""
