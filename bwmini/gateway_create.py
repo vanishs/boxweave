@@ -173,6 +173,30 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
             and error.status_origin in ("grpc", "compatibility"))
         if not known_missing:
             raise GatewayRESTFault("REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+        if error.status_origin == "compatibility":
+            # In upstream v0.128 GetContainer ignores peer list failures.
+            # The legacy 500 text alone is therefore not proof that this
+            # Box is absent on every backend. Independently check the full
+            # REST inventory, including unreachable peers and pending boxes,
+            # before allowing a permanent create intent.
+            try:
+                inventory = rest.request("GET", "/v1/containers", timeout=20)
+                rest_routes.validate_read_result("list_containers", inventory)
+                if (not isinstance(inventory.get("unreachableBackends"), list)
+                        or "totalCount" not in inventory):
+                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+                names = [
+                    rest_routes.logical_name(row["username"])
+                    for row in inventory["containers"]
+                ]
+                if len(names) != len(set(names)):
+                    raise rest_routes.RouteFault("REST_INVENTORY_PARTIAL")
+            except (rest_wire.WireFault, rest_routes.RouteFault,
+                    KeyError, TypeError, ValueError):
+                raise GatewayRESTFault(
+                    "REST_CREATE_PREFLIGHT_UNVERIFIED") from None
+            if body["username"] in names:
+                raise GatewayRESTFault("REST_RESOURCE_EXISTS")
     else:
         raise GatewayRESTFault("REST_RESOURCE_EXISTS")
     # Everything above is validated before the permanent no-replay intent.
