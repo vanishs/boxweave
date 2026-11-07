@@ -932,8 +932,8 @@ store.admin(generate_password_hash(password))
         atomic(sudoers, payload, 0o440); old["managed_files"][str(sudoers)] = sha(payload)
         # This small independent heartbeat must not await 45+ guest SSH
         # host-key reads. R-04 scope and guest SSH trust remain separate.
-        scope_service = b"[Unit]\\nDescription=Attest native R-04 Provider scope\\n[Service]\\nType=oneshot\\nUMask=0077\\nExecStart=/usr/bin/python3 /usr/local/lib/boxweave/default/scope_heartbeat.py\\n"
-        scope_timer = b"[Unit]\\nDescription=Refresh native Provider scope heartbeat\\n[Timer]\\nOnBootSec=5s\\nOnUnitInactiveSec=10s\\nAccuracySec=1s\\n[Install]\\nWantedBy=timers.target\\n"
+        scope_service = b"[Unit]\nDescription=Attest native R-04 Provider scope\n[Service]\nType=oneshot\nUMask=0077\nExecStart=/usr/bin/python3 /usr/local/lib/boxweave/default/scope_heartbeat.py\n"
+        scope_timer = b"[Unit]\nDescription=Refresh native Provider scope heartbeat\n[Timer]\nOnBootSec=5s\nOnUnitInactiveSec=10s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n"
         for name,payload in (("boxweave-scope.service",scope_service),
                              ("boxweave-scope.timer",scope_timer)):
             target=UNIT_DIR/name
@@ -947,7 +947,9 @@ store.admin(generate_password_hash(password))
             atomic(target,payload,0o644);old["managed_files"][str(target)]=sha(payload)
         atomic(marker,json.dumps(old,sort_keys=True).encode())
         run(["systemctl","daemon-reload"],deadline)
-        run(["systemctl","start","boxweave-scope.service"],deadline)\n        run(["systemctl","enable","--now","boxweave-scope.timer"],deadline)\n        run(["systemctl","start","boxweave-trust.service"],deadline)
+        run(["systemctl","start","boxweave-scope.service"],deadline)
+        run(["systemctl","enable","--now","boxweave-scope.timer"],deadline)
+        run(["systemctl","start","boxweave-trust.service"],deadline)
         run(["systemctl","enable","--now","boxweave-trust.timer"],deadline)
         # Existing sshd configuration/host identity is observed, never rewritten.
         require(Path("/usr/sbin/sshd").exists() and Path("/etc/ssh/ssh_host_ed25519_key.pub").is_file(), "PREPARE_SSH_SERVER_SEPARATELY")
