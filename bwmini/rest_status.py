@@ -159,8 +159,13 @@ def normalize(method, route, upstream_http_status, raw_body):
     HTTP 404 by itself is not sufficient proof for a *create* preflight,
     because the route itself may be absent on a different Provider version.
     """
-    if type(upstream_http_status) is not int or not 400 <= upstream_http_status <= 599:
-        raise ValueError("expected HTTP error status")
+    if type(upstream_http_status) is not int or not 100 <= upstream_http_status <= 599:
+        raise ValueError("expected an HTTP status")
+    # urllib may surface 3xx as HTTPError because redirects are disabled.
+    # An unexpected redirect has no gRPC meaning and always fails closed.
+    if upstream_http_status < 400:
+        return NormalizedError(None, upstream_http_status,
+                               upstream_http_status, "unclassified")
     payload = _envelope(raw_body, upstream_http_status)
     if _legacy_missing_v0128(payload, method, route, upstream_http_status):
         return NormalizedError(GRPCCode.NOT_FOUND, 404, 500, "compatibility")
