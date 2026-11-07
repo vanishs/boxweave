@@ -12,9 +12,9 @@ Authenticated MCP caller
         -> owned Linux container (no guest client required)
 ```
 
-Create, list, start, stop, delete, resource config and native Exec are issued by Incus on the containing host. Guest command stdout, stderr, exit status, timeout and transport interruption are captured by native Exec handling and the durable BoxWeave operation journal. A valid guest root (UID 0) is the owner's selected default; explicit supported UID/GID overrides are allowed. Guest root is not a host root command surface. Do not expose host paths, Incus sockets, devices or privileged instance configuration through guest Exec.
+Create, list, start, stop, delete, resource config, P0 guest file APIs and native Exec are issued by Incus on the containing host. Creation starts and checks guest readiness by default; explicit `start=false` is supported. Guest command stdout, stderr, exit status, timeout and transport interruption are captured by native Exec handling and the durable BoxWeave operation journal. A valid guest root (UID 0) is the owner's selected default; explicit supported UID/GID overrides are allowed. Guest root is not a host root command surface. Do not expose host paths, Incus sockets, devices or privileged instance configuration through guest Exec.
 
-Native Incus file APIs can later support P1 guest file operations without requiring a guest-installed BoxWeave agent. The guest OS still needs ordinary runtime facilities needed by the specific command (e.g. an existing executable), but no BoxWeave-specific daemon.
+Native Incus guest file APIs are part of **P0**, enabling bounded listing/reading, create-only or safe conditional writes, and optimistic hash-checked replacement without requiring a guest-installed BoxWeave Agent. If a specific native API cannot prove safe symlink/race/atomicity handling, report UNSUPPORTED rather than using host filesystem fallbacks. All writes and Exec are durable async with stable Tracking ID and separate queryable output/diagnostic evidence. The guest OS still needs ordinary runtime facilities needed by the specific command (e.g. an existing executable), but no BoxWeave-specific daemon.
 
 ## Contrast with Containarium
 
@@ -32,4 +32,4 @@ Incus Linux **containers** support native Exec without a guest agent. Incus **vi
 
 ## Acceptance
 
-Create a fresh base-image container with no BoxWeave client, no SSH and no extra in-guest services. From authenticated MCP, perform lifecycle and guest-root `box_exec` with actual stdout/stderr/exit recording. Verify no guest agent was installed, the container remains unprivileged under native isolation, and forged Box identities or host paths cannot target the parent host. Repeat inside an independently installed nested BoxWeave where supported.
+Create a fresh base-image container with no BoxWeave client, no SSH and no extra in-guest services. From authenticated MCP, perform lifecycle and guest-root async `box_exec` with actual stdout/stderr/exit and original Tracking ID recording. List/read/write and hash-check-patch a guest file, run a test/build, disconnect/reconnect, inspect original output and rerun after a fix. Verify no guest agent was installed, the container remains unprivileged under native isolation, and forged Box identities or host paths cannot target the parent host. Repeat inside an independently installed nested BoxWeave where supported.

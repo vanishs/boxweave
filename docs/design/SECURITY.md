@@ -13,10 +13,16 @@
 ## MCP threat model and admission
 
 - Authenticate MCP using verifiable, independently revocable scoped bearer credentials; bootstrap the single super-admin locally. The listener uses loopback HTTP by default; an operator-managed trusted proxy/Tunnel supplies external HTTPS when explicitly configured. Never send administrator passwords on every MCP call.
-- Require authorization, scoped parameters, idempotency and exact native target identity for every mutation; deny unknown fields or raw native config that could bypass policy.
+- Require authorization, operation-class and exact-Box UUID Token permissions, scoped parameters, idempotency and exact native target identity for every mutation; deny unknown fields or raw native config that could bypass policy. Permission to execute as guest root does not confer permission to access parent-host resources.
 - Serve a bounded, typed public schema and redact secrets. Protect HTTP MCP against Origin/CORS abuse, request floods, oversized parameters and output leakage.
 - No direct MCP access to Incus's unrestricted Unix socket or Caddy's Admin API. Minimize privileges of the HTTP process; put privileged Incus/host setup behind a narrow local boundary with an allowlist of operations.
 - Do not confuse authentication with resource authority. Host files/services and foreign Instances, Incus networks, projects, devices, mounts, disks, sockets, and Caddy routes remain prohibited.
+
+## Tracking and guest-file privacy
+
+Assign server-owned Tracking IDs; treat caller-provided tracing headers as untrusted metadata, not authenticated identities. Go context propagates safe identifiers and deadlines to native adapters. Workers revalidate scoped policy and exact Box ownership before effects. Restrict `operation_get`, `operation_output_get` and `diagnostic_get` per actor/token rights and relevant Box; never publish secrets, full commands, guest content or foreign resource metadata through tracing. Guest file operations are P0 but must refuse host paths, unsafe file types, traversal/symlink escape and mismatched revisions.
+
+The local dependency installer is a **separate, privileged operator path**, never an MCP management tool. An explicitly initiated install/upgrade may automatically reconcile approved owned prerequisites, but shared Incus/foreign services require separate specific operator authorization before a disruptive upgrade. This preserves the MCP ownership invariant while maintaining versioned dependencies. See [Tracking/context](TRACKING_CONTEXT.md) and [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
 
 ## Allowed / denied examples
 
@@ -24,7 +30,7 @@
 |---|---|
 | Create or stop a Box whose UUID is owned by this layer | Allow when authorized and safe |
 | Exec as root (UID 0) **inside a verified owned guest**, within native guest confinement | Allow by default; never host root/host Exec |
-| Read or write files inside an owned Box guest | Planned P1; never arbitrary host paths |
+| Read, list, create or safely patch files inside an identity-verified owned Box guest | P0, with guest filesystem safety and scoped token rights; never host paths |
 | Forward an owned Box's HTTP/TCP/UDP service | Allow only via Box UUID + verified port |
 | Send Caddy to proxy an arbitrary host daemon, unrelated system or user-supplied URL | Deny |
 | Modify unrelated Incus instances, storage or security config | Deny |

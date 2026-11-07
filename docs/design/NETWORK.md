@@ -28,6 +28,10 @@ MCP accepts a requested protocol/host bind port + `box_id` + `guest_port`, not a
 
 Every layer may create its own route and forward records targeting **only its directly owned Boxes**. A service inside an L2 Box can be reached through parent layers only if operators independently configure ordinary owned-Box routes/forwards and network permissions at each layer. BoxWeave neither discovers the full ancestry nor automatically traverses or programs parent Caddy/Incus configurations. A child cannot edit its parent's routes, firewall, or credentials. This is the same networking contract at every level, not a special multi-layer publishing API.
 
+## Async and Tracking coverage
+
+Every accepted route/forward/ACL change journals an immutable intent, receives the same Tracking ID through MCP, Go domain/worker context, Caddy/Incus adapter and final verified native effect. A request timeout or stale ownership check does not imply that Caddy/network effects were absent. Per-port and per-route claims prevent conflicting mutations; query the original operation rather than retrying it blindly.
+
 ## Safety checks
 
 Test private denial, explicitly granted peer access, public-route allowance, blocked internet egress, IPv6, IP reuse, Caddy outage/restart, foreign route preservation, arbitrary-upstream rejection, nested reachability and no unintended parent modifications.

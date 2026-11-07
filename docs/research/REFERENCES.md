@@ -14,7 +14,7 @@ Retain English artifacts, requester-language replies, explicit privileges, sourc
 
 https://github.com/nikitatsym/incus-mcp
 
-Borrow write-after-read validation, explicit omitted-vs-null parameter semantics, non-blocking native operation waiting, API schema checks and real Incus integration tests. Its **in-process** waiter registry is not a substitute for v1 durable cross-restart operation journaling.
+Borrow write-after-read validation, explicit omitted-vs-null parameter semantics, non-blocking native operation waiting, API schema checks and real Incus integration tests. These are now mandatory across file writes, async Exec, Tracking ID/Operation and the P0 development loop. Its **in-process** waiter registry is not a substitute for v1 durable cross-restart operation journaling.
 
 ## fredmj/incus-mcp-server
 

@@ -10,6 +10,7 @@
 
 ## Trust and deployment constraints
 
+- Every authenticated tool request receives safe request/Tracking correlation, including errors and read calls where protocol-appropriate. MCP request cancellation does not automatically cancel an already admitted durable native operation.
 - Even when the transport is HTTP on loopback, MCP requires a caller credential. Authentication, authorization, token revocation, resource ownership, request size controls and structured denials are enforced by BoxWeave, not assumed from Cloudflare.
 - Treat proxy-exposed MCP as an Internet-reachable administrator surface, even if no local interface listens publicly. Enforce secure bearer token storage and meaningful rate limits; never log tokens, allow anonymous public tools or bypass the ownership boundary.
 - Honor supported MCP transport and Origin validation requirements without trusting arbitrary `Host`, `Forwarded`, `X-Forwarded-*` or Origin values as authorization. Any trusted-proxy configuration must be explicit and tested with the chosen client/tunnel.

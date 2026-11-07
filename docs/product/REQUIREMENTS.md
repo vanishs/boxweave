@@ -29,9 +29,22 @@ Status: **accepted design goals**, not implemented or tested facts.
 | R-023 | Linux container lifecycle and Exec require no guest-installed BoxWeave client, resident Agent or SSH daemon; default Exec UID is guest root only, never parent/host root. |
 | R-024 | The HTTP MCP listener binds only to `127.0.0.1` by default; the operator may separately proxy/Tunnel to public HTTPS, without enabling anonymous or raw native access. |
 | R-025 | Ubuntu LTS is the first tested host environment and default guest image; guest resources have configurable defaults and nesting is opt-in. |
-| R-026 | When supported and authorized, the installer reuses an existing Incus daemon and provisions only owned Project resources and a dedicated Caddy, with no foreign service takeover or implicit upgrades. |
+| R-026 | When supported and authorized, the installer reuses an existing Incus daemon and provisions only owned Project resources and a dedicated Caddy; explicitly invoked install/upgrade reconciles approved dependency versions without unauthorized foreign-service takeover. |
 | R-027 | Host upgrades are explicit, while new-version source releases from successful `v1` CI are automatic and immutable; no docs-only pseudo-release, duplicate tag, automatic deployment or stable selector change. |
 | R-028 | Local bootstrap issues multiple independently revocable scoped MCP credentials; managed resource ACLs may accept verified owned Box IPs or Box IDs, with identity-safe native state updates. |
 | R-029 | Missing/corrupt ownership state fails closed, with only explicit host-local verified recovery. |
+| R-030 | Every authenticated MCP action, including reads and validation/denial paths where protocol permits, emits a server-assigned Tracking ID; stable across deduplicated logical retries, distinct from request, idempotency, BoxWeave operation and native Incus IDs. |
+| R-031 | Go `context.Context` propagates deadlines, actor/scope and Tracking ID through transport, domain, durable journal, workers, Incus/Caddy/SQLite adapters, diagnostics and local maintenance where applicable; workers reconstruct only a safe persisted projection. |
+| R-032 | All accepted mutations including guest Exec and guest file writes run as durable asynchronous operations with scoped idempotency; client timeout/disconnect never implies native cancellation or permits blind replay of UNKNOWN. |
+| R-033 | Box creation starts by default (`start=false` opt-out), and distinguishes native RUNNING from verified guest Exec readiness. |
+| R-034 | P0 supplies agentless native guest file list/read/create-or-safe-write/hash-checked patch, bounded and verified within exact owned Box identities, with no host path or guest management Agent. |
+| R-035 | P0 supports asynchronous builds/tests via guest-root Incus Exec, bounded paginated output and observed exit/command success retrieval after client reconnect; missing evidence is UNKNOWN/not captured, not invented output. |
+| R-036 | P0 provides Tracking-ID-linked, ownership-scoped, redacted read-only diagnostics, including known failure layer, observed status, omissions and evidence level; no generic host inspection API. |
+| R-037 | MCP credentials can be restricted by operation class and exact owned Box UUID, with independently revocable rights; auth scope is distinct from resource ownership. |
+| R-038 | Disk shrink is refused before dispatch in P0 regardless of storage driver; disk growth is capability checked and verified after mutation. |
+| R-039 | Explicit local install/upgrade records source-bound required/observed Incus, Caddy, Go SDK/toolchain, OS and state-schema versions, automatically installs missing or upgrades outdated/incompatible approved **managed** dependencies, and verifies postflight. |
+| R-040 | Existing shared Incus or unrelated host services must not be restarted/upgraded by dependency reconciliation without explicit, specific, host-local operator approval and impact preflight; no broad or background updater. |
+| R-041 | P0 must pass the real clean-Box Agent development loop: create -> readiness -> read/list -> write/optimistic patch -> async test/build -> reconnect and recover result -> diagnose -> fix and retest -> independent validation. |
+| R-042 | P1, not P0, may add persistent guest process management, guest search convenience, idle auto-sleep and HTTP wake, OAuth 2.1 and snapshots. |
 
-See [acceptance cases](../verification/ACCEPTANCE.md) and detailed [security](../design/SECURITY.md), [operations](../design/OPERATIONS.md), and [nesting](../design/NESTING.md).
+See [acceptance cases](../verification/ACCEPTANCE.md), [P0 development loop](DEVELOPMENT_LOOP.md), [Tracking/Context](../design/TRACKING_CONTEXT.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), and detailed [security](../design/SECURITY.md), [operations](../design/OPERATIONS.md), and [nesting](../design/NESTING.md).

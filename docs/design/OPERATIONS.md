@@ -1,6 +1,6 @@
 # Durable operations and recovery — P0
 
-Incus has native operations; **BoxWeave operations are separate durable business records**, tracking authorization, stable Box identity, ownership, idempotency, dispatch evidence, and postcondition verification across Incus, Caddy and local databases.
+Incus has native operations; **BoxWeave operations are separate durable business records**, tracking authorization, stable Box identity, ownership, idempotency, original **Tracking ID**, Go execution context metadata, dispatch evidence, and postcondition verification across Incus, Caddy and local databases. All mutations, including guest Exec and file writes, are **asynchronous by default**. Reads may be synchronous but still carry a Tracking ID.
 
 ## Lifecycle
 
@@ -18,7 +18,7 @@ An operation may later move from UNKNOWN to SUCCEEDED or FAILED **only** after s
 
 ## Minimum journal fields
 
-`operation_id`, owner/layer identity, authenticated actor, operation type, requested target `box_uuid`, stable incarnation/creation identity, immutable normalized intent, scoped idempotency key, queued/dispatch timestamps, native Incus operation ID where available, Caddy/resource revision, state transitions, bounded error, verification evidence, and redacted diagnostic references.
+`operation_id`, original `tracking_id`, inbound `request_id` and safe diagnostic `trace_id` linkage, owner/layer identity, authenticated actor/token ID (not token value), operation type, requested `box_uuid` and stable incarnation, normalized **redacted** immutable intent/fingerprint, scoped idempotency key digest, safe persisted `OperationContext` projection, queued/dispatch timestamps, native Incus operation ID where available, Caddy/resource revision, state transitions, bounded error, observed guest command exit, verification evidence, and private bounded output reference.
 
 Persist a safe pre-dispatch intent transactionally. Apply a unique constraint to the idempotency scope. Exact duplicate requests return the original receipt; conflicting or same-key/different-payload requests fail with a typed conflict. Do not rely on a short-lived in-process map as the only operation registry.
 
@@ -29,13 +29,13 @@ Persist a safe pre-dispatch intent transactionally. Apply a unique constraint to
 - Categorize transport timeout separately from native operation failure, application deadline and failed verification. Incus may finish after a local timeout.
 - Check native state and original operation whenever possible; reconcile Caddy and ACL desired-versus-actual state under strict ownership and revision checks.
 - Verify actual postconditions (CPU/memory config, Box state, guest command exit, native ACL, Caddy routing, forward identity). A successful HTTP response from Incus/Caddy alone is not sufficient.
-- Bounded stdout/stderr, pagination and expiring retention; redact tokens and private data. Preserve UNKNOWN original identities until a reviewed resolution.
+- Bounded stdout/stderr, paginated `operation_output_get`, expiration and retention; redact tokens, file bytes and private data. Preserve UNKNOWN original identities until reviewed resolution. An observed guest exit `!= 0` is **completed execution** with `command_success=false`, not an MCP timeout or UNKNOWN.
 - Define safe, case-specific compensation only for proven owned partial effects. No catch-all retry, force-delete or reset of a suspicious Box.
 - SQLite durability and crash recovery must be demonstrated under service kill, host reboot simulation and nested parent restart.
 
 ## Tool response
 
-An accepted mutation responds with the persistent `operation_id` and current state. `operation_get` and `operation_list` expose scoped progress, terminal result and evidence. Read-only tools may return immediately. Use standard MCP error categories and meaningful domain error codes; do not invent fake HTTP/gRPC statuses or misclassify UNKNOWN as not found.
+An accepted mutation responds with persistent `tracking_id`, `operation_id`, and current state. `operation_get`, `operation_list`, and `operation_output_get` expose scoped progress, bounded output/exit and evidence; `diagnostic_get` provides a redacted trace/phase explanation by Tracking ID. Read-only tools may return immediately but carry correlation. A valid duplicate request returns original IDs. Use standard MCP error categories and meaningful domain error codes; do not invent fake HTTP/gRPC statuses or misclassify UNKNOWN as not found. See [Tracking/context](TRACKING_CONTEXT.md).
 
 ## High-risk cases
 

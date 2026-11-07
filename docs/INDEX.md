@@ -5,6 +5,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | Question | Authoritative document |
 |---|---|
 | What is BoxWeave? | [Product](product/PRODUCT.md) |
+| What is the primary P0 Agent workflow? | [Sustainable development loop](product/DEVELOPMENT_LOOP.md) |
 | What is in/out? | [Scope](product/SCOPE.md) |
 | What must work? | [Requirements](product/REQUIREMENTS.md) |
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |
@@ -15,6 +16,8 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What may an MCP client touch? | [Security and ownership](design/SECURITY.md) |
 | How does nesting work? | [Nesting](design/NESTING.md) |
 | What happens to interrupted mutations? | [Operations](design/OPERATIONS.md) |
+| How are requests correlated across services? | [Tracking ID and Go context](design/TRACKING_CONTEXT.md) |
+| How are dependency versions reconciled? | [Dependency lifecycle](process/DEPENDENCY_LIFECYCLE.md) |
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |
 | How is Incus integrated? | [Incus integration](design/INCUS_INTEGRATION.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |

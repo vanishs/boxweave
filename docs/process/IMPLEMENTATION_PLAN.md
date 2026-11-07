@@ -1,20 +1,25 @@
-# Proposed v1 implementation slices
+# v1 implementation plan — sustainable Agent development first
 
-**Status:** plan only. The `v1` branch has no runtime implementation. Each slice is subject to resource ownership, recursive parity and durable operation acceptance.
+**Status:** design plan, not runnable code. The owner prioritized a self-sustaining Agent edit/build/test/diagnose loop before optional platform features. Every slice must preserve ownership restrictions, native SDK use, Tracking IDs and recursive runtime compatibility.
 
-| Order | Slice | Main proof before claiming complete |
+| Order | Slice | Minimum actual proof |
 |---|---|---|
-| 0 | Lock compatible official Go SDK revisions, native Incus capability matrix, privilege-boundary threat model and typed MCP schemas | Pinned module graph, compiled SDK smoke test, real native Incus version/extension probe, reviewed ownership invariants |
-| 1 | Build Go process/service, local install/status/recovery CLI, super-admin and scoped token bootstrap, **authenticated loopback HTTP MCP** and restricted local privileges | Authenticated local MCP handshake; optional operator-configured HTTPS proxy/Tunnel; foreign resources and raw host requests denied |
-| 2 | SQLite identity/ownership model and durable async operation journal | Crash-after-dispatch, duplicate requests, conflict, UNKNOWN recovery without replay |
-| 3 | Agentless Box lifecycle, safe updates, native guest-root Exec and verified status; Ubuntu LTS default image, configurable resource defaults, opt-in nesting | Create/start/guest-root Exec/stop/delete without guest SSH/client, exact UUID, denial and independent post-read |
-| 4 | Private network topology, directional ACL grants, default internet, optional block | Real same-bridge IPv4/IPv6 denial/allow; IP reuse; no foreign NIC mutation |
-| 5 | Box-owned Caddy public routes and native TCP/UDP forwards | Domain/port collision, cross-Box public allowance, restart reconciliation, foreign upstream rejection |
-| 6 | Nested installation/upgrade compatibility and full per-layer feature parity (no cross-layer controller) | L0/L1/L2 full P0 matrix, L3 key paths if supported, parent/sibling denial; ordinary parent Box lifecycle |
-| 7 | Independent system reacceptance, safe installer upgrade/repair, exact-source **CI auto-release** readiness | Finder/Fixer/Verifier original repro, fresh install, rollback/recovery evidence; new VERSION green `v1` CI publishes exact assets but does not upgrade hosts |
+| 0 | Pin official Go MCP/Incus SDKs, dependency version manifest and required native API Extensions; freeze typed tool/Tracking/context schemas and privileged boundary | Manifest and hashes; compiled Go SDK smoke tests; observed Incus/Caddy/OS versions; reviewed security failure modes |
+| 1 | Minimal Go service, local CLI installer/upgrade with automatic **approved dependency** reconciliation, admin/token bootstrap, loopback HTTP MCP and restricted native access | Clean Ubuntu LTS host, missing owned dependency auto-install, outdated owned dependency upgrade, shared Incus refusal/explicit approval, real MCP initialize/authorized and denied call |
+| 2 | SQLite ownership and **universal Tracking ID / Go context**; durable async operation journal, bounded output store, diagnostic evidence and reconciliation | Same original Tracking ID through ingress/worker/native adapter; duplicate idempotency one effect; crash/UNKNOWN preserves native original |
+| 3 | Box create/get/list/update/start/stop/delete with default start/guest Exec readiness; agentless async guest-root Exec and output retrieval; no disk shrink | Real Box UUID + readiness proof; `go test`/build Exec with nonzero/zero exit, client disconnect and original result recovery |
+| 4 | **Complete P0 development loop:** native guest file list/read/create/conditional write/optimistic patch, scopes and redacted diagnostic lookup | Real create -> edit -> failing test -> debug -> fix -> passing test -> independent post-read; foreign path, stale hash, token scope denied without effect |
+| 5 | Private network topology, directional ACL grants, internet allowed by default/opt-out and revision-safe writes | Real IPv4/IPv6 same-bridge denial/allow, IP reuse, native enforcement and foreign-NIC preservation |
+| 6 | Box-owned Caddy HTTP routes and native TCP/UDP forwards with durable reconciliation | Domain/port conflicts, owned target only, Caddy restart, foreign route denial, original operation Tracking ID preserved |
+| 7 | Nested install/upgrade compatibility and identical per-layer MCP/function coverage (no cross-layer controller) | L0/L1/L2 full P0 loop/matrix, L3 key paths if supported, own dependency versions, no parent/sibling modification |
+| 8 | Adversarial Finder/Fixer/independent Verifier reacceptance, exact installed package and Go source-bound CI auto-publication | Same original bug replay against exact built bytes; complete per-tool pass/fail coverage and safe release provenance; CI source release never upgrades hosts |
 
-A slice changing installed surfaces cannot be marked fully accepted from source tests alone. Once the minimal P0 product becomes usable, complete acceptance is defined by [ACCEPTANCE.md](../verification/ACCEPTANCE.md), not by a count of passed unit tests.
+## Gate rules
 
-P1, separately scoped later: guest file operations and storage-driver-supported snapshots. Backups are not in scope.
+- **A slice is not complete until its real acceptance criteria pass.** Design review, mock/CI tests and source Release do not prove installed native behavior.
+- P0 provides a genuinely usable development workflow before building optional process supervision, sleep/wake, search, OAuth or snapshot features. Do not conflate a running Box with a ready guest.
+- Every mutating tool, including Exec and guest file operations, uses durable async admission. Reads still carry correlation context. No tool supports arbitrary host shell/files or unmanaged Caddy upstreams.
+- Version-aware local dependency reconciliation is part of install/upgrade; upgrading a shared pre-existing Incus daemon is a separately scoped privileged action, not an automatic side effect of a generic install.
+- The `v1` branch starts at design-only `1.0.0`. No CI workflow or real release exists yet. After an actual tested build and new/versioned candidate, the standing GitHub CI publish policy applies, independent of host installation.
 
-The current v1.0.0 design baseline is intentionally not a production deliverable.
+Relevant contracts: [development loop](../product/DEVELOPMENT_LOOP.md), [tool catalog](../design/MCP_TOOLS.md), [Tracking/context](../design/TRACKING_CONTEXT.md), [dependency lifecycle](DEPENDENCY_LIFECYCLE.md), [security](../design/SECURITY.md), [acceptance](../verification/ACCEPTANCE.md).

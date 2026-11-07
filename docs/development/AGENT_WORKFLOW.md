@@ -16,8 +16,8 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 - Keep MCP transport/auth, domain policy, durable operation journal and native adapters independent. Test the domain service without an MCP transport where possible.
 - Check real native identity and local ownership before each sensitive read or mutation. Guest Exec is not host Exec.
 - Validate the original result, negative/refusal behavior, and postcondition on the actual Incus/Caddy system. Do not equate API success with applied state.
-- Persist mutation intent and identity *before* dispatch; maintain a recoverable UNKNOWN when a response is missing. Never blindly replay.
-- Favor focused dependencies; explain license, provenance, transitive dependencies and security risk for additions. Treat CI workflow, installer, privileges, permissions and deployment scripts as high-review areas.
+- Persist mutation intent, safe caller scope and original Tracking ID *before* dispatch; carry typed Go `context.Context` through MCP/domain/worker/Incus/Caddy/SQLite and reconstruct safe metadata when asynchronous. Keep distinct idempotency, BoxWeave operation and native operation IDs; maintain recoverable UNKNOWN without blind replay.
+- Favor focused dependencies; explain license, provenance, transitive dependencies and security risk for additions. Pin required/observed dependency versions in the install ledger; perform automatic managed-dependency reconciliation in **explicit local** install/upgrade workflows, with a separate authorization gate for shared Incus/foreign services. Treat CI workflow, installer, privileges, permissions and deployment scripts as high-review areas.
 - Use generic names and example domains in public docs. Escape untrusted text in console and log output; avoid recording private IPs or real service names.
 - Maintain user-visible documentation and machine-readable MCP schemas in English. Reply to the requester in their explicitly requested language or this conversation's language by default.
 
@@ -26,9 +26,9 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 1. Reproduce a bug before modifying code; save original request, stdout/stderr/exit, operation receipt and independent native state.
 2. Write one bounded change, its acceptance criterion and positive/negative regression tests. Avoid unrelated refactors or sweeping generated changes.
 3. Run targeted checks first (Go: `go test`, `go vet`, lint/security tools when present). Do not mark absent checks as passed.
-4. For MCP behavior, test authenticated Streamable HTTP initialization, discovery and call; invalid arguments, authorization and ownership failures; real side-effect/absence-of-effect oracles.
+4. For MCP behavior, test authenticated Streamable HTTP initialization, discovery and call; invalid arguments, operation-class/exact-Box Token scopes, consistent Tracking IDs, Go context/deadline propagation, and ownership failures; real side-effect/absence-of-effect oracles.
 5. For startup/upgrade/nesting/privileged behavior, use an explicitly approved disposable environment. Prefer a clean test Box to prove clean installation. An existing Box with an old release can be seeded in a clean lab to reproduce upgrades.
-6. Test exact candidate artifact, service version, Box UUID and actual layer. L0/L1/L2 parity is required for nesting-sensitive slices where technically supported.
+6. Test the **complete Agent edit/build/test/diagnose/retest loop**, and exact candidate artifact, dependency versions observed before/after, Tracking ID, service version, Box UUID and actual layer. L0/L1/L2 parity is required for nesting-sensitive slices where technically supported.
 7. Preserve FAIL/UNKNOWN evidence and its original resource; clean only task-owned successful artifacts and verify native removal.
 8. Record exact PASS/FAIL/PARTIAL/BLOCKED/SKIPPED/UNKNOWN with evidence tier and remaining tasks.
 
@@ -37,16 +37,16 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 The owner instruction **Run full BoxWeave reacceptance** invokes an adversarial, black-box-first campaign, not merely unit-test execution.
 
 - **Coordinator:** enumerate currently installed MCP tools and host-local CLI leaves, plus actual Incus/Caddy/runtime versions. Build a named per-tool/function matrix including tests that cannot safely run.
-- **Finder:** attempt realistic end-to-end workflows, invalid/refusal paths, two-actor concurrency, service interruption, nested failures and independently observed side effects. Preserve first failure and known-bad calibration.
+- **Finder:** attempt realistic end-to-end create/read/edit/async Exec/reconnect/fix/retest workflows, invalid/refusal paths, two-actor concurrency, service interruption, nested failures and independently observed side effects. Preserve first failure and known-bad calibration.
 - **Fixer:** isolate root cause, retain reproduction and produce an exact candidate with focused tests.
 - **Independent Verifier:** run the original black-box failure against those exact candidate bytes on a different approved test Box/Agent, inspect native effects, then declare only the coverage actually seen.
-- **Reporter:** list every tool by name, scenario, result and evidence tier; separately retain suspected bugs, upstream limitations, harness defects and UNKNOWN receipts. If independent agents are unavailable, label same-Agent, not independent.
+- **Reporter:** list every tool by name, Tracking ID, original operation identity, scenario, result and evidence tier; separately retain suspected bugs, upstream limitations, harness defects and UNKNOWN receipts. If independent agents are unavailable, label same-Agent, not independent.
 
 The full test harness belongs in repository/CI or disposable test Boxes, **not** inside the standard customer runtime unless a small diagnostic is a deliberate product feature.
 
 ## Privileged-boundary adversarial cases
 
-Test foreign Incus instances/project, stale/reused Box names/IPs, raw Incus/Caddy API input, host file paths/mounts, hostile logs, port/domain collisions, cross-Box ACLs, nested access to parent/sibling, expired credentials, HTTP MCP origin policy, lost worker replies and restart with original UNKNOWN identity. Denial must leave native foreign state unchanged.
+Test foreign Incus instances/project, stale/reused Box names/IPs, raw Incus/Caddy API input, guest file traversal/symlink/hardlink/device and stale hashes, host file paths/mounts, hostile logs, operation output cross-token disclosure, port/domain collisions, cross-Box ACLs, nested access to parent/sibling, expired credentials, HTTP MCP origin policy, lost worker replies and restart with original UNKNOWN identity. Denial must leave native foreign state unchanged.
 
 The owner-approved private-network contract allows public-site access between Boxes. Do not silently expand P0 into blocking public-route hairpin traffic.
 

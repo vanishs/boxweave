@@ -43,25 +43,38 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-024 | An unmodified supported Linux container needs no BoxWeave guest Client, resident Agent or SSH; guest-root Exec has correct exit/output and cannot become host root | I + N |
 | A-025 | MCP only listens on 127.0.0.1 HTTP by default, no automatic public ingress; operator-configured HTTPS proxy/Tunnel works with auth and MCP transport; bad tokens still denied | I |
 | A-026 | Default Ubuntu LTS image, supported alternative image, configurable resources and explicit nesting switch behave as declared and respect nested resource limits | I + N |
-| A-027 | Host install reuses compatible existing Incus in a separately controlled Project and dedicated Caddy, installs missing dependencies only with authorization and refuses foreign port/ownership conflicts | I + V |
+| A-027 | Host install reuses existing compatible Incus Project and dedicated Caddy, records dependency versions, automatically installs/upgrades authorized managed dependencies, and refuses foreign-service/port/ownership conflicts | I + V |
 | A-028 | Multiple independently revocable scoped tokens enforce permissions with safe bootstrap/rotation and fail-closed storage recovery | I + V |
 | A-029 | ACL selection by Box ID or verified owned Box IP correctly resolves native identity; foreign IP changes do not transfer grants | I + N |
 | A-030 | Missing/corrupt SQLite ownership store halts dangerous mutations; explicit local recovery does not silently adopt unowned Incus/Caddy assets | I + V |
 | A-031 | Successful new-version `v1` CI builds a genuine artifact and automatically publishes one immutable matching tag/Release; unchanged version and docs-only tree do not create false assets; installed upgrades and stable pointer remain manual | T + I |
-| A-032 | A new or nested Ubuntu LTS host can complete approved dependency bootstrap and explicit BoxWeave upgrade without modifying unrelated services | I + N |
+| A-032 | A new or nested Ubuntu LTS host can complete managed dependency installation/**version upgrades** and explicit BoxWeave upgrade, preserving unrelated services | I + N |
+| A-033 | Server-assigned Tracking ID persists across MCP, Go context/domain, SQLite worker, native Incus/Caddy adapter, diagnostic event and final receipt; dedup returns original Tracking/Operation IDs | T + I |
+| A-034 | Read and denied MCP actions are safely correlated; client-provided tracking fields do not grant identity; request ID differs on retry while logical Tracking ID remains stable | T + I |
+| A-035 | Async guest Exec survives client disconnect where service/native worker remains alive; original command exit 0/nonzero, stdout/stderr pages and completion/unknown distinctions are observed | I + V |
+| A-036 | Clean Box creation defaults to start and verifies independent guest Exec readiness; explicit `start=false` leaves Box stopped without false-ready claim | I + N |
+| A-037 | P0 agentless guest file list/read/create-or-conditional-write/optimistic patch works in a clean Box without Guest Agent or SSH; native file bytes and checksums verify result | I + N + V |
+| A-038 | Unsafe guest file path, symlink/hardlink/device, stale revision, foreign Box UUID and unauthorized per-Box/token class are denied before effect; no host file mutation | I + V |
+| A-039 | Complete P0 development loop: create -> read -> edit -> deliberate failing Go test -> track and recover output after reconnect -> diagnose -> fix -> passing Go test -> independently verify | I + N + V |
+| A-040 | `diagnostic_get` redacts secrets, scope-checks Tracking ID, reports omitted/unverified stages and does not permit generic host log access | T + I |
+| A-041 | Known disk shrink denied before native dispatch with no side effects; supported disk growth returns native/postcondition evidence, otherwise UNSUPPORTED | I + V |
+| A-042 | Explicit local upgrade detects outdated owned Incus/Caddy dependencies, records before/after, upgrades compatible pinned versions and proves running/native feature compatibility | I + N |
+| A-043 | Shared pre-existing Incus with unrelated consumers requires separate local approval before upgrade/restart; decline/refusal leaves foreign services intact | I + V |
+| A-044 | Interrupted dependency upgrade or SQLite migration retains exact Tracking ID, source digest, phase and recoverable error; no silent reinstall/downgrade, blanket host update or automatic background package mutation | T + I |
+| A-045 | P0 has no silent idle stop/HTTP wake or OAuth-only login prerequisite; later P1 additions do not break Token-backed Agent development loop | I |
 
 ## Required adversarial combinations
 
 - Create is in flight while concurrent delete/update arrives; enforce one allowed effect, typed conflict, verified follow-on success.
 - Delete then recreate a Box with the same name/IP; ACL, routes, forwarding and old operation receipts never rebind to the new UUID.
-- Lose MCP client connection after mutating dispatch; query the *original* operation, not an implicit replay.
+- Lose MCP client connection after mutating dispatch (including a long guest build/test); query the *original* operation/output by Tracking/Operation ID, not an implicit replay.
 - Incus accepts a configuration write but ignores a key; verify postcondition failure.
 - Caddy route written to DB, Caddy API unavailable, later Caddy restart; reconcile without touching unowned domains.
 - Parent L0 stops L1 Box while L1 has a running nested operation; verify child recovery and no accidental parent modification.
 - Box A cannot privately connect to B without permission but can reach B's intentionally published website.
 - Attempt to proxy arbitrary host local port or external service, edit foreign Incus network, or delete arbitrary host files; verify unchanged native state.
 
-Test harnesses must include known-bad negative controls. Keep original receipts, native side-effect oracles, actor identities and exact candidate hashes. Do not label same-Agent tests independent.
+Test harnesses must include a real source edit/build/test/retest scenario, known-bad negative controls, and a pre/post managed-dependency version record. Keep original receipts, native side-effect oracles, actor identities and exact candidate hashes. Do not label same-Agent tests independent.
 
 ## Coverage reporting
 
