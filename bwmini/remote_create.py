@@ -42,6 +42,24 @@ CREATE TABLE IF NOT EXISTS remote_create_options(
  last_probe_at REAL NOT NULL DEFAULT 0,
  source TEXT NOT NULL CHECK(source IN ('http','ssh','web'))
 );
+CREATE TABLE IF NOT EXISTS remote_rest_tasks(
+ task_id TEXT PRIMARY KEY,
+ request_key TEXT NOT NULL UNIQUE,
+ logical TEXT NOT NULL,
+ action TEXT NOT NULL CHECK(action IN ('start','stop','delete','resize')),
+ payload_sha256 TEXT NOT NULL,
+ identity_digest TEXT NOT NULL,
+ instance_name TEXT NOT NULL,
+ instance_created TEXT NOT NULL,
+ spec_json TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('submitted','accepted','succeeded','unknown')),
+ code TEXT NOT NULL,
+ created REAL NOT NULL,
+ updated REAL NOT NULL,
+ last_probe_at REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS remote_rest_tasks_poll
+ ON remote_rest_tasks(state,last_probe_at);
 """
 
 class CreateFault(Exception):
