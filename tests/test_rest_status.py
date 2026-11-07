@@ -166,3 +166,30 @@ class CanonicalProviderErrorTests(unittest.TestCase):
                     {"url":"http://127.0.0.1:18080",
                      "token_file":"/tmp/placeholder-not-read"},
                     "list_containers", {})
+
+    def test_transport_loss_is_standard_unavailable_for_reads_unknown_for_writes(self):
+        class Owner:
+            url = "http://127.0.0.1:18080"
+            def _credential(self):
+                return "placeholder-not-real"
+            class Opener:
+                def open(self, req, timeout):
+                    raise urllib.error.URLError("do-not-reveal")
+            opener = Opener()
+        for method, expected_code, expected_http in (
+            ("GET", rest_status.GRPCCode.UNAVAILABLE, 503),
+            ("POST", rest_status.GRPCCode.UNKNOWN, 500),
+            ("DELETE", rest_status.GRPCCode.UNKNOWN, 500),
+            ("PUT", rest_status.GRPCCode.UNKNOWN, 500),
+        ):
+            with self.subTest(method=method):
+                with self.assertRaises(rest_wire.WireFault) as caught:
+                    rest_wire.request(
+                        Owner(), method, "/v1/containers/demo",
+                        body={} if method != "GET" else None)
+                err = caught.exception
+                self.assertEqual(err.grpc_code, expected_code)
+                self.assertEqual(err.http_status, expected_http)
+                self.assertIsNone(err.upstream_http_status)
+                self.assertEqual(err.status_origin, "transport")
+                self.assertNotIn("do-not-reveal", str(err))
