@@ -40,6 +40,15 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-021 | Production runtime builds with the official MCP Go SDK and official Incus Go client; native Exec, Operation, ACL and Unix-socket behavior are tested against the observed Incus daemon rather than assumed | T + I |
 | A-022 | A nested installation performs its own bootstrap without taking parent admin credentials or mutating parent services; parent permission deficits are correctly reported | N + V |
 | A-023 | A Box containing another BoxWeave is managed through ordinary parent Box lifecycle only; deleting that owned Box uses the standard confirmation and does not require inner-controller discovery or a recursive orchestration API | I + N |
+| A-024 | An unmodified supported Linux container needs no BoxWeave guest Client, resident Agent or SSH; guest-root Exec has correct exit/output and cannot become host root | I + N |
+| A-025 | MCP only listens on 127.0.0.1 HTTP by default, no automatic public ingress; operator-configured HTTPS proxy/Tunnel works with auth and MCP transport; bad tokens still denied | I |
+| A-026 | Default Ubuntu LTS image, supported alternative image, configurable resources and explicit nesting switch behave as declared and respect nested resource limits | I + N |
+| A-027 | Host install reuses compatible existing Incus in a separately controlled Project and dedicated Caddy, installs missing dependencies only with authorization and refuses foreign port/ownership conflicts | I + V |
+| A-028 | Multiple independently revocable scoped tokens enforce permissions with safe bootstrap/rotation and fail-closed storage recovery | I + V |
+| A-029 | ACL selection by Box ID or verified owned Box IP correctly resolves native identity; foreign IP changes do not transfer grants | I + N |
+| A-030 | Missing/corrupt SQLite ownership store halts dangerous mutations; explicit local recovery does not silently adopt unowned Incus/Caddy assets | I + V |
+| A-031 | Successful new-version `v1` CI builds a genuine artifact and automatically publishes one immutable matching tag/Release; unchanged version and docs-only tree do not create false assets; installed upgrades and stable pointer remain manual | T + I |
+| A-032 | A new or nested Ubuntu LTS host can complete approved dependency bootstrap and explicit BoxWeave upgrade without modifying unrelated services | I + N |
 
 ## Required adversarial combinations
 

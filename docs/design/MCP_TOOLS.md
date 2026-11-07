@@ -6,14 +6,14 @@
 
 | Tool | Kind | Contract |
 |---|---|---|
-| `box_create` | Mutation | Provision one Box with approved image, resources and optional nesting capability. |
+| `box_create` | Mutation | Provision an agentless Box with reviewed Ubuntu LTS default image, configurable CPU/RAM/disk defaults, optional alternate supported image and explicit opt-in nesting. |
 | `box_list` | Read | List only Boxes owned by this layer, including identity and lifecycle state. |
 | `box_get` | Read | Return native identity, configuration, state, health and bounded diagnostics. |
 | `box_update` | Mutation | Whitelisted CPU, memory, disk and network/nesting options; no arbitrary Incus config or host mounts. |
 | `box_start` | Mutation | Start exact Box UUID and verify running state. |
 | `box_stop` | Mutation | Stop exact Box UUID and verify stopped state. |
 | `box_delete` | Mutation | Delete exact owned Box UUID, with standard server-enforced confirmation and owned-attachment cleanup; no special discovery or protection of a nested controller inside the Box. |
-| `box_exec` | Mutation | Execute inside verified owned guest via Incus Exec, capture bounded output/exit; not a host shell. |
+| `box_exec` | Mutation | Execute inside the verified owned container as guest root (UID 0) by default, with optional explicit guest identity, via native Incus Exec; bounded stdout/stderr/exit, no guest Agent or host shell. |
 | `operation_get` | Read | Original durable operation receipt, current phase, target and evidence. |
 | `operation_list` | Read | Scoped, paginated operation history with explicit unknowns. |
 | `http_route_list` | Read | List only BoxWeave-owned public HTTP route records. |

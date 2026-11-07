@@ -6,6 +6,6 @@ A BoxWeave instance regards its own execution environment as its host. When inst
 
 Full nested compatibility primarily enables safe development, installation and testing of new BoxWeave versions **inside existing Boxes**. It also keeps the option of future environment subleasing open, without implementing a tenant/subleasing platform or any cross-layer orchestration in v1.
 
-Operators use a secure Streamable HTTP MCP management endpoint. A limited local CLI supports installation, lifecycle maintenance, initial super-administrator credential setup and emergency recovery. Application traffic published through Caddy or port forwarding is a separate data plane, **not** an additional management API.
+Operators use an authenticated Streamable HTTP MCP management endpoint bound to the local loopback interface by default; any public HTTPS exposure uses a separately operator-managed proxy or tunnel. A limited local CLI supports installation, lifecycle maintenance, initial super-administrator credential setup and emergency recovery. Application traffic published through Caddy or port forwarding is a separate data plane, **not** an additional management API.
 
-The project aims for correctness, bounded authority, repeatability and clear failure states, rather than feature parity with the former Containarium wrapper.
+Ordinary Linux Boxes need no installed BoxWeave guest client, resident management Agent, or SSH service: the host Incus daemon provides native lifecycle and Exec. Guest Exec defaults to root *inside the owned Box*, not the host. The project aims for correctness, bounded authority, repeatability and clear failure states, rather than feature parity with the former Containarium wrapper.

@@ -12,7 +12,7 @@
 
 ## MCP threat model and admission
 
-- Authenticate MCP over TLS with centrally verifiable bearer credentials; bootstrap the single super-admin locally, issue/revoke tokens through a reviewed local workflow. Never send administrator passwords on every MCP call.
+- Authenticate MCP using verifiable, independently revocable scoped bearer credentials; bootstrap the single super-admin locally. The listener uses loopback HTTP by default; an operator-managed trusted proxy/Tunnel supplies external HTTPS when explicitly configured. Never send administrator passwords on every MCP call.
 - Require authorization, scoped parameters, idempotency and exact native target identity for every mutation; deny unknown fields or raw native config that could bypass policy.
 - Serve a bounded, typed public schema and redact secrets. Protect HTTP MCP against Origin/CORS abuse, request floods, oversized parameters and output leakage.
 - No direct MCP access to Incus's unrestricted Unix socket or Caddy's Admin API. Minimize privileges of the HTTP process; put privileged Incus/host setup behind a narrow local boundary with an allowlist of operations.
@@ -23,7 +23,7 @@
 | Request | Disposition |
 |---|---|
 | Create or stop a Box whose UUID is owned by this layer | Allow when authorized and safe |
-| Exec inside an owned guest, within native guest confinement | Allow (subject to guest execution policy) |
+| Exec as root (UID 0) **inside a verified owned guest**, within native guest confinement | Allow by default; never host root/host Exec |
 | Read or write files inside an owned Box guest | Planned P1; never arbitrary host paths |
 | Forward an owned Box's HTTP/TCP/UDP service | Allow only via Box UUID + verified port |
 | Send Caddy to proxy an arbitrary host daemon, unrelated system or user-supplied URL | Deny |
@@ -34,6 +34,12 @@
 | Access an owned Box's public Caddy site from another Box | Allowed by agreed network policy |
 
 **Important limitation:** A guest Exec can modify the guest's own files and processes; the isolation boundary is the enclosing guest and native security policy. This design does not claim that arbitrary commands inside a permitted guest are harmless.
+
+## Transport and guest control distinction
+
+The public MCP listener is authenticated loopback HTTP. External HTTPS exposure is operator-owned, for example Cloudflare Tunnel, and must not weaken token checks, ownership enforcement or request/Origin validation. BoxWeave's dedicated Caddy manages **application** domains to owned Boxes, not automatically its own MCP endpoint.
+
+No guest-installed management Agent is required for Incus Linux containers. Guest-root Exec is explicitly allowed, but unprivileged container configuration, host-mount/device denial and native layer isolation remain mandatory. The target of every native Exec must be an identity-verified Box owned by this controller.
 
 ## Caddy and Incus authority
 

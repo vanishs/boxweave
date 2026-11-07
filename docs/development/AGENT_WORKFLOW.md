@@ -52,8 +52,8 @@ The owner-approved private-network contract allows public-site access between Bo
 
 ## Version, publication and handoff
 
-- Version is `1.X.Y`: X = feature, Y = patch. Read [versioning](../process/VERSIONING.md). A change to documents alone need not be published.
-- Source-CI success, an immutable GitHub Release and independent installed acceptance are distinct events. Do not tag, publish, deploy or move the stable selector without currently applicable authorization.
+- Version is `1.X.Y`: X = feature, Y = patch. Read [versioning](../process/VERSIONING.md) and [approved defaults](../decisions/DEFAULTS.md). Documentation-only edits do not create functional releases.
+- Source-CI success, an immutable GitHub Release and independent installed acceptance are distinct events. The owner's standing policy authorizes **automatic publication from verified new-version `v1` CI** once real assets exist, not arbitrary Agent-driven tags, production deployment or stable selector changes.
 - Handoff in one short note, with exact source SHA/dirty state, target layer/Box UUID, changes, commands run and exits, proof level, retained resources, unresolved risks/UNKNOWN and smallest next executable task.
 
 For full requirements see [acceptance](../verification/ACCEPTANCE.md).

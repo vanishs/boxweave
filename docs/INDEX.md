@@ -10,11 +10,14 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |
 | Which runtime and SDKs are required? | [Go technology stack](design/TECH_STACK.md) |
 | Which MCP tools are planned? | [MCP catalog](design/MCP_TOOLS.md) |
+| Must a Box run a client? | [Agentless guest management](design/GUEST_MANAGEMENT.md) |
+| How does local MCP become reachable? | [MCP loopback transport](design/MCP_BINDING.md) |
 | What may an MCP client touch? | [Security and ownership](design/SECURITY.md) |
 | How does nesting work? | [Nesting](design/NESTING.md) |
 | What happens to interrupted mutations? | [Operations](design/OPERATIONS.md) |
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |
 | How is Incus integrated? | [Incus integration](design/INCUS_INTEGRATION.md) |
+| What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
 | How is behavior accepted? | [Acceptance matrix](verification/ACCEPTANCE.md) |
 | How should agents develop? | [Agent workflow](development/AGENT_WORKFLOW.md) |

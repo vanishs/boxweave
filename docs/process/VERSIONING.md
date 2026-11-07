@@ -13,15 +13,16 @@ Use `1.X.Y` where:
 
 ## This initial branch
 
-`v1` contains **only the new specification**, no inherited v0.x runtime, build, updater or tests. Therefore `1.0.0` is the **source design baseline**, not a claim that a production-ready 1.0.0 executable exists. No `v1.0.0` Git tag, release assets, stable installer pointer update or installed acceptance is authorized by creating these documents.
+`v1` contains **only the new specification**, no inherited v0.x runtime, build, updater or tests. Therefore `1.0.0` is the **source design baseline**, not a claim that a production-ready 1.0.0 executable exists. No `v1.0.0` Git tag, functional release assets, stable installer pointer update or installed acceptance is justified by these **design-only** documents. When an actual verified v1.0.0 application artifact is first available, the branch CI may automatically issue the initial `v1.0.0` Release if the immutable tag has not been published yet.
 
 ## Later releases
 
 - Record exact source revision, immutable build/artifact identities and SHA-256, current version, change scope, native integration tests, denial tests and known risks.
-- CI should build and verify reproducibly, but a source-CI Release does not imply full installed acceptance.
+- CI should build and verify reproducibly and automatically publish a new immutable tag/Release for a successful build on `v1` with an unpublished VERSION and exact checked assets; a source-CI Release does not imply full installed acceptance.
 - Treat Git tag/asset publication as immutable. Never retarget a published tag or replace published bytes silently.
 - Feature and patch increments follow the owner's `1.X.Y` policy, with a separate decision for any future major version change.
-- Explicit operator approval is needed to promote an installer stable selector or deploy/change a real host.
+- **Accepted owner policy:** for a verified new-version candidate in `v1` with real deliverables and green CI, publish the exact immutable GitHub source release automatically, without requesting release-by-release approval. The immutable tag/release must not be recreated for an unchanged VERSION.
+- Explicit operator approval is still needed to promote an installer stable selector or deploy/change a real host.
 - Source artifacts and installed binaries must report the same version. Define the one source-of-truth version mechanism when Go/Python is finalized.
 
 ## Branch policy

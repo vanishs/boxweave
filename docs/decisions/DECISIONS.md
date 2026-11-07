@@ -26,5 +26,8 @@ Recorded from the owner's current design discussion. **Accepted** means a produc
 | D-020 | Accepted | Nested operation is a compatibility property for development/testing new BoxWeave versions in managed Boxes and possible future environment subleasing; it is not a v1 cross-layer administration or delegation feature. |
 | D-021 | Accepted | A parent treats a Box hosting an inner BoxWeave as an ordinary owned Box; normal deletion semantics apply with no inner-controller discovery, recursive protection or extra deletion handshake. |
 | D-022 | Accepted | Cross-layer ingress is configured through ordinary separately authorized route/forward actions per layer; no automatic multi-layer publish/delegation protocol is in v1 scope. |
+| D-023 | Accepted | All fourteen operator defaults were approved on 2026-11-07, as specified in [DEFAULTS.md](DEFAULTS.md): item 1B, item 14B, clarified item 8 (loopback-only HTTP with externally configured proxy/Tunnel), and A for the other items. |
+| D-024 | Accepted | Normal Linux Boxes require no installed BoxWeave guest client, resident Agent or SSH to be managed; lifecycle/Exec uses the native Incus Go SDK. Guest root is the default Exec identity; there is no host root MCP surface. |
+| D-025 | Accepted | Only a compatible, verified, unissued VERSION on a successfully built `v1` CI run triggers immutable GitHub tag/Release publication; existing installed BoxWeave updates and stable installer promotions remain separately initiated. |
 
 Before overturning an accepted item, update product requirements, the affected design and acceptance tests and explicitly record why. Do not treat archived v0.x docs or external repositories as a competing source of authority.

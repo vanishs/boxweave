@@ -6,7 +6,7 @@
 
 | Responsibility | Module / interface | Role |
 |---|---|---|
-| Public Model Context Protocol | `github.com/modelcontextprotocol/go-sdk` | Registers typed BoxWeave tools, handles MCP JSON-RPC and Streamable HTTP transport |
+| Public Model Context Protocol | `github.com/modelcontextprotocol/go-sdk` | Registers typed BoxWeave tools, handles MCP JSON-RPC and Streamable HTTP transport; default listener is loopback HTTP, optionally externally proxied by the operator |
 | Native Incus management | `github.com/lxc/incus/v7/client` and matching `github.com/lxc/incus/v7/shared/api` | Instance lifecycle, Exec/WebSocket, native Operation, network ACL and optional snapshot/file APIs |
 | HTTP publishing | Caddy Admin API | Manage only BoxWeave-owned routes in a protected instance/configuration namespace |
 | Durable state | SQLite | Ownership records, async operation journal, locks, Caddy and ACL desired state |
@@ -16,7 +16,7 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 
 ## Explicit architecture constraints
 
-- **External control:** authenticated Streamable HTTP MCP only. An Incus SDK request over a local Unix socket is an *internal* API call, not a BoxWeave public REST endpoint.
+- **External control:** authenticated Streamable HTTP MCP only; it binds `127.0.0.1` HTTP by default and can be exposed via optional operator-managed HTTPS proxy/Cloudflare Tunnel. The dedicated Caddy serves Box application sites instead of automatically proxying MCP. An Incus SDK request over a local Unix socket is an *internal* API call, not a BoxWeave public REST endpoint.
 - **No Containarium:** do not retain an upstream controller, external MCP proxy, SSH hop or wrapper CLI for lifecycle and Exec.
 - **SDKs are libraries:** BoxWeave links both SDKs into its Go program. Domain services handle policy, idempotency, ownership and post-state verification, not the MCP SDK.
 - **No raw client pass-through:** exposed MCP schemas are narrow BoxWeave business operations. Do not publish arbitrary Incus API operations, Caddy JSON, host path editing or host command execution.
@@ -29,7 +29,7 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 1. Pin reviewed compatible SDK module revisions and Go toolchain versions with reproducible dependency checks.
 2. Build and exercise a real authenticated MCP handshake and one typed read tool.
 3. Call a real Incus daemon using the official Go SDK and record the native version/extensions and tested operations.
-4. Demonstrate successful Exec stdout/stderr/exit, canceled/unknown native Operation, ETag ACL update and ownership denial.
+4. Demonstrate agentless Linux container guest-root Exec stdout/stderr/exit, canceled/unknown native Operation, ETag ACL update and ownership denial.
 5. Repeat the integration at nested L1/L2 without relying on an outer privileged socket.
 
 Review upstream [Incus Go client](https://github.com/lxc/incus/tree/main/client) and [official MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). The exact SDK versions and supporting Linux/Incus baseline are engineering choices to validate, not existing v1 implementation facts.

@@ -16,6 +16,8 @@ Maintain rules as identity-anchored desired state; resolve current IPs from nati
 
 ## Caddy HTTP routes
 
+The BoxWeave-owned Caddy instance publishes **Box application websites**, not the MCP management endpoint. By default MCP listens on loopback HTTP only; its optional Cloudflare Tunnel/HTTPS proxy is external operator configuration and is not a managed `http_route_create` target.
+
 MCP accepts `box_id`, `guest_port`, and a validated domain—not arbitrary upstream URLs, local host ports, raw Caddy JSON, or destination IP. Resolve the Box UUID to the current verified guest address. Keep routes in a durable BoxWeave-owned namespace and reconcile only that namespace into a dedicated managed Caddy instance. HTTPS and TLS automation must be ownership-safe, with checks for DNS/reachability and port conflicts. Never modify a foreign web server.
 
 ## TCP/UDP forwards

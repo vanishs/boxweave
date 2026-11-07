@@ -7,7 +7,7 @@
 ```text
 External MCP client
    |
-   | HTTPS, authenticated Streamable HTTP MCP
+   | authenticated HTTP Streamable MCP on loopback; optional operator HTTPS proxy
    v
 BoxWeave MCP adapter (schema, auth, ownership, request validation)
    |
@@ -36,13 +36,14 @@ Do not build a second public management protocol, Web control plane, remotely ca
 
 ## Implementation boundaries
 
-1. **Public transport adapter:** official MCP protocol implementation, request/response schemas, authentication and filtering. It must not itself perform unchecked host or Incus mutations.
+1. **Public transport adapter:** official Go MCP SDK bound to `127.0.0.1` HTTP by default, with separately operator-configured external HTTPS transport, request/response schemas, authentication and filtering. It must not itself perform unchecked host or Incus mutations.
 2. **Domain/policy layer:** Box identities, ownership, planned state, ACL rules, published routes and ports, allowed configuration updates and operation contracts.
 3. **Operation store and reconciliation:** local SQLite WAL plus locking and transactional updates. Durable intents precede any external effect. Persist original upstream operation identity where available.
 4. **Incus adapter:** use the official Go Incus client and typed Incus API models. A narrow SDK adapter enables compatibility checks, native error mapping, resource ownership validation and independent native reads.
 5. **Caddy adapter:** dedicated BoxWeave-owned Caddy process/configuration where feasible; only BoxWeave-managed route namespace, local-only Admin API. Reconcile desired SQLite records into Caddy live configuration.
 6. **Privileged boundary:** service privilege separation or a constrained local helper owns necessary Incus/host setup privileges. Public MCP never accesses unrestricted Incus socket, Caddy Admin API or host shell.
-7. **Host-local CLI:** bootstrap password, diagnostics, upgrades, recovery, version display, credential reset; never a public management endpoint.
+7. **Host-local CLI:** bootstrap password, multiple scoped token issuance/revocation, diagnostics, upgrades, recovery, version display, credential reset; never a public management endpoint.
+8. **Guest operation path:** no BoxWeave Client or SSH is installed into ordinary Linux Boxes. Incus daemon performs native Exec and planned guest file APIs directly.
 
 ## Confirmed technology selection
 
@@ -52,7 +53,7 @@ Do not build a second public management protocol, Web control plane, remotely ca
 - **State and integrations:** local SQLite journal, Caddy Admin API, Linux/systemd; the exact implementation libraries and version compatibility are verified in the first development slice.
 - **No secondary controller:** no Containarium layer, arbitrary Incus CLI subprocess wrapper for core operations, or separate public REST/gRPC management service.
 
-See [technology stack](TECH_STACK.md).
+See [technology stack](TECH_STACK.md), [MCP binding](MCP_BINDING.md), [agentless guest management](GUEST_MANAGEMENT.md), and [approved defaults](../decisions/DEFAULTS.md).
 
 ## Security invariants
 

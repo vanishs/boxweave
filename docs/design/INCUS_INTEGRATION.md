@@ -10,7 +10,7 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 
 - Check the actual Incus daemon version and `api_extensions` during startup and before capability-sensitive actions. Version strings alone do not guarantee a feature.
 - Bind Boxes to native Incus instance UUID and verify on each privileged mutation; do not treat names, IPs or guessed profiles as identity.
-- Use Incus Exec rather than SSH. Execute in a non-root guest user by default where feasible; escalate only through explicitly authorized guest policy, never host shell pass-through.
+- Use Incus Exec rather than SSH. The owner selected **guest root (UID 0) by default** with an optional explicitly requested guest UID/GID; guest root remains confined to the unprivileged owned container and is never a host shell pass-through.
 - Native Incus Operation IDs are execution evidence but not substitutes for the BoxWeave journal.
 - Handle Exec websocket streams, status/exit codes, output bounds, cancellation and lost connections without fabricated outcomes.
 - Use native ETag for concurrent updates where available. Validate read-back of accepted writes.
@@ -25,6 +25,10 @@ Unrestricted Incus admin socket access can confer broad host powers. Use restric
 ## Selected Go and MCP integrations
 
 The v1 implementation language is **Go**. The HTTP MCP server uses the official `github.com/modelcontextprotocol/go-sdk` library; the native Incus adapter uses the official `github.com/lxc/incus/v7/client` library. Both SDKs are linked into BoxWeave; neither is a separate service or a public REST interface. Compile against a reviewed compatible release and validate the actual daemon's `api_extensions`; never equate a successful compile with complete feature coverage. See [technology stack](TECH_STACK.md).
+
+## Agentless containers
+
+Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH service for lifecycle, native Exec or supported file APIs. This is different from VM-focused `incus-agent` requirements and Containarium's optional in-guest `agent-box` MCP workspace extension. See [guest management](GUEST_MANAGEMENT.md).
 
 ## Compatibility and tests
 

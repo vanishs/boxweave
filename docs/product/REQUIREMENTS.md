@@ -26,5 +26,12 @@ Status: **accepted design goals**, not implemented or tested facts.
 | R-020 | The same install/upgrade/capability-check process works at each supported nesting layer without seizing parent resources; parent capabilities are configured through ordinary authorized operations on the containing Box. |
 | R-021 | The Box hosting an inner BoxWeave is an ordinary parent-owned Box: it has the same start/stop/update/delete semantics, with no special discovery, subtree protection or recursive cleanup. |
 | R-022 | Nested compatibility supports BoxWeave-in-BoxWeave development and acceptance, and allows future environment subleasing without implementing subleasing management, billing, user tenancy or cross-layer orchestration in v1. |
+| R-023 | Linux container lifecycle and Exec require no guest-installed BoxWeave client, resident Agent or SSH daemon; default Exec UID is guest root only, never parent/host root. |
+| R-024 | The HTTP MCP listener binds only to `127.0.0.1` by default; the operator may separately proxy/Tunnel to public HTTPS, without enabling anonymous or raw native access. |
+| R-025 | Ubuntu LTS is the first tested host environment and default guest image; guest resources have configurable defaults and nesting is opt-in. |
+| R-026 | When supported and authorized, the installer reuses an existing Incus daemon and provisions only owned Project resources and a dedicated Caddy, with no foreign service takeover or implicit upgrades. |
+| R-027 | Host upgrades are explicit, while new-version source releases from successful `v1` CI are automatic and immutable; no docs-only pseudo-release, duplicate tag, automatic deployment or stable selector change. |
+| R-028 | Local bootstrap issues multiple independently revocable scoped MCP credentials; managed resource ACLs may accept verified owned Box IPs or Box IDs, with identity-safe native state updates. |
+| R-029 | Missing/corrupt ownership state fails closed, with only explicit host-local verified recovery. |
 
 See [acceptance cases](../verification/ACCEPTANCE.md) and detailed [security](../design/SECURITY.md), [operations](../design/OPERATIONS.md), and [nesting](../design/NESTING.md).

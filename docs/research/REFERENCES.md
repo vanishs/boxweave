@@ -36,7 +36,7 @@ Learn from OpenAPI generation and precise API version alignment. The Python clie
 - https://github.com/FootprintAI/Containarium/blob/main/pkg/core/incus/acl.go
 - https://github.com/FootprintAI/Containarium/blob/main/internal/app/route_sync.go
 
-Borrow bounded and typed operation timeout handling, ETag and owned ACL edits, route desired-state reconciliation, strong typed models, supply-chain review, public deployment metadata anonymization, strict PR scope and meaningful test gates.
+Borrow bounded and typed operation timeout handling, ETag and owned ACL edits, route desired-state reconciliation, strong typed models, supply-chain review, public deployment metadata anonymization, strict PR scope and meaningful test gates. Containarium additionally has a separate in-guest `agent-box` MCP server, but its native `pkg/core/incus/client.go` performs container Exec through the Incus SDK; **do not require guest agent-box or SSH in BoxWeave P0**.
 
 **Reject as v1 architecture:** Containarium as a runtime dependency, CLI-first platform APIs, protobuf/gRPC/REST gateway as a public management contract, separate in-Box SSH MCP, multi-host/tenant infrastructure, and PostgreSQL dependency for single-host state. Its Platform MCP handles protocol itself; its Agent Box MCP uses third-party `mark3labs/mcp-go`. V1 favors an official MCP SDK if Go is selected.
 
