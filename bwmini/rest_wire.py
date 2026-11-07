@@ -161,7 +161,14 @@ def request(owner, method, path, body=None, timeout=30):
                         status_origin=semantic.origin) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
-        raise WireFault(code) from None
+        # No upstream HTTP response exists. A failed read is gRPC Unavailable;
+        # a lost write acknowledgement is gRPC Unknown, NEVER retry-safe.
+        grpc = (rest_status.GRPCCode.UNKNOWN if is_write
+                else rest_status.GRPCCode.UNAVAILABLE)
+        raise WireFault(
+            code, status=rest_status.http_status_for(grpc), grpc_code=grpc,
+            http_status=rest_status.http_status_for(grpc),
+            upstream_http_status=None, status_origin="transport") from None
     finally:
         if hasattr(owner, "_event"):
             try:
