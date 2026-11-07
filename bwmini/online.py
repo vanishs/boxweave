@@ -20,7 +20,7 @@ PROVIDER_ASSETS = {
     "containarium": "74560e96c4216cfb83218499682c816a9db78e4f367a4c194a587d650b83f696",
     "mcp-server": "d1c645843ef2989fc5bff53ec57b6612ff931e3b94c9f42d040ee8d7c065b0ba",
 }
-RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "debug_rest.py", "resource_size.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py", "upstream_version.py")
+RELEASE_FILES = ("boxweave.zip", "bootstrap.py", "distribution.py", "online.py", "hostkeys.py", "mcp_gate.py", "debug_rest.py", "gateway_rest.py", "rest_wire.py", "rest_routes.py", "resource_size.py", "gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py", "coordination_runtime.py", "coordination_bridge.py", "box_reads.py", "box_patch.py", "gateway_tasks.py", "gateway_protection.py", "nesting.py", "client_setup.py", "client_profiles.py", "host_cli.py", "upstream_version.py")
 SECRET = Path("/etc/boxweave-provider/jwt.secret")
 UNIT_DIR = Path("/etc/systemd/system")
 # The upstream main at e5deb167 and v0.120.1 contain the identical wrapper.
@@ -908,7 +908,7 @@ store.admin(generate_password_hash(password))
         require(private.is_file() and pub.is_file() and not private.is_symlink() and not pub.is_symlink(), "MANAGED_IDENTITY_INCOMPLETE")
         managed_public_key = public_key(pub.read_text())
         directory(PUBLIC, 0o755)
-        for name in ("online.py","hostkeys.py","mcp_gate.py","debug_rest.py","resource_size.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py","upstream_version.py"):
+        for name in ("online.py","hostkeys.py","mcp_gate.py","debug_rest.py","gateway_rest.py","rest_wire.py","rest_routes.py","resource_size.py","gate_diagnostics.py","mcp_compat.py","restore_guard.py","operation_coordination.py","coordination_runtime.py","coordination_bridge.py","box_reads.py", "box_patch.py","gateway_tasks.py","gateway_protection.py","nesting.py","client_setup.py","client_profiles.py","host_cli.py","upstream_version.py"):
             target = PUBLIC/name
             require(not target.exists() or str(target) in old["managed_files"], "FOREIGN_PUBLIC_HELPER")
             payload = (release/name).read_bytes(); atomic(target,payload,0o755)
