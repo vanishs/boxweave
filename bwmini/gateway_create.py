@@ -161,7 +161,7 @@ def dispatch(configuration, raw_args, rpc_id, *, normalize, protected):
         ledger.freeze(task)
         raise GatewayRESTFault("REST_CREATE_PREDISPATCH_UNVERIFIED") from None
     try:
-        response = rest_wire.Client(configuration).request(
+        response = rest_wire.Client({k: configuration[k] for k in ("url", "token_file")}).request(
             method, route, body, timeout=45)
         target = response.get("container")
         if (not isinstance(target, dict) or
