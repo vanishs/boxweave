@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest, gateway_create
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest, gateway_create, rest_mutations
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -24,6 +24,7 @@ except ImportError:
     import debug_rest
     import gateway_rest
     import gateway_create
+    import rest_mutations
     from operation_coordination import CoordinationFault
 
 # Source-backed, read-only MCP self-information; tools/list is runtime truth.
@@ -588,10 +589,29 @@ def main():
                         message = gateway_protection.filter_catalog(
                             message, rest_debug=selected_debug,
                             coordinated_rest=coordinated_rest)
-                    if selected_rest is not None and selected_rest["mode"] == "read":
-                        message["result"]["tools"] = [
-                            tool for tool in message["result"]["tools"]
-                            if tool.get("name") not in gateway_rest.WRITES]
+                    if selected_rest is not None:
+                        # A selected REST capability never falls back to MCP
+                        # when coordination is absent or disabled.
+                        if not coordinated_rest:
+                            message["result"]["tools"] = [
+                                tool for tool in message["result"]["tools"]
+                                if tool.get("name") not in gateway_rest.WRITES]
+                        else:
+                            for tool in message["result"]["tools"]:
+                                if tool.get("name") in (
+                                        "start_container", "stop_container",
+                                        "delete_container", "resize_container"):
+                                    tool["inputSchema"].setdefault(
+                                        "properties", {})["request_key"] = {
+                                        "type": "string", "pattern": "^[0-9a-f]{32}$",
+                                        "description": "Optional durable one-shot intent. "
+                                        "Use a new key only for a deliberate new operation."}
+                            for tool in (rest_mutations.CREATE_STATUS_TOOL,
+                                         rest_mutations.STATUS_TOOL):
+                                if permitted is None or tool["name"] in permitted:
+                                    if not any(t.get("name") == tool["name"]
+                                               for t in message["result"]["tools"]):
+                                        message["result"]["tools"].append(dict(tool))
                 except (debug_rest.DebugRESTError, gateway_rest.GatewayRESTFault) as error:
                     # A malformed root policy cannot silently downgrade or
                     # widen the protected forwarded MCP catalog.
@@ -634,10 +654,35 @@ def main():
                     if rest_config is not None and params.get("name") in (
                             "start_container", "stop_container",
                             "delete_container", "resize_container"):
-                        # Never route a selected REST capability back to the
-                        # old upstream MCP writer. These require a separate
-                        # exact-identity tracked operation and R-04 release.
-                        raise gateway_rest.GatewayRESTFault("REST_TRACKED_OPERATION_REQUIRED")
+                        if params["name"] == "resize_container":
+                            validated_resize_arguments(args)
+                        receipt = rest_mutations.dispatch(
+                            rest_config, params["name"], args,
+                            protected=protected)
+                        emit_result(request["id"], receipt)
+                        gd.record(params["name"],
+                                  {"result":{"content":[],"isError":False}},
+                                  (time.monotonic()-started)*1000, trace=trace)
+                        continue
+                    if params.get("name") in (
+                            "boxweave_rest_status", "boxweave_create_status"):
+                        if rest_config is None or not coordinated_rest:
+                            raise gateway_rest.GatewayRESTFault("REST_TASK_UNAVAILABLE")
+                        if not isinstance(args,dict):
+                            raise gateway_rest.GatewayRESTFault("REST_TASK_SELECTOR_INVALID")
+                        if params["name"] == "boxweave_rest_status":
+                            if set(args)!={"task_id"}:
+                                raise gateway_rest.GatewayRESTFault("REST_TASK_SELECTOR_INVALID")
+                            value=rest_mutations.MutationJournal(
+                                gateway_create.AppStore(rest_config["state_db"])
+                            ).get(task_id=args["task_id"])
+                        else:
+                            if not args or set(args)-{
+                                    "task_id","request_key","username"}:
+                                raise gateway_rest.GatewayRESTFault("CREATE_SELECTOR_INVALID")
+                            value=gateway_create.journal(rest_config).get(**args)
+                        emit_result(request["id"], value)
+                        continue
                     if rest_config is not None and params.get("name") in (
                             "list_containers", "get_container", "debug_container"):
                         value = gateway_rest.execute_read(
@@ -936,7 +981,7 @@ def main():
                         trusted({**args, "box": logical}, registry, observed)
                         # Forward only the verified logical username.
                         params["arguments"] = {**args, "box": logical}
-                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault, CoordinationFault) as error:
+                except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError, gateway_tasks.TaskFault, gateway_create.CreateFault, CoordinationFault) as error:
                     # Never disclose actual public/private key data in errors.
                     reason = str(error) if str(error) in GATE_ERROR_CODES else "TRUST_OR_WORKLOAD_KEY_GATE: inspect the exact target and server-managed identity"
                     error_result = {"jsonrpc": "2.0", "id": request.get("id"),
