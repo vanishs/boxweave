@@ -117,7 +117,12 @@ def inspect_mcp(argv, owned=None, *, verified_target=None):
                          "MUTATING_OR_UNREVIEWED_TOOL_REQUIRES_SCENARIO_AND_GRANT"}
             continue
         schema = t.get("inputSchema") or {}
-        args, blocker = positive_arguments(schema, owned)
+        args, blocker = positive_arguments(schema, owned if trusted else None)
+        target_fields = isinstance(schema, dict) and isinstance(
+            schema.get("properties", {}), dict) and any(
+                key in schema["properties"] for key in ("username", "box", "logical"))
+        if target_fields and owned and not trusted:
+            blocker = "INDEPENDENT_TEST_TARGET_ORACLE_REQUIRED"
         # The MCP schema for task_get allows either request_key or task_id
         # but may advertise no top-level "required". Never submit empty
         # arguments as though they were a valid positive workload.
