@@ -116,6 +116,22 @@ class RemoteTests(unittest.TestCase):
                          "method": "notifications/initialized"}).status_code, 202)
         self.assertEqual(len(self.calls), 1)
 
+    def test_tools_list_without_params_matches_empty_params(self):
+        # Real remote MCP clients may omit the optional JSON-RPC params field.
+        # A missing field must not cause HTTP 500 during catalog augmentation.
+        token = self.auth.issue("api", "optional params")
+        no_params = {"jsonrpc": "2.0", "id": 91, "method": "tools/list"}
+        result = self.call(token, payload=no_params)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json["result"]["tools"][0]["name"], "list_containers")
+        self.assertIn("boxweave_create_status",
+                      [t["name"] for t in result.json["result"]["tools"]])
+        self.assertEqual(self.calls, [no_params])
+        # Explicit null is not an omitted object: preserve validation.
+        malformed = dict(no_params, params=None)
+        self.assertEqual(self.call(token, payload=malformed).status_code, 400)
+        self.assertEqual(self.calls, [no_params])
+
     def test_bad_headers_origin_and_version_fail_before_dispatch(self):
         token = self.auth.issue("api", "fixture")
         self.assertEqual(self.call(token, headers={"Origin": "https://evil.test"}).status_code, 403)
