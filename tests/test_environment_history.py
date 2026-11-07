@@ -88,7 +88,7 @@ class EnvironmentHistoryTests(unittest.TestCase):
         with self.assertRaises(Fault):
             list_captures(self.store,limit=True)
         with sqlite3.connect(self.store.path) as db:
-            db.execute("PRAGMA user_version=15")
+            db.execute("PRAGMA user_version=16")
         with self.assertRaisesRegex(Fault,"SCHEMA_UNSUPPORTED"):
             Store(self.store.path)
 
