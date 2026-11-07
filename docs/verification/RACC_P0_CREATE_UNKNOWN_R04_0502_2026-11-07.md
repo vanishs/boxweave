@@ -12,6 +12,12 @@
 - The host reports **4 physical CPUs, 86 tenant-committed CPUs (21.5x), with admission gate disabled** at observation time. This can affect timing; overload is **not** a proven root cause of these errors.
 - The original UNKNOWN target remains intentionally retained. No host root shell, production policy activation, reboot, guest provisioning repair, trust bypass, forced lock release, or cleanup of uncertain effects was performed.
 
+## Actual ingress versus outbound Provider transport attribution
+
+The entrypoint tested was **external authenticated HTTP MCP**; that does *not* establish the Gateway-to-Containarium transport was REST. A read-only `get_container(bwp0-no-such-0502)` of a definitively nonexistent name returned the upstream **raw** Containarium `HTTP 500 / rpc error: code = Unknown ... Instance not found` text through the outer MCP, instead of the v0.50.2 centralized Adapter's canonical `NOT_FOUND / 404`. The exact same unnormalized error was observed during an early missing-target read for the new test Box. At pinned v0.50.2 source, `mcp_gate.py` selects `gateway_rest.execute_read` only when `gateway_rest.policy()` enables the separate root-owned Gateway REST policy; the `boxweave_diagnostic_run(profile=rest_read)` check only proves the **app-owned** REST route, not this Gateway selection.
+
+**Strongly suggested route:** HTTP MCP ingress → legacy forwarded upstream MCP, **not necessarily** Gateway REST, on this updated host. The actual root-owned Gateway policy and request-level transport trace were not independently inspected. Consequently this live test **does not prove the new centralized REST adapter failed**, nor accept the untested opt-in Gateway REST write path. It does demonstrate #92/#88's real user-facing create/UNKNOWN symptom on the currently available MCP surface. Any next Agent testing the v0.50.2 REST adapter must explicitly verify the separate Gateway REST opt-in and compare exact routing before claiming REST installed acceptance.
+
 ## P0 issue #92 — created Box with partial postconditions
 
 | Assertion | Observed v0.50.2 black-box evidence | Verdict |
