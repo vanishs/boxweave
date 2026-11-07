@@ -9,7 +9,7 @@ except ImportError:
 
 try:
     from . import gate_diagnostics as gd
-    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, debug_rest, gateway_rest, gateway_create, rest_mutations
+    from . import box_reads, box_patch, gateway_tasks, coordination_bridge, gateway_protection, mcp_compat, restore_guard, resource_size, gateway_rest, gateway_create, rest_mutations
     from .operation_coordination import CoordinationFault
 except ImportError:
     import gate_diagnostics as gd
@@ -21,7 +21,6 @@ except ImportError:
     import mcp_compat
     import restore_guard
     import resource_size
-    import debug_rest
     import gateway_rest
     import gateway_create
     import rest_mutations
@@ -562,7 +561,7 @@ def main():
                                     if not any(t.get("name") == tool["name"]
                                                for t in message["result"]["tools"]):
                                         message["result"]["tools"].append(dict(tool))
-                except (debug_rest.DebugRESTError, gateway_rest.GatewayRESTFault) as error:
+                except gateway_rest.GatewayRESTFault as error:
                     # A malformed root policy cannot silently downgrade or
                     # widen the protected forwarded MCP catalog.
                     print(json.dumps({"jsonrpc":"2.0","id":request.get("id"),
