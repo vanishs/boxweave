@@ -161,7 +161,7 @@ def task_receipt(row):
         "username": row["logical"],
         "state": state,
         "code": row["code"],
-        "upstream_acknowledged": state == "succeeded",
+        "upstream_acknowledged": state in ("accepted", "succeeded"),
         "guest_user_and_ssh_verified": False,
     }
     if state in ("submitted", "accepted"):
