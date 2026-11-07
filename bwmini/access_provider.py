@@ -66,7 +66,13 @@ class Wire:
             cap=read_json(m,'network_tenant_capabilities',{})
             if cap.get('contract')!='native-network-tenant/v1' or cap.get('backendScope')!='local-lxc' or cap.get('nativeMembershipRead') is not True:raise Fault('NETWORK_CONTRACT_UNSUPPORTED')
             cap['_atomic_tools']=all(k in tools for k in ('get_network_policy','patch_tenant_access')) and 'changes' in tools.get('patch_tenant_access',{}).get('inputSchema',{}).get('properties',{})
-            cap['_shared_field']='network_tenant' in tools.get('create_container',{}).get('inputSchema',{}).get('properties',{})
+            # Create is REST-migrated: its schema is BoxWeave-owned, never
+            # inferred from a stale Containarium MCP create descriptor.
+            from . import rest_routes
+            cap['_shared_field']=(getattr(self.provider,'rest',None) is not None
+                and 'network_tenant' in next(t['inputSchema']['properties']
+                    for t in rest_routes.mcp_tool_catalog()
+                    if t['name']=='create_container'))
             return cap
     def guard(self):
         with self.provider.session() as m:
@@ -99,11 +105,9 @@ class Wire:
     def container(self,logical):
         # Full inventory avoids interpreting an arbitrary get failure as absence.
         if logical not in self.provider.lifecycle_inventory():return None
-        if getattr(self.provider, "rest", None) is not None:
-            value = self.provider.rest.container(logical)
-        else:
-            with self.provider.session() as m:
-                m.discover();value=read_json(m,'get_container',{'username':logical}).get('container',{})
+        if getattr(self.provider,"rest",None) is None:
+            raise Fault("PROVIDER_API_REQUIRED",422)
+        value=self.provider.rest.container(logical)
         try:
             target=Target(self.provider.config['provider'],self.provider.config['backend'],self.provider.config['project'],logical,value['name'],str(value['createdAt']),value['username'],value['name'])
             if value['username']!=logical:raise ValueError()
