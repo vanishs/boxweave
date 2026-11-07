@@ -25,7 +25,7 @@ class CreateJournalTests(unittest.TestCase):
 
     def test_migration_is_durable_without_storing_args_or_keys(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 14)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 15)
         logical, key, args, digest = validated_request({
             "username": "test-a", "cpu": "1", "request_key": "a"*32,
             "ssh_keys": ["ssh-ed25519 public-material-fixture"]})
