@@ -41,7 +41,11 @@ class GatewayRESTTests(unittest.TestCase):
                 self.cfg = cfg
             def request(self, method, uri, body=None, timeout=30):
                 if method == "GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 calls.append((method,uri,body))
                 return {"container":{"username":"wip-unique",
                                      "state":"CONTAINER_STATE_CREATING"}}
@@ -83,7 +87,11 @@ class GatewayRESTTests(unittest.TestCase):
             def request(self,method,uri,body=None,timeout=30):
                 calls.append(method)
                 if method=="GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 raise AssertionError("REST write bypassed shared claim")
         with (patch("bwmini.rest_wire.Client",Client),
               patch("bwmini.coordination_bridge.published_scope",
@@ -107,7 +115,11 @@ class GatewayRESTTests(unittest.TestCase):
             def __init__(self, cfg): pass
             def request(self,method,uri,body=None,timeout=30):
                 if method == "GET":
-                    raise rest_wire.WireFault("API_TARGET_NOT_FOUND")
+                    raise rest_wire.WireFault(
+                        "API_TARGET_NOT_FOUND",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=404,
+                        status_origin="grpc")
                 calls.append((method,uri))
                 raise rest_wire.WireFault("API_OUTCOME_UNKNOWN")
         class Claims:
@@ -209,11 +221,14 @@ class GatewayRESTTests(unittest.TestCase):
         with self.assertRaises(rest_wire.WireFault) as ctx:
             rest_wire.request(Owner(), "GET", route)
         self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
-        self.assertTrue(ctx.exception.legacy_missing_instance)
+        self.assertIs(ctx.exception.grpc_code, rest_wire.rest_status.GRPCCode.NOT_FOUND)
+        self.assertEqual(ctx.exception.http_status, 404)
+        self.assertEqual(ctx.exception.upstream_http_status, 500)
+        self.assertEqual(ctx.exception.status_origin, "compatibility")
         with self.assertRaises(rest_wire.WireFault) as ctx:
             rest_wire.request(Owner(), "POST", route)
         self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
-        self.assertFalse(ctx.exception.legacy_missing_instance)
+        self.assertIsNot(ctx.exception.grpc_code, rest_wire.rest_status.GRPCCode.NOT_FOUND)
 
     def test_create_preflight_accepts_only_typed_legacy_hint(self):
         calls = []
@@ -224,7 +239,10 @@ class GatewayRESTTests(unittest.TestCase):
                 calls.append(method)
                 if method == "GET":
                     raise rest_wire.WireFault(
-                        "API_HTTP_REJECTED", legacy_missing_instance=True)
+                        "API_HTTP_REJECTED",
+                        grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                        http_status=404, upstream_http_status=500,
+                        status_origin="compatibility")
                 return {"container": {
                     "username": "wip-unique",
                     "state": "CONTAINER_STATE_CREATING"}}
