@@ -46,7 +46,7 @@ class ScopeHeartbeatTests(unittest.TestCase):
               patch.object(scope_heartbeat,"SCOPE",self.target),
               patch.object(scope_heartbeat,"atomic",
                            side_effect=lambda path,data,*a:path.write_bytes(data)),
-              patch.object(Path,"lstat",self.fake_root_lstat)):
+              patch.object(Path,"lstat",lambda path:self.fake_root_lstat(path))):
             response=scope_heartbeat.publish(
                 state=self.state,directory=self.public,
                 now=lambda:100.,inspect=inspect,hostname=lambda:"dev")
@@ -64,7 +64,7 @@ class ScopeHeartbeatTests(unittest.TestCase):
             return SimpleNamespace(returncode=1,stdout="")
         with (patch.object(scope_heartbeat.os,"geteuid",return_value=0),
               patch.object(scope_heartbeat,"SCOPE",self.target),
-              patch.object(Path,"lstat",self.fake_root_lstat)):
+              patch.object(Path,"lstat",lambda path:self.fake_root_lstat(path))):
             with self.assertRaisesRegex(ValueError,
                                        "SCOPE_NATIVE_PROVIDER_UNVERIFIED"):
                 scope_heartbeat.publish(
