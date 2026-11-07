@@ -237,6 +237,9 @@ class GatewayRESTTests(unittest.TestCase):
                 pass
             def request(self, method, uri, body=None, timeout=30):
                 calls.append(method)
+                if method == "GET" and uri == "/v1/containers":
+                    return {"containers": [], "unreachableBackends": [],
+                            "totalCount": 0}
                 if method == "GET":
                     raise rest_wire.WireFault(
                         "API_HTTP_REJECTED",
@@ -263,7 +266,7 @@ class GatewayRESTTests(unittest.TestCase):
                 normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
                 protected=True)
         self.assertEqual(result["state"], "accepted")
-        self.assertEqual(calls, ["GET", "POST"])
+        self.assertEqual(calls, ["GET", "GET", "POST"])
 
     def test_create_preflight_does_not_accept_generic_500(self):
         calls = []
@@ -304,3 +307,44 @@ class GatewayRESTTests(unittest.TestCase):
                     normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
                     protected=True)
         self.assertEqual(calls, ["GET"])
+
+    def test_legacy_500_missing_requires_complete_backend_inventory(self):
+        """No mutation when any peer is unreachable or identity is occupied."""
+        for inventory, expected in (
+            ({"containers": [], "unreachableBackends": [{"id": "down"}],
+              "totalCount": 0}, "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [{"username": "wip-unique"}],
+              "unreachableBackends": [], "totalCount": 1},
+             "REST_RESOURCE_EXISTS"),
+            ({"containers": [], "totalCount": 0},
+             "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [], "unreachableBackends": [],
+              "totalCount": 1}, "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+            ({"containers": [{"username":"dup"}, {"username":"dup"}],
+              "unreachableBackends": [], "totalCount": 2},
+             "REST_CREATE_PREFLIGHT_UNVERIFIED"),
+        ):
+            with self.subTest(inventory=inventory):
+                calls = []
+                class Rest:
+                    def __init__(self, cfg):
+                        pass
+                    def request(self, method, uri, body=None, timeout=30):
+                        calls.append((method, uri))
+                        if method == "GET" and uri == "/v1/containers":
+                            return inventory
+                        if method == "GET":
+                            raise rest_wire.WireFault(
+                                "API_HTTP_REJECTED",
+                                grpc_code=rest_wire.rest_status.GRPCCode.NOT_FOUND,
+                                http_status=404, upstream_http_status=500,
+                                status_origin="compatibility")
+                        raise AssertionError("Unsafe create POST after partial inventory")
+                with patch("bwmini.rest_wire.Client", Rest):
+                    with self.assertRaisesRegex(ValueError, expected):
+                        gateway_create.dispatch(
+                            self.config, {"username": "wip-unique"}, 7,
+                            normalize=lambda x: {
+                                **x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                            protected=True)
+                self.assertEqual([method for method, _ in calls], ["GET", "GET"])
