@@ -437,9 +437,13 @@ I authorize this client to use BoxWeave MCP tools.</label>
                     except (ValueError, TypeError):
                         pass
                 if (isinstance(accepted, dict)
-                        and accepted.get("state") == "accepted"
-                        and accepted.get("task_id") == task_id):
-                    journal.accept(task_id)
+                        and accepted.get("task_id") == task_id
+                        and accepted.get("state") in (
+                            "submitted", "accepted", "unknown", "succeeded")):
+                    # The single app journal already owns this receipt.
+                    # A duplicate/pending status is NEVER proof of success.
+                    if accepted["state"] == "accepted":
+                        journal.accept(task_id)
                 else:
                     journal.complete(task_id, True)
             else:
