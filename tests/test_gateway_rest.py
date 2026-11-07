@@ -139,11 +139,12 @@ class GatewayRESTTests(unittest.TestCase):
                     side_effect=lambda:SharedClaims(claims_file))):
             web.acquire_environment("e"*32,"environment_"+"e"*32,
                                     scope,"create","wip-unique",None,{})
-            with self.assertRaisesRegex(ValueError,"REST_CREATE_PREDISPATCH_UNVERIFIED"):
-                gateway_create.dispatch(
-                    self.config,{"username":"wip-unique"},7,
-                    normalize=lambda x:{**x,"ssh_keys":["ssh-ed25519 AAA"]},
-                    protected=True)
+            result=gateway_create.dispatch(
+                self.config,{"username":"wip-unique"},7,
+                normalize=lambda x:{**x,"ssh_keys":["ssh-ed25519 AAA"]},
+                protected=True)
+            self.assertEqual(result["state"],"failed_before_dispatch")
+            self.assertEqual(result["code"],"REST_CREATE_PREDISPATCH_UNVERIFIED")
         self.assertEqual(calls,["GET"])
         self.assertEqual(SharedClaims(claims_file).coordinator.status(
             "e"*32)["state"],"accepted")
