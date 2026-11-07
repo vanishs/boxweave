@@ -39,12 +39,12 @@ class EnvironmentHistoryTests(unittest.TestCase):
 
     def test_private_v13_schema_and_older_migration(self):
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],14)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],15)
             db.execute("DROP TABLE environment_captures")
             db.execute("PRAGMA user_version=12")
         Store(self.store.path)
         with self.store.db() as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],14)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0],15)
             self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE "
                                             "name='environment_captures'").fetchone())
 
