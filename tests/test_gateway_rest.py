@@ -128,3 +128,138 @@ class GatewayRESTTests(unittest.TestCase):
         self.assertEqual(one["state"],"unknown")
         self.assertEqual(other["task_id"],one["task_id"])
         self.assertEqual(len(calls),1)
+
+    def test_legacy_missing_instance_500_is_exact_and_target_bound(self):
+        """No generic 'not found' text may prove target absence."""
+        import io
+        import urllib.error
+
+        name = "bw50qa-async-a"
+        route = "/v1/containers/" + name
+        detail = ('failed to get container: failed to get container: '
+                  'Failed to fetch instance "' + name +
+                  '-container" in project "default": Instance not found')
+        payload = {"error": "rpc error: code = Unknown desc = " + detail,
+                   "code": 500, "message": detail}
+
+        def response(p, status=500):
+            return urllib.error.HTTPError(
+                "http://127.0.0.1:18080" + route, status,
+                "Internal Server Error", {},
+                io.BytesIO(json.dumps(p).encode()))
+
+        self.assertTrue(rest_wire._legacy_incus_instance_absent(
+            response(payload), "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response(payload), "GET", "/v1/containers/another-name"))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response(payload), "POST", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response(payload, 404), "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response(payload), "GET", "/v1/containers"))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({**payload, "code": 404}), "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({**payload, "message": "unrelated: Instance not found"}),
+            "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({**payload, "error": "something else: " + detail}),
+            "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({**payload, "details": []}), "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({"error": "Instance not found", "code": 500,
+                      "message": "Instance not found"}), "GET", route))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            response({"error": "x" * 4097, "code": 500, "message": detail}),
+            "GET", route))
+        # Duplicate JSON names must not silently override an earlier value.
+        ambiguous = (json.dumps(payload)[:-1] + ',"code":500}').encode()
+        duplicate = urllib.error.HTTPError(
+            "http://127.0.0.1:18080" + route, 500,
+            "Internal Server Error", {}, io.BytesIO(ambiguous))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            duplicate, "GET", route))
+
+    def test_wire_exposes_legacy_hint_without_rewriting_500(self):
+        import io
+        import urllib.error
+
+        name = "bw50qa-async-a"
+        route = "/v1/containers/" + name
+        detail = ('failed to get container: failed to get container: '
+                  'Failed to fetch instance "' + name +
+                  '-container" in project "default": Instance not found')
+        body = json.dumps({
+            "error": "rpc error: code = Unknown desc = " + detail,
+            "code": 500, "message": detail}).encode()
+
+        class Owner:
+            url = "http://127.0.0.1:18080"
+            def _credential(self):
+                return "placeholder-not-a-real-credential"
+            class Opener:
+                def open(self, request, timeout):
+                    raise urllib.error.HTTPError(
+                        request.full_url, 500, "Internal Server Error", {},
+                        io.BytesIO(body))
+            opener = Opener()
+
+        with self.assertRaises(rest_wire.WireFault) as ctx:
+            rest_wire.request(Owner(), "GET", route)
+        self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
+        self.assertTrue(ctx.exception.legacy_missing_instance)
+        with self.assertRaises(rest_wire.WireFault) as ctx:
+            rest_wire.request(Owner(), "POST", route)
+        self.assertEqual(ctx.exception.code, "API_HTTP_REJECTED")
+        self.assertFalse(ctx.exception.legacy_missing_instance)
+
+    def test_create_preflight_accepts_only_typed_legacy_hint(self):
+        calls = []
+        class Rest:
+            def __init__(self, cfg):
+                pass
+            def request(self, method, uri, body=None, timeout=30):
+                calls.append(method)
+                if method == "GET":
+                    raise rest_wire.WireFault(
+                        "API_HTTP_REJECTED", legacy_missing_instance=True)
+                return {"container": {
+                    "username": "wip-unique",
+                    "state": "CONTAINER_STATE_CREATING"}}
+        class Claims:
+            def acquire_environment(self, *a):
+                pass
+            def dispatch_intent(self, *a):
+                pass
+            def unknown(self, *a):
+                pass
+        with (patch("bwmini.rest_wire.Client", Rest),
+              patch("bwmini.coordination_bridge.published_scope",
+                    return_value={"provider": "containarium",
+                                  "backend": "dev", "project": "default"}),
+              patch("bwmini.coordination_bridge.SharedClaims", Claims)):
+            result = gateway_create.dispatch(
+                self.config, {"username": "wip-unique"}, 7,
+                normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                protected=True)
+        self.assertEqual(result["state"], "accepted")
+        self.assertEqual(calls, ["GET", "POST"])
+
+    def test_create_preflight_does_not_accept_generic_500(self):
+        calls = []
+        class Rest:
+            def __init__(self, cfg):
+                pass
+            def request(self, method, uri, body=None, timeout=30):
+                calls.append(method)
+                raise rest_wire.WireFault("API_HTTP_REJECTED")
+        with patch("bwmini.rest_wire.Client", Rest):
+            with self.assertRaisesRegex(
+                    ValueError, "REST_CREATE_PREFLIGHT_UNVERIFIED"):
+                gateway_create.dispatch(
+                    self.config, {"username": "wip-unique"}, 7,
+                    normalize=lambda x: {**x, "ssh_keys": ["ssh-ed25519 AAA"]},
+                    protected=True)
+        self.assertEqual(calls, ["GET"])
