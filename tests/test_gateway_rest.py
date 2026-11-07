@@ -174,6 +174,13 @@ class GatewayRESTTests(unittest.TestCase):
         self.assertFalse(rest_wire._legacy_incus_instance_absent(
             response({"error": "x" * 4097, "code": 500, "message": detail}),
             "GET", route))
+        # Duplicate JSON names must not silently override an earlier value.
+        ambiguous = (json.dumps(payload)[:-1] + ',"code":500}').encode()
+        duplicate = urllib.error.HTTPError(
+            "http://127.0.0.1:18080" + route, 500,
+            "Internal Server Error", {}, io.BytesIO(ambiguous))
+        self.assertFalse(rest_wire._legacy_incus_instance_absent(
+            duplicate, "GET", route))
 
     def test_wire_exposes_legacy_hint_without_rewriting_500(self):
         import io
