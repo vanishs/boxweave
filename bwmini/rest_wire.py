@@ -15,9 +15,40 @@ import urllib.request
 
 
 class WireFault(Exception):
-    def __init__(self, code, status=409):
+    def __init__(self, code, status=409, *, legacy_missing_instance=False):
         self.code, self.status = code, status
+        # Only create preflight can opt into this version-specific signal.
+        self.legacy_missing_instance = legacy_missing_instance
         super().__init__(code)
+
+
+def _legacy_incus_instance_absent(error, method, path):
+    """Match the observed Containarium 0.128 GET-500 body, not generic 500s.
+
+    Require an exact, target-bound message in both upstream JSON fields.
+    Unknown error text, changed formats and larger bodies fail closed.
+    """
+    match = re.fullmatch(r"/v1/containers/([a-z][a-z0-9-]{0,62})", path)
+    if error.code != 500 or method != "GET" or match is None:
+        return False
+    try:
+        raw = error.read(4097)
+        if len(raw) > 4096:
+            return False
+        payload = json.loads(raw)
+    except (ValueError, UnicodeError, OSError):
+        return False
+    if not isinstance(payload, dict) or set(payload) != {"error", "code", "message"}:
+        return False
+    logical = match.group(1)
+    detail = (
+        'failed to get container: failed to get container: '
+        'Failed to fetch instance "' + logical +
+        '-container" in project "default": Instance not found'
+    )
+    return (type(payload["code"]) is int and payload["code"] == 500
+            and payload["message"] == detail
+            and payload["error"] == "rpc error: code = Unknown desc = " + detail)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -112,6 +143,9 @@ def request(owner, method, path, body=None, timeout=30):
             code = "API_RESPONSE_RECEIVED"
             return value
     except urllib.error.HTTPError as error:
+        # Keep HTTP 500 classified as rejected; attach a bounded compatibility
+        # hint which only the create preflight is allowed to consume.
+        legacy_missing = _legacy_incus_instance_absent(error, method, path)
         code = ("API_AUTH_REJECTED" if error.code in (401, 403)
                 else "API_TARGET_NOT_FOUND" if error.code == 404 and
                 method == "GET" and re.fullmatch(
@@ -120,7 +154,7 @@ def request(owner, method, path, body=None, timeout=30):
                 else "API_CONFLICT" if error.code == 409
                 else "API_RATE_LIMITED" if error.code == 429
                 else "API_HTTP_REJECTED")
-        raise WireFault(code) from None
+        raise WireFault(code, legacy_missing_instance=legacy_missing) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         code = "API_OUTCOME_UNKNOWN" if is_write else "API_READ_UNAVAILABLE"
         raise WireFault(code) from None
