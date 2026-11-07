@@ -47,9 +47,7 @@ def positive_arguments(schema, owned):
         return None, "INVALID_RUNTIME_SCHEMA"
     args = {}
     for prop in required:
-        if prop == "username" and owned:
-            args[prop] = owned
-        elif prop == "box" and owned:
+        if prop in ("username", "box", "logical") and owned:
             args[prop] = owned
         else:
             return None, "REQUIRES_REVIEWED_SAFE_INPUT_" + str(prop)
