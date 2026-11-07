@@ -20,6 +20,23 @@ except ImportError:
     import resource_size
     from gateway_create import AppStore, GatewayRESTFault
 
+STATUS_TOOL = {
+    "name": "boxweave_rest_status",
+    "description": "Read the original durable REST lifecycle operation by task_id; no retry or write.",
+    "inputSchema": {"type": "object", "additionalProperties": False,
+                    "properties": {"task_id": {"type": "string"}},
+                    "required": ["task_id"]},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False}
+}
+CREATE_STATUS_TOOL = {
+    "name": "boxweave_create_status",
+    "description": "Read original durable async Box creation receipt by task_id, request_key or username.",
+    "inputSchema": {"type": "object", "additionalProperties": False,
+                    "properties": {k: {"type": "string"} for k in
+                                   ("task_id", "request_key", "username")}},
+    "annotations": {"readOnlyHint": True, "destructiveHint": False}
+}
+
 KEY = re.compile(r"[0-9a-f]{32}\Z")
 ACTIONS = frozenset(("start_container", "stop_container",
                      "delete_container", "resize_container"))
