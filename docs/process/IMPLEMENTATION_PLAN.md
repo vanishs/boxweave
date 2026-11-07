@@ -10,7 +10,7 @@
 | 3 | Box lifecycle, safe update fields, Incus Exec and verified native status | Create/start/Exec/stop/delete on exact owned UUID; denial and independent post-read |
 | 4 | Private network topology, directional ACL grants, default internet, optional block | Real same-bridge IPv4/IPv6 denial/allow; IP reuse; no foreign NIC mutation |
 | 5 | Box-owned Caddy public routes and native TCP/UDP forwards | Domain/port collision, cross-Box public allowance, restart reconciliation, foreign upstream rejection |
-| 6 | Recursive nesting installation/upgrade and full surface parity | L0/L1/L2 full P0 matrix, L3 key paths if supported, parent/sibling denial |
+| 6 | Nested installation/upgrade compatibility and full per-layer feature parity (no cross-layer controller) | L0/L1/L2 full P0 matrix, L3 key paths if supported, parent/sibling denial; ordinary parent Box lifecycle |
 | 7 | Independent system reacceptance, safe installer upgrade/repair, exact-source release readiness | Finder/Fixer/Verifier original repro, fresh install, rollback/recovery evidence |
 
 A slice changing installed surfaces cannot be marked fully accepted from source tests alone. Once the minimal P0 product becomes usable, complete acceptance is defined by [ACCEPTANCE.md](../verification/ACCEPTANCE.md), not by a count of passed unit tests.

@@ -39,6 +39,7 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-020 | Every installed MCP tool and local maintenance CLI leaf gets valid, invalid and relevant denial scenarios or named blocker | I + V |
 | A-021 | Production runtime builds with the official MCP Go SDK and official Incus Go client; native Exec, Operation, ACL and Unix-socket behavior are tested against the observed Incus daemon rather than assumed | T + I |
 | A-022 | A nested installation performs its own bootstrap without taking parent admin credentials or mutating parent services; parent permission deficits are correctly reported | N + V |
+| A-023 | A Box containing another BoxWeave is managed through ordinary parent Box lifecycle only; deleting that owned Box uses the standard confirmation and does not require inner-controller discovery or a recursive orchestration API | I + N |
 
 ## Required adversarial combinations
 

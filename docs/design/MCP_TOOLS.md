@@ -12,7 +12,7 @@
 | `box_update` | Mutation | Whitelisted CPU, memory, disk and network/nesting options; no arbitrary Incus config or host mounts. |
 | `box_start` | Mutation | Start exact Box UUID and verify running state. |
 | `box_stop` | Mutation | Stop exact Box UUID and verify stopped state. |
-| `box_delete` | Mutation | Delete exact owned Box UUID, with server-enforced confirmation and attachment cleanup. |
+| `box_delete` | Mutation | Delete exact owned Box UUID, with standard server-enforced confirmation and owned-attachment cleanup; no special discovery or protection of a nested controller inside the Box. |
 | `box_exec` | Mutation | Execute inside verified owned guest via Incus Exec, capture bounded output/exit; not a host shell. |
 | `operation_get` | Read | Original durable operation receipt, current phase, target and evidence. |
 | `operation_list` | Read | Scoped, paginated operation history with explicit unknowns. |

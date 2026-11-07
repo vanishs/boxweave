@@ -43,7 +43,7 @@ For Incus, prefer restricted project-scoped identity when technically adequate. 
 
 ## Nested layers
 
-A nested BoxWeave is independently authenticated with new keys, DB and local Incus. It receives no parent credentials, socket, file bind or unmediated route-management rights. Provisioning a nested-capable Box does not authorize a child to change the parent's firewall, Caddy or Incus.
+A nested BoxWeave is independently authenticated with new keys, DB and local Incus. It receives no parent credentials, socket, file bind or unmediated route-management rights. Provisioning a nested-capable Box does not authorize a child to change the parent's firewall, Caddy or Incus. Each installation manages only its **directly owned Boxes**. The parent treats the Box containing a child installation like any other owned Box and does not discover or administer the child's internal Boxes. Ordinary parent-side deletion can therefore erase the child's entire environment; no cross-layer deletion protector or child-discovery capability is part of v1.
 
 ## Required negative acceptance
 

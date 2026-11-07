@@ -22,9 +22,9 @@ MCP accepts `box_id`, `guest_port`, and a validated domain—not arbitrary upstr
 
 MCP accepts a requested protocol/host bind port + `box_id` + `guest_port`, not a target IP. Prefer native Incus forwarding facilities where supported, selecting network forward vs proxy device only after compatibility and nested tests. Check bind-port exclusivity, identity, owner, IPv4/IPv6 and restart restoration. Removal never touches a forward that ownership cannot prove.
 
-## Nested exposure
+## Nested networking is ordinary networking
 
-Every layer can create the same route and forward records in its own scope. To publish an L2 service externally, L1 and L0 must grant relevant ingress explicitly; neither child nor its token may alter the parent. Automatic delegated publish flows, if added, must use scoped authorization, journaled mutations and verifiable ownership at **each** intervening layer.
+Every layer may create its own route and forward records targeting **only its directly owned Boxes**. A service inside an L2 Box can be reached through parent layers only if operators independently configure ordinary owned-Box routes/forwards and network permissions at each layer. BoxWeave neither discovers the full ancestry nor automatically traverses or programs parent Caddy/Incus configurations. A child cannot edit its parent's routes, firewall, or credentials. This is the same networking contract at every level, not a special multi-layer publishing API.
 
 ## Safety checks
 

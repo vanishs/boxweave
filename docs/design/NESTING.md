@@ -1,32 +1,34 @@
-# Recursive self-hosting and parity — P0
+# Full nested runtime compatibility — P0
 
-A nested BoxWeave is **not** a special or reduced mode. Every layer independently runs the same application binaries, management MCP contract, installation/upgrade behavior, local operation store, Caddy ownership boundary and native Incus management integration.
+**Goal:** An ordinary Box can run a complete, independent BoxWeave installation with the same features as an installation on a physical host, as long as Incus and the Linux environment support them. This is **runtime compatibility**, not a feature for orchestrating nested BoxWeave controllers.
+
+The principal motivations are:
+- Develop, install, upgrade, test, and independently accept new BoxWeave versions **inside an existing BoxWeave-managed Box**, without changing the outer controller.
+- Preserve a foundation for possible future environment subleasing: an operator may allocate one Box that happens to contain another full BoxWeave. Subleasing, cross-layer administration, tenant delegation, usage metering, or commercial billing are **not v1 scope**.
 
 ```text
-Physical Linux host
-  L0 BoxWeave + Incus + Caddy + SQLite
-    `-- Box A (owned by L0, nesting permitted)
-          L1 BoxWeave + Incus + Caddy + SQLite
-            `-- Box B (owned by L1, nesting permitted)
-                  L2 BoxWeave + Incus + Caddy + SQLite
-                    `-- ...
+Physical host: BoxWeave L0
+  owns Box A (ordinary owned Box; nesting capability enabled)
+    Box A runs BoxWeave L1, with its own Incus / Caddy / SQLite / MCP
+      owns Box B (ordinary L1-owned Box; nesting enabled)
+        Box B runs BoxWeave L2
+          owns Box C ...
 ```
 
-## Invariants
+## Local-only responsibilities
 
-1. **No BoxWeave-imposed depth limit.** Real limits are dictated by kernel namespaces, user mappings, storage/network drivers, available resources and upstream Incus support.
-2. **Equivalent functionality.** The same MCP tool names, schemas, error semantics, installation and upgrade procedures, operation durability, route/forward/ACL policy and security invariants apply at every level. Features unsupported by the actual environment report a precise capability condition rather than silently disappearing.
-3. **Each level owns only its descendants.** Parent and child have distinct administrator credentials, instance UUID namespaces/ownership records, SQLite DBs and Caddy configurations. Parent and sibling resources are not discoverable or mutable through child MCP.
-4. **Nesting must be provisioned and verified safely.** Parent-side allowlisted creation/update can request nested Incus capability. The inner standard installer must bootstrap its own Incus/Caddy/controller where allowed and report missing prerequisites; it must never silently mutate the parent. `security.nesting=true` alone does not prove nested Incus works; check actual user namespaces/idmaps, kernel policy, network and storage without indiscriminate privilege escalation.
-5. **Host means this layer's runtime environment.** Child-local installation CLI can maintain services inside its containing Box, never on the parent's physical host. No host socket mounts or parent credential transfer.
-6. **Public ingress is delegated, not stolen.** Inner Caddy/routes/forwards work within connectivity assigned by the parent. End-to-end public reachability across all layers requires explicit parent-owned port or route delegation; a child cannot edit parent Caddy or firewall to achieve it. A missing parent grant is a capability/access boundary, not permission to bypass it.
-7. **Resources are bounded upstream.** Inner capacity and network reachability are constrained by the resources its parent has assigned. Failure to provision deeper Boxes due to host resource or upstream limitations is reported, never hidden or made into a successful status.
-8. **Unknown effects survive parent resets.** Each layer reconciles only its own original operations; a parent stopping/starting its Box must not silently erase or replay a child action.
+1. **Each layer manages only its own directly owned Boxes.** L0 manages Box A; L1 manages Box B; L2 manages Box C. No layer discovers, inventories, coordinates, upgrades, migrates, backs up, or manages the **inner BoxWeave controller** or any of its child Boxes as a special hierarchy.
+2. **A nested installation is just software in a Box.** Its containing Box is an ordinary resource of the parent layer. The parent is not required to detect whether it runs BoxWeave, nor to inspect the inner operation database, Incus instances or Caddy state.
+3. **Ordinary lifecycle rules apply.** Starting, stopping, updating, and deleting a Box that contains another BoxWeave have exactly the same parent-layer authorization, identity, confirmation and operation semantics as other owned Boxes. Deleting the containing Box may destroy everything stored inside it; the parent does not walk a descendant tree, apply special recursive deletion protection, or require an inner-controller handshake.
+4. **Independent scope and identity.** Every BoxWeave has its own host-local Incus, Caddy, SQLite, administrator credentials and MCP endpoint. Its host is the environment where it runs. The child does not receive its parent's credentials, native socket or privileged management access.
+5. **Identical feature contract, no artificial depth limit.** The same program, public MCP tool schemas, local CLI and operations work at any supported nesting depth. Different native capabilities or resource limits may cause a precise `UNSUPPORTED` result; the product must not silently downgrade functionality.
+6. **Ordinary network ownership.** Each layer may manage HTTP routes, forwards and ACLs only for its own Boxes. Connectivity across layers uses the normal, explicitly authorized routing/port-forward actions at each relevant layer, set up separately by the operator. No cross-layer delegation protocol, automatic parent Caddy changes or recursive publishing service is required.
+7. **Supported nesting must actually work.** A parent can enable allowed nesting capabilities on a directly owned Box. `security.nesting=true` alone is not proof that an inner Incus can create a child. The guest-side installer must check its own user namespaces/idmaps, storage, networking and privileges, and report limitations without changing the parent.
 
-## Test matrix
+## Development and acceptance use
 
-At minimum, test L0, L1 and L2 with the same source/build and full P0 tool catalog, plus L3 for critical lifecycle and status when Incus and resources permit. Include nested guest create -> start -> Exec with independently recorded exit -> ACL allow/deny -> Caddy route -> TCP/UDP forward -> stop -> restart -> delete, subject to safe owned targets.
+Use an isolated parent-owned Box as a complete nested Linux host for building, installing, upgrading and testing a candidate BoxWeave. A failing inner controller must not be relied on to collect its own failure evidence; an authorized outer controller may inspect its **owned containing Box** using ordinary Box lifecycle/Exec tools. It does not get special access to the inner controller's managed resources.
 
-Test a middle-layer restart and crash, parent/child credential isolation, route delegation refusal, native Incus UUID binding, and no modification of parent/sibling resources. Record `UNSUPPORTED` with the exact upstream preflight for any blocked deeper level; never call it PASS.
+Test equivalent BoxWeave functionality on L0, L1 and L2, and deeper where possible: create/start/Exec/update/stop/delete, ACL, internet access, Caddy routes, forwarding, durable operation recovery, local upgrade, and authentication boundaries. Use ordinary operators and current layer credentials for each layer. Verify that a failure in one layer neither grants authority in another nor changes foreign resources.
 
-This requirement does **not** guarantee that all physical hosts can support unlimited nesting.
+The acceptance target is **same capabilities under supported environments**, not one controller managing the nested hierarchy and not a promise of unlimited physical kernel capacity.

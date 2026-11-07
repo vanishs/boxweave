@@ -11,7 +11,7 @@
 - Linux containers first. Virtual machines, complex orchestration, and clusters are not part of the P0 promise.
 - Guest commands use native Incus Exec, not a required guest SSH service.
 - Every accepted mutation is represented by a durable local operation and can be reconciled after failure.
-- Recursively complete installations: the same BoxWeave behavior applies to every supported nesting layer.
+- Fully functional installations at every supported nesting layer: each layer independently manages only its own directly owned Boxes. Nesting is runtime compatibility, not a recursive BoxWeave management feature.
 - Keep the underlying Incus storage driver unconstrained; capability-dependent operations report unsupported accurately.
 
 ## P0
@@ -29,4 +29,5 @@ Box file read/write via Incus guest file facilities; Box snapshot list/create/re
 - Whole-Box backup/restore and automatic backup systems.
 - Full isolation against public-route or port-forward hairpin paths: direct **private** Box-to-Box isolation is the agreed boundary; published public websites remain reachable to other Boxes.
 - Public administrative REST or Web interface, OAuth multi-tenant control plane, agent SSH management, unrelated host file/service management, unmanaged Caddy routing, multi-host orchestration.
+- Cross-layer BoxWeave discovery, delegation, controller management, automatic multi-level ingress propagation, special subtree deletion safeguards, subleasing accounts, metering and billing. Future subleasing is a motivation, not an implemented v1 feature.
 - Imposed storage-driver selection, broad infrastructure upgrades, implicit parent-level network changes.

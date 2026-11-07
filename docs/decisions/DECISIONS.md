@@ -12,7 +12,7 @@ Recorded from the owner's current design discussion. **Accepted** means a produc
 | D-006 | Accepted | A Box may access another Box's public Caddy website; bypass protection for that public path is not P0. |
 | D-007 | Accepted | HTTP routes and TCP/UDP forwards are owned, Box-targeted services; Caddy/Incus unmanaged services cannot be published via MCP. |
 | D-008 | Accepted | Mutations are asynchronous durable BoxWeave operations with dedup, concurrency protection, UNKNOWN preservation and post-state verification. |
-| D-009 | Accepted | Fully recursive self-hosting with no artificial depth limit; same functions at each supported layer and independent trust domains. |
+| D-009 | Accepted | Fully compatible self-hosting with no artificial depth limit; each independent layer has the same functions but manages only its directly owned Boxes, not a recursive management tree. |
 | D-010 | Accepted | Strict resource ownership boundary even for superadmin MCP calls; no generic host shell, host file operations or arbitrary native API passthrough. |
 | D-011 | Accepted | No mandatory storage driver; backup deferred, guest file/snapshot tools later P1. |
 | D-012 | Accepted | A limited host-local install/status/upgrade/credential recovery CLI exists despite no Web UI. |
@@ -23,5 +23,8 @@ Recorded from the owner's current design discussion. **Accepted** means a produc
 | D-017 | Accepted | Nested installs use the same build and bootstrap/maintenance workflow; each layer treats its own environment as host and never silently modifies parent infrastructure. |
 | D-018 | Accepted | Public routing, forwarding and private ACL changes must be bound to an owned Box identity; no arbitrary host, remote service or unmanaged target may be published via MCP. |
 | D-019 | Accepted | Native operation receipts must be retained separately from BoxWeave durable business-operation receipts; ambiguous results stay UNKNOWN instead of automatic replay. |
+| D-020 | Accepted | Nested operation is a compatibility property for development/testing new BoxWeave versions in managed Boxes and possible future environment subleasing; it is not a v1 cross-layer administration or delegation feature. |
+| D-021 | Accepted | A parent treats a Box hosting an inner BoxWeave as an ordinary owned Box; normal deletion semantics apply with no inner-controller discovery, recursive protection or extra deletion handshake. |
+| D-022 | Accepted | Cross-layer ingress is configured through ordinary separately authorized route/forward actions per layer; no automatic multi-layer publish/delegation protocol is in v1 scope. |
 
 Before overturning an accepted item, update product requirements, the affected design and acceptance tests and explicitly record why. Do not treat archived v0.x docs or external repositories as a competing source of authority.

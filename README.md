@@ -6,10 +6,11 @@ BoxWeave is an agent-oriented, single-host Incus management controller. Its sole
 
 Core promises:
 - Manage only resources this layer of BoxWeave owns.
-- Run the same BoxWeave stack at any nesting level supported by Incus and the environment.
+- Run the same BoxWeave stack at any nesting level supported by Incus and the environment; each instance manages only its own directly owned Boxes, not a nested hierarchy.
 - Use native Incus identities and guest Exec, never an unrestricted host shell through MCP.
 - Treat every mutation as a durable, reconcilable operation.
 - Isolate private Box-to-Box networking by default while allowing outbound internet and access to public services.
+- Enable testing and developing new BoxWeave installations inside ordinary managed Boxes, while preserving a future path to environment subleasing without implementing cross-layer management now.
 
 Start with [documentation index](docs/INDEX.md), [product scope](docs/product/SCOPE.md), [requirements](docs/product/REQUIREMENTS.md), [architecture](docs/design/ARCHITECTURE.md), [security boundaries](docs/design/SECURITY.md), and [Agent rules](AGENTS.md).
 
