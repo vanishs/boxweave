@@ -40,7 +40,7 @@ _FIELD = {
     "tenant_id": "tenantId", "network_tenant": "networkTenant",
     "os_type": "osType",
 }
-_OSTYPES = {"ubuntu": "OS_TYPE_UBUNTU", "rocky9": "OS_TYPE_ROCKY_9",
+_OSTYPES = {"ubuntu": "OS_TYPE_UBUNTU_2404", "rocky9": "OS_TYPE_ROCKY_9",
             "rhel9": "OS_TYPE_RHEL_9", "windows2022": "OS_TYPE_WINDOWS_2022"}
 _ISOLATION = {"container": "ISOLATION_TYPE_CONTAINER", "vm": "ISOLATION_TYPE_VM"}
 
