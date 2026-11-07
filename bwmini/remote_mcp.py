@@ -18,7 +18,7 @@ from flask import Flask, Response, jsonify, redirect, request
 
 from .remote_auth import RemoteCredentials, RemoteError, TOKEN_PATTERN, valid_url
 from .mcp_gate import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS, SERVER_INFO_VERSION
-from .remote_create import CreateFault, CreateJournal, validated_request, validate_upstream_payload
+from .remote_create import CreateFault, CreateJournal, PREDISPATCH_FAILURE_CODES, validated_request, validate_upstream_payload
 
 PROTOCOL = "2025-11-25"
 GATE = "/usr/local/lib/boxweave/default/mcp_gate.py"
@@ -439,7 +439,8 @@ I authorize this client to use BoxWeave MCP tools.</label>
                 if (isinstance(accepted, dict)
                         and accepted.get("task_id") == task_id
                         and accepted.get("state") in (
-                            "submitted", "accepted", "unknown", "succeeded")):
+                            "submitted", "accepted", "unknown", "succeeded",
+                            "failed_before_dispatch")):
                     # The single app journal already owns this receipt.
                     # A duplicate/pending status is NEVER proof of success.
                     if accepted["state"] == "accepted":
@@ -447,7 +448,14 @@ I authorize this client to use BoxWeave MCP tools.</label>
                 else:
                     journal.complete(task_id, True)
             else:
-                journal.complete(task_id, False)
+                # Only a *known local Gateway refusal* before create
+                # dispatch is a definitive no-POST result. Unknown origin,
+                # transport loss or a recorded dispatch intent remains UNKNOWN.
+                failure = reply.get("error") if isinstance(reply,dict) else None
+                code = failure.get("message") if isinstance(failure,dict) else None
+                if code not in PREDISPATCH_FAILURE_CODES or not journal.fail_before_dispatch(
+                        task_id, code):
+                    journal.complete(task_id, False)
         except Exception:
             # The original write may still finish upstream. Never retry it.
             try:

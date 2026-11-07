@@ -11,7 +11,10 @@ import stat
 import subprocess
 import time
 
-from hostkeys import atomic
+try:
+    from .hostkeys import atomic
+except ImportError:
+    from hostkeys import atomic
 
 STATE = Path("/var/lib/boxweave-default/state.json")
 PUBLIC = Path("/var/lib/boxweave-default/public")
