@@ -61,6 +61,14 @@
 
 See [second-pass gap report](SDK_GAP_CLOSURE_2026-11-07.md) for tagged-source detail on MCP Tool request auth, bridge ACL selectors, project bootstrap, Exec output, file create and read-only wait side effects.
 
+## C.1. Additional verified native NetworkACL security details (later 2026-11-08 test)
+
+See [the executed official Incus Go SDK TLS/Scriptlet test](../verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md). Native restricted TLS limited to the Box Project returned **403** for inherited `default` ACL; default-restricted TLS could edit any permitted `default` ACL but could also read unrelated resources. Built-in Incus Scriptlet successfully authorized `network_acl:default/<exact-ACL>#can_edit` and denied a second ACL, without deploying OpenFGA or a privileged helper. However this requires **daemon-global TLS client-class routing**, not a per-cert switch: routed Scriptlet clients **lose automatic certificate Project restrictions** unless the policy faithfully reproduces them.
+
+The SDK's `GetNetworkACL` returns an ETag; `UpdateNetworkACL(name,put,ETag)` truly returned **HTTP 412** when presented with a stale value, and the new ACL contents stayed unchanged. Use that native optimistic guard, not an app-specific revision integer.
+
+**Do not conflate ACL edit with ACL create:** the native `POST /network-acls` checks the effective Project's `can_create_network_acls` before parsing the posted name. The live test created an arbitrary-named ACL with that Project entitlement even though subsequent object-level ACL access was denied. Controlled dynamic ACL provisioning and global auth compatibility are P0 blockers not solved by merely importing a different SDK method. No outer host test or v1 runtime PASS was performed.
+
 ## D. Minimum code-first proof gates, no host modification in this review
 
 - **Incus credential probe (first):** dedicated non-root service user in `incus` group (not `incus-admin`), native auto-confined Project, project `restricted=true` and only necessary options; verify stop/exec/file/network ACL/proxy/nesting works while foreign and admin actions are **denied**. `restricted.devices.proxy` defaults to `block`, and `restricted.containers.nesting` defaults to `block`; enabling each has genuine exposure consequences. If this native-only model cannot meet P0, evaluate *restricted TLS certificate*, then only if needed a tiny privileged helper.
