@@ -21,7 +21,7 @@
 
 Use `mcp.NewStreamableHTTPHandler` and typed `mcp.AddTool` rather than a custom JSON-RPC dispatcher, Schema engine or persistent MCP session layer. For protocol 2026-07-28, the SDK HTTP transport requires `StreamableHTTPOptions.Stateless=true`; treat that as the preferred design candidate while verifying actual ChatGPT and legacy-client negotiation. Long-running BoxWeave operations survive independently in the durable journal and are queried through `operation_get` after reconnect; do not rely on MCP transport session IDs or `Last-Event-ID` to implement business durability.
 
-Authentication, token revocation, Origin/Host verification, body-size/rate limits and explicitly trusted-proxy configuration must be installed as **real HTTP middleware outside the SDK handler**; cross-origin checks cannot be assumed enabled by default. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+Use native `auth.RequireBearerToken` with BoxWeave's own revocation-aware `TokenVerifier`; handlers obtain `auth.TokenInfoFromContext`. The MCP Streamable HTTP SDK **already provides a default 4 MiB request body cap and localhost Host/DNS-rebinding checks**. Do not duplicate those primitives. Explicit Origin policy (e.g. Go `http.NewCrossOriginProtection`), rate policy and trusted reverse-proxy handling remain to be configured. Ensure the file-apply limit accounts for JSON/base64 overhead. If an operator proxy forwards external `Host` to loopback, test compatibility before any explicit protection change. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
 ## Verification
 
