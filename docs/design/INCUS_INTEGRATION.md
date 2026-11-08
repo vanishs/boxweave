@@ -4,7 +4,7 @@
 
 Incus's stable foundation is its native management API. The Incus CLI and the official Go client use that API. **BoxWeave external management remains HTTP MCP only**; an internal Incus API or Unix-socket call is not a second BoxWeave public REST API.
 
-**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. The local Incus Unix socket is unrestricted Incus admin access; `UseProject` scopes requests but is **not** a privilege boundary. The installer may use the admin socket; the MCP runtime needs verified restricted native credentials or a small independently enforcing privileged boundary. Test native permissions before choosing. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
+**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Incus Unix socket privileges vary by OS identity: root/`incus-admin` has full rights; a non-root user **only in `incus`** is natively confined to its per-user Project. `UseProject` is only a selector. Start with a dedicated `incus`-only service account and local-admin-provisioned Project restrictions; test native proxy/ACL/nesting and denial of foreign/admin calls. Restricted TLS identity is fallback and a helper last resort. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
 
 ## Trust and division of responsibility
 
@@ -33,9 +33,17 @@ Use the smallest typed Incus adapter. Before dispatch: validate resource units a
 
 These constraints come from [profile/NIC, root-pool, resize, input and Exec failure history](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md), not from adopting Containarium's generic Backend interface.
 
-## Local privilege
+## Local privilege — upstream-first
 
-Unrestricted Incus admin socket access can confer broad host powers. Use restricted Incus identities where workable, and a narrow local privileged service with an allowlist for any essential setup actions. Treat this as a real OS/process privilege boundary, not merely JSON validation in an all-powerful public HTTP process.
+The preferred runtime service is a dedicated non-root OS user belonging to `incus` but **not** `incus-admin`. Incus's documented per-user Project confinement is a native security boundary; the host-local installer may configure its `restricted=true` Project. `restricted.devices.proxy` and `restricted.containers.nesting` default to `block` and need explicit, reviewed allowances if proven necessary. A scoped Project is not by itself a grant to reach foreign Boxes, and BoxWeave still checks UUID ownership. Restricted TLS certificates are the next candidate if local confinement cannot support P0; do not create a separate privileged helper by default. [Incus authorization](https://linuxcontainers.org/incus/docs/main/authorization/).
+
+## Correct native API families and error semantics
+
+- `GetInstancePortForwardConn` connects to a guest port; it **does not** install a persistent host listener. Use a named, owned instance `proxy` device via `UpdateInstance`.
+- `CreateNetworkPeer` manages **network-to-network** peering, not directional Box-to-Box permission. Use NIC-attached `NetworkACL` operations for `box_peer_set`.
+- Classify upstream HTTP errors with `api.StatusErrorMatch` / `api.StatusErrorCheck`, not English substrings or invented numeric error values.
+- `InstancePut.Config` and `Devices` are whole native maps; preserve unrelated effective settings under ETag guarded updates.
+- See [20-tool SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md).
 
 ## Selected Go and MCP integrations
 
