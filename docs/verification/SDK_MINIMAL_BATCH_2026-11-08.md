@@ -1,0 +1,54 @@
+# Minimal batched native SDK verification — existing nested Incus 7.6 laboratory
+
+**Date:** 2026-11-08  
+**Purpose:** Test a small number of exact P0 SDK invariants in batches, with almost no reliance on unstable BoxWeave `main` after admission. This is an **execution plan plus partial real environment evidence**, not a complete native PASS report. No v1 controller binary exists yet.
+
+## Decision: reuse before creating
+
+**Preferred laboratory: existing managed Box `bw-debug-0460-lab` (L1), not a new L0 Box.** The outer `dev` host is Incus **7.5.1** with BoxWeave/Containarium management through `main`; inside this **already running** Box, the **client and server are both Incus 7.6**, with nesting configured, a working native daemon, the `default` dir storage pool, the `incusbr0` managed IPv4 NAT bridge and one cached Ubuntu Noble image. Its nested instance list was **empty** when inspected. Outer Box identity at inspection: `a51196d3-54f9-4d67-ae6f-7b22a1aca7e9`. This avoids creating a second L0 Box just to reach a newer Incus.
+
+A previously attempted L0 disposable Box `bwv1sdk-1107-a` has the **original creation task** `0f3f3a1f9a1141b21d89e0eb08a83f24` and request key `7b84aaf378e44b9e81c99c29381a1d02`. On 2026-11-08 the original status returned `READINESS_OUTCOME_UNKNOWN` and `get_container` showed `CONTAINER_STATE_ERROR`; the name was absent from the normal Box inventory. **Never re-dispatch, delete or auto-adopt it based on those inconsistent observations.** Exact native reconciliation is an independent host-local task.
+
+## Actual batch-0 observations — observed, not presumed
+
+| Gate | Evidence and exact outcome | Status |
+|---|---|---|
+| L0 gateway inventory | 47 managed Boxes reported; L0 `dev` daemon 7.5.1; existing `bw-debug-0460-lab` Running; `boxweave_nesting(inspect)` showed `nesting=true`, **effective child execution not verified** | **PASS inventory only** |
+| L1 Incus 7.6 baseline | `sudo incus version`: client 7.6, server 7.6; `sudo incus list --all-projects`: no nested instances; `incus network show incusbr0` private 10.203.0.1/24 NAT, IPv6 `none`; `incus profile show default` has managed NIC and root disk pool `default`; native socket and cgroup v2 exist | **PASS environment only** |
+| L1 egress / Go toolchain | `proxy.golang.org` and `images.linuxcontainers.org` reachable. Installed upstream Go **1.26.10** within the Box user's home (outside the test module). Downloaded official Incus Go SDK `github.com/lxc/incus/v7@v7.6.0` and MCP Go SDK `github.com/modelcontextprotocol/go-sdk@v1.8.0`. After moving unpacked Go out of module tree, `go mod tidy` returned **0** according to the test runner's status file | **PASS dependency/toolchain preparation only** |
+| Native restricted OS user | Created **guest-local** non-root `bwv1sdk1108`, UID 1003, member of `incus` but **not** `incus-admin`. Native Incus created confined `user-1003` Project with `restricted=true` | **PASS exact user/project creation** |
+| Native foreign/admin denied | `sudo -u bwv1sdk1108 incus project show default` returned **permission denied**. `incus project set user-1003 limits.containers=2` returned **Certificate is restricted**. Scoped project inventory showed only `user-1003` | **PASS those two denial probes**; not comprehensive foreign instance/host privilege isolation |
+| Auto Project effective configuration | Auto `user-1003` has `features.networks=false`, managed NIC `incusbr-1003`, an isolated Profile with **root disk pool `default`**, `restricted.networks.access=incusbr-1003`, and `restricted.containers.nesting=allow`; `restricted.devices.proxy` was not set. Project isolation is native, but auto-generated permissions **must be reviewed/tightened**. | **PASS configuration readback**, not a claim of safe initial policy |
+| MCP SDK auth / Go native binary | Two local `mcp_auth_test.go` and `native_inspect.go` sources were written to `~/bwv1-native-probe-1108`, then a single tmux compilation/test batch was submitted. A gateway response reported `TRUST_OBSERVATION_STALE`, yet a later read showed **file move and `TIDY_EXIT=0` already completed**. Later attempts to read `auth-test.log` and native-build status returned gateway `UNKNOWN`/`UNAVAILABLE` | **UNKNOWN / NOT A TEST PASS**; read original local files, do not blindly restart |
+| Nested guest lifecycle / Exec / files / network | Not performed or not verified in this round. | **UNTESTED** |
+
+### Why `main` gateway errors are not an Incus SDK defect
+
+The read-only and SSH MCP tools intermittently returned `The tool failed internally`, `TRUST_OBSERVATION_STALE`, `UNKNOWN` and `UNAVAILABLE`. At least one operation actually progressed after the gateway reported a failure. Therefore: **admission/response, actual guest execution and native Incus effects are three separate pieces of evidence**. Do not retry any uncertain guest/Incus mutator merely because the gateway reports error. Inspect the existing tmux session and files via a read-only call after the channel recovers.
+
+## Minimum efficient verification design
+
+**One source tree** in the owned lab at `~/bwv1-native-probe-1108`; a single bounded runner writes an append-only local manifest with original command, SDK module version, guest daemon version/API extensions, exact Project and native UUID, expected/observed status, exit/error classification and cleanup. Each group runs independently so a broken network/privilege case does not prevent MCP auth or basic file/Exec verification. Never print raw bearer tokens or guest private files.
+
+| Batch | Actual execution / assertions | Boundaries and decisive outcome |
+|---|---|---|
+| **A — pure MCP Go SDK, no Incus state** | `go test` with `mcp.NewStreamableHTTPHandler(Stateless=true)`, two independently identified Bearer credentials, `req.Extra.TokenInfo` for every typed Tool, viewer denial/admin allow, expiry/revocation on subsequent HTTP calls, concurrent actor isolation, `server/discover` + legacy `initialize`, malformed Host/Origin and request-size negatives. | **T** only; does not require an L2 instance or live ChatGPT. Initial Go test source already submitted; read `auth-test.log` before any retry. Use the SDK middleware rather than reimplementing Bearer/JSON-RPC. |
+| **B — one native restricted L2 container** | With **the existing** `user-1003` account/project, first **read/confirm** exact Profile root disk, image, NIC, `restricted.*` and capabilities. Under disposable `bwv1s-1108-` naming, test SDK `ConnectIncusUnix` via `unix.socket.user`, project isolation + foreign denial, instance create/get UUID/ETag, safe update/readback, start/stop, typed 404 `api.StatusErrorMatch`, non-canceling bounded operation observation, typed guest Exec 0/nonzero/long output, file list/read, upload overwrite controls and SFTP `O_EXCL` candidate; apply negative symlink/concurrency probes **only to scratch L2 paths**. | **N** when executed, with exact UUID/native readback; limited bridge/dir storage behavior. Only one child initially; do not skip capabilities unsupported in a nested runtime and call them PASS. Conditional replace/delete remain `UNSUPPORTED` until a real race-safe method is proved. |
+| **C — optional second native L2 container** | Create a second owned child only after batch B's own lifecycle/isolation succeeds. Check NIC-attached Bridge ACL actual packet deny, A→B allow/replies/B→A initiation denial, revoke/old connections, native MAC/IP anti-spoof, IPv4 and **enabled IPv6 only**; test loopback TCP and UDP `proxy` device if restricted Project permits, including port collision and after-state. Verify inner NAT with anti-spoof enabled and avoid parent bridging/macvlan. | **N** packet witness possible only in nested topology. The existing bridge advertises IPv6 `none`: this is **NOT** IPv6 PASS. If native `proxy` is denied by default, record permission failure; any change to `restricted.devices.proxy` must be explicitly confined and verified within guest-local test Project, not outer L0. |
+| **D — cleanup/evidence** | Only for exact `bwv1s-1108-` L2 resources proven owned and in a known native state: tear down temporary ACL/port/children with native readback, record no residual claims. For uncertain effects preserve identity and original operation instead of retrying delete. The original L0 Box creation task is **out of scope for this cleanup**. | **V** requires independent native post-read, no blind deletion of foreign or unknown objects. |
+
+**Fast-fail isolation:** If inner Incus cannot launch a child due to user namespace/idmap/cgroup/storage/route restrictions, the **L1 native user and the pure MCP tests remain valid**, but L2 lifecycle/network become **BLOCKED (nested environment)**. Do not upgrade/restart L0 Incus 7.5.1, change outer `main`, disable native anti-spoof, grant L0 privileged socket or create a replacement Box automatically. One verified new L0 disposable Box is a fallback **only if the existing lab is demonstrably unusable**, not the first action.
+
+## What nested tests can and cannot establish
+
+Nested 7.6 can verify tagged SDK call semantics, Go build compatibility, confined-Project behavior on that daemon, local guest Exec and file operations, native container lifecycle and local same-bridge ACL rules. But it **cannot certify** a physical-host deployment's networking, real independent LAN listener, all host firewall interactions, production storage drivers, nested depth beyond the tested one, IPv6 when none is configured, or BoxWeave v1 controller behavior (it does not exist yet). Record precise `NESTED-N` evidence, not broad `L0-PASS`.
+
+After the above groups, reserve a **small separate L0 witness** for physical host LAN IP TCP/UDP, IPv4/IPv6, external firewall and the exact **installed BoxWeave candidate**; this must not be silently inferred from an L1/L2 sandbox.
+
+## Next action when the gateway is healthy
+
+1. **Read, never replay:** `~/bwv1-native-probe-1108/build.status`, `auth-test.log`, `native-build.log`, and the original `bwv1compile1108` tmux session. `TIDY_EXIT=0` is observed; MCP auth test and native compile outcomes are **UNKNOWN**.
+2. If compiled, read and run the existing `native-inspect` under the restricted user using `/var/lib/incus/unix.socket.user` and independently verify actual Project scope. If not compiled, fix or run the original test exactly once after checking whether a prior run is active. Never claim an error from the unstable `main` gateway is the compiler result.
+3. Only then admit a **single** disposable L2 instance (never an L0 Box), preserving original native operation IDs; proceed group-by-group to optional second instance.
+
+Related: [full SDK fit](../research/OFFICIAL_SDK_FIT_2026-11-07.md), [second-pass source gaps](../research/SDK_GAP_CLOSURE_2026-11-07.md), [full acceptance](ACCEPTANCE.md), [prior uncertain L0 Box](SDK_NATIVE_BOX_PROBE_2026-11-07.md).
