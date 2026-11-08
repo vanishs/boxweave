@@ -15,9 +15,9 @@
 | Next intended phase | **S1 in progress** — [foundation](phases/01_FOUNDATION.md). Implement, test and attempt isolated acceptance. |
 | Immutable phase boundary | Public catalog **20 tools**; no Containarium, new REST transport, Caddy, generic ACL service or Incus/Cowsql DB patch. |
 | Known SDK limits | Native unsafe file conditional replace/delete → UNSUPPORTED until safe; detached Exec Operation.Cancel unsupported; one shared ACL/Scriptlet selected; partial NIC ACL update and actual v1 acceptance not yet tested. |
-| Original UNKNOWN / operational cautions | Prior outer L0 BoxWeave main uncertain create is **not part of this docs-only run**; do not retry or clean. Original native nested Cowsql events are environment records, not permission to mutate daemon. See [SDK final report](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md) for exact prior cases. |
+| Original UNKNOWN / operational cautions | **Current S1 isolated Box create UNKNOWN:** name `bw-v1-s1-1108`, task `7e1cbf043d1fd4ea3d9ec0093a04371e`, key `1d6007f5972bd21b01f89eacd42c3160`; upstream ACK absent. One read-only get returned NOT_FOUND and debug reported missing; **do not create/retry/delete/reclaim**, pending decisive original-receipt and native reconciliation. Older main-branch UNKNOWN and native Cowsql also remain independent. |
 | Owner decisions needed right now | **None for planning.** Future shared-host upgrades/exposure, mandatory positive file CAS behavior or unresolved release-critical native enforcement may require explicit approval; log and continue other tasks when reached. |
-| Next 1–3 actions | 1) Create one uniquely named disposable S1 Box; 2) implement/build/test in isolated branch and Box; 3) update exact evidence/status and blockers, then submit PR against v1. |
+| Next 1–3 actions | 1) Preserve/create reconciliation of original S1 Box UNKNOWN, no new risky request; 2) implement source/CI isolated from unavailable Box; 3) run source CI, record blocked native IDs and open PR against v1. |
 
 **Update this small checkpoint before context compaction, agent handoff or a new native mutation.** The checkpoint is intentionally mutable; all evidence/decisions below remain append-only. Record actual HEAD/working branch and binary hash once a real implementation begins. If multiple Agents work in parallel, do not overwrite one another's original failure entries.
 
@@ -37,6 +37,14 @@ New entries go **newest first after this template**, or append by monotonically 
 | Resume | Next safe action, relevant **smallest** docs to read, do-not-repeat warnings |
 
 ## Recorded entries
+
+### LOG-20261108-S1-UNKNOWN-001 — isolated S1 Box create ambiguous (2026-11-08)
+
+- **Phase/test:** S1 native development environment bootstrap / **UNKNOWN** (not a v1 Box acceptance case); original Box name `bw-v1-s1-1108`, backend `dev`, create task `7e1cbf043d1fd4ea3d9ec0093a04371e`, request key `1d6007f5972bd21b01f89eacd42c3160`.
+- **Exact original request:** one `create_container` with cpu=4, memory=8GB, disk=50GB, nesting enabled; response `REST_GATE_PENDING`, `submitted`, upstream_acknowledged=false. Original task status read returned `UPSTREAM_CREATE_OUTCOME_UNKNOWN`, state=unknown, upstream_acknowledged=false.
+- **Independent read-only observations:** one `get_container` returned NOT_FOUND; `debug_container` reported `containerState=missing`, daemon `0.128.0`, no host user. These are time-local negative reads, **not proof that no native dispatch can have occurred** and do not revoke the original UNKNOWN.
+- **Safety decision:** no replay of `create_container`, no new Box with different name to evade original safety lock, no auto-delete/adopt and no Incus remediation. Save IDs and continue **independent Go source, CI, documentation, mock/unit tests**. Native installed S1 tests remain BLOCKED until an authorized lab is unquestionably available. Next probe: read *the same original task* and exact native ID once available.
+- **Before/after:** implementation branch only; no confirmed new native resource or production configuration change. No S1 PASS inferred.
 
 ### LOG-20261108-S1-START — S1 opened, initial environment check (2026-11-08, implementation Agent)
 
