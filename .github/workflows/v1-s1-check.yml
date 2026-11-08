@@ -32,13 +32,17 @@ jobs:
           test "$(id -u)" -ne 0
           tmp="$(mktemp -d)"
           chmod 0700 "$tmp"
-          trap 'kill "$pid" 2>/dev/null || :; rm -rf "$tmp"' EXIT
+          pid=""
+          trap 'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || :; fi; rm -rf "$tmp"' EXIT
           go build -o "$tmp/boxweave" ./cmd/boxweave
+          echo "SMOKE 1/5: binary built"
           "$tmp/boxweave" status -db "$tmp/ledger.sqlite" -project no-project -incus-socket /nonexistent | grep -q '"ready": false'
+          echo "SMOKE 2/5: CLI status works"
           credentials="$("$tmp/boxweave" token-create -db "$tmp/ledger.sqlite" -role admin -ttl 1h)"
           token="$(printf '%s\n' "$credentials" | sed -n 's/^token=//p')"
           token_id="$(printf '%s\n' "$credentials" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
           test -n "$token" && test -n "$token_id"
+          echo "SMOKE 3/5: token issued and parsed"
           "$tmp/boxweave" serve -db "$tmp/ledger.sqlite" -project no-project -incus-socket /nonexistent -listen 127.0.0.1:18650 > "$tmp/serve.log" 2>&1 &
           pid=$!
           response_code=""
@@ -47,9 +51,16 @@ jobs:
             if [ "$response_code" = 401 ]; then break; fi
             sleep 0.1
           done
+          echo "SMOKE 4/5: anonymous HTTP=$response_code"
           test "$response_code" = 401
-          response="$(curl --silent --show-error --max-time 10 -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')"
-          printf '%s\n' "$response" | grep -q 'host_status'
+          authenticated_code="$(curl --silent --show-error --max-time 10 -o "$tmp/list-response" -w '%{http_code}' -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')"
+          echo "SMOKE 5/5: authenticated list HTTP=$authenticated_code"
+          if ! grep -q 'host_status' "$tmp/list-response"; then
+            echo "host_status missing; truncated safe MCP response:"
+            head -c 400 "$tmp/list-response" || :
+            exit 1
+          fi
           "$tmp/boxweave" token-revoke -db "$tmp/ledger.sqlite" -id "$token_id"
           response_code="$(curl --silent --max-time 2 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" --data '{}')"
           test "$response_code" = 401
+          echo "SMOKE 6/6: revoked token denied"
