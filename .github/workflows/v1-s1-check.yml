@@ -53,7 +53,7 @@ jobs:
           done
           echo "SMOKE 4/5: anonymous HTTP=$response_code"
           test "$response_code" = 401
-          authenticated_code="$(curl --silent --show-error --max-time 10 -o "$tmp/list-response" -w '%{http_code}' -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}')"
+          authenticated_code="$(curl --silent --show-error --max-time 10 -o "$tmp/list-response" -w '%{http_code}' -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" -H "Mcp-Method: tools/list" --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}')"
           echo "SMOKE 5/5: authenticated list HTTP=$authenticated_code"
           if ! grep -q 'host_status' "$tmp/list-response"; then
             echo "host_status missing; truncated safe MCP response:"
