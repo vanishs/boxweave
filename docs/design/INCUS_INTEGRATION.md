@@ -22,6 +22,12 @@ Incus is a mature authoritative Linux-container runtime: **trust the official da
 - No storage driver hard constraint. Determine whether a requested resize/storage operation is supported by the actual pool and return `UNSUPPORTED` or a native semantic error instead of attempting an unsafe workaround. **P0 refuses disk shrinking before any native dispatch**; growth is observed and post-verified.
 - Scope native resources to the managed project/namespaces and preserve pre-existing host/project state.
 
+## Native Project bootstrap is a prerequisite, not a repair after create
+
+Per [Incus's official tagged Project docs](https://github.com/lxc/incus/blob/v7.6.0/doc/howto/projects_create.md), a newly isolated Project typically has `features.profiles=true` and its own `default` Profile **may not have a root-disk device**. The [Project explanation](https://github.com/lxc/incus/blob/v7.6.0/doc/explanation/projects.md) says `features.*` choices become locked when the Project contains instances. Therefore the host-local installer must preconfigure the **native confined service-user Project** before creating the first Box: intended `features.images/profiles/networks/storage`, approved restricted devices/permissions, the exact storage pool and effective root disk, usable managed NIC/network and ACL availability. Never silently import or edit the host `default` Profile or an unrelated network after a failed create.
+
+The exact project feature/ACL/proxy rights of a non-root `incus`-only user remain **native-untested**. Local group confinement is source-confirmed but not a claim that every approved P0 device will be permitted; only consider restricted TLS or a privileged helper after proving a specific native capability gap. See [second-pass gaps](../research/SDK_GAP_CLOSURE_2026-11-07.md).
+
 ## Native preflight, effective configuration and safe updates
 
 Use the smallest typed Incus adapter. Before dispatch: validate resource units and bounds (reject NaN/Inf, overflow, negative/unsupported sizes), actual API extensions, selected storage pool, guest image, intended network topology and exact owned target. A running Incus daemon alone does not mean an initialized usable storage pool/network exists. If space/capability is unknown or insufficient for a requested operation, report a truthful precondition/`UNSUPPORTED` result; do not add generalized capacity scheduling.
