@@ -6,7 +6,7 @@ on:
     branches: [v1]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   build-test:
     runs-on: ubuntu-latest
@@ -17,21 +17,9 @@ jobs:
         with:
           go-version: '1.26.9'
           cache: false
-      - name: One-time bootstrap of formatting and go.sum (feature branch only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/v1-s1-foundation-20261108'
-        run: |
-          go mod tidy
-          gofmt -w cmd internal
-          git add cmd internal go.mod go.sum
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore(s1): format Go code and pin resolved module checksums"
-            git push origin HEAD:feat/v1-s1-foundation-20261108
-          fi
       - name: Resolve tagged official SDKs and build
         run: |
-          go mod tidy
+          go mod verify
           go build ./...
       - name: Race and negative unit tests (not native acceptance)
         run: go test -race -count=1 ./...
