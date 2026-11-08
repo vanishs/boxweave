@@ -14,6 +14,12 @@ Reviewed Incus v7.6.0 module declares **Go 1.26.9**, MCP v1.8.0 declares **Go 1.
 
 Incus natively confines a non-root service user in `incus` (not `incus-admin`) to its per-user Project. The local admin installer should first configure a `restricted=true` Project with only reviewed exceptions. `restricted.devices.proxy` and `restricted.containers.nesting` default to `block`, so negative tests and explicit operator authorization are essential. Try restricted TLS only if the native local arrangement cannot support required operations; a privileged helper is a last resort, not a normal runtime component. See [Incus authorization](https://linuxcontainers.org/incus/docs/main/authorization/) and [20-tool mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md).
 
+## Pre-first-Box Project initialization gate
+
+On both fresh and already-running Incus hosts, provision/verify the exact native service-user **confined Project before the first Box**. A new isolated Project's `default` Profile can lack its root disk; `features.*` options can become immutable after an instance is created. Preflight those decisions together with restricted proxy/nesting settings, selected pool, image access, managed network/NIC/ACL and actual kernel capabilities. Do not solve a missing root disk by mutating the shared host `default` Profile or widening credentials. Existing foreign Project data remains untouched.
+
+Stage the installation as **observe native state → choose and configure owned Project/Profiles/networks → prove rights and effective devices → create only owned instances**. Real cross-version checks must distinguish the observed daemon (last Box host: 7.5.1) from pinned SDK source v7.6.0. See [second-pass findings](../research/SDK_GAP_CLOSURE_2026-11-07.md).
+
 ## Host-local controlled reconciliation
 
 1. A local administrator explicitly invokes `boxweave install` or `boxweave upgrade`. Observe the existing daemon and its consumers before change; do not take over unrelated Incus instances just because they exist.
