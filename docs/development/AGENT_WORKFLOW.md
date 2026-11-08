@@ -15,7 +15,7 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 - Implement runtime code in Go with the official MCP Go SDK and official Incus Go client; use typed Go structs/enums for tool and native API payloads. Do not pass raw Incus/native Incus config from MCP clients or model outcomes as arbitrary strings.
 - Keep MCP transport/auth, domain policy, durable operation journal and native adapters independent. Test the domain service without an MCP transport where possible.
 - Check real native identity and local ownership before each sensitive read or mutation. Guest Exec is not host Exec.
-- Validate the original result, negative/refusal behavior, and postcondition on the actual Incus/Caddy system. Do not equate API success with applied state.
+- Validate the original result, negative/refusal behavior, and postcondition on the actual Incus system. Do not equate API success with applied state.
 - Require caller-generated reusable `idempotency_key` on **every** mutating MCP call. Refuse missing/conflicting keys before effects; persist mutation intent, safe caller scope and original Tracking ID *before* dispatch; carry typed Go `context.Context` through MCP/domain/worker/Incus/Caddy/SQLite and reconstruct safe metadata when asynchronous. Keep distinct idempotency, BoxWeave operation and native operation IDs; maintain recoverable UNKNOWN without blind replay.
 - A revoked Token blocks new requests and provably undispatched queued tasks; do not infer cancel/rollback of a running or UNKNOWN operation. Never reboot a host automatically from installer/upgrade; report accurate `reboot_required` and leave reboot to the operator.
 - Favor focused dependencies; explain license, provenance, transitive dependencies and security risk for additions. Pin required/observed dependency versions in the install ledger; perform automatic managed-dependency reconciliation in **explicit local** install/upgrade workflows, with a separate authorization gate for shared Incus/foreign services. Treat CI workflow, installer, privileges, permissions and deployment scripts as high-review areas.
@@ -37,7 +37,7 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 
 The owner instruction **Run full BoxWeave reacceptance** invokes an adversarial, black-box-first campaign, not merely unit-test execution.
 
-- **Coordinator:** enumerate currently installed MCP tools and host-local CLI leaves, plus actual Incus/Caddy/runtime versions. Build a named per-tool/function matrix including tests that cannot safely run.
+- **Coordinator:** enumerate currently installed MCP tools and host-local CLI leaves, plus actual Incus/runtime versions. Build a named per-tool/function matrix including tests that cannot safely run.
 - **Finder:** attempt realistic end-to-end create/read/edit/async Exec/reconnect/fix/retest workflows, invalid/refusal paths, two-actor concurrency, service interruption, nested failures and independently observed side effects. Preserve first failure and known-bad calibration.
 - **Fixer:** isolate root cause, retain reproduction and produce an exact candidate with focused tests.
 - **Independent Verifier:** run the original black-box failure against those exact candidate bytes on a different approved test Box/Agent, inspect native effects, then declare only the coverage actually seen.

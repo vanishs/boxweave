@@ -19,19 +19,13 @@
 | 13 | **A — initial Ubuntu LTS host support** | Ubuntu LTS is the initial officially tested installation host OS, physical or nested. Other Linux distributions are added only after actual verification. This does not prohibit creating other supported Box guest images. |
 | 14 | **B — CI-driven automatic source releases** | A successful `v1` branch build/verify of an **unpublished, valid incremented VERSION** automatically creates the immutable matching tag and GitHub Release with those exact tested assets. Do not republish the same version, build a fake binary, auto-upgrade any installation or change the stable installer selector. The current design-only `1.0.0` baseline has no runnable build artifacts and **must not trigger a pretend release**. Independent installed acceptance remains separate from source-CI publication. |
 
-## Interpretation
+## Interpretation and precedence
 
-The user's initial selection was `1B, 14B`; item 8 was clarified to **loopback-only HTTP with external exposure configured by the operator**; the remaining initial choices were A. A subsequent explicit owner decision **supersedes the old item 7/12 dependency-maintenance wording**: a locally initiated install/upgrade must record and automatically reconcile approved dependency versions. See [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
+The original 14 owner choices are retained in the table for historical traceability, including guest-root Exec, locally bound authenticated MCP, explicit local upgrades and CI-controlled publication. Later explicit decisions superseded Caddy, generic ACL, fine-grained Token scope and the custom patch/diagnostic platform.
 
-The owner also accepted the main-code audit recommendations: **P0** guest files, create-and-start readiness, async Exec/Tracking ID and result retrieval, per-Box/operation-class Token scopes, read-only diagnostics and disk no-shrink; **P1** long-lived process management, idle auto-sleep/HTTP wake, and OAuth 2.1. See [development loop](../product/DEVELOPMENT_LOOP.md).
+The **permanent product boundary** is now authoritative over any earlier P0/P1 or default wording that conflicts with it. Final P0: 20 tools, native owned TCP/UDP forwarding, simple directional owned peer toggle, no Caddy, admin/viewer tokens, and native guest list/read/create/conditional replace/delete. Strong async Tracking/idempotency/UNKNOWN, nested parity and Incus dependency management are preserved.
 
-A subsequent P0 operational review accepted **1A–4A** and user-selected **5B**: fail-closed private network isolation with safe owned IPv6 disable/refusal; mandatory client-provided idempotency keys on mutations; revocation blocks future/undispatched work but does not presume already-running tasks stop; no automatic whole-host reboot on installer upgrades; and HTTP-only Caddy application publishing with **website HTTPS deferred**. See [P0 operational policies](P0_OPERATIONAL_POLICIES.md).
-
-A later P0 MCP catalog review was also approved: unify write/patch into `box_file_apply` (`create|replace|patch|delete`), add evidence-based `operation_cancel`, support `operation_get(wait_ms)`, explicitly constrain `box_exec` and `box_update`, and require trustworthy file SHA metadata. The catalog remains 26 tools. Guest-root Exec is powerful guest write authority even when file-tool write/delete scopes are absent. See [detailed tool contracts](../design/MCP_TOOL_CONTRACTS.md).
-
-Local HTTP is secure only as a deliberately restricted listener, not a public plaintext service. Cloudflare Tunnel or another reverse proxy can terminate external HTTPS, but the BoxWeave MCP endpoint must still validate caller authorization. Public website routing through Caddy and **public management MCP transport are separate concerns**.
-
-See [MCP binding](../design/MCP_BINDING.md), [guest management](../design/GUEST_MANAGEMENT.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), [Tracking/Context](../design/TRACKING_CONTEXT.md), [versioning](../process/VERSIONING.md), [security](../design/SECURITY.md), and [open risks](../verification/OPEN_RISKS.md).
+See [permanent product boundary](PRODUCT_BOUNDARY.md), [MCP tools](../design/MCP_TOOLS.md) and [P0 operational policies](P0_OPERATIONAL_POLICIES.md).
 
 ## Permanent narrowing amendment
 

@@ -1,6 +1,6 @@
 # Local-only HTTP MCP and operator-controlled external access
 
-**Approved default:** BoxWeave's Streamable HTTP MCP listener binds **`127.0.0.1`** by default. It is not published on `0.0.0.0`, a container bridge address, the public interface, or a public Caddy site by the installer.
+**Approved default:** BoxWeave's Streamable HTTP MCP listener binds **`127.0.0.1`** by default. It is not published on `0.0.0.0`, a container bridge address, the public interface, or a public service port by the installer.
 
 ## Separate control and application traffic
 

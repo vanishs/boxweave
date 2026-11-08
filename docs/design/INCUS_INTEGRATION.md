@@ -15,7 +15,7 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 - Handle Exec websocket streams, status/exit codes, output bounds, cancellation and lost connections without fabricated outcomes.
 - Use native ETag for concurrent typed Box and owned network changes where available. Validate read-back of accepted writes.
 - Avoid arbitrary Incus configuration maps in public requests; explicitly allowlist CPU, memory, disk, nesting and network settings. Deny unrestricted devices, raw config, host mounts, privileged containers and host socket exposure.
-- No storage driver hard constraint. Determine whether a requested resize/snapshot/storage operation is supported by the actual pool and return `UNSUPPORTED` or a native semantic error instead of attempting an unsafe workaround. **P0 refuses disk shrinking before any native dispatch**; growth is observed and post-verified.
+- No storage driver hard constraint. Determine whether a requested resize/storage operation is supported by the actual pool and return `UNSUPPORTED` or a native semantic error instead of attempting an unsafe workaround. **P0 refuses disk shrinking before any native dispatch**; growth is observed and post-verified.
 - Scope native resources to the managed project/namespaces and preserve pre-existing host/project state.
 
 ## Local privilege

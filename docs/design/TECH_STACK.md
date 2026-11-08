@@ -7,7 +7,7 @@
 | Responsibility | Module / interface | Role |
 |---|---|---|
 | Public Model Context Protocol | `github.com/modelcontextprotocol/go-sdk` | Registers typed BoxWeave tools, handles MCP JSON-RPC and Streamable HTTP transport; default listener is loopback HTTP, optionally externally proxied by the operator |
-| Native Incus management | `github.com/lxc/incus/v7/client` and matching `github.com/lxc/incus/v7/shared/api` | Instance lifecycle, Exec/WebSocket, native Operation, network ACL and optional snapshot/file APIs |
+| Native Incus management | `github.com/lxc/incus/v7/client` and matching `github.com/lxc/incus/v7/shared/api` | Instance lifecycle, Exec/WebSocket, native Operation, native TCP/UDP forwarding, minimal peer isolation and guest file APIs |
 | Durable state | SQLite | Ownership records, Tracking ID/async operation journal, bounded output references, resource locks, owned native port forwards and simple private peer grants |
 | Host-local lifecycle | Go binary + Linux service management | Version-manifest-driven install/status/upgrade, dependency reconciliation, diagnosis, administrator credential bootstrap/reset and safe recovery |
 
@@ -19,7 +19,7 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 - **No Containarium:** do not retain an upstream controller, external MCP proxy, SSH hop or wrapper CLI for lifecycle and Exec.
 - **SDKs are libraries:** BoxWeave links both SDKs into its Go program. Domain services handle policy, idempotency, ownership and post-state verification, not the MCP SDK.
 - **P0 Tracking and development:** Go `context.Context` and server-generated Tracking ID propagate through request/domain/journal/worker/SDK adapters/diagnostics. Native Incus guest file APIs and async Exec power the complete Agent editing/build/test/retest loop without a guest-installed Agent.
-- **No raw client pass-through:** exposed MCP schemas are narrow BoxWeave business operations. Do not publish arbitrary Incus API operations, Caddy JSON, host path editing or host command execution.
+- **No raw client pass-through:** exposed MCP schemas are narrow BoxWeave business operations. Do not publish arbitrary Incus API operations, reverse proxy settings, host path editing or host command execution.
 - **Permission boundary:** the Go MCP process is not trusted with unrestricted native root-equivalent host access merely because it imports an SDK. The privileged helper/restricted Incus credentials must enforce scope independently.
 - **Capability-first:** check actual API Extensions, network isolation, Incus Exec stream/exit behavior, storage support and recursive nesting; unsupported dependencies result in accurate structured errors rather than invented success.
 - **No extra management surface:** the host-local CLI exists only for host bootstrap and maintenance, and is not reachable as a public RPC endpoint.

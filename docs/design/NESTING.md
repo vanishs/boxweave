@@ -9,7 +9,7 @@ The principal motivations are:
 ```text
 Physical host: BoxWeave L0
   owns Box A (ordinary owned Box; nesting capability enabled)
-    Box A runs BoxWeave L1, with its own Incus / Caddy / SQLite / MCP
+    Box A runs BoxWeave L1, with its own Incus / SQLite / MCP
       owns Box B (ordinary L1-owned Box; nesting enabled)
         Box B runs BoxWeave L2
           owns Box C ...
