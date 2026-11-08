@@ -18,11 +18,11 @@ Authenticated localhost Streamable HTTP MCP (operator tunnel optional)
      +--> agentless guest Exec and guest file APIs
 ```
 
-A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. The local Incus Unix socket grants full Incus administrator authority: a dedicated Project plus `UseProject` is **not** privilege separation. The MCP-facing runtime must use a verified restricted native identity or a narrowly enforcing privileged boundary; the operator-only installer may use the admin socket. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
+A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Root/`incus-admin` Unix socket clients are privileged, but a non-root user **only in `incus`** has native per-user Project confinement. Prefer a dedicated `incus`-only BoxWeave runtime, with local-admin-provisioned `restricted.*` capabilities and actual denial tests. `UseProject` alone is not authorization; restricted TLS is a fallback, a privileged helper last resort. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
 
 ## SDK-first boundary
 
-The official MCP Go SDK owns Streamable HTTP negotiation and typed tool handling; the official Incus Go SDK owns native Instances, Operations, Exec, files and device APIs. BoxWeave retains only its specific product policy, durable idempotency receipts and independently observed postconditions. Prefer stateless Streamable HTTP for MCP 2026-07-28 and one instance-owned proxy-device backend for P0 host-port publishing, with client/native tests before freezing. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+The official MCP Go SDK owns Streamable HTTP negotiation, Bearer auth middleware, localhost Host/body guards and typed tool handling; the official Incus Go SDK owns native Instances, Operations, Exec, files and device APIs. BoxWeave retains only its specific product policy, durable idempotency receipts and independently observed postconditions. Prefer stateless Streamable HTTP for MCP 2026-07-28 and one instance-owned proxy-device backend for P0 host-port publishing, with client/native tests before freezing. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) and [20/20 native method mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md).
 
 ## Ownership and operations
 
