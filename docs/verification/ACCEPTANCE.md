@@ -1,6 +1,6 @@
 # v1 real functional and security acceptance matrix
 
-**Status:** tests specified only; no v1 runtime or live PASS evidence exists. This matrix covers the current **20-tool** permanent product, not the deleted Caddy/general ACL/patch/diagnostic capabilities. Do not reduce security verification merely because the product is smaller.
+**Status:** no installed v1 runtime PASS evidence exists; the native Incus 7.6 SDK/three-Box subset has independently verified PASS evidence below, not a shipped v1 tool/release acceptance. This matrix covers the current **20-tool** permanent product, not the deleted Caddy/general ACL/patch/diagnostic capabilities. Do not reduce security verification merely because the product is smaller.
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Every item remains UNTESTED until actual evidence.
 
@@ -27,6 +27,16 @@ The [official Incus TLS/Scriptlet Go SDK probe](INCUS_ACL_AUTHZ_TLS_SCRIPTLET_20
 **Extra P0 acceptance gates, all UNTESTED as an integrated product:** (1) no client/tool action can create unauthorized ACL names in a shared `default` Project; (2) native ACL updates require exact owned UUID/NIC and exclusively attached ACL plus ETag and fail-closed stale reads; (3) existing host TLS users preserve their project restrictions under any global Scriptlet routing, including rollback; (4) cert loss/revocation/rotation and daemon restart do not grant other Project access; (5) new Box ACL provisioning and deletion are safe under concurrency, partial failure and lost native receipts. An already-existing ACL's Scriptlet edit PASS **does not** satisfy the first gate.
 
 The native test returned `AUTHZ_CLEAN_EXIT=0` with only the original `default` Project and bridge, no ACLs, no trusted certs or child instances, and no test HTTPS listener/scriptlet routing. Outer L0 Incus 7.5.1 was not changed or tested for this path.
+
+## Selected one-ACL / global Scriptlet native three-Box proof — actual 2026-11-08
+
+The owner selected the **single installer-precreated shared ACL + native Scriptlet + restricted TLS + official Incus Go SDK with ETag** model. [Detailed original packets/SDK/authz/cleanup report](SINGLE_SHARED_ACL_SCRIPTLET_ACCEPTANCE_2026-11-08.md).
+
+**PASS — native Incus 7.6 only:** three L2 Box NICs all attached to exactly one test ACL; no-grant private IPv4/IPv6 deny; SDK TLS Scriptlet update of two source-A/destination-B ingress allow rules across the same ACL; A→B IPv4 and IPv6 ICMP/HTTP success; B→A, C→B, A→C new flow deny; SDK revoke restored IPv4/IPv6 A→B deny; direct host-to-private-B HTTP denied but **instance-owned** loopback TCP HTTP 200 / UDP echo survived both allow and revoke; unrelated ACL read/write, target ACL DELETE, ACL CREATE, instance access, Project switch denied 403; native SDK stale ETag rejected with 412; one separate restricted TLS client showed byte-for-byte identical Project/inherited resources/instance/guest Exec allowed-and-denied outputs before, during and after native global Scriptlet switch; all test resources and global policy rolled back with native readback `FINAL_CLEAN_EXIT=0`. The test simulated one legacy certificate, **not** actual host-wide existing Incus clients.
+
+**FAIL/OPEN — separate nested environmental incident:** native third child `incus init` returned timeout and inner Cowsql stopped yielding a leader. An inner-only offline database backup/restart restored reads; the original child actually existed STOPPED with its UUID. No duplicate create dispatched. Similar native failure had occurred in the earlier nested batch; root cause NOT proven and external host stability not verified. Original detailed evidence preserved in the linked report.
+
+**P0 runtime acceptance still UNTESTED:** actual compiled v1 controller + installer, real shared-host Scriptlet compatibility and rollback for existing TLS users, ownership-grant tracking under changed NIC/IP/anti-spoof, established-flow revocation, partial NIC reload fault and high fan-out, public LAN forwarding, persistent identity after daemon/host restarts. A successful shared-ACL native test does not make the shipping v1 tool PASS. Do not add a custom privileged ACL helper, arbitrary ACL-create privilege or generalized firewall without a new owner decision.
 
 ## SDK-contract acceptance prerequisites
 
