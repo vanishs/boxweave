@@ -60,6 +60,7 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 | A-050 | Old first-version installed bug is reproducible in controlled lab; corrected candidate installable **before** formal Release and verified with exact binary/source digest against original delete regression + negative/UNKNOWN cases in nested L1/L2 | I + N + V |
 | A-051 | Formal second-version CI publication occurs only after independent exact-artifact native/nested gate; missing evidence or artifact digest mismatch blocks GitHub Release, tag is immutable and published bytes match tested candidate | T + I + N + V |
 | A-052 | After formal Release, original L0 remains unchanged with its original failed Box until explicit host-local upgrade and safe reconciliation; no candidate test or GitHub tag silently cleans the old incident | I + V |
+| A-053 | Native Box already deleted but a verified BoxWeave-owned network forward persists: `port_forward_list/delete` can safely remove that exact orphan by durable forward identity/Box tombstone without requiring the old Box to exist or touching any foreign forward | I + N + V |
 
 ## Adversarial combinations
 

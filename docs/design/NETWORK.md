@@ -15,7 +15,7 @@
 Keep `port_forward_list/create/delete` to map a host listening `protocol/address/port` to an exact verified owned `box_uuid + guest_port`. Implement through native Incus **proxy devices or network forwards**, whichever is appropriate and verified on the supported host network; do **not** build a forwarding service.
 
 - A listener on host `127.0.0.1` supports operator-local consumers/proxies. Public/wildcard binds require explicit caller choice, administrative authority and a port-conflict/exposure check; never bind every interface silently.
-- Reject arbitrary target IPs, host service targets, host mount or proxy configuration, listener collisions and unsupported native network type. Forward identity is durable and verified on create/delete and after native restarts; no foreign forwards edited.
+- Reject arbitrary target IPs, host service targets, host mount or proxy configuration, listener collisions and unsupported native network type. Forward identity is durable and verified on create/delete and after native restarts; no foreign forwards edited. If a Box was already deleted but a **verified BoxWeave-owned network forward remains**, the existing `port_forward_list/delete` must still allow a narrowly scoped orphan cleanup using its original forward native identity and durable Box tombstone; never adopt a same-name or foreign forward.
 - TCP and UDP are supported **only when the underlying Incus network, listener and guest capabilities actually support them**. Return UNSUPPORTED rather than silently falling back to a custom proxy.
 - For nested L1/L2 BoxWeave, all forwards remain **layer-local**. Reaching an inner service outside its parent may require a separately authorized mapping at each relevant layer. No recursive configuration automation.
 

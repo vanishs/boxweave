@@ -27,6 +27,7 @@
 | O-021 | **VERIFY** | Inner loopback MCP via guest-local test client, secure bootstrap/secret redaction and independent L1/L2 test environments; verify parent cannot directly address inner `127.0.0.1` across the bridge. |
 | O-022 | **RELEASE GATE** | Trustworthy candidate-build provenance, binary SHA-bound independent native/nested regression and verified CI release gating before immutable auto-publication. A green unit suite or fabricated acceptance report does not satisfy the gate. |
 | O-023 | **VALIDATE** | Native guest service persistence using guest OS facilities and app listen address; do not add a BoxWeave guest process supervisor to satisfy the Hello World scenario. |
+| O-024 | **VALIDATE** | Native orphan forward cleanup after target Box is gone: exact native forward ownership/tombstone verification and `port_forward_delete` access without resurrecting the Box or deleting foreign/renamed claims. |
 
 ## Not on the roadmap
 
