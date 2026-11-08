@@ -34,6 +34,11 @@
 | O-028 | **VALIDATE** | Incus guest file API compare-and-swap under other guest writers. A pre-read SHA then write is not inherently atomic. Test point-of-use safety, symlink/hardlink, races and actual post-state before promising safe patch/replace/delete. |
 | O-029 | **VALIDATE** | Incus Exec cancellation: waiter canceled versus guest process killed, active cancellation race, UNKNOWN native outcome, restart and partial guest effects. Queued-only cancellation must remain safe if native termination is unsupported. |
 | O-030 | **DESIGN** | Final file hash coverage/content encoding and safe payload size, bounded Exec output retention, `operation_get(wait_ms)` waiter limits and Tunnel/proxy interoperability. Pick measured SDK-tested limits, not invented guarantees. |
+| O-031 | **VALIDATE** | A restricted Incus Project is not, by itself, proof of network isolation. Native Project network features, bridge/OVN behavior, ACL enforcement, IPv6 and managed network ownership must be verified before allowing an owned Box to enter a weaker-than-promised network mode. See https://linuxcontainers.org/incus/docs/main/reference/projects/. |
+| O-032 | **DESIGN** | Agree explicit P0 mutation idempotency-key admission and safe retry behavior after a lost first receipt; no key or guessed Box name can prove the original operation never dispatched. |
+| O-033 | **DESIGN** | Private guest Git repository access for an authorized coding Agent without logging credentials or adding host-wide credential management; decide whether one-shot guest credential provisioning belongs to P0 or stays an operator-controlled task. |
+| O-034 | **DESIGN** | Confirm P0 path for testing inner loopback-only MCP from an outer development Box: guest-local test client or separately operator-configured tunnel, no automatic cross-layer routing. |
+| O-035 | **DESIGN** | Define host network prerequisite/refusal policy for unsupported default Box-to-Box ACL, IPv6, root-host service exposure, Caddy port conflicts and bridge/OVN capability differences. No successful isolation claim without actual packet-level proof. |
 
 No unresolved choice permits MCP operation against unowned resources or bypass of the parental layer boundary.
 

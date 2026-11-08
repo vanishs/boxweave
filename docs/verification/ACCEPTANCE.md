@@ -69,6 +69,9 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-050 | Guest-root `box.exec` may modify guest files despite absent file-write/delete Token rights, but cannot access parent/foreign host files | I + V |
 | A-051 | `box_update` forbids raw Incus/NIC/device/host mounts and disk shrink; only typed CPU/memory/disk-growth/nesting/internet changes with post-state verification | I + V |
 | A-052 | `box_file_read` returns trustworthy size, offset, EOF, SHA/hash coverage; concurrent or partial reads without snapshot-consistency do not fabricate verified full-file hashes | I + V |
+| A-053 | A new Box obtains source via ordinary guest Git/Exec without a BoxWeave bulk upload/download tool; private credentials are not leaked into operation/diagnostic records | I + V |
+| A-054 | Concurrent guest writers and unsafe files do not lead to falsely asserted atomic compare-and-swap; unsupported guaranteed file changes fail closed without host/path/foreign effects | I + V |
+| A-055 | Queued-undispatched cancel is verified; active Exec cancel is best-effort with independent termination proof or explicit UNSUPPORTED/UNKNOWN, never guessed rollback | I + V |
 
 ## Required adversarial combinations
 

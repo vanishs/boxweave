@@ -25,7 +25,7 @@ See [tool inventory](../design/MCP_TOOLS.md).
 
 ## P1 candidates (not part of P0)
 
-Native snapshot list/create/restore/delete where storage supports it; optional guest file search convenience; durable background process start/stop/log supervision; Box idle auto-sleep and HTTP wake; OAuth 2.1 browser authorization. These features must obey all P0 trust and operation guarantees when implemented.
+Native snapshot list/create/restore/delete where storage supports it; optional guest file search convenience and bulk guest repository/file import/export APIs (ordinary Git via guest Exec is P0); durable background process start/stop/log supervision; Box idle auto-sleep and HTTP wake; OAuth 2.1 browser authorization. These features must obey all P0 trust and operation guarantees when implemented.
 
 ## Deferred / excluded
 
