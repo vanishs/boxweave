@@ -166,7 +166,7 @@ func (s *Store) tokenActive(ctx context.Context,id string)(bool,error){
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context,a Admission)(Receipt,error) {
-    if a.Layer==""||a.ActorID==""||a.TokenID==""||len(a.Key)<16||len(a.Key)>128||a.Action==""||
+    if a.Layer==""||a.ActorID==""||a.TokenID==""||a.ActorID!=a.TokenID||len(a.Key)<16||len(a.Key)>128||a.Action==""||
         len(a.SafeIntent)==0||len(a.SafeIntent)>65536||a.RequestID=="" {return Receipt{},ErrInvalid}
     // A non-secret digest avoids storing raw client key.
     keyHash:=digest(a.Key);intentHash:=digest(a.Action+"\x00"+string(a.SafeIntent)+"\x00"+a.BoxUUID+"\x00"+a.Incarnation)
@@ -210,17 +210,24 @@ func (s *Store) transition(ctx context.Context,id,expected,next,nativeID,errClas
     if _,err=tx.ExecContext(ctx,"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",id,time.Now().UnixNano(),next,errClass);err!=nil{return err}
     return tx.Commit()
 }
+// Claim atomically verifies current token revocation and writes dispatch intent.
+// Returning ErrRevoked means no native effect can be sent by this worker.
 func(s *Store) Claim(ctx context.Context,id string)error{
-    active,err:=s.operationActorActive(ctx,id);if err!=nil{return err}
-    if !active{return s.transition(ctx,id,"ADMITTED","FAILED","", "AUTH_REVOKED_BEFORE_DISPATCH")}
-    // A crash after this durable transition is UNKNOWN even if the native call wasn't sent.
-    return s.transition(ctx,id,"ADMITTED","DISPATCHING","","")
-}
-func(s *Store) operationActorActive(ctx context.Context,id string)(bool,error){
-    var token string
-    err:=s.db.QueryRowContext(ctx,"SELECT token_id FROM operations WHERE id=?",id).Scan(&token)
-    if err!=nil{return false,err}
-    return s.tokenActive(ctx,token)
+    tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err}
+    defer tx.Rollback()
+    var token,state string
+    if err=tx.QueryRowContext(ctx,"SELECT token_id,state FROM operations WHERE id=?",id).Scan(&token,&state);err!=nil{return err}
+    if state!="ADMITTED"{return ErrState}
+    var active int
+    if err=tx.QueryRowContext(ctx,"SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?",token,time.Now().Unix()).Scan(&active);err!=nil{return err}
+    next,reason:="DISPATCHING",""
+    if active!=1{next,reason="FAILED","AUTH_REVOKED_BEFORE_DISPATCH"}
+    now:=time.Now().UnixNano()
+    if _,err=tx.ExecContext(ctx,"UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state='ADMITTED'",next,reason,now,id);err!=nil{return err}
+    if _,err=tx.ExecContext(ctx,"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",id,now,next,reason);err!=nil{return err}
+    if err=tx.Commit();err!=nil{return err}
+    if active!=1{return ErrRevoked}
+    return nil
 }
 func(s *Store) NativeAck(ctx context.Context,id,nativeID string)error {
     if nativeID==""{return ErrInvalid}
@@ -233,7 +240,23 @@ func(s *Store) Unknown(ctx context.Context,id,from,reason string)error{
 }
 // Recover never replays a possibly dispatched effect on process restart.
 func(s *Store) Recover(ctx context.Context)(int64,error){
-    r,err:=s.db.ExecContext(ctx,"UPDATE operations SET state='UNKNOWN',error_class='PROCESS_RESTART_OR_LOST_ACK',updated_at=? WHERE state IN ('DISPATCHING','RUNNING','VERIFYING')",time.Now().UnixNano())
+    tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return 0,err}
+    defer tx.Rollback()
+    rows,err:=tx.QueryContext(ctx,"SELECT id,state FROM operations WHERE state IN ('DISPATCHING','RUNNING','VERIFYING')")
     if err!=nil{return 0,err}
-    return r.RowsAffected()
+    var ids []string
+    for rows.Next(){
+        var id,old string
+        if err=rows.Scan(&id,&old);err!=nil{_ = rows.Close();return 0,err}
+        ids=append(ids,id)
+    }
+    if err=rows.Err();err!=nil{_ = rows.Close();return 0,err}
+    if err=rows.Close();err!=nil{return 0,err}
+    for _,id:=range ids {
+        now:=time.Now().UnixNano()
+        if _,err=tx.ExecContext(ctx,"UPDATE operations SET state='UNKNOWN',error_class='PROCESS_RESTART_OR_LOST_ACK',updated_at=? WHERE id=?",now,id);err!=nil{return 0,err}
+        if _,err=tx.ExecContext(ctx,"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",id,now,"UNKNOWN","PROCESS_RESTART_OR_LOST_ACK");err!=nil{return 0,err}
+    }
+    if err=tx.Commit();err!=nil{return 0,err}
+    return int64(len(ids)),nil
 }
