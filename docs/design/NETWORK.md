@@ -2,6 +2,10 @@
 
 **Permanent scope:** BoxWeave delegates networking to typed Incus native APIs and controls only its owned Box resources. It **does not ship, install, upgrade or configure Caddy**, HTTP site routers, TLS certificates or a custom forwarding daemon.
 
+## Do not confuse native SDK method families
+
+The SDK's `GetInstancePortForwardConn` opens a connection to an instance, **not** a lasting host listener. The SDK's `CreateNetworkPeer` peers networks, **not** two Boxes. Use an instance-owned `proxy` device through `UpdateInstance` for P0 `port_forward_*` and NIC-attached native NetworkACLs for `box_peer_set`. See [20-tool native SDK map](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md).
+
 ## Native networking fit
 
 Incus `proxy` devices provide host TCP/UDP listeners owned by the target instance. Native `network-forward` objects belong to an Incus network and may survive instance deletion. For v1 P0's narrow host-port publishing, **one proxy-device backend** avoids an unnecessary second ownership/reconciliation system. See [Incus proxy docs](https://linuxcontainers.org/incus/docs/main/reference/devices_proxy/), [network forwards](https://linuxcontainers.org/incus/docs/main/howto/network_forwards/) and [SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
