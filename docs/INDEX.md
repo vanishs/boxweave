@@ -2,6 +2,17 @@
 
 This branch is a **v1 design baseline**, not implemented product functionality.
 
+**Start development without loading the whole repository:** [single five-stage implementation entry](process/IMPLEMENTATION_PLAN.md) → [phase execution and context protocol](development/PHASE_EXECUTION_PROTOCOL.md) → [current checkpoint / append-only operations + decision log](development/EXECUTION_LOG.md#current-checkpoint) → **only the current** [S1–S5 phase card](development/phases/README.md). Phase cards reference the **smallest relevant sections** of the detailed documents below. Do not treat upstream SDK probes as installed v1 acceptance.
+
+| Development question | One entrypoint |
+|---|---|
+| What big stages and which MCP tool ownership? | [Five-phase implementation plan](process/IMPLEMENTATION_PLAN.md) |
+| How to execute continuously, handle repeated failures and avoid context loss? | [Execution protocol](development/PHASE_EXECUTION_PROTOCOL.md) |
+| What did earlier Agents do, decide, leave UNKNOWN or require the owner to decide? | [Execution log and live checkpoint](development/EXECUTION_LOG.md) |
+| Which focused inputs and exit gates belong to the current phase? | [Phase cards index](development/phases/README.md) |
+
+**Reference index — load one topic below when the current phase needs it:**
+
 | Question | Authoritative document |
 |---|---|
 | What is BoxWeave? | [Product](product/PRODUCT.md) |
