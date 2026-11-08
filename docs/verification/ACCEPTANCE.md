@@ -4,11 +4,15 @@
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Every item remains UNTESTED until actual evidence.
 
+## SDK-contract acceptance prerequisites
+
+These are **UNTESTED** design gates from the [official SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md), not additional user-facing MCP tools: (1) native read-only operation wait never calls `Cancel`; (2) MCP runtime cannot exercise unrelated Incus admin operations despite project selection; (3) owned `volatile.uuid` is rechecked across name reuse; (4) no conditional guest file write/delete claims atomic CAS without point-of-use proof; (5) P0 host forwarding uses instance-owned proxy device, with actual native TCP/UDP/LAN witness and NIC-level same-bridge IPv4/IPv6 policy; (6) real SDK stateless modern `server/discover` and legacy negotiated MCP flows, auth and disconnect/recovery are tested. No native `N` or independent `V` status may be assigned for source inspection alone.
+
 ## Required functional cases
 
 | ID | Exact requirement to test | Evidence |
 |---|---|---|
-| A-001 | Authenticated loopback HTTP MCP initialize/list/call; missing/revoked admin and viewer credentials denied appropriately; optional operator Tunnel not managed by BoxWeave | I |
+| A-001 | Authenticated loopback HTTP MCP `server/discover` under negotiated 2026-07-28 **and legacy initialize/list/call** where applicable; explicit Origin/Host validation, missing/revoked admin and viewer denied; optional operator Tunnel not managed by BoxWeave | I |
 | A-002 | Local install/status/upgrade/bootstrap/doctor and protected credential recovery; no remote host admin route | I |
 | A-003 | Viewer role may read owned Box metadata/files/output but cannot create/update/delete/Exec/peer/forward/cancel; admin only manages owned resources | I + V |
 | A-004 | Exact native Box UUID/incarnation owned identity for list/get/create/read; no foreign host/Incus file or Box disclosure | I + V |
@@ -60,7 +64,7 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 | A-050 | Old first-version installed bug is reproducible in controlled lab; corrected candidate installable **before** formal Release and verified with exact binary/source digest against original delete regression + negative/UNKNOWN cases in nested L1/L2 | I + N + V |
 | A-051 | Formal second-version CI publication occurs only after independent exact-artifact native/nested gate; missing evidence or artifact digest mismatch blocks GitHub Release, tag is immutable and published bytes match tested candidate | T + I + N + V |
 | A-052 | After formal Release, original L0 remains unchanged with its original failed Box until explicit host-local upgrade and safe reconciliation; no candidate test or GitHub tag silently cleans the old incident | I + V |
-| A-053 | Native Box already deleted but a verified BoxWeave-owned network forward persists: `port_forward_list/delete` can safely remove that exact orphan by durable forward identity/Box tombstone without requiring the old Box to exist or touching any foreign forward | I + N + V |
+| A-053 | **CONDITIONAL (not P0 proxy-only):** only if a separate network-forward backend is explicitly implemented, native Box gone but owned network-forward persists; safely remove by exact native identity/tombstone, never by foreign/stale name. For P0 proxy-device backend, independently prove no stale owned mapping or foreign change after Box delete. | I + N + V (conditional) |
 | A-054 | Host-local manual UNKNOWN review binds a short-lived single-use challenge to exact original Operation, immutable target and claimed resource snapshot; wrong, expired or changed review refuses with zero side effects | T + I + V |
 | A-055 | Explicit second operator risk confirmation atomically audits and releases only a selected UNKNOWN claim; audit-write failure retains claim; original receipt/key remain UNKNOWN and do not re-dispatch; no remote MCP recovery route exists | T + I + V |
 

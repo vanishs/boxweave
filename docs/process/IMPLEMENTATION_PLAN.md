@@ -4,7 +4,7 @@
 
 | Order | Implementation slice | Required real proof |
 |---|---|---|
-| 0 | Pin reviewed Go MCP/Incus SDKs and Incus daemon API extensions; freeze 20 MCP schemas and limited admin/viewer credentials | Go compile + real SDK calls; native security and restricted Project capability evidence |
+| 0 | Pin reviewed Go MCP/Incus SDKs and Incus daemon API extensions; run **small native/MCP SDK feasibility spikes before freezing contracts**, including immutable UUID/name resolution, safe non-canceling operation waits, real privilege isolation, native guest file semantics, instance proxy TCP/UDP and NIC-level peer isolation, MCP Stateless HTTP and client negotiation | Tagged Go compile + real SDK calls, real denied foreign native actions, actual MCP client round-trips; mark unproven CAS and networking as BLOCKED/UNSUPPORTED, not PASS |
 | 1 | Host-local Incus-aware installer/status/upgrade/bootstrap; version/capability ledger; no Caddy; reuse compatible existing daemon | Fresh Ubuntu install and existing Incus reuse; shared upgrade approval; no foreign modification or automatic reboot |
 | 2 | Loopback authenticated MCP, SQLite owned-Box records, universal Tracking/context, caller idempotency and durable async worker/UNKNOWN | Auth positive/negative, dedup and crash/restart original receipt, viewer cannot mutate/Exec |
 | 3 | Create/list/get/update/start/stop/delete owned Box and native async guest-root Exec + output/readiness/cancel | Real guest test/build with nonzero/zero exit, disconnect/recover, native post-state and foreign denial |
@@ -12,6 +12,8 @@
 | 5 | Fail-closed native private isolation + directional `box_peer_set` and TCP/UDP native port forwards, **including Box-delete dependent-resource cleanup** | Real A->B deny/allow/revoke, IPv4/IPv6, **L0 LAN-IP host bind probed from a separate LAN machine**, TCP+UDP, collision/reboot, delete partial cleanup and foreign state intact |
 | 6 | Self-contained nested install/upgrade and same functional contract in L1/L2; guest-local MCP test client for inner loopback endpoint, explicit layered native forwards; no parent orchestration | Repeat full real Agent/failed-delete recovery loop in inner candidate; separately test stacked forwards from physical LAN; inner Incus gets no parent sockets/credentials |
 | 7 | Black-box Finder/Fixer/**independent exact-candidate native verifier** then CI auto-publication | Reproduce known-bad original, fix under same scenario in nested candidate, verify exact source/binary hashes and dependency cleanup; only then publish same tested bytes; no source-only PASS |
+
+**SDK-aligned sequence:** the full [upstream SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) defines D0 documentation correction, D1 native Incus probe, D2 MCP transport/client probe, D3 contract freeze and D4 implementation. Slice 0 must settle those constraints before other slices become binding implementation promises. Prefer one instance-bound Incus `proxy` device backend for P0 host ports; orphaned **network-forward objects** are conditional future-backend tests, not mandatory scaffolding for proxy-only P0. Use SDK typed `AddTool`; no custom JSON-RPC engine.
 
 Officially support Ubuntu LTS first. Other guest distributions can be certified on evidence, without making the first product incompatible with future proven Linux images. No phase in this plan adds Caddy, general ACL editing, RBAC, snapshots, OAuth, file patch engine, bulk import, host automation, process supervisor or idle wake.
 

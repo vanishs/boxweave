@@ -24,6 +24,12 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 - **Capability-first:** check actual API Extensions, network isolation, Incus Exec stream/exit behavior, storage support and recursive nesting; unsupported dependencies result in accurate structured errors rather than invented success.
 - **No extra management surface:** the host-local CLI exists only for host bootstrap and maintenance, and is not reachable as a public RPC endpoint.
 
+## Upstream source baseline (reviewed; not yet implemented)
+
+The 2026-11-07 [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) inspected released **Incus v7.6.0** (`github.com/lxc/incus/v7`) and **MCP Go SDK v1.8.0**. These are an engineering review baseline, **not** compiled v1 dependency pins. Use tagged modules and build against their supported Go toolchain before freezing release manifests.
+
+Incus `Operation.WaitContext` may request native cancellation when its context expires; its ordinary instance methods are name-addressed and many lack context parameters; native guest file writes do not provide hash-based atomic compare-and-swap. The local Incus admin socket is not a restricted Project identity. MCP 2026-07-28 requires SDK Stateless Streamable HTTP, while BoxWeave durable operations remain in SQLite independently of MCP sessions.
+
 ## Verification gates
 
 1. Pin reviewed compatible SDK module revisions and Go toolchain versions with reproducible dependency checks.

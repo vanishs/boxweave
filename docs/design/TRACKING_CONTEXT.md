@@ -40,6 +40,10 @@ MCP transport
 - Handle deadlines as distinct classes: inbound MCP deadline, journal admission deadline, worker execution budget, native Incus API deadline, guest command timeout and verification deadline. Never infer native cancellation from a timed-out caller.
 - Nested BoxWeave installations generate independent local tracking IDs; no implicit cross-layer propagation, shared database, parent token inheritance or orchestration. A separately authorized operator may store an external *reference* between layer receipts, but no automatic correlation is required.
 
+## Native SDK cancellation reality
+
+Passing `context.Context` throughout BoxWeave's own handlers, workers and adapters is still required, but many Incus `InstanceServer` methods do **not** take context arguments. Never claim that all native API calls are automatically cancelable or inherit request deadlines. Crucially, the Incus `Operation.WaitContext` event-listener path calls native `Cancel` on context cancellation. For `operation_get(wait_ms)`, use safe native status observation (`GetOperationWait`/`GetOperation`), not cancelable `WaitContext`. See [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+
 ## Data and output boundaries
 
 - Every emitted event includes stable `tracking_id` when the work is authenticated and admitted, component, phase, safe error category, timestamp and evidence/coverage state. Use `trace_id`/span when available. Never log raw tokens, full environment variables, command arguments containing secrets, arbitrary guest stdout, guest files or Incus API bodies.

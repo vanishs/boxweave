@@ -8,7 +8,7 @@
 | O-002 | **VALIDATE** | Exact Incus UUID/instance incarnation behavior on create, clone, delete/recreate; ownership cannot rely on name/IP. |
 | O-003 | **VALIDATE** | Bridge/OVN NIC actual same-bridge IPv4/IPv6 deny and per-pair directional native enforcement, including spoofing and lifecycle/IP reuse. No general ACL editor. |
 | O-004 | **VALIDATE** | Restricted Incus credentials/project and setup privilege boundary; no root-equivalent native admin socket in network-facing MCP runtime. |
-| O-005 | **VALIDATE** | Native TCP and UDP host-port bind via Incus proxy-device/network-forward, collisions, supported bridge/OVN, hotplug/restart and nested layer limitations. No custom proxy/Caddy fallback. |
+| O-005 | **VALIDATE** | Prefer **instance-bound native proxy device** for TCP/UDP P0 host listener. Prove bind/collision, supported bridge/OVN, hotplug/restart and nesting; an independent network-forward backend is **not** a P0 fallback. No custom proxy/Caddy. |
 | O-006 | **VALIDATE** | Native IPv6 safe owned disable or fail-closed refusal where private isolation cannot be proven; no global host/foreign modifications. |
 | O-007 | **VALIDATE** | Full inside-Box install/nested Incus user namespaces/idmaps/storage/bridge permissions through L1/L2 and parity under actual resources. |
 | O-008 | **DESIGN** | Minimal SQLite durable intent/context/Tracking journal, exact idempotency and UNKNOWN reconciliation after native result disappears. No tracing backend platform. |
@@ -21,13 +21,26 @@
 | O-015 | **VALIDATE** | Operator-managed Cloudflare Tunnel/reverse proxy compatibility with loopback Streamable HTTP MCP and external native forwarded guest services. BoxWeave does not manage proxy. |
 | O-016 | **DESIGN** | Durable owned port/peer identity after daemon restart, native IP change, explicit public bind and readback; never reattach a stale claim to a recreated Box. |
 | O-017 | **RESOLVED — OWNER CHOSE A** | Existing Incus adoption means reuse, compatibility management, and explicitly authorized daemon upgrades **only**. Existing/foreign Incus instances are never automatically imported, reassigned or controlled by BoxWeave. No further product decision is needed. |
-| O-018 | **VALIDATE** | Actual Incus proxy device vs independent network-forward behavior when deleting the associated instance; correct dependent cleanup ordering, native residuals, locks and SQLite tombstone under crash/partial failures. |
+| O-018 | **VALIDATE** | Exact instance proxy-device removal and peer cleanup before/with Box delete, correct resource locks/SQLite tombstone after partial failure. A separate network-forward backend and orphan lifecycle apply **only if explicitly introduced later**. |
 | O-019 | **VALIDATE** | Native host LAN binding, firewall/routing, guest listener and independent same-LAN probe across both physical L0 and explicitly chained nested L0/L1 forwarding. No arbitrary host firewall configuration. |
 | O-020 | **DESIGN / VERIFY** | Exact safe `operation_get` diagnostic envelope for partial deletion: phase, native error category, observed Box/forward states, missing evidence, build SHA and authorized local escalation without an MCP host-log tool. |
 | O-021 | **VERIFY** | Inner loopback MCP via guest-local test client, secure bootstrap/secret redaction and independent L1/L2 test environments; verify parent cannot directly address inner `127.0.0.1` across the bridge. |
 | O-022 | **RELEASE GATE** | Trustworthy candidate-build provenance, binary SHA-bound independent native/nested regression and verified CI release gating before immutable auto-publication. A green unit suite or fabricated acceptance report does not satisfy the gate. |
 | O-023 | **VALIDATE** | Native guest service persistence using guest OS facilities and app listen address; do not add a BoxWeave guest process supervisor to satisfy the Hello World scenario. |
-| O-024 | **VALIDATE** | Native orphan forward cleanup after target Box is gone: exact native forward ownership/tombstone verification and `port_forward_delete` access without resurrecting the Box or deleting foreign/renamed claims. |
+| O-024 | **CONDITIONAL** | Orphan **network-forward object** cleanup is applicable only if a future explicitly chosen network-forward backend is implemented. For P0 instance-owned proxy devices, instead verify no stale BoxWeave claim remains after instance deletion and no foreign device is touched. |
+
+## New official SDK capability checks
+
+The [2026-11-07 Incus/MCP SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) confirmed limitations that cannot be resolved by simply writing more BoxWeave code:
+
+- **S01 P0:** Incus `Operation.WaitContext` may invoke native cancel when its context expires. Use `GetOperationWait`/`GetOperation` for observational waits and explicitly test non-cancelation.
+- **S02 P0:** Incus local Unix socket has full administrator authority. `UseProject` is not privilege restriction; prove actual native permissions before enabling MCP.
+- **S03 P0:** Instance methods are often name-addressed. Resolve stored `volatile.uuid` to live owned project/name and recheck UUID before effects.
+- **S04 P0:** Incus guest file API has no atomic hash/ETag conditional write/delete. Strong `box_file_apply` modes are blocked until a safe native-compatible implementation is proven; return UNSUPPORTED instead of claiming atomicity.
+- **S05/S06 P0:** Prefer instance proxy-device host listener and one tested NIC ACL topology; same-bridge packet enforcement needs proof.
+- **S09/S10/S11 P1:** MCP SDK v1.8 handles modern Stateless HTTP and typed tools; explicit external HTTP auth/Origin protections and real ChatGPT/legacy compatibility tests are still necessary.
+
+These are **SDK contract alignment** checks, not defects attributed to the official upstreams. No v1 real-environment acceptance has been run by this document change.
 
 ## Historical evidence does not close native validation
 

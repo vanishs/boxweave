@@ -50,6 +50,10 @@ The official [Incus SDK v7.6.0 source](https://github.com/lxc/incus/blob/v7.6.0/
 
 Evidence and exact incident IDs: [Containarium study](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
 
+## P0 forwarding ownership and optional orphan backend
+
+The selected **P0 implementation candidate** is an **instance-owned Incus proxy device**, not an independent network-forward object. It must be removed/verified with the instance's device/config lifecycle, and local owned-forward claims must be retired transactionally only after native post-readback. Retain partial cleanup evidence. An orphaned native `network-forward` surviving an instance deletion is a **conditional future-backend case**, not a requirement to ship a second P0 backend or orphan scanner. The generic cleanup discussion below covers both models when applicable; don't build future-only mechanisms just to satisfy an illustrative failure scenario. See [SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+
 ## Box deletion as a multi-resource operation
 
 `box_delete` is **not** one Incus API call once BoxWeave has created native TCP/UDP forwards and directional peer grants. Its standard confirmation covers removal of **all verified BoxWeave-owned** dependent forward/peer claims for the exact Box UUID/incarnation; it must not imply deletion of foreign host/network resources.
