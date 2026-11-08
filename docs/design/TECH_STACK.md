@@ -20,9 +20,11 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 - **SDKs are libraries:** BoxWeave links both SDKs into its Go program. Domain services handle policy, idempotency, ownership and post-state verification, not the MCP SDK.
 - **P0 Tracking and development:** Go `context.Context` and server-generated Tracking ID propagate through request/domain/journal/worker/SDK adapters/diagnostics. Native Incus guest file APIs and async Exec power the complete Agent editing/build/test/retest loop without a guest-installed Agent.
 - **No raw client pass-through:** exposed MCP schemas are narrow BoxWeave business operations. Do not publish arbitrary Incus API operations, reverse proxy settings, host path editing or host command execution.
-- **Permission boundary:** the Go MCP process is not trusted with unrestricted native root-equivalent host access merely because it imports an SDK. The privileged helper/restricted Incus credentials must enforce scope independently.
+- **Permission boundary:** the Go MCP process is not trusted with unrestricted native root-equivalent host access merely because it imports an SDK. **First** use a non-root `incus`-only service user in its native confined Project with approved `restricted.*` settings; test native privilege denial and required ACL/proxy operations. Restricted TLS is fallback; a separate privileged helper is only justified after native paths fail.
 - **Capability-first:** check actual API Extensions, network isolation, Incus Exec stream/exit behavior, storage support and recursive nesting; unsupported dependencies result in accurate structured errors rather than invented success.
 - **No extra management surface:** the host-local CLI exists only for host bootstrap and maintenance, and is not reachable as a public RPC endpoint.
+
+For correct per-request MCP auth metadata, Project initial Profile/root disk, Bridge NIC address/anti-spoof behavior, file upload exclusivity, Exec output and `GetOperationWait` shared transport semantics, follow the [second-pass SDK source report](../research/SDK_GAP_CLOSURE_2026-11-07.md), not assumptions based on method names.
 
 ## Upstream source baseline (reviewed; not yet implemented)
 
