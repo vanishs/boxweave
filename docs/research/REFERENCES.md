@@ -42,6 +42,14 @@ Borrow bounded and typed operation timeout handling, ETag and owned ACL edits, r
 
 For a **fixed source, commit-by-commit, non-template assessment** (2,577 upstream commit subjects, representative diffs, 21 bounded incident lessons and test links), see [Containarium `main` and history study](CONTAINARIUM_MAIN_HISTORY_2026-11-07.md). Upstream references are **examples**, not proof of v1 behavior.
 
+## Waishnav/devspace — external development/verification evidence
+
+https://github.com/Waishnav/devspace
+
+Its **current source** illustrates local MCP workspace execution, workspace-scoped identity, SQLite dispatch records, explicit cancellation/stop distinction, interrupted-workflow recovery, native Git review checkpoints, and isolated real-MCP/CLI plus record/replay tests. Its **1,260-subject commit history** supplies real counterexamples: delegated read-only authority escapes, unsafe provider extensions, cleanup followed by failed persistence and failed compensation, daemon/reply races, incompatible migrations and tests that could not fail. These are engineering evidence, **not** v1 native PASS or requirements to add an Agent service. Keep all verification orchestration in repository/CI/disposable Boxes, not the standard BoxWeave runtime. [Pinned two-dimensional source and commit assessment](DEVSPACE_MAIN_HISTORY_2026-11-07.md).
+
+**Do not import:** DevSpace's JavaScript/Node runtime, multi-provider adapters, OAuth web authorization, local host Shell, Git worktree API, UI, workflow scripting, resident Agent daemon or best-effort activity journal as a replacement for BoxWeave's mandatory Operation/audit. Existing 20 MCP tools and product boundary remain unchanged.
+
 ## Incus / MCP originals
 
 

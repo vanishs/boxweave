@@ -100,6 +100,16 @@ The A-056–A-073 cases are **additional test cases for existing 20 tools/local 
 
 These four cases are **UNTESTED refinements to existing v1 interfaces**, not new tools or expansion. Evidence: [two Incus MCP code reviews](../research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
 
+## DevSpace-history-derived negative controls (existing behavior only)
+
+| ID | Existing v1 behavior / external acceptance method to test | Evidence |
+|---|---|---|
+| A-078 | Inject native success or partial owned forward/Box deletion followed by SQLite commit failure **and compensation failure**: preserve both failures, original native/Tracking/Operation identities, observed partial/tombstone state and UNKNOWN lock where unproven; no successful rollback claim or automatic mutation replay | T + I + N + V |
+| A-079 | For a selected current installed MCP/CLI contract, record a sanitized failing request/output, replay it through the built candidate and fake/native adapter with precise lost-reply/cancel/fault timing, and prove a **known-bad or injected negative control makes the test fail**. Record simulation vs installed/real native evidence distinctly; independent Verifier checks same exact candidate digest and original failure | T + I + N + V |
+| A-080 | Unknown/newer or same-version-different-name SQLite migration history, concurrently starting/upgrading authorized local instances and interrupted migration: fail closed without clobbering original configuration/Operation/audit history; installed service does not claim readiness until real recovery succeeds | T + I + V |
+
+These are **UNTESTED test and harness refinements**, not additional MCP tools, agents, databases or runtime services. Record/replay and fake-native calls do not count as N or V by themselves. Historical source: [DevSpace two-dimensional audit](../research/DEVSPACE_MAIN_HISTORY_2026-11-07.md). The A-001–A-077 contracts remain authoritative, with no duplicate implementation of already-required UNKNOWN/cancel semantics.
+
 ## Adversarial combinations
 
 Test lost MCP reply after create/Exec/forward, concurrent Box delete vs peer/forward edits, token revocation just before and after dispatch, stale guest hashes and symlink races, fixed network ACL vs peer grants, IPv6 bypass, host listener and port collisions, simulated parent restart during nested work and existing shared Incus upgrade. No native effect outside the owned set is ever permitted.

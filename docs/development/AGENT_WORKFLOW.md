@@ -43,7 +43,13 @@ The owner instruction **Run full BoxWeave reacceptance** invokes an adversarial,
 - **Independent Verifier:** first establish the known-bad repro (where safe), then run the unchanged original black-box failure against the **exact candidate binary digest** in a different authorized nested/native test installation; inspect actual owned Box/port/peer state and negative effects. A build-only mock or same-Agent self-declaration is not independent installed acceptance.
 - **Reporter:** list every tool by name, Tracking ID, original operation identity, exact installed SHA, affected Box and native dependent forwards, external LAN probe witness, tested layer, scenario, result and evidence tier; retain suspected bugs, upstream limitations, harness defects and UNKNOWN receipts separately. Nested-controller localhost MCP tests must run from a guest-local authorized client; external HTTP reachability requires an independent LAN witness. If independent agents are unavailable, label same-Agent, not independent.
 
+**Record/replay and negative-control rule (upstream case study):** For each affected MCP/CLI/Incus adapter contract, capture a sanitized, version-pinned failing tool request/response and original Tracking/Operation/native IDs. Replay through the **actual built candidate's** MCP/CLI -> domain -> fake-native boundary with fault injection (never merely call a test helper); use it to reproduce timing/error patterns, not to assert real Incus PASS. Include a known-bad or intentionally injected fault that **must make the test fail**, then verify the fixed candidate in a separate authorized installed/native Box. A test that cannot fail is not evidence. Scrub sensitive transcripts and bind every fixture/result to the original source SHA, installed binary hash, target Box UUID/incarnation and layer. Review stdout truncation and child completion independently.
+
+**Verifier authority and isolation:** A prompt saying “read-only,” a Git worktree or a local path allowlist does not enforce an OS security boundary, and delegated subagents can exceed the parent's requested permissions. Use actual viewer credentials where suitable, minimal-scoped independent test credentials and/or separate disposable Incus Boxes. Verify both direct and delegated forbidden writes with negative tests. Do not introduce per-Box RBAC or a provider sandbox inside the BoxWeave product.
+
 The full test harness belongs in repository/CI or disposable test Boxes, **not** inside the standard customer runtime unless a small diagnostic is a deliberate product feature.
+
+Source/evidence counterexamples: [DevSpace pinned current code and history review](../research/DEVSPACE_MAIN_HISTORY_2026-11-07.md).
 
 ## Privileged-boundary adversarial cases
 
