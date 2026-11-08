@@ -4,6 +4,10 @@
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Every item remains UNTESTED until actual evidence.
 
+**Phase execution and evidence ownership:** Use [one implementation entry](../process/IMPLEMENTATION_PLAN.md), [S1–S5 phase acceptance scopes](../development/phases/README.md) and the [action/decision log](../development/EXECUTION_LOG.md). Each phase checks only its assigned named A-/SDK-G IDs; S5 **rechecks all installed 20 MCP tools and local CLI leaves** with the same exact candidate SHA. A phase checkpoint is **not** a release pass. Earlier real SDK probes remain labeled SDK-only/native lab, not installed v1. For each actual candidate test, record PASS/FAIL/PARTIAL/BLOCKED/UNKNOWN/SKIPPED with source/binary hash, environment/layer, native evidence, negative effects, original identities and issue/next safe probe.
+
+**Cross-phase closure rule:** S2 owns box_delete on a Box without dependents, but **A-043–046 and related network-dependent delete require actual S4 reacceptance**. S3 may safely refuse conditional file replace/delete as UNSUPPORTED because native CAS is absent; **such safety refusal is not positive A-012/A-065 feature PASS** and must remain a product acceptance/owner-decision gate if required to ship. Full private-peer and shared Scriptlet install requires S4 host-native verification, not simply early SDK PASS. No BoxWeave Incus/Cowsql repair subsystem is an acceptance requirement.
+
 ## Final executed SDK P0 verification — NOT an installed v1 pass
 
 [Plan](P0_SDK_LAST_GATE_PLAN_2026-11-08.md) · [Detailed real results](P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Native L1 Incus **7.6**, official Go SDK **7.6.0**, MCP official Go SDK **1.8.0**, real SDK loopback HTTP + **one owned native L2**. All new L2/Project resources were deleted by original UUID and native readback (`P0_FINAL_CLEAN_EXIT=0`), original outer L0 unchanged.
