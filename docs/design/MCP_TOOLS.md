@@ -16,7 +16,7 @@
 | `box_exec` | Mutation | Durable async guest Exec, guest root by default, typed argv/cwd/bounded env, timeout and output; no host shell. |
 | `box_file_list` | Read | Bounded/paginated list of regular guest directory entries. |
 | `box_file_read` | Read | Bounded guest file bytes/pages with truthful metadata/observed hash. |
-| `box_file_apply` | Mutation | Safe single guest regular file create/conditional replace/conditional delete; no patch engine or recursive delete. |
+| `box_file_apply` | Mutation | Single owned guest regular file `create|replace|delete`; **native SFTP `O_EXCL` exclusive create PASSED**, but **conditional `replace/delete` must return `UNSUPPORTED` until atomic point-of-use hash/inode safeguards are actually established**. Never silently substitute ordinary overwrite/delete; no patch engine or recursive delete. |
 | `operation_get` | Read | Original scoped async receipt/status with optional bounded wait_ms and structured **failing phase, sanitized native error, last observed Box/dependent resources, evidence gaps, safe recovery hint and controller build identity**. |
 | `operation_list` | Read | Paginated owned operations, including UNKNOWN. |
 | `operation_output_get` | Read | Bounded/paginated guest Exec output and observed exit details after reconnect. |
@@ -32,6 +32,8 @@ No `http_route_*`, `acl_rule_*`, `diagnostic_get`, Caddy API, generic host shell
 ## Exact native SDK mapping
 
 Every public tool below maps to a tagged upstream API in [the complete 20/20 mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). The Go MCP SDK already supplies typed `mcp.AddTool`, Bearer auth middleware, Schema validation and tool-error handling. Incus `GetInstancePortForwardConn` is **not** persistent port publishing; `CreateNetworkPeer` is **not** a Box-to-Box ACL. Use native instance `proxy` devices and NIC-level ACL instead. Unproven native file CAS must remain UNSUPPORTED rather than simulated.
+
+**Last pre-development SDK P0 gate actually executed:** [2026-11-08 native Incus + real HTTP MCP results](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Real SDK v1.8.0 Streamable HTTP discovery (new and legacy), auth, concurrent Token isolation, body cap and request-cancel handling **PASSED**. Native Incus v7.6.0 Exec/recorded output retrieval after SDK reconnect and live control-socket SIGTERM **PASSED with limitations**; native API did **not** supply atomic file conditional replace/delete. P0 SDK research is complete, **not** a claim that the v1 runtime and all 20 tools passed.
 
 ## Shared semantics
 
