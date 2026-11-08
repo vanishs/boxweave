@@ -1,6 +1,6 @@
 # S1 — Runnable foundation, safe local install, identities and durable admission
 
-**State: NOT_STARTED (2026-11-08).** **Execute S1 in one pass**: focused read → any required tagged SDK verification → Go implementation → tests → native/HTTP acceptance → repair/retest → log and commit. **This card does not authorize host upgrades or production installation.**
+**State: PARTIAL on feature branch (2026-11-08); installed/native acceptance BLOCKED, not PASS.** [S1 evidence](../../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md) and [current log](../EXECUTION_LOG.md) describe exact source work, failures and original UNKNOWN. **Resume S1 in one pass**: focused read → any required tagged SDK verification → Go implementation → tests → native/HTTP acceptance → repair/retest → log and commit. **This card does not authorize host upgrades or production installation.**
 
 **Why first:** Every later tool must share the same ownership, authentication, Tracking ID, idempotency and durable UNKNOWN contract. Building those separately inside each later stage would recreate v0.x complexity.
 
