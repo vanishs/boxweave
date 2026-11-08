@@ -8,6 +8,10 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 
 These are **UNTESTED** design gates from the [official SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md), not additional user-facing MCP tools: (1) native read-only operation wait never calls `Cancel`; (2) MCP runtime cannot exercise unrelated Incus admin operations despite project selection; (3) owned `volatile.uuid` is rechecked across name reuse; (4) no conditional guest file write/delete claims atomic CAS without point-of-use proof; (5) P0 host forwarding uses instance-owned proxy device, with actual native TCP/UDP/LAN witness and NIC-level same-bridge IPv4/IPv6 policy; (6) real SDK stateless modern `server/discover` and legacy negotiated MCP flows, auth and disconnect/recovery are tested. No native `N` or independent `V` status may be assigned for source inspection alone.
 
+## Native SDK alignment checks (not yet executed)
+
+Read the [20/20 native SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) and verify real behavior before assigning N/V PASS. Use a dedicated non-root OS user in `incus`, not `incus-admin`; prove the native Project restricts foreign/admin calls while approved proxy/ACL/nesting function. Verify `api.StatusErrorMatch`, Exec `RecordOutput` time to first Operation ID and output reconnection, SDK `auth.RequireBearerToken` revocation/expiry, localhost Host protection and default 4 MiB request limit, plus explicit Origin/trusted-proxy and stateless/legacy protocol negotiation. None of this was executed by the research.
+
 ## Required functional cases
 
 | ID | Exact requirement to test | Evidence |
