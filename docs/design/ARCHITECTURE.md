@@ -18,7 +18,11 @@ Authenticated localhost Streamable HTTP MCP (operator tunnel optional)
      +--> agentless guest Exec and guest file APIs
 ```
 
-A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. Restricted native daemon credentials and a narrow privileged installation/setup boundary must prevent the MCP runtime from acquiring unrestricted host-root authority. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
+A separate host-local CLI manages bootstrap, token rotation/recovery, verified Incus dependency installation/upgrades and health. The local Incus Unix socket grants full Incus administrator authority: a dedicated Project plus `UseProject` is **not** privilege separation. The MCP-facing runtime must use a verified restricted native identity or a narrowly enforcing privileged boundary; the operator-only installer may use the admin socket. No secondary management service, Caddy instance, custom proxy daemon, SSH hop or public REST/Web management exists.
+
+## SDK-first boundary
+
+The official MCP Go SDK owns Streamable HTTP negotiation and typed tool handling; the official Incus Go SDK owns native Instances, Operations, Exec, files and device APIs. BoxWeave retains only its specific product policy, durable idempotency receipts and independently observed postconditions. Prefer stateless Streamable HTTP for MCP 2026-07-28 and one instance-owned proxy-device backend for P0 host-port publishing, with client/native tests before freezing. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
 ## Ownership and operations
 

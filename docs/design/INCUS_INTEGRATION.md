@@ -4,7 +4,7 @@
 
 Incus's stable foundation is its native management API. The Incus CLI and the official Go client use that API. **BoxWeave external management remains HTTP MCP only**; an internal Incus API or Unix-socket call is not a second BoxWeave public REST API.
 
-**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Prefer local Unix socket access through a properly restricted local security boundary. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
+**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. The local Incus Unix socket is unrestricted Incus admin access; `UseProject` scopes requests but is **not** a privilege boundary. The installer may use the admin socket; the MCP runtime needs verified restricted native credentials or a small independently enforcing privileged boundary. Test native permissions before choosing. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
 
 ## Trust and division of responsibility
 
@@ -13,9 +13,9 @@ Incus is a mature authoritative Linux-container runtime: **trust the official da
 ## Runtime capabilities
 
 - Check the actual Incus daemon version and `api_extensions` during startup and before capability-sensitive actions. Version strings alone do not guarantee a feature.
-- Bind Boxes to native Incus instance UUID and verify on each privileged mutation; do not treat names, IPs or guessed profiles as identity.
+- Bind Boxes to native instance `Config["volatile.uuid"]` and verify the owned Project before privileged effects. The SDK's native instance methods are typically **name-addressed**, not UUID-addressed: resolve UUID to current project/name and compare the live `volatile.uuid` immediately before mutation. Do not grant authority on name/IP reuse or conflate `volatile.uuid.generation` with instance identity.
 - Use Incus Exec rather than SSH. Guest UID 0 by default with optional explicit UID/GID; typed argv and bounded guest cwd/env/timeout/output, without implicit shell interpolation. Guest root stays inside the owned unprivileged container, never host shell. Exec is async and Tracking-ID-correlated, nonzero exit is a completed result; `operation_cancel` needs independently tested native termination semantics.
-- Native Incus Operation IDs are execution evidence but not substitutes for the BoxWeave journal.
+- Native Incus Operation IDs are execution evidence but not substitutes for the BoxWeave journal. `Operation.WaitContext(ctx)` can call native `Cancel()` when its context expires on the event-listener path: never use it as a read-only status poll. Prefer `GetOperationWait` or bounded `GetOperation` observation, reserving native cancellation for explicit `operation_cancel`.
 - Handle Exec websocket streams, status/exit codes, output bounds, cancellation and lost connections without fabricated outcomes.
 - Use native ETag for concurrent typed Box and owned network changes where available. Validate read-back of accepted writes.
 - Avoid arbitrary Incus configuration maps in public requests; explicitly allowlist CPU, memory, disk, nesting and network settings. Deny unrestricted devices, raw config, host mounts, privileged containers and host socket exposure.
@@ -47,7 +47,13 @@ Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH 
 
 ## Context, version and capability reporting
 
-Every native adapter call receives Go `context.Context` carrying a safe Tracking ID/actor/owned-target reference and bounded deadline. Persist original native Operation ID where available; client disconnect never justifies auto-replay of a mutating native call. Include actual Incus daemon version and API extensions in the dependency ledger, and distinguish `running` from verified guest Exec readiness. Explicit local install/upgrade reconciles compatible managed Incus versions, with shared-host upgrade approval when required. See [Tracking/context](TRACKING_CONTEXT.md) and [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
+Every BoxWeave native adapter call accepts Go `context.Context` for safe Tracking ID and work budgets; however **many Incus `InstanceServer` methods do not accept a context argument themselves**. Native cancellation is only promised for tested SDK paths. Persist original native Operation ID where available; client disconnect never justifies auto-replay of a mutating native call. Include actual Incus daemon version and API extensions in the dependency ledger, and distinguish `running` from verified guest Exec readiness. Explicit local install/upgrade reconciles compatible managed Incus versions, with shared-host upgrade approval when required. See [Tracking/context](TRACKING_CONTEXT.md) and [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
+
+## Current upstream capability gates
+
+Reviewed Incus v7.6.0 `GetInstanceFile`/`CreateInstanceFile`/`DeleteInstanceFile` provide native guest files, but **not a caller-hash/ETag atomic compare-and-swap** for conditional replace/delete. A pre-read SHA is a conflict hint, not atomic safety; preserve fail-closed behavior until verified.
+
+For host-port forwarding, Incus instance `proxy` devices provide host `listen`/`connect`. Incus network forwards are distinct network-scoped IP-forward objects; **select proxy devices as the P0 implementation candidate** instead of silently supporting two different lifecycle models. On native bridge ACLs, network-level attachment does not isolate same-bridge peers; validate NIC-level rules and packet behavior. See [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
 ## Narrow SDK contract and postcondition checks
 
