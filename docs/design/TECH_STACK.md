@@ -8,7 +8,7 @@
 |---|---|---|
 | Public Model Context Protocol | `github.com/modelcontextprotocol/go-sdk` | Registers typed BoxWeave tools, handles MCP JSON-RPC and Streamable HTTP transport; default listener is loopback HTTP, optionally externally proxied by the operator |
 | Native Incus management | `github.com/lxc/incus/v7/client` and matching `github.com/lxc/incus/v7/shared/api` | Instance lifecycle, Exec/WebSocket, native Operation, network ACL and optional snapshot/file APIs |
-| HTTP publishing | Caddy Admin API | Manage only BoxWeave-owned routes in a protected instance/configuration namespace |
+| HTTP publishing | Caddy Admin API | Manage only BoxWeave-owned **HTTP-only P0 application** routes in a protected instance/configuration namespace; no managed HTTPS/certificates/443/redirect |
 | Durable state | SQLite | Ownership records, Tracking ID/async operation journal, contextual events, bounded output references, locks, Caddy and ACL desired state |
 | Host-local lifecycle | Go binary + Linux service management | Version-manifest-driven install/status/upgrade, dependency reconciliation, diagnosis, administrator credential bootstrap/reset and safe recovery |
 

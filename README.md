@@ -21,4 +21,6 @@ Installation and operator-invoked upgrades record and reconcile the required/obs
 
 Version policy: `1.X.Y`; `X` increases for a completed feature increment and resets `Y` to zero; `Y` increases for a patch to existing behavior. After a successful verified **new-version** build on `v1`, CI automatically publishes exact source assets; no automatic installed upgrades. See [versioning](docs/process/VERSIONING.md).
 
-MCP runs over authenticated **loopback-only HTTP** by default. Public MCP HTTPS is separately configured by the operator, for example with Cloudflare Tunnel; Caddy remains responsible for Box **application** sites, not mandatory MCP TLS termination.
+MCP runs over authenticated **loopback-only HTTP** by default. Public MCP HTTPS is separately configured by the operator, for example with Cloudflare Tunnel. **P0 Box application sites are also HTTP-only**, through a dedicated Caddy with no automatic website TLS, certificate issuance, redirect or port 443 management; application-site HTTPS is deferred. Direct public HTTP is unencrypted.
+
+P0 mutation requests require a caller-generated reusable idempotency key; token revocation blocks new and provably undispatched tasks, without implying already-running work stopped. Network isolation is fail-closed; installation never automatically reboots the whole host.

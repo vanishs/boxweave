@@ -6,16 +6,16 @@
 - Single host per BoxWeave instance, no distributed controller or cluster scheduling.
 - No dependency on Containarium, no v0.x compatibility requirement, no automatic old state migration.
 - Public management protocol: authenticated Streamable HTTP MCP only, bound to `127.0.0.1` over HTTP by default; public HTTPS is optional, external and operator-configured (for example through Cloudflare Tunnel). No public REST management endpoints and no Web console. The only interactive initial experience is local super-administrator credential bootstrap.
-- Incus controls Boxes; Caddy manages BoxWeave-owned HTTP publishing; native Incus networking supports scoped TCP/UDP forwarding and private connectivity rules.
+- Incus controls Boxes; Caddy manages **P0 HTTP-only** Box application publishing (no managed HTTPS, certificates or redirects); native Incus networking supports scoped TCP/UDP forwarding and private connectivity rules.
 - Per-Box ownership and isolation; no user-facing Tenant concept.
 - Linux containers first. Virtual machines, complex orchestration, and clusters are not part of the P0 promise.
 - Guest commands use native Incus Exec with **guest root (UID 0) by default**, typed `argv`, safe guest `cwd`, bounded env/timeout/output, and no required guest SSH/Agent. P0 uses safe native Incus guest file APIs for list/read and `box_file_apply(mode=create|replace|patch|delete)` with optimistic hash checks. Host shell and host privilege remain forbidden.
-- Every accepted mutation, including guest Exec and guest file writes, is represented by a durable local asynchronous operation and can be reconciled after failure. Each MCP action is correlated using a stable server-owned Tracking ID and typed Go context propagation.
+- Every MCP mutation requires a caller-supplied reusable `idempotency_key` before any native effect. Every accepted mutation, including guest Exec and guest file writes, is represented by a durable local asynchronous operation and can be reconciled after failure. Each MCP action is correlated using a stable server-owned Tracking ID and typed Go context propagation.
 - Fully functional installations at every supported nesting layer: each layer independently manages only its own directly owned Boxes. Nesting is runtime compatibility, not a recursive BoxWeave management feature.
 - Keep the underlying Incus storage driver unconstrained; capability-dependent operations report unsupported accurately.
 - Ubuntu LTS is the initial supported **host** installation baseline. Guest image defaults to a reviewed Ubuntu LTS image, with supported alternatives.
-- Reuse an existing compatible Incus daemon in a BoxWeave-controlled restricted Project; run a dedicated BoxWeave Caddy for Box application routes. Explicit local install/upgrade **automatically installs or upgrades approved managed dependencies** against a recorded compatible version manifest. A shared Incus daemon or foreign service is never disrupted without separately scoped local approval.
-- Nesting is opt-in per directly owned Box; resource defaults are configurable. An operator explicitly invokes installed upgrades; source release automation never upgrades a running host.
+- Reuse an existing compatible Incus daemon in a BoxWeave-controlled restricted Project; **do not assume Project isolation implies verified network isolation**. Fail closed if native private isolation cannot be enforced for Box-owned IPv4 and enabled IPv6; safe owned IPv6 disable is allowed, unowned host-wide network changes are not. Run a dedicated BoxWeave Caddy for HTTP Box application routes. Explicit local install/upgrade **automatically installs or upgrades approved managed dependencies** against a recorded compatible version manifest. A shared Incus daemon or foreign service is never disrupted without separately scoped local approval.
+- Nesting is opt-in per directly owned Box; resource defaults are configurable. An operator explicitly invokes installed upgrades; the installer never automatically reboots a whole host, reporting `reboot_required` instead. Source release automation never upgrades a running host.
 
 ## P0
 
@@ -25,7 +25,7 @@ See [tool inventory](../design/MCP_TOOLS.md).
 
 ## P1 candidates (not part of P0)
 
-Native snapshot list/create/restore/delete where storage supports it; optional guest file search convenience and bulk guest repository/file import/export APIs (ordinary Git via guest Exec is P0); durable background process start/stop/log supervision; Box idle auto-sleep and HTTP wake; OAuth 2.1 browser authorization. These features must obey all P0 trust and operation guarantees when implemented.
+Managed Box application HTTPS/TLS certificates/renewal and automatic redirect; native snapshot list/create/restore/delete where storage supports it; optional guest file search convenience and bulk guest repository/file import/export APIs (ordinary Git via guest Exec is P0); durable background process start/stop/log supervision; Box idle auto-sleep and HTTP wake; OAuth 2.1 browser authorization. These features must obey all P0 trust and operation guarantees when implemented.
 
 ## Deferred / excluded
 

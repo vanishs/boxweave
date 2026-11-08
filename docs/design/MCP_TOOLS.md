@@ -23,7 +23,7 @@
 | `operation_cancel` | Mutation | Authenticated, auditable cancellation *request* against an exact owned operation; prove queued cancellation or attempt supported active Exec termination. Never promise native cancellation or undo effects without evidence. |
 | `diagnostic_get` | Read | Ownership-scoped redacted phases/errors/coverage by authorized Tracking ID; no arbitrary host logs. |
 | `http_route_list` | Read | Read this layer's BoxWeave-owned HTTP routes. |
-| `http_route_create` | Mutation | Domain -> verified owned Box UUID + guest port via dedicated managed Caddy only. |
+| `http_route_create` | Mutation | HTTP-only application domain -> verified owned Box UUID + guest port via managed Caddy; no P0 TLS, certificate issuance, forced HTTPS redirects or arbitrary upstream. |
 | `http_route_delete` | Mutation | Delete exact owned route; no arbitrary Caddy editing. |
 | `port_forward_list` | Read | List this layer's owned TCP/UDP forwarding records. |
 | `port_forward_create` | Mutation | Bind host protocol/port -> verified owned Box UUID + guest port; no arbitrary upstream IP. |
@@ -39,7 +39,7 @@ The catalog keeps **26 tools** by merging two guest-file mutations into one and 
 
 1. Authenticate, enforce both BoxWeave resource ownership and the authenticated principal's operation-class + optional exact Box UUID scopes on reads, writes, diagnostics and cancellation.
 2. Create a fresh `request_id` for each transport attempt. A newly admitted logical mutation receives server-owned `tracking_id` and persistent `operation_id`; duplicate idempotency requests return the **original** IDs without dispatch.
-3. Persist accepted mutating intent before the native effect; return a quick durable receipt and allow polling. Distinguish caller timeout/cancel from operation cancellation.
+3. Require a caller-supplied reusable `idempotency_key` on **every** mutation before admission (including create, Exec, file edits and cancel). Persist accepted mutating intent before native effect; return a quick durable receipt and allow polling. Never silently generate a non-reusable server-only substitute. Distinguish caller timeout/cancel from operation cancellation.
 4. Propagate typed Go `context.Context` to domain services, worker and Incus/Caddy/SQLite adapters. Async workers rebuild a safe durable context; client disconnect alone does not cancel work.
 5. Return only independently verified post-state as success. Nonzero guest command exit is an observed completed command with `command_success=false`, not a transport failure.
 6. Bound and scope all output, file access and diagnostic evidence. Refuse stale native identity, unsafe guest file paths, unverified safe replacement, foreign services, and unsupported native cancellation.

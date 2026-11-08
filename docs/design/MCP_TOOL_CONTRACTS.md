@@ -4,7 +4,7 @@
 
 ## Guest file changes: `box_file_apply`
 
-Required: exact owned `box_id` (native UUID binding), safe guest `path`, and `mode`. All mutating requests also include a scoped idempotency key (or a proven equivalent durable dedup mechanism). `mode` is one of:
+Required: exact owned `box_id` (native UUID binding), safe guest `path`, and `mode`. All mutating requests **MUST provide a caller-generated, reusable and nonempty `idempotency_key`**. No implicit server-generated substitute is accepted; reject missing/invalid keys before any native effect. Same actor/layer/key plus identical normalized action/intent returns the original receipt; reuse with different intent is a conflict. The native Box UUID may not yet exist at `box_create` admission, so it cannot be required to construct the idempotency uniqueness scope. `mode` is one of:
 
 | Mode | Inputs | Safety/result |
 |---|---|---|
@@ -35,7 +35,7 @@ Guest-root Exec can itself create, replace and delete guest files. Therefore `bo
 
 ## `operation_cancel`: proof-based cancellation request
 
-- Input: target `operation_id` plus caller's unique idempotency key. The server validates the original actor/administrator authority, exact owned Box/resource, original operation identity and a dedicated `operation.cancel` class **plus** applicable target-operation permission. A token that may read status is not thereby authorized to cancel.
+- Input: target `operation_id` plus mandatory caller-generated reusable `idempotency_key`. The server validates the original actor/administrator authority, exact owned Box/resource, original operation identity and a dedicated `operation.cancel` class **plus** applicable target-operation permission. A token that may read status is not thereby authorized to cancel.
 - Every accepted cancellation attempt records its own auditable cancellation intent, `tracking_id` and receipt; return `target_operation_id` and separate `cancel_operation_id`. Do **not** overwrite the target's original operation or replay it.
 - Before dispatch: a transactionally proven queued/undispatched operation can be atomically marked `CANCELLED_BEFORE_DISPATCH`; verify no native effect was sent. A mere queue time estimate or missing native receipt is **not** proof of non-dispatch.
 - After dispatch: try termination **only** for a native operation type with a verified cancellation mechanism (initially guest Exec, capability-gated). An accepted request means `CANCEL_REQUESTED`, not `CANCELLED`. Confirm termination separately; report partial effects, exit or lost evidence honestly. A killed test process may already have modified guest files.
@@ -53,6 +53,12 @@ Guest-root Exec can itself create, replace and delete guest files. Therefore `bo
 - Return byte/size/encoding/offset/EOF and an observed SHA-256 with `hash_verified` or `not_verified` coverage. A full-file hash must be calculated from a consistent/native-verifiable file revision; do not attach a confident hash to unrelated page snapshots.
 - Reads, long-polling, output pages and diagnostic lookup must recheck both token permission and exact owned target identity, not merely accept possession of a Tracking ID/operation ID.
 - `diagnostic_get` remains separate from `operation_get`: reads and pre-dispatch refusals can be correlated without an admitted business operation. Sensitive log text and raw guest data stay private.
+
+## Revocation and site transport constraints
+
+- A revoked Token cannot start a new mutation or dispatch an admitted but **proven undispatched** queued mutation; the worker rechecks revocation and records an explicit blocked state before native dispatch. Already dispatched or UNKNOWN tasks retain the original outcome and are not automatically terminated by revocation.
+- `http_route_create` in P0 publishes only **HTTP** applications. The managed Caddy must never automatically issue certificates, activate TLS/port 443 or redirect HTTP to HTTPS. An optional operator-managed external HTTPS proxy is not a BoxWeave MCP-controlled site resource.
+- New Boxes use fail-closed private isolation for IPv4 and any enabled IPv6. If owned IPv6 cannot be safely denied, it may be disabled only for managed network resources; otherwise refuse creation/start instead of silently weakening private isolation.
 
 ## Required API/permission acceptance
 

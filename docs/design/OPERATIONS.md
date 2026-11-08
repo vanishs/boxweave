@@ -20,11 +20,12 @@ An operation may later move from UNKNOWN to SUCCEEDED or FAILED **only** after s
 
 `operation_id`, original `tracking_id`, inbound `request_id` and safe diagnostic `trace_id` linkage, owner/layer identity, authenticated actor/token ID (not token value), operation type, requested `box_uuid` and stable incarnation, normalized **redacted** immutable intent/fingerprint, scoped idempotency key digest, safe persisted `OperationContext` projection, queued/dispatch timestamps, native Incus operation ID where available, Caddy/resource revision, state transitions, bounded error, observed guest command exit, verification evidence, and private bounded output reference.
 
-Persist a safe pre-dispatch intent transactionally. Apply a unique constraint to the idempotency scope. Exact duplicate requests return the original receipt; conflicting or same-key/different-payload requests fail with a typed conflict. Do not rely on a short-lived in-process map as the only operation registry.
+Require a nonempty, caller-generated, reusable `idempotency_key` for **every MCP mutation**; reject missing keys before admission/native effects. Persist a safe pre-dispatch intent transactionally. Enforce unique (layer, authenticated stable actor, key), with separate canonical action/intent fingerprint (including existing target UUID/incarnation where applicable). For `box_create`, UUID does not exist at admission. Exact duplicates return original Tracking/Operation receipts; same-key/different-action or payload conflicts fail with a typed error. Do not rely on a short-lived in-process map as the only operation registry.
 
 ## Worker and reconciliation
 
 - Acquire per-Box/per-route/port/ACL resource locks transactionally. Do not block unrelated resources unnecessarily.
+- Recheck Token revocation and Box ownership immediately **before dispatch**. If revoked and provably undispatched, record `AUTH_REVOKED_BEFORE_DISPATCH` (or equivalent), refuse effect and keep audit evidence. An already-dispatched or uncertain operation must remain independently reconciled and never be labeled canceled solely because its Token was revoked.
 - Persist native operation identity immediately after obtaining it. A crash in the interval between effect and persisted receipt remains UNKNOWN; never blindly send the command again.
 - Categorize transport timeout separately from native operation failure, application deadline and failed verification. Incus may finish after a local timeout.
 - Check native state and original operation whenever possible; reconcile Caddy and ACL desired-versus-actual state under strict ownership and revision checks.

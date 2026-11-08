@@ -11,7 +11,7 @@
 | `operation_id` | Durable BoxWeave journal | One accepted mutating business operation, including Exec and guest file writes. Returned with tracking ID; stable across duplicate submissions. |
 | `native_operation_id` | Incus, where available | An upstream execution handle. May be absent or expire; never replace the BoxWeave operation ID. |
 | `trace_id` / `span_id` | Internal bounded diagnostic instrumentation | Correlate checked component transitions; a separate trace/span may be associated with one tracking ID. Do not expose a generic tracing backend or secret-bearing logs to MCP. |
-| `idempotency_key` | Caller, when provided, or a documented durable admission mechanism | Prevent a logically identical mutation from being dispatched twice. Key is scoped to actor + action + owned target identity + canonical intent. Not the tracking or operation ID. |
+| `idempotency_key` | **Required caller input for every mutating tool** | Client generates once per logical mutation and reuses on retry. Persist unique (layer/actor/key), then compare canonical action+intent (including exact native target identity when one exists). Conflicting reuse is denied. A new `box_create` has no UUID before admission. Not a tracking/operation ID or credential. |
 
 The tracking ID can appear in structured MCP tool results, safe diagnostic errors, local CLI output and internal logs. Protocol-level MCP errors that cannot use a tool result include a safe correlation identifier where the protocol permits. An unauthenticated request may receive an opaque request ID but never a private operation trace. `operation_get`, `operation_list`, `operation_output_get` and `diagnostic_get` remain authorization- and ownership-scoped.
 
@@ -51,7 +51,7 @@ MCP transport
 
 ## Test requirements
 
-1. A single logical create, Exec or file change retains the **same tracking ID** through MCP response, durable record, worker, native adapter events, redacted diagnostic lookup and read-back; repeated identical submission returns the original tracking and operation IDs without a second effect.
+1. A single logical create, Exec or file change retains the **same tracking ID** through MCP response, durable record, worker, native adapter events, redacted diagnostic lookup and read-back; **every mutation requires a caller-supplied reusable idempotency key** and repeated identical submission returns original Tracking/Operation IDs without a second effect. Reject absent/invalid keys before dispatch.
 2. Two distinct transport retries have different request IDs, one logical tracking ID; a mismatched idempotency payload is denied before dispatch.
 3. Kill a client while Exec/build runs. Original operation remains queryable; if lost worker/native continuity cannot be proven, return UNKNOWN rather than invent a successful exit.
 4. Kill the worker between intent and native receipt, then restart. Preserve UNKNOWN and prevent duplicate create/Exec/file write; independently observe original target.

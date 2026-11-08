@@ -22,13 +22,13 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-003 | Create/list/get/update/start/stop/delete exact owned Box; actual native UUID/state reads | I + V |
 | A-004 | Duplicate create/rename/reused name/IP and stale UUID; no unintended inheritance or duplicate | I |
 | A-005 | Exec in owned guest, correct stdout/stderr/exit and timeout handling; guest stays confined to its Box | I + V |
-| A-006 | Every mutation returns stable journal ID; duplicate idempotency key returns original, conflicting payload denied | T + I |
+| A-006 | **Every MCP mutation requires caller-provided idempotency key**; absent/invalid key denied before effect, duplicate key+intent returns original Tracking/Operation IDs, same-key/different intent conflicts even for create lacking UUID | T + I |
 | A-007 | Worker dies after dispatch, lost upstream reply, Incus timeout; UNKNOWN preserved and reconciled without replay | T + I + V |
 | A-008 | Failed post-state check is not SUCCEEDED; native Incus/Caddy side effects and errors are observable | I |
-| A-009 | Private Box A -> B traffic denied by default; explicit directional IP/protocol/port grant works | I + N |
+| A-009 | Private Box A -> B traffic denied by default under native IPv4 and enabled IPv6 packet tests; when owned IPv6 cannot be enforced, safe owned disable or fail-closed creation/start; explicit directional grant works | I + N |
 | A-010 | Internet allowed by default and optionally disabled per Box; IPv4/IPv6 enforced as configured | I + N |
 | A-011 | Public Caddy site on B accessible to Box A despite private direct denial, per agreed policy | I + N |
-| A-012 | Caddy domain points only to owned Box UUID+port; arbitrary upstream/host daemon/foreign route refused | I + V |
+| A-012 | **HTTP-only P0** Caddy application domain points to owned Box UUID+port; arbitrary upstream/host daemon/foreign route refused; no automatic TLS/443/ACME/redirect | I + V |
 | A-013 | Native TCP/UDP forwarding only to owned Box; collision, restart and teardown behave correctly | I + N |
 | A-014 | ACL revision/ETag updates preserve unmanaged NIC/profile/ACL state; rebinding handles native IP change | I + V |
 | A-015 | Real Caddy outage/restart repaired from owned SQLite route intent, without altering foreign configuration | I |
@@ -44,11 +44,11 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-025 | MCP only listens on 127.0.0.1 HTTP by default, no automatic public ingress; operator-configured HTTPS proxy/Tunnel works with auth and MCP transport; bad tokens still denied | I |
 | A-026 | Default Ubuntu LTS image, supported alternative image, configurable resources and explicit nesting switch behave as declared and respect nested resource limits | I + N |
 | A-027 | Host install reuses existing compatible Incus Project and dedicated Caddy, records dependency versions, automatically installs/upgrades authorized managed dependencies, and refuses foreign-service/port/ownership conflicts | I + V |
-| A-028 | Multiple independently revocable scoped tokens enforce permissions with safe bootstrap/rotation and fail-closed storage recovery | I + V |
+| A-028 | Multiple scoped revocable tokens; revoked credential denied for new requests and proven undispatched queued effects, while dispatched/UNKNOWN original remains reconcileable and is not falsely terminated | I + V |
 | A-029 | ACL selection by Box ID or verified owned Box IP correctly resolves native identity; foreign IP changes do not transfer grants | I + N |
 | A-030 | Missing/corrupt SQLite ownership store halts dangerous mutations; explicit local recovery does not silently adopt unowned Incus/Caddy assets | I + V |
 | A-031 | Successful new-version `v1` CI builds a genuine artifact and automatically publishes one immutable matching tag/Release; unchanged version and docs-only tree do not create false assets; installed upgrades and stable pointer remain manual | T + I |
-| A-032 | A new or nested Ubuntu LTS host can complete managed dependency installation/**version upgrades** and explicit BoxWeave upgrade, preserving unrelated services | I + N |
+| A-032 | A new/nested Ubuntu LTS host completes managed dependency install/upgrade; installer never reboots entire host automatically, reports `reboot_required` and verifies post-operator reboot; foreign services preserved | I + N |
 | A-033 | Server-assigned Tracking ID persists across MCP, Go context/domain, SQLite worker, native Incus/Caddy adapter, diagnostic event and final receipt; dedup returns original Tracking/Operation IDs | T + I |
 | A-034 | Read and denied MCP actions are safely correlated; client-provided tracking fields do not grant identity; request ID differs on retry while logical Tracking ID remains stable | T + I |
 | A-035 | Typed-argv async guest Exec survives client disconnect where service/native worker remains alive; cwd/env/timeout/output bounds, original exit 0/nonzero, stdout/stderr and completion/unknown distinctions verified | I + V |
@@ -72,6 +72,11 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-053 | A new Box obtains source via ordinary guest Git/Exec without a BoxWeave bulk upload/download tool; private credentials are not leaked into operation/diagnostic records | I + V |
 | A-054 | Concurrent guest writers and unsafe files do not lead to falsely asserted atomic compare-and-swap; unsupported guaranteed file changes fail closed without host/path/foreign effects | I + V |
 | A-055 | Queued-undispatched cancel is verified; active Exec cancel is best-effort with independent termination proof or explicit UNSUPPORTED/UNKNOWN, never guessed rollback | I + V |
+| A-056 | No private Box path escapes default isolation: IPv4 enforced, IPv6 enforced or safely disabled only on owned network, unsupported network refuses Box start/create; host-wide IPv6/foreign networking unchanged | I + N + V |
+| A-057 | Missing/non-reusable `idempotency_key` refused on all mutating tools (including create/Exec/file/cancel); duplicate returns original IDs; same key/different action/intent conflicts after reconnect | T + I + V |
+| A-058 | Revoked Token cannot create new mutations or dispatch queued proven-undispatched operation; dispatched/UNKNOWN work is observed and reconciled rather than automatically canceled | T + I + V |
+| A-059 | Dependency upgrade requiring kernel/host reboot returns true `reboot_required`, no unattended whole-host reboot, preserves install journal; operator reboot and independent postflight needed for PASS | I + N |
+| A-060 | Box application Caddy site is HTTP-only in P0; no certificate/ACME requests, HTTPS auto redirect or 443 binding; unrelated Caddy and management MCP external tunnel remain untouched; direct HTTP marked unencrypted | I + N + V |
 
 ## Required adversarial combinations
 
