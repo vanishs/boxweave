@@ -29,6 +29,10 @@
 
 No `http_route_*`, `acl_rule_*`, `diagnostic_get`, Caddy API, generic host shell/file/Incus management or additional management transport. Read-only failures return Tracking ID + safe classified error; admitted Operation failures include diagnostic summary in `operation_get`. Detailed logs remain host-local.
 
+## Exact native SDK mapping
+
+Every public tool below maps to a tagged upstream API in [the complete 20/20 mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). The Go MCP SDK already supplies typed `mcp.AddTool`, Bearer auth middleware, Schema validation and tool-error handling. Incus `GetInstancePortForwardConn` is **not** persistent port publishing; `CreateNetworkPeer` is **not** a Box-to-Box ACL. Use native instance `proxy` devices and NIC-level ACL instead. Unproven native file CAS must remain UNSUPPORTED rather than simulated.
+
 ## Shared semantics
 
 - Tokens are `admin` (manage all **owned** resources, including guest-root Exec) or `viewer` (read-only inspection of owned metadata, guest files and original operation output); multiple independently revocable credentials. Viewer access can disclose guest data and must never imply low sensitivity. No per-Box Token grants or tool-level RBAC.
