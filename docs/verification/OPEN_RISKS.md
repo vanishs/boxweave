@@ -29,6 +29,12 @@
 | O-023 | **VALIDATE** | Native guest service persistence using guest OS facilities and app listen address; do not add a BoxWeave guest process supervisor to satisfy the Hello World scenario. |
 | O-024 | **CONDITIONAL** | Orphan **network-forward object** cleanup is applicable only if a future explicitly chosen network-forward backend is implemented. For P0 instance-owned proxy devices, instead verify no stale BoxWeave claim remains after instance deletion and no foreign device is touched. |
 
+## Current standalone native evidence and blocker (2026-11-08)
+
+[Minimal batched Incus 7.6 experiment](SDK_MINIMAL_BATCH_2026-11-08.md): official Go SDKs compile; standalone MCP per-Tool token identity/admin-viewer/revocation test PASSED; restricted `incus`-only user Project, denied foreign Project settings/admin Unix socket and native SDK scoped `UseProject` + typed 404 PASSED **for these narrow checks**. This does **not** close broad O-003/O-004/O-010/O-011 or certify a v1 installation.
+
+One nested `incus init` then failed with a native event-listener timeout and Cowsql leader loss. The daemon process remained active, but database queries failed and an owned instance-storage symlink remained. Original native operation was reported failed, yet exact native resource post-state is **UNKNOWN**. Treat this as an O-007/O-008 test-environment blocker; preserve original evidence, do not repeat create or destructively clean unknown state, and do not call the error an Incus v7.6 SDK defect without independent non-nested reproduction.
+
 ## New official SDK capability checks
 
 The [2026-11-07 Incus/MCP SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) confirmed limitations that cannot be resolved by simply writing more BoxWeave code:
