@@ -46,6 +46,19 @@ These are **SDK contract alignment** checks, not defects attributed to the offic
 
 See [20/20 tool-to-SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). Verify SDK HTTP `auth.RequireBearerToken` expiration/revocation, localhost Host guard, default 4 MiB request cap, explicit Origin proxy compatibility, `api.StatusErrorMatch` semantics and Incus `ExecInstance` RecordOutput timing. Incus `GetInstancePortForwardConn` and `CreateNetworkPeer` are **not** implementations for the BoxWeave host forward / Box peer tools. These are validation tasks only, **not** live test PASS.
 
+## Source-level follow-up: implement by SDK semantics
+
+[Second-pass native source research](../research/SDK_GAP_CLOSURE_2026-11-07.md) tightens the already-listed validation risks, without opening a general platform backlog:
+
+- **P0 / O-009:** In typed MCP Tool handlers, authenticate **`req.Extra.TokenInfo`** on every call. `auth.TokenInfoFromContext` is only the HTTP middleware accessor; prove no actor/role cross-request leakage, revocation and legacy client handling.
+- **P0 / O-003:** Bridge NIC ACL group selectors are unavailable; require trustworthy current IP/IPv6 binding and native anti-spoof, fail-closed on address change. No custom ACL editor.
+- **P0 / O-010:** Native file upload defaults to `O_CREATE|O_TRUNC`, not exclusive create; SFTP `O_EXCL` is **only a native test candidate**. Strong conditional replace/delete still require real atomic proof or an explicit owner product choice.
+- **P0 / O-011/O-012:** `ExecInstance(RecordOutput=true)` with output writers can synchronously wait before returning; native recorded-output getters are private. Use a tested SDK-streaming mode with durable worker output. `GetOperationWait` modifies shared HTTP Transport `ResponseHeaderTimeout`; prefer bounded `GetOperation` polling until concurrent semantics are tested.
+- **P1 / O-004/O-013:** Confined Project must have its `features.*`, root disk/Profile and required managed NIC/network/ACL rights configured **before the first instance**; feature choices can lock afterward.
+- **P1 / O-007:** Parent NIC anti-spoof controls can block nested L2 forwarding with new MAC. Prove nested managed-bridge NAT instead of disabling native protection broadly.
+
+These are tagged SDK facts plus honest native UNKNOWNs; no live acceptance was run in this document change.
+
 ## Historical evidence does not close native validation
 
 [Containarium source and 2,577-subject history review](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md) supplies test counterexamples, **not** v1 PASS evidence. The existing O-002/003/005/010/011/013/018/024 risks already cover exact identity, pre-start security, native forwarding, file race safety, Exec truth, storage and deletion recovery; do not duplicate them as a new platform backlog. Record exact kernel/Incus SDK/runtime/API extension and the failing native probe before weakening an approved guarantee. A feature that native Incus cannot prove remains BLOCKED/UNSUPPORTED until an owner product decision. No scope expansion is authorized by the research.
