@@ -7,6 +7,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What is BoxWeave? | [Product](product/PRODUCT.md) |
 | Which permanent boundaries override superseded v1 plans? | [Permanent product boundary](decisions/PRODUCT_BOUNDARY.md) |
 | What is the primary P0 Agent workflow? | [Sustainable development loop](product/DEVELOPMENT_LOOP.md) |
+| How to simulate a real LAN Hello World, failed delete, nested candidate and release? | [Fault-driven release scenarios](verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) |
 | What is in/out? | [Scope](product/SCOPE.md) |
 | What must work? | [Requirements](product/REQUIREMENTS.md) |
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |

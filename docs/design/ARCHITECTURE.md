@@ -23,7 +23,7 @@ A separate host-local CLI manages bootstrap, token rotation/recovery, verified I
 ## Ownership and operations
 
 - One installation owns a restricted Incus Project and an identity-verified set of its own Boxes, native port mappings and minimal directional private peer grants. No foreign container/project/network adoption by default.
-- Every authenticated mutation requires a client-reusable idempotency key and returns original Tracking and async Operation ID. SQLite stores intent before dispatch; workers reconstruct safe Go context and verify actual native post-state. UNKNOWN results are not blindly retried.
+- Every authenticated mutation requires a client-reusable idempotency key and returns original Tracking and async Operation ID. For `box_delete`, journal a provider-aware sequence that includes owned forward/peer cleanup and exact instance removal; retain partial effects and safe structured error evidence. SQLite stores intent before dispatch; workers reconstruct safe Go context and verify actual native post-state. UNKNOWN results are not blindly retried.
 - Native Guest Exec defaults to guest root (not host root); files use native list/read/create/conditional replace/single delete, no patch engine. Operation status includes minimal safe diagnostics.
 - Two revocable MCP token roles only: `admin` and `viewer`. Viewer can read guest metadata/files and bounded output (potentially sensitive), but cannot mutate or Exec.
 - Networking is a **fixed safety policy plus two narrow capabilities**: native TCP/UDP forward management for owned Box ports and a directional `box_peer_set` allow/revoke for owned peer tests. The controller is not a general Incus networking manager.

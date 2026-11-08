@@ -15,7 +15,7 @@ BoxWeave uses Go, the official MCP Go SDK and official Incus Go SDK. Its only pu
 
 **Not BoxWeave responsibilities:** Caddy, website/domain/HTTPS management, a general firewall/ACL/RBAC platform, tenant billing, snapshots/backup, automatic idle sleep/wake, background process supervisor, OAuth login, bulk file transfer or built-in patch engine, VM/cluster management, or cross-layer controller orchestration. These are **excluded**, not P1 promises.
 
-The developer/acceptance workflow remains comprehensive and black-box-first, but harnesses live in the repository/CI/disposable Boxes, not the standard runtime.
+The developer/acceptance workflow remains comprehensive and black-box-first. The [fault-driven Hello World -> failed delete -> nested candidate -> release scenario](docs/verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) is the required cross-tool smoke/regression gate; it verifies actual LAN reachability, partial-delete evidence, safe nested localhost MCP testing and exact candidate bytes **before** CI auto-publication. Harnesses live in repository/CI/disposable Boxes, not the standard runtime.
 
 Start with [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md), [scope](docs/product/SCOPE.md), [20 MCP tools](docs/design/MCP_TOOLS.md), [Agent development loop](docs/product/DEVELOPMENT_LOOP.md), [networking](docs/design/NETWORK.md), [dependency lifecycle](docs/process/DEPENDENCY_LIFECYCLE.md), [security](docs/design/SECURITY.md) and [Agent rules](AGENTS.md).
 

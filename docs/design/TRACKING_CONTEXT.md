@@ -47,7 +47,7 @@ MCP transport
 - `operation_get` includes bounded redacted diagnostic classification for admitted operations; early failed/denied calls return a safe Tracking ID for host-local logs. No independent diagnostic lookup MCP tool or trace-store product exists. Authorized Box-level diagnostics are scoped to owned identities; sensitive details remain local private evidence.
 - Persist redaction, retention, and limits as documented versioned settings; protect operation IDs, cursors, and trace selectors against cross-token leaks. Tracking IDs are not secret but the details behind them may be.
 - Define consistent structured `COMPLETED` semantics for guest Exec: an observed nonzero exit is a completed failed command, not a transport UNKNOWN. `SUCCEEDED` for BoxWeave Exec means its transport and exit result were observed and durably recorded; report actual `exit_code` and an explicit `command_success` boolean separately.
-- For a mutating operation, successful Incus transport receipt is insufficient: independently verify requested postcondition, with UNKNOWN if native outcome cannot be established.
+- For a mutating operation, successful Incus transport receipt is insufficient: independently verify requested postcondition, with UNKNOWN if native outcome cannot be established. In multi-resource `box_delete`, retain the same original Tracking ID across dependent forward/peer cleanup, instance delete, verified tombstone or partial failure. Expose sanitized phase/error/observed-state metadata through the existing `operation_get` rather than creating a tracing API.
 
 ## Test requirements
 

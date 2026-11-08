@@ -36,10 +36,28 @@ Require a nonempty, caller-generated, reusable `idempotency_key` for **every MCP
 - Define safe, case-specific compensation only for proven owned partial effects. No catch-all retry, force-delete or reset of a suspicious Box.
 - SQLite durability and crash recovery must be demonstrated under service kill, host reboot simulation and nested parent restart.
 
+## Box deletion as a multi-resource operation
+
+`box_delete` is **not** one Incus API call once BoxWeave has created native TCP/UDP forwards and directional peer grants. Its standard confirmation covers removal of **all verified BoxWeave-owned** dependent forward/peer claims for the exact Box UUID/incarnation; it must not imply deletion of foreign host/network resources.
+
+Before dispatch, snapshot and lock the exact owned Box **and its dependent forward/peer claims**, and ensure concurrent create-forward, peer-set, update, stop and delete cannot race into an orphan exposure. The journal must record individual step intent, native result, postcondition observation and any missed/uncertain evidence. Backend differences matter: an Incus instance proxy device may disappear with the instance, while an independent Incus network-forward entry may survive. Use a verified provider-specific dependency graph, not guessed cascading behavior.
+
+Preferred **reconcilable** phases: `DELETE_PREFLIGHT` -> `FORWARD_CLEANUP` -> `PEER_CLEANUP` -> `INSTANCE_DELETE` -> `POST_VERIFY` -> `TOMBSTONE_COMMIT`. Include a native stop/substep only when the chosen supported deletion policy requires it. Mark `SUCCEEDED` only after the exact instance is gone, all managed dependents are absent, and the tombstone/ownership transition is durably committed. Verify both actual Incus state and local ownership records, not just a successful API response.
+
+If a forward is verified removed but the instance delete fails, **the Box may still exist but its service is no longer published**. Record PARTIAL/FAILED only with evidence; `operation_get` must identify the failing phase and successful earlier effects. Preserve original IDs and the journal; do not silently recreate the forward, discard the Box record or release UNKNOWN claims. An observed FAILED with verified stable native state may be repaired through a separately approved reconciliation, or by a **new** idempotency-keyed delete after safe identity/lock checks. Reusing the original key returns the original receipt and **never** dispatches a second delete. A merely missing Box after a lost reply does not prove dependent network cleanup; keep UNKNOWN until verified.
+
+The remote Agent may query existing `operation_get`, `box_get` and `port_forward_list` to determine observed residuals. A failed `box_get` from a deleted Box is only a specific data point, not authority to clean arbitrary network state. Sensitive host stack traces, privileged diagnostics, socket access and raw journal inspection stay in the **host-local** CLI/OS; the MCP API does not grow a new host-log tool.
+
 ## Tool response
 
 An accepted mutation responds with persistent `tracking_id`, `operation_id`, and current state. The `operation_cancel` response distinguishes its new `cancel_operation_id` from the `target_operation_id`. `operation_get`, `operation_list`, and `operation_output_get` expose scoped progress, bounded output/exit and evidence; `operation_get` includes a small redacted phase/error/evidence summary linked to the original Tracking ID; protected local CLI logs hold further diagnostics. No separate diagnostic MCP API exists. Read-only tools may return immediately but carry correlation. A valid duplicate request returns original IDs. Use standard MCP error categories and meaningful domain error codes; do not invent fake HTTP/gRPC statuses or misclassify UNKNOWN as not found. See [Tracking/context](TRACKING_CONTEXT.md).
 
+## Safe structured failure evidence
+
+`operation_get` must expose a **bounded, sanitized** diagnostic envelope sufficient for a remote Agent to distinguish which native stage failed and which side effects were independently observed: original Tracking/Operation IDs; controller VERSION/build SHA and layer; operation action/target UUID; stable phase/substep; typed `error_class` and native error category/status where safe; limited sanitized native message; `dispatch_possible`; last observed target state; owned forward/peer cleanup summary; `observed_at`, verification coverage and missing evidence; `reconciliation_state` and one actionable **safe** next step. Host paths, stack traces, raw Incus bodies, guest secrets and token values remain private. The full error may not be knowable from MCP; when missing evidence is material, report `local_operator_diagnostics_required` instead of fabricating root cause.
+
+Pre-admission denials that never created an operation return a safe Tracking ID plus structured validation/authorization error in the tool response. Do not invent an `operation_id` for them. Support version/build identification in `host_status` so Agent can compare first and candidate installations without relying on release URLs.
+
 ## High-risk cases
 
-Repeated create after lost reply; start competing with delete; concurrent directional owned peer grants; native port forward add interruption; Exec streaming interruption; deletion with reused name; partial forward apply; parent restart with child operation still running; native success but postcondition mismatch.
+Repeated create after lost reply; start/forward/peer-set competing with delete; Box delete after partially removed forward; instance gone but stale network forward survives; duplicate original delete idempotency key; native port forward add interruption; Exec streaming interruption; deletion with reused name; partial forward apply; parent restart with child operation still running; native success but postcondition mismatch. See [fault simulation](../verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md).

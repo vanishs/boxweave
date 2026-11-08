@@ -48,11 +48,25 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 | A-038 | Exact verified Go SDK/native package versions, binary hashes and immutable GitHub new-version release with no automatic live host deployment | T + I |
 | A-039 | Initial Ubuntu LTS guest works; any additional guest distro is separately validated before added to supported images; unsupported cases honest | I + N |
 | A-040 | All excluded product features are absent: no generic ACL editor, per-Box RBAC, Caddy/domain/HTTPS, native snapshot tools, automatic wake or guest text patch engine | I |
+| A-041 | A Hello World guest service is installed via ordinary guest Exec/service manager and remains reachable after the initiating Exec is finished; no BoxWeave in-guest management Agent/supervisor | I + N |
+| A-042 | Explicit L0 LAN interface bind (not default loopback) allows real HTTP access from **another machine on the same LAN**, with matching response and native forward identity; host firewall/routing failures correctly classified | I + N + V |
+| A-043 | `box_delete` with owned forward and peer dependencies discloses cleanup scope, locks resource identities, removes/verifies only owned dependencies and then native Box; no leftover exposure on success | I + N + V |
+| A-044 | Inject forward cleanup success followed by instance-delete failure: Box remains but mapping absent, Operation records partial substeps/cause, `box_get` and `port_forward_list` agree with observed native state | I + N + V |
+| A-045 | Inject native delete success with lost MCP reply/SQLite commit: duplicate caller key returns original operation, no repeated native delete or stale forward claim; unresolved state stays UNKNOWN until independent verification | T + I + V |
+| A-046 | Delete vs concurrent forward/peer mutation uses exact UUID/incarnation locks and correct dependency/tombstone order; another Box and foreign Incus resources stay unchanged | T + I + V |
+| A-047 | `operation_get` provides sanitized phase/native error classification/observed dependent state/evidence gap/recovery hint/build SHA for failed delete, with no arbitrary host logs, raw trace or credentials | T + I |
+| A-048 | Inner candidate MCP is contacted through guest-local authorized localhost client via parent guest Exec, with independent inner credentials never exposed in argv/stdout; parent cannot directly reach inner loopback via guest bridge IP | I + N + V |
+| A-049 | L0/L1 independently authorized native forwards yield actual nested Hello World HTTP from separate **physical LAN witness**; failure inside one layer stays attributed there and no automatic parent orchestration occurs | I + N + V |
+| A-050 | Old first-version installed bug is reproducible in controlled lab; corrected candidate installable **before** formal Release and verified with exact binary/source digest against original delete regression + negative/UNKNOWN cases in nested L1/L2 | I + N + V |
+| A-051 | Formal second-version CI publication occurs only after independent exact-artifact native/nested gate; missing evidence or artifact digest mismatch blocks GitHub Release, tag is immutable and published bytes match tested candidate | T + I + N + V |
+| A-052 | After formal Release, original L0 remains unchanged with its original failed Box until explicit host-local upgrade and safe reconciliation; no candidate test or GitHub tag silently cleans the old incident | I + V |
 
 ## Adversarial combinations
 
 Test lost MCP reply after create/Exec/forward, concurrent Box delete vs peer/forward edits, token revocation just before and after dispatch, stale guest hashes and symlink races, fixed network ACL vs peer grants, IPv6 bypass, host listener and port collisions, simulated parent restart during nested work and existing shared Incus upgrade. No native effect outside the owned set is ever permitted.
 
 The independent Finder/Fixer/Verifier harness belongs in repository/CI/disposable Boxes, not customer runtime. Record tool name, original Tracking/Operation IDs, exact source SHA, installed bytes, native Incus version, outcome and evidence. No false PASS from a mock.
+
+For step-by-step injector variants V-01–V-15, expected partial-state observations and test/release gate, see [fault-driven end-to-end scenario](FAILURE_DRIVEN_RELEASE_SCENARIOS.md).
 
 See [scope](../product/SCOPE.md), [tools](../design/MCP_TOOLS.md), [network](../design/NETWORK.md), [permanent boundary](../decisions/PRODUCT_BOUNDARY.md).

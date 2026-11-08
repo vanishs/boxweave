@@ -12,20 +12,20 @@
 | `box_update` | Mutation | Allowlisted CPU, RAM, safe disk growth, opt-in nesting and per-Box internet toggle only. Never raw Incus configs or disk shrink. |
 | `box_start` | Mutation | Start exact owned Box, verify actual running/readiness. |
 | `box_stop` | Mutation | Stop exact owned Box, verify native state. |
-| `box_delete` | Mutation | Delete exact owned Box with normal destructive confirmation; do not inspect inner nested controllers. |
+| `box_delete` | Mutation | Delete exact owned Box with normal confirmation **covering owned dependent port forwards/peer grants**; journal per-step cleanup, preserve PARTIAL/UNKNOWN and verify no orphan exposure; no inner-controller discovery. |
 | `box_exec` | Mutation | Durable async guest Exec, guest root by default, typed argv/cwd/bounded env, timeout and output; no host shell. |
 | `box_file_list` | Read | Bounded/paginated list of regular guest directory entries. |
 | `box_file_read` | Read | Bounded guest file bytes/pages with truthful metadata/observed hash. |
 | `box_file_apply` | Mutation | Safe single guest regular file create/conditional replace/conditional delete; no patch engine or recursive delete. |
-| `operation_get` | Read | Original scoped async receipt, status, optional bounded wait_ms and small redacted diagnostic/evidence summary. |
+| `operation_get` | Read | Original scoped async receipt/status with optional bounded wait_ms and structured **failing phase, sanitized native error, last observed Box/dependent resources, evidence gaps, safe recovery hint and controller build identity**. |
 | `operation_list` | Read | Paginated owned operations, including UNKNOWN. |
 | `operation_output_get` | Read | Bounded/paginated guest Exec output and observed exit details after reconnect. |
 | `operation_cancel` | Mutation | Prove queued cancellation or request supported Exec termination; no speculative undo or UNKNOWN resolution. |
 | `port_forward_list` | Read | List only native BoxWeave-owned TCP/UDP forwards and host binds. |
-| `port_forward_create` | Mutation | Native Incus host listener protocol/address/port -> verified owned Box UUID/guest port; public binding explicitly authorized. |
+| `port_forward_create` | Mutation | Native Incus host listener protocol/address/port -> verified owned Box UUID/guest port; default loopback is not LAN-reachable, explicit LAN/public bind authorized, native address/port and external probe verified separately. |
 | `port_forward_delete` | Mutation | Remove verified owned native forwarding only. |
 | `box_peer_set` | Mutation | Allow or revoke directional private access from exact owned source Box UUID to target Box UUID; no CIDR/IP/port/protocol policy DSL. |
-| `host_status` | Read | Read-only this-layer controller/Incus version, capabilities and health with no foreign host inventory. |
+| `host_status` | Read | Read-only this-layer controller **VERSION/build SHA**, Incus version/API capabilities and health with no foreign host inventory. |
 
 No `http_route_*`, `acl_rule_*`, `diagnostic_get`, Caddy API, generic host shell/file/Incus management or additional management transport. Read-only failures return Tracking ID + safe classified error; admitted Operation failures include diagnostic summary in `operation_get`. Detailed logs remain host-local.
 

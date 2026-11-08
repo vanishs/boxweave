@@ -20,10 +20,18 @@ Report native post-state, observed SHA/hash coverage and errors; do not invent s
 
 `operation_cancel` is a separately journaled and authorized cancellation request. Prove queued/undispatched cancellation transactionally; for active Exec attempt native stop only when supported and confirmed. Do not treat attempted cancellation as rollback or resolve UNKNOWN without evidence.
 
+## Delete lifecycle and remote failure visibility
+
+`box_delete` confirms deletion of the **exact owned Box UUID** and all its **owned** dependent native TCP/UDP forwards and private peer grants. The backend must lock these claims against concurrent edits, journal each native cleanup phase, verify owned dependent removal and native Box absence before committing a terminal tombstone. It must never silently delete foreign network state, free uncertain UNKNOWN locks, or claim all-or-nothing atomicity across SQLite and Incus. On partial failure, keep the original operation record and expose verified remaining Box/forward state through existing read tools.
+
+`operation_get` returns a small, structured and redacted causal summary: current/failed step, safe native error category, observed Box/owned forward status, missing evidence and safe recovery hint, alongside version/build and original IDs. It is not arbitrary host diagnostics. Local operator doctor/journal remains an out-of-band escalation if the error cannot be safely localized from MCP. A duplicate `box_delete` with the same idempotency key **only queries the original receipt**, never re-dispatches another destructive call.
+
+`host_status` identifies installed controller VERSION/build SHA and observed Incus version/API features. `box_get` and `port_forward_list` reflect observed native state and known stale/partial records honestly; a mere HTTP or SQLite success is not a verified live-service state.
+
 ## `box_peer_set` and native forwards
 
 - `box_peer_set(source_box_id,target_box_id,allow,idempotency_key)` changes **only** the directional private access state of two verified owned Box UUID/incarnations. It has no CIDR/IP/port/protocol expression parameters. Native bridge/OVN/NIC safety must be proven; current effective grants are read in `box_get`. Deny foreign identities, address reuse, unsupported network enforcement and host-global ACL manipulation.
-- `port_forward_create(box_id,guest_port,protocol,host_port,host_bind?,idempotency_key)` selects only TCP/UDP and verified Box targets. Host listener default is loopback when suitable; explicit public/wildcard bind requires administrator action and collision check. Implement via native Incus network forwards/proxy devices. `port_forward_list/delete` show/remove owned native claims only; never provide custom reverse proxy/URL forwarding or arbitrary target IP.
+- `port_forward_create(box_id,guest_port,protocol,host_port,host_bind?,idempotency_key)` selects only TCP/UDP and verified Box targets. **LAN reachability requires explicit host LAN-IP binding and a probe from another LAN machine; host loopback defaults cannot provide it.** Host listener default is loopback when suitable; explicit public/wildcard bind requires administrator action and collision check. Implement via native Incus network forwards/proxy devices. `port_forward_list/delete` show/remove owned native claims only; never provide custom reverse proxy/URL forwarding or arbitrary target IP.
 - Native private Box isolation remains default fail-closed. Native port forwarding creates an **explicitly exposed** service and must not silently broaden rights to other Boxes.
 
 ## Auth and source visibility

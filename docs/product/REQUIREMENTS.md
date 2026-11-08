@@ -24,5 +24,10 @@
 | R-018 | Black-box test every exposed MCP and local CLI leaf and negative boundary; test complete Agent edit/build/fix/retest loop and L0/L1/L2 where supported; independent verifier does not become customer runtime. |
 | R-019 | CI auto-publishes real verified new-version source build/artifact for `1.X.Y` on `v1`; does not deploy/upgrade hosts or publish docs-only pseudo-release. |
 | R-020 | No implicit access to privileged Incus socket or host admin API by remote MCP; use a technically enforced restricted native/host-local setup boundary. |
+| R-021 | A confirmed `box_delete` must clean and independently verify **all BoxWeave-owned dependent native port forwards and peer grants** under the exact Box UUID, with durable substeps and safe partial/UNKNOWN recovery; foreign resources must remain untouched. |
+| R-022 | Existing `operation_get` must provide bounded, sanitized per-phase native error/observed dependent state and next safe diagnosis; `host_status` identifies exact running product/build. No additional MCP host-log tool. |
+| R-023 | LAN service publishing requires an explicit reachable host LAN bind and independent probe from another LAN machine; guest-native service persistence and guest listener reachability are separate conditions. |
+| R-024 | Inner localhost-only MCP is tested by an authorized guest-local client inside the nested host; physical LAN access to an inner service requires independent, explicit per-layer native forwards, never automatic cross-layer management. |
+| R-025 | CI automatic formal publication of a real new-version bug fix is gated on original repro, exact candidate binary/source hashes, **independent real nested/native regression and negative acceptance before release**. Candidate may be installed in an isolated Box before formal publication; old host updates are always explicit. |
 
 See [permanent boundary](../decisions/PRODUCT_BOUNDARY.md), [tool catalog](../design/MCP_TOOLS.md), [verification](../verification/ACCEPTANCE.md), [security](../design/SECURITY.md).

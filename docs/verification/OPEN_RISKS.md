@@ -21,6 +21,12 @@
 | O-015 | **VALIDATE** | Operator-managed Cloudflare Tunnel/reverse proxy compatibility with loopback Streamable HTTP MCP and external native forwarded guest services. BoxWeave does not manage proxy. |
 | O-016 | **DESIGN** | Durable owned port/peer identity after daemon restart, native IP change, explicit public bind and readback; never reattach a stale claim to a recreated Box. |
 | O-017 | **RESOLVED — OWNER CHOSE A** | Existing Incus adoption means reuse, compatibility management, and explicitly authorized daemon upgrades **only**. Existing/foreign Incus instances are never automatically imported, reassigned or controlled by BoxWeave. No further product decision is needed. |
+| O-018 | **VALIDATE** | Actual Incus proxy device vs independent network-forward behavior when deleting the associated instance; correct dependent cleanup ordering, native residuals, locks and SQLite tombstone under crash/partial failures. |
+| O-019 | **VALIDATE** | Native host LAN binding, firewall/routing, guest listener and independent same-LAN probe across both physical L0 and explicitly chained nested L0/L1 forwarding. No arbitrary host firewall configuration. |
+| O-020 | **DESIGN / VERIFY** | Exact safe `operation_get` diagnostic envelope for partial deletion: phase, native error category, observed Box/forward states, missing evidence, build SHA and authorized local escalation without an MCP host-log tool. |
+| O-021 | **VERIFY** | Inner loopback MCP via guest-local test client, secure bootstrap/secret redaction and independent L1/L2 test environments; verify parent cannot directly address inner `127.0.0.1` across the bridge. |
+| O-022 | **RELEASE GATE** | Trustworthy candidate-build provenance, binary SHA-bound independent native/nested regression and verified CI release gating before immutable auto-publication. A green unit suite or fabricated acceptance report does not satisfy the gate. |
+| O-023 | **VALIDATE** | Native guest service persistence using guest OS facilities and app listen address; do not add a BoxWeave guest process supervisor to satisfy the Hello World scenario. |
 
 ## Not on the roadmap
 
