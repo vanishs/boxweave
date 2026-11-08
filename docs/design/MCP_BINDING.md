@@ -17,8 +17,14 @@
 - Do not require a production/public DNS name or auto-generate certificates for the local MCP server.
 - Public Cloudflare Tunnel usage and other optional proxy operations are separate operator-owned setup, not BoxWeave-owned routes/forwards and not an MCP-exposed host administration action.
 
+## SDK-native protocol selection
+
+Use `mcp.NewStreamableHTTPHandler` and typed `mcp.AddTool` rather than a custom JSON-RPC dispatcher, Schema engine or persistent MCP session layer. For protocol 2026-07-28, the SDK HTTP transport requires `StreamableHTTPOptions.Stateless=true`; treat that as the preferred design candidate while verifying actual ChatGPT and legacy-client negotiation. Long-running BoxWeave operations survive independently in the durable journal and are queried through `operation_get` after reconnect; do not rely on MCP transport session IDs or `Last-Event-ID` to implement business durability.
+
+Authentication, token revocation, Origin/Host verification, body-size/rate limits and explicitly trusted-proxy configuration must be installed as **real HTTP middleware outside the SDK handler**; cross-origin checks cannot be assumed enabled by default. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+
 ## Verification
 
-Verify default listener is only `127.0.0.1`; there is no unsolicited local-network/public management access. Validate authenticated local MCP `initialize`, `tools/list` and `tools/call`. Test via operator-configured HTTPS proxy/tunnel separately, including Streamable HTTP behavior, invalid credentials, Origin handling, disconnects and read-only state polling. If a proxy is not configured, remote MCP access is intentionally unavailable.
+Verify default listener is only `127.0.0.1`; there is no unsolicited local-network/public management access. Validate authenticated negotiated MCP `server/discover` where supported (2026-07-28) and legacy `initialize`, then `tools/list` and `tools/call`. Record the negotiated protocol and verify both allowed and denied requests. Test via operator-configured HTTPS proxy/tunnel separately, including Streamable HTTP behavior, invalid credentials, Origin handling, disconnects and read-only state polling. If a proxy is not configured, remote MCP access is intentionally unavailable.
 
 Cloudflare local tunnel origin example: [official Cloudflare Tunnel docs](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/create-local-tunnel/).

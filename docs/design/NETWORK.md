@@ -2,6 +2,12 @@
 
 **Permanent scope:** BoxWeave delegates networking to typed Incus native APIs and controls only its owned Box resources. It **does not ship, install, upgrade or configure Caddy**, HTTP site routers, TLS certificates or a custom forwarding daemon.
 
+## Native networking fit
+
+Incus `proxy` devices provide host TCP/UDP listeners owned by the target instance. Native `network-forward` objects belong to an Incus network and may survive instance deletion. For v1 P0's narrow host-port publishing, **one proxy-device backend** avoids an unnecessary second ownership/reconciliation system. See [Incus proxy docs](https://linuxcontainers.org/incus/docs/main/reference/devices_proxy/), [network forwards](https://linuxcontainers.org/incus/docs/main/howto/network_forwards/) and [SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
+
+Incus's official bridge ACL documentation also states that network-level bridge ACLs do not enforce intra-bridge isolation; NIC-level attachment is a distinct implementation with limitations. Validate the exact NIC policy and same-bridge IPv4/IPv6 packet denial before first start.
+
 ## Private Box isolation and simple test peer access
 
 - Direct private Box-to-Box traffic is **denied by default**. Enforce both IPv4 and enabled IPv6, including same-bridge paths, after real native compatibility tests. A restricted Incus Project is not evidence of packet isolation.
@@ -22,7 +28,7 @@ See [incident evidence and implementation cautions](../research/CONTAINARIUM_MAI
 
 ## Native Incus TCP/UDP forwarding — required
 
-Keep `port_forward_list/create/delete` to map a host listening `protocol/address/port` to an exact verified owned `box_uuid + guest_port`. Implement through native Incus **proxy devices or network forwards**, whichever is appropriate and verified on the supported host network; do **not** build a forwarding service.
+Keep `port_forward_list/create/delete` to map a host listening `protocol/address/port` to an exact verified owned `box_uuid + guest_port`. Implement the P0 host-port capability through **instance-owned Incus proxy devices** (`type=proxy`, `bind=host`, typed `listen`/`connect`) and guarded instance update/readback; do **not** build a forwarding service. Network-forward objects are network-scoped IP-forwarding resources, not an interchangeable host-port backend. Support them only if a separately established need and native topology justify another explicitly designed lifecycle.
 
 - A listener on host `127.0.0.1` supports operator-local consumers/proxies. Public/wildcard binds require explicit caller choice, administrative authority and a port-conflict/exposure check; never bind every interface silently.
 - Reject arbitrary target IPs, host service targets, host mount or proxy configuration, listener collisions and unsupported native network type. Forward identity is durable and verified on create/delete and after native restarts; no foreign forwards edited. If a Box was already deleted but a **verified BoxWeave-owned network forward remains**, the existing `port_forward_list/delete` must still allow a narrowly scoped orphan cleanup using its original forward native identity and durable Box tombstone; never adopt a same-name or foreign forward.
