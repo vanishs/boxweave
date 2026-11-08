@@ -1,25 +1,18 @@
-# v1 implementation plan — sustainable Agent development first
+# Implementation plan — permanent narrow product
 
-**Status:** design plan, not runnable code. The owner prioritized a self-sustaining Agent edit/build/test/diagnose loop before optional platform features. Every slice must preserve ownership restrictions, native SDK use, Tracking IDs and recursive runtime compatibility.
+**Status:** no v1 implementation exists yet. The numbering below is an engineering dependency order, **not P0-to-P1 deferral of excluded products**. Deleted features are outside scope.
 
-| Order | Slice | Minimum actual proof |
+| Order | Implementation slice | Required real proof |
 |---|---|---|
-| 0 | Pin official Go MCP/Incus SDKs, dependency version manifest and required native API Extensions; freeze typed tool/Tracking/context schemas and privileged boundary | Manifest and hashes; compiled Go SDK smoke tests; observed Incus/Caddy/OS versions; reviewed security failure modes |
-| 1 | Minimal Go service, local CLI installer/upgrade with automatic **approved dependency** reconciliation but no full-host auto-reboot, admin/token bootstrap, loopback HTTP MCP and restricted native access | Clean Ubuntu LTS host; owned dependency install/upgrade; shared Incus refusal/explicit approval; `reboot_required` without reboot; token revocation; real authenticated/denied MCP call |
-| 2 | SQLite ownership, mandatory **caller-provided reusable idempotency keys on every mutation** and universal Tracking ID / Go context; durable async journal, output store, cancellation and diagnostic evidence | Missing key denied before dispatch; duplicate key/intent returns original IDs; conflicting reuse denied; revoked queued Token blocked, dispatched operation reconciled; crash/UNKNOWN retains native original |
-| 3 | Box lifecycle/typed allowlisted updates, default start/readiness; async guest-root `box_exec(argv,cwd,env,timeout,output limits)` and result retrieval; no disk shrink | Native Box identity/readiness, zero/nonzero guest Exec, disconnect/recovery and evidence-backed cancel without false termination claims |
-| 4 | **Complete P0 development loop:** native guest file list/read and `box_file_apply(create|replace|patch|delete)`, safe hash metadata, scopes and diagnostics | Create/edit/failing test/debug/fix/passing test/single-file delete; stale hash, race and unsafe path refused; guest-root Exec may write guest despite file-tool scope |
-| 5 | **Fail-closed** private network isolation, directional grants, internet opt-out, revision-safe native writes | Real IPv4 denial and enabled IPv6 denial or safe owned IPv6 disable; unsupported bridges fail Box creation/start; IP reuse and foreign NIC/host state unchanged |
-| 6 | Box-owned Caddy **HTTP-only P0** routes and native TCP/UDP forwards with durable reconciliation; website TLS deferred | Real HTTP route, no automatic 443/ACME/TLS/redirect, native port conflicts, Caddy restart, foreign routes unchanged and original Tracking ID |
-| 7 | Nested install/upgrade compatibility and identical per-layer MCP/function coverage (no cross-layer controller) | L0/L1/L2 full P0 loop/matrix, L3 key paths if supported, own dependency versions, no parent/sibling modification |
-| 8 | Adversarial Finder/Fixer/independent Verifier reacceptance, exact installed package and Go source-bound CI auto-publication | Same original bug replay against exact built bytes; complete per-tool pass/fail coverage and safe release provenance; CI source release never upgrades hosts |
+| 0 | Pin reviewed Go MCP/Incus SDKs and Incus daemon API extensions; freeze 20 MCP schemas and limited admin/viewer credentials | Go compile + real SDK calls; native security and restricted Project capability evidence |
+| 1 | Host-local Incus-aware installer/status/upgrade/bootstrap; version/capability ledger; no Caddy; reuse compatible existing daemon | Fresh Ubuntu install and existing Incus reuse; shared upgrade approval; no foreign modification or automatic reboot |
+| 2 | Loopback authenticated MCP, SQLite owned-Box records, universal Tracking/context, caller idempotency and durable async worker/UNKNOWN | Auth positive/negative, dedup and crash/restart original receipt, viewer cannot mutate/Exec |
+| 3 | Create/list/get/update/start/stop/delete owned Box and native async guest-root Exec + output/readiness/cancel | Real guest test/build with nonzero/zero exit, disconnect/recover, native post-state and foreign denial |
+| 4 | Native guest file list/read/create/conditional replace/delete with bounded safe hashes, and original Operation diagnostic summary | Real create->read->edit->fail->fix->retest, unsafe path/race refusal, no patch engine or diagnostic service |
+| 5 | Fail-closed native private network isolation + directional `box_peer_set` and TCP/UDP native port forwards | Real A->B deny/allow/revoke, IPv4/IPv6, loopback/public mapping, TCP+UDP, collision/reboot, foreign state intact |
+| 6 | Self-contained nested install/upgrade and same functional contract in L1/L2; no parent orchestration | Repeat full real Agent loop; inner Incus does not receive parent sockets/credentials |
+| 7 | Black-box Finder/Fixer/independent Verifier, CI assets and immutable version publishing | 20 MCP tools plus local CLI leaves: positive/negative native evidence; no source-only PASS for installed function |
 
-## Gate rules
+Officially support Ubuntu LTS first. Other guest distributions can be certified on evidence, without making the first product incompatible with future proven Linux images. No phase in this plan adds Caddy, general ACL editing, RBAC, snapshots, OAuth, file patch engine, bulk import, host automation, process supervisor or idle wake.
 
-- **A slice is not complete until its real acceptance criteria pass.** Design review, mock/CI tests and source Release do not prove installed native behavior.
-- P0 provides a genuinely usable development workflow before building optional process supervision, sleep/wake, search, OAuth or snapshot features. Do not conflate a running Box with a ready guest.
-- Every mutating tool, including Exec and guest file operations, uses durable async admission. Reads still carry correlation context. No tool supports arbitrary host shell/files or unmanaged Caddy upstreams.
-- Version-aware local dependency reconciliation is part of install/upgrade; upgrading a shared pre-existing Incus daemon is a separately scoped privileged action, not an automatic side effect of a generic install.
-- The `v1` branch starts at design-only `1.0.0`. No CI workflow or real release exists yet. After an actual tested build and new/versioned candidate, the standing GitHub CI publish policy applies, independent of host installation.
-
-Relevant contracts: [development loop](../product/DEVELOPMENT_LOOP.md), [tool catalog](../design/MCP_TOOLS.md), [Tracking/context](../design/TRACKING_CONTEXT.md), [dependency lifecycle](DEPENDENCY_LIFECYCLE.md), [security](../design/SECURITY.md), [acceptance](../verification/ACCEPTANCE.md).
+See [boundary](../decisions/PRODUCT_BOUNDARY.md), [Agent loop](../product/DEVELOPMENT_LOOP.md), [network](../design/NETWORK.md), [acceptance](../verification/ACCEPTANCE.md).

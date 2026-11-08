@@ -12,7 +12,7 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 
 ## Engineering standards
 
-- Implement runtime code in Go with the official MCP Go SDK and official Incus Go client; use typed Go structs/enums for tool and native API payloads. Do not pass raw Incus/Caddy config from MCP clients or model outcomes as arbitrary strings.
+- Implement runtime code in Go with the official MCP Go SDK and official Incus Go client; use typed Go structs/enums for tool and native API payloads. Do not pass raw Incus/native Incus config from MCP clients or model outcomes as arbitrary strings.
 - Keep MCP transport/auth, domain policy, durable operation journal and native adapters independent. Test the domain service without an MCP transport where possible.
 - Check real native identity and local ownership before each sensitive read or mutation. Guest Exec is not host Exec.
 - Validate the original result, negative/refusal behavior, and postcondition on the actual Incus/Caddy system. Do not equate API success with applied state.
@@ -27,9 +27,9 @@ This document elaborates [AGENTS.md](../../AGENTS.md). It does **not** authorize
 1. Reproduce a bug before modifying code; save original request, stdout/stderr/exit, operation receipt and independent native state.
 2. Write one bounded change, its acceptance criterion and positive/negative regression tests. Avoid unrelated refactors or sweeping generated changes.
 3. Run targeted checks first (Go: `go test`, `go vet`, lint/security tools when present). Do not mark absent checks as passed.
-4. For MCP behavior, test authenticated Streamable HTTP initialization, discovery and call; invalid arguments, operation-class/exact-Box Token scopes (including `box.file.delete` and `operation.cancel`), consistent Tracking IDs, Go context/deadline propagation, and ownership failures; real side-effect/absence-of-effect oracles.
+4. For MCP behavior, test authenticated Streamable HTTP initialization, discovery and call; invalid arguments, admin/viewer role enforcement and owned Box scope, consistent Tracking IDs, Go context/deadline propagation, and ownership failures; real side-effect/absence-of-effect oracles.
 5. For startup/upgrade/nesting/privileged behavior, use an explicitly approved disposable environment. Prefer a clean test Box to prove clean installation. An existing Box with an old release can be seeded in a clean lab to reproduce upgrades.
-6. Test the **complete Agent file-apply/edit/build/test/short-wait/cancel/diagnose/retest loop**, including guest-root Exec modifying a guest file even without file-tool write permission; inspect exact candidate artifact, dependency versions, Tracking ID, service version, Box UUID and actual layer. L0/L1/L2 parity is required for nesting-sensitive slices where technically supported.
+6. Test the **complete Agent file-apply/edit/build/test/short-wait/cancel/diagnose/retest loop**, including guest-root Exec editing within its Box despite the absence of a patch engine; inspect exact candidate artifact, dependency versions, Tracking ID, service version, Box UUID and actual layer. L0/L1/L2 parity is required for nesting-sensitive slices where technically supported.
 7. Preserve FAIL/UNKNOWN evidence and its original resource; clean only task-owned successful artifacts and verify native removal.
 8. Record exact PASS/FAIL/PARTIAL/BLOCKED/SKIPPED/UNKNOWN with evidence tier and remaining tasks.
 
@@ -47,7 +47,7 @@ The full test harness belongs in repository/CI or disposable test Boxes, **not**
 
 ## Privileged-boundary adversarial cases
 
-Test missing/reused/conflicting caller idempotency keys, revoked Token queued/active operation races, unsupported IPv6 fail-closed and absent automatic Caddy HTTPS/443, foreign Incus instances/project, stale/reused Box names/IPs, raw Incus/Caddy API input, all `box_file_apply` modes with guest file traversal/symlink/hardlink/device/stale hash, operation cancel without permission/unsupported cancellation, short wait after disconnect, host paths/mounts, hostile logs, operation output cross-token disclosure, port/domain collisions, cross-Box ACLs, nested access to parent/sibling, expired credentials, HTTP MCP origin policy, lost worker replies and restart with original UNKNOWN identity. Denial must leave native foreign state unchanged.
+Test missing/reused/conflicting caller idempotency keys, revoked Token queued/active operation races, unsupported IPv6 fail-closed and **absent Caddy process/website management**, foreign Incus instances/project, stale/reused Box names/IPs, raw Incus/Caddy API input, all `box_file_apply(create|replace|delete)` modes with guest file traversal/symlink/hardlink/device/stale hash, operation cancel without permission/unsupported cancellation, short wait after disconnect, host paths/mounts, hostile logs, operation output cross-token disclosure, native port collisions, simple peer allow/revoke, nested access to parent/sibling, expired credentials, HTTP MCP origin policy, lost worker replies and restart with original UNKNOWN identity. Denial must leave native foreign state unchanged.
 
 The owner-approved private-network contract allows public-site access between Boxes. Do not silently expand P0 into blocking public-route hairpin traffic.
 

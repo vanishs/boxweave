@@ -28,15 +28,12 @@
 - When a kernel/host reboot is necessary, preserve exact manifest, observed versions, operation/Tracking ID and safe installation journal; respond with `reboot_required=true`, affected component and next instructions. The installation remains `PARTIAL` or `BLOCKED` until the operator independently reboots and actual post-boot checks pass.
 - Shared pre-existing Incus or other foreign service upgrades/restarts still require explicit target-specific local permission. Never reboot or modify an outer BoxWeave layer from its inner installer.
 
-## 5B. HTTP-only P0 Box application publishing
+## Revised website/service publishing — supersedes prior 5B
 
-- Dedicated BoxWeave Caddy only creates **HTTP application routes** for a verified owned Box UUID + guest port in P0. It does **not** issue/renew website TLS certificates, start ACME, bind managed HTTPS on port 443, or enable automatic HTTP-to-HTTPS redirects.
-- Generate explicit HTTP-only Caddy site configuration so its usual automatic HTTPS behavior cannot activate accidentally. Do not disable or modify an independent foreign Caddy or unrelated site.
-- **Direct public HTTP is unencrypted**, including application credentials and content. Do not present it as a secure public website transport. Operators may separately set up their own trusted HTTPS reverse proxy/CDN; BoxWeave does not manage its certificate or proxy identity. Box website HTTPS is deferred to P1 or later.
-- The **MCP management** listener remains authenticated `127.0.0.1` HTTP, with optional operator-configured external HTTPS Tunnel/proxy. That independent MCP decision is unchanged.
+BoxWeave no longer has any managed website publishing or Caddy responsibility. Port exposure is handled **only** by native Incus TCP/UDP forwarding to owned Box UUID + guest port. Operator-owned reverse proxy/Cloudflare Tunnel/DNS/HTTPS may target such an explicitly published port. Direct exposed HTTP is unencrypted. MCP stays authenticated loopback HTTP with separate optional operator HTTPS transport. Do not implement or defer Caddy website publishing as a BoxWeave feature.
 
 ## Evidence gates
 
-Before marking P0 accepted, independently verify IPv4/IPv6 packet-level isolation or safe refusal, all tool key validation and duplicate/changed-intent concurrency, queued-vs-running Token revocation, local upgrade with reboot-required but **no** unattended reboot, and Caddy HTTP-only behavior with no 443/ACME/certificate/redirect.
+Before marking P0 accepted, independently verify IPv4/IPv6 packet-level isolation or safe refusal, all tool key validation and duplicate/changed-intent concurrency, queued-vs-running Token revocation, local upgrade with reboot-required but **no** unattended reboot, and native TCP/UDP forwarding + simple peer grants with **no BoxWeave Caddy dependency**.
 
 Related: [MCP tools](../design/MCP_TOOLS.md), [operations](../design/OPERATIONS.md), [network](../design/NETWORK.md), [security](../design/SECURITY.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), [acceptance](../verification/ACCEPTANCE.md).

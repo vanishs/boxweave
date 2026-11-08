@@ -10,10 +10,10 @@
 | `request_id` | BoxWeave HTTP/MCP ingress | One inbound transport attempt. Reconnects/retries receive new request IDs even if the logical task is the same. |
 | `operation_id` | Durable BoxWeave journal | One accepted mutating business operation, including Exec and guest file writes. Returned with tracking ID; stable across duplicate submissions. |
 | `native_operation_id` | Incus, where available | An upstream execution handle. May be absent or expire; never replace the BoxWeave operation ID. |
-| `trace_id` / `span_id` | Internal bounded diagnostic instrumentation | Correlate checked component transitions; a separate trace/span may be associated with one tracking ID. Do not expose a generic tracing backend or secret-bearing logs to MCP. |
+| `trace_id` / `span_id` | Internal bounded diagnostic instrumentation | Correlate checked component transitions; trace/span data is **optional internal logging only**, not a separate product feature, store or required public identifier. Do not expose a generic tracing backend or secret-bearing logs to MCP. |
 | `idempotency_key` | **Required caller input for every mutating tool** | Client generates once per logical mutation and reuses on retry. Persist unique (layer/actor/key), then compare canonical action+intent (including exact native target identity when one exists). Conflicting reuse is denied. A new `box_create` has no UUID before admission. Not a tracking/operation ID or credential. |
 
-The tracking ID can appear in structured MCP tool results, safe diagnostic errors, local CLI output and internal logs. Protocol-level MCP errors that cannot use a tool result include a safe correlation identifier where the protocol permits. An unauthenticated request may receive an opaque request ID but never a private operation trace. `operation_get`, `operation_list`, `operation_output_get` and `diagnostic_get` remain authorization- and ownership-scoped.
+The tracking ID can appear in structured MCP tool results, safe diagnostic errors, local CLI output and internal logs. Protocol-level MCP errors that cannot use a tool result include a safe correlation identifier where the protocol permits. An unauthenticated request may receive an opaque request ID but never a private operation trace. `operation_get`, `operation_list` and `operation_output_get` remain authorization- and ownership-scoped.
 
 Do not reuse BoxWeave's tracking IDs as native Incus UUIDs, file-path selectors, access tokens, or permission claims. Never treat a caller-provided `tracking_id` or HTTP tracing header as proof of authority or a unique task identity.
 
@@ -25,7 +25,7 @@ MCP transport
   -> validated request context (tracking_id, request_id, actor identity, scope)
   -> BoxWeave domain service and durable admission journal
   -> worker (reconstructed safe durable metadata, original tracking_id)
-  -> native Incus SDK / Caddy adapter / SQLite transaction
+  -> native Incus SDK / SQLite transaction
   -> independent post-state verification
   -> operation receipt, diagnostics and bounded outputs
 ```
@@ -42,12 +42,12 @@ MCP transport
 
 ## Data and output boundaries
 
-- Every emitted event includes stable `tracking_id` when the work is authenticated and admitted, component, phase, safe error category, timestamp and evidence/coverage state. Use `trace_id`/span when available. Never log raw tokens, full environment variables, command arguments containing secrets, arbitrary guest stdout, guest files or Caddy/Incus API bodies.
+- Every emitted event includes stable `tracking_id` when the work is authenticated and admitted, component, phase, safe error category, timestamp and evidence/coverage state. Use `trace_id`/span when available. Never log raw tokens, full environment variables, command arguments containing secrets, arbitrary guest stdout, guest files or Incus API bodies.
 - Persist **bounded**, retention-limited command output separately from immutable operation metadata. `operation_output_get` must paginate stdout/stderr by opaque cursor and report `truncated`, `expired`, `not_captured` or `unknown` honestly. A large output cannot exhaust SQLite, memory or an MCP response.
-- `diagnostic_get` exposes approved read-only classification/coverage linked to a tracking ID, not arbitrary log files or host process inspection. Authorized Box-level diagnostics are scoped to owned identities; sensitive details remain local private evidence.
+- `operation_get` includes bounded redacted diagnostic classification for admitted operations; early failed/denied calls return a safe Tracking ID for host-local logs. No independent diagnostic lookup MCP tool or trace-store product exists. Authorized Box-level diagnostics are scoped to owned identities; sensitive details remain local private evidence.
 - Persist redaction, retention, and limits as documented versioned settings; protect operation IDs, cursors, and trace selectors against cross-token leaks. Tracking IDs are not secret but the details behind them may be.
 - Define consistent structured `COMPLETED` semantics for guest Exec: an observed nonzero exit is a completed failed command, not a transport UNKNOWN. `SUCCEEDED` for BoxWeave Exec means its transport and exit result were observed and durably recorded; report actual `exit_code` and an explicit `command_success` boolean separately.
-- For a mutating operation, successful Incus/Caddy transport receipt is insufficient: independently verify requested postcondition, with UNKNOWN if native outcome cannot be established.
+- For a mutating operation, successful Incus transport receipt is insufficient: independently verify requested postcondition, with UNKNOWN if native outcome cannot be established.
 
 ## Test requirements
 
@@ -56,7 +56,7 @@ MCP transport
 3. Kill a client while Exec/build runs. Original operation remains queryable; if lost worker/native continuity cannot be proven, return UNKNOWN rather than invent a successful exit.
 4. Kill the worker between intent and native receipt, then restart. Preserve UNKNOWN and prevent duplicate create/Exec/file write; independently observe original target.
 5. Test parent/child nested controllers: IDs and credentials do not cross automatically.
-6. Test token rotation, scoped trace lookup rejection, output retention expiration, oversized output, secret canaries and truncated diagnostic evidence.
+6. Test token rotation, scoped operation lookup rejection, output retention expiration, oversized output, secret canaries and truncated diagnostic evidence.
 7. Test native command exit 0 and nonzero (both have observed `COMPLETED` state), guest process timeout, missing exit status and transport failure as separate cases.
 
 Related: [operation journal](OPERATIONS.md), [MCP tools](MCP_TOOLS.md), [development loop](../product/DEVELOPMENT_LOOP.md), [security](SECURITY.md).

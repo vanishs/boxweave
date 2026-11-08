@@ -1,66 +1,32 @@
-# Security and resource ownership boundary
+# Security and ownership — small fixed policy
 
-**Primary invariant (P0):** No request arriving through this BoxWeave layer's MCP can observe private state of, mutate, proxy, delete, or otherwise administer resources outside this layer's verified BoxWeave ownership domain. Even the BoxWeave super-administrator cannot override this *product* boundary through MCP.
+**Invariant:** A BoxWeave MCP caller, including an `admin` token, can inspect or mutate **only** this layer's BoxWeave-owned Incus resources and their approved consequences. It cannot acquire host shell, foreign Incus admin, host file, parent BoxWeave or arbitrary network/Caddy authority.
 
-## Ownership model
+## Owned native boundary
 
-- Own each managed Box by the observed Incus native instance UUID (not name or IP), this BoxWeave installation/layer identity, and durable local records. Native `volatile.uuid` is the preferred source, subject to runtime verification and Incus version-specific behavior.
-- Incus Project may be used internally for isolation, but is not a user-facing Tenant. Project membership alone is not sufficient proof of ownership.
-- A deleted/recreated instance with the same name/IP is a **new identity**; old ACLs, routes, forwards and operations must not silently attach.
-- Each managed Caddy route, ACL rule, forward and operation has an owner record and a native/config identity. Write operations compare current ownership and revision before mutation.
-- If ownership records are lost, conflicting or unverifiable, deny actions and offer safe local recovery. Never adopt arbitrary pre-existing Incus or Caddy resources automatically.
+- Confirm exact Incus instance UUID/incarnation and local SQLite ownership before sensitive calls. Names/IPs are not identities; reuse cannot attach old peer grants or forwards. A restricted Incus Project assists isolation but is not by itself ownership or private packet isolation proof.
+- Only BoxWeave-owned Boxes, native forwards, single directional peer grants and relevant operation receipts may be exposed. Existing unrelated Incus instances/projects/networks remain unmanaged. SQLite loss/corruption fails closed and requires host-local independently verified recovery.
+- Guest-root `box_exec` can read/write/delete guest files even if those file actions are not individually exposed. Guest root is not host root: deny privileged container configuration, host mounts, Unix socket bind, devices, raw Incus API pass-through or arbitrary host shell/file operations.
+- Private traffic between managed Boxes is denied by default with actual IPv4/enabled IPv6 enforcement; controlled IPv6 disable or Box creation/start refusal if enforcement is unsupported. Simple `box_peer_set` may explicitly allow/revoke one directional owned Box pair. Never edit arbitrary CIDR/IP/host firewall.
+- Native TCP/UDP forwards accept only owned Box UUID + guest port. Explicit host public bind is an administrative exposure event; default local bind where possible, reject foreign port/device claims and collisions.
+- Independent nested installations receive no inherited socket, Token or parent service authority. A Box containing an inner BoxWeave is an ordinary parent-owned Box with standard lifecycle/destructive rules.
 
-## MCP threat model and admission
+## Minimal access control
 
-- Authenticate MCP using verifiable, independently revocable scoped bearer credentials; bootstrap the single super-admin locally. The listener uses loopback HTTP by default; an operator-managed trusted proxy/Tunnel supplies external HTTPS when explicitly configured. Never send administrator passwords on every MCP call.
-- Require authorization, operation-class and exact-Box UUID Token permissions, a **mandatory client-provided reusable idempotency key on every mutation**, scoped parameters, and exact native target identity; deny unknown fields or raw native config before any side effect. Revoked tokens are denied for new and provably undispatched work. **Guest-root `box.exec` can read, write and delete any guest file allowed by native guest confinement regardless of `box.file.write` denial**. Do not claim a read-only guest when unrestricted Exec is granted. Guest-root Exec is never permission to execute on or modify the parent host.
-- Serve a bounded, typed public schema and redact secrets. Protect HTTP MCP against Origin/CORS abuse, request floods, oversized parameters and output leakage.
-- No direct MCP access to Incus's unrestricted Unix socket or Caddy's Admin API. Minimize privileges of the HTTP process; put privileged Incus/host setup behind a narrow local boundary with an allowlist of operations.
-- Do not confuse authentication with resource authority. Host files/services and foreign Instances, Incus networks, projects, devices, mounts, disks, sockets, and Caddy routes remain prohibited.
+- Local bootstrap creates super-admin; multiple independently revocable MCP credentials are `admin` or `viewer`. No per-Box Token grants, separate file/delete/cancel/tool rights or general RBAC platform. Admin can issue authorized mutations and guest-root Exec only within this controller's ownership domain.
+- Viewer **cannot mutate or Exec**, but can read owned Box metadata, files and bounded Exec output, which can contain secrets. Never market viewer as a privacy/redaction role; revoke/limit issuance as appropriate.
+- Revocation rejects new requests and provably undispatched queued operations. It does not imply that a dispatched/possibly dispatched operation was stopped, rolled back or resolved. A revoked Token cannot fetch old receipts; a valid admin can inspect redacted audit evidence.
 
-## Private network fail-closed rule
+## MCP and async safety
 
-A restricted Incus Project is not proof of native bridge/OVN or IPv6 packet isolation. Validate real private traffic denial for managed IPv4 and enabled IPv6. If native IPv6 enforcement is unsupported, disable only the BoxWeave-owned IPv6 path and independently reverify. If that cannot prevent unintended private Box-to-Box access, refuse the unsafe Box network/start; never disable foreign/host-wide IPv6 as a workaround. Public HTTP sites remain reachable under the separately agreed public-route exception.
+- Bind authenticated Streamable HTTP MCP to `127.0.0.1` by default. Operator-managed HTTPS proxy/Cloudflare Tunnel is separate; enforce Token, size/rate and Origin/trusted-proxy checks regardless.
+- Every mutation requires caller-provided reusable idempotency key; same actor/key/intent returns original Tracking/Operation IDs and conflicting reuse is denied. Go context is propagated through native adapters, but disconnected caller context does not undo accepted durable work.
+- All accepted mutations persist safe intent before effect, cap output and retain UNKNOWN on ambiguous native results. Verify post-state; no blind replay of create/delete/Exec/forward changes. `operation_get` includes small redacted diagnostic summary. Detailed logs and recovery stay in local protected CLI; **no separate diagnostics MCP service**.
+- Guest file list/read/create/replace/delete are restricted to guest regular files with size/race/path checks. No built-in patch engine or host fallback. Fail UNSUPPORTED when native safe overwrite/delete cannot be verified.
+- Automatic dependency reconciliation is host-local and explicitly invoked. Reuse/manage an existing Incus daemon without unapproved shared service disruption, and never adopt arbitrary existing instances. No Caddy dependency or automatic host reboot.
 
-## Tracking and guest-file privacy
+## Negative acceptance
 
-Assign server-owned Tracking IDs; treat caller-provided tracing headers as untrusted metadata, not authenticated identities. Go context propagates safe identifiers and deadlines to native adapters. Workers revalidate scoped policy, token revocation state and exact Box ownership **before native dispatch**. Revocation blocks queued work whose non-dispatch is proven, but never falsely reports a dispatched/possibly dispatched operation as canceled. Restrict `operation_get`, `operation_output_get`, `diagnostic_get` and `operation_cancel` per actor/token rights and relevant Box; cancellation requires separate `operation.cancel` authority and target-operation permission, not mere read access. Never publish secrets, full commands, guest content or foreign resource metadata through tracing. `box_file_apply` is the single P0 file mutation entry (`create|replace|patch|delete`), with distinct `box.file.delete` permission for deletion; it must refuse host paths, unsafe file types, traversal/symlink/hardlink escape and mismatched revisions. Do not pretend a hash preflight followed by a native write is atomic without evidence.
+Test foreign Box UUID/host file, raw Incus settings, old IP/name reuse, unsafe guest file symlink/hardlink, token viewer Exec/write, revoked queued/active operations, uncontrolled IPv4/IPv6 paths, foreign port listener, public bind authorization, nested parent/sibling privilege, duplicate idempotency and UNKNOWN. Refusals must have independent no-side-effect evidence.
 
-The local dependency installer is a **separate, privileged operator path**, never an MCP management tool. An explicitly initiated install/upgrade may automatically reconcile approved owned prerequisites, but shared Incus/foreign services require separate specific operator authorization before a disruptive upgrade. This preserves the MCP ownership invariant while maintaining versioned dependencies. See [Tracking/context](TRACKING_CONTEXT.md) and [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
-
-## Allowed / denied examples
-
-| Request | Disposition |
-|---|---|
-| Create or stop a Box whose UUID is owned by this layer | Allow when authorized and safe |
-| Exec as root (UID 0) **inside a verified owned guest**, within native guest confinement | Allow by default; never host root/host Exec |
-| Read, list, create, replace, patch or delete one verified regular file inside an identity-verified owned Box guest | P0 via `box_file_apply` for mutation, with expected revision/hash, scoped rights and safe native guest filesystem handling; never host paths |
-| Forward an owned Box's HTTP/TCP/UDP service | Allow only via Box UUID + verified port |
-| Send Caddy to proxy an arbitrary host daemon, unrelated system or user-supplied URL | Deny |
-| Modify unrelated Incus instances, storage or security config | Deny |
-| Mount parent host directories/Incus socket into a Box using raw config | Deny |
-| Remove arbitrary host files or run host shell commands | Deny |
-| Control a parent/sibling layer from a nested BoxWeave | Deny |
-| Access an owned Box's public Caddy site from another Box | Allowed by agreed network policy |
-
-**Important limitation:** A guest Exec can modify the guest's own files and processes; the isolation boundary is the enclosing guest and native security policy. This design does not claim that arbitrary commands inside a permitted guest are harmless.
-
-## Transport and guest control distinction
-
-The public MCP listener is authenticated loopback HTTP. External HTTPS exposure is operator-owned, for example Cloudflare Tunnel, and must not weaken token checks, ownership enforcement or request/Origin validation. BoxWeave's dedicated Caddy publishes **HTTP-only P0 application** domains to owned Boxes, never its own MCP endpoint. It must not automatically issue certificates, expose 443 or redirect HTTP to HTTPS. Direct public HTTP traffic is unencrypted; advise operator-owned TLS termination for sensitive applications.
-
-No guest-installed management Agent is required for Incus Linux containers. Guest-root Exec is explicitly allowed, but unprivileged container configuration, host-mount/device denial and native layer isolation remain mandatory. The target of every native Exec must be an identity-verified Box owned by this controller.
-
-## Caddy and Incus authority
-
-Prefer a dedicated BoxWeave-owned Caddy instance. Fail safely on host port conflicts; never overwrite or adopt a pre-existing Caddy process without a separately approved installation migration. Restrict Admin API to local protected access. Persist expected routes and reconcile only owned Caddy entries.
-
-For Incus, prefer restricted project-scoped identity when technically adequate. Where installation or low-level operations require elevated Incus permission, use a narrow locally callable privileged helper that validates ownership and approved fields; deny arbitrary API calls. Do not mistake a Python/Go policy wrapper around a root-equivalent socket for OS-level privilege separation.
-
-## Nested layers
-
-A nested BoxWeave is independently authenticated with new keys, DB and local Incus. It receives no parent credentials, socket, file bind or unmediated route-management rights. Provisioning a nested-capable Box does not authorize a child to change the parent's firewall, Caddy or Incus. Each installation manages only its **directly owned Boxes**. The parent treats the Box containing a child installation like any other owned Box and does not discover or administer the child's internal Boxes. Ordinary parent-side deletion can therefore erase the child's entire environment; no cross-layer deletion protector or child-discovery capability is part of v1.
-
-## Required negative acceptance
-
-Test foreign Box, fabricated/stale UUID, host path, host mount, raw Incus config, arbitrary upstream, foreign Caddy route, parent/sibling control, concurrent ownership updates, guest-file stale hash/symlink/hardlink, expired token, unauthorized operation cancellation, and unknown state; assert unauthorized native state is unchanged. Preserve actual evidence, not just HTTP/MCP error text.
+See [scope](../product/SCOPE.md), [MCP tool contracts](MCP_TOOL_CONTRACTS.md), [network](NETWORK.md), [operations](OPERATIONS.md).

@@ -1,45 +1,31 @@
-# Open decisions, compatibility risks and deliberate exclusions
+# v1 open technical risks and explicit exclusions
 
-**Status:** active design questions, not permission to omit agreed P0 invariants.
+**Status:** design-only; these are **validation tasks**, not permission to expand the product. Current 20-tool [scope](../product/SCOPE.md) and [permanent boundary](../decisions/PRODUCT_BOUNDARY.md) supersede the previous broad Caddy/ACL/RBAC/P1 risk register.
 
-| ID | Status | Item / resolution gate |
+| ID | State | Remaining investigation or scoped limitation |
 |---|---|---|
-| O-001 | **RESOLVED** | The owner explicitly selected Go + official MCP Go SDK + official Incus Go client/module. Actual dependency versions and required Incus API extensions remain to be verified in slice 0. |
-| O-002 | **VALIDATE** | Incus native `volatile.uuid` semantics and availability for create/delete/re-create/cloning across supported versions; refuse identity-sensitive writes if unavailable. |
-| O-003 | **VALIDATE** | Native bridge/NIC ACL semantics for actual same-bridge Box-to-Box isolation, IPv4/IPv6, inherited NIC profile edits, nested routes and IP spoofing. |
-| O-004 | **VALIDATE** | Restricting Incus privileges without giving the network-facing MCP service root-equivalent socket power; explicit local helper and project restrictions. |
-| O-005 | **VALIDATE** | Dedicated Caddy instance and **HTTP-only P0 site publishing** are accepted. Verify no Caddy automatic HTTPS/ACME, implicit port 443, forced redirects or foreign Caddy modification; validate HTTP bind conflicts, Admin API confinement and native post-state. Website HTTPS is deferred. |
-| O-006 | **VALIDATE** | Incus network forwards vs proxy devices for TCP/UDP, host address collision rules, and nested networking. |
-| O-007 | **VALIDATE** | Nested Incus kernel/user namespace/idmap/storage/network support and what functions can honestly be guaranteed at each layer. |
-| O-008 | **OUT OF SCOPE** | No special nested ingress delegation protocol is required. Operators configure ordinary owned-Box routes/forwards separately at each needed layer. |
-| O-009 | **DESIGN** | Operation persistence format, separate Tracking/Request/BoxWeave/Incus ID contracts, safe Go context projection, idempotency scope, async Exec result retention, journal recovery limits, original Incus operation disappearance and UNKNOWN escalation procedures. The cross-layer correlation boundary is intentionally independent. |
-| O-010 | **DESIGN** | Administrator is locally bootstrapped and multiple revocable scoped MCP tokens are approved. Finalize exact storage/issuance/rotation/expiration, local HTTP Origin policy, trusted proxy handling and recovery implementation. No MCP public TLS auto-provisioning is needed. |
-| O-011 | **DEFERRED** | Full route/forward-based public hairpin isolation bypass protection; the owner chose private-direct isolation only and permits public-site access from other Boxes. |
-| O-012 | **DEFERRED** | Whole-Box backup, remote backup and restore; snapshot handling may be considered independently as P1. |
-| O-013 | **UNCONSTRAINED** | Storage driver choice; support is capability-dependent. Do not silently require ZFS/Btrfs. |
-| O-014 | **RESOLVED** | `box_exec` defaults to root (UID 0) **inside a verified owned guest**, optionally supports caller-selected guest UID/GID, never executes commands as host/parent root. No guest-installed client is needed for Linux containers. |
-| O-015 | **RESOLVED** | No automated parent delegation workflow. Ordinary route/forward actions belong to the respective layer and its authorized operator; nesting adds no cross-layer API. |
-| O-016 | **RESOLVED (refined)** | Reuse compatible existing Incus using a restricted BoxWeave Project and dedicated Caddy. Local install/upgrade now automatically reconciles **owned/approved** dependency versions. Shared Incus/foreign-service upgrade or restart requires a separate specific local impact authorization; no silent foreign takeover. |
-| O-017 | **PARTIALLY RESOLVED** | Local super-admin bootstrap plus multiple scoped/revocable MCP tokens are accepted. The concrete credential format, rotation/recovery workflow and secure nested headless initial setup remain implementation-design tasks, not undecided product defaults. |
-| O-018 | **PARTIALLY RESOLVED** | MCP remains authenticated loopback HTTP with optional operator-run HTTPS/Tunnel. Box **application websites are HTTP-only in P0**, with no managed certs/TLS, port 443 or redirect. Website HTTPS/certificates are deferred; check HTTP DNS/bind conflicts and optional proxy/client compatibility. |
-| O-019 | **VALIDATE** | SDK/module compatibility, required Incus API Extensions and tested minimum supported Incus capabilities; official Go client dependency must not be confused with a hard maximum daemon version. |
-| O-020 | **DESIGN** | Resource ownership registry and local state recovery when SQLite is missing/corrupted; preserve fail-closed behavior and decide how a human can recover without automatic adoption. |
-| O-021 | **RESOLVED** | Ordinary `box_delete` semantics apply to any parent-owned Box, even when it contains an inner BoxWeave. No subtree detection, child handshake, special recursive protection or extra confirmation; operator assumes normal Box data loss. |
-| O-022 | **VALIDATE** | Native Incus guest-file list/read/write safety, symlink/hardlink/device handling, concurrent hash-checked replace and exact observed post-state without a Guest Agent or host filesystem fallback. |
-| O-023 | **DESIGN** | Trace metadata schema, per-tool Tracking ID envelope compatibility with official MCP SDK, safe context propagation across worker crash, output pagination/retention and scoped diagnostic lookup. |
-| O-024 | **VALIDATE** | Pin the actual compatible Incus/Caddy runtime versions, official Go SDK build revisions, Ubuntu LTS baseline and required API extensions; detect shared-service consumers and preflight safe version upgrades. No arbitrary guessed dependency versions. |
-| O-025 | **VALIDATE** | Default create/start timing, guest Incus Exec readiness, startup false readiness, nested Linux capacity and the exact optional start=false semantics. |
-| O-026 | **DESIGN** | Exact Box UUID/token operation-class authorization model, credential revocation propagation across durable workers, and denial of cross-token output/diagnostic access. |
-| O-027 | **VALIDATE** | Long-lived guest Exec without resident Agent: typed argv/cwd/env, native cancel/termination proof, exit/output under disconnect, Box stop and worker restart. Cancellation requested is not confirmed termination. |
-| O-028 | **VALIDATE** | Incus guest file API compare-and-swap under other guest writers. A pre-read SHA then write is not inherently atomic. Test point-of-use safety, symlink/hardlink, races and actual post-state before promising safe patch/replace/delete. |
-| O-029 | **VALIDATE** | Incus Exec cancellation: waiter canceled versus guest process killed, active cancellation race, UNKNOWN native outcome, restart and partial guest effects. Queued-only cancellation must remain safe if native termination is unsupported. |
-| O-030 | **DESIGN** | Final file hash coverage/content encoding and safe payload size, bounded Exec output retention, `operation_get(wait_ms)` waiter limits and Tunnel/proxy interoperability. Pick measured SDK-tested limits, not invented guarantees. |
-| O-031 | **VALIDATE** | A restricted Incus Project is not, by itself, proof of network isolation. Native Project network features, bridge/OVN behavior, ACL enforcement, IPv6 and managed network ownership must be verified before allowing an owned Box to enter a weaker-than-promised network mode. See https://linuxcontainers.org/incus/docs/main/reference/projects/. |
-| O-032 | **RESOLVED — IMPLEMENT/VALIDATE** | Every mutating MCP tool requires a nonempty client-provided reusable `idempotency_key`; never substitute a non-reusable server key. Same logical key+intent returns original IDs, changed intent conflicts; create must scope without a preexisting native UUID. Validate across reconnect and concurrent retries. |
-| O-033 | **DESIGN** | Private guest Git repository access for an authorized coding Agent without logging credentials or adding host-wide credential management; decide whether one-shot guest credential provisioning belongs to P0 or stays an operator-controlled task. |
-| O-034 | **DESIGN** | Confirm P0 path for testing inner loopback-only MCP from an outer development Box: guest-local test client or separately operator-configured tunnel, no automatic cross-layer routing. |
-| O-035 | **RESOLVED — VALIDATE** | Default private isolation is fail-closed: prove owned IPv4 and enabled IPv6 enforcement, safely disable **only owned IPv6** if needed, otherwise refuse new Box networking. No unowned global host network modifications. Verify actual bridge/OVN packet-level behavior. |
+| O-001 | **DECIDED** | Go + official MCP Go/Incus Go SDKs; pin actual supported versions/API Extensions through build/native tests. |
+| O-002 | **VALIDATE** | Exact Incus UUID/instance incarnation behavior on create, clone, delete/recreate; ownership cannot rely on name/IP. |
+| O-003 | **VALIDATE** | Bridge/OVN NIC actual same-bridge IPv4/IPv6 deny and per-pair directional native enforcement, including spoofing and lifecycle/IP reuse. No general ACL editor. |
+| O-004 | **VALIDATE** | Restricted Incus credentials/project and setup privilege boundary; no root-equivalent native admin socket in network-facing MCP runtime. |
+| O-005 | **VALIDATE** | Native TCP and UDP host-port bind via Incus proxy-device/network-forward, collisions, supported bridge/OVN, hotplug/restart and nested layer limitations. No custom proxy/Caddy fallback. |
+| O-006 | **VALIDATE** | Native IPv6 safe owned disable or fail-closed refusal where private isolation cannot be proven; no global host/foreign modifications. |
+| O-007 | **VALIDATE** | Full inside-Box install/nested Incus user namespaces/idmaps/storage/bridge permissions through L1/L2 and parity under actual resources. |
+| O-008 | **DESIGN** | Minimal SQLite durable intent/context/Tracking journal, exact idempotency and UNKNOWN reconciliation after native result disappears. No tracing backend platform. |
+| O-009 | **DESIGN** | Local bootstrap, `admin`/`viewer` token issuance/revocation and role checks; viewer reads are potentially sensitive. |
+| O-010 | **VALIDATE** | Safe guest file create/conditional replace/delete via native Incus files, symlink/hardlink/concurrent writer attacks and honest atomicity limits. No guest patch engine. |
+| O-011 | **VALIDATE** | Native Guest Exec long-running output/exit and attempts to cancel active process, including disconnected client, worker restart and UNKNOWN state. |
+| O-012 | **VALIDATE** | Operation output retention bounds, `operation_get(wait_ms)` concurrency, request/Tracking ID propagation and safe redacted inline diagnostic summary. |
+| O-013 | **VALIDATE** | Existing Incus daemon/version detection, compatible upgrade when explicitly authorized, shared consumer protection, no foreign adoption, native postflight. |
+| O-014 | **VALIDATE** | Ubuntu LTS guest/host first; any new Linux guest image must pass actual Exec/file/network/nesting support matrix before advertised. |
+| O-015 | **VALIDATE** | Operator-managed Cloudflare Tunnel/reverse proxy compatibility with loopback Streamable HTTP MCP and external native forwarded guest services. BoxWeave does not manage proxy. |
+| O-016 | **DESIGN** | Durable owned port/peer identity after daemon restart, native IP change, explicit public bind and readback; never reattach a stale claim to a recreated Box. |
+| O-017 | **OPEN PRODUCT CLARIFICATION** | Does 'take over an existing Incus' mean reusing and upgrading an installed daemon only (current safe interpretation), or importing already-running foreign containers into BoxWeave ownership? No automatic foreign resource adoption is authorized. |
 
-No unresolved choice permits MCP operation against unowned resources or bypass of the parental layer boundary.
+## Not on the roadmap
 
-Maintain exact test evidence and the reason a risk was closed. Proposals remain unimplemented until accepted and verified.
+Caddy and website domain/TLS controls, generic ACL/CIDR/firewall editing, per-Box Token delegation/RBAC, snapshots/backup, native guest patch/search/bulk transfer, persistent process supervisor, automatic idle sleep/HTTP wake, OAuth browser flow, multi-host/VM management, general host management, cross-layer orchestration. These are not technical blockers or P1 promises. Only a new explicit owner product decision can reopen them.
+
+## Release rule
+
+An unsupported or unverified native behavior may be a real BLOCKED/UNSUPPORTED result, not a fabricated PASS. Failure in mandatory core functions (including private network deny, native forwarding and file read/write) prevents claiming full P0 acceptance. Keep independent test evidence, actual upstream versions and intact original UNKNOWN/failed resources.

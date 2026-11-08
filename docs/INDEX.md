@@ -5,6 +5,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | Question | Authoritative document |
 |---|---|
 | What is BoxWeave? | [Product](product/PRODUCT.md) |
+| Which permanent boundaries override superseded v1 plans? | [Permanent product boundary](decisions/PRODUCT_BOUNDARY.md) |
 | What is the primary P0 Agent workflow? | [Sustainable development loop](product/DEVELOPMENT_LOOP.md) |
 | What is in/out? | [Scope](product/SCOPE.md) |
 | What must work? | [Requirements](product/REQUIREMENTS.md) |
@@ -22,7 +23,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |
 | How is Incus integrated? | [Incus integration](design/INCUS_INTEGRATION.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
-| What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) |
+| What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) and [permanent scope](decisions/PRODUCT_BOUNDARY.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
 | How is behavior accepted? | [Acceptance matrix](verification/ACCEPTANCE.md) |
 | How should agents develop? | [Agent workflow](development/AGENT_WORKFLOW.md) |

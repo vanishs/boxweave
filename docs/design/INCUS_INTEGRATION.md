@@ -4,7 +4,7 @@
 
 Incus's stable foundation is its native management API. The Incus CLI and the official Go client use that API. **BoxWeave external management remains HTTP MCP only**; an internal Incus API or Unix-socket call is not a second BoxWeave public REST API.
 
-**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Prefer local Unix socket access through a properly restricted local security boundary. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, ACL and snapshot APIs, but each BoxWeave-needed feature still requires real integration verification.
+**The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Prefer local Unix socket access through a properly restricted local security boundary. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
 
 ## Runtime capabilities
 
@@ -13,7 +13,7 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 - Use Incus Exec rather than SSH. Guest UID 0 by default with optional explicit UID/GID; typed argv and bounded guest cwd/env/timeout/output, without implicit shell interpolation. Guest root stays inside the owned unprivileged container, never host shell. Exec is async and Tracking-ID-correlated, nonzero exit is a completed result; `operation_cancel` needs independently tested native termination semantics.
 - Native Incus Operation IDs are execution evidence but not substitutes for the BoxWeave journal.
 - Handle Exec websocket streams, status/exit codes, output bounds, cancellation and lost connections without fabricated outcomes.
-- Use native ETag for concurrent updates where available. Validate read-back of accepted writes.
+- Use native ETag for concurrent typed Box and owned network changes where available. Validate read-back of accepted writes.
 - Avoid arbitrary Incus configuration maps in public requests; explicitly allowlist CPU, memory, disk, nesting and network settings. Deny unrestricted devices, raw config, host mounts, privileged containers and host socket exposure.
 - No storage driver hard constraint. Determine whether a requested resize/snapshot/storage operation is supported by the actual pool and return `UNSUPPORTED` or a native semantic error instead of attempting an unsafe workaround. **P0 refuses disk shrinking before any native dispatch**; growth is observed and post-verified.
 - Scope native resources to the managed project/namespaces and preserve pre-existing host/project state.
@@ -28,7 +28,7 @@ The v1 implementation language is **Go**. The HTTP MCP server uses the official 
 
 ## Agentless containers
 
-Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH service for lifecycle, native Exec or **P0 native guest file list/read plus unified conditional `box_file_apply(create|replace|patch|delete)`**. The exact SDK file API and guest filesystem safety, symlink/race/atomicity guarantees must be validated; reject unsupported safe operations rather than falling back to host filesystem access. This is different from VM-focused `incus-agent` requirements and Containarium's optional in-guest `agent-box` MCP workspace extension. See [guest management](GUEST_MANAGEMENT.md).
+Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH service for lifecycle, native Exec or **P0 native guest file list/read plus `box_file_apply(create|replace|delete)`**. The exact SDK file API and guest filesystem safety, symlink/race/atomicity guarantees must be validated; reject unsupported safe operations rather than falling back to host filesystem access. This is different from VM-focused `incus-agent` requirements and Containarium's optional in-guest `agent-box` MCP workspace extension. See [guest management](GUEST_MANAGEMENT.md).
 
 ## Context, version and capability reporting
 
@@ -36,4 +36,4 @@ Every native adapter call receives Go `context.Context` carrying a safe Tracking
 
 ## Compatibility and tests
 
-Use official SDK typed models and API-extension negotiation; run native Incus integration tests for lifecycle, Exec, ACL, forwarding, storage capability and multi-level nested setups. A 2xx/API success is not postcondition proof. Pin exact upstream versions and independently verify native state.
+Use official SDK typed models and API-extension negotiation; run native Incus integration tests for lifecycle, Exec, minimal peer isolation, native port forwarding, storage capability and multi-level nested setups. A 2xx/API success is not postcondition proof. Pin exact upstream versions and independently verify native state.

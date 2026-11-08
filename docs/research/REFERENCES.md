@@ -52,3 +52,7 @@ Pin actual versions and API extension requirements during implementation. Upstre
 ## Agent policy reference
 
 Containarium has `CLAUDE.md` and `CONTRIBUTING.md`. The two smaller Incus MCP repositories and pyincusd showed no repository-root `AGENTS.md` / `CLAUDE.md` in the inspected main trees; their README/test practice was evaluated instead. Keep v1 rules model-neutral in `AGENTS.md` and the detailed runbook separate.
+
+## Permanent product narrowing (owner-approved)
+
+Prior Containarium Caddy reconciliation, generalized ACL, Web/UI, OAuth, snapshot and resident agent patterns are **historical research only**, not features to implement or defer. The narrow product keeps only native Incus TCP/UDP forwards, a simple owned directional peer allow/revoke and the Agentless development loop. See [permanent boundary](../decisions/PRODUCT_BOUNDARY.md).

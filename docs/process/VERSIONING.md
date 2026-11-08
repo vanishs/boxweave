@@ -23,7 +23,7 @@ Use `1.X.Y` where:
 - Feature and patch increments follow the owner's `1.X.Y` policy, with a separate decision for any future major version change.
 - **Accepted owner policy:** for a verified new-version candidate in `v1` with real deliverables and green CI, publish the exact immutable GitHub source release automatically, without requesting release-by-release approval. The immutable tag/release must not be recreated for an unchanged VERSION.
 - Explicit operator approval is still needed to promote an installer stable selector or deploy/change a real host.
-- Source artifacts and installed Go binaries must report the same version. Pin one version source of truth and include the exact dependency manifest (Go toolchain/MCP SDK/Incus SDK versions, observed runtime Incus/Caddy and required API extension baseline) in release assets and local installation ledger. Do not conflate CI auto-publication with host dependency auto-upgrades during a separately initiated local install/update.
+- Source artifacts and installed Go binaries must report the same version. Pin one version source of truth and include the exact dependency manifest (Go toolchain/MCP SDK/Incus SDK versions, observed runtime Incus and required API extension baseline) in release assets and local installation ledger. Do not conflate CI auto-publication with host dependency auto-upgrades during a separately initiated local install/update.
 
 ## Branch policy
 

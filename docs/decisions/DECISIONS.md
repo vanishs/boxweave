@@ -54,3 +54,20 @@ Recorded from the owner's current design discussion. **Accepted** means a produc
 | D-048 | Accepted (5B) | P0 Box application sites are HTTP-only. Managed Caddy must not auto-enable HTTPS, ACME certificates, redirects or port 443. Website HTTPS is deferred; operator external HTTPS termination is separate. The authenticated loopback MCP transport decision is unchanged. |
 
 Before overturning an accepted item, update product requirements, the affected design and acceptance tests and explicitly record why. Do not treat archived v0.x docs or external repositories as a competing source of authority.
+
+## Permanent product narrowing — superseding earlier accepted items
+
+The following final decisions supersede earlier broad commitments where they conflict. Historical rows remain for traceability; **only these current rules govern implementation**.
+
+| ID | Status | Current decision |
+|---|---|---|
+| D-049 | **Accepted / supersedes Caddy** | BoxWeave does not install or manage Caddy, websites, domain routes, TLS or operator reverse proxies. Native Incus TCP/UDP port forwards remain an essential permanent capability. |
+| D-050 | **Accepted / supersedes generic ACL** | Default native private isolation remains fail-closed; one directional Box UUID pair allow/revoke tool `box_peer_set` serves Box interconnection tests. No generic ACL management or IP/CIDR/port-policy DSL. |
+| D-051 | **Accepted / simplifies Token model** | Multiple revocable `admin` or `viewer` MCP tokens only. No per-Box Token scope, tool-class role matrix, tenant or RBAC framework. Viewer can read sensitive guest file/output data. |
+| D-052 | **Accepted / simplifies files** | Guest file list/read and one `box_file_apply(create|replace|delete)` only. No built-in patch engine or file search/bulk transfer; complex edits via authorized Guest Git/Exec. Conditional changes fail closed when unsafe. |
+| D-053 | **Accepted / simplifies diagnostics** | Eliminate `diagnostic_get` and separate diagnostic query store; use minimal redacted result/phase/evidence fields in `operation_get`, Tracking ID on errors, and protected host-local logs/doctor. |
+| D-054 | **Accepted / preserves Incus lifecycle** | Explicit local dependency management can reuse, install and manage compatible already-running Incus daemon versions. Shared disruptive upgrades need target-specific approval, and existing unowned containers are never adopted automatically. Caddy removed from dependencies. |
+| D-055 | **Accepted / evolving verified images** | Ubuntu LTS first, additional Linux guest distributions only after real native compatibility checks; not hard-locked to Ubuntu forever. |
+| D-056 | **Accepted / permanent exclusions** | Removed Caddy/ACL/RBAC/OAuth/snapshots/backup/idle sleep-wake/background process platform/text patch engine/search/bulk file tools are not deferred feature promises. Reintroduction requires owner approval. |
+
+Canonical narrow policy: [PRODUCT_BOUNDARY.md](PRODUCT_BOUNDARY.md).

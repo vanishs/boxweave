@@ -6,7 +6,7 @@
 
 - **MCP control plane:** a Go service using the official MCP Go SDK on loopback HTTP. Example `http://127.0.0.1:<configured-port>/mcp`. A locally authorized MCP client can connect without TLS on loopback; authentication and ownership restrictions still apply.
 - **Public control-plane access, only if operator configures it:** an operator may separately run `cloudflared`/Cloudflare Tunnel or a trusted reverse proxy mapping external HTTPS to the local MCP loopback endpoint. BoxWeave does not provision, expose, start, control or require the tunnel. Do not share parent-layer credentials or change parent networking for a child.
-- **Box application traffic:** dedicated BoxWeave-owned Caddy handles **P0 HTTP-only domain routing** to verified owned Boxes; no BoxWeave-managed website HTTPS, certificates, port 443 or redirects. Incus-native forwarding handles owned TCP/UDP. This is separate from the MCP transport. External site HTTPS proxies/CDNs, if used, are operator-owned and not automatically configured by BoxWeave.
+- **Guest service traffic:** native Incus TCP/UDP forwarding maps authorized host bind/port to owned Box UUID + guest port. Operator-managed TLS proxy/Tunnel or DNS may use that port, but BoxWeave does not install or configure Caddy, website routes, certificates or a reverse proxy.
 
 ## Trust and deployment constraints
 

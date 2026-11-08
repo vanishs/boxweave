@@ -1,36 +1,27 @@
-# v1 scope and exclusions
+# v1 permanent scope and exclusions
 
-## Fixed requirements
+**Status:** This is the intentionally small product boundary, not merely a P0/P1 rollout order. Supersedes superseded older broad design assumptions; see [boundary decision](../decisions/PRODUCT_BOUNDARY.md).
 
-- Implementation in Go using the official MCP Go SDK and official Incus Go client/module.
-- Single host per BoxWeave instance, no distributed controller or cluster scheduling.
-- No dependency on Containarium, no v0.x compatibility requirement, no automatic old state migration.
-- Public management protocol: authenticated Streamable HTTP MCP only, bound to `127.0.0.1` over HTTP by default; public HTTPS is optional, external and operator-configured (for example through Cloudflare Tunnel). No public REST management endpoints and no Web console. The only interactive initial experience is local super-administrator credential bootstrap.
-- Incus controls Boxes; Caddy manages **P0 HTTP-only** Box application publishing (no managed HTTPS, certificates or redirects); native Incus networking supports scoped TCP/UDP forwarding and private connectivity rules.
-- Per-Box ownership and isolation; no user-facing Tenant concept.
-- Linux containers first. Virtual machines, complex orchestration, and clusters are not part of the P0 promise.
-- Guest commands use native Incus Exec with **guest root (UID 0) by default**, typed `argv`, safe guest `cwd`, bounded env/timeout/output, and no required guest SSH/Agent. P0 uses safe native Incus guest file APIs for list/read and `box_file_apply(mode=create|replace|patch|delete)` with optimistic hash checks. Host shell and host privilege remain forbidden.
-- Every MCP mutation requires a caller-supplied reusable `idempotency_key` before any native effect. Every accepted mutation, including guest Exec and guest file writes, is represented by a durable local asynchronous operation and can be reconciled after failure. Each MCP action is correlated using a stable server-owned Tracking ID and typed Go context propagation.
-- Fully functional installations at every supported nesting layer: each layer independently manages only its own directly owned Boxes. Nesting is runtime compatibility, not a recursive BoxWeave management feature.
-- Keep the underlying Incus storage driver unconstrained; capability-dependent operations report unsupported accurately.
-- Ubuntu LTS is the initial supported **host** installation baseline. Guest image defaults to a reviewed Ubuntu LTS image, with supported alternatives.
-- Reuse an existing compatible Incus daemon in a BoxWeave-controlled restricted Project; **do not assume Project isolation implies verified network isolation**. Fail closed if native private isolation cannot be enforced for Box-owned IPv4 and enabled IPv6; safe owned IPv6 disable is allowed, unowned host-wide network changes are not. Run a dedicated BoxWeave Caddy for HTTP Box application routes. Explicit local install/upgrade **automatically installs or upgrades approved managed dependencies** against a recorded compatible version manifest. A shared Incus daemon or foreign service is never disrupted without separately scoped local approval.
-- Nesting is opt-in per directly owned Box; resource defaults are configurable. An operator explicitly invokes installed upgrades; the installer never automatically reboots a whole host, reporting `reboot_required` instead. Source release automation never upgrades a running host.
+## Required core
 
-## P0
+- One BoxWeave controller per host/layer, implemented in Go with official MCP and Incus Go SDKs. No Containarium, Web console, public REST management, guest management Agent, SSH dependency or generic host shell.
+- HTTP MCP listens on loopback by default; external HTTPS/Tunnel is operator-owned. Local CLI limited to install/upgrade/status/bootstrap/token recovery/doctor. MCP tokens are independently revocable **admin** or **viewer** only, never an RBAC/per-Box delegation platform.
+- Managed Incus Linux Boxes with native UUID-verified ownership: create/start (default ready), list/get, typed resource update, stop/delete, nesting opt-in and guest-root asynchronous Exec. Ubuntu LTS verified first; other Linux guest images added with explicit compatibility tests.
+- Guest file list/read and `box_file_apply(mode=create|replace|delete)` for safe single regular-file changes. Complex edits, repository Git and build/test commands run inside the authorized Box via `box_exec`; no built-in patch engine.
+- Mutations are journaled and async; caller-provided reusable idempotency key, server Tracking ID, distinct durable operation IDs, bounded/retained output, honest UNKNOWN and independent native post-state reads. `operation_get` includes redacted diagnostic summary; no standalone diagnostic MCP tool.
+- Safe network policy: private Box-to-Box deny by default, one directional `box_peer_set` between exact owned Box identities for inter-Box testing, verified native IPv4/enabled IPv6 enforcement. Internet outbound by default with per-Box deny switch. Fail closed if isolation cannot be proven.
+- **Keep** only native Incus `port_forward_list/create/delete` for TCP/UDP exposure of exact owned Box UUID + guest port, checking bind collisions and external exposure. No managed domain/website proxy.
+- Reuse existing compatible Incus daemon where possible; manage approved dependency version installation/upgrades from an explicit **host-local** operator action. Separately approve disruptive upgrades of shared Incus; no foreign project/resource adoption. Never auto-reboot host.
+- Same functional contract for L0/L1/L2 nesting when native capabilities permit; no parent-to-child controller orchestration, shared tokens or cross-layer automatic routing. Source-CI real new-version releases are automatically published; live host updates remain explicit.
+- Full negative/ownership and real create/edit/build/fix/retest acceptance; keep Finder/Fixer/Verifier tools in repository/CI/test Boxes, not production runtime.
 
-**Sustainable Agent development loop**: Box creation defaults to start and proves guest Exec readiness; Box-scoped guest file listing/reading and a single safe apply tool supporting create/replace/patch/single-file delete; asynchronous guest-root Exec with paginated bounded stdout/stderr and observed exit retrieval; `operation_get(wait_ms)` and proof-based `operation_cancel`; read-only Tracking ID diagnostics; authenticated per-operation-class/per-Box Token rights. Box lifecycle and safe updates (including **no disk shrink**), host health; managed HTTP routes and TCP/UDP port forwarding; Box-owned private ACL and optional internet denial; universal Tracking ID/Go context and durable async operations; strict host/resource boundaries; independent nesting; version-aware auto-reconciliation of approved dependencies during explicit local install/update/status/recovery; adversarial and real nested acceptance.
+## Permanently outside the product unless separately reapproved
 
-See [tool inventory](../design/MCP_TOOLS.md).
+- Dedicated Caddy instance, Caddy API, BoxWeave-managed website hostnames/routes, TLS/certificate management, domain proxy, custom port-forwarding service.
+- General Incus ACL/CIDR/IP/protocol/port editor, free-form firewall controls, multi-resource network controller, whole-host service configuration.
+- Multi-user tenants, per-Box Token delegation, role hierarchy, OAuth browser authorization and billing/meters.
+- Native snapshots and backup platform, bulk file upload, text-patch engine, guest file search, persistent background process supervision, automatic idle sleep/HTTP wake.
+- Virtual machine management, multi-host orchestration, arbitrary privileged Incus/host operations and automatic adoption of foreign containers.
+- Automatic parent/child coordination, unsafe partial/UNKNOWN replay or unverified host-namespace privilege.
 
-## P1 candidates (not part of P0)
-
-Managed Box application HTTPS/TLS certificates/renewal and automatic redirect; native snapshot list/create/restore/delete where storage supports it; optional guest file search convenience and bulk guest repository/file import/export APIs (ordinary Git via guest Exec is P0); durable background process start/stop/log supervision; Box idle auto-sleep and HTTP wake; OAuth 2.1 browser authorization. These features must obey all P0 trust and operation guarantees when implemented.
-
-## Deferred / excluded
-
-- Whole-Box backup/restore and automatic backup systems.
-- Full isolation against public-route or port-forward hairpin paths: direct **private** Box-to-Box isolation is the agreed boundary; published public websites remain reachable to other Boxes.
-- Public administrative REST or Web interface, OAuth multi-tenant control plane, agent SSH management, unrelated host file/service management, unmanaged Caddy routing, multi-host orchestration.
-- Cross-layer BoxWeave discovery, delegation, controller management, automatic multi-level ingress propagation, special subtree deletion safeguards, subleasing accounts, metering and billing. Future subleasing is a motivation, not an implemented v1 feature.
-- Imposed storage-driver selection, **unrelated or blanket system upgrades** (reviewed owned dependency reconciliation is P0), implicit parent-level network changes.
+**New functionality requires a new owner-approved product-scope decision, not merely shifting an excluded item to P1.**
