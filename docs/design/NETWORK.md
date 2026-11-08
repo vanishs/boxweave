@@ -20,6 +20,14 @@ Incus's official bridge ACL documentation also states that network-level bridge 
 - If IPv6 filtering cannot be proven, safely disable only BoxWeave-controlled IPv6 and reverify, otherwise refuse Box creation/start; never disable unowned host IPv6. Internet egress defaults to allowed, with a simple per-Box block option.
 - A Box can still reach a service intentionally exposed on a mapped host port where underlying routing/hairpin behavior permits; this is **not** a substitute for guaranteed private peer connectivity and not a claim of all-path isolation.
 
+## Bridge NIC ACLs are not UUID-based policies
+
+Incus v7.6.0 [native ACL documentation](https://github.com/lxc/incus/blob/v7.6.0/doc/howto/network_acls.md) confirms that Bridge **network-level** ACLs cannot block same-bridge peer traffic and that **Bridge ACL group/network selectors are not supported**. The selected P0 path must use a **NIC-attached** ACL, with rules anchored to verified current guest IPv4/IPv6 and checked MAC/NIC identity where available; the Box UUID is a BoxWeave ownership key, **not a native network ACL selector**. Native `security.mac_filtering`, `security.ipv4_filtering`, `security.ipv6_filtering` are possible anti-spoof features; they are not enabled by merely assigning an ACL.
+
+Before granting A→B, prove that both current native address bindings are trustworthy. On DHCP/IPv6 change, Box deletion/recreation, ownership conflict, unsupported anti-spoof or rule update failure, fail closed: withhold/revoke the affected peer grant or block start rather than transferring access to a new occupant of an old IP. Bridge ACLs also have baseline service rules that precede ACL rules and may rewrite `reject` to `drop`; assert actual traffic behavior, not exact textual rule interpretation. Test permitted initiated traffic **and replies** versus newly initiated reverse traffic, as well as old established flows after revocation.
+
+Native IP/MAC filtering can restrict nested L2 forwarding with another MAC. For `nesting=true`, prefer an independent inner managed bridge using guest NAT through the parent's permitted NIC; verify this works without relaxing anti-spoof globally. Details: [second-pass SDK review](../research/SDK_GAP_CLOSURE_2026-11-07.md), [nested topology](NESTING.md). Do not create a generic IP/CIDR ACL service.
+
 ## Guard at first start and claim only applied security
 
 For the supported native topology, create the new owned instance **stopped**; install and verify its required IPv4 and enabled IPv6 private-isolation rules on the correct effective NIC **before any first start or autostart**. Recheck before a later start if topology, NIC or applied protection could have changed. A failed/unsupported guard blocks start and reports the actual instance identity/cleanup status; never silently start the Box reachable and then try to repair its policy. Do not copy a generic Network Tenant service.
