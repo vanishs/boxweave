@@ -14,13 +14,13 @@ Retain English artifacts, requester-language replies, explicit privileges, sourc
 
 https://github.com/nikitatsym/incus-mcp
 
-Borrow write-after-read validation, explicit omitted-vs-null parameter semantics, non-blocking native operation waiting, API schema checks and real Incus integration tests. These are now mandatory across file writes, async Exec, Tracking ID/Operation and the P0 development loop. Its **in-process** waiter registry is not a substitute for v1 durable cross-restart operation journaling.
+Borrow omitted-vs-null parameter semantics, schema conformance test patterns, post-terminal native readback, and real Incus integration tests. **Its write verifier checks returned key presence, not full value equality; do not call that sufficient postcondition proof.** Its in-process waiter/pending-verify maps are not durable across restarts. Keep only v1's already-approved tools and responsibilities. [Pinned source assessment](INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
 
 ## fredmj/incus-mcp-server
 
 https://github.com/fredmj/incus-mcp-server
 
-Borrow scoped destructive confirmation, narrow MCP tool schemas, read/write safety separation and official Incus Go SDK usage. It uses `github.com/modelcontextprotocol/go-sdk`. Do not adopt synchronous mutation waiting or assume the same version/features of Incus SDK support v1 untouched.
+Borrow typed official MCP Go SDK tool registration, small Go handler layout, injectable fake Incus client/MCP-session tests and create-before-start separation. Its Incus **v6** dependency, synchronous waits, name-only deletion checks, raw native config, default Incus CLI remote credentials and unbounded Exec buffers are **not** v1 patterns. v1 uses reviewed **Incus v7**. [Pinned source assessment](INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
 
 ## sw2m/pyincusd
 

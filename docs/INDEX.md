@@ -21,6 +21,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What happens to interrupted mutations? | [Operations](design/OPERATIONS.md) |
 | How does an operator safely unlock an UNKNOWN claim? | [Approved local UNKNOWN recovery](process/UNKNOWN_MANUAL_RECOVERY.md) |
 | What was learned from Containarium current main and 2,577 commit subjects? | [Containarium study — source and historical counterexamples](research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md) |
+| What did two smaller Incus MCP implementations teach? | [Incus MCP source review, Python and Go](research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md) |
 | What lessons were extracted from all 814 main commits? | [Main history audit, research only](research/MAIN_HISTORY_LESSONS_2026-11-07.md) |
 | How are requests correlated across services? | [Tracking ID and Go context](design/TRACKING_CONTEXT.md) |
 | How are dependency versions reconciled? | [Dependency lifecycle](process/DEPENDENCY_LIFECYCLE.md) |

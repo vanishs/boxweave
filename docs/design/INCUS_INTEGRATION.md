@@ -49,6 +49,14 @@ Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH 
 
 Every native adapter call receives Go `context.Context` carrying a safe Tracking ID/actor/owned-target reference and bounded deadline. Persist original native Operation ID where available; client disconnect never justifies auto-replay of a mutating native call. Include actual Incus daemon version and API extensions in the dependency ledger, and distinguish `running` from verified guest Exec readiness. Explicit local install/upgrade reconciles compatible managed Incus versions, with shared-host upgrade approval when required. See [Tracking/context](TRACKING_CONTEXT.md) and [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).
 
+## Narrow SDK contract and postcondition checks
+
+The two small [Incus MCP implementation case studies](../research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md) reinforce three requirements **without changing the official Go SDK choice**:
+
+- **Input presence is semantic:** distinguish an omitted field (preserve), an explicit clear (permitted only when a named BoxWeave typed field allows it), and a provided value (validate before dispatch). Go optional pointers/JSON `omitempty` alone must not silently turn explicit null into omission. A CPU-only update cannot erase memory or NIC settings.
+- **Verification must examine values:** a successful typed SDK call, present config key, HTTP 2xx or completed Incus Operation does not establish the intended effective value or preservation of unrelated config. Read back expanded/effective device and resource state with original UUID/incarnation and compare intended values; missing proof remains honestly unresolved.
+- **Contract drift is tested, not patched with a generic REST gateway:** build SDK method/typed fields/API-extension coverage tests for each v1 feature; include wrong/ignored fields and unsupported enums. In-memory MCP client + injected narrow Incus fake exercises schemas, permissions and error translation, but real native Incus post-read and negative tests remain the acceptance gate. Pin the actual SDK/runtime compatibility; upstream example versions are not substitutes.
+
 ## Compatibility and tests
 
 Use official SDK typed models and API-extension negotiation; run native Incus integration tests for lifecycle, Exec, minimal peer isolation, native port forwarding, storage capability and multi-level nested setups. A 2xx/API success is not postcondition proof. Pin exact upstream versions and independently verify native state.

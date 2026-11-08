@@ -89,6 +89,17 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 
 The A-056–A-073 cases are **additional test cases for existing 20 tools/local CLI, not new user-facing capabilities**. All remain **UNTESTED** until actual appropriate evidence; historical Containarium commits are not v1 native PASS. [Evidence index](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
 
+## Small-implementation-derived contract tests
+
+| ID | Existing v1 behavior to test | Evidence |
+|---|---|---|
+| A-074 | `box_update` distinguishes omitted vs explicitly cleared vs supplied typed values; unsupported clear rejected, omitted CPU/memory/disk/NIC preserved; no raw Incus config surface | T + I + V |
+| A-075 | Every supported Incus SDK method/field/enum and actual required API extension is mapped and exercised; unknown/ignored values and version drift cannot yield a false mutation success | T + I + V |
+| A-076 | Native terminal ACK and returned key presence are insufficient: readback compares actual requested **values**, effective inherited devices, untouched limits and exact owned UUID; ambiguous postcheck retains original Operation evidence | T + I + V |
+| A-077 | Official MCP Go SDK in-process client + injected narrow Incus fake verifies declared schemas, missing/unknown args, authorization and native errors; no mock alone is counted as a native PASS | T + I |
+
+These four cases are **UNTESTED refinements to existing v1 interfaces**, not new tools or expansion. Evidence: [two Incus MCP code reviews](../research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md).
+
 ## Adversarial combinations
 
 Test lost MCP reply after create/Exec/forward, concurrent Box delete vs peer/forward edits, token revocation just before and after dispatch, stale guest hashes and symlink races, fixed network ACL vs peer grants, IPv6 bypass, host listener and port collisions, simulated parent restart during nested work and existing shared Incus upgrade. No native effect outside the owned set is ever permitted.
