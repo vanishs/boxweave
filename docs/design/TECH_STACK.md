@@ -30,6 +30,12 @@ The 2026-11-07 [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) insp
 
 Incus `Operation.WaitContext` may request native cancellation when its context expires; its ordinary instance methods are name-addressed and many lack context parameters; native guest file writes do not provide hash-based atomic compare-and-swap. The local Incus admin socket is not a restricted Project identity. MCP 2026-07-28 requires SDK Stateless Streamable HTTP, while BoxWeave durable operations remain in SQLite independently of MCP sessions.
 
+## Tagged Go requirements and reusable upstream primitives
+
+Incus **v7.6.0** declares `go 1.26.9` in its released `go.mod`; MCP Go SDK **v1.8.0** declares `go 1.25.0`. When using the reviewed Incus release, build with a compatible Go 1.26.9+ toolchain; users installing signed prebuilt BoxWeave binaries should not need a Go compiler.
+
+Use MCP `auth.RequireBearerToken`, typed `mcp.AddTool`, built-in localhost Host/DNS-rebinding protection and default 4 MiB body limit rather than reimplementing them. Use Incus native confined `incus`-group service-user credentials rather than assuming a privileged helper. Match native HTTP errors with `api.StatusErrorMatch`. The [20/20 mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) documents exact SDK methods and mismatched name traps.
+
 ## Verification gates
 
 1. Pin reviewed compatible SDK module revisions and Go toolchain versions with reproducible dependency checks.
