@@ -122,3 +122,25 @@ func TestPermissionsRejectUnsafeFile(t *testing.T) {
 		t.Fatal("world-readable existing DB unexpectedly accepted")
 	}
 }
+
+func TestDatabaseSymlinkCannotAdoptOtherFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "unmanaged.db")
+	if err := os.WriteFile(target, []byte("untouched"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "ledger.db")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(link); err == nil {
+		t.Fatal("unsafe symlinked database was accepted")
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != "untouched" {
+		t.Fatalf("unmanaged target changed: %v", err)
+	}
+}
