@@ -23,6 +23,8 @@ Use `mcp.NewStreamableHTTPHandler` and typed `mcp.AddTool` rather than a custom 
 
 Use native `auth.RequireBearerToken` with BoxWeave's own revocation-aware `TokenVerifier`; handlers obtain `auth.TokenInfoFromContext`. The MCP Streamable HTTP SDK **already provides a default 4 MiB request body cap and localhost Host/DNS-rebinding checks**. Do not duplicate those primitives. Explicit Origin policy (e.g. Go `http.NewCrossOriginProtection`), rate policy and trusted reverse-proxy handling remain to be configured. Ensure the file-apply limit accounts for JSON/base64 overhead. If an operator proxy forwards external `Host` to loopback, test compatibility before any explicit protection change. See [upstream SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
+For the full 20-tool SDK and middleware interface mapping, see [native SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md); this is source research, not deployed validation.
+
 ## Verification
 
 Verify default listener is only `127.0.0.1`; there is no unsolicited local-network/public management access. Validate authenticated negotiated MCP `server/discover` where supported (2026-07-28) and legacy `initialize`, then `tools/list` and `tools/call`. Record the negotiated protocol and verify both allowed and denied requests. Test via operator-configured HTTPS proxy/tunnel separately, including Streamable HTTP behavior, invalid credentials, Origin handling, disconnects and read-only state polling. If a proxy is not configured, remote MCP access is intentionally unavailable.
