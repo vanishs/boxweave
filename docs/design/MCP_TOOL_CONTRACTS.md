@@ -6,7 +6,7 @@
 
 Input: exact owned `box_id`, safe guest path, `mode=create|replace|delete`. **No patch mode**.
 
-- `create`: fail if path already exists; create only a verified regular file, within size limit.
+- `create`: fail if path already exists; create only a verified regular file, within size limit. Incus SDK `CreateInstanceFile` overwrite mode uses `O_CREATE|O_TRUNC`, so **it does not satisfy exclusive create**. Test native `GetInstanceFileSFTP` with an exclusive-create flag (`O_EXCL`) as a candidate; absent verified atomic create, report `UNSUPPORTED` rather than overwrite existing content.
 - `replace`: accept complete new content with required observed original hash/revision. Check the exact native target and compare immediately before the write; never claim atomic compare-and-swap if guest concurrent writers can defeat it. Fail UNSUPPORTED when safe point-of-use guarantees are unavailable.
 - `delete`: delete exactly one verified regular guest file only with required original revision/hash. No recursive delete, special files, symlink/hardlink/host-path access, or uncontrolled race.
 
@@ -26,7 +26,7 @@ For `box_exec`, report separately: observed zero exit, observed nonzero exit, an
 
 ## Delete lifecycle and remote failure visibility
 
-`box_delete` confirms deletion of the **exact owned Box UUID** and all its **owned** dependent native TCP/UDP forwards and private peer grants. The backend must lock these claims against concurrent edits, journal each native cleanup phase, verify owned dependent removal and native Box absence before committing a terminal tombstone. It must never silently delete foreign network state, free uncertain UNKNOWN locks, or claim all-or-nothing atomicity across SQLite and Incus. On partial failure, keep the original operation record and expose verified remaining Box/forward state through existing read tools. Known incomplete operations finish as `FAILED` with `partial_effects=true`; ambiguous native completion remains `UNKNOWN`. `port_forward_delete` may remove a verified owned orphan forward after its target Box is gone, using exact native forward identity plus BoxWeave ownership tombstone—not target-name guesses or arbitrary network adoption.
+`box_delete` confirms deletion of the **exact owned Box UUID** and all its **owned** dependent native TCP/UDP forwards and private peer grants. The backend must lock these claims against concurrent edits, journal each native cleanup phase, verify owned dependent removal and native Box absence before committing a terminal tombstone. It must never silently delete foreign network state, free uncertain UNKNOWN locks, or claim all-or-nothing atomicity across SQLite and Incus. On partial failure, keep the original operation record and expose verified remaining Box/forward state through existing read tools. Known incomplete operations finish as `FAILED` with `partial_effects=true`; ambiguous native completion remains `UNKNOWN`. For P0 the forward is an **instance-owned `proxy` device** and cannot survive as a separate native network-forward object after instance deletion; retire only verified stale local ownership claims. An orphan *network-forward object* deletion capability is conditional on a separately approved future backend; do not require it for P0.
 
 `operation_get` returns a small, structured and redacted causal summary: current/failed step, safe native error category, observed Box/owned forward status, missing evidence and safe recovery hint, alongside version/build and original IDs. It is not arbitrary host diagnostics. Local operator doctor/journal remains an out-of-band escalation if the error cannot be safely localized from MCP. A duplicate `box_delete` with the same idempotency key **only queries the original receipt**, never re-dispatches another destructive call.
 
@@ -34,7 +34,7 @@ For `box_exec`, report separately: observed zero exit, observed nonzero exit, an
 
 ## `box_peer_set` and native forwards
 
-- `box_peer_set(source_box_id,target_box_id,allow,idempotency_key)` changes **only** the directional private access state of two verified owned Box UUID/incarnations. It has no CIDR/IP/port/protocol expression parameters. Native bridge/OVN/NIC safety must be proven; current effective grants are read in `box_get`. Deny foreign identities, address reuse, unsupported network enforcement and host-global ACL manipulation.
+- `box_peer_set(source_box_id,target_box_id,allow,idempotency_key)` changes **only** the directional private access state of two verified owned Box UUID/incarnations. On Bridge, native ACL group selectors are unsupported, so test NIC-attached rules against **current IP bindings plus anti-spoof**; address change, reuse, absent IPv6 proof or partial rule change must fail closed. It has no CIDR/IP/port/protocol expression parameters. Native bridge/OVN/NIC safety must be proven; current effective grants are read in `box_get`. Deny foreign identities, address reuse, unsupported network enforcement and host-global ACL manipulation.
 - `port_forward_create(box_id,guest_port,protocol,host_port,host_bind?,idempotency_key)` selects only TCP/UDP and verified Box targets. **LAN reachability requires explicit host LAN-IP binding and a probe from another LAN machine; host loopback defaults cannot provide it.** Host listener default is loopback when suitable; explicit public/wildcard bind requires administrator action and collision check. Use an **instance-owned Incus proxy device** as the P0 host-port backend. Network-forward objects are separate network-scoped resources, not a silent fallback; adding them requires a new, explicit topology and orphan-cleanup decision. `port_forward_list/delete` show/remove owned native claims only; never provide custom reverse proxy/URL forwarding or arbitrary target IP.
 - Native private Box isolation remains default fail-closed. Native port forwarding creates an **explicitly exposed** service and must not silently broaden rights to other Boxes.
 
@@ -43,6 +43,13 @@ For `box_exec`, report separately: observed zero exit, observed nonzero exit, an
 Two independently revocable role types: `admin` may manage BoxWeave-owned resources and Exec inside owned guests; `viewer` may inspect owned metadata and guest files/output, but must never mutate or Exec. No per-Box grants, tool-class ACL matrix, tenant roles or inherited parent credentials. Viewer read access may expose confidential guest data; do not describe it as harmless.
 
 Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not proved-dispatched work. On unsafe/incapable native operation, fail closed with Tracking ID and classified error; logs remain local. No Caddy, HTTP-route, generic ACL or dedicated diagnostic API.
+
+## Tagged-SDK execution nuances
+
+- An authenticated typed MCP handler receives the actor in **`req.Extra.TokenInfo`**, while `auth.TokenInfoFromContext` is for HTTP handlers; authorize each invocation and reject missing/revoked metadata.
+- For an immediate async `box_exec` receipt, avoid `RecordOutput=true` combined with non-nil output writers until proved safe: Incus's official SDK can synchronously wait and delete native recorded logs in that path. Prefer SDK stream + bounded worker retention.
+- Default read-only `operation_get(wait_ms)` to bounded native `GetOperation` polling until `GetOperationWait`'s shared HTTP transport timeout side effect is tested.
+- These choices follow [source-level second-pass review](../research/SDK_GAP_CLOSURE_2026-11-07.md), not a private Incus REST implementation.
 
 ## Required native black-box checks
 
