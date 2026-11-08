@@ -35,6 +35,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What were the actual native B/C SDK tests, database recovery, packet findings and cleanup states? | [2026-11-08 executed Incus 7.6 nested B/C batch, native evidence and ACL permission blocker](verification/SDK_NATIVE_BATCH_RESULTS_2026-11-08.md) |
 | Can Incus native restricted TLS/Scriptlet safely edit one ACL, and what still blocks dynamic creation? | [Executed Incus Go SDK TLS, Scriptlet, ETag and ACL creation-granularity probe](verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) |
 | Which v1 networking design was selected and what actually passed across three Boxes? | [Single shared ACL + native Scriptlet: three-Box IPv4/IPv6, peer revoke, proxy, legacy TLS compatibility and cleanup](verification/SINGLE_SHARED_ACL_SCRIPTLET_ACCEPTANCE_2026-11-08.md) |
+| Which official SDK P0 behaviors actually passed, and which Incus-native limits must v1 respect? | [Last pre-development P0 plan](verification/P0_SDK_LAST_GATE_PLAN_2026-11-08.md) and [executed Incus + MCP SDK test results/cleanup](verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
 | What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) and [permanent scope](decisions/PRODUCT_BOUNDARY.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
