@@ -29,7 +29,7 @@ func TestAdmissionIdempotencyAndRevocation(t *testing.T){
     if _,err=s.Admit(ctx,a);!errors.Is(err,ErrConflict){t.Fatalf("wanted conflict: %v",err)}
     if err=s.RevokeToken(ctx,token.ID);err!=nil{t.Fatal(err)}
     if _,err=s.VerifyToken(ctx,raw);!errors.Is(err,ErrRevoked){t.Fatalf("revocation: %v",err)}
-    if err=s.Claim(ctx,first.ID);err!=nil{t.Fatal(err)}
+    if err=s.Claim(ctx,first.ID);!errors.Is(err,ErrRevoked){t.Fatalf("expected revoked refusal: %v",err)}
     got,err:=s.Get(ctx,first.ID);if err!=nil||got.State!="FAILED"{t.Fatalf("revoked dispatch: %+v %v",got,err)}
 }
 func TestCrashRecoveryNeverRedispatches(t *testing.T){
