@@ -61,6 +61,8 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 | A-051 | Formal second-version CI publication occurs only after independent exact-artifact native/nested gate; missing evidence or artifact digest mismatch blocks GitHub Release, tag is immutable and published bytes match tested candidate | T + I + N + V |
 | A-052 | After formal Release, original L0 remains unchanged with its original failed Box until explicit host-local upgrade and safe reconciliation; no candidate test or GitHub tag silently cleans the old incident | I + V |
 | A-053 | Native Box already deleted but a verified BoxWeave-owned network forward persists: `port_forward_list/delete` can safely remove that exact orphan by durable forward identity/Box tombstone without requiring the old Box to exist or touching any foreign forward | I + N + V |
+| A-054 | Host-local manual UNKNOWN review binds a short-lived single-use challenge to exact original Operation, immutable target and claimed resource snapshot; wrong, expired or changed review refuses with zero side effects | T + I + V |
+| A-055 | Explicit second operator risk confirmation atomically audits and releases only a selected UNKNOWN claim; audit-write failure retains claim; original receipt/key remain UNKNOWN and do not re-dispatch; no remote MCP recovery route exists | T + I + V |
 
 ## Adversarial combinations
 

@@ -19,6 +19,8 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What may an MCP client touch? | [Security and ownership](design/SECURITY.md) |
 | How does nesting work? | [Nesting](design/NESTING.md) |
 | What happens to interrupted mutations? | [Operations](design/OPERATIONS.md) |
+| How does an operator safely unlock an UNKNOWN claim? | [Approved local UNKNOWN recovery](process/UNKNOWN_MANUAL_RECOVERY.md) |
+| What lessons were extracted from all 814 main commits? | [Main history audit, research only](research/MAIN_HISTORY_LESSONS_2026-11-07.md) |
 | How are requests correlated across services? | [Tracking ID and Go context](design/TRACKING_CONTEXT.md) |
 | How are dependency versions reconciled? | [Dependency lifecycle](process/DEPENDENCY_LIFECYCLE.md) |
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |

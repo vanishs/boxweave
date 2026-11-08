@@ -72,4 +72,6 @@ The following final decisions supersede earlier broad commitments where they con
 
 | D-057 | **Accepted — owner chose A** | “Take over existing Incus” means reuse its compatible daemon and manage its required dependency versions through the authorized local installer; do **not** import existing containers or assume their ownership. Already-running foreign instances/projects remain untouched. |
 
+| D-058 | **Accepted — owner approved minimal UNKNOWN recovery** | A host-local operator can review exact UNKNOWN task/resource evidence, receive a short-lived challenge, confirm a second time with reason/risk acknowledgement, and durably audit release of **only the local claim**. Never auto-retry, cancel, mark success or modify the original receipt; no new MCP tool. |
+
 Canonical narrow policy: [PRODUCT_BOUNDARY.md](PRODUCT_BOUNDARY.md).

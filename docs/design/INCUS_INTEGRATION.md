@@ -6,6 +6,10 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 
 **The owner selected Go + the official Incus Go client.** Use `github.com/lxc/incus/v7/client` and matching typed Incus API models directly behind a narrow domain adapter. Prefer local Unix socket access through a properly restricted local security boundary. Do not implement an independent generic Incus REST client or rely on the Incus CLI as the core controller. The Go SDK covers native Instance, Exec, Operation, proxy-device/network-forward and peer-isolation APIs, but each BoxWeave-needed feature still requires real integration verification.
 
+## Trust and division of responsibility
+
+Incus is a mature authoritative Linux-container runtime: **trust the official daemon and typed Go SDK as the underlying infrastructure**. BoxWeave does not need a second Incus implementation, custom equivalent transaction engine, routine upstream reliability audit, or broad compatibility layer for old Containarium HTTP bugs. The necessary tests concern **our** ownership decisions, SDK argument mapping, supported API extensions, privilege boundary, and observed user workflows (e.g. LAN port publishing, safe peer policy, guest Exec state). Report unsupported SDK/runtime capabilities accurately; do not infer a flaw in Incus from an unverified BoxWeave request, network route or test fixture.
+
 ## Runtime capabilities
 
 - Check the actual Incus daemon version and `api_extensions` during startup and before capability-sensitive actions. Version strings alone do not guarantee a feature.

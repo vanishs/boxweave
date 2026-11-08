@@ -58,6 +58,12 @@ An accepted mutation responds with persistent `tracking_id`, `operation_id`, and
 
 Pre-admission denials that never created an operation return a safe Tracking ID plus structured validation/authorization error in the tool response. Do not invent an `operation_id` for them. Support version/build identification in `host_status` so Agent can compare first and candidate installations without relying on release URLs.
 
+## Privileged manual UNKNOWN recovery (owner approved)
+
+When an exact mutating native outcome remains ambiguous, hold its Box/port/peer claim and preserve the original `UNKNOWN` receipt. A protected **host-local** recovery flow may inspect the original Operation and exact resource/identity snapshot, issue a short-lived one-use challenge, and require a second explicit operator confirmation/reason before **releasing only that local claim with a durable audit entry**. The original Operation outcome, Tracking ID and idempotency key never change solely because the lock was released. This is **not** retry, cancellation, postcondition success, automated rollback or native resource adoption. Abort on altered snapshots or audit-write failure. Do not expose force-unlock on MCP or introduce a general lease management API.
+
+See [minimal local recovery procedure](../process/UNKNOWN_MANUAL_RECOVERY.md) for confirmed sequence, negative tests and reference to earlier main code/evidence.
+
 ## High-risk cases
 
 Repeated create after lost reply; start/forward/peer-set competing with delete; Box delete after partially removed forward; instance gone but stale network forward survives; duplicate original delete idempotency key; native port forward add interruption; Exec streaming interruption; deletion with reused name; partial forward apply; parent restart with child operation still running; native success but postcondition mismatch. See [fault simulation](../verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md).
