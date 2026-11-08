@@ -33,6 +33,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What did the disposable Box SDK validation actually establish? | [2026-11-07 live Box probe and remaining blockers](verification/SDK_NATIVE_BOX_PROBE_2026-11-07.md) |
 | What is the smallest practical batched native SDK verification, and which tests have actually passed? | [Original minimal test plan and preliminary smoke](verification/SDK_MINIMAL_BATCH_2026-11-08.md) |
 | What were the actual native B/C SDK tests, database recovery, packet findings and cleanup states? | [2026-11-08 executed Incus 7.6 nested B/C batch, native evidence and ACL permission blocker](verification/SDK_NATIVE_BATCH_RESULTS_2026-11-08.md) |
+| Can Incus native restricted TLS/Scriptlet safely edit one ACL, and what still blocks dynamic creation? | [Executed Incus Go SDK TLS, Scriptlet, ETag and ACL creation-granularity probe](verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
 | What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) and [permanent scope](decisions/PRODUCT_BOUNDARY.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
