@@ -11,6 +11,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |
 | Which runtime and SDKs are required? | [Go technology stack](design/TECH_STACK.md) |
 | Which MCP tools are planned? | [MCP catalog](design/MCP_TOOLS.md) |
+| What are the detailed file, Exec, wait and cancel contracts? | [MCP tool contracts](design/MCP_TOOL_CONTRACTS.md) |
 | Must a Box run a client? | [Agentless guest management](design/GUEST_MANAGEMENT.md) |
 | How does local MCP become reachable? | [MCP loopback transport](design/MCP_BINDING.md) |
 | What may an MCP client touch? | [Security and ownership](design/SECURITY.md) |

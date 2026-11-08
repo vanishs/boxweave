@@ -10,7 +10,7 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 
 - Check the actual Incus daemon version and `api_extensions` during startup and before capability-sensitive actions. Version strings alone do not guarantee a feature.
 - Bind Boxes to native Incus instance UUID and verify on each privileged mutation; do not treat names, IPs or guessed profiles as identity.
-- Use Incus Exec rather than SSH. The owner selected **guest root (UID 0) by default** with an optional explicitly requested guest UID/GID; guest root remains confined to the unprivileged owned container and is never a host shell pass-through. Exec is an async, durable, Tracking-ID-correlated business operation; observed nonzero command exit is a completed command outcome.
+- Use Incus Exec rather than SSH. Guest UID 0 by default with optional explicit UID/GID; typed argv and bounded guest cwd/env/timeout/output, without implicit shell interpolation. Guest root stays inside the owned unprivileged container, never host shell. Exec is async and Tracking-ID-correlated, nonzero exit is a completed result; `operation_cancel` needs independently tested native termination semantics.
 - Native Incus Operation IDs are execution evidence but not substitutes for the BoxWeave journal.
 - Handle Exec websocket streams, status/exit codes, output bounds, cancellation and lost connections without fabricated outcomes.
 - Use native ETag for concurrent updates where available. Validate read-back of accepted writes.
@@ -28,7 +28,7 @@ The v1 implementation language is **Go**. The HTTP MCP server uses the official 
 
 ## Agentless containers
 
-Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH service for lifecycle, native Exec or **P0 native guest file list/read/create/conditional write/optimistic patch**. The exact SDK file API and guest filesystem safety, symlink/race/atomicity guarantees must be validated; reject unsupported safe operations rather than falling back to host filesystem access. This is different from VM-focused `incus-agent` requirements and Containarium's optional in-guest `agent-box` MCP workspace extension. See [guest management](GUEST_MANAGEMENT.md).
+Incus Linux containers require no installed BoxWeave guest Agent, daemon or SSH service for lifecycle, native Exec or **P0 native guest file list/read plus unified conditional `box_file_apply(create|replace|patch|delete)`**. The exact SDK file API and guest filesystem safety, symlink/race/atomicity guarantees must be validated; reject unsupported safe operations rather than falling back to host filesystem access. This is different from VM-focused `incus-agent` requirements and Containarium's optional in-guest `agent-box` MCP workspace extension. See [guest management](GUEST_MANAGEMENT.md).
 
 ## Context, version and capability reporting
 

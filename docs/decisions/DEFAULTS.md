@@ -25,6 +25,8 @@ The user's initial selection was `1B, 14B`; item 8 was clarified to **loopback-o
 
 The owner also accepted the main-code audit recommendations: **P0** guest files, create-and-start readiness, async Exec/Tracking ID and result retrieval, per-Box/operation-class Token scopes, read-only diagnostics and disk no-shrink; **P1** long-lived process management, idle auto-sleep/HTTP wake, and OAuth 2.1. See [development loop](../product/DEVELOPMENT_LOOP.md).
 
+A later P0 MCP catalog review was also approved: unify write/patch into `box_file_apply` (`create|replace|patch|delete`), add evidence-based `operation_cancel`, support `operation_get(wait_ms)`, explicitly constrain `box_exec` and `box_update`, and require trustworthy file SHA metadata. The catalog remains 26 tools. Guest-root Exec is powerful guest write authority even when file-tool write/delete scopes are absent. See [detailed tool contracts](../design/MCP_TOOL_CONTRACTS.md).
+
 Local HTTP is secure only as a deliberately restricted listener, not a public plaintext service. Cloudflare Tunnel or another reverse proxy can terminate external HTTPS, but the BoxWeave MCP endpoint must still validate caller authorization. Public website routing through Caddy and **public management MCP transport are separate concerns**.
 
 See [MCP binding](../design/MCP_BINDING.md), [guest management](../design/GUEST_MANAGEMENT.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), [Tracking/Context](../design/TRACKING_CONTEXT.md), [versioning](../process/VERSIONING.md), [security](../design/SECURITY.md), and [open risks](../verification/OPEN_RISKS.md).

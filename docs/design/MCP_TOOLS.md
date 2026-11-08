@@ -1,54 +1,52 @@
 # Public MCP tool catalog — v1 P0
 
-**Status:** owner-approved design, not implementation. Go with the official MCP and Incus SDKs. Every authenticated tool invocation carries a server-issued `tracking_id`. Mutations are durable asynchronous operations and return `operation_id`, `tracking_id`, initial phase/state, and a safe result-query hint. Reads may respond synchronously, but use the same Tracking/context chain. Do not confuse these IDs with the native Incus operation ID or an idempotency key.
+**Status:** accepted API design, not implemented. Go + official MCP Go SDK + official Incus Go SDK. Every authenticated tool call uses a server-owned Tracking ID; accepted mutations return distinct durable BoxWeave operation IDs and run asynchronously. Read tools may return synchronously.
 
 ## P0 — 26 tools
 
 | Tool | Kind | Contract |
 |---|---|---|
-| `box_create` | Mutation | Create an agentless reviewed Ubuntu LTS Box with configurable defaults; **start by default**, `start=false` opt-out and opt-in nesting; distinguish RUNNING from guest Exec readiness. |
-| `box_list` | Read | List only this layer's owned Boxes, with native identity and scoped pagination. |
-| `box_get` | Read | Inspect an exact owned Box, observed state, readiness, config and bounded capability summary. |
-| `box_update` | Mutation | Allowlisted CPU/memory/disk/network/nesting; reject disk shrink before dispatch, capability-gate growth; no raw Incus settings or host mounts. |
-| `box_start` | Mutation | Start exact Box UUID and verify native state/readiness as separate observations. |
-| `box_stop` | Mutation | Stop exact Box UUID; never confuse a transport acknowledgment with verified stop. |
-| `box_delete` | Mutation | Delete exact owned Box with normal confirmation; no special nested-controller discovery or recursive sub-tree protection. |
-| `box_exec` | Mutation | Async Incus Exec **inside owned guest** as UID 0 by default, optional explicit guest identity; bounded command and working-directory policy, observed exit/output; no guest Agent, SSH or host Exec. |
-| `box_file_list` | Read | Paginated listing of an allowed directory **inside** an exact owned guest, bounded metadata and safe path handling. |
-| `box_file_read` | Read | Bounded guest file bytes/encoding/offset/EOF/hash, no host files, device reads or arbitrary resource capture. |
-| `box_file_write` | Mutation | Create-only or revision-conditional guest file write; verify target identity/type/size/path and native resulting bytes; never blind overwrite. |
-| `box_file_patch` | Mutation | Optimistic guest replacement/patch with expected original SHA-256 or revision and verified post-hash; stale/symlink/unsafe targets denied. |
-| `operation_get` | Read | Original scoped durable operation receipt, state, target, Tracking ID, native evidence and observed guest exit where available. |
-| `operation_list` | Read | Paginated actor/owned-resource scoped operation history, including UNKNOWN. |
-| `operation_output_get` | Read | Bounded, paginated stdout/stderr of an authorized original Exec operation, with unavailable/expired/truncated markers. |
-| `diagnostic_get` | Read | Read-only redacted operation/phase/source/omission evidence linked to authorized Tracking ID; never arbitrary host logs. |
-| `http_route_list` | Read | List only BoxWeave-owned public HTTP route records. |
-| `http_route_create` | Mutation | Bind domain only to verified owned Box UUID + guest port through dedicated managed Caddy. |
-| `http_route_delete` | Mutation | Remove exact owned route identity, never arbitrary Caddy config. |
-| `port_forward_list` | Read | List only this layer's TCP/UDP forward records. |
-| `port_forward_create` | Mutation | Bind host protocol/port only to owned Box UUID + guest port, with collision and capability checks. |
-| `port_forward_delete` | Mutation | Remove only identity-verified owned native forwarding rule. |
-| `acl_rule_list` | Read | List scoped directional Box grants. |
-| `acl_rule_add` | Mutation | Add directional private access between verified managed Box identities with protocol/port constraints. |
-| `acl_rule_remove` | Mutation | Remove one exact owned ACL grant without disturbing foreign ACLs. |
-| `host_status` | Read | Report this layer's state, observed dependency versions/capabilities, Incus/Caddy readiness, nested prerequisites and safe diagnostic coverage; no foreign inventory. |
+| `box_create` | Mutation | Create an owned, agentless Linux Box with reviewed Ubuntu LTS default, configurable resources, start=true by default, optional start=false and nesting=true; report native running and verified guest readiness separately. |
+| `box_list` | Read | Paginated discovery of only this controller's owned Boxes. |
+| `box_get` | Read | Exact owned Box native identity, state, readiness, safe configuration and capabilities. |
+| `box_update` | Mutation | Explicit allowlist of CPU, memory, disk growth, nesting and internet setting; no arbitrary Incus/NIC/device/network configuration; disk shrink always denied. |
+| `box_start` | Mutation | Start exact owned Box UUID and independently verify state and guest readiness. |
+| `box_stop` | Mutation | Stop exact owned Box UUID and independently verify stopped state. |
+| `box_delete` | Mutation | Delete exact owned Box UUID under standard explicit confirmation; no special nested-controller discovery. |
+| `box_exec` | Mutation | Async native Exec inside exact owned guest, UID 0 by default; typed argv, optional safe cwd/guest UID/GID/bounded env, timeout and output limits, durable exit/output receipt; no host Exec. |
+| `box_file_list` | Read | Bounded, paginated exact guest directory listing with safe metadata. |
+| `box_file_read` | Read | Bounded guest file byte/page read with size, encoding, offset/EOF, SHA-256 and verification status for safe optimistic writes. |
+| `box_file_apply` | Mutation | Single identity-checked guest file change with `mode=create|replace|patch|delete`, expected SHA/revision for existing files, exact path, bounded payload, post-read verification; no recursive delete or host file access. |
+| `operation_get` | Read | Exact authorized durable operation receipt with optional bounded `wait_ms` long-poll (default 0, maximum 20000), latest observed state/exit and Tracking ID. |
+| `operation_list` | Read | Paginated, ownership-scoped operation history, including UNKNOWN and cancellation outcomes. |
+| `operation_output_get` | Read | Paginated, bounded original Exec stdout/stderr, cursor and expired/truncated/unknown markers. |
+| `operation_cancel` | Mutation | Authenticated, auditable cancellation *request* against an exact owned operation; prove queued cancellation or attempt supported active Exec termination. Never promise native cancellation or undo effects without evidence. |
+| `diagnostic_get` | Read | Ownership-scoped redacted phases/errors/coverage by authorized Tracking ID; no arbitrary host logs. |
+| `http_route_list` | Read | Read this layer's BoxWeave-owned HTTP routes. |
+| `http_route_create` | Mutation | Domain -> verified owned Box UUID + guest port via dedicated managed Caddy only. |
+| `http_route_delete` | Mutation | Delete exact owned route; no arbitrary Caddy editing. |
+| `port_forward_list` | Read | List this layer's owned TCP/UDP forwarding records. |
+| `port_forward_create` | Mutation | Bind host protocol/port -> verified owned Box UUID + guest port; no arbitrary upstream IP. |
+| `port_forward_delete` | Mutation | Remove exact owned, independently verified native forward. |
+| `acl_rule_list` | Read | Read identity-scoped private access grants. |
+| `acl_rule_add` | Mutation | Add directional protocol/port-scoped access between verified managed Box identities. |
+| `acl_rule_remove` | Mutation | Remove exact owned ACL rule without disturbing foreign settings. |
+| `host_status` | Read | Safe this-layer health, observed dependency versions, Incus/Caddy capability, and nested prerequisites; no foreign host inventory. |
 
-## Universal request and response rules
+The catalog keeps **26 tools** by merging two guest-file mutations into one and adding an operation-cancellation request. Keep separate lifecycle verbs (not generic `box_action`), read/list tools, Caddy routes vs TCP/UDP forwards, and status vs large output/diagnostic queries.
 
-1. Authenticate first and independently establish this layer's ownership scope. A token's permission category and optional exact Box UUID restrictions apply to **reads as well as writes**.
-2. Issue a new `request_id` for each transport attempt and a server-generated `tracking_id` for each logical task. On a valid duplicate idempotency request, return the **original** `tracking_id` and `operation_id` without redispatch.
-3. Journal an accepted mutating intent before sending a native side effect. A mutation is **asynchronous by default**, not a blocking MCP request waiting for completion. Output and final states are queried through read tools.
-4. Pass a typed Go `context.Context` through transport, domain, journal/worker and adapters; worker context is reconstructed from a safe durable projection. A disconnected client does not automatically cancel native work.
-5. Do not return `SUCCEEDED` for a lifecycle/config/route/file operation without verified postconditions. A guest command with `exit_code != 0` is a **completed Exec with failed command outcome**, not an unknown transport effect.
-6. Enforce output/metadata limits, retention, pagination, honest missing-evidence states and secrets redaction. Unauthenticated clients get no operation/diagnostic inventory.
-7. For Box file operations, resolve native guest identity and safely validate file type, traversal/symlink behavior and point-of-use race. Use the native Incus file API where it can meet the required safety/atomicity. Unsupported safe replacements fail closed rather than attempting unsafe host filesystem access.
+## Shared MCP behavior
 
-## P1 / future candidate tools (not P0)
+1. Authenticate, enforce both BoxWeave resource ownership and the authenticated principal's operation-class + optional exact Box UUID scopes on reads, writes, diagnostics and cancellation.
+2. Create a fresh `request_id` for each transport attempt. A newly admitted logical mutation receives server-owned `tracking_id` and persistent `operation_id`; duplicate idempotency requests return the **original** IDs without dispatch.
+3. Persist accepted mutating intent before the native effect; return a quick durable receipt and allow polling. Distinguish caller timeout/cancel from operation cancellation.
+4. Propagate typed Go `context.Context` to domain services, worker and Incus/Caddy/SQLite adapters. Async workers rebuild a safe durable context; client disconnect alone does not cancel work.
+5. Return only independently verified post-state as success. Nonzero guest command exit is an observed completed command with `command_success=false`, not a transport failure.
+6. Bound and scope all output, file access and diagnostic evidence. Refuse stale native identity, unsafe guest file paths, unverified safe replacement, foreign services, and unsupported native cancellation.
+7. Preserve distinct Tracking, Request, Idempotency, BoxWeave Operation and native Incus Operation IDs; tracking and cancellation IDs never authorize access.
 
-- `box_file_search`: bounded guest text search if a durable need emerges.
-- `box_snapshot_list`, `box_snapshot_create`, `box_snapshot_restore`, `box_snapshot_delete`: optional native storage-specific snapshots.
-- Background process management (launch/attach/read logs/stop), idle auto-sleep and HTTP wake, OAuth 2.1 browser authorization: independent later features; no tool names promised yet.
+For precise arguments, cancellation status and file safety, see [tool contract details](MCP_TOOL_CONTRACTS.md). For [Agent development](../product/DEVELOPMENT_LOOP.md), [Tracking/context](TRACKING_CONTEXT.md), [operations](OPERATIONS.md), and [security](SECURITY.md), see the linked contracts.
 
-No mandatory in-Box management client. Do not add `run_host_command`, `read_host_file`, `incus_request`, `caddy_request`, `network_apply_raw`, arbitrary upstream host, arbitrary Incus device/host path or a generic shell running on the host.
+## Later (not P0)
 
-Related: [development loop](../product/DEVELOPMENT_LOOP.md), [Tracking/context](TRACKING_CONTEXT.md), [operations](OPERATIONS.md), [security](SECURITY.md).
+Native snapshots, bounded guest file search, persistent background process supervision, idle sleep/HTTP wake, and OAuth 2.1 browser login. No mandatory guest client, SSH or host shell. Never expose raw Incus/Caddy APIs, arbitrary host file operations, host devices, mounts or unmanaged proxy targets.

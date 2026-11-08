@@ -14,7 +14,7 @@ REQUEST -> ADMITTED (durable before side effect)
                  +-----------+----------+--> UNKNOWN (ambiguous)
 ```
 
-An operation may later move from UNKNOWN to SUCCEEDED or FAILED **only** after sufficient independent evidence; a transient GET returning not found is not by itself proof that a possibly dispatched action never ran. `CANCEL_REQUESTED` is not the same as `CANCELLED`.
+An operation may later move from UNKNOWN to SUCCEEDED or FAILED **only** after sufficient independent evidence; a transient GET returning not found is not by itself proof that a possibly dispatched action never ran. `operation_cancel` is a **separately journaled mutation request**, not an automatic stop or rollback. `CANCEL_REQUESTED` is not `CANCELLED_BEFORE_DISPATCH`, a verified stopped guest Exec, or `CANCELLED`. Only proven no-dispatch can claim no native effects; stopping an already running guest command cannot undo effects it previously made.
 
 ## Minimum journal fields
 
@@ -28,6 +28,8 @@ Persist a safe pre-dispatch intent transactionally. Apply a unique constraint to
 - Persist native operation identity immediately after obtaining it. A crash in the interval between effect and persisted receipt remains UNKNOWN; never blindly send the command again.
 - Categorize transport timeout separately from native operation failure, application deadline and failed verification. Incus may finish after a local timeout.
 - Check native state and original operation whenever possible; reconcile Caddy and ACL desired-versus-actual state under strict ownership and revision checks.
+- Permit exact-operation cancellation **only with proof**: atomically cancel a queued-undispatched intent or request native termination of a supported, observed running Exec. Record cancellation's own Tracking ID/receipt and authorization; never free UNKNOWN claims based on a cancel request alone.
+- Implement `operation_get(wait_ms)` as read-only long polling, default 0 and maximum 20000 ms. Canceling a waiting HTTP request does not cancel the underlying durable native operation.
 - Verify actual postconditions (CPU/memory config, Box state, guest command exit, native ACL, Caddy routing, forward identity). A successful HTTP response from Incus/Caddy alone is not sufficient.
 - Bounded stdout/stderr, paginated `operation_output_get`, expiration and retention; redact tokens, file bytes and private data. Preserve UNKNOWN original identities until reviewed resolution. An observed guest exit `!= 0` is **completed execution** with `command_success=false`, not an MCP timeout or UNKNOWN.
 - Define safe, case-specific compensation only for proven owned partial effects. No catch-all retry, force-delete or reset of a suspicious Box.
@@ -35,7 +37,7 @@ Persist a safe pre-dispatch intent transactionally. Apply a unique constraint to
 
 ## Tool response
 
-An accepted mutation responds with persistent `tracking_id`, `operation_id`, and current state. `operation_get`, `operation_list`, and `operation_output_get` expose scoped progress, bounded output/exit and evidence; `diagnostic_get` provides a redacted trace/phase explanation by Tracking ID. Read-only tools may return immediately but carry correlation. A valid duplicate request returns original IDs. Use standard MCP error categories and meaningful domain error codes; do not invent fake HTTP/gRPC statuses or misclassify UNKNOWN as not found. See [Tracking/context](TRACKING_CONTEXT.md).
+An accepted mutation responds with persistent `tracking_id`, `operation_id`, and current state. The `operation_cancel` response distinguishes its new `cancel_operation_id` from the `target_operation_id`. `operation_get`, `operation_list`, and `operation_output_get` expose scoped progress, bounded output/exit and evidence; `diagnostic_get` provides a redacted trace/phase explanation by Tracking ID. Read-only tools may return immediately but carry correlation. A valid duplicate request returns original IDs. Use standard MCP error categories and meaningful domain error codes; do not invent fake HTTP/gRPC statuses or misclassify UNKNOWN as not found. See [Tracking/context](TRACKING_CONTEXT.md).
 
 ## High-risk cases
 

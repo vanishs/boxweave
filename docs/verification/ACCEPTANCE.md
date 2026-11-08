@@ -51,10 +51,10 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-032 | A new or nested Ubuntu LTS host can complete managed dependency installation/**version upgrades** and explicit BoxWeave upgrade, preserving unrelated services | I + N |
 | A-033 | Server-assigned Tracking ID persists across MCP, Go context/domain, SQLite worker, native Incus/Caddy adapter, diagnostic event and final receipt; dedup returns original Tracking/Operation IDs | T + I |
 | A-034 | Read and denied MCP actions are safely correlated; client-provided tracking fields do not grant identity; request ID differs on retry while logical Tracking ID remains stable | T + I |
-| A-035 | Async guest Exec survives client disconnect where service/native worker remains alive; original command exit 0/nonzero, stdout/stderr pages and completion/unknown distinctions are observed | I + V |
+| A-035 | Typed-argv async guest Exec survives client disconnect where service/native worker remains alive; cwd/env/timeout/output bounds, original exit 0/nonzero, stdout/stderr and completion/unknown distinctions verified | I + V |
 | A-036 | Clean Box creation defaults to start and verifies independent guest Exec readiness; explicit `start=false` leaves Box stopped without false-ready claim | I + N |
-| A-037 | P0 agentless guest file list/read/create-or-conditional-write/optimistic patch works in a clean Box without Guest Agent or SSH; native file bytes and checksums verify result | I + N + V |
-| A-038 | Unsafe guest file path, symlink/hardlink/device, stale revision, foreign Box UUID and unauthorized per-Box/token class are denied before effect; no host file mutation | I + V |
+| A-037 | P0 agentless guest file list/read and four `box_file_apply` modes work in clean Box without Guest Agent/SSH; original SHA and independent post-state verify results | I + N + V |
+| A-038 | Unsafe guest path, symlink/hardlink/device, stale hash, foreign Box and unauthorized `box.file.delete` Token class are denied without effect; no host mutation or unproven atomic-CAS claims | I + V |
 | A-039 | Complete P0 development loop: create -> read -> edit -> deliberate failing Go test -> track and recover output after reconnect -> diagnose -> fix -> passing Go test -> independently verify | I + N + V |
 | A-040 | `diagnostic_get` redacts secrets, scope-checks Tracking ID, reports omitted/unverified stages and does not permit generic host log access | T + I |
 | A-041 | Known disk shrink denied before native dispatch with no side effects; supported disk growth returns native/postcondition evidence, otherwise UNSUPPORTED | I + V |
@@ -62,12 +62,19 @@ Every case reports PASS, FAIL, PARTIAL, BLOCKED, SKIPPED or UNKNOWN and the actu
 | A-043 | Shared pre-existing Incus with unrelated consumers requires separate local approval before upgrade/restart; decline/refusal leaves foreign services intact | I + V |
 | A-044 | Interrupted dependency upgrade or SQLite migration retains exact Tracking ID, source digest, phase and recoverable error; no silent reinstall/downgrade, blanket host update or automatic background package mutation | T + I |
 | A-045 | P0 has no silent idle stop/HTTP wake or OAuth-only login prerequisite; later P1 additions do not break Token-backed Agent development loop | I |
+| A-046 | `operation_get(wait_ms)` has a max 20000 ms bounded wait, responds on state change and never cancels native work from read timeout/disconnect | T + I |
+| A-047 | `operation_cancel` atomically cancels a proven undispatched intent; has its own Tracking/cancel operation receipt; `operation.read`-only token cannot cancel | T + I + V |
+| A-048 | Active Exec cancel needs actual native termination proof; concurrent completion, unsupported native actions, UNKNOWN and prior guest side effects are not mislabeled as rolled back | I + V |
+| A-049 | All four `box_file_apply` modes, including one-file delete, verify native post-state; unsafe host paths, race, symlink/hardlink/device and stale hashes refused | I + N + V |
+| A-050 | Guest-root `box.exec` may modify guest files despite absent file-write/delete Token rights, but cannot access parent/foreign host files | I + V |
+| A-051 | `box_update` forbids raw Incus/NIC/device/host mounts and disk shrink; only typed CPU/memory/disk-growth/nesting/internet changes with post-state verification | I + V |
+| A-052 | `box_file_read` returns trustworthy size, offset, EOF, SHA/hash coverage; concurrent or partial reads without snapshot-consistency do not fabricate verified full-file hashes | I + V |
 
 ## Required adversarial combinations
 
 - Create is in flight while concurrent delete/update arrives; enforce one allowed effect, typed conflict, verified follow-on success.
 - Delete then recreate a Box with the same name/IP; ACL, routes, forwarding and old operation receipts never rebind to the new UUID.
-- Lose MCP client connection after mutating dispatch (including a long guest build/test); query the *original* operation/output by Tracking/Operation ID, not an implicit replay.
+- Lose MCP client connection after mutating dispatch (including a long guest build/test); query the *original* operation/output by Tracking/Operation ID. `operation_get(wait_ms)` times out without canceling the original, and `operation_cancel` never implies rollback.
 - Incus accepts a configuration write but ignores a key; verify postcondition failure.
 - Caddy route written to DB, Caddy API unavailable, later Caddy restart; reconcile without touching unowned domains.
 - Parent L0 stops L1 Box while L1 has a running nested operation; verify child recovery and no accidental parent modification.

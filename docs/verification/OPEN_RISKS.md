@@ -30,7 +30,10 @@
 | O-024 | **VALIDATE** | Pin the actual compatible Incus/Caddy runtime versions, official Go SDK build revisions, Ubuntu LTS baseline and required API extensions; detect shared-service consumers and preflight safe version upgrades. No arbitrary guessed dependency versions. |
 | O-025 | **VALIDATE** | Default create/start timing, guest Incus Exec readiness, startup false readiness, nested Linux capacity and the exact optional start=false semantics. |
 | O-026 | **DESIGN** | Exact Box UUID/token operation-class authorization model, credential revocation propagation across durable workers, and denial of cross-token output/diagnostic access. |
-| O-027 | **VALIDATE** | Long-lived guest Exec without resident Agent: native operation continuity, process termination, observed exit, output capture under client disconnect, Box stop and worker restart. An UNKNOWN must not be falsely reported as completed. |
+| O-027 | **VALIDATE** | Long-lived guest Exec without resident Agent: typed argv/cwd/env, native cancel/termination proof, exit/output under disconnect, Box stop and worker restart. Cancellation requested is not confirmed termination. |
+| O-028 | **VALIDATE** | Incus guest file API compare-and-swap under other guest writers. A pre-read SHA then write is not inherently atomic. Test point-of-use safety, symlink/hardlink, races and actual post-state before promising safe patch/replace/delete. |
+| O-029 | **VALIDATE** | Incus Exec cancellation: waiter canceled versus guest process killed, active cancellation race, UNKNOWN native outcome, restart and partial guest effects. Queued-only cancellation must remain safe if native termination is unsupported. |
+| O-030 | **DESIGN** | Final file hash coverage/content encoding and safe payload size, bounded Exec output retention, `operation_get(wait_ms)` waiter limits and Tunnel/proxy interoperability. Pick measured SDK-tested limits, not invented guarantees. |
 
 No unresolved choice permits MCP operation against unowned resources or bypass of the parental layer boundary.
 

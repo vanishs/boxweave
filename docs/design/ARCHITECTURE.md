@@ -44,7 +44,7 @@ Do not build a second public management protocol, Web control plane, remotely ca
 5. **Caddy adapter:** dedicated BoxWeave-owned Caddy process/configuration where feasible; only BoxWeave-managed route namespace, local-only Admin API. Reconcile desired SQLite records into Caddy live configuration.
 6. **Privileged boundary:** service privilege separation or a constrained local helper owns necessary Incus/host setup privileges. Public MCP never accesses unrestricted Incus socket, Caddy Admin API or host shell.
 7. **Host-local CLI:** bootstrap password, operation-class/exact-Box scoped token issuance/revocation, diagnostics, dependency-aware explicit install/upgrade/recovery, version/dependency provenance, credential reset; never a public management endpoint. Each tracked local operation carries a safe correlation ID.
-8. **P0 Agent development path:** no BoxWeave Client or SSH in ordinary Linux Boxes. Incus daemon performs native async Exec, guest file list/read/create-or-safe-write/optimistic patch and independently observed state. Reads/writes carry Tracking IDs; bounded original outputs and diagnostics are queryable after reconnect.
+8. **P0 Agent development path:** no guest Client or SSH. Incus performs typed-argv async Exec and guest file list/read plus `box_file_apply(create|replace|patch|delete)`, with independently observed state. Bounded `operation_get(wait_ms)` reads and separately tracked `operation_cancel` requests never falsely imply rollback. Tracking IDs, original output and diagnostics remain queryable after reconnect.
 
 ## Confirmed technology selection
 
@@ -54,7 +54,7 @@ Do not build a second public management protocol, Web control plane, remotely ca
 - **State and integrations:** local SQLite journal, Caddy Admin API, Linux/systemd; the exact implementation libraries and version compatibility are verified in the first development slice.
 - **No secondary controller:** no Containarium layer, arbitrary Incus CLI subprocess wrapper for core operations, or separate public REST/gRPC management service.
 
-See [technology stack](TECH_STACK.md), [Tracking/context](TRACKING_CONTEXT.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), [P0 development loop](../product/DEVELOPMENT_LOOP.md), [MCP binding](MCP_BINDING.md), [agentless guest management](GUEST_MANAGEMENT.md), and [approved defaults](../decisions/DEFAULTS.md).
+See [technology stack](TECH_STACK.md), [detailed MCP tool contracts](MCP_TOOL_CONTRACTS.md), [Tracking/context](TRACKING_CONTEXT.md), [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md), [P0 development loop](../product/DEVELOPMENT_LOOP.md), [MCP binding](MCP_BINDING.md), [agentless guest management](GUEST_MANAGEMENT.md), and [approved defaults](../decisions/DEFAULTS.md).
 
 ## Security invariants
 

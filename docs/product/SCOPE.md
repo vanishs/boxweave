@@ -9,7 +9,7 @@
 - Incus controls Boxes; Caddy manages BoxWeave-owned HTTP publishing; native Incus networking supports scoped TCP/UDP forwarding and private connectivity rules.
 - Per-Box ownership and isolation; no user-facing Tenant concept.
 - Linux containers first. Virtual machines, complex orchestration, and clusters are not part of the P0 promise.
-- Guest commands use native Incus Exec with **guest root (UID 0) by default**, not a required guest SSH service or installed guest-side BoxWeave Agent. P0 also uses safe native Incus guest file APIs for list/read/write/optimistic patch. Host shell and host privilege remain forbidden.
+- Guest commands use native Incus Exec with **guest root (UID 0) by default**, typed `argv`, safe guest `cwd`, bounded env/timeout/output, and no required guest SSH/Agent. P0 uses safe native Incus guest file APIs for list/read and `box_file_apply(mode=create|replace|patch|delete)` with optimistic hash checks. Host shell and host privilege remain forbidden.
 - Every accepted mutation, including guest Exec and guest file writes, is represented by a durable local asynchronous operation and can be reconciled after failure. Each MCP action is correlated using a stable server-owned Tracking ID and typed Go context propagation.
 - Fully functional installations at every supported nesting layer: each layer independently manages only its own directly owned Boxes. Nesting is runtime compatibility, not a recursive BoxWeave management feature.
 - Keep the underlying Incus storage driver unconstrained; capability-dependent operations report unsupported accurately.
@@ -19,7 +19,7 @@
 
 ## P0
 
-**Sustainable Agent development loop**: Box creation defaults to start and proves guest Exec readiness; Box-scoped guest file listing/reading/create-or-safe-write/optimistic patch; asynchronous guest-root Exec with paginated bounded stdout/stderr and observed exit retrieval; read-only Tracking ID diagnostics; authenticated per-operation-class/per-Box Token rights. Box lifecycle and safe updates (including **no disk shrink**), host health; managed HTTP routes and TCP/UDP port forwarding; Box-owned private ACL and optional internet denial; universal Tracking ID/Go context and durable async operations; strict host/resource boundaries; independent nesting; version-aware auto-reconciliation of approved dependencies during explicit local install/update/status/recovery; adversarial and real nested acceptance.
+**Sustainable Agent development loop**: Box creation defaults to start and proves guest Exec readiness; Box-scoped guest file listing/reading and a single safe apply tool supporting create/replace/patch/single-file delete; asynchronous guest-root Exec with paginated bounded stdout/stderr and observed exit retrieval; `operation_get(wait_ms)` and proof-based `operation_cancel`; read-only Tracking ID diagnostics; authenticated per-operation-class/per-Box Token rights. Box lifecycle and safe updates (including **no disk shrink**), host health; managed HTTP routes and TCP/UDP port forwarding; Box-owned private ACL and optional internet denial; universal Tracking ID/Go context and durable async operations; strict host/resource boundaries; independent nesting; version-aware auto-reconciliation of approved dependencies during explicit local install/update/status/recovery; adversarial and real nested acceptance.
 
 See [tool inventory](../design/MCP_TOOLS.md).
 
