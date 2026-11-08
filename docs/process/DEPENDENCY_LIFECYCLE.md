@@ -8,6 +8,12 @@ Pin source VERSION, exact Go toolchain/MCP SDK/Incus SDK revisions and verified 
 
 **Caddy and its TLS/HTTP packages are not BoxWeave dependencies.** No independent proxy service is installed or upgraded. Exact compatible version bounds are established by engineering tests, not guessed in the design.
 
+## Prefer upstream-native runtime confinement
+
+Reviewed Incus v7.6.0 module declares **Go 1.26.9**, MCP v1.8.0 declares **Go 1.25.0**; build using the stricter selected dependency requirement. Installed binary users should not need a local compiler.
+
+Incus natively confines a non-root service user in `incus` (not `incus-admin`) to its per-user Project. The local admin installer should first configure a `restricted=true` Project with only reviewed exceptions. `restricted.devices.proxy` and `restricted.containers.nesting` default to `block`, so negative tests and explicit operator authorization are essential. Try restricted TLS only if the native local arrangement cannot support required operations; a privileged helper is a last resort, not a normal runtime component. See [Incus authorization](https://linuxcontainers.org/incus/docs/main/authorization/) and [20-tool mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md).
+
 ## Host-local controlled reconciliation
 
 1. A local administrator explicitly invokes `boxweave install` or `boxweave upgrade`. Observe the existing daemon and its consumers before change; do not take over unrelated Incus instances just because they exist.
