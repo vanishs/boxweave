@@ -86,6 +86,10 @@ A restricted `incus` user initially received **`Proxy devices are forbidden`** w
 
 The backed-up database and real test logs are deliberate L1 artifacts, **not** exposed to model clients as host diagnostics or removed blindly.
 
+## Subsequent follow-up: original TLS hypothesis was actually tested
+
+The later [tagged-source and native TLS/Scriptlet ACL SDK report](INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) **completed** the restricted-TLS verification proposed below. Pure restricted TLS to the business Project cannot modify an inherited `default` ACL; restricted TLS to `default` can edit it but exposes more Project authority. A built-in Incus Scriptlet allowed exact existing ACL edits and denied another ACL's GET/PUT/DELETE, while SDK native ACL ETag returned **412** on a stale update. **Creation remained Project-wide**, and global TLS-to-Scriptlet routing lost automatic certificate Project limitations. The later experiment cleaned up all new certs/ACLs/Project/loopback listener, and additionally removed two old test-only certs left behind by the first B/C cleanup. The older recommendations below are preserved as historical context; use the newer report for current design status.
+
 ## Architecture decisions now grounded in evidence
 
 1. **Keep official SDK-first.** Working native SDK Exec/file paths, typed 404, restricted Unix user and actual NIC/proxy devices remove the need for generic wrappers. `UseProject` must explicitly select the verified restricted Project even on `unix.socket.user`; `GetServer().Auth=trusted` is not Incus administrator authorization.
