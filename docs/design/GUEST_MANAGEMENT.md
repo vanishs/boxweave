@@ -20,6 +20,15 @@ Native Incus guest file APIs are part of **P0**, enabling bounded listing/readin
 
 Incus v7.6.0 provides guest list/read, create/overwrite/append/delete and SFTP, but the normal SDK file upload/delete arguments do **not** carry an original content hash, ETag, or atomic compare-and-swap guard. A pre-read hash does not make concurrent `replace` or `delete` atomic, and ordinary create may overwrite unless separately proven exclusive. Keep the narrow `box_file_apply` contract but **do not claim strong conditional safety without a verified implementation**. Investigate a small one-shot SDK-based guest Exec where appropriate; otherwise return `UNSUPPORTED` for the affected mode and surface the missing guarantee. No guest daemon or custom patch engine is justified. See [SDK fit review](../research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
+## Second-pass native SDK call mode
+
+[Tagged-source second-pass investigation](../research/SDK_GAP_CLOSURE_2026-11-07.md) clarified two P0 constraints:
+
+- **File create:** The Incus daemon's ordinary `CreateInstanceFile` regular-file overwrite path uses `O_CREATE|O_TRUNC`. It is not a create-if-absent API. The official `GetInstanceFileSFTP` client might permit `OpenFile(O_EXCL)` for a *native exclusive create*, but that precise server behavior and symlink/race cases need real negative tests. Do not report `create` success if an existing path could have been overwritten. Strong hash-conditional replace/delete remain unproved.
+- **Async Exec:** `ExecInstance(RecordOutput=true)` **with** non-nil stdout/stderr writer can block on native `op.Wait()` and consume/delete the SDK's recorded output before returning. The SDK's public `GetInstanceLogfile` is not the private exec-output reader. Prefer the official Exec websocket stream plus a BoxWeave worker-owned bounded output sink and early native operation receipt; prove lifecycle/output recovery instead of wrapping internal HTTP endpoints.
+
+These are choices of native SDK **usage**, not reasons to reimplement the daemon or install a guest Agent.
+
 ## Exact guest Exec and regular-file result guarantees
 
 **Exec:** A nonzero observed guest exit is completed execution with `command_success=false`. A trustworthy observed zero is success. Missing or malformed exit metadata, an uncertain native dispatch/wait or lost websocket cannot be folded into zero/success; keep bounded output and original Operation/Tracking identity for reconciliation. A dead MCP client must neither cause an implicit replay nor be the sole owner of the command's output/exit bookkeeping. Test long-running commands with both silent and continuous stdout/stderr while the client disconnects. Cap bytes as they arrive; distinguish truncation from a genuine native/transport failure. Never auto-retry an arbitrary user command merely because an error string resembles a transient PID failure.
