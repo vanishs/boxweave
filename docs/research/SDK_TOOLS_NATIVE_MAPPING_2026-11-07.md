@@ -1,0 +1,70 @@
+# v1 public tools → native SDK contract map (20/20)
+
+**Status:** code/documentation research only, 2026-11-07. Covers the exact current 20 public tools in [MCP_TOOLS](../design/MCP_TOOLS.md), using Incus **v7.6.0**, MCP Go SDK **v1.8.0** tagged source. **Mapping is not implemented, compiled or natively accepted.** Use this map before defining adapters or requesting a new BoxWeave subsystem.
+
+**Design rule:** Incus already implements native resources/operations; MCP SDK already implements protocol/typed handlers/auth middleware. BoxWeave adds only actual *product* ownership, safe input policy, caller idempotency, the minimum business-operation journal and proof of requested postconditions. SDK interfaces are not synonymous with verified real-world behavior.
+
+## A. Public MCP → Incus SDK map
+
+| Tool | Primary official Incus SDK methods / native model | BoxWeave-owned work (not an SDK feature) | Status |
+|---|---|---|---|
+| `box_create` | `CreateInstance` or `CreateInstanceFromImage`, `UpdateInstanceState`, `GetInstance`, `GetInstanceState`; `api.InstancesPost` / `api.InstanceStatePut` | Project-scoped admission, owned UUID from live `volatile.uuid`, effective root pool/NIC, pre-start isolation, readiness, durable idempotency | Native API CONFIRMED; exact safe topology UNKNOWN |
+| `box_list` | `GetInstances(api.InstanceTypeContainer)`; optional filtered instance APIs | Keep only ledger-owned UUIDs in this Project; report stale/unknown native records separately, paginate in BoxWeave | CONFIRMED |
+| `box_get` | `GetInstance(name)` (returns ETag and `ExpandedConfig`/`ExpandedDevices`), `GetInstanceState` | Resolve owned UUID -> project/name and live UUID; distinguish native status from guest readiness; show only owned grants | CONFIRMED |
+| `box_update` | `GetInstance` → typed `api.InstancePut` merge → `UpdateInstance(name,put,ETag)` → `GetInstance` / `GetInstanceState` | Allowlist CPU/memory/root-disk growth/nesting/internet toggle; omitted != clear; never erase inherited local device fields; verify effective state | CONFIRMED API; storage/effective semantics UNKNOWN |
+| `box_start` | `UpdateInstanceState(name,api.InstanceStatePut{Action:"start"},ETag)` plus `GetInstanceState` | Pre-start NIC isolation check, UUID guard, durable receipt, observed readiness | CONFIRMED |
+| `box_stop` | `UpdateInstanceState` with stop action, `GetInstanceState` | UUID+ownership, bounded stop policy, native state/effect observation | CONFIRMED |
+| `box_delete` | `DeleteInstance(name)` plus native `UpdateInstance` for owned proxy devices, `GetNetworkACL`/`UpdateNetworkACL` for owned grants | Lock exact UUID/forward/peer claims, record partial cleanup, safe tombstone and UNKNOWN. For instance-owned proxy-only P0, don't build orphan *network-forward object* machinery | CONFIRMED API; transaction assembly BoxWeave |
+| `box_exec` | `ExecInstance(name,api.InstanceExecPost, *InstanceExecArgs)`, native `Operation`/`GetOperation`; websocket output, `RecordOutput`; logfile endpoints | Durable admission and bounded output; original exit metadata, disconnection, separate native terminate evidence; no in-guest BoxWeave Agent | CONFIRMED API; stream/reconnect semantics UNKNOWN |
+| `box_file_list` | `GetInstanceFile` on directory returns `InstanceFileResponse.Entries` (`[]string`) and metadata | Restrict path and owned Box; bound/paginate result **in BoxWeave**, not assume upstream file pagination | CONFIRMED |
+| `box_file_read` | `GetInstanceFile` returns `io.ReadCloser` / `InstanceFileResponse` | Bounded stream, verify regular file type and size, compute full SHA **only if complete consistent read**, safe path rules | CONFIRMED |
+| `box_file_apply` | `CreateInstanceFile` (`InstanceFileArgs` + overwrite/append), `DeleteInstanceFile`, and `GetInstanceFileSFTP` where useful | **No native hash/ETag CAS** for create-if-absent, conditional replace/delete; enforce actual point-of-use safety or report UNSUPPORTED. Avoid custom patch agent | Partial: basic native write yes; strong conditional semantics UNPROVEN |
+| `operation_get` | `GetOperation(id)` or `GetOperationWait(id,seconds)`; `api.Operation` native status, metadata and error | Durable original operation receipt/actor scope, read-only capped polling, postcondition evidence. Never use `WaitContext(ctx)` as observational timeout | CONFIRMED |
+| `operation_list` | `GetOperations` can supplement active native tasks | **List BoxWeave journal**, not native operations as authority: native completed ops may disappear, other project ops may exist | CONFIRMED distinction |
+| `operation_output_get` | Exec `RecordOutput`/native output log access (`GetInstanceLogfile` / `GetInstanceLogfiles`) and/or live `InstanceExecArgs` writers | Capture bounded original output in BoxWeave under native operation; retention/cursor/authorization are BoxWeave contracts. Validate exact output collection timing | API CONFIRMED; reconnect path UNKNOWN |
+| `operation_cancel` | Native `Operation.Cancel()` and `api.Operation.MayCancel`; query result with `GetOperation` | Separately track cancel request; prove no dispatch for queued jobs, prove native termination for running Exec; never treat cancel request as rollback | Native method CONFIRMED; termination semantics UNKNOWN |
+| `port_forward_list` | `GetInstance` local/expanded devices: owned `type=proxy` | Filter and present only instance-owned named device claims from local ledger/native readback; do not list all `GetNetworkForwards` | DESIGN choice; native device data CONFIRMED |
+| `port_forward_create` | `GetInstance` → guarded `api.InstancePut.Devices` (instance-owned `proxy` config) → `UpdateInstance(..., ETag)` → readback | Validate owner UUID, host binding, protocol+target, no foreign device overwrite, read/verify actual listener and LAN witness. Respect `restricted.devices.proxy` | Native proxy capability CONFIRMED; host/network test UNKNOWN |
+| `port_forward_delete` | Same guarded `UpdateInstance(..., ETag)` removing exact owned proxy device | Exact native device identity, no foreign deletion, idempotent durable result and native absence proof. If instance is gone, there is no surviving *instance device* to remove | CONFIRMED native model |
+| `box_peer_set` | `GetNetworkACL`, `CreateNetworkACL`, `UpdateNetworkACL(..., ETag)`, `DeleteNetworkACL`; `UpdateInstance` owned NIC `security.acls` | Directional pair policy and identity/IP reuse checks, pre-start default deny, proof IPv4/IPv6 and reply traffic. **Not** Incus `GetNetworkPeer/CreateNetworkPeer`: those are OVN network-to-network peer APIs | Correct API family CONFIRMED; packet rules UNKNOWN |
+| `host_status` | `GetServer()` provides `api.Server` / extensions; `HasExtension(name)`; optional `GetServerResources` | Version/build hash/Go module pins, local service/DB/dependency health, safe capability labels | CONFIRMED |
+
+**Source:** [Incus InstanceServer interface](https://github.com/lxc/incus/blob/v7.6.0/client/interfaces.go); [instance methods](https://github.com/lxc/incus/blob/v7.6.0/client/incus_instances.go); [operation methods](https://github.com/lxc/incus/blob/v7.6.0/client/incus_operations.go); [operation model](https://github.com/lxc/incus/blob/v7.6.0/shared/api/operation.go); [project and ACL interfaces](https://github.com/lxc/incus/blob/v7.6.0/client/interfaces.go); [proxy docs](https://linuxcontainers.org/incus/docs/main/reference/devices_proxy/).
+
+## B. The MCP Go SDK already supplies these components
+
+| Function | Native SDK surface | v1 decision |
+|---|---|---|
+| Streamable HTTP / version negotiation | `mcp.NewStreamableHTTPHandler`, `mcp.StreamableHTTPOptions{Stateless:true}`, `mcp.ServerOptions.SupportedProtocolVersions` | SDK-owned. New `2026-07-28` protocol requires Stateless HTTP. Legacy client negotiation is an acceptance test, not our own transport implementation |
+| Tool registration and JSON validation | `mcp.NewServer` + typed `mcp.AddTool[In,Out]`; `mcp.ToolAnnotations` | Register 20 tools once on shared server; use SDK input/output Schema. Tool annotations are *hints*, never authorization |
+| Tool business error | `mcp.CallToolResult.IsError`, `SetError`; ordinary typed-handler errors become tool results | Tool execution/domain failure should be MCP tool error, so the agent can inspect it; reserve JSON-RPC errors for actual protocol-level faults; preserve safe structured domain error fields without invented gRPC codes |
+| Bearer token HTTP parsing / validation | `auth.RequireBearerToken(verifier,opts)`, `auth.TokenInfoFromContext` | Reuse SDK middleware. BoxWeave implements verifier against its own token store, revocation and admin/viewer authorization. SDK requires `TokenInfo.Expiration` by default (or explicit `AllowMissingExpiration`). No need for our own Bearer parser, OAuth login or token-validation framework |
+| DNS rebinding / body cap | Default loopback Host protection, `StreamableHTTPOptions.MaxRequestBodyBytes` (default 4 MiB) | Reuse SDK defaults. Configure Origin middleware and trusted reverse proxy behavior explicitly; don't disable localhost protections casually, or install redundant body reader. Respect 4 MiB request payload when defining file-apply size cap |
+| Cancellation semantics | `StreamableHTTPOptions.PropagateRequestCancellation`, default false | Durable work continues after HTTP abort by design; don't conflate MCP handler cancel with native Incus cancellation. Test modern/legacy differences |
+| JSON vs SSE and session replay | `JSONResponse`, `EventStore`, `Stateless` | For narrow request/response tools, prefer normal SDK behavior; MCP session replay isn't an operation journal and 2026-07-28 has no SSE resumption |
+| Schema cache and paging | `mcp.SchemaCache`, `mcp.ServerOptions.PageSize` | A single shared server can register tools once; if creating per-request servers, share SDK `SchemaCache`. SDK tool-list paging is **not** BoxWeave `box_list`/`operation_list` paging |
+
+**Source:** [MCP streamable transport](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/streamable.go); [typed tool behavior](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/tool.go); [server typed tool implementation](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/server.go); [Bearer middleware](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/auth/auth.go); [CallToolResult](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/mcp/protocol.go).
+
+## C. Explicit false friends (similarly named, different semantics)
+
+1. Incus `GetInstancePortForwardConn` opens a connection to a guest port; it is **not** persistent public host port publishing. Use an instance `proxy` device for P0 host-port listeners.
+2. Incus `CreateNetworkPeer` peers **networks**, not one Box to another. Use NIC-attached ACL policy for `box_peer_set`.
+3. `UseProject` selects a project in an SDK client; it does **not** assign restricted OS credentials. Incus's `incus` group and restricted TLS certificate provide their own separate native auth restrictions, subject to configuration.
+4. `InstancePut.Config` / `Devices` are maps. SDK typing does **not** grant atomic field-level patches or protect inherited devices; use read → narrow merge → ETag guarded update → effective readback.
+5. `api.StatusErrorMatch(err, codes...)` and `api.StatusErrorCheck` are native HTTP error classifiers. Do not compare localized error strings for `404`/`409`; do not invent fake provider status-code constants.
+6. `Operation.WaitContext` may call `Cancel()` on expiration. `GetOperationWait` is a *read* API and must be used appropriately.
+7. `mcp.ToolAnnotations.ReadOnlyHint/IdempotentHint` are caller **hints**, not security or server idempotency.
+8. Incus file write APIs provide bytes/files, not a transactional compare-and-swap across guest processes.
+9. Incus Project containment controls accessible native objects; it does not by itself prove same-bridge packet isolation.
+10. A successful Incus Operation is native execution evidence; BoxWeave business readiness (service reachable, old forward absent, intended effective limit applied) needs its own specific postcheck.
+
+## D. Minimum code-first proof gates, no host modification in this review
+
+- **Incus credential probe (first):** dedicated non-root service user in `incus` group (not `incus-admin`), native auto-confined Project, project `restricted=true` and only necessary options; verify stop/exec/file/network ACL/proxy/nesting works while foreign and admin actions are **denied**. `restricted.devices.proxy` defaults to `block`, and `restricted.containers.nesting` defaults to `block`; enabling each has genuine exposure consequences. If this native-only model cannot meet P0, evaluate *restricted TLS certificate*, then only if needed a tiny privileged helper.
+- **Native instance/operation probe:** `CreateInstance`, read `volatile.uuid`, ETag update, `GetOperationWait` timeout without cancel, type-safe `StatusErrorMatch`, tracked Exec with observed exit/output.
+- **File guarantee probe:** read/list, SFTP create-if-absent where available, symlink/hardlink/multi-writer tests, native overwrite/delete without fake CAS. Either prove safe conditions or reduce specific modes to UNSUPPORTED pending owner decision.
+- **Network probe:** one Incus instance `proxy` for loopback TCP/UDP and LAN binding, NIC ACL same-bridge IPv4/IPv6 before start, A-initiated flow and B-initiated denial, guest network changes, nested proxy behavior.
+- **MCP probe:** typed server, native Bearer middleware, SDK default body/Host limits, explicit Origin enforcement, stateless modern discovery, legacy initialize, tool errors versus protocol errors, client reconnect polling.
+
+Result labels must distinguish `SOURCE_CONFIRMED`, `DESIGN_SELECTED`, `NEEDS_NATIVE_TEST` and `UNSUPPORTED`. No code/doc study alone earns a native acceptance PASS.
