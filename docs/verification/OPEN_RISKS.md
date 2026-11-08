@@ -6,15 +6,15 @@
 |---|---|---|
 | O-001 | **DECIDED** | Go + official MCP Go/Incus Go SDKs; pin actual supported versions/API Extensions through build/native tests. |
 | O-002 | **VALIDATE** | Exact Incus UUID/instance incarnation behavior on create, clone, delete/recreate; ownership cannot rely on name/IP. |
-| O-003 | **VALIDATE** | Bridge/OVN NIC actual same-bridge IPv4/IPv6 deny and per-pair directional native enforcement, including spoofing and lifecycle/IP reuse. No general ACL editor. |
-| O-004 | **VALIDATE** | Restricted Incus credentials/project and setup privilege boundary; no root-equivalent native admin socket in network-facing MCP runtime. |
-| O-005 | **VALIDATE** | Prefer **instance-bound native proxy device** for TCP/UDP P0 host listener. Prove bind/collision, supported bridge/OVN, hotplug/restart and nesting; an independent network-forward backend is **not** a P0 fallback. No custom proxy/Caddy. |
+| O-003 | **PARTIAL / P0 BLOCKED** | Native Bridge NIC IPv4+IPv6 deny, admin-granted directional allow and new-flow revoke PASSED with real L2 packets. But **confined runtime user cannot edit its inherited default-Project ACL rules**; `features.networks=true` required OVN. Restricted-TLS capability remains the immediate design decision gate; spoof/IP reuse and established-flow revocation untested. |
+| O-004 | **PARTIAL / P0 BLOCKED** | Real non-root `incus` user/Project, explicit SDK `UseProject`, denied admin Unix Socket and foreign Project config PASSED. However runtime ACL create/update in inherited `default` was denied; do not simply run the network-facing MCP process as `incus-admin`. |
+| O-005 | **PARTIAL PASS** | Actual native **loopback TCP HTTP 200 and UDP echo** passed with restricted runtime user after host-local Project `restricted.devices.proxy=allow`. Device removal/listener disappearance also PASSED. External LAN/public bind, collision, host restart, IP reuse and L0/L1 chained forwards remain untested. No custom proxy/Caddy. |
 | O-006 | **VALIDATE** | Native IPv6 safe owned disable or fail-closed refusal where private isolation cannot be proven; no global host/foreign modifications. |
 | O-007 | **VALIDATE** | Full inside-Box install/nested Incus user namespaces/idmaps/storage/bridge permissions through L1/L2 and parity under actual resources. |
 | O-008 | **DESIGN** | Minimal SQLite durable intent/context/Tracking journal, exact idempotency and UNKNOWN reconciliation after native result disappears. No tracing backend platform. |
 | O-009 | **DESIGN** | Local bootstrap, `admin`/`viewer` token issuance/revocation and role checks; viewer reads are potentially sensitive. |
-| O-010 | **VALIDATE** | Safe guest file create/conditional replace/delete via native Incus files, symlink/hardlink/concurrent writer attacks and honest atomicity limits. No guest patch engine. |
-| O-011 | **VALIDATE** | Native Guest Exec long-running output/exit and attempts to cancel active process, including disconnected client, worker restart and UNKNOWN state. |
+| O-010 | **PARTIAL PASS** | Official SDK file create/read/exact-content/delete+404 and one SFTP `O_EXCL` existing-file refusal PASSED. Concurrent exclusive-create, symlink/hardlink paths and atomic conditional replace/delete are **not proven**; no guest patch engine. |
+| O-011 | **PARTIAL PASS** | Official SDK early native Exec operation receipt, stdout/stderr, observed nonzero **7** and zero exit PASSED. MCP disconnect/worker restart, native running cancellation, missing-output recovery and original UNKNOWN durability remain untested. |
 | O-012 | **VALIDATE** | Operation output retention bounds, `operation_get(wait_ms)` concurrency, request/Tracking ID propagation and safe redacted inline diagnostic summary. |
 | O-013 | **VALIDATE** | Existing Incus daemon/version detection, compatible upgrade when explicitly authorized, shared consumer protection, no foreign adoption, native postflight. |
 | O-014 | **VALIDATE** | Ubuntu LTS guest/host first; any new Linux guest image must pass actual Exec/file/network/nesting support matrix before advertised. |
