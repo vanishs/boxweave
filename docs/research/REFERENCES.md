@@ -77,3 +77,5 @@ Prior Containarium Caddy reconciliation, generalized ACL, Web/UI, OAuth, snapsho
 - [Every v1 public MCP tool mapped to official Incus/MCP SDK methods](SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) — 20/20 tools, native implementations versus BoxWeave-specific policy, missing guarantees and practical test gates.
 
 - [Second-pass exact SDK contract gaps](SDK_GAP_CLOSURE_2026-11-07.md) — MCP Tool per-request identity (distinct from HTTP context), Bridge ACL selector/anti-spoof limits, native file creation truncation and CAS, blocking Exec output modes, operation-wait transport behavior, Project features/root Profile ordering; source links and historical changes included.
+
+- [Executed Incus 7.6 TLS/Scriptlet ACL authorization probe](../verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) — source-confirmed Project ACL expansion, official Go SDK restricted TLS access tests, native Scriptlet exact ACL edit permissions, stale ETag 412, Project-wide ACL create-granularity limit, client-class routing risks and independently verified cleanup.
