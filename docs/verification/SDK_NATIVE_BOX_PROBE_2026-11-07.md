@@ -23,10 +23,10 @@
 | Original task ID | `0f3f3a1f9a1141b21d89e0eb08a83f24` |
 | Creation response | `REST_GATE_PENDING` on submission; **`REST_CREATE_ACCEPTED`** on read-only poll |
 | Guest SSH result | `TRUST_NOT_READY` at first connect — **not guest ready** |
-| Latest subsequent status | **UNKNOWN**: status read, existing-Box SSH probe and even read-only host info all returned `The tool failed internally.` |
+| Latest subsequent status | **UNKNOWN:** a subsequent status read again returned `REST_CREATE_ACCEPTED` (guest SSH false); `get_container` reported `CONTAINER_STATE_ERROR` with otherwise empty/default resource fields; `debug_container` returned `UNAVAILABLE`; SSH remained `TRUST_NOT_READY`. Later repeated gateway/tool read failures prevented independently reconciling this inconsistent view. |
 | Current final state | **UNKNOWN** — no final creation success, login or native outcome proven; **never resend create** |
 
-**Important:** The Box admission may have progressed after the last successful poll. We do not have verified readiness, no permission to infer failure, and no evidence of a guest mutation or an Incus-native SDK command actually running in the new Box. The original task must be **read**, not repeated.
+**Important:** The apparent `CONTAINER_STATE_ERROR` from a partially populated REST get and `REST_CREATE_ACCEPTED` from the original durable creation task **must not be collapsed into an asserted final success or failure**; use exact native evidence before cleanup. After a brief tool recovery, live host info showed **50** running containers, versus 49 earlier, but that aggregate count does not identify the new Box or prove SSH readiness. The Box admission may have progressed after the last successful poll. We do not have verified readiness, no permission to infer failure, and no evidence of a guest mutation or an Incus-native SDK command actually running in the new Box. The original task must be **read**, not repeated.
 
 ## Grouped validation matrix — all remaining work unexecuted
 
@@ -47,6 +47,16 @@
 - No background or automatic retry of an uncertain create/mutate request. Read original receipt and verify exact native identity.
 - All test evidence must include command/result, SDK module version, daemon version/API extension, owned instance UUID and independent native readback. A code review or an SSH prompt does not count as native validation.
 - If Go 1.26.9+ (Incus v7.6 SDK requirement) or native network controls are unavailable in this Box, mark exact tests BLOCKED/UNSUPPORTED rather than substituting an upstream implementation or modifying shared host.
+
+## Additional gateway observations after transient recovery
+
+- A read-only follow-up on original task still reported **`REST_CREATE_ACCEPTED`**, `guest_user_and_ssh_verified=false`.
+- `get_container(username=bwv1sdk-1107-a)` reported `CONTAINER_STATE_ERROR`, but most fields were empty/default; this is **not** independent native state verification.
+- `debug_container` returned `UNAVAILABLE`; `connect` returned `TRUST_NOT_READY`.
+- The host aggregate went from **49** to **50** running containers; no exact Box identity could be inferred from aggregate reporting.
+- Additional read-only SSH probes of previously accessible Boxes, create-status and gateway diagnosis again returned **internal tool errors**. The testing transport is therefore unstable for this run.
+
+**Handling:** Do not dispatch a replacement creation, delete an unverified instance or treat these gateway errors as SDK regressions. The original accepted test Box may remain allocated; preserve original task ID for operator-native reconciliation and cleanup **only after exact identity and current status are established**.
 
 ## Result and architecture impact
 
