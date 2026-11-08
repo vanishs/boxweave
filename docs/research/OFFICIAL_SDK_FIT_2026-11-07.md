@@ -4,6 +4,8 @@
 **Target:** independent BoxWeave `v1` design branch; no implemented v1 runtime.  
 **Source baselines:** Incus `v7.6.0` (`github.com/lxc/incus/v7`, released 2026-10-30); MCP Go SDK `v1.8.0` (`github.com/modelcontextprotocol/go-sdk`, released 2026-09-14). Exact Go toolchain and module pins are implementation decisions to verify by compilation, not accomplishments of this review.
 
+**Later follow-up in the same research series:** [Tagged-source second-pass SDK gap closure](SDK_GAP_CLOSURE_2026-11-07.md) adds concrete findings that **refine this report's earlier alternatives**: typed MCP Tool handlers use `req.Extra.TokenInfo`; Incus Bridge ACLs lack group selectors; file `CreateInstanceFile` overwrite is not exclusive; Exec `RecordOutput` with output writers may block; `GetOperationWait` alters a shared transport timeout; Project features/root disk need configuration before first Box. When these narrower source facts apply, **use the later report's correct call mode** rather than relying on this first-pass shorthand. Neither document is an installed-native test PASS.
+
 ## Principle
 
 **Trust the upstream daemon and official SDKs. Shape BoxWeave v1 around their actual APIs and semantics, rather than making an artificial feature contract and working backwards.** BoxWeave owns only its narrow policy: authorized owned-resource access, durable caller idempotency, original operation receipts and business postcondition evidence. Do not reimplement an Incus engine, MCP transport/session protocol, general network platform or file-editing service.
