@@ -1,10 +1,10 @@
 # BoxWeave v1 — single development entrypoint, five autonomous phases
 
-**Status (2026-11-08): DESIGN ONLY. No v1 Go controller, installer or shipped release yet.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
+**Status (2026-11-08): S1 PARTIAL on development PR branch only. A source Go controller, limited staging installer and source CI now exist; no installed/native S1 acceptance or shipped release.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
 
 ## Next command and how to start
 
-**Start at S1.** An executing Agent can be told: **“Execute BoxWeave v1 development phase S1 end-to-end according to docs/process/IMPLEMENTATION_PLAN.md. Keep the execution log and proceed autonomously through implementation, tests, failed-case repair and acceptance; record blocked/decision-required items while continuing independent work.”**
+**Resume S1 until its mandatory real native/installer gates are met.** An executing Agent can be told: **“Execute BoxWeave v1 development phase S1 end-to-end according to docs/process/IMPLEMENTATION_PLAN.md. Keep the execution log and proceed autonomously through implementation, tests, failed-case repair and acceptance; record blocked/decision-required items while continuing independent work.”**
 
 At every new context/session: read **[AGENTS.md](../../AGENTS.md) → this short plan → [execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) → the current [phase card](../development/phases/README.md) → [current checkpoint](../development/EXECUTION_LOG.md#current-checkpoint)**. Fetch one relevant design/SDK/acceptance section **only when its subtask begins**; do not preload the complete repository research, the full acceptance matrix or all phase cards.
 
@@ -14,7 +14,7 @@ Verify actual branch HEAD, uncommitted edits, active tasks, installed version an
 
 | Stage | Full in-one-pass deliverable | New MCP tools | Document to execute | Current actual state |
 |---|---|---:|---|---|
-| **S1 Foundation** | Official SDK Go service, typed authenticated loopback MCP, safe host-local install/reuse/status, Incus restriction, SQLite ledger, Tracking/async admission/UNKNOWN, real security tests | **1: host_status** | [S1 card](../development/phases/01_FOUNDATION.md) | **NOT_STARTED** |
+| **S1 Foundation** | Official SDK Go service, typed authenticated loopback MCP, safe host-local install/reuse/status, Incus restriction, SQLite ledger, Tracking/async admission/UNKNOWN, real security tests | **1: host_status** | [S1 card](../development/phases/01_FOUNDATION.md) | **PARTIAL (feature branch source; native/installer gates blocked)** — [evidence](../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md) |
 | **S2 Box and operations** | 7 native Box lifecycle tools; async guest Exec; 4 durable operation tools; native identity/ready/restart/readback, all positive and negative cases | **12** | [S2 card](../development/phases/02_BOX_LIFECYCLE_OPERATIONS.md) | **NOT_STARTED** |
 | **S3 Files and Agent loop** | 3 guest file tools; SFTP exclusive create, safe unsupported conditional cases; a real Agent guest Git/edit/failing test/fix/passing test cycle | **3** | [S3 card](../development/phases/03_FILES_AGENT_LOOP.md) | **NOT_STARTED** |
 | **S4 Networking and nesting** | 3 native TCP/UDP forward tools and box_peer_set; one installer-precreated ACL + exact TLS/Scriptlet, real peer/isolation/LAN, nested install, dependent Box delete | **4** | [S4 card](../development/phases/04_NETWORK_NESTING.md) | **NOT_STARTED** |
