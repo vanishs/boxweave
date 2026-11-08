@@ -70,4 +70,6 @@ The following final decisions supersede earlier broad commitments where they con
 | D-055 | **Accepted / evolving verified images** | Ubuntu LTS first, additional Linux guest distributions only after real native compatibility checks; not hard-locked to Ubuntu forever. |
 | D-056 | **Accepted / permanent exclusions** | Removed Caddy/ACL/RBAC/OAuth/snapshots/backup/idle sleep-wake/background process platform/text patch engine/search/bulk file tools are not deferred feature promises. Reintroduction requires owner approval. |
 
+| D-057 | **Accepted — owner chose A** | “Take over existing Incus” means reuse its compatible daemon and manage its required dependency versions through the authorized local installer; do **not** import existing containers or assume their ownership. Already-running foreign instances/projects remain untouched. |
+
 Canonical narrow policy: [PRODUCT_BOUNDARY.md](PRODUCT_BOUNDARY.md).

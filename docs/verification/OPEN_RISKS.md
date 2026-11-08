@@ -20,7 +20,7 @@
 | O-014 | **VALIDATE** | Ubuntu LTS guest/host first; any new Linux guest image must pass actual Exec/file/network/nesting support matrix before advertised. |
 | O-015 | **VALIDATE** | Operator-managed Cloudflare Tunnel/reverse proxy compatibility with loopback Streamable HTTP MCP and external native forwarded guest services. BoxWeave does not manage proxy. |
 | O-016 | **DESIGN** | Durable owned port/peer identity after daemon restart, native IP change, explicit public bind and readback; never reattach a stale claim to a recreated Box. |
-| O-017 | **OPEN PRODUCT CLARIFICATION** | Does 'take over an existing Incus' mean reusing and upgrading an installed daemon only (current safe interpretation), or importing already-running foreign containers into BoxWeave ownership? No automatic foreign resource adoption is authorized. |
+| O-017 | **RESOLVED — OWNER CHOSE A** | Existing Incus adoption means reuse, compatibility management, and explicitly authorized daemon upgrades **only**. Existing/foreign Incus instances are never automatically imported, reassigned or controlled by BoxWeave. No further product decision is needed. |
 
 ## Not on the roadmap
 

@@ -1,6 +1,6 @@
 # Permanent v1 product boundary — keep BoxWeave small
 
-**Owner review:** Retain native Incus TCP/UDP forwarding and a minimal private peer-connection toggle, permanently drop Caddy and generic ACL editing. Continue managing versions of a pre-existing compatible Incus daemon through an authorized local installer; never silently adopt unrelated existing containers. Other previously proposed simplifications are accepted. These changes **supersede** older P0/P1 plans rather than reschedule removed features.
+**Owner review (confirmed option A):** Retain native Incus TCP/UDP forwarding and a minimal private peer-connection toggle, permanently drop Caddy and generic ACL editing. **Taking over an existing Incus installation means reusing and managing the daemon/version only; it does not mean importing any existing containers.** Never automatically adopt or change unrelated existing instances/projects. Other previously proposed simplifications are accepted. These changes **supersede** older P0/P1 plans rather than reschedule removed features.
 
 ## The product is
 

@@ -22,6 +22,6 @@ Pin source VERSION, exact Go toolchain/MCP SDK/Incus SDK revisions and verified 
 
 Clean Ubuntu LTS host; already-installed compatible Incus with unrelated projects; stale daemon version requiring separately authorized shared upgrade; unchanged foreign resources; native daemon capability mismatch; failed package/checksum; interrupted upgrade and recovery; nested independent installation; retained versions and no automatic host reboot.
 
-Other Linux **guest images** may be incrementally certified with real SDK/native tests after the Ubuntu LTS baseline. No automatic import of pre-existing foreign instances is included—see [product boundary](../decisions/PRODUCT_BOUNDARY.md) and the outstanding product clarification.
+Other Linux **guest images** may be incrementally certified with real SDK/native tests after the Ubuntu LTS baseline. The owner explicitly chose **A**: reuse/manage the existing Incus daemon only, **never import already-running containers** or assume ownership of unrelated instances/projects. See [product boundary](../decisions/PRODUCT_BOUNDARY.md).
 
 Related [Incus integration](../design/INCUS_INTEGRATION.md), [requirements](../product/REQUIREMENTS.md), [acceptance](../verification/ACCEPTANCE.md).
