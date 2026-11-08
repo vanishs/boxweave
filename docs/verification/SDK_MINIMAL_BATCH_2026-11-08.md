@@ -3,6 +3,10 @@
 **Date:** 2026-11-08  
 **Purpose:** Test a small number of exact P0 SDK invariants in batches, with almost no reliance on unstable BoxWeave `main` after admission. This is an **execution plan plus partial real environment evidence**, not a complete native PASS report. No v1 controller binary exists yet.
 
+## Execution follow-up — recovered and actually tested
+
+**This file preserves the original plan and its stop decisions.** Later, the exact unhealthy native L1 daemon was backed up offline and restarted **once**, the failed original child creation was independently reconciled to a real STOPPED child, and the existing child was reused. Official Incus SDK lifecycle/Exec/files, native Bridge NIC IPv4/IPv6 deny/allow/revoke, TCP/UDP packet exchange and native loopback proxy were then tested. A **runtime restricted-user ACL rule modification gap** was confirmed; the ordinary proxy permission was resolved by an explicit test-Project `restricted.devices.proxy=allow` grant. Both test L2 instances and native storage volumes were later **stopped/deleted and read back absent**. See the newer [real B/C execution and recovery report](SDK_NATIVE_BATCH_RESULTS_2026-11-08.md) for actual evidence, remaining UNKNOWNs and cleanup status. **The initial database blocker below is historical, not the final test result**.
+
 ## Decision: reuse before creating
 
 **Preferred laboratory: existing managed Box `bw-debug-0460-lab` (L1), not a new L0 Box.** The outer `dev` host is Incus **7.5.1** with BoxWeave/Containarium management through `main`; inside this **already running** Box, the **client and server are both Incus 7.6**, with nesting configured, a working native daemon, the `default` dir storage pool, the `incusbr0` managed IPv4 NAT bridge and one cached Ubuntu Noble image. Its nested instance list was **empty** when inspected. Outer Box identity at inspection: `a51196d3-54f9-4d67-ae6f-7b22a1aca7e9`. This avoids creating a second L0 Box just to reach a newer Incus.
