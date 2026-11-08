@@ -34,13 +34,17 @@
 The [2026-11-07 Incus/MCP SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) confirmed limitations that cannot be resolved by simply writing more BoxWeave code:
 
 - **S01 P0:** Incus `Operation.WaitContext` may invoke native cancel when its context expires. Use `GetOperationWait`/`GetOperation` for observational waits and explicitly test non-cancelation.
-- **S02 P0:** Incus local Unix socket has full administrator authority. `UseProject` is not privilege restriction; prove actual native permissions before enabling MCP.
+- **S02 P0 corrected:** root/`incus-admin` has full local Incus authority; a non-root `incus`-only user has native per-user Project confinement. `UseProject` is not a credential. Test denied foreign/admin calls, project `restricted.*` allowances for proxy and nesting, and NIC ACL behavior; try restricted TLS before any helper.
 - **S03 P0:** Instance methods are often name-addressed. Resolve stored `volatile.uuid` to live owned project/name and recheck UUID before effects.
 - **S04 P0:** Incus guest file API has no atomic hash/ETag conditional write/delete. Strong `box_file_apply` modes are blocked until a safe native-compatible implementation is proven; return UNSUPPORTED instead of claiming atomicity.
 - **S05/S06 P0:** Prefer instance proxy-device host listener and one tested NIC ACL topology; same-bridge packet enforcement needs proof.
 - **S09/S10/S11 P1:** MCP SDK v1.8 handles modern Stateless HTTP and typed tools; explicit external HTTP auth/Origin protections and real ChatGPT/legacy compatibility tests are still necessary.
 
 These are **SDK contract alignment** checks, not defects attributed to the official upstreams. No v1 real-environment acceptance has been run by this document change.
+
+## Full native SDK coverage and newly discovered checks
+
+See [20/20 tool-to-SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). Verify SDK HTTP `auth.RequireBearerToken` expiration/revocation, localhost Host guard, default 4 MiB request cap, explicit Origin proxy compatibility, `api.StatusErrorMatch` semantics and Incus `ExecInstance` RecordOutput timing. Incus `GetInstancePortForwardConn` and `CreateNetworkPeer` are **not** implementations for the BoxWeave host forward / Box peer tools. These are validation tasks only, **not** live test PASS.
 
 ## Historical evidence does not close native validation
 
