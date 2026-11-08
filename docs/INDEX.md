@@ -28,6 +28,7 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |
 | How is Incus integrated? | [Incus integration](design/INCUS_INTEGRATION.md) |
 | Which official SDK behaviors constrain the v1 architecture? | [Official Incus + MCP SDK fit review](research/OFFICIAL_SDK_FIT_2026-11-07.md) |
+| How does each of the 20 public MCP tools map to native SDK methods? | [Native SDK mapping: 20/20 tools](research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
 | What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) and [permanent scope](decisions/PRODUCT_BOUNDARY.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
