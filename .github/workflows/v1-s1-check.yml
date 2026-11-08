@@ -1,0 +1,28 @@
+name: v1 S1 source checks (non-release)
+on:
+  push:
+    branches: [feat/v1-s1-foundation-20261108]
+  pull_request:
+    branches: [v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+          cache: false
+      - name: Resolve tagged official SDKs and build
+        run: |
+          go mod tidy
+          go build ./...
+      - name: Race and negative unit tests (not native acceptance)
+        run: go test -race -count=1 ./...
+      - name: Format check
+        run: |
+          test -z "$(gofmt -l cmd internal)"
