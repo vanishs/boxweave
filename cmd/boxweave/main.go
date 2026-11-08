@@ -11,6 +11,7 @@ import (
     "time"
 
     "github.com/vanishs/boxweave/internal/control"
+    "github.com/vanishs/boxweave/internal/install"
     "github.com/vanishs/boxweave/internal/native"
     "github.com/vanishs/boxweave/internal/state"
 )
@@ -19,7 +20,7 @@ var (
     version="0.0.0-s1-dev"
     commit="unverified"
 )
-func usage() {fmt.Fprintln(os.Stderr,"usage: boxweave serve|status|doctor|token-create|token-revoke [flags]")}
+func usage() {fmt.Fprintln(os.Stderr,"usage: boxweave serve|status|doctor|token-create|token-revoke|install-stage|install-status [flags]")}
 func run()error{
     if len(os.Args)<2 {usage();return errors.New("subcommand required")}
     command:=os.Args[1]
@@ -31,11 +32,30 @@ func run()error{
     role:=f.String("role","viewer","token role")
     ttl:=f.Duration("ttl",30*24*time.Hour,"token validity")
     tokenID:=f.String("id","","exact local credential ID")
+    serviceUser:=f.String("service-user","boxweave","dedicated nonroot incus-only service account")
+    sourceBinary:=f.String("source-binary","","source executable at approved exact digest")
+    digest:=f.String("expect-sha256","","locally reviewed binary sha256")
+    approve:=f.Bool("approve-stage",false,"explicitly authorize staging service files; no automatic start")
     if err:=f.Parse(os.Args[2:]);err!=nil{return err}
     if f.NArg()!=0{return errors.New("unexpected arguments")}
     switch command {
-    case "serve","status","doctor","token-create","token-revoke":
+    case "serve","status","doctor","token-create","token-revoke","install-stage","install-status":
     default: usage();return errors.New("unsupported command")
+    }
+    if command=="install-stage"||command=="install-status" {
+        p:=install.Plan{User:*serviceUser,StateDir:"/var/lib/boxweave",
+            BinaryPath:"/usr/local/bin/boxweave",UnitPath:"/etc/systemd/system/boxweave.service",
+            SourceBinary:*sourceBinary,Project:*project,Socket:*socket,Version:version,
+            ExpectedDigest:*digest}
+        if command=="install-stage" {
+            m,err:=install.Stage(p,*approve)
+            if err!=nil{return err}
+            // Staging is not install acceptance; systemd and Incus remain untouched.
+            return json.NewEncoder(os.Stdout).Encode(m)
+        }
+        m,err:=install.Status(p)
+        if err!=nil{return err}
+        return json.NewEncoder(os.Stdout).Encode(m)
     }
     s,err:=state.Open(*db);if err!=nil{return err}
     defer s.Close()
