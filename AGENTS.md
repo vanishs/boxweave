@@ -4,6 +4,8 @@ Read [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md), [scope](d
 
 **Upstream SDK-first rule:** treat official Incus and MCP Go SDKs as trusted foundations. Use their native APIs and actual semantics rather than inventing a second engine, MCP transport or impossible guarantees. Before coding privilege separation, native wait/cancel, conditional guest files, TCP/UDP forwarding or same-bridge ACLs, read [SDK capability/architecture fit review](docs/research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
+**Second-pass mandatory source findings:** Read [native SDK gap closure](docs/research/SDK_GAP_CLOSURE_2026-11-07.md). MCP typed Tool auth uses **`req.Extra.TokenInfo`**, not HTTP `auth.TokenInfoFromContext`; Incus ordinary file upload is not exclusive create; Bridge ACLs have no group selectors; `RecordOutput`+writers can block the initial async Exec; read-only wait needs safe SDK use; native Project root disk/features must be prepared before first Box. Never substitute a new private protocol/helper/agent for the appropriate upstream API.
+
 **Upstream-first supplement:** Read [20/20 SDK-native tool mapping](docs/research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). Non-root `incus`-only users have native Project confinement (unlike root/`incus-admin`); prefer native MCP `auth.RequireBearerToken`, Incus `api.StatusErrorMatch` and SDK Host/body guards over homemade frameworks. These are source findings, not native PASS evidence.
 
 1. **English artifacts; requester-language discussion.** Repository source, docs, CLI/MCP contracts, tests and release artifacts are English. Reply to the requester in their chosen/current language.
