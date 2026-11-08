@@ -12,6 +12,23 @@ These are **UNTESTED** design gates from the [official SDK review](../research/O
 
 Read the [20/20 native SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) and verify real behavior before assigning N/V PASS. Use a dedicated non-root OS user in `incus`, not `incus-admin`; prove the native Project restricts foreign/admin calls while approved proxy/ACL/nesting function. Verify `api.StatusErrorMatch`, Exec `RecordOutput` time to first Operation ID and output reconnection, SDK `auth.RequireBearerToken` revocation/expiry, localhost Host protection and default 4 MiB request limit, plus explicit Origin/trusted-proxy and stateless/legacy protocol negotiation. None of this was executed by the research.
 
+## Second-pass upstream SDK proof cases — ALL UNTESTED
+
+The [tagged-source gap report](../research/SDK_GAP_CLOSURE_2026-11-07.md) identified practical gaps beyond API presence. These are **native/client validation prerequisites**, not fabricated PASSes or additional public MCP tools.
+
+| Gate | Required negative/positive evidence | Required evidence level |
+|---|---|---|
+| SDK-G01 | With one typed SDK MCP server, two distinct Bearer credentials concurrently invoke a Tool. The handler sees the **current** identity in `req.Extra.TokenInfo` (not another request's context). Viewer mutation fails without native effects; admin succeeds on only its owned Box; revoked/expired credentials fail for new HTTP calls. Test modern Stateless plus legacy initialize. | T + I |
+| SDK-G02 | Non-root `incus`-only user and prepared restricted Project may act on its exact owned instances, ACL and proxy, but may **not** access foreign project/host admin/resources. New Project's `features.*`, isolated default Profile **root disk** and approved network/storage are correctly prepared **before first instance**. | N + V |
+| SDK-G03 | Bridge NIC-attached ACL defaults to deny between owned Boxes; native spoof filters cover source MAC/IPv4/enabled IPv6. Pair A→B allows A-initiated flows and replies but denies B-initiated flows. After A/B IP change or deleted/recreated target, old grant does not transfer; test already-established flows during revoke. Default DNS/DHCP and authorized Internet egress remain viable. | N + V packet witness |
+| SDK-G04 | `box_file_apply(create)` refuses an existing regular file **without truncating it** under concurrency, including final symlink/hardlink cases. SDK native upload `O_TRUNC` path is **not** acceptable proof. Test SFTP `OpenFile(O_EXCL)` candidate. Conditional replace/delete prove point-of-use CAS or deliberately return `UNSUPPORTED` with owner-visible P0 blocker. | N + V |
+| SDK-G05 | `box_exec` first response includes original durable operation identity **before long command finishes**, while SDK worker captures bounded output and actual native exit after MCP disconnect. Test `RecordOutput` with writers versus selected streaming mode; do not mistake ordinary instance logs for private native exec-output logs. | I + N + V |
+| SDK-G06 | `operation_get(wait_ms)` times out without native cancellation; concurrent read polls do not alter operation execution or shared transport settings. Prefer bounded `GetOperation` polling until `GetOperationWait` transport behavior is proven. | T + N + V |
+| SDK-G07 | With parent NIC spoof filtering active, independently installed nested Incus works through its own bridge/NAT without granting new parent-interface MAC or disabling host security; show accurate refusal where impossible. | N + V |
+| SDK-G08 | A native feature is advertised only after actual daemon extension/permission check; verify `container_exec_recording` and `container_exec_user_group_cwd` behavior for requested Exec variants, including unsupported UID/GID/cwd. | N + V |
+
+Results belong to the **exact test version and environment**, not generic upstream stability. The previous Box SDK probe ended in guest/gateway UNKNOWN and cannot close these gates.
+
 ## Required functional cases
 
 | ID | Exact requirement to test | Evidence |
