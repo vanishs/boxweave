@@ -76,12 +76,21 @@ func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
-	if st, err := os.Stat(filepath.Dir(path)); err != nil {
+	if st, err := os.Lstat(filepath.Dir(path)); err != nil {
 		return nil, err
-	} else if st.Mode().Perm()&0077 != 0 {
-		return nil, fmt.Errorf("database parent must not be group/world accessible")
+	} else if !st.IsDir() || st.Mode().Perm()&0077 != 0 {
+		return nil, fmt.Errorf("database parent must be a private real directory")
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	// Never follow a preexisting link into an unmanaged host file.
+	flags := os.O_RDWR
+	if st, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		flags |= os.O_CREATE | os.O_EXCL
+	} else if err != nil {
+		return nil, err
+	} else if !st.Mode().IsRegular() || st.Mode().Perm()&0077 != 0 {
+		return nil, fmt.Errorf("database path must be a private regular file, not a symlink")
+	}
+	f, err := os.OpenFile(path, flags, 0600)
 	if err != nil {
 		return nil, err
 	}
