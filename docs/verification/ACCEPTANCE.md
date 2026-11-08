@@ -4,6 +4,20 @@
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Every item remains UNTESTED until actual evidence.
 
+## Final executed SDK P0 verification — NOT an installed v1 pass
+
+[Plan](P0_SDK_LAST_GATE_PLAN_2026-11-08.md) · [Detailed real results](P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Native L1 Incus **7.6**, official Go SDK **7.6.0**, MCP official Go SDK **1.8.0**, real SDK loopback HTTP + **one owned native L2**. All new L2/Project resources were deleted by original UUID and native readback (`P0_FINAL_CLEAN_EXIT=0`), original outer L0 unchanged.
+
+| P0 area | Verified SDK/native status | What is **not** verified |
+|---|---|---|
+| MCP HTTP M-01/M-02/M-03 | **PASS** actual new discover/legacy initialize; typed Tools; 20 concurrent bearer actor checks, viewer denial, revoked/expired/invalid rejection, Origin/Host 403, body >4MiB 413; already-admitted independent handler completed after HTTP caller cancellation | Real production ChatGPT client, operator proxy/Tunnel and durable journal/worker survives process restart |
+| Native file I-01 | **PASS** SFTP exclusive create/refuse existing and Lstat symlink. **CONFIRMED NATIVE LIMIT** stale pre-read cannot CAS: another writer's BETA was overwritten and DELTA was deleted | Conditional atomic `replace/delete` **MUST be `UNSUPPORTED` unless independently proven safe**; unsafe path and hardlink/concurrent race tests are still runtime tests |
+| Native Exec I-02 | **PASS** immediate native ID, independent operation GET, exit 0/7/6/9, recorded stdout/stderr retrieved via new SDK connection, live Control-WebSocket signal stopped command (143) | Detached `Operation.Cancel()` **fails**; cannot claim cancellation after losing control channel; v1 output page, worker restart still untested |
+| Native UNKNOWN I-03 | **PASS** actual original timed-out create was later found STOPPED with same UUID; no blind retry, and this round's controlled single child created+started by original intent | No provider-side universal idempotency; durable v1 original-id/SQLite recovery untested |
+| Native ACL/anti-spoof I-04 | **PASS** earlier three-NIC shared-ACL IPv4/IPv6 normal flow/revoke and this round **one-NIC IPv4 spoofed-address packet drop** with valid-address success | IPv6 filtering, IP reassignment/reuse, established TCP after revoke, per-NIC shared ACL partial failure and deployed controller |
+
+**Cowsql directive from owner:** inner nested Cowsql loss could arise from unstable Box environment; preserve exact failure evidence and **do not build Incus/Cowsql DB patches or expand v1 scope**. The native SDK P0 investigation is done with stated limits. The SDK PASS rows do **not** close full functional cases A-001–A-0xx or release gate O-022.
+
 ## Standalone SDK smoke results versus v1 acceptance (2026-11-08)
 
 The [minimal batched nested Incus 7.6 lab](SDK_MINIMAL_BATCH_2026-11-08.md) compiled official Incus Go SDK **v7.6.0** and MCP Go SDK **v1.8.0** using Go **1.26.10**. One standalone MCP typed-Tool test **PASSED** current `req.Extra.TokenInfo` actor identity, admin/viewer denial, invalid/expired/revoked credentials. One standalone Incus SDK read-only test **PASSED** native per-user restricted Socket, explicit `UseProject("user-1003")`, OS admin Socket denial and typed HTTP 404. These are SDK smoke passes, **not v1 runtime/tool/native lifecycle, file or network acceptance**.
@@ -46,7 +60,7 @@ These are **UNTESTED** design gates from the [official SDK review](../research/O
 
 Read the [20/20 native SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) and verify real behavior before assigning N/V PASS. Use a dedicated non-root OS user in `incus`, not `incus-admin`; prove the native Project restricts foreign/admin calls while approved proxy/ACL/nesting function. Verify `api.StatusErrorMatch`, Exec `RecordOutput` time to first Operation ID and output reconnection, SDK `auth.RequireBearerToken` revocation/expiry, localhost Host protection and default 4 MiB request limit, plus explicit Origin/trusted-proxy and stateless/legacy protocol negotiation. None of this was executed by the research.
 
-## Second-pass upstream SDK proof cases — ALL UNTESTED
+## Historical second-pass SDK proof checklist — see newer executed results above
 
 The [tagged-source gap report](../research/SDK_GAP_CLOSURE_2026-11-07.md) identified practical gaps beyond API presence. These are **native/client validation prerequisites**, not fabricated PASSes or additional public MCP tools.
 
