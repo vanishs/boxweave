@@ -50,7 +50,7 @@
 
 1. Incus `GetInstancePortForwardConn` opens a connection to a guest port; it is **not** persistent public host port publishing. Use an instance `proxy` device for P0 host-port listeners.
 2. Incus `CreateNetworkPeer` peers **networks**, not one Box to another. Use NIC-attached ACL policy for `box_peer_set`.
-3. `UseProject` selects a project in an SDK client; it does **not** assign restricted OS credentials. Incus's `incus` group and restricted TLS certificate provide their own separate native auth restrictions, subject to configuration.
+3. `UseProject` selects a project in an SDK client; it does **not** assign restricted OS credentials. Incus's `incus` group and restricted TLS certificate provide their own separate native auth restrictions, subject to configuration. **Native Incus 7.6 SDK smoke verified that restricted `unix.socket.user` connections do not automatically scope `GetProfile` to the user's auto-confined Project: call `UseProject` explicitly after verifying the exact native Project. `GetServer().Auth="trusted"` is not a claim of administrator rights.**
 4. `InstancePut.Config` / `Devices` are maps. SDK typing does **not** grant atomic field-level patches or protect inherited devices; use read → narrow merge → ETag guarded update → effective readback.
 5. `api.StatusErrorMatch(err, codes...)` and `api.StatusErrorCheck` are native HTTP error classifiers. Do not compare localized error strings for `404`/`409`; do not invent fake provider status-code constants.
 6. `Operation.WaitContext` may call `Cancel()` on expiration. `GetOperationWait` is a *read* API and must be used appropriately.
