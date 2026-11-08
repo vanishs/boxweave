@@ -25,6 +25,14 @@ Physical host: BoxWeave L0
 6. **Ordinary network ownership.** Each layer manages only native TCP/UDP forwards and optional simple private Box-to-Box peer grants for its own Boxes. To reach an inner service, the operator separately configures layer-local native forwards as necessary; there is no Caddy or cross-layer delegation/publishing protocol.
 7. **Supported nesting must actually work.** A parent can enable allowed nesting capabilities on a directly owned Box. `security.nesting=true` alone is not proof that an inner Incus can create a child. The guest-side installer must check its own user namespaces/idmaps, storage, networking and privileges, and report limitations without changing the parent.
 
+## Nested networking and native NIC anti-spoof compatibility
+
+Incus [bridged NIC security documentation](https://github.com/lxc/incus/blob/v7.6.0/doc/explanation/security.md) says native `security.mac_filtering` and `security.ipv4_filtering`/`security.ipv6_filtering` can prevent source-address spoofing, but also restrict inner bridged/macvlan devices that send traffic with a different MAC. This is an **upstream-defined behavior**, not a reason to disable native filtering across all Boxes.
+
+Preferred **test candidate**, not yet an acceptance result: give the outer owned Box one anti-spoof-protected ordinary NIC; run the inner Incus's **own managed bridge + NAT** so its child traffic uses the containing Box's allowed address on the parent NIC. Validate inner guest egress, default isolation, native forwarding, IPv4/IPv6 behavior and no parent-host or sibling access. If the native kernel/nesting environment lacks this path, report precise `UNSUPPORTED` rather than silently enabling raw L2 bridging/macvlan, broadening parent NIC permissions, altering outer host firewall or requiring a dedicated parent agent.
+
+The detailed native evidence and grouped probe are in [second-pass SDK review](../research/SDK_GAP_CLOSURE_2026-11-07.md) and [earlier Box probe](../verification/SDK_NATIVE_BOX_PROBE_2026-11-07.md).
+
 ## Local MCP access inside nested development Boxes
 
 Every inner controller's MCP endpoint listens only at its own guest **`127.0.0.1`**; an outer Agent **cannot** call that endpoint directly through the inner Box's bridge/LAN IP, nor does an L0 port forward to an L1 guest IP magically expose L1 localhost MCP. For testing, an authorized outer `box_exec` may run an **ordinary temporary MCP client in the owned Dev Box**, which talks to that independently installed inner controller's localhost endpoint and retains original L1 operation receipts. The inner credentials are initialized through its own guest-local bootstrap; keep them in restricted guest-local storage and never print them in Exec argv, stdout or shared logs. This is normal guest software, **not a parent-to-child management API**.
