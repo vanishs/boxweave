@@ -57,9 +57,9 @@ Nested 7.6 can verify tagged SDK call semantics, Go build compatibility, confine
 
 After the above groups, reserve a **small separate L0 witness** for physical host LAN IP TCP/UDP, IPv4/IPv6, external firewall and the exact **installed BoxWeave candidate**; this must not be silently inferred from an L1/L2 sandbox.
 
-## Next action when the gateway is healthy
+## Next safe action: native database reconciliation, not retry
 
-1. **Read, never replay:** `~/bwv1-native-probe-1108/build.status`, `auth-test.log`, `native-build.log`, and the original `bwv1compile1108` tmux session. `TIDY_EXIT=0` is observed; MCP auth test and native compile outcomes are **UNKNOWN**.
+1. **Preserve completed PASS evidence:** `~/bwv1-native-probe-1108/build.status` recorded `TIDY_EXIT=0`, `AUTH_EXIT=0`, `NATIVE_BUILD_EXIT=0`; `auth-test.log` showed a real PASS. Do **not** recompile or rerun an accepted native create simply to work around the outer management gateway.
 2. **MCP test and native SDK compile already passed**; do not repeat setup. The scoped binary resides in `/home/bwv1sdk1108/native-inspect`, proving `UseProject("user-1003")` is needed. **The single child init has already returned exit 1 with a native event-listener timeout and Cowsql leader loss**. Preserve original `child.status`, `child-init.log`, native operation ID, project, symlink and systemd journal; reconcile native state safely before any new instance action.
 3. **Only after a guest-local recovery plan and healthy native DB readback**: reconcile the original native operation and possible partial child storage; don't use a failing native database to decide cleanup. Attempt further lifecycle/file/Exec/peer tests **only in a proven healthy dedicated Project/lab**. Never dispatch a second L0 Box merely because the prior gateway call was uncertain.
 
