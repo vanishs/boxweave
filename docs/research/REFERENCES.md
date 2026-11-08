@@ -70,3 +70,8 @@ Containarium has `CLAUDE.md` and `CONTRIBUTING.md`. The two smaller Incus MCP re
 ## Permanent product narrowing (owner-approved)
 
 Prior Containarium Caddy reconciliation, generalized ACL, Web/UI, OAuth, snapshot and resident agent patterns are **historical research only**, not features to implement or defer. The narrow product keeps only native Incus TCP/UDP forwards, a simple owned directional peer allow/revoke and the Agentless development loop. See [permanent boundary](../decisions/PRODUCT_BOUNDARY.md).
+
+## Official Go SDK research (2026-11-07)
+
+- [Incus and MCP Go SDK capabilities, source history and architectural fit](OFFICIAL_SDK_FIT_2026-11-07.md) — S01–S20 with the corrected local Incus privilege model.
+- [Every v1 public MCP tool mapped to official Incus/MCP SDK methods](SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) — 20/20 tools, native implementations versus BoxWeave-specific policy, missing guarantees and practical test gates.
