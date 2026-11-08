@@ -29,7 +29,7 @@ The `v7` component above identifies the currently reviewed Incus Go module path,
 1. Pin reviewed compatible SDK module revisions and Go toolchain versions with reproducible dependency checks.
 2. Build and exercise a real authenticated MCP handshake and one typed read tool.
 3. Call a real Incus daemon using the official Go SDK and record the native version/extensions and tested operations.
-4. Demonstrate agentless Linux container guest-root Exec stdout/stderr/exit, canceled/unknown native Operation, ETag ACL update and ownership denial.
+4. Demonstrate agentless Linux container guest-root Exec stdout/stderr/exit, canceled/unknown native Operation, typed peer policy/forward update and ownership denial.
 5. Repeat the integration at nested L1/L2 without relying on an outer privileged socket.
 
 Record exact Go toolchain, official MCP/Incus SDK revisions and observed Incus daemon versions in the source-bound release/dependency manifest; explicitly invoked local install/upgrade automatically reconciles managed dependency versions. See [dependency lifecycle](../process/DEPENDENCY_LIFECYCLE.md).

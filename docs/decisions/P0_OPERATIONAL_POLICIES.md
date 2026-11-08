@@ -7,11 +7,11 @@
 - Only create/start an owned Box when the actual Incus networking configuration can enforce private Box-to-Box isolation. Incus Project membership is not sufficient evidence.
 - Prove private IPv4 denial and deny enabled IPv6 paths as well. If owned IPv6 cannot be safely filtered, BoxWeave may disable **only its own managed Box/NIC/network IPv6** and reverify. If that cannot stop private bypass, refuse creation/start and report a typed isolation-unsupported result.
 - Never disable host-wide or unrelated/foreign IPv6, weaken ACLs, or change foreign networks merely to make a Box work. Native IPv4/IPv6 packet tests are required before claiming PASS.
-- Private network isolation does not block a Box from accessing another Box's deliberately **published public HTTP website**; that public route exception remains.
+- Private network isolation does not claim to prevent access through an intentionally published **host TCP/UDP port** where actual routing allows it. There is no BoxWeave-managed website or Caddy public-route exception.
 
 ## 2A. Client-provided reusable idempotency keys
 
-- A **nonempty client-generated `idempotency_key` is mandatory** on every mutating MCP tool: create, update, start/stop/delete, Exec, guest file apply, route, forward, ACL, cancellation, etc. Reject a missing/invalid key **before native effects**. Read-only tools need no key.
+- A **nonempty client-generated `idempotency_key` is mandatory** on every mutating MCP tool: create, update, start/stop/delete, Exec, guest file apply, native TCP/UDP forward, directional Box peer toggle and cancellation, etc. Reject a missing/invalid key **before native effects**. Read-only tools need no key.
 - Client creates a key once per logical mutation and **reuses the same key on reconnect/retry**. Uniqueness is enforced on the stable layer + authenticated actor + client key; the stored canonical action, target identity (when available) and payload fingerprint are compared separately. **Same key/same intent** returns original `tracking_id`/`operation_id`; **same key/different action, target or payload** is a typed conflict, not a second mutation.
 - For `box_create`, a native Box UUID does not yet exist when admitting intent. Never fabricate one to make key scoping work. Use the layer/actor/key uniqueness and canonical create intent comparison.
 - Keys are not authentication credentials, permissions, Tracking IDs or native operation IDs. Returning an original receipt still requires authenticated authorization and scope checks. Keep a durable dedup record across crashes/retention policy boundaries appropriate to avoiding unsafe retry.

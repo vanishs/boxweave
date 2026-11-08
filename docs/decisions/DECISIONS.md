@@ -18,7 +18,7 @@ Recorded from the owner's current design discussion. **Accepted** means a produc
 | D-012 | Accepted | A limited host-local install/status/upgrade/credential recovery CLI exists despite no Web UI. |
 | D-013 | Accepted | All project artifacts English; Agents communicate in the requester's preferred/current language. |
 | D-014 | **Accepted** | Implement v1 in Go using the official Model Context Protocol Go SDK and official Incus Go client/module; Python is superseded as the v1 implementation language. |
-| D-015 | **REJECTED / no Caddy** | Dedicated BoxWeave-owned Caddy instance and restricted local Incus helper as the implementation means for the accepted security boundary. |
+| D-015 | **PARTIALLY SUPERSEDED** | Dedicated BoxWeave-owned Caddy rejected permanently. A narrowly privileged local Incus setup helper remains an implementation option only when required to enforce the accepted native ownership/security boundary. |
 | D-016 | Accepted | Internal Incus SDK/API calls are allowed; the no-REST constraint applies to BoxWeave's public management surface. Do not build or expose a second public management API. |
 | D-017 | Accepted | Nested installs use the same build and bootstrap/maintenance workflow; each layer treats its own environment as host and never silently modifies parent infrastructure. |
 | D-018 | **SUPERSEDED by permanent scope D-049–D-056** | Public routing, forwarding and private ACL changes must be bound to an owned Box identity; no arbitrary host, remote service or unmanaged target may be published via MCP. |
