@@ -10,6 +10,16 @@
 - If IPv6 filtering cannot be proven, safely disable only BoxWeave-controlled IPv6 and reverify, otherwise refuse Box creation/start; never disable unowned host IPv6. Internet egress defaults to allowed, with a simple per-Box block option.
 - A Box can still reach a service intentionally exposed on a mapped host port where underlying routing/hairpin behavior permits; this is **not** a substitute for guaranteed private peer connectivity and not a claim of all-path isolation.
 
+## Guard at first start and claim only applied security
+
+For the supported native topology, create the new owned instance **stopped**; install and verify its required IPv4 and enabled IPv6 private-isolation rules on the correct effective NIC **before any first start or autostart**. Recheck before a later start if topology, NIC or applied protection could have changed. A failed/unsupported guard blocks start and reports the actual instance identity/cleanup status; never silently start the Box reachable and then try to repair its policy. Do not copy a generic Network Tenant service.
+
+On an inherited Profile NIC, an instance-local override may be required for `security.acls`: base it on the complete effective device, preserve unrelated fields and ACLs, update with native ETag and verify the *actual* effective attachment. A desired database rule, an ACL name attached to a NIC, and packets proven isolated are **three different evidence levels**. `box_get`/operation receipts must not claim a peer grant/revocation is effective without native readback; positive acceptance additionally requires real same-bridge IPv4/IPv6 packet tests. A directional A->B grant must permit A-initiated flows and their responses without permitting B-initiated flows.
+
+Native Proxy devices are instance-bound, while native network-forward entries may outlive an instance. Journal and read back their exact **owned** identity and guard deletion/reconciliation against stale tombstones and name/IP reuse. Recovery must never resurrect stale exposure or remove a foreign listener. Probe guest, host-local and independent LAN reachability separately; do not add a custom firewall/proxy/reconciler platform to emulate an unsupported topology.
+
+See [incident evidence and implementation cautions](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Native Incus TCP/UDP forwarding — required
 
 Keep `port_forward_list/create/delete` to map a host listening `protocol/address/port` to an exact verified owned `box_uuid + guest_port`. Implement through native Incus **proxy devices or network forwards**, whichever is appropriate and verified on the supported host network; do **not** build a forwarding service.

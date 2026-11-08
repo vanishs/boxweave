@@ -22,6 +22,17 @@ Incus is a mature authoritative Linux-container runtime: **trust the official da
 - No storage driver hard constraint. Determine whether a requested resize/storage operation is supported by the actual pool and return `UNSUPPORTED` or a native semantic error instead of attempting an unsafe workaround. **P0 refuses disk shrinking before any native dispatch**; growth is observed and post-verified.
 - Scope native resources to the managed project/namespaces and preserve pre-existing host/project state.
 
+## Native preflight, effective configuration and safe updates
+
+Use the smallest typed Incus adapter. Before dispatch: validate resource units and bounds (reject NaN/Inf, overflow, negative/unsupported sizes), actual API extensions, selected storage pool, guest image, intended network topology and exact owned target. A running Incus daemon alone does not mean an initialized usable storage pool/network exists. If space/capability is unknown or insufficient for a requested operation, report a truthful precondition/`UNSUPPORTED` result; do not add generalized capacity scheduling.
+
+- **Create uses effective devices:** Verify the effective root disk pool even when disk size is omitted; Profile inheritance can otherwise silently substitute the default pool. Read native `ExpandedDevices` and instance-local devices to understand an inherited NIC; if an owned NIC must be shadowed to set an owned ACL, carry its other settings forward instead of replacing it with a partial device. Do not edit foreign Profiles or globally change bridge settings.
+- **Update only named fields:** `box_update(cpu=...)` must not erase unchanged memory, disk, networking or security settings. Use native read -> typed merge -> ETag guarded write where supported -> complete effective readback, including untouched axes. No broad `raw.lxc`/device map from MCP.
+- **Exact identity and honest source:** Resolve Incus native instance UUID/incarnation/revision and owned project at point of use; name/IP reuse never transfers authority. Distinguish what was requested from what Incus actually reports. An ETag or success ACK alone does not prove the BoxWeave postcondition.
+- **Native transient errors:** Match supported typed SDK/HTTP semantics where possible. A bounded read-only recheck may resolve a transient state-read failure. A failed/uncertain mutating SDK call or Exec **must not** be automatically reissued from an upstream error substring.
+
+These constraints come from [profile/NIC, root-pool, resize, input and Exec failure history](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md), not from adopting Containarium's generic Backend interface.
+
 ## Local privilege
 
 Unrestricted Incus admin socket access can confer broad host powers. Use restricted Incus identities where workable, and a narrow local privileged service with an allowlist for any essential setup actions. Treat this as a real OS/process privilege boundary, not merely JSON validation in an all-powerful public HTTP process.

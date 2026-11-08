@@ -12,6 +12,8 @@ Input: exact owned `box_id`, safe guest path, `mode=create|replace|delete`. **No
 
 Report native post-state, observed SHA/hash coverage and errors; do not invent success for a partial write. File list/read are bounded/paginated and must not claim a verified full-file SHA from an inconsistent partial read. Complex code patching is done via an authorized guest Git or shell invocation under `box_exec`, **not** an independent in-controller patch engine.
 
+A staging-file rename by itself only guarantees whole-file visibility, **not** compare-and-swap against a concurrent guest writer. Do not weaken the existing conditional `replace/delete` contract based on an upstream example; return `UNSUPPORTED` when native point-of-use safety cannot be proven. An Incus file response identifying a symlink or directory is not ordinary regular-file bytes.
+
 ## `box_exec` and operation tools
 
 `box_exec(box_id,argv,cwd?,guest_uid?,guest_gid?,env?,timeout_ms?,output_limit?,idempotency_key)` uses nonempty typed argv, guest-root UID 0 by default, bounded guest cwd/environment/time/output and no implicit host shell. A caller may explicitly invoke a shell **inside the owned Box**. It is a durable async mutation, with original exit/status/output obtained via `operation_get` and paginated `operation_output_get`. Nonzero observed exit is a completed failed command, not native UNKNOWN.
@@ -19,6 +21,8 @@ Report native post-state, observed SHA/hash coverage and errors; do not invent s
 `operation_get(operation_id,wait_ms=0)` supports a capped 20000-ms read-only long poll; cancellation or timeout of the wait does not cancel the operation. Include a **small redacted diagnostic summary** (phase, failure classification, coverage/post-state evidence, original Tracking ID) in this result; no `diagnostic_get` tool or general host-log reader.
 
 `operation_cancel` is a separately journaled and authorized cancellation request. Prove queued/undispatched cancellation transactionally; for active Exec attempt native stop only when supported and confirmed. Do not treat attempted cancellation as rollback or resolve UNKNOWN without evidence.
+
+For `box_exec`, report separately: observed zero exit, observed nonzero exit, and unproven/missing exit metadata. Never default absent exit data to 0, retry arbitrary commands from PID-error text, or mask a native/transport failure behind an output-cap warning. Continued native execution/output/exit observation must survive an MCP caller disconnect; `operation_get` is a read of the durable original, not a new execution.
 
 ## Delete lifecycle and remote failure visibility
 

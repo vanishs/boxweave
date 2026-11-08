@@ -36,6 +36,16 @@ Require a nonempty, caller-generated, reusable `idempotency_key` for **every MCP
 - Define safe, case-specific compensation only for proven owned partial effects. No catch-all retry, force-delete or reset of a suspicious Box.
 - SQLite durability and crash recovery must be demonstrated under service kill, host reboot simulation and nested parent restart.
 
+## Incident-derived result and readiness invariants
+
+- **Native state vs business readiness:** `box_get` and `box_list` must consistently expose native stopped/running state separately from actual guest Exec readiness and any still-unverified create requirements. Incus `RUNNING`, a healthy daemon or a successful create API response is not proof that the admitted Box is fully ready. A create interrupted after native instance creation retains the exact UUID/ownership and an honest partial/UNKNOWN receipt; its cleanup is not assumed complete.
+- **Waiting, state probing and replay are different operations:** Native `Operation.WaitContext` reaching its deadline means *this waiter stopped waiting*, not that Incus stopped. If native dispatch may have occurred and final effect is unproven, retain `UNKNOWN` and reconcile the original native operation. Transient read-side NotFound may be rechecked with a bounded deadline and exact UUID; it cannot prove deletion and must never trigger repeat dispatch.
+- **Exec result truth:** An observed guest exit 0 is distinct from an observed nonzero exit and from *no trustworthy exit value*. Missing/malformed exit metadata, a broken websocket, or an incomplete native operation cannot default to zero; preserve the original Exec operation and mark evidence missing/UNKNOWN as appropriate. A nonzero **observed** exit remains a completed guest command, not an RPC failure invented from stderr.
+- **Disconnected client, noisy output and caps:** Durable Exec ownership/output/exit observation must not depend on a live MCP HTTP request; test both quiet and continuously-writing commands. Enforce byte limits while streaming, keep a visible truncation/coverage indicator, and never suppress a concurrent transport/native error merely because the output exceeded its cap. A client long-poll timeout affects the poll only.
+- **Mutation preflight and partial effects:** Validate all requested native capabilities, input bounds and exact ownership *before* side effects. A failed cleanup, rollback or creation after a native instance exists cannot be described as "nothing happened"; preserve observed partial effects and the original IDs. Existing resource claims lock only the affected Box/forward/pair; no general lease coordinator is required.
+
+Evidence and exact incident IDs: [Containarium study](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Box deletion as a multi-resource operation
 
 `box_delete` is **not** one Incus API call once BoxWeave has created native TCP/UDP forwards and directional peer grants. Its standard confirmation covers removal of **all verified BoxWeave-owned** dependent forward/peer claims for the exact Box UUID/incarnation; it must not imply deletion of foreign host/network resources.

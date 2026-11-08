@@ -37,6 +37,10 @@ For a bug in an actually installed first `1.0.0` release, the correction is norm
 
 Use [fault-driven scenario](../verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) for detailed stages, baseline/candidate distinction and simulation versus actual evidence. Real native acceptance is part of the **release gate**, not post-release work.
 
+## Release metadata and workflow input safety
+
+The tag/version naming path is a security boundary: validate VERSION/tag input before release, carry externally influenced branch/tag strings into workflow steps as **data** (e.g. fixed environment variables), not unescaped source fragments inside a generated shell script. The published assets must report the same tagged VERSION and exact build SHA/digest as the independently verified candidate. Keep source, binary and release identities aligned even for documentation-only changes; **do not publish** the design-only `1.0.0` baseline. This hardens the existing release workflow without adding a signing/orchestration platform. See [Containarium incident review #1602/#549](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Branch policy
 
 `main` remains the v0.x development line until the owner instructs otherwise. `v1` is independent in **contents**, using an entirely new source tree. Preserve old work in `main`; do not merge or automatically migrate its implementation into `v1`.

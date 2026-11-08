@@ -64,6 +64,31 @@ Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; *
 | A-054 | Host-local manual UNKNOWN review binds a short-lived single-use challenge to exact original Operation, immutable target and claimed resource snapshot; wrong, expired or changed review refuses with zero side effects | T + I + V |
 | A-055 | Explicit second operator risk confirmation atomically audits and releases only a selected UNKNOWN claim; audit-write failure retains claim; original receipt/key remain UNKNOWN and do not re-dispatch; no remote MCP recovery route exists | T + I + V |
 
+## Incident-derived acceptance extensions
+
+| ID | Existing tool/CLI behavior to test | Evidence |
+|---|---|---|
+| A-056 | Create an owned instance stopped with inherited NIC; verify private IPv4/enabled IPv6 isolation installed and effective **before first start/autostart**, otherwise refusal with exact residual identity | I + N + V |
+| A-057 | `box_get` and `box_list` show consistent separate native RUNNING vs unverified Guest Ready/create progress; a failed/interrupted create cannot be reused as ready | I + N + V |
+| A-058 | Delete during async create or delayed create completion preserves original intent, exact UUID and correct cleanup; neither false create failure nor duplicate dispatch | T + I + V |
+| A-059 | ACL desired/in-DB, attached-to-NIC and actually enforced are distinguished; same-bridge IPv4/IPv6 packets and A->B replies/B->A new initiations prove peer semantics | I + N + V |
+| A-060 | Requesting a nondefault root storage pool with omitted disk size uses that *effective* pool; no silent Profile substitution; unsupported/missing pool refused before native effects | I + N + V |
+| A-061 | `box_update(cpu-only)` preserves memory/disk/network limits; memory-only preserves CPU; ETag conflict and complete effective readback validated | T + I + V |
+| A-062 | Missing/malformed Exec `return` metadata is never exit 0; observed 0/nonzero, empty stdout, stderr-only and transport failure remain distinct | T + I + N + V |
+| A-063 | Disconnect caller during quiet and continuous-output Exec; original output/exit/status survive or honestly remain UNKNOWN; no duplicated command or stream-induced termination | I + N + V |
+| A-064 | At/over byte limit for both Exec streams and file reads: bounded memory/partial coverage, native/transport error not hidden by truncation, no false full-file hash | T + I + V |
+| A-065 | Validated safe guest file create/replace/delete rejects symlink, hardlink, special file, path escape, stale hash and concurrent writer; rename alone is not accepted as conditional CAS proof | T + I + N + V |
+| A-066 | A delayed read-side `Instance not found` is boundedly rechecked without a second mutation; genuine deletion and same-name replacement cannot inherit old ownership | T + I + V |
+| A-067 | Already-running Start/already-stopped Stop yield typed target-state result with original key semantics; uncertain dispatch must not become a no-op proof | T + I + V |
+| A-068 | CPU NaN/Inf/oversized or overflowed quantities, negative/unsafe memory/disk and absent capabilities fail before any effect; effective config verified | T + I + V |
+| A-069 | Delete when owned forwarding metadata temporarily unavailable, then restart/recovery: old tombstoned forward never reappears and no foreign forward changes | T + I + N + V |
+| A-070 | Forward directly after create only with verified native target address/required state; guest, host and LAN witnesses distinguish listen address/hairpin/firewall failures | I + N + V |
+| A-071 | Fresh Incus daemon missing pool/network, selected pool on separate disk, incorrect claimed free space and unmounted data directory: installer/doctor report true limitations without modifying foreign resources | I + N + V |
+| A-072 | Interrupted install/upgrade rollback of binary/service is independently read back; rollback failure is reported as failure, not successful recovery; SQLite history survives restart | T + I + V |
+| A-073 | Release workflow rejects unsafe version/tag inputs and verifies tag, source commit, tested binary digest and embedded version; no release from docs-only baseline | T + I + V |
+
+The A-056–A-073 cases are **additional test cases for existing 20 tools/local CLI, not new user-facing capabilities**. All remain **UNTESTED** until actual appropriate evidence; historical Containarium commits are not v1 native PASS. [Evidence index](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Adversarial combinations
 
 Test lost MCP reply after create/Exec/forward, concurrent Box delete vs peer/forward edits, token revocation just before and after dispatch, stale guest hashes and symlink races, fixed network ACL vs peer grants, IPv6 bypass, host listener and port collisions, simulated parent restart during nested work and existing shared Incus upgrade. No native effect outside the owned set is ever permitted.

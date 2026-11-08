@@ -40,7 +40,11 @@ Borrow bounded and typed operation timeout handling, ETag and owned ACL edits, r
 
 **Reject as v1 architecture:** Containarium as a runtime dependency, CLI-first platform APIs, protobuf/gRPC/REST gateway as a public management contract, separate in-Box SSH MCP, multi-host/tenant infrastructure, and PostgreSQL dependency for single-host state. Its Platform MCP handles protocol itself; its Agent Box MCP uses third-party `mark3labs/mcp-go`. V1 favors an official MCP SDK if Go is selected.
 
+For a **fixed source, commit-by-commit, non-template assessment** (2,577 upstream commit subjects, representative diffs, 21 bounded incident lessons and test links), see [Containarium `main` and history study](CONTAINARIUM_MAIN_HISTORY_2026-11-07.md). Upstream references are **examples**, not proof of v1 behavior.
+
 ## Incus / MCP originals
+
+
 
 - https://github.com/lxc/incus/tree/main/client
 - https://linuxcontainers.org/incus/docs/main/rest-api/

@@ -16,6 +16,14 @@ Create, list, start, stop, delete, resource config, P0 guest file APIs and nativ
 
 Native Incus guest file APIs are part of **P0**, enabling bounded listing/reading with verified hash and unified `box_file_apply(create|replace|delete)` without a guest Agent. Complex patches use guest Git/Exec, not a BoxWeave patch engine. Conditional updates need a defensible native compare-and-swap/point-of-use guarantee; no fake atomicity. If a specific native API cannot prove safe symlink/race/atomicity handling, report UNSUPPORTED rather than using host filesystem fallbacks. All writes and Exec are durable async with stable Tracking ID and separate queryable output/diagnostic evidence. The guest OS still needs ordinary runtime facilities needed by the specific command (e.g. an existing executable), but no BoxWeave-specific daemon.
 
+## Exact guest Exec and regular-file result guarantees
+
+**Exec:** A nonzero observed guest exit is completed execution with `command_success=false`. A trustworthy observed zero is success. Missing or malformed exit metadata, an uncertain native dispatch/wait or lost websocket cannot be folded into zero/success; keep bounded output and original Operation/Tracking identity for reconciliation. A dead MCP client must neither cause an implicit replay nor be the sole owner of the command's output/exit bookkeeping. Test long-running commands with both silent and continuous stdout/stderr while the client disconnects. Cap bytes as they arrive; distinguish truncation from a genuine native/transport failure. Never auto-retry an arbitrary user command merely because an error string resembles a transient PID failure.
+
+**Files:** Stage-and-rename can prevent *partial bytes being visible* but is **not** atomic compare-and-swap relative to a concurrent guest writer or a changed symlink. Treat guest file-API response types (regular/directory/symlink) and actual path targets explicitly; lexical cleaning alone is not a trust boundary. `create` must not replace an existing path. `replace/delete` require an original revision/hash *and* point-of-use safety; if the official native API cannot supply the required race guarantees, return `UNSUPPORTED` without claiming an atomic conditional edit. Read size limits, stream closure, partial hash evidence and post-readback must remain truthful; do not introduce a file helper daemon.
+
+Historical concrete counterexamples and source risks are in [Containarium main/history review](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Contrast with Containarium
 
 Containarium's core implementation uses the official Incus Go client for lifecycle and native `ExecInstance` operations. It separately ships `agent-box`, an in-box MCP service for an agent-oriented workspace (shell, files, logs and process management), often reached over SSH/stdio. That service is **an enhanced guest-facing MCP workload**, not a technical prerequisite for the native Incus container lifecycle or Exec.

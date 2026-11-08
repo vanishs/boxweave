@@ -18,6 +18,14 @@ Pin source VERSION, exact Go toolchain/MCP SDK/Incus SDK revisions and verified 
 6. Run `boxweave status/doctor` to report observed Incus version/extensions, own project and binary/schema compatibility. No claim of success from a package manager exit alone.
 7. Nested BoxWeave treats its **own containing Box** as host. It can manage only software/resources inside that Box. It never changes the outer Incus, outer kernel, parent package manager, parent credentials or parent services.
 
+## Incident-derived host checks
+
+- **Usable daemon, not only reachable daemon:** Preflight the actual selected Incus storage pool, root disk/profile mapping, network and required API extensions. A fresh daemon that answers `incus info` may still lack a storage pool; a pool on another device is not the host root filesystem's available space. Never initialize/replace foreign storage/network implicitly to make a test green.
+- **Persistence actually survives:** Check SQLite intent/operation/ownership/journal location, filesystem/mount durability and service permissions under the target installation, host restart and independently nested restart. A directory merely existing is not proof that the intended durable volume is mounted.
+- **Rollback and reporting:** Keep exact original and candidate binary identity, observed schema/dependency version and pre/post service health. If recovery of a previous binary or service restart fails, report **rollback failed** rather than success; an interrupted install remains BLOCKED/UNKNOWN where the actual state is not established.
+
+These are checks inside the existing local install/status/doctor/upgrade flow, not a new host backup/recovery product. See [upstream incident study](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md).
+
 ## Minimal test matrix
 
 Clean Ubuntu LTS host; already-installed compatible Incus with unrelated projects; stale daemon version requiring separately authorized shared upgrade; unchanged foreign resources; native daemon capability mismatch; failed package/checksum; interrupted upgrade and recovery; nested independent installation; retained versions and no automatic host reboot.

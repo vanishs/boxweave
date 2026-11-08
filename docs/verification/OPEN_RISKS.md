@@ -29,6 +29,10 @@
 | O-023 | **VALIDATE** | Native guest service persistence using guest OS facilities and app listen address; do not add a BoxWeave guest process supervisor to satisfy the Hello World scenario. |
 | O-024 | **VALIDATE** | Native orphan forward cleanup after target Box is gone: exact native forward ownership/tombstone verification and `port_forward_delete` access without resurrecting the Box or deleting foreign/renamed claims. |
 
+## Historical evidence does not close native validation
+
+[Containarium source and 2,577-subject history review](../research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md) supplies test counterexamples, **not** v1 PASS evidence. The existing O-002/003/005/010/011/013/018/024 risks already cover exact identity, pre-start security, native forwarding, file race safety, Exec truth, storage and deletion recovery; do not duplicate them as a new platform backlog. Record exact kernel/Incus SDK/runtime/API extension and the failing native probe before weakening an approved guarantee. A feature that native Incus cannot prove remains BLOCKED/UNSUPPORTED until an owner product decision. No scope expansion is authorized by the research.
+
 ## Not on the roadmap
 
 Caddy and website domain/TLS controls, generic ACL/CIDR/firewall editing, per-Box Token delegation/RBAC, snapshots/backup, native guest patch/search/bulk transfer, persistent process supervisor, automatic idle sleep/HTTP wake, OAuth browser flow, multi-host/VM management, general host management, cross-layer orchestration. These are not technical blockers or P1 promises. Only a new explicit owner product decision can reopen them.
