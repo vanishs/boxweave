@@ -138,6 +138,10 @@ func TestOfficialMCPHandshakeAndOnlyOneTool(t *testing.T) {
 		if got.IsError {
 			t.Fatalf("unexpected MCP tool error: %+v", got)
 		}
+		invalid, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "host_status", Arguments: map[string]any{"unexpected_field": "must-reject"}})
+		if err == nil && invalid != nil && !invalid.IsError {
+			t.Fatal("unknown host_status input was silently ignored")
+		}
 		_ = sess.Close()
 		cancel()
 	}
