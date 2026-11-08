@@ -22,6 +22,12 @@ An operation may later move from UNKNOWN to SUCCEEDED or FAILED **only** after s
 
 Require a nonempty, caller-generated, reusable `idempotency_key` for **every MCP mutation**; reject missing keys before admission/native effects. Persist a safe pre-dispatch intent transactionally. Enforce unique (layer, authenticated stable actor, key), with separate canonical action/intent fingerprint (including existing target UUID/incarnation where applicable). For `box_create`, UUID does not exist at admission. Exact duplicates return original Tracking/Operation receipts; same-key/different-action or payload conflicts fail with a typed error. Do not rely on a short-lived in-process map as the only operation registry.
 
+## Second-pass native wait implementation detail
+
+In Incus v7.6.0, `GetOperationWait` obtains the actual HTTP Transport pointer and sets `ResponseHeaderTimeout=0` before the native wait request. Even though this is a **read** endpoint, shared-client transport behavior warrants an explicit concurrency test. For v1 `operation_get(wait_ms)`, prefer a small bounded `GetOperation` polling loop as the initial SDK-first implementation; keep the original native task untouched. Only select `GetOperationWait` after validating concurrent use and transport settings in the pinned version. See [tagged source and test gate](../research/SDK_GAP_CLOSURE_2026-11-07.md).
+
+The SDK `ExecInstance` may synchronously wait when `RecordOutput=true` and `Stdout`/`Stderr` writers are provided. For v1 durable async semantics, the worker (not MCP connection) owns native Exec stream consumption, bounded output retention and reliable exit status; no new log-reading public MCP tool or custom Incus REST layer.
+
 ## Native wait and cancellation boundary
 
 The official [Incus SDK v7.6.0 source](https://github.com/lxc/incus/blob/v7.6.0/client/operations.go#L183-L249) explicitly calls `op.Cancel()` on context cancellation in the listener path of `WaitContext`. Distinguish polling, native explicit cancellation, worker deadline and uncertain native dispatch. Only `operation_cancel` may initiate native cancellation; it remains an independently tracked mutation with evidence-based results. This is a **use-the-SDK-correctly** rule, not an allegation of upstream instability.
