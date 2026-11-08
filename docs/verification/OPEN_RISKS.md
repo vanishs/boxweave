@@ -35,6 +35,14 @@
 
 One nested `incus init` then failed with a native event-listener timeout and Cowsql leader loss. The daemon process remained active, but database queries failed and an owned instance-storage symlink remained. Original native operation was reported failed, yet exact native resource post-state is **UNKNOWN**. Treat this as an O-007/O-008 test-environment blocker; preserve original evidence, do not repeat create or destructively clean unknown state, and do not call the error an Incus v7.6 SDK defect without independent non-nested reproduction.
 
+## 2026-11-08 real nested native validation — replace first blocker status
+
+Read [actual native B/C result report](SDK_NATIVE_BATCH_RESULTS_2026-11-08.md). **Narrow demonstrated PASS**: L1 Cowsql database recovered by guest-local stop/backup/start; original timed-out native create actually produced an owned STOPPED child and was *not* retried; two child lifecycle/stop/delete and storage readback, official SDK asynchronous Exec (including observed exit 7), native guest file read/write/delete and one exclusive-create refusal, Bridge NIC IPv4+IPv6 default deny / admin-granted A→B / revoke, TCP/UDP packets, and both TCP+UDP **loopback** `proxy` after explicit project permission. These are nested raw Incus/SDK observations, **not** v1 controller acceptance.
+
+**Confirmed P0 blocker on O-003/O-004:** In the tested native `incus`-only restricted Project `user-1003`, runtime credential could attach an administrator-prepared ACL to its own NIC but **could not create or update ACL rules** in the inherited `default` Project. A second fresh confined Project failed when admin attempted `features.networks=true`: **OVN required**. The small BoxWeave `box_peer_set` implementation cannot claim native restricted-runtime semantics by relying on admin-only ACL edits. Next independently investigate a narrowly scoped **official restricted TLS authorization path**; only if that fails propose one locally approved, strictly owned ACL-only privilege boundary. No automatic custom host firewall, extra API, or privilege escalation is authorized by this research.
+
+**Confirmed P0 configuration prerequisite on O-005:** default `restricted.devices.proxy` blocked native proxy; a local administrator set `restricted.devices.proxy=allow` **only on the test Project**, after which the restricted runtime user added native TCP/UDP proxy devices and loopback packets succeeded. The test grant was later unset after device removal. External binding and instance IP-change cases are still native UNKNOWN. The original transient Cowsql failure is **not** proof of a persistent Incus bug; the root cause was not isolated.
+
 ## New official SDK capability checks
 
 The [2026-11-07 Incus/MCP SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md) confirmed limitations that cannot be resolved by simply writing more BoxWeave code:
