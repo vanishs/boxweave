@@ -4,6 +4,8 @@ Read [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md), [scope](d
 
 **Upstream SDK-first rule:** treat official Incus and MCP Go SDKs as trusted foundations. Use their native APIs and actual semantics rather than inventing a second engine, MCP transport or impossible guarantees. Before coding privilege separation, native wait/cancel, conditional guest files, TCP/UDP forwarding or same-bridge ACLs, read [SDK capability/architecture fit review](docs/research/OFFICIAL_SDK_FIT_2026-11-07.md).
 
+**Upstream-first supplement:** Read [20/20 SDK-native tool mapping](docs/research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). Non-root `incus`-only users have native Project confinement (unlike root/`incus-admin`); prefer native MCP `auth.RequireBearerToken`, Incus `api.StatusErrorMatch` and SDK Host/body guards over homemade frameworks. These are source findings, not native PASS evidence.
+
 1. **English artifacts; requester-language discussion.** Repository source, docs, CLI/MCP contracts, tests and release artifacts are English. Reply to the requester in their chosen/current language.
 2. **Evidence not aspiration.** A design/CI pass is not a real native Incus or installed-Box acceptance; report PASS/FAIL/PARTIAL/UNKNOWN accurately with original Tracking IDs, actual native Box/forward state and the independent witness for LAN claims. For bug-fix versions, formal CI auto-Release is permitted only after exact-candidate independent nested/native regression verification.
 3. **Keep permanent scope narrow.** Single-host Go controller with official MCP/Incus SDKs, no Containarium, Caddy, public REST/Web API, generic ACL/RBAC, guest Agent, host shell, website management or other excluded features. Never silently convert exclusions to P1.
