@@ -4,6 +4,12 @@
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Every item remains UNTESTED until actual evidence.
 
+## Standalone SDK smoke results versus v1 acceptance (2026-11-08)
+
+The [minimal batched nested Incus 7.6 lab](SDK_MINIMAL_BATCH_2026-11-08.md) compiled official Incus Go SDK **v7.6.0** and MCP Go SDK **v1.8.0** using Go **1.26.10**. One standalone MCP typed-Tool test **PASSED** current `req.Extra.TokenInfo` actor identity, admin/viewer denial, invalid/expired/revoked credentials. One standalone Incus SDK read-only test **PASSED** native per-user restricted Socket, explicit `UseProject("user-1003")`, OS admin Socket denial and typed HTTP 404. These are SDK smoke passes, **not v1 runtime/tool/native lifecycle, file or network acceptance**.
+
+One native L2 `incus init` then failed with an event-listener timeout and Cowsql leader unavailability. Native database reads failed and owned partial storage exists, so exact post-state is **UNKNOWN**. No new L2 effect may be retried/cleaned while state is unverified; do not attribute the observed failure automatically to SDK or nesting.
+
 ## SDK-contract acceptance prerequisites
 
 These are **UNTESTED** design gates from the [official SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md), not additional user-facing MCP tools: (1) native read-only operation wait never calls `Cancel`; (2) MCP runtime cannot exercise unrelated Incus admin operations despite project selection; (3) owned `volatile.uuid` is rechecked across name reuse; (4) no conditional guest file write/delete claims atomic CAS without point-of-use proof; (5) P0 host forwarding uses instance-owned proxy device, with actual native TCP/UDP/LAN witness and NIC-level same-bridge IPv4/IPv6 policy; (6) real SDK stateless modern `server/discover` and legacy negotiated MCP flows, auth and disconnect/recovery are tested. No native `N` or independent `V` status may be assigned for source inspection alone.
