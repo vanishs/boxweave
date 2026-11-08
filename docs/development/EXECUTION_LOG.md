@@ -8,16 +8,16 @@
 
 | Field | Current recorded fact |
 |---|---|
-| Last updated | 2026-11-08; docs orchestration verified on v1 HEAD **b42be46ca2355506e5285db06f97c07f29af8419** (pre-final-log amendment; recheck actual HEAD before S1) |
-| Branch | **v1** |
+| Last updated | 2026-11-08; S1 started from verified v1 HEAD **e5c7ae26bdaa24f9243b7dec28dbd34ca561bcb2**; implementation branch `feat/v1-s1-foundation-20261108`. |
+| Branch | **feat/v1-s1-foundation-20261108** from **v1** |
 | Code state | **Docs-only design baseline; no v1 Go controller/installer exists yet.** Root VERSION=1.0.0 is not a release proof. |
-| Completed work | SDK final P0 native/HTTP investigation **completed previously**, with verified limitations and cleanup. **Development phase S1–S5 NOT_STARTED**. 5-phase execution docs/links created as documentation only. |
-| Next intended phase | **S1** — [foundation](phases/01_FOUNDATION.md). Read only [AGENTS](../../AGENTS.md), [implementation plan](../process/IMPLEMENTATION_PLAN.md), [phase protocol](PHASE_EXECUTION_PROTOCOL.md), S1 card and this checkpoint. |
+| Completed work | SDK P0 historical only. **S1 IN_PROGRESS**; S2–S5 NOT_STARTED. Initial source is docs-only. No candidate binary yet. |
+| Next intended phase | **S1 in progress** — [foundation](phases/01_FOUNDATION.md). Implement, test and attempt isolated acceptance. |
 | Immutable phase boundary | Public catalog **20 tools**; no Containarium, new REST transport, Caddy, generic ACL service or Incus/Cowsql DB patch. |
 | Known SDK limits | Native unsafe file conditional replace/delete → UNSUPPORTED until safe; detached Exec Operation.Cancel unsupported; one shared ACL/Scriptlet selected; partial NIC ACL update and actual v1 acceptance not yet tested. |
 | Original UNKNOWN / operational cautions | Prior outer L0 BoxWeave main uncertain create is **not part of this docs-only run**; do not retry or clean. Original native nested Cowsql events are environment records, not permission to mutate daemon. See [SDK final report](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md) for exact prior cases. |
 | Owner decisions needed right now | **None for planning.** Future shared-host upgrades/exposure, mandatory positive file CAS behavior or unresolved release-critical native enforcement may require explicit approval; log and continue other tasks when reached. |
-| Next 1–3 actions | 1) Verify current v1 HEAD and no concurrent edits; 2) Execute S1 scope/read/implementation/installed acceptance in one pass; 3) append S1 evidence, cleanup, blockers and S2 handoff. |
+| Next 1–3 actions | 1) Create one uniquely named disposable S1 Box; 2) implement/build/test in isolated branch and Box; 3) update exact evidence/status and blockers, then submit PR against v1. |
 
 **Update this small checkpoint before context compaction, agent handoff or a new native mutation.** The checkpoint is intentionally mutable; all evidence/decisions below remain append-only. Record actual HEAD/working branch and binary hash once a real implementation begins. If multiple Agents work in parallel, do not overwrite one another's original failure entries.
 
@@ -37,6 +37,14 @@ New entries go **newest first after this template**, or append by monotonically 
 | Resume | Next safe action, relevant **smallest** docs to read, do-not-repeat warnings |
 
 ## Recorded entries
+
+### LOG-20261108-S1-START — S1 opened, initial environment check (2026-11-08, implementation Agent)
+
+- **Phase/status:** S1 / **IN_PROGRESS**; no application PASS yet. Verified remote v1 HEAD `e5c7ae26bdaa24f9243b7dec28dbd34ca561bcb2`; implementation branch `feat/v1-s1-foundation-20261108`.
+- **Read:** AGENTS, current single plan, execution protocol, S1 card/checkpoint, scoped boundary and Go SDK/architecture/MCP security and Tracking contracts. No v1 Go sources existed at entry. Old installed BoxWeave self-report source version `0.50.4` is not the v1 candidate.
+- **Environment observation:** container local Go version `go1.23.2`; local `git ls-remote` failed DNS resolution for github.com. Reviewed tagged Incus Go SDK requires Go 1.26.9+, so this local runtime is **not** a valid compile/acceptance environment. Existing remote Boxes are not owned by this run and must not be modified.
+- **Action/authority:** prepare one **new, uniquely owned disposable development Box**, rather than touch the existing stable host, older Box or shared Incus configuration. S1 does not authorize global Scriptlet, shared host upgrade, daemon reboot or foreign-resource change.
+- **Next:** record original new Box receipt/identity and worker code/Go pins, then run build, MCP native HTTP and negative tests. Any native uncertainty remains UNKNOWN with no retry.
 
 ### LOG-20261108-001 — new context-safe development orchestration (2026-11-08, documentation Agent)
 
