@@ -144,3 +144,22 @@ func TestDatabaseSymlinkCannotAdoptOtherFile(t *testing.T) {
 		t.Fatalf("unmanaged target changed: %v", err)
 	}
 }
+
+func TestForeignDatabaseContentsAreNotModified(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "foreign.sqlite")
+	original := []byte("external-sentinel-must-not-change")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(path); err == nil {
+		t.Fatal("foreign database unexpectedly adopted")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(original) {
+		t.Fatalf("foreign database was changed: %v", err)
+	}
+}
