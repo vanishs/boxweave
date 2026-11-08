@@ -14,7 +14,6 @@ import (
     "path/filepath"
     "regexp"
     "strconv"
-    "strings"
 )
 
 type Plan struct {
@@ -49,7 +48,9 @@ func safe(p Plan)error{
     for _,v:=range []string{p.StateDir,p.BinaryPath,p.UnitPath,p.Socket,p.SourceBinary}{
         if !filepath.IsAbs(v)||filepath.Clean(v)!=v{return errors.New("absolute clean install path required")}
     }
-    if strings.HasPrefix(p.StateDir,"/tmp/")||p.StateDir=="/" {return errors.New("unsafe state location")}
+    if p.StateDir!="/var/lib/boxweave"||p.BinaryPath!="/usr/local/bin/boxweave"||p.UnitPath!="/etc/systemd/system/boxweave.service" {
+        return errors.New("nonstandard install target requires a separate approved installer design")
+    }
     return nil
 }
 func ServiceIdentity(p Plan)(int,int,error){
@@ -129,6 +130,9 @@ func Stage(p Plan,approve bool)(Manifest,error){
         return old,nil
     }else if !errors.Is(err,os.ErrNotExist){return Manifest{},err}
     if _,err=os.Lstat(p.BinaryPath);err==nil{return Manifest{},errors.New("target binary exists but is not a verified BoxWeave install")}
+    if _,e:=os.Lstat(p.StateDir);e==nil {
+        return Manifest{},errors.New("existing state directory not governed by a verified manifest; refuse adoption")
+    }else if !errors.Is(e,os.ErrNotExist){return Manifest{},e}
     if err=os.MkdirAll(p.StateDir,0700);err!=nil{return Manifest{},err}
     if err=os.Chmod(p.StateDir,0700);err!=nil{return Manifest{},err}
     if err=os.Chown(p.StateDir,uid,gid);err!=nil{return Manifest{},err}
