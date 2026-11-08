@@ -108,7 +108,7 @@ func Open(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
-	if err := s.init(); err != nil {
+	if err := s.init(flags&os.O_EXCL != 0); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -116,72 +116,72 @@ func Open(path string) (*Store, error) {
 }
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) init() error {
+func (s *Store) init(fresh bool) error {
+	if !fresh {
+		// Inspect existing files with read-only SQL BEFORE any journal mode,
+		// DDL or migration: never modify a foreign/unversioned database.
+		var n int
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
+			return err
+		}
+		if n != 1 {
+			return fmt.Errorf("existing database missing version: refuse foreign adoption")
+		}
+		var version int
+		if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
+			return err
+		}
+		if version != SchemaVersion {
+			return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
+		}
+		for _, name := range []string{"credentials", "owned_boxes", "operations", "operation_events", "recovery_audit"} {
+			if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n); err != nil {
+				return err
+			}
+			if n != 1 {
+				return fmt.Errorf("missing required table %s", name)
+			}
+		}
+		var integrity string
+		if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
+			return err
+		}
+		if integrity != "ok" {
+			return fmt.Errorf("integrity check failed")
+		}
+	}
 	for _, q := range []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=FULL",
 		"PRAGMA foreign_keys=ON",
-		"CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)",
 	} {
 		if _, err := s.db.Exec(q); err != nil {
 			return err
 		}
 	}
-	var v int
-	err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&v)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if !fresh {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
 		return err
 	}
-	if err == nil && v != SchemaVersion {
-		return fmt.Errorf("unsupported schema %d; refuse mutation/automatic migration", v)
+	defer tx.Rollback()
+	schema := []string{
+		"CREATE TABLE schema_version (version INTEGER NOT NULL)",
+		"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+		"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
+		"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
+		"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
+		"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
+		"INSERT INTO schema_version(version) VALUES (1)",
 	}
-	if errors.Is(err, sql.ErrNoRows) {
-		// Only initialize an empty, new database. Existing but unversioned files fail closed.
-		var n int
-		if e := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name!='schema_version'").Scan(&n); e != nil {
-			return e
-		}
-		if n != 0 {
-			return fmt.Errorf("existing unversioned database, refusing adoption")
-		}
-		tx, e := s.db.Begin()
-		if e != nil {
-			return e
-		}
-		defer tx.Rollback()
-		schema := []string{
-			"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
-			"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
-			"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
-			"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
-			"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
-			"INSERT INTO schema_version(version) VALUES (1)",
-		}
-		for _, q := range schema {
-			if _, e = tx.Exec(q); e != nil {
-				return e
-			}
-		}
-		return tx.Commit()
-	}
-	// Do not replace or silently repair an existing inconsistent ledger.
-	for _, name := range []string{"credentials", "owned_boxes", "operations", "operation_events", "recovery_audit"} {
-		var n int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n); err != nil {
+	for _, q := range schema {
+		if _, err := tx.Exec(q); err != nil {
 			return err
 		}
-		if n != 1 {
-			return fmt.Errorf("missing required table %s", name)
-		}
 	}
-	var integrity string
-	if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
-		return err
-	}
-	if integrity != "ok" {
-		return fmt.Errorf("integrity check failed")
-	}
-	return nil
+	return tx.Commit()
 }
 func (s *Store) Schema(ctx context.Context) (int, error) {
 	var v int
