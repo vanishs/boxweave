@@ -110,6 +110,15 @@ These four cases are **UNTESTED refinements to existing v1 interfaces**, not new
 
 These are **UNTESTED test and harness refinements**, not additional MCP tools, agents, databases or runtime services. Record/replay and fake-native calls do not count as N or V by themselves. Historical source: [DevSpace two-dimensional audit](../research/DEVSPACE_MAIN_HISTORY_2026-11-07.md). The A-001–A-077 contracts remain authoritative, with no duplicate implementation of already-required UNKNOWN/cancel semantics.
 
+## Main migration-history regression controls (existing behavior only)
+
+| ID | Existing v1 behavior / negative regression to test | Evidence |
+|---|---|---|
+| A-081 | On one unchanged, owned native Box, deliberate `stop → start → stop` with **three distinct idempotency keys** performs and verifies both stops; an exact duplicate of any original key returns only its original Operation with zero new native dispatch, and same key/different payload is rejected. Pending/UNKNOWN action prevents conflicting mutations without permanently banning later legitimate actions | T + I + N + V |
+| A-082 | Inject an accepted resize/update and then remove trustworthy native effective-resource readback: `operation_get`, the MCP mutation response and host-local operator inspection must **not** claim verified success while the original claim is UNKNOWN/held. A second mutator is blocked; after exact UUID and requested values are independently proven, public state and lock disposition converge without replay. Verify missing/partial readback is never silently treated as desired-state proof | T + I + N + V |
+
+**Both are UNTESTED negative controls for existing 20 tools/local CLI, not new operations, tables or user-facing APIs.** The source-confirmed counterexamples are [main v0.50.4 lifecycle/claims](../research/MAIN_HISTORY_LESSONS_2026-11-07.md#owner-retrospective-and-pinned-v0504-re-review-2026-11-07); the older A-016/A-018/A-076 requirements remain binding.
+
 ## Adversarial combinations
 
 Test lost MCP reply after create/Exec/forward, concurrent Box delete vs peer/forward edits, token revocation just before and after dispatch, stale guest hashes and symlink races, fixed network ACL vs peer grants, IPv6 bypass, host listener and port collisions, simulated parent restart during nested work and existing shared Incus upgrade. No native effect outside the owned set is ever permitted.

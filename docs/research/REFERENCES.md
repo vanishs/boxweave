@@ -10,6 +10,8 @@ References are **technical evidence and inspiration**, not dependencies or instr
 
 Retain English artifacts, requester-language replies, explicit privileges, source-vs-installed evidence, UNKNOWN preservation, black-box bug hunting, separate Finder/Fixer/Verifier and concise handoff. Do **not** import Containarium-specific procedures, old code, SSH client matrices, Web UI rules, stale host/Box names, or legacy release assumptions.
 
+**Owner's retrospective (2026-11-07):** Reliability problems appeared to intensify after MCP→REST migration. Treat this as a high-priority **anti-pattern investigation**, not as proof of REST-protocol causation or an endorsement of old MCP relaying. [Pinned two-dimensional `main` source/814-commit-history review](MAIN_HISTORY_LESSONS_2026-11-07.md#owner-retrospective-and-pinned-v0504-re-review-2026-11-07) identifies multiple receipt models, an actual resize success/UNKNOWN semantic split, REST-500/404 repair chains, permanent-payload idempotency mistakes and test-harness false evidence. Prefer **eliminating duplicated boundaries** through one native Incus Go SDK Operation path to importing the old downstream fixes.
+
 ## nikitatsym/incus-mcp
 
 https://github.com/nikitatsym/incus-mcp
