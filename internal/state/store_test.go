@@ -3,13 +3,16 @@ package state
 import (
     "context"
     "errors"
+    "os"
     "path/filepath"
     "testing"
     "time"
 )
 func newStore(t *testing.T)*Store {
     t.Helper()
-    s,err:=Open(filepath.Join(t.TempDir(),"ledger.db"))
+    dir:=t.TempDir()
+    if err:=os.Chmod(dir,0700);err!=nil{t.Fatal(err)}
+    s,err:=Open(filepath.Join(dir,"ledger.db"))
     if err!=nil{t.Fatal(err)}
     t.Cleanup(func(){_ = s.Close()})
     return s
@@ -45,11 +48,12 @@ func TestCrashRecoveryNeverRedispatches(t *testing.T){
     duplicate,err:=s.Admit(ctx,a);if err!=nil||duplicate.ID!=r.ID||duplicate.State!="UNKNOWN" {t.Fatalf("unknown dedupe: %+v %v",duplicate,err)}
 }
 func TestPermissionsRejectUnsafeFile(t *testing.T){
-    s:=newStore(t)
-    _=s.Close()
-    // Existing readable-by-others store is rejected, never silently changed.
-    path:=filepath.Join(t.TempDir(),"loose.db")
-    // Separate parent is 0700 by t.TempDir.
-    _,err:=Open(path)
-    if err!=nil{t.Fatal(err)}
+    dir:=t.TempDir()
+    if err:=os.Chmod(dir,0755);err!=nil{t.Fatal(err)}
+    if _,err:=Open(filepath.Join(dir,"unsafe.db"));err==nil{t.Fatal("world-readable database directory unexpectedly accepted")}
+    if err:=os.Chmod(dir,0700);err!=nil{t.Fatal(err)}
+    s,err:=Open(filepath.Join(dir,"safe.db"));if err!=nil{t.Fatal(err)}
+    if err:=s.Close();err!=nil{t.Fatal(err)}
+    if err:=os.Chmod(filepath.Join(dir,"safe.db"),0644);err!=nil{t.Fatal(err)}
+    if _,err:=Open(filepath.Join(dir,"safe.db"));err==nil{t.Fatal("world-readable existing DB unexpectedly accepted")}
 }
