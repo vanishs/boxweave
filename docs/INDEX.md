@@ -31,7 +31,8 @@ This branch is a **v1 design baseline**, not implemented product functionality.
 | How does each of the 20 public MCP tools map to native SDK methods? | [Native SDK mapping: 20/20 tools](research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) |
 | Which further SDK call semantics still affect v1's design? | [Second-pass SDK gap closure: Tool auth, Bridge ACL, files, Exec, wait and Project bootstrap](research/SDK_GAP_CLOSURE_2026-11-07.md) |
 | What did the disposable Box SDK validation actually establish? | [2026-11-07 live Box probe and remaining blockers](verification/SDK_NATIVE_BOX_PROBE_2026-11-07.md) |
-| What is the smallest practical batched native SDK verification, and which tests have actually passed? | [2026-11-08 Incus 7.6 nested laboratory, MCP/Incus SDK smoke and remaining batches](verification/SDK_MINIMAL_BATCH_2026-11-08.md) |
+| What is the smallest practical batched native SDK verification, and which tests have actually passed? | [Original minimal test plan and preliminary smoke](verification/SDK_MINIMAL_BATCH_2026-11-08.md) |
+| What were the actual native B/C SDK tests, database recovery, packet findings and cleanup states? | [2026-11-08 executed Incus 7.6 nested B/C batch, native evidence and ACL permission blocker](verification/SDK_NATIVE_BATCH_RESULTS_2026-11-08.md) |
 | What are the approved runtime defaults? | [Owner-approved defaults](decisions/DEFAULTS.md) |
 | What are the finalized P0 operational rules? | [P0 operational policies](decisions/P0_OPERATIONAL_POLICIES.md) and [permanent scope](decisions/PRODUCT_BOUNDARY.md) |
 | What remains undecided? | [Open decisions and risks](verification/OPEN_RISKS.md) |
