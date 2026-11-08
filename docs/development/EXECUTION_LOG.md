@@ -8,16 +8,16 @@
 
 | Field | Current recorded fact |
 |---|---|
-| Last updated | 2026-11-08; S1 started from verified v1 HEAD **e5c7ae26bdaa24f9243b7dec28dbd34ca561bcb2**; implementation branch `feat/v1-s1-foundation-20261108`. |
+| Last updated | 2026-11-08; S1 source checks **PASS** at commit **66b7e0eec4a94f5a29469598c975e2c0f7394fe9**, [CI #42522526700](https://github.com/vanishs/boxweave/actions/runs/42522526700); **native/installed S1 BLOCKED; phase PARTIAL**. Base v1 remains e5c7ae26bdaa24f9243b7dec28dbd34ca561bcb2. |
 | Branch | **feat/v1-s1-foundation-20261108** from **v1** |
 | Code state | **S1 source candidate on feature branch**, Go controller, official MCP/Incus SDKs, SQLite schema1, staging-only local installer and host_status. **No installed v1 candidate; source CI is not native proof.** Root VERSION=1.0.0 is not a release proof. |
-| Completed work | **S1 PARTIAL:** official SDK module pins, typed host_status, token/revocation, SQLite journal & no-blind-replay worker, local staging/status CLI, native read adapter and candidate test suite. CI source build/race on some revisions passed; latest CI must be pinned to exact head. **S2–S5 NOT_STARTED.** |
+| Completed work | **S1 PARTIAL** source candidate. **PASS (CI/source/loopback only):** tagged SDK source build, Go -race/unit, format, compiled CLI status and serve, missing bearer rejected, modern raw MCP tools/list, token revoke rejected; SHA **66b7e0e**, run **42522526700**. Includes SQLite unknown/symlink safety. **NOT PASS native/installed:** no safe Box test environment. **S2–S5 NOT_STARTED.** |
 | Next intended phase | **S1 PARTIAL, native test BLOCKED:** see [S1 evidence](../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md). Continue source checks, fix/verify, then resume installed/native acceptance only in an authorized safe lab. Do not advance to S2 as though S1 passed. |
 | Immutable phase boundary | Public catalog **20 tools**; no Containarium, new REST transport, Caddy, generic ACL service or Incus/Cowsql DB patch. |
 | Known SDK limits | Native unsafe file conditional replace/delete → UNSUPPORTED until safe; detached Exec Operation.Cancel unsupported; one shared ACL/Scriptlet selected; partial NIC ACL update and actual v1 acceptance not yet tested. |
 | Original UNKNOWN / operational cautions | **Current S1 isolated Box create UNKNOWN:** name `bw-v1-s1-1108`, task `7e1cbf043d1fd4ea3d9ec0093a04371e`, key `1d6007f5972bd21b01f89eacd42c3160`; upstream ACK absent. One read-only get returned NOT_FOUND and debug reported missing; **do not create/retry/delete/reclaim**, pending decisive original-receipt and native reconciliation. Older main-branch UNKNOWN and native Cowsql also remain independent. |
 | Owner decisions needed right now | **Native test environment approval may be required** if original create UNKNOWN cannot be reconciled. No owner permission to install on existing shared host, reboot, force create/retry, or change global Scriptlet. Safe source work continues. |
-| Next 1–3 actions | 1) Verify exact final SHA and CI build/race/HTTP tests; 2) review and complete safe installer/upgrade/recovery source without native risks; 3) reconcile original Box task read-only, perform mandatory installed native acceptance when separately authorized and safe. |
+| Next 1–3 actions | 1) Maintain original Box task UNKNOWN lock and reconcile read-only; 2) finish remaining S1 safe installer/upgrade/backup/recovery implementation and failure cases; 3) obtain separately authorized clean native lab for installed version/permissions/restart/rollback and independent verifier before S1 PASS. |
 
 **Update this small checkpoint before context compaction, agent handoff or a new native mutation.** The checkpoint is intentionally mutable; all evidence/decisions below remain append-only. Record actual HEAD/working branch and binary hash once a real implementation begins. If multiple Agents work in parallel, do not overwrite one another's original failure entries.
 
@@ -37,6 +37,14 @@ New entries go **newest first after this template**, or append by monotonically 
 | Resume | Next safe action, relevant **smallest** docs to read, do-not-repeat warnings |
 
 ## Recorded entries
+
+### LOG-20261108-S1-CI-004 — source and loopback smoke green; S1 remains PARTIAL (2026-11-08)
+
+- **Exact source SHA:** `66b7e0eec4a94f5a29469598c975e2c0f7394fe9`. [GitHub Actions #42522526700](https://github.com/vanishs/boxweave/actions/runs/42522526700) **success**: `go mod verify` + `go build ./...`, `go test -race -count=1 ./...`, `gofmt -l` and **real built binary** CLI/loopback HTTP smoke. Original workflow is read-only; one temporary formatter bot commit `d38d49d` added `go.sum` and was removed from normal CI afterward.
+- **CI failure/correction (new test, not product bypass):** [run #42521689966](https://github.com/vanishs/boxweave/actions/runs/42521689966) CLI status/token/service/anonymous 401 passed, raw modern `tools/list` returned HTTP 400 because request lacked required `_meta` protocolVersion/clientCapabilities; recorded response and corrected. [run #42522284849](https://github.com/vanishs/boxweave/actions/runs/42522284849) got past metadata validation but returned 400 **missing required Mcp-Method header**; added `Mcp-Method: tools/list`, reran, final complete CI **PASS**. No secret token exposed; actual binary token-create/revoke verified.
+- **Source safety correction:** `state.Open` now rejects symlinked SQLite file and parent directories; `TestDatabaseSymlinkCannotAdoptOtherFile` checks original target unchanged. Opening an existing DB now performs read-only schema/table/integrity preflight **before** any DDL/WAL setup, with `TestForeignDatabaseContentsAreNotModified`. Initial fail-closed directory chmod tests and native LOST-ACK UNKNOWN tests remain.
+- **Evidence ceiling:** source/race/loopback **PASS**, native installed/app/Incus and independent verifier **NOT RUN / BLOCKED**. Original S1 test Box task `7e1cbf043d1fd4ea3d9ec0093a04371e` is still `UPSTREAM_CREATE_OUTCOME_UNKNOWN`; **no duplicate create, deletion, host policy change, deployment or release.** Stage-only installer lacks complete upgrade/rollback and clean-host acceptance. [Report](../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md). [Draft PR #115](https://github.com/vanishs/boxweave/pull/115) stays unmerged.
+- **Handoff:** resume remaining S1, never treat CI as native PASS and never start S2 or release without S1 phase exit gate.
 
 ### LOG-20261108-S1-DEV-002 — bounded implementation, CI diagnosis and native acceptance blocked (2026-11-08)
 
