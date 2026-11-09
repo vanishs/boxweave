@@ -84,8 +84,8 @@ func Activate(p Plan, approved bool) (Manifest, error) {
 			return m, err
 		}
 	}
-	if err = serviceActive(); err != nil {
-		return m, fmt.Errorf("service not active: %w", err)
+	if err = waitInstalledHealthy(p, m); err != nil {
+		return m, fmt.Errorf("activated service is not stable: %w", err)
 	}
 	m.RestartRequired = false
 	if err = writeManifest(p, m); err != nil {
