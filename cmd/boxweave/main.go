@@ -80,7 +80,9 @@ func run() error {
 		} else {
 			report, err = install.NativeDependencyBootstrap(*nativePackageVersion, *nativePlanSHA, *approveNative)
 		}
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if command == "recover" {
