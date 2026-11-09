@@ -14,7 +14,7 @@ const minNativePoolFreeBytes uint64 = 64 << 20
 
 var (
 	errNativeBackingUnverified = errors.New("nondefault dir pool backing cannot be distinguished from host-root fallback by restricted actor")
-	errNativeSpaceLow         = errors.New("selected native storage free space insufficient")
+	errNativeSpaceLow          = errors.New("selected native storage free space insufficient")
 )
 
 // localDirPoolSpace checks the ACTUAL filesystem below Incus's canonical pool
