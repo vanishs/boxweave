@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -52,6 +52,11 @@ func run() error {
 	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
+	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
+	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
+	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
+	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
+
 	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
 	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")
@@ -67,7 +72,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -77,12 +82,42 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "recover":
+		"native-bootstrap", "native-migrate-apply", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
 			return err
 		}
 		defer release()
+	}
+	if command == "native-migrate-plan" || command == "native-migrate-apply" ||
+		command == "native-migrate-status" || command == "native-migrate-rollback" ||
+		command == "native-migrate-commit" {
+		enc := json.NewEncoder(os.Stdout)
+		switch command {
+		case "native-migrate-plan":
+			result, err := install.NativeMigrationReview(*oldIncusPackage, *nativePackageVersion)
+			if err != nil { return err }
+			return enc.Encode(result)
+		case "native-migrate-apply":
+			result, err := install.NativeMigrationApply(*oldIncusPackage, *nativePackageVersion,
+				*nativePlanSHA, *confirmNativeHost, *approveMigration, *ackNativeDowntime)
+			if err != nil { return err }
+			return enc.Encode(result)
+		case "native-migrate-status":
+			result, err := install.NativeMigrationStatus()
+			if err != nil { return err }
+			return enc.Encode(result)
+		case "native-migrate-rollback":
+			result, err := install.NativeMigrationRollback(*confirmNativeHost,
+				*oldIncusPackage, *approveMigration, *ackNativeDowntime)
+			if err != nil { return err }
+			return enc.Encode(result)
+		case "native-migrate-commit":
+			archive, err := install.NativeMigrationFinalize(*confirmNativeHost,
+				*nativePackageVersion, *approveMigration)
+			if err != nil { return err }
+			return enc.Encode(struct{ Archive string `json:"audit_archive"` }{archive})
+		}
 	}
 	if command == "native-plan" || command == "native-bootstrap" {
 		var report install.NativeBootstrapReport
