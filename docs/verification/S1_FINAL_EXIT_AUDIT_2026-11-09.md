@@ -1,0 +1,46 @@
+# S1 final phase-exit audit — evidence-first checkpoint (2026-11-09)
+
+**Overall: PARTIAL; S1 must not be marked PASS, PR #115 stays Draft, and no S2 promotion or release is authorized.** This report is the first explicit acceptance-ID phase-exit reconciliation, **not** a claim that the remaining cases have been exercised.
+
+## Immutable identities and governance
+
+- Pull request: [#115](https://github.com/vanishs/boxweave/pull/115), head branch `feat/v1-s1-foundation-20261108`, base `v1`.
+- Earlier independently **installed and native-tested implementation**: code `06e777276ca11f564de00794b74b9182888aaf38`; version `1.0.19-s1-issue116-accept`; SHA-256 `fa5f19c26aea1796ccaf7ceea0710b15e5498e83a44a9b5346ffb8a1e7ae8a52`, in test-owned nested `bws1-deps-1108`.
+- Later S1 A-080 source fix: `2df1fb9811cf49cb64aa18561dbb487a698d8e68`, with dedicated regression tests at `b4db90383dfd05c052009361978b4e9bac6617aa`. **This source is not the installed binary listed above**. GitHub CI and actual installed-binary verification must be independently evaluated on the eventual final code SHA.
+- [Issue #116](S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md): signed old Incus -> new, real rollback, post-APT crash journal, negative foreign consumers, partially initialized native host; **PASS for scoped disposable zero-foreign-consumer maintenance**, not permission for shared-host migration.
+- [Issue #117](../process/QUALITY_GATES.md): GitHub Ruleset `#26842628` active on exact `v1`, strict required `quality-gate`, no bypass; failing non-Draft PR #118 was independently blocked. Prior `Basic protection` rule `#26251692` remains disabled and unchanged.
+- Separate original outer create task `7e1cbf043d1fd4ea3d9ec0093a04371e` (`bw-v1-s1-1108`) remains **UNKNOWN**, not reissued, adopted, force-unlocked or cleaned.
+- No production/shared native upgrade, published release, v1 merge, or unrelated instance mutation.
+
+## Phase-local ID-by-ID reconciliation
+
+The IDs belong to the full [acceptance catalog](ACCEPTANCE.md); some full cases explicitly require S2–S5 tools that are not S1 deliverables. **PASS (S1)** below is limited to the S1-defined surface and the cited binary/source, never an assertion that all future MCP tools passed.
+
+| ID | S1 obligation and strongest linked evidence | S1 assessment |
+|---|---|---|
+| A-001 | Earlier installed HTTP tests covered modern + legacy MCP negotiation/list/call, bad/revoked token, Origin/Host/body cap; latest prior candidate separately verified loopback MCP anonymous 401, one `host_status` tool, actual service restart and token revocation. [Installed checkpoint](S1_FOUNDATION_LATEST_2026-11-09.md), [native #116](S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md). | **PASS (S1); newest A-080 change not independently installed** |
+| A-002 | Signed native bootstrap, exact version reuse, approved old Incus migration/real rollback, binary/service stage/upgrade, protected credentials and native doctor. [#116](S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md). | **PASS (previous installed candidate)** |
+| A-003 | Admin/viewer read-only host-status boundary and independent revocation covered. Viewer refusal for later create/Exec/peer/forward/cancel awaits their S2–S4 implementation. | **PASS (S1 one-tool scope); later mutations deferred** |
+| A-004 | Native restricted user and Project deny known foreign `default` in real guest; earlier native UUID tests are separately version-pinned. Future Box list/get/create identities belong to S2. | **PASS (S1 identity boundary); S2 tool cases deferred** |
+| A-016 | Durable admission/duplicate-idempotency/intent-conflict unit + earlier native mutation proof, original Tracking and Operation receipts. Not a claim that all future S2 mutations already exist. | **PASS (S1 admission engine)** |
+| A-017 | Explicit Tracking/request/idempotency/native IDs and typed worker context in S1 source/native trials. | **PASS (S1 internal boundary)** |
+| A-018 | Earlier native lost-ACK/OS-exit, UNKNOWN preserved and no redispatch; #116 real after-APT pre-ACK crash separately recovered without replay. | **PASS (earlier installed native and S1 dependency boundary)** |
+| A-019 | S1 internal worker/read-wait safety only; the public `operation_get(wait_ms)` is an S2 deliverable and cannot be counted as a public S1 tool. | **DEFERRED public API to S2; not falsely PASS** |
+| A-022 | Local CLI doctor/status and redacted errors exist; the later public `operation_get` diagnostic receipt is an S2 case. | **PASS CLI-only S1; deferred public receipt** |
+| A-032 | Exact compatible existing daemon and nonroot restricted Project/socket, pool/profile/NIC readback, foreign deny. [#116](S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md). | **PASS (bounded native scope)** |
+| A-033 | Signed absent/old packages installed/upgraded only via exact root-local approved plans; real native rollback and honest UNKNOWN. No automatic shared host migration or reboot. [#116](S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md). | **PASS (authorized zero-foreign-consumer lab)** |
+| A-034 | Existing SQLite exact DDL, file-mode/symlink, unknown/newer version fail-closed tests; newly identified unknown-table/multiple-history admission gap fixed in `2df1fb9` and exercised in new source regression at `b4db9038`. **The new code was not independently installed.** | **PARTIAL pending final-binary independent check** |
+| A-071 | Actual owned-project missing root disk and NIC produced truthful doctor refusal then restoration; signed native install created a real pool. **Separate-disk selected pool, incorrect reported free space, and unmounted Incus data-directory negatives remain without verified real/native evidence.** A successful `GetStoragePool(Status=Created)` is not proof of the backing mount, real free bytes or external network reachability. | **PARTIAL — mandatory missing negative subcases** |
+| A-072 | Actual binary/service upgrade, intentionally broken service candidate, verified rollback to old binary/SQLite/unit, and real package rollback with truthful uncertain result. Last recorded installed binary still predates the A-080 source guard. | **PASS previous binary/Incus lifecycle; rerun changed candidate** |
+| A-075 | Official SDK typed S1 host_status/native operations verified with version/extensions; complete 20-tool SDK coverage is S5 and later development. | **PASS S1 SDK subset; S2–S5 deferred** |
+| A-076 | Earlier real native effect with original UUID + independent postread, lost ACK and no blind replay. No claim covering all later lifecycle or network mutations. | **PASS S1 native admission subcase; S2–S5 deferred** |
+| A-077 | Official MCP Go SDK schema/negative/in-process tests and Go unit regression checks; mocks alone do not count as installed/native. | **PASS S1 source layer only** |
+| A-080 | At `b4db9038`, new Go tests exercise five foreign/ambiguous SQLite histories, twelve concurrent openers retaining original Operation/Tracking IDs, and OS exit 79 inside an uncommitted DDL transaction; all passed on an isolated source clone. Before fix, four negative cases **incorrectly succeeded**, reproducing the issue. This verifies **source behavior only**. Concurrent authorized installed controller upgrade/start, committed incomplete migration, independently installed final code and readiness/operation/audit preservation are not yet covered. v1 currently uses `SchemaVersion=1` and intentionally refuses automatic cross-version migrations. | **PARTIAL — source regression PASS; installed/migration failure matrix incomplete** |
+
+## Mandatory residual verification before Draft -> Ready
+
+1. **A-071**: in a NEW explicitly disposable nested native host, test selected pool on separately mounted storage, wrong free-space claim, mount absent at boot and unmounted data-directory after preflight. Collect exact mountinfo/`statfs`/native pool/profile/doctor outputs and verify **no foreign writes**. Do not unmount the current working parent/host or any shared storage. If tooling cannot expose a reliable distinction, return an explicit not-verified/blocked capability rather than `ready=true` physical-disk proof.
+2. **A-080**: run full Go race/quality CI on the exact new candidate, then compile/deploy that candidate to an owned disposable guest and independently verify SQLite identity/history, service readiness, concurrent local startup/upgrade lock, intentionally interrupted schema migration and preserved credentials/operations/recovery audit. Never rewrite the live installed ledger merely for a negative test.
+3. **Exact final candidate**: rerun independent installed-systemd/native/MCP verification on the **new** binary SHA. Previous `06e7772` install evidence and source-only `b4db9038` tests cannot be combined into a fictitious single-binary PASS. Update the source/binary hashes, this matrix and the [execution log](../development/EXECUTION_LOG.md), then only mark S1 PASS if required native gates close.
+
+**No owner decision currently required:** all remaining checks can use a safely isolated, explicitly disposable laboratory without upgrading production/shared Incus. If that lab is unavailable, record a dated BLOCKED result instead of bypassing the acceptance gate. Avoid touching the original unrelated UNKNOWN task.
