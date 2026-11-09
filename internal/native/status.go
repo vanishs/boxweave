@@ -17,6 +17,8 @@ type Status struct {
 	Version       string          `json:"incus_version,omitempty"`
 	Project       string          `json:"project"`
 	ProfileReady  bool            `json:"default_profile_ready"`
+	StorageReady  bool            `json:"selected_storage_pool_ready"`
+	NICConfigured bool            `json:"default_nic_configured"`
 	APIExtensions map[string]bool `json:"required_extensions"`
 	ErrorClass    string          `json:"error_class,omitempty"`
 }
@@ -105,14 +107,31 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "PROFILE_UNAVAILABLE"
 		return s
 	}
+	var selectedPool string
 	for _, d := range profile.Devices {
 		if d["type"] == "disk" && d["path"] == "/" && d["pool"] != "" {
 			s.ProfileReady = true
-			break
+			selectedPool = d["pool"]
+		}
+		if d["type"] == "nic" && d["network"] != "" {
+			// A confined service user cannot directly read daemon-global
+			// network objects. This proves only its assigned Profile NIC,
+			// not that the physical network/hairpin is reachable.
+			s.NICConfigured = true
 		}
 	}
 	if !s.ProfileReady {
 		s.ErrorClass = "ROOT_DISK_NOT_CONFIGURED"
+		return s
+	}
+	pool, _, err := scoped.GetStoragePool(selectedPool)
+	if err != nil || pool.Status != "Created" {
+		s.ErrorClass = "SELECTED_STORAGE_POOL_UNAVAILABLE"
+		return s
+	}
+	s.StorageReady = true
+	if !s.NICConfigured {
+		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s
 	}
 	for _, required := range requiredExtensions {
