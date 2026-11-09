@@ -46,6 +46,10 @@ loop="$(sudo losetup --find --show "$diskfile")"
 test -n "$loop"
 sudo mkfs.ext4 -F -q "$loop"
 sudo mount -t ext4 -o nodev,nosuid "$loop" "$source_dir"
+# ext4 creates lost+found on the filesystem root; Incus requires an empty
+# dir source, so place its root inside a fresh child on that same real disk.
+pool_source="$source_dir/incus-pool"
+sudo mkdir -m 0755 "$pool_source"
 test "$(findmnt -n -o FSTYPE --target "$source_dir")" = ext4
 test "$(stat -c '%d' "$source_dir")" != "$(stat -c '%d' /)"
 test "$(sudo blkid -s TYPE -o value "$loop")" = ext4
@@ -58,8 +62,8 @@ if ! sudo incus storage list --format csv | grep -q '^default,.*CREATED'; then
   sudo incus admin init --auto --storage-backend=dir
 fi
 test -z "$(sudo incus list --all-projects --format csv -c n)"
-sudo incus storage create bw-s1-a071-block dir source="$source_dir"
-sudo incus storage show bw-s1-a071-block | grep -F "source: $source_dir"
+sudo incus storage create bw-s1-a071-block dir source="$pool_source"
+sudo incus storage show bw-s1-a071-block | grep -F "source: $pool_source"
 sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 uid="$(id -u boxweave)"
 project="user-$uid"
