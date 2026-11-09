@@ -96,27 +96,39 @@ func run() error {
 		switch command {
 		case "native-migrate-plan":
 			result, err := install.NativeMigrationReview(*oldIncusPackage, *nativePackageVersion)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			return enc.Encode(result)
 		case "native-migrate-apply":
 			result, err := install.NativeMigrationApply(*oldIncusPackage, *nativePackageVersion,
 				*nativePlanSHA, *confirmNativeHost, *approveMigration, *ackNativeDowntime)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			return enc.Encode(result)
 		case "native-migrate-status":
 			result, err := install.NativeMigrationStatus()
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			return enc.Encode(result)
 		case "native-migrate-rollback":
 			result, err := install.NativeMigrationRollback(*confirmNativeHost,
 				*oldIncusPackage, *approveMigration, *ackNativeDowntime)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			return enc.Encode(result)
 		case "native-migrate-commit":
 			archive, err := install.NativeMigrationFinalize(*confirmNativeHost,
 				*nativePackageVersion, *approveMigration)
-			if err != nil { return err }
-			return enc.Encode(struct{ Archive string `json:"audit_archive"` }{archive})
+			if err != nil {
+				return err
+			}
+			return enc.Encode(struct {
+				Archive string `json:"audit_archive"`
+			}{archive})
 		}
 	}
 	if command == "native-plan" || command == "native-bootstrap" {
@@ -226,3 +238,4 @@ func main() {
 		os.Exit(1)
 	}
 }
+
