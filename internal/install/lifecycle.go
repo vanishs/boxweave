@@ -220,6 +220,10 @@ func Upgrade(p Plan, approved bool) (Manifest, error) {
 	if err != nil {
 		return old, err
 	}
+	build, err := verifiedSourceBuild(p, p.SourceBinary)
+	if err != nil {
+		return old, err
+	}
 	if h == old.BinarySHA256 {
 		return old, nil
 	}
@@ -250,7 +254,8 @@ func Upgrade(p Plan, approved bool) (Manifest, error) {
 		return old, fmt.Errorf("upgrade write: %v; rollback: %v", err, rollback)
 	}
 	next := old
-	next.Version = p.Version
+	next.Version = build.Version
+	next.BuildCommit = build.Commit
 	next.BinarySHA256 = h
 	next.RestartRequired = true
 	if err = writeManifest(p, next); err != nil {
