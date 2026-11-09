@@ -448,4 +448,3 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 	}
 	return int64(len(ids)), nil
 }
-
