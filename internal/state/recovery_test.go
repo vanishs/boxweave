@@ -144,4 +144,3 @@ func TestManualRecoveryCannotAdoptAbsentOwnership(t *testing.T) {
 		t.Fatalf("unknown box with no verified UUID must refuse local release: %v", err)
 	}
 }
-
