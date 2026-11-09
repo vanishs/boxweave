@@ -20,6 +20,18 @@ import (
 
 const SchemaVersion = 1
 
+// Exact schema contract for v1. Any shape change MUST increment SchemaVersion
+// and go through an explicitly reviewed migration/rollback; do not silently
+// adopt another DB merely because it advertises version 1.
+var schemaDDL = []string{
+	"CREATE TABLE schema_version (version INTEGER NOT NULL)",
+	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
+	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
+	"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
+	"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
+}
+
 var (
 	ErrConflict       = errors.New("idempotency key conflicts with original intent")
 	ErrNotFound       = errors.New("operation not found")
@@ -135,13 +147,23 @@ func (s *Store) init(fresh bool) error {
 		if version != SchemaVersion {
 			return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
 		}
-		for _, name := range []string{"credentials", "owned_boxes", "operations", "operation_events", "recovery_audit"} {
-			if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n); err != nil {
-				return err
+		for _, expected := range schemaDDL {
+			name := strings.Fields(expected)[2]
+			var actual string
+			if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
+				return fmt.Errorf("missing exact schema table %s: %w", name, err)
 			}
-			if n != 1 {
-				return fmt.Errorf("missing required table %s", name)
+			if actual != expected {
+				return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
 			}
+		}
+		// A foreign trigger/view can silently change mutation semantics even when
+		// the six declared table names and schema_version are unchanged.
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
+			return err
+		}
+		if n != 0 {
+			return errors.New("unexpected SQLite trigger/view: refuse foreign database")
 		}
 		var integrity string
 		if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
@@ -168,15 +190,7 @@ func (s *Store) init(fresh bool) error {
 		return err
 	}
 	defer tx.Rollback()
-	schema := []string{
-		"CREATE TABLE schema_version (version INTEGER NOT NULL)",
-		"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
-		"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
-		"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
-		"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
-		"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
-		"INSERT INTO schema_version(version) VALUES (1)",
-	}
+	schema := append(append([]string{}, schemaDDL...), "INSERT INTO schema_version(version) VALUES (1)")
 	for _, q := range schema {
 		if _, err := tx.Exec(q); err != nil {
 			return err
