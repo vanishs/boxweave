@@ -1,5 +1,8 @@
 # S1 Foundation — partial implementation and evidence, 2026-11-08
 
+> **Historical checkpoint — superseded for CURRENT S1 status.** Use [Latest S1 verification and exit matrix (2026-11-09)](S1_FOUNDATION_LATEST_2026-11-09.md) for tested source `4882adc`, real Incus bootstrap, independently verified installed v1, original UNKNOWN and remaining approved older-Incus upgrade blocker. The earlier lines below intentionally preserve what was and was not verified **at that time**; they are not a claim that today's installed tests are still unrun. S1 overall is still **PARTIAL**, no production release.
+
+
 **Status: PARTIAL; selected native Incus security and actual binary/HTTP MCP cases now PASS in authorized reused lab, but complete S1 exit/native mutation/installer/independent verification are NOT accepted; not release eligible.** This is an execution artifact for [S1](../development/phases/01_FOUNDATION.md), not a replacement plan or relaxation of [ACCEPTANCE](ACCEPTANCE.md).
 
 ## Latest verified S1 subset (2026-11-08 PST, real reused lab)
