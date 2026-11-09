@@ -14,6 +14,8 @@
 | Before push | `.githooks/pre-push` and `make verify` | Any source check failure |
 | GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`** | Any GitHub status other than SUCCESS for the candidate SHA; scheduled smoke and installed verification remain separate additional gates |
 
+**Owner-side enablement and negative merge verification are tracked in [GitHub Issue #117](https://github.com/vanishs/boxweave/issues/117). Until that issue closes with direct GitHub ruleset readback, `quality-gate` PASS is advisory for merge protection.**
+
 **Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or a direct push to an unprotected branch. A failing workflow cannot erase an already-written commit; it only blocks merges when a server-side required-check ruleset is active. Do not promise impossible universal commit rejection on GitHub.com.
 
 ## Server-side v1 merge rule (OWNER ACTION REQUIRED)
