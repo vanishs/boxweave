@@ -8,6 +8,10 @@ For the new v1 implementation, **begin with** [the single phased implementation 
 
 If a subtask remains unresolved, document the original error, native/Tracking/UUID identity, attempts, permission/decision needs and next safe probe. Continue independent work rather than abandon the whole phase; **mandatory safety/release conditions still block their own acceptance/publication**. Update docs whenever code, native facts or context constraints demand it; log cross-phase changes and use narrow links rather than loading the entire archive. The final S5 must reaccept **all 20** tools and every installed local CLI leaf on the exact tested candidate, even if a previous SDK-only or early-stage probe succeeded.
 
+## Commit / PR gates (required at every stage)
+
+Before committing, run `make hooks` (once per clone) and `make verify`; inspect the exact **staged** blob with `.githooks/pre-commit`, ensure tracked YAML parses without duplicate keys and every Go file passes `gofmt`. PRs must run the stable `quality-gate` status on the exact head SHA, plus phase-specific native independent proof. A green check alone does not enforce merging: [quality policy](../process/QUALITY_GATES.md) and [active-ruleset blocker #117](https://github.com/vanishs/boxweave/issues/117). A red/unverified check or mandatory phase gap forbids promotion, irrespective of the user's tool permissions; no bypass/force-push.
+
 ## Start-of-task checklist
 
 1. Confirm requested outcome, current repository and branch, HEAD SHA, existing edits, related decisions, one observable acceptance criterion and current open risks.
