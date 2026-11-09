@@ -16,7 +16,7 @@ This repository is deliberately a staged, security-sensitive Go implementation. 
 - The stable `quality-gate` status must be green on the **exact candidate commit**, with `v1 S1 source checks (non-release)` and any specialized workflows green as well. Red, skipped, cancelled, pending or stale results are **not** evidence of passing.
 - Every risky change documents exact source/test binary SHA-256, permissions, native Project and scope, positive/negative observations, failure and rollback, unknown tasks, and append-only log updates.
 - An independent verifier performs the installed-native tests required by the current S1–S5 phase; green source CI alone never proves real Incus or release acceptance. No release or merge while mandatory stage gates are PARTIAL/BLOCKED.
-- GitHub's server-side merge blockade is effective **only after the owner enables the repository ruleset** described in [quality gates](docs/process/QUALITY_GATES.md). Local hooks cannot prevent GitHub API commits or `--no-verify`; do not claim universal commit blocking.
+- GitHub's server-side `v1` merge gate **is active** (Ruleset #26842628, strict required `quality-gate`; failing non-Draft PR #118 blocked) as documented in [quality gates](docs/process/QUALITY_GATES.md). Local hooks still cannot prevent GitHub API commits or `--no-verify`; the server rule blocks protected-branch merges, not invalid commits on unprotected branches.
 - Avoid `git push --force`; prefer reviewed topic commits and preserve the original UNKNOWN identifiers and source history.
 
 ## Supported baseline
