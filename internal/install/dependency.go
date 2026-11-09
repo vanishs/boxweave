@@ -70,8 +70,9 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 		if _, err = os.Lstat("/var/lib/incus/unix.socket.user"); err != nil {
 			return p, errors.New("existing daemon is not ready: refuse automatic restart")
 		}
-		p.Mode = "reuse-existing-daemon"
-		return p, nil
+		inventory, err := nativeExistingRead()
+		if err != nil { return p, err }
+		return nativeInstalledReview(packageVersion, inventory)
 	}
 	if _, err = os.Lstat("/var/lib/incus"); err == nil {
 		return p, errors.New("existing/residual Incus state requires manual investigation")
@@ -124,6 +125,27 @@ func NativeDependencyBootstrap(version, approvedDigest string, approved bool) (N
 		return p, err
 	}
 	if p.Mode == "reuse-existing-daemon" {
+		return p, nil
+	}
+	if (p.Mode == "compatible-uninitialized-review" || p.Mode == "compatible-user-provision-review") {
+		if approvedDigest == "" || approvedDigest != p.PlanSHA256 {
+			return p, errors.New("native initialization/provisioning plan digest changed or not approved")
+		}
+		if p.Mode == "compatible-uninitialized-review" {
+			// The current host state was independently reviewed as empty and
+			// default-only. If native init fails, DO NOT blindly rerun.
+			if err = runLocal("incus", "admin", "init", "--auto", "--storage-backend=dir"); err != nil {
+				return p, fmt.Errorf("existing compatible daemon native initialization uncertain; inspect before retry: %w", err)
+			}
+		}
+		if err = nativePrepareServiceAccount(); err != nil {
+			return p, fmt.Errorf("native runtime identity provisioning partial; inspect before retry: %w", err)
+		}
+		final, err := nativePlan(version)
+		if err != nil || final.Mode != "reuse-existing-daemon" {
+			return p, fmt.Errorf("native initialization not fully verified: %w", err)
+		}
+		p.Mode = "existing-daemon-prepared"
 		return p, nil
 	}
 	if approvedDigest == "" || approvedDigest != p.PlanSHA256 {
