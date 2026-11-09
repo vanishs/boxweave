@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,6 +35,8 @@ func duplicateMapping(n *yaml.Node) error {
 }
 
 func main() {
+	cached := flag.Bool("cached", false, "inspect staged YAML rather than working tree")
+	flag.Parse()
 	out, err := exec.Command("git", "ls-files", "-z", "--", "*.yaml", "*.yml").Output()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "YAML FAIL: cannot enumerate tracked files:", err)
@@ -49,7 +52,12 @@ func main() {
 			fmt.Fprintln(os.Stderr, "YAML FAIL: unsafe path:", path)
 			os.Exit(1)
 		}
-		data, err := os.ReadFile(path)
+		var data []byte
+		if *cached {
+			data, err = exec.Command("git", "show", ":"+path).Output()
+		} else {
+			data, err = os.ReadFile(path)
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "YAML FAIL:", path, err)
 			os.Exit(1)
