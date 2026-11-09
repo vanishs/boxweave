@@ -72,6 +72,16 @@ func run() error {
 		usage()
 		return errors.New("unsupported command")
 	}
+	// One fail-closed root-local mutex for every installer or native dependency
+	// mutation, including a reviewed UNKNOWN claim release. Read-only status
+	// and plan commands deliberately remain available during maintenance.
+	switch command {
+	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
+		"native-bootstrap", "recover":
+		release, err := acquireMaintenanceLock()
+		if err != nil { return err }
+		defer release()
+	}
 	if command == "native-plan" || command == "native-bootstrap" {
 		var report install.NativeBootstrapReport
 		var err error
