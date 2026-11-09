@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -49,6 +49,9 @@ func run() error {
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
 	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
+	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
+	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
+	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
 	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
 	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")
@@ -64,10 +67,21 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap":
 	default:
 		usage()
 		return errors.New("unsupported command")
+	}
+	if command == "native-plan" || command == "native-bootstrap" {
+		var report install.NativeBootstrapReport
+		var err error
+		if command == "native-plan" {
+			report, err = install.NativeDependencyPlan(*nativePackageVersion)
+		} else {
+			report, err = install.NativeDependencyBootstrap(*nativePackageVersion, *nativePlanSHA, *approveNative)
+		}
+		if err != nil { return err }
+		return json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if command == "recover" {
 		return recoverLocal(recoverArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser,
