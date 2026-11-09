@@ -7,10 +7,10 @@
 | Change | Check | Reject condition |
 |---|---|---|
 | Go `cmd/`, `internal/` and future tracked `*.go` | `gofmt`, `go vet ./...`, `go mod tidy -diff`, `go mod verify`, `go test -race -count=1 ./...`, `go build ./...` | Any mismatch/failure; disabled CGO builds explicitly rejected by S1 smoke |
-| All tracked text files | `python3 scripts/check_format.py`, `.editorconfig`, `.gitattributes` | Not UTF-8/LF, missing final newline, disallowed tabs/trailing whitespace or invalid JSON |
+| All tracked text files | `python3 scripts/check_format.py`, `.editorconfig`, `.gitattributes` | Not UTF-8/LF, missing final newline, disallowed tabs/trailing whitespace or invalid JSON; `go run scripts/check_yaml.go` additionally rejects invalid YAML syntax and duplicate mapping keys |
 | Changed lines on a PR | `git diff --check <merge-base> HEAD` | Newly added whitespace errors or extra blank EOF lines, including historical Markdown hard-break exceptions |
 | Shell files | `sh -n` on versioned hooks and tracked `*.sh` | Shell syntax failure |
-| Git index before commit | `.githooks/pre-commit`, installed with `make hooks` | Staged blob gofmt mismatch or `git diff --cached --check` failure; an unstaged worktree fix does not bypass |
+| Git index before commit | `.githooks/pre-commit`, installed with `make hooks` | Staged blob gofmt mismatch, staged YAML syntax or duplicate-key error, or `git diff --cached --check` failure; an unstaged worktree fix does not bypass |
 | Before push | `.githooks/pre-push` and `make verify` | Any source check failure |
 | GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`** | Any GitHub status other than SUCCESS for the candidate SHA; scheduled smoke and installed verification remain separate additional gates |
 
