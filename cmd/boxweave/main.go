@@ -30,6 +30,10 @@ func run() error {
 		return errors.New("subcommand required")
 	}
 	command := os.Args[1]
+	if command == "recover-worker" {
+		if len(os.Args) != 2 { return errors.New("private worker accepts no user arguments") }
+		return recoverWorker()
+	}
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
 	db := f.String("db", "/var/lib/boxweave/ledger.sqlite", "protected local SQLite path")
 	socket := f.String("incus-socket", "/var/lib/incus/unix.socket.user", "restricted Incus Unix socket")
