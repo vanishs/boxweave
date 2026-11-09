@@ -14,22 +14,25 @@
 | Before push | `.githooks/pre-push` and `make verify` | Any source check failure |
 | GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`** | Any GitHub status other than SUCCESS for the candidate SHA; scheduled smoke and installed verification remain separate additional gates |
 
-**Owner-side enablement and negative merge verification are tracked in [GitHub Issue #117](https://github.com/vanishs/boxweave/issues/117). Until that issue closes with direct GitHub ruleset readback, `quality-gate` PASS is advisory for merge protection.**
+**Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. The server-side required-check rule on `v1` **now blocks merge/update of the protected branch**, not the creation of an invalid commit on another branch.
 
-**Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or a direct push to an unprotected branch. A failing workflow cannot erase an already-written commit; it only blocks merges when a server-side required-check ruleset is active. Do not promise impossible universal commit rejection on GitHub.com.
+## Server-side v1 merge rule — ACTIVE and independently verified (2026-11-09)
 
-## Server-side v1 merge rule (OWNER ACTION REQUIRED)
+**[Ruleset #26842628 — v1 required quality](https://github.com/vanishs/boxweave/rules/26842628)** was saved by the repository owner and independently read back through GitHub's ruleset API. The observed effective configuration is:
 
-At the time this document was created, GitHub returned **Ruleset #26251692 `Basic protection`: `enforcement=disabled`** and this connection had **read-only ruleset actions**. Thus the following settings are a required operator task, **not a claimed accomplished protection**.
+- **`enforcement=active`**, `target=branch`, exact included ref **`refs/heads/v1`**; no excluded branches.
+- Required **pull request**: `required_approving_review_count=0` (single maintainer), `required_review_thread_resolution=true`. Allowed merge methods: merge, squash and rebase.
+- Required check **`quality-gate`** from GitHub Actions (integration ID `15368`); **strict/up-to-date=true**, `do_not_enforce_on_create=false`. The check must pass on the candidate SHA.
+- **No bypass actors** (`bypass_actors=[]`, `current_user_can_bypass=never`), no force-push (`non_fast_forward`) and no branch deletion (`deletion`).
+- The unrelated historical ruleset [#26251692 — Basic protection](https://github.com/vanishs/boxweave/rules/26251692) remains `disabled`, targets `~ALL` when enabled, and **was not modified**. The new active rule protects only `v1`, not every repository branch.
 
-Using repository admin permissions in GitHub:
+### Actual negative merge-gate witness
 
-1. Open [Repository rulesets](https://github.com/vanishs/boxweave/settings/rules) → **New ruleset** → **New branch ruleset**. Name it `v1 required source quality`; target the precise branch `v1` (not every experimental topic branch).
-2. Set **Enforcement = Active**. Require a pull request before merge; require status checks. Select exact required check **`quality-gate`** from workflow `v1 required quality gate`. Require branches to be up to date before merging; block force-push and deletion.
-3. Allow no bypass actors unless separately approved; prefer dismissing stale approvals on new commits. If this is a single-maintainer repository, do not require an unavailable second reviewer by default. Existing `main` protections are not changed by this task.
-4. **Save and independently verify** the ruleset is `active`, matches `refs/heads/v1`, and a deliberately red test PR **cannot merge**. Then inspect a green candidate PR and verify it can proceed only after S1-specific acceptance. Record screenshot or ruleset ID/version in [execution log](../development/EXECUTION_LOG.md).
+A **non-Draft** [temporary PR #118](https://github.com/vanishs/boxweave/pull/118) targeting `v1` used a previously known bad-format code commit `a86eca8b306783bce00ecf375649ccf729759e88`. Its *fresh* GitHub Actions [run #42597345601](https://github.com/vanishs/boxweave/actions/runs/42597345601) produced **`quality-gate=failure`**, and GitHub reported **`mergeable_state=blocked`** for the non-Draft PR. **No merge was attempted.** The test PR was closed after confirming rejection; branch `test/v1-quality-gate-negative-20261109` remains a cleanup-only test ref because the available GitHub connector has no branch-delete operation.
 
-An illustrative review-only ruleset payload is [`v1-required-quality.example.json`](../../.github/rulesets/v1-required-quality.example.json). It is not automatically applied to GitHub. Do not treat `Draft` or a passing check alone as a merge prohibition without an active ruleset. Do not weaken a failing check or move the PR base to bypass the gate.
+**[Issue #117](https://github.com/vanishs/boxweave/issues/117): server-side rule accepted** on this evidence. This does *not* imply S1's independent native phase-exit approval, nor does it make Draft [PR #115](https://github.com/vanishs/boxweave/pull/115) releasable. Keep the PR Draft until stage acceptance; do not bypass the new required check.
+
+A configuration reference is stored at [`v1-required-quality.example.json`](../../.github/rulesets/v1-required-quality.example.json). This reference is not an executable GitHub settings change and its name/review-toggle defaults may differ from the owner's live rule. GitHub's live rule is authoritative.
 
 ## Phase / publication gate beyond syntax
 
