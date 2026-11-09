@@ -14,7 +14,7 @@ const minNativePoolFreeBytes uint64 = 64 << 20
 
 var (
 	errNativeMountAbsent = errors.New("selected nondefault dir pool backing mount absent")
-	errNativeSpaceLow = errors.New("selected native storage free space insufficient")
+	errNativeSpaceLow    = errors.New("selected native storage free space insufficient")
 )
 
 // localDirPoolSpace checks the ACTUAL filesystem below Incus's canonical pool
