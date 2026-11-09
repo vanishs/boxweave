@@ -1,0 +1,72 @@
+name: v1 required quality gate
+
+on:
+  push:
+    branches:
+      - v1
+      - "feat/v1-*"
+  pull_request:
+    branches:
+      - v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v1-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout entire history for changed-file whitespace validation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up pinned Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check whole repository formatting (gofmt, UTF-8, LF, Markdown, YAML, JSON)
+        run: python3 scripts/check_format.py
+      - name: Parse tracked YAML and refuse duplicate keys
+        run: go run scripts/check_yaml.go
+      - name: Reject newly introduced trailing whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(git merge-base HEAD origin/v1)"
+          git diff --check "$base" HEAD
+      - name: Check tracked shell script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r path; do
+            sh -n "$path"
+          done < <(git ls-files '*.sh' '.githooks/pre-*')
+      - name: Ensure precise Go module formatting and verified checksums
+        run: |
+          go mod verify
+          go mod tidy -diff
+      - name: Static Go vet
+        run: go vet ./...
+      - name: Full Go race regression tests
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          go test -race -count=1 ./...
+          go test -tags=s1lab -count=1 ./internal/install
+      - name: Verify Go source builds
+        env:
+          CGO_ENABLED: "1"
+        run: go build ./...
+
+# Required check name: "quality-gate" (this job).
+# To actually block merges configure a GitHub ruleset on v1, requiring this
+# check; merely having a workflow does not enforce merge protection.

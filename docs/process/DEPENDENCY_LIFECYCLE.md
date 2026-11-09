@@ -8,6 +8,10 @@ Pin source VERSION, exact Go toolchain/MCP SDK/Incus SDK revisions and verified 
 
 **Caddy and its TLS/HTTP packages are not BoxWeave dependencies.** No independent proxy service is installed or upgraded. Exact compatible version bounds are established by engineering tests, not guessed in the design.
 
+## Issue #116 tested v1 implementation (2026-11-09)
+
+Approved local CLI now supports exact package/version/host-bound `native-migrate-plan`, `native-migrate-apply`, `native-migrate-status`, `native-migrate-reconcile`, `native-migrate-rollback` and `native-migrate-commit`. It **refuses every existing native instance, even stopped, and extra foreign Projects**; this does not provide a generic shared-daemon upgrade license. Dedicated disposable nested Ubuntu24.04 lab tested signed `6.0.0-1`→`6.0.0-1ubuntu0.3`, private offline native snapshot and old signed package backups, actual rollback, after-APT process crash with no blind replay, APT pre-effect simulated failure and explicit real rollback, and compatible but uninitialized package repair with exact reviewed digest. **Mid-dpkg half-configured corruption has not been auto-repaired; it remains UNKNOWN/manual on failure.** Evidence / hashes: [Issue #116 native report](../verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md). GitHub's dedicated exact-`v1` required-check Ruleset #26842628 is **ACTIVE and independently negative-tested**, [#117](https://github.com/vanishs/boxweave/issues/117) closed; no additional owner governance action is pending.
+
 ## Prefer upstream-native runtime confinement
 
 Reviewed Incus v7.6.0 module declares **Go 1.26.9**, MCP v1.8.0 declares **Go 1.25.0**; build using the stricter selected dependency requirement. Installed binary users should not need a local compiler.

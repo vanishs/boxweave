@@ -1,0 +1,25 @@
+name: v1 S1 A071 disposable block-disk native acceptance
+on:
+  push:
+    branches: [feat/v1-s1-foundation-20261108]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  a071-block-disk:
+    name: a071-block-disk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Real Incus dir pool on dedicated virtual block device
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/accept_s1_a071_block_disk.sh

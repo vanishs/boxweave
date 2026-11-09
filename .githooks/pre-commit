@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+# Git index, not worktree: catches staged unformatted Go even if an unstaged
+# correction makes the working tree appear formatted.
+git diff --cached --check
+python3 scripts/check_format.py --cached
+go run scripts/check_yaml.go --cached
+# Additional non-format checks are intentionally run in pre-push / CI.
