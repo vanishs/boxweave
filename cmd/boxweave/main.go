@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|install-stage|install-activate|install-status|upgrade|rollback [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -50,10 +50,16 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "install-stage", "install-activate", "install-status", "upgrade", "rollback":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback":
 	default:
 		usage()
 		return errors.New("unsupported command")
+	}
+	if command == "build-info" {
+		return json.NewEncoder(os.Stdout).Encode(struct {
+			Version string `json:"version"`
+			Commit string `json:"commit"`
+		}{Version: version, Commit: commit})
 	}
 	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" {
 		p := install.Plan{User: *serviceUser, StateDir: "/var/lib/boxweave",
