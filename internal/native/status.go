@@ -142,8 +142,8 @@ func (r Reader) Read(ctx context.Context) Status {
 		if checkErr != nil {
 			s.ErrorClass = "SELECTED_STORAGE_FILESYSTEM_UNAVAILABLE"
 			switch {
-			case errors.Is(checkErr, errNativeMountAbsent):
-				s.ErrorClass = "SELECTED_STORAGE_MOUNT_MISSING"
+			case errors.Is(checkErr, errNativeBackingUnverified):
+				s.ErrorClass = "SELECTED_STORAGE_BACKING_UNVERIFIED"
 			case errors.Is(checkErr, errNativeSpaceLow):
 				s.ErrorClass = "SELECTED_STORAGE_SPACE_INSUFFICIENT"
 			}
