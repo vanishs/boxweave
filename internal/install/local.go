@@ -31,6 +31,8 @@ type Manifest struct {
 	Schema          int    `json:"schema"`
 	Version         string `json:"version"`
 	BinarySHA256    string `json:"binary_sha256"`
+	UnitSHA256      string `json:"unit_sha256"`
+	ServiceActive   bool   `json:"service_active"`
 	BinaryPath      string `json:"binary_path"`
 	StateDir        string `json:"state_dir"`
 	ServiceUser     string `json:"service_user"`
@@ -39,7 +41,7 @@ type Manifest struct {
 	RestartRequired bool   `json:"restart_required"`
 }
 
-const manifestSchema = 1
+const manifestSchema = 2
 
 var safeValue = regexp.MustCompile(`^[a-zA-Z0-9_./-]+$`)
 
@@ -125,6 +127,13 @@ func sha(path string) (string, error) {
 func manifestPath(p Plan) string { return filepath.Join(p.StateDir, "install-manifest.json") }
 func ReadManifest(p Plan) (Manifest, error) {
 	var m Manifest
+	st, err := os.Lstat(manifestPath(p))
+	if err != nil {
+		return m, err
+	}
+	if !st.Mode().IsRegular() || st.Mode().Perm() != 0600 {
+		return m, errors.New("installer manifest is not a private regular file")
+	}
 	data, err := os.ReadFile(manifestPath(p))
 	if err != nil {
 		return m, err
@@ -145,6 +154,15 @@ func Status(p Plan) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
+	for _, path := range []string{p.BinaryPath, p.UnitPath} {
+		st, err := os.Lstat(path)
+		if err != nil {
+			return m, err
+		}
+		if !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 {
+			return m, errors.New("installer binary or unit is not a safe regular file")
+		}
+	}
 	h, err := sha(p.BinaryPath)
 	if err != nil {
 		return m, err
@@ -152,6 +170,14 @@ func Status(p Plan) (Manifest, error) {
 	if h != m.BinarySHA256 {
 		return m, errors.New("installed binary digest mismatch")
 	}
+	unitHash, err := sha(p.UnitPath)
+	if err != nil {
+		return m, err
+	}
+	if m.UnitSHA256 == "" || unitHash != m.UnitSHA256 {
+		return m, errors.New("installer unit checksum mismatch")
+	}
+	m.ServiceActive = serviceActive() == nil
 	return m, nil
 }
 func unit(p Plan) string {
@@ -210,6 +236,13 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	if len(p.ExpectedDigest) != 64 || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(p.ExpectedDigest) {
 		return Manifest{}, errors.New("operator expected sha256 required")
 	}
+	st, err := os.Lstat(p.SourceBinary)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if !st.Mode().IsRegular() {
+		return Manifest{}, errors.New("approved binary source must be a real regular file")
+	}
 	h, err := sha(p.SourceBinary)
 	if err != nil {
 		return Manifest{}, err
@@ -253,7 +286,8 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	if err = atomicWrite(p.BinaryPath, src, 0755); err != nil {
 		return Manifest{}, err
 	}
-	m := Manifest{Schema: manifestSchema, Version: p.Version, BinarySHA256: h, BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
+	digestUnit := sha256.Sum256([]byte(unit(p)))
+	m := Manifest{Schema: manifestSchema, Version: p.Version, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return m, err
