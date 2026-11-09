@@ -21,6 +21,15 @@ jobs:
         run: |
           go mod verify
           go build ./...
+      - name: Reject CGO-disabled SQLite stub builds
+        run: |
+          set -eu
+          test "$(go env CGO_ENABLED)" = 1
+          if CGO_ENABLED=0 go build ./cmd/boxweave > /tmp/nocgo-build.log 2>&1; then
+            echo "FAIL: nonfunctional CGO-disabled SQLite binary unexpectedly built"
+            exit 1
+          fi
+          grep -q ERROR_BOXWEAVE_SQLITE_REQUIRES_CGO_ENABLED /tmp/nocgo-build.log
       - name: Race and negative unit tests (not native acceptance)
         run: go test -race -count=1 ./...
       - name: Format check
