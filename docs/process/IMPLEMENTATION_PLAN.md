@@ -1,6 +1,6 @@
 # BoxWeave v1 — single development entrypoint, five autonomous phases
 
-**Status (2026-11-08): S1 PARTIAL on development PR branch only. A source Go controller, limited staging installer and source CI now exist; no installed/native S1 acceptance or shipped release.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
+**Status (2026-11-08): S1 PARTIAL on development PR branch only. Source build/race/real-binary MCP and restricted native Incus **read-only** checks have PASS evidence in a separate test Box; full service installation/rollback, native effects and independent gate are still OPEN. No production installation or shipped release.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
 
 ## Next command and how to start
 
@@ -14,7 +14,7 @@ Verify actual branch HEAD, uncommitted edits, active tasks, installed version an
 
 | Stage | Full in-one-pass deliverable | New MCP tools | Document to execute | Current actual state |
 |---|---|---:|---|---|
-| **S1 Foundation** | Official SDK Go service, typed authenticated loopback MCP, safe host-local install/reuse/status, Incus restriction, SQLite ledger, Tracking/async admission/UNKNOWN, real security tests | **1: host_status** | [S1 card](../development/phases/01_FOUNDATION.md) | **PARTIAL (feature branch source; native/installer gates blocked)** — [evidence](../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md) |
+| **S1 Foundation** | Official SDK Go service, typed authenticated loopback MCP, safe host-local install/reuse/status, Incus restriction, SQLite ledger, Tracking/async admission/UNKNOWN, real security tests | **1: host_status** | [S1 card](../development/phases/01_FOUNDATION.md) | **PARTIAL (source and real native-read/MCP PASS; full installer/native mutation OPEN)** — [evidence](../verification/S1_FOUNDATION_PARTIAL_2026-11-08.md) |
 | **S2 Box and operations** | 7 native Box lifecycle tools; async guest Exec; 4 durable operation tools; native identity/ready/restart/readback, all positive and negative cases | **12** | [S2 card](../development/phases/02_BOX_LIFECYCLE_OPERATIONS.md) | **NOT_STARTED** |
 | **S3 Files and Agent loop** | 3 guest file tools; SFTP exclusive create, safe unsupported conditional cases; a real Agent guest Git/edit/failing test/fix/passing test cycle | **3** | [S3 card](../development/phases/03_FILES_AGENT_LOOP.md) | **NOT_STARTED** |
 | **S4 Networking and nesting** | 3 native TCP/UDP forward tools and box_peer_set; one installer-precreated ACL + exact TLS/Scriptlet, real peer/isolation/LAN, nested install, dependent Box delete | **4** | [S4 card](../development/phases/04_NETWORK_NESTING.md) | **NOT_STARTED** |
@@ -26,7 +26,7 @@ Verify actual branch HEAD, uncommitted edits, active tasks, installed version an
 
 ## The substage loop is the same inside EVERY stage
 
-**1. Locate required source → 2. Investigate only gaps → 3. Implement → 4. Build/negative-test → 5. Independent/native acceptance → 6. Fix code/docs and rerun → 7. Commit, log, hand off.** Read the [execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) for evidence, document editing, owner permissions and context checkpoint requirements. Do not terminate an otherwise executable phase at “wrote a design” or “opened a PR”.
+**1. Locate required source → 2. Investigate only gaps → 3. Implement → 4. Build/negative-test → 5. Independent/native acceptance → 6. Fix code/docs and rerun → 7. Commit, log, hand off.** **After the first build, run the earliest actual executable with real state/dependencies/actor in an authorized isolated lab**, before relying on a large unit-test PASS; explicitly classify source/real-process/native-read/native-write/installed/independent evidence. See [runtime-first protocol](../development/PHASE_EXECUTION_PROTOCOL.md#runtime-first-and-native-proof-checkpoints-reusable-across-s1s5). Read the [execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) for evidence, document editing, owner permissions and context checkpoint requirements. Do not terminate an otherwise executable phase at “wrote a design” or “opened a PR”.
 
 Each phase card has its *small* entry reading set, task-time links and exact acceptance IDs. Full historical studies ([source/history research](../research/REFERENCES.md)), huge [ACCEPTANCE](../verification/ACCEPTANCE.md) and [OPEN_RISKS](../verification/OPEN_RISKS.md) must be loaded **by relevant section or ID**, not copied into every Agent prompt.
 
