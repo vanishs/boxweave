@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -72,7 +72,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -82,7 +82,7 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "native-migrate-apply", "native-migrate-rollback", "native-migrate-commit", "recover":
+		"native-bootstrap", "native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
 			return err
@@ -90,7 +90,7 @@ func run() error {
 		defer release()
 	}
 	if command == "native-migrate-plan" || command == "native-migrate-apply" ||
-		command == "native-migrate-status" || command == "native-migrate-rollback" ||
+		command == "native-migrate-status" || command == "native-migrate-reconcile" || command == "native-migrate-rollback" ||
 		command == "native-migrate-commit" {
 		enc := json.NewEncoder(os.Stdout)
 		switch command {
@@ -109,6 +109,12 @@ func run() error {
 			return enc.Encode(result)
 		case "native-migrate-status":
 			result, err := install.NativeMigrationStatus()
+			if err != nil {
+				return err
+			}
+			return enc.Encode(result)
+		case "native-migrate-reconcile":
+			result, err := install.NativeMigrationReconcile(*confirmNativeHost, *nativePackageVersion, *approveMigration)
 			if err != nil {
 				return err
 			}
