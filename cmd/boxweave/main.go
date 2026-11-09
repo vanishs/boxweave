@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -50,7 +50,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -61,7 +61,7 @@ func run() error {
 			Commit  string `json:"commit"`
 		}{Version: version, Commit: commit})
 	}
-	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" {
+	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" || command == "install-commit" {
 		p := install.Plan{User: *serviceUser, StateDir: "/var/lib/boxweave",
 			BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service",
 			SourceBinary: *sourceBinary, Project: *project, Socket: *socket, Version: version,
@@ -77,6 +77,8 @@ func run() error {
 			m, err = install.Upgrade(p, *approveLocal)
 		case "rollback":
 			m, err = install.Rollback(p, *approveLocal)
+		case "install-commit":
+			m, err = install.CommitUpgrade(p, *approveLocal)
 		case "install-status":
 			m, err = install.Status(p)
 		}
