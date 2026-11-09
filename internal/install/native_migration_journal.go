@@ -171,4 +171,3 @@ func assertNativeBackup(j NativeMigrationJournal) error {
 	}
 	return nil
 }
-
