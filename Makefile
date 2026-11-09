@@ -8,6 +8,7 @@ fmt:
 
 fmt-check:
 	$(PYTHON) scripts/check_format.py
+	$(GO) run scripts/check_yaml.go
 	$(GO) mod tidy -diff
 
 lint: fmt-check
