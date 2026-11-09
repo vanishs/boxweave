@@ -64,10 +64,10 @@ func run() error {
 		return errors.New("unsupported command")
 	}
 	if command == "recover" {
-		return recoverLocal(recoverArgs{DB:*db,Socket:*socket,Project:*project,ServiceUser:*serviceUser,
-			Action:*recoveryAction,Operation:*recoveryOperation,Reviewer:*recoveryReviewer,
-			Challenge:*recoveryChallenge,ConfirmUUID:*recoveryConfirm,Reason:*recoveryReason,
-			Approved:*approveLocal,Acknowledge:*recoveryAcknowledge})
+		return recoverLocal(recoverArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser,
+			Action: *recoveryAction, Operation: *recoveryOperation, Reviewer: *recoveryReviewer,
+			Challenge: *recoveryChallenge, ConfirmUUID: *recoveryConfirm, Reason: *recoveryReason,
+			Approved: *approveLocal, Acknowledge: *recoveryAcknowledge})
 	}
 	if command == "build-info" {
 		return json.NewEncoder(os.Stdout).Encode(struct {
