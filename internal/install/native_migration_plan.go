@@ -198,4 +198,3 @@ func NativeMigrationReview(from, to string) (NativeMigrationPlan, error) {
 	p.Mode = "explicit-migration-approval-required"
 	return p, nil
 }
-
