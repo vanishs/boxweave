@@ -38,6 +38,10 @@
 
 ## Stage exit and remaining action
 
+**Tracked remaining gate:** [Issue #116 — approved older-Incus migration, interrupted APT/native rollback](https://github.com/vanishs/boxweave/issues/116). It is not resolved by the current safe version-mismatch refusal.
+
+
+
 - **Engineering/sandbox foundation:** runnable, built, installed, restricted native Project, official MCP and SQLite durable UNKNOWN/manual recovery, real positive/negative installed evidence are all operational.
 - **Overall S1:** remain **PARTIAL**, not PASS, because the [S1 phase card](../development/phases/01_FOUNDATION.md) explicitly requires honest evidence for authorized older/shared native Incus maintenance. The present installer **refuses mismatch** (correctly safe) rather than implementing the additional approved migration/rollback procedure. Also record interrupted APT and dependency-only rollback as not proven. It is inappropriate to silently relax this gate.
 - **Next smallest independent work:** in a separate owner-approved disposable host with an **old but managed** native daemon, implement a reviewed *local-only* exact-version migration plan with durable per-step journal and package/daemon rollback guarantees, verify no foreign consumers touched, then repeat the same installed binary/SQL/native/HTTP independent verifier. Never modify the existing shared/production daemon under the current authorization.
