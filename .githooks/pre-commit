@@ -5,4 +5,5 @@ cd "$(git rev-parse --show-toplevel)"
 # correction makes the working tree appear formatted.
 git diff --cached --check
 python3 scripts/check_format.py --cached
+go run scripts/check_yaml.go --cached
 # Additional non-format checks are intentionally run in pre-push / CI.
