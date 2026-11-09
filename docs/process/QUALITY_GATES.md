@@ -30,14 +30,14 @@
 
 A **non-Draft** [temporary PR #118](https://github.com/vanishs/boxweave/pull/118) targeting `v1` used a previously known bad-format code commit `a86eca8b306783bce00ecf375649ccf729759e88`. Its *fresh* GitHub Actions [run #42597345601](https://github.com/vanishs/boxweave/actions/runs/42597345601) produced **`quality-gate=failure`**, and GitHub reported **`mergeable_state=blocked`** for the non-Draft PR. **No merge was attempted.** The test PR was closed after confirming rejection; branch `test/v1-quality-gate-negative-20261109` remains a cleanup-only test ref because the available GitHub connector has no branch-delete operation.
 
-**[Issue #117](https://github.com/vanishs/boxweave/issues/117): server-side rule accepted** on this evidence. This does *not* imply S1's independent native phase-exit approval, nor does it make Draft [PR #115](https://github.com/vanishs/boxweave/pull/115) releasable. Keep the PR Draft until stage acceptance; do not bypass the new required check.
+**[Issue #117](https://github.com/vanishs/boxweave/issues/117): server-side rule accepted** on its original negative evidence. S1 later independently passed the [real native stage exit](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md) and [PR #115](https://github.com/vanishs/boxweave/pull/115) was merged into protected `v1` as commit `d29be2561b233ff250630719fcf7244217e0b384`, without bypassing required quality checks. **No GitHub Release or production installation was authorized.**
 
 A configuration reference is stored at [`v1-required-quality.example.json`](../../.github/rulesets/v1-required-quality.example.json). This reference is not an executable GitHub settings change and its name/review-toggle defaults may differ from the owner's live rule. GitHub's live rule is authoritative.
 
 ## Phase / publication gate beyond syntax
 
-- Before S1 merge: exact source identity, actual accepted installed v1 binary, root-confined native capability, tested native daemon transition and rollback, UNKNOWN journal with no blind retry, independent acceptance, updated canonical phase document and append-only execution ledger.
+- S1 merge **satisfied**: exact source identity, installed native candidate, root-confined capability, signed native daemon transition/rollback, unchanged UNKNOWN journal without blind replay, independent real selected virtual block device acceptance, final stage audit, and append-only execution ledger. [Merge PR #115](https://github.com/vanishs/boxweave/pull/115), `d29be2561b233ff250630719fcf7244217e0b384`.
 - `S1=PARTIAL`, `BLOCKED`, missing evidence, open required issue or uncertain native outcome **blocks promotion**, even if source-format CI is green. S2–S5 likewise require their own phase exit.
 - Releases require an immutable source/tag/artifact SHA, candidate-native independent verifier and all public MCP/CLI acceptance. `quality-gate` alone is never a release proof.
 
-**One-line developer entry:** `make hooks && make verify`. Review [CONTRIBUTING](../../CONTRIBUTING.md), [S1 plan](../development/phases/01_FOUNDATION.md), and [latest S1 verification](../verification/S1_FOUNDATION_LATEST_2026-11-09.md).
+**One-line developer entry:** `make hooks && make verify`. Review [CONTRIBUTING](../../CONTRIBUTING.md), [S1 plan](../development/phases/01_FOUNDATION.md), and [final S1 acceptance matrix](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md).
