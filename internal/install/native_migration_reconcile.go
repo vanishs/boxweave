@@ -11,11 +11,15 @@ import (
 // actually proved. No public MCP operation can call this root-local function.
 func NativeMigrationReconcile(hostDigest, expectedVersion string, approved bool) (NativeMigrationJournal, error) {
 	j, err := readMigrationJournal()
-	if err != nil { return j, err }
+	if err != nil {
+		return j, err
+	}
 	if os.Geteuid() != 0 || !approved || hostDigest != j.Plan.HostDigest {
 		return j, errors.New("explicit local host-bound recovery review required")
 	}
-	if err = assertNativeBackup(j); err != nil { return j, err }
+	if err = assertNativeBackup(j); err != nil {
+		return j, err
+	}
 	var settledPhase string
 	switch j.Phase {
 	case "APT_MAY_HAVE_RUN", "APT_OUTCOME_UNKNOWN", "APT_RETURNED_NEEDS_VERIFICATION", "POSTCHECK_UNKNOWN":
