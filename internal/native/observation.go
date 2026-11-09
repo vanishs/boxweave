@@ -53,4 +53,3 @@ func (r Reader) ObserveOwnedBox(ctx context.Context, name, uuid string) (BoxObse
 	out.Fingerprint = hex.EncodeToString(h[:])
 	return out, nil
 }
-
