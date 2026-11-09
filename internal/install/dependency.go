@@ -71,7 +71,9 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 			return p, errors.New("existing daemon is not ready: refuse automatic restart")
 		}
 		inventory, err := nativeExistingRead()
-		if err != nil { return p, err }
+		if err != nil {
+			return p, err
+		}
 		return nativeInstalledReview(packageVersion, inventory)
 	}
 	if _, err = os.Lstat("/var/lib/incus"); err == nil {
@@ -127,7 +129,7 @@ func NativeDependencyBootstrap(version, approvedDigest string, approved bool) (N
 	if p.Mode == "reuse-existing-daemon" {
 		return p, nil
 	}
-	if (p.Mode == "compatible-uninitialized-review" || p.Mode == "compatible-user-provision-review") {
+	if p.Mode == "compatible-uninitialized-review" || p.Mode == "compatible-user-provision-review" {
 		if approvedDigest == "" || approvedDigest != p.PlanSHA256 {
 			return p, errors.New("native initialization/provisioning plan digest changed or not approved")
 		}
