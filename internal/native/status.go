@@ -17,8 +17,11 @@ type Status struct {
 	Version       string          `json:"incus_version,omitempty"`
 	Project       string          `json:"project"`
 	ProfileReady  bool            `json:"default_profile_ready"`
-	StorageReady  bool            `json:"selected_storage_pool_ready"`
-	NICConfigured bool            `json:"default_nic_configured"`
+	StorageReady          bool            `json:"selected_storage_pool_ready"`
+	StorageSpaceChecked   bool            `json:"selected_storage_space_checked"`
+	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
+	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
+	NICConfigured         bool            `json:"default_nic_configured"`
 	APIExtensions map[string]bool `json:"required_extensions"`
 	ErrorClass    string          `json:"error_class,omitempty"`
 }
@@ -128,6 +131,25 @@ func (r Reader) Read(ctx context.Context) Status {
 	if err != nil || pool.Status != "Created" {
 		s.ErrorClass = "SELECTED_STORAGE_POOL_UNAVAILABLE"
 		return s
+	}
+	// The official SDK can return Created even if a selected dir pool lost
+	// its own backing mount. Restricted actors cannot read pool.Config["source"],
+	// so check Incus's actual canonical pool path with statfs, not host /.
+	if pool.Driver == "dir" {
+		free, separate, checkErr := localDirPoolSpace(selectedPool)
+		s.StorageAvailableBytes = free
+		s.StorageSeparateMount = separate
+		if checkErr != nil {
+			s.ErrorClass = "SELECTED_STORAGE_FILESYSTEM_UNAVAILABLE"
+			switch {
+			case errors.Is(checkErr, errNativeMountAbsent):
+				s.ErrorClass = "SELECTED_STORAGE_MOUNT_MISSING"
+			case errors.Is(checkErr, errNativeSpaceLow):
+				s.ErrorClass = "SELECTED_STORAGE_SPACE_INSUFFICIENT"
+			}
+			return s
+		}
+		s.StorageSpaceChecked = true
 	}
 	s.StorageReady = true
 	if !s.NICConfigured {
