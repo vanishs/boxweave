@@ -22,7 +22,14 @@ if [ -d /var/lib/incus ] || id boxweave >/dev/null 2>&1; then
 fi
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends incus incus-client dnsmasq-base e2fsprogs util-linux >/dev/null
-sudo systemctl is-active --quiet incus
+# Ubuntu package may leave Incus socket-activated rather than active.
+echo "A071_CI_START_INCUS_ON_OWNED_EMPTY_VM"
+sudo systemctl start incus.service
+sudo incus version
+if ! sudo systemctl is-active --quiet incus.service; then
+  sudo systemctl --no-pager status incus.service || :
+  exit 87
+fi
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 test "$(sudo incus project list --format csv | wc -l)" -eq 1
 
