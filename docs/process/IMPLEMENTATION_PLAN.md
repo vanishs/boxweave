@@ -1,6 +1,6 @@
 # BoxWeave v1 — single development entrypoint, five autonomous phases
 
-**Status (2026-11-08): S1 PARTIAL on development PR branch only. Source build/race/real-binary MCP and restricted native Incus **read-only** checks have PASS evidence in a separate test Box; full service installation/rollback, native effects and independent gate are still OPEN. No production installation or shipped release.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
+**Status (2026-11-08): S1 PARTIAL on development PR branch only. Source build/race/real-binary MCP and restricted native Incus read-only checks have PASS evidence in a separate test Box; full service installation/rollback, native effects and independent gate are still OPEN. No production installation or shipped release.** SDK P0 capability research was completed and recorded in [the last native/real-HTTP SDK tests](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). It is **not** installed v1 acceptance. This file is the **only top-level development plan**. Execute each phase end to end; [the short execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md) defines the repeated loop and continuity rules.
 
 ## Next command and how to start
 
