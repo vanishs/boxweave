@@ -115,13 +115,11 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 		_ = setMigrationPhase(&j, "APT_OUTCOME_UNKNOWN")
 		return j, fmt.Errorf("native APT upgrade outcome unknown: %w; no automatic retry", err)
 	}
-	// A privileged lab-only OS exit allows a real post-APT/pre-ACK crash test,
-	// requiring an explicit root-owned sentinel inside the disposable guest.
-	if os.Getenv("BW_S1_NATIVE_TEST_CRASH_AFTER_APT") == "1" {
-		if marker, e := os.ReadFile("/etc/boxweave-s1-disposable-migration-fixture"); e == nil &&
-			string(marker) == "EXPLICIT_DISPOSABLE_S1_LAB_ONLY\n" {
-			os.Exit(79)
-		}
+	// Only a binary explicitly built with -tags=s1lab can exit at this
+	// post-APT/pre-ACK point; normal production binaries cannot be
+	// environment-triggered into an unexpected host-level process exit.
+	if nativeMigrationLabCrashRequested() {
+		os.Exit(79)
 	}
 	if err = setMigrationPhase(&j, "APT_RETURNED_NEEDS_VERIFICATION"); err != nil {
 		return j, err
