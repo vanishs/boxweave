@@ -38,6 +38,12 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261108-S1-BLOCKER-013 — handoff for the only remaining approved old Incus dependency migration (2026-11-08 PST / 2026-11-09 UTC)
+
+- Created **[Issue #116](https://github.com/vanishs/boxweave/issues/116)**: existing older signed Incus daemon exact-version approved migration with rollback, including interrupted APT/native init and independent postread, is still unimplemented/unverified; **correct current refusal does not count as upgrade PASS**.
+- Linked the issue from [authoritative latest S1 verification](../verification/S1_FOUNDATION_LATEST_2026-11-09.md), [S1 phase card](phases/01_FOUNDATION.md), and [draft PR #115](https://github.com/vanishs/boxweave/pull/115). Do not claim S1 complete, merge, publish or move to S2 without closing the phase gate.
+- Exact last feature-code proof unchanged: source `4882adcfa8120018603cd4ddc793eb64a569d21e`, [green CI #42577689359](https://github.com/vanishs/boxweave/actions/runs/42577689359), installed native candidate SHA256 `6d6300255b6a0736f410908c3709d3c933c79020f85b2a323dca2c04f09187d6`; subsequent docs commits only update the record. Original outer Box creation remains independently **UNKNOWN**, never retried.
+
 ### LOG-20261108-S1-BOOTSTRAP-012 — full *absent native daemon* installation, independent latest-code runtime and installer concurrency fixes (2026-11-08 PST / 2026-11-09 UTC)
 
 - **Clean controlled new dependency fixture:** under existing authorized `boxweave-test-ser`, the restricted parent `user-1004` created test-owned inner `bws1-deps-1108` (Ubuntu 24.04, initially NO Incus package/binary/state, no BoxWeave identity/database). Parent old BoxWeave v0.26.1 and existing foreign `hello-py-container` untouched. Do not conflate with original outer UNKNOWN create `bw-v1-s1-1108`.
