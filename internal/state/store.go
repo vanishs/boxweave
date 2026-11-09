@@ -21,11 +21,11 @@ import (
 const SchemaVersion = 1
 
 var (
-	ErrConflict = errors.New("idempotency key conflicts with original intent")
-	ErrNotFound = errors.New("operation not found")
-	ErrInvalid  = errors.New("invalid admission")
-	ErrRevoked  = errors.New("actor credential revoked before dispatch")
-	ErrState    = errors.New("invalid operation transition")
+	ErrConflict       = errors.New("idempotency key conflicts with original intent")
+	ErrNotFound       = errors.New("operation not found")
+	ErrInvalid        = errors.New("invalid admission")
+	ErrRevoked        = errors.New("actor credential revoked before dispatch")
+	ErrState          = errors.New("invalid operation transition")
 	ErrResourceLocked = errors.New("original unresolved resource claim is still locked")
 )
 
@@ -283,9 +283,13 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
 			AND NOT EXISTS (SELECT 1 FROM recovery_audit a
 			                WHERE a.operation_id=o.id AND a.decision='RELEASED')`,
-			a.BoxUUID,a.Incarnation).Scan(&outstanding)
-		if err != nil { return Receipt{}, err }
-		if outstanding > 0 { return Receipt{}, ErrResourceLocked }
+			a.BoxUUID, a.Incarnation).Scan(&outstanding)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if outstanding > 0 {
+			return Receipt{}, ErrResourceLocked
+		}
 	}
 	var active int
 	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", a.TokenID, time.Now().Unix()).Scan(&active)
@@ -444,3 +448,4 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 	}
 	return int64(len(ids)), nil
 }
+
