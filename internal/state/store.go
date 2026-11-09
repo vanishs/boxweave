@@ -26,6 +26,7 @@ var (
 	ErrInvalid  = errors.New("invalid admission")
 	ErrRevoked  = errors.New("actor credential revoked before dispatch")
 	ErrState    = errors.New("invalid operation transition")
+	ErrResourceLocked = errors.New("original unresolved resource claim is still locked")
 )
 
 type Store struct{ db *sql.DB }
@@ -271,6 +272,20 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
+	}
+	if a.BoxUUID != "" && a.Incarnation != "" {
+		// A different idempotency key cannot bypass an original UNKNOWN
+		// native-resource claim. A local reviewed RELEASED audit may allow
+		// a future NEW operation, but NEVER redispatches the original.
+		var outstanding int
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.box_uuid=? AND o.incarnation=?
+			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+			AND NOT EXISTS (SELECT 1 FROM recovery_audit a
+			                WHERE a.operation_id=o.id AND a.decision='RELEASED')`,
+			a.BoxUUID,a.Incarnation).Scan(&outstanding)
+		if err != nil { return Receipt{}, err }
+		if outstanding > 0 { return Receipt{}, ErrResourceLocked }
 	}
 	var active int
 	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", a.TokenID, time.Now().Unix()).Scan(&active)
