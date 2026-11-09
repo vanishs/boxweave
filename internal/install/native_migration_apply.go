@@ -111,6 +111,9 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 	cmd := exec.Command("apt-get", "install", "-y", "--no-install-recommends",
 		"incus="+to, "incus-client="+to)
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
+	// An optional s1lab-only compiled replacement can simulate a failed
+	// APT invocation. Production always executes the exact reviewed apt-get.
+	cmd = nativeMigrationLabAptCommand(cmd)
 	if err = cmd.Run(); err != nil {
 		_ = setMigrationPhase(&j, "APT_OUTCOME_UNKNOWN")
 		return j, fmt.Errorf("native APT upgrade outcome unknown: %w; no automatic retry", err)
