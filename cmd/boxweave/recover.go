@@ -111,4 +111,3 @@ func recoverLocal(a recoverArgs) error {
 	}
 	return errors.New("invalid recovery mode")
 }
-
