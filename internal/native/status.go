@@ -26,7 +26,9 @@ type Reader struct {
 	Project string
 }
 
-var requiredExtensions = []string{"projects", "restricted", "container_exec_recording"}
+// Incus advertises projects_restrictions, not a generic "restricted" extension.
+// Inspect the actual Project.Config["restricted"] separately at runtime.
+var requiredExtensions = []string{"projects", "projects_restrictions", "container_exec_recording"}
 
 func (r Reader) Read(ctx context.Context) Status {
 	s := Status{Project: r.Project, APIExtensions: map[string]bool{}}
