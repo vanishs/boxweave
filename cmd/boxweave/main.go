@@ -31,7 +31,9 @@ func run() error {
 	}
 	command := os.Args[1]
 	if command == "recover-worker" {
-		if len(os.Args) != 2 { return errors.New("private worker accepts no user arguments") }
+		if len(os.Args) != 2 {
+			return errors.New("private worker accepts no user arguments")
+		}
 		return recoverWorker()
 	}
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
