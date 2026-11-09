@@ -74,8 +74,7 @@ func nativeServiceActorReady()error{
 	own:="user-"+u.Uid
 	out,err=exec.Command("runuser","-u","boxweave","--","incus","project","list","--format","csv").CombinedOutput()
 	if err!=nil||strings.TrimSpace(string(out))==""||
-		strings.Contains(strings.TrimSpace(string(out)),"
-")||
+		strings.Contains(strings.TrimSpace(string(out)),"\n")||
 		!strings.HasPrefix(strings.TrimSpace(string(out)),own+" "){
 		return errors.New("boxweave native project not exclusively confined")
 	}
