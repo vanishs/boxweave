@@ -2,6 +2,23 @@
 
 **Status: PARTIAL; selected native Incus security and actual binary/HTTP MCP cases now PASS in authorized reused lab, but complete S1 exit/native mutation/installer/independent verification are NOT accepted; not release eligible.** This is an execution artifact for [S1](../development/phases/01_FOUNDATION.md), not a replacement plan or relaxation of [ACCEPTANCE](ACCEPTANCE.md).
 
+## Latest verified S1 subset (2026-11-08 PST, real reused lab)
+
+| Verification | Exact evidence | Verdict |
+|---|---|---|
+| Latest source Go SDK + CGO race/test/format/real CLI smoke | SHA `591ddaacd882cfe941565a9229ad83b78d16b309`, [CI #42553614450](https://github.com/vanishs/boxweave/actions/runs/42553614450), local `CGO_ENABLED=1 go test -race -count=1 ./...` | **PASS** |
+| Disabled-CGO SQLite stub prevention | `CGO_ENABLED=0 go build ./cmd/boxweave` fails specifically on `ERROR_BOXWEAVE_SQLITE_REQUIRES_CGO_ENABLED`; normal CGO=1 build works | **PASS** |
+| Native identity and official Incus 7.6 SDK read | Dedicated `bws1lab` only `incus` group, Project `user-1004` `restricted: true`; v1 CLI `doctor` ready=true, exact root Profile and extensions | **PASS** |
+| Native foreign-project permission | Exact `incus project show default` and `incus info hello-py-container --project default` denied; prior `hello-py-container` remains running and untouched | **PASS** |
+| Actual binary MCP HTTP and negative security | Candidate `/home/bws1lab/s1/boxweave-s1-591ddaac` SHA256 `33384e4cb5aa5a5af6bc6b89383e1c7202cd20da518bec5ac9a315fd31e72b73`. `test_live_mcp_largebody_591ddaac.py` verifies tool list/call, roles, missing/invalid/revoked tokens, unknown arguments, 5MiB body 413, malicious Host/Origin 403 | **PASS** |
+| Actual process-crash SQLite UNKNOWN | Child exits without close during DISPATCHING/VERIFYING; subsequent process `Recover` retains original IDs and prevents redispatch, with **synthetic** native ACK only | **PASS (no real Incus mutation)** |
+| Unsafe/uninitialized installer refusal | Non-root `install-stage --approve-stage` denied, unstaged `install-status` rejected and binary unchanged | **PASS (negative paths only)** |
+| Installer complete, real native mutating UNKNOWN/postcheck, legacy MCP, independent verifier | Not proven; no shared host/old controller replacement attempted | **OPEN — overall S1 PARTIAL** |
+
+Final tested source is newer than the earlier `f605c35` binary. Compiled binaries are **isolated test artifacts only**, not installed production services. Older validated artifact `boxweave-s1` was preserved when its overwrite failed with `File exists`; newest artifact uses a versioned filename. The test listener was stopped and issued test credentials revoked after each suite.
+
+The original outer create task `7e1cbf043d1fd4ea3d9ec0093a04371e` is **still UNKNOWN**, not replayed, despite safe reuse of an *independent* old test Box. The source CI is green; **do not mark S1 PASS, merge or release** until remaining mandatory gates have real independent evidence. Detailed operation and correction trail: [execution log](../development/EXECUTION_LOG.md).
+
 ## Exact scope and candidate
 
 - Source branch: `feat/v1-s1-foundation-20261108` from `v1` HEAD `e5c7ae26bdaa24f9243b7dec28dbd34ca561bcb2`. Candidate SHA must be read from GitHub at resumption; the branch received multiple fix commits.
