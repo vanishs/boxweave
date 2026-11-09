@@ -35,6 +35,8 @@ jobs:
           cache: true
       - name: Check whole repository formatting (gofmt, UTF-8, LF, Markdown, YAML, JSON)
         run: python3 scripts/check_format.py
+      - name: Parse tracked YAML and refuse duplicate keys
+        run: go run scripts/check_yaml.go
       - name: Reject newly introduced trailing whitespace
         shell: bash
         run: |
@@ -57,7 +59,9 @@ jobs:
       - name: Full Go race regression tests
         env:
           CGO_ENABLED: "1"
-        run: go test -race -count=1 ./...
+        run: |
+          go test -race -count=1 ./...
+          go test -tags=s1lab -count=1 ./internal/install
       - name: Verify Go source builds
         env:
           CGO_ENABLED: "1"
