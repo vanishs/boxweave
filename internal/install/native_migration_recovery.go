@@ -139,4 +139,3 @@ func NativeMigrationFinalize(hostDigest, expectedVersion string, approved bool) 
 	}
 	return archive, nil
 }
-
