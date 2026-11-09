@@ -168,4 +168,3 @@ func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, re
 	}
 	return tx.Commit()
 }
-
