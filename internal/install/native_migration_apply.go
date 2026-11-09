@@ -175,4 +175,3 @@ func verifyMigratedNative(version string) error {
 	}
 	return nil
 }
-
