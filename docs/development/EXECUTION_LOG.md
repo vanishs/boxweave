@@ -38,6 +38,12 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261108-S1-CLEANUP-007 — no new outer Box, unused test staging cleaned (2026-11-08 PST / 2026-11-09 UTC)
+
+- **Cleanup:** on `bwfix-0448-e2e`, verified the exact temporary source checkout origin and known created tarball/binary under `$HOME/bw-v1-s1-accept-20261108`, then removed **only that disposable directory**, confirmed absent. No preexisting workload, guest, host daemon, or user identity was modified there.
+- **Retained reproducible laboratory:** `boxweave-test-ser` test directory and isolated `bws1lab` account/Project remain for S1 follow-up. Latest candidate binary `boxweave-s1-591ddaac` sha256 `33384e4cb5aa5a5af6bc6b89383e1c7202cd20da518bec5ac9a315fd31e72b73` remains in private home; temporary service stopped and test Token IDs revoked. Old `boxweave` CLI still reports **v0.26.1**, preexisting `hello-py-container` remains RUNNING, no new native child in `user-1004`. Old upstream create remains UNKNOWN and untouched.
+- **Final result:** source exact SHA `591ddaacd882cfe941565a9229ad83b78d16b309`, CI [#42553614450](https://github.com/vanishs/boxweave/actions/runs/42553614450) PASS; actual native read-only + MCP auth/body-limit/role evidence PASS at fixed test binary, full installer/native mutating crash/independent verifier still **OPEN**, so S1 **PARTIAL**. PR #115 draft, no merge/release. The latest docs-only commits do not change tested Go source; GitHub CI for new docs head may still be running.
+
 ### LOG-20261108-S1-NATIVE-006 — exact latest code, CI and native MCP proof, safe installation negatives (2026-11-08 PST / 2026-11-09 UTC)
 
 - **Exact tested source** `591ddaacd882cfe941565a9229ad83b78d16b309`; `go mod verify`, `CGO_ENABLED=1 go test -race -count=1 ./...` **PASS** on reused `boxweave-test-ser`. [Read-only CI #42553614450](https://github.com/vanishs/boxweave/actions/runs/42553614450) **all green**: build, compile refusal with `CGO_ENABLED=0`, race/unit including real process crash, gofmt, actual binary local CLI/HTTP. Earlier CI on unformatted cross-process test [#42553047941](https://github.com/vanishs/boxweave/actions/runs/42553047941) was **FAIL** (format), corrected via `gofmt` at `3c9f3017`; failure retained.
