@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestS1CustomDirPoolMissingMountRefusedWithoutMutation(t *testing.T) {
+func TestS1CustomDirPoolOnHostRootCannotProveBacking(t *testing.T) {
 	dir := t.TempDir()
 	custom := filepath.Join(dir, "pool")
 	if err := os.Mkdir(custom, 0700); err != nil {
@@ -19,8 +19,8 @@ func TestS1CustomDirPoolMissingMountRefusedWithoutMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, separate, err := inspectDirPoolFilesystem("user-storage", custom, "/")
-	if !errors.Is(err, errNativeMountAbsent) || separate {
-		t.Fatalf("custom storage on host root must be refused: separate=%v err=%v", separate, err)
+	if !errors.Is(err, errNativeBackingUnverified) || separate {
+		t.Fatalf("custom storage on host root must be reported unverified: separate=%v err=%v", separate, err)
 	}
 	after, err := os.Stat(custom)
 	if err != nil || !after.IsDir() || !after.ModTime().Equal(before.ModTime()) {
