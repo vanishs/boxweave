@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -43,6 +43,14 @@ func run() error {
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
 	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
+	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release")
+	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
+	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")
+	recoveryChallenge := f.String("challenge", "", "single-use time-limited local recovery challenge")
+	recoveryConfirm := f.String("confirm-uuid", "", "literal exact original native Box UUID")
+	recoveryReason := f.String("reason", "", "documented review reason")
+	recoveryAcknowledge := f.Bool("acknowledge-uncertain-native", false, "explicit acknowledgement that native effect may still be in flight")
+
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -50,10 +58,16 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover":
 	default:
 		usage()
 		return errors.New("unsupported command")
+	}
+	if command == "recover" {
+		return recoverLocal(recoverArgs{DB:*db,Socket:*socket,Project:*project,ServiceUser:*serviceUser,
+			Action:*recoveryAction,Operation:*recoveryOperation,Reviewer:*recoveryReviewer,
+			Challenge:*recoveryChallenge,ConfirmUUID:*recoveryConfirm,Reason:*recoveryReason,
+			Approved:*approveLocal,Acknowledge:*recoveryAcknowledge})
 	}
 	if command == "build-info" {
 		return json.NewEncoder(os.Stdout).Encode(struct {
