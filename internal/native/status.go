@@ -13,17 +13,17 @@ import (
 )
 
 type Status struct {
-	Ready         bool            `json:"ready"`
-	Version       string          `json:"incus_version,omitempty"`
-	Project       string          `json:"project"`
-	ProfileReady  bool            `json:"default_profile_ready"`
+	Ready                 bool            `json:"ready"`
+	Version               string          `json:"incus_version,omitempty"`
+	Project               string          `json:"project"`
+	ProfileReady          bool            `json:"default_profile_ready"`
 	StorageReady          bool            `json:"selected_storage_pool_ready"`
 	StorageSpaceChecked   bool            `json:"selected_storage_space_checked"`
 	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
 	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
 	NICConfigured         bool            `json:"default_nic_configured"`
-	APIExtensions map[string]bool `json:"required_extensions"`
-	ErrorClass    string          `json:"error_class,omitempty"`
+	APIExtensions         map[string]bool `json:"required_extensions"`
+	ErrorClass            string          `json:"error_class,omitempty"`
 }
 
 type Reader struct {
