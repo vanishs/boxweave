@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -19,10 +20,22 @@ var exactBuildCommit = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // The candidate executable itself declares its build identity. Reading the
 // version of the OLD invoking CLI is not evidence about the NEW executable.
 func verifiedSourceBuild(p Plan, binary string) (BuildIdentity, error) {
-	if _, _, err := ServiceIdentity(p); err != nil {
+	uid, _, err := ServiceIdentity(p)
+	if err != nil {
 		return BuildIdentity{}, err
 	}
-	out, err := exec.Command("runuser", "-u", p.User, "--", binary, "build-info").Output()
+	// Root runs the candidate under the restricted identity. An already
+	// restricted recovery worker executes directly (runuser requires root).
+	var cmd *exec.Cmd
+	switch os.Geteuid() {
+	case 0:
+		cmd = exec.Command("runuser", "-u", p.User, "--", binary, "build-info")
+	case uid:
+		cmd = exec.Command(binary, "build-info")
+	default:
+		return BuildIdentity{}, errors.New("wrong OS identity for executable verification")
+	}
+	out, err := cmd.Output()
 	if err != nil {
 		return BuildIdentity{}, fmt.Errorf("target binary identity unavailable to restricted actor: %w", err)
 	}
