@@ -156,7 +156,7 @@ func verifyMigratedNative(version string) error {
 	if err != nil || client != version {
 		return errors.New("native client package postcondition mismatch")
 	}
-	if err = runLocal("systemctl", "start", "incus.socket", "incus.service"); err != nil {
+	if err = runLocal("systemctl", "start", "incus.socket", "incus.service", "incus-user.socket"); err != nil {
 		return fmt.Errorf("cannot start changed native daemon: %w", err)
 	}
 	if err = exec.Command("systemctl", "is-active", "--quiet", "incus.service").Run(); err != nil {
