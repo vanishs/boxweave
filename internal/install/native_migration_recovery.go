@@ -80,7 +80,7 @@ func NativeMigrationRollback(hostDigest, oldVersion string, approved, downtime b
 	}
 	// Offline, digest-verified, root-only original native state. Never
 	// overwrite a live database by extracting in-place.
-	if err = runLocal("tar", "--no-same-owner", "-C", "/var/lib", "-xf",
+	if err = runLocal("tar", "--same-owner", "--numeric-owner", "-C", "/var/lib", "-xf",
 		filepath.Join(nativeMigrationDir, "native-state.tar")); err != nil {
 		_ = setMigrationPhase(&j, "ROLLBACK_UNCERTAIN")
 		return j, fmt.Errorf("offline native snapshot restore uncertain: %w", err)
