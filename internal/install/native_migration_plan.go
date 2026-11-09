@@ -15,12 +15,12 @@ import (
 const nativeMigrationDir = "/var/lib/boxweave-native-migration"
 
 type NativeMigrationPlan struct {
-	Mode string `json:"mode"`
-	OldPackage string `json:"old_package_version"`
-	NewPackage string `json:"new_package_version"`
-	HostDigest string `json:"host_digest"`
-	PlanSHA256 string `json:"plan_sha256"`
-	Projects []string `json:"observed_projects"`
+	Mode       string   `json:"mode"`
+	OldPackage string   `json:"old_package_version"`
+	NewPackage string   `json:"new_package_version"`
+	HostDigest string   `json:"host_digest"`
+	PlanSHA256 string   `json:"plan_sha256"`
+	Projects   []string `json:"observed_projects"`
 	AptChanges []string `json:"apt_changes"`
 }
 
@@ -45,32 +45,51 @@ func installedClientVersion() (string, error) {
 // existing instances, including stopped guests, and any foreign Project.
 func migrationInventory() ([]string, error) {
 	out, err := exec.Command("incus", "list", "--all-projects", "--format", "json").CombinedOutput()
-	if err != nil { return nil, fmt.Errorf("native instance inventory unavailable: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("native instance inventory unavailable: %w", err)
+	}
 	var instances []json.RawMessage
-	if err := json.Unmarshal(out, &instances); err != nil { return nil, err }
-	if len(instances) != 0 { return nil, errors.New("native instances present: shared daemon migration refused") }
+	if err := json.Unmarshal(out, &instances); err != nil {
+		return nil, err
+	}
+	if len(instances) != 0 {
+		return nil, errors.New("native instances present: shared daemon migration refused")
+	}
 	out, err = exec.Command("incus", "project", "list", "--format", "json").CombinedOutput()
-	if err != nil { return nil, fmt.Errorf("native Project inventory unavailable: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("native Project inventory unavailable: %w", err)
+	}
 	var projects []struct {
-		Name string `json:"name"`
+		Name   string            `json:"name"`
 		Config map[string]string `json:"config"`
 	}
-	if err := json.Unmarshal(out, &projects); err != nil { return nil, err }
+	if err := json.Unmarshal(out, &projects); err != nil {
+		return nil, err
+	}
 	u, err := user.Lookup("boxweave")
-	if err != nil { return nil, errors.New("dedicated native user required") }
+	if err != nil {
+		return nil, errors.New("dedicated native user required")
+	}
 	own := "user-" + u.Uid
-	if len(projects) != 2 { return nil, errors.New("foreign or extra Projects prevent native maintenance") }
+	if len(projects) != 2 {
+		return nil, errors.New("foreign or extra Projects prevent native maintenance")
+	}
 	var ownOK, defOK bool
 	var names []string
 	for _, p := range projects {
 		names = append(names, p.Name)
 		switch p.Name {
-		case "default": defOK = true
-		case own: ownOK = p.Config["restricted"] == "true"
-		default: return nil, errors.New("foreign Project prevents migration")
+		case "default":
+			defOK = true
+		case own:
+			ownOK = p.Config["restricted"] == "true"
+		default:
+			return nil, errors.New("foreign Project prevents migration")
 		}
 	}
-	if !ownOK || !defOK { return nil, errors.New("exact restricted service Project and default required") }
+	if !ownOK || !defOK {
+		return nil, errors.New("exact restricted service Project and default required")
+	}
 	out, err = exec.Command("runuser", "-u", "boxweave", "--",
 		"incus", "project", "list", "--format", "csv").CombinedOutput()
 	trimmed := strings.TrimSpace(string(out))
@@ -93,51 +112,90 @@ func exactAptMigration(from, to string) ([]string, string, error) {
 	}
 	out, err := exec.Command("apt-get", "-s", "--no-install-recommends",
 		"install", "incus="+to, "incus-client="+to).CombinedOutput()
-	if err != nil { return nil, "", fmt.Errorf("APT signed simulation failed: %w", err) }
+	if err != nil {
+		return nil, "", fmt.Errorf("APT signed simulation failed: %w", err)
+	}
 	simulation := string(out)
 	for _, unsafe := range []string{"Remv ", "cannot be authenticated", "essential packages will be removed", "WARNING:"} {
-		if strings.Contains(simulation, unsafe) { return nil, "", errors.New("unsafe APT change refused") }
+		if strings.Contains(simulation, unsafe) {
+			return nil, "", errors.New("unsafe APT change refused")
+		}
 	}
 	var lines []string
 	var server, client bool
 	for _, line := range strings.Split(simulation, "\n") {
-		if !strings.HasPrefix(line, "Inst ") { continue }
+		if !strings.HasPrefix(line, "Inst ") {
+			continue
+		}
 		lines = append(lines, strings.TrimSpace(line))
-		if strings.HasPrefix(line, "Inst incus ["+from+"] ("+to+" ") { server = true }
-		if strings.HasPrefix(line, "Inst incus-client ["+from+"] ("+to+" ") { client = true }
+		if strings.HasPrefix(line, "Inst incus ["+from+"] ("+to+" ") {
+			server = true
+		}
+		if strings.HasPrefix(line, "Inst incus-client ["+from+"] ("+to+" ") {
+			client = true
+		}
 	}
-	if !server || !client { return nil, "", errors.New("APT did not plan BOTH exact old packages") }
+	if !server || !client {
+		return nil, "", errors.New("APT did not plan BOTH exact old packages")
+	}
 	return lines, simulation, nil
 }
 
 func NativeMigrationReview(from, to string) (NativeMigrationPlan, error) {
-	p := NativeMigrationPlan{Mode:"review-only", OldPackage:from, NewPackage:to}
-	if os.Geteuid()!=0 { return p, errors.New("root-only native inventory") }
-	if err:=ubuntuNativeBaseline();err!=nil{return p,err}
-	if _,err:=os.Lstat(nativeMigrationDir);err==nil{
-		return p,errors.New("previous migration journal exists: inspect, do not retry")
-	}else if !errors.Is(err,os.ErrNotExist){return p,err}
-	if out,err:=exec.Command("apt-config","dump").CombinedOutput();err!=nil{return p,err
-	}else{
-		for _,bad:=range []string{"AllowUnauthenticated \"true\"","AllowInsecureRepositories \"true\""}{
-			if strings.Contains(string(out),bad){return p,errors.New("insecure apt override")}
+	p := NativeMigrationPlan{Mode: "review-only", OldPackage: from, NewPackage: to}
+	if os.Geteuid() != 0 {
+		return p, errors.New("root-only native inventory")
+	}
+	if err := ubuntuNativeBaseline(); err != nil {
+		return p, err
+	}
+	if _, err := os.Lstat(nativeMigrationDir); err == nil {
+		return p, errors.New("previous migration journal exists: inspect, do not retry")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return p, err
+	}
+	if out, err := exec.Command("apt-config", "dump").CombinedOutput(); err != nil {
+		return p, err
+	} else {
+		for _, bad := range []string{"AllowUnauthenticated \"true\"", "AllowInsecureRepositories \"true\""} {
+			if strings.Contains(string(out), bad) {
+				return p, errors.New("insecure apt override")
+			}
 		}
 	}
-	version,ok,err:=installedIncusPackage()
-	if err!=nil||!ok||version!=from{return p,fmt.Errorf("old Incus dpkg mismatch, want %s got %s: %v",from,version,err)}
-	client,err:=installedClientVersion()
-	if err!=nil||client!=from{return p,errors.New("native client and server package versions differ")}
-	if exec.Command("systemctl","is-active","--quiet","incus").Run()!=nil{
-		return p,errors.New("old native daemon inactive")
+	version, ok, err := installedIncusPackage()
+	if err != nil || !ok || version != from {
+		return p, fmt.Errorf("old Incus dpkg mismatch, want %s got %s: %v", from, version, err)
 	}
-	if _,err:=os.Lstat("/var/lib/incus/unix.socket.user");err!=nil{return p,err}
-	projects,err:=migrationInventory();if err!=nil{return p,err}
-	changes,simulation,err:=exactAptMigration(from,to);if err!=nil{return p,err}
-	host,err:=migrationHostDigest();if err!=nil{return p,err}
-	p.HostDigest=host;p.Projects=projects;p.AptChanges=changes
-	h:=sha256.Sum256([]byte("boxweave-native-migration-v1\n"+host+"\n"+from+"\n"+to+
-		"\n"+strings.Join(projects,"\n")+"\n"+simulation))
-	p.PlanSHA256=hex.EncodeToString(h[:])
-	p.Mode="explicit-migration-approval-required"
-	return p,nil
+	client, err := installedClientVersion()
+	if err != nil || client != from {
+		return p, errors.New("native client and server package versions differ")
+	}
+	if exec.Command("systemctl", "is-active", "--quiet", "incus").Run() != nil {
+		return p, errors.New("old native daemon inactive")
+	}
+	if _, err := os.Lstat("/var/lib/incus/unix.socket.user"); err != nil {
+		return p, err
+	}
+	projects, err := migrationInventory()
+	if err != nil {
+		return p, err
+	}
+	changes, simulation, err := exactAptMigration(from, to)
+	if err != nil {
+		return p, err
+	}
+	host, err := migrationHostDigest()
+	if err != nil {
+		return p, err
+	}
+	p.HostDigest = host
+	p.Projects = projects
+	p.AptChanges = changes
+	h := sha256.Sum256([]byte("boxweave-native-migration-v1\n" + host + "\n" + from + "\n" + to +
+		"\n" + strings.Join(projects, "\n") + "\n" + simulation))
+	p.PlanSHA256 = hex.EncodeToString(h[:])
+	p.Mode = "explicit-migration-approval-required"
+	return p, nil
 }
+
