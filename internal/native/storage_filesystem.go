@@ -13,8 +13,8 @@ import (
 const minNativePoolFreeBytes uint64 = 64 << 20
 
 var (
-	errNativeMountAbsent = errors.New("selected nondefault dir pool backing mount absent")
-	errNativeSpaceLow    = errors.New("selected native storage free space insufficient")
+	errNativeBackingUnverified = errors.New("nondefault dir pool backing cannot be distinguished from host-root fallback by restricted actor")
+	errNativeSpaceLow         = errors.New("selected native storage free space insufficient")
 )
 
 // localDirPoolSpace checks the ACTUAL filesystem below Incus's canonical pool
@@ -45,11 +45,12 @@ func inspectDirPoolFilesystem(poolName, path, rootPath string) (uint64, bool, er
 		return 0, false, errors.New("native storage device identity unavailable")
 	}
 	separate := selectedDev.Dev != rootDev.Dev
-	// Default dir on the root filesystem is supported. A separately selected
-	// nondefault dir pool must not silently fall back to host root when the
-	// backing mount vanishes; fail closed rather than claim readiness.
+	// Root-backed named dir pools can be valid Incus configurations, but a
+	// confined actor cannot read the original (redacted) pool source and so
+	// cannot distinguish those from a missing formerly separate mount.
+	// Do not claim the mount is missing; refuse readiness as unverified.
 	if poolName != "default" && !separate {
-		return 0, false, errNativeMountAbsent
+		return 0, false, errNativeBackingUnverified
 	}
 	var fs syscall.Statfs_t
 	if err := syscall.Statfs(path, &fs); err != nil {
