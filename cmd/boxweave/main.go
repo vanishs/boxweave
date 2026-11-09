@@ -58,7 +58,7 @@ func run() error {
 	if command == "build-info" {
 		return json.NewEncoder(os.Stdout).Encode(struct {
 			Version string `json:"version"`
-			Commit string `json:"commit"`
+			Commit  string `json:"commit"`
 		}{Version: version, Commit: commit})
 	}
 	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" {
