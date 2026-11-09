@@ -30,6 +30,7 @@ type Plan struct {
 type Manifest struct {
 	Schema          int    `json:"schema"`
 	Version         string `json:"version"`
+	BuildCommit     string `json:"build_commit,omitempty"`
 	BinarySHA256    string `json:"binary_sha256"`
 	UnitSHA256      string `json:"unit_sha256"`
 	ServiceActive   bool   `json:"service_active"`
@@ -177,6 +178,12 @@ func Status(p Plan) (Manifest, error) {
 	if m.UnitSHA256 == "" || unitHash != m.UnitSHA256 {
 		return m, errors.New("installer unit checksum mismatch")
 	}
+	if m.BuildCommit != "" {
+		build, err := verifiedSourceBuild(p, p.BinaryPath)
+		if err != nil || build.Version != m.Version || build.Commit != m.BuildCommit {
+			return m, errors.New("installed executable version/commit mismatch")
+		}
+	}
 	m.ServiceActive = serviceActive() == nil
 	return m, nil
 }
@@ -250,6 +257,10 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	if h != p.ExpectedDigest {
 		return Manifest{}, errors.New("source digest differs from operator reviewed digest")
 	}
+	build, err := verifiedSourceBuild(p, p.SourceBinary)
+	if err != nil {
+		return Manifest{}, err
+	}
 	if _, err = os.Lstat(p.UnitPath); err == nil {
 		old, e := Status(p)
 		if e != nil {
@@ -287,7 +298,7 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 		return Manifest{}, err
 	}
 	digestUnit := sha256.Sum256([]byte(unit(p)))
-	m := Manifest{Schema: manifestSchema, Version: p.Version, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
+	m := Manifest{Schema: manifestSchema, Version: build.Version, BuildCommit: build.Commit, BinarySHA256: h, UnitSHA256: hex.EncodeToString(digestUnit[:]), BinaryPath: p.BinaryPath, StateDir: p.StateDir, ServiceUser: p.User, Project: p.Project, Socket: p.Socket, RestartRequired: true}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return m, err
