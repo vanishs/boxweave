@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|install-stage|install-status [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|install-stage|install-activate|install-status|upgrade|rollback [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -42,6 +42,7 @@ func run() error {
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
 	approve := f.Bool("approve-stage", false, "explicitly authorize staging service files; no automatic start")
+	approveLocal := f.Bool("approve-local", false, "host-local root authorization to activate, upgrade or rollback")
 	if err := f.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -49,25 +50,30 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "install-stage", "install-status":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "install-stage", "install-activate", "install-status", "upgrade", "rollback":
 	default:
 		usage()
 		return errors.New("unsupported command")
 	}
-	if command == "install-stage" || command == "install-status" {
+	if command == "install-stage" || command == "install-activate" || command == "install-status" || command == "upgrade" || command == "rollback" {
 		p := install.Plan{User: *serviceUser, StateDir: "/var/lib/boxweave",
 			BinaryPath: "/usr/local/bin/boxweave", UnitPath: "/etc/systemd/system/boxweave.service",
 			SourceBinary: *sourceBinary, Project: *project, Socket: *socket, Version: version,
 			ExpectedDigest: *digest}
-		if command == "install-stage" {
-			m, err := install.Stage(p, *approve)
-			if err != nil {
-				return err
-			}
-			// Staging is not install acceptance; systemd and Incus remain untouched.
-			return json.NewEncoder(os.Stdout).Encode(m)
+		var m install.Manifest
+		var err error
+		switch command {
+		case "install-stage":
+			m, err = install.Stage(p, *approve)
+		case "install-activate":
+			m, err = install.Activate(p, *approveLocal)
+		case "upgrade":
+			m, err = install.Upgrade(p, *approveLocal)
+		case "rollback":
+			m, err = install.Rollback(p, *approveLocal)
+		case "install-status":
+			m, err = install.Status(p)
 		}
-		m, err := install.Status(p)
 		if err != nil {
 			return err
 		}
