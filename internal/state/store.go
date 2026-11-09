@@ -147,6 +147,43 @@ func (s *Store) init(fresh bool) error {
 		if version != SchemaVersion {
 			return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
 		}
+		// A LIMIT 1 version read alone can hide a second conflicting migration
+		// record. Never choose one history or adopt unknown application tables.
+		var versionRows int
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
+			return err
+		}
+		if versionRows != 1 {
+			return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
+		}
+		rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
+		if err != nil {
+			return err
+		}
+		actualTables := make(map[string]bool)
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			actualTables[name] = true
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if len(actualTables) != len(schemaDDL) {
+			return fmt.Errorf("unexpected SQLite schema/migration tables: refuse foreign adoption")
+		}
+		for _, expected := range schemaDDL {
+			if !actualTables[strings.Fields(expected)[2]] {
+				return fmt.Errorf("missing declared schema table: refuse foreign adoption")
+			}
+		}
 		for _, expected := range schemaDDL {
 			name := strings.Fields(expected)[2]
 			var actual string
