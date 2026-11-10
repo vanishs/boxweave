@@ -170,6 +170,21 @@ func (r Reader) CheckBootstrap(ctx context.Context) error {
 	return nil
 }
 
+// observeBoxEffectiveDevices reads ALL effective devices. Incus api.DevicesMap
+// is a Go map: finding the root disk cannot terminate traversal because eth0
+// may be visited later. The earlier break made internet=true randomly read
+// false and even caused correctly created native Boxes to become UNKNOWN.
+func observeBoxEffectiveDevices(out *BoxState, devices api.DevicesMap) {
+	for _, d := range devices {
+		if d["type"] == "nic" {
+			out.Internet = d["security.acls.default.egress.action"] == "allow"
+		}
+		if d["type"] == "disk" && d["path"] == "/" {
+			out.RootDiskSize = d["size"]
+		}
+	}
+}
+
 func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, string, error) {
 	out := BoxState{Project: r.Project, Name: name}
 	if !safeName.MatchString(name) || uuid == "" {
@@ -191,15 +206,7 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.CPU = inst.ExpandedConfig["limits.cpu"]
 	out.Memory = inst.ExpandedConfig["limits.memory"]
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
-	for _, d := range inst.ExpandedDevices {
-		if d["type"] == "nic" {
-			out.Internet = d["security.acls.default.egress.action"] == "allow"
-		}
-		if d["type"] == "disk" && d["path"] == "/" {
-			out.RootDiskSize = d["size"]
-			break
-		}
-	}
+	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
 	// Only a real guest probe may establish GuestReady. Native RUNNING
 	// and guest shell readiness are different truths.
 	return out, etag, nil
@@ -744,15 +751,7 @@ func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, erro
 		NativeState: inst.Status, CPU: inst.ExpandedConfig["limits.cpu"],
 		Memory:  inst.ExpandedConfig["limits.memory"],
 		Nesting: inst.ExpandedConfig["security.nesting"] == "true"}
-	for _, d := range inst.ExpandedDevices {
-		if d["type"] == "nic" {
-			out.Internet = d["security.acls.default.egress.action"] == "allow"
-		}
-		if d["type"] == "disk" && d["path"] == "/" {
-			out.RootDiskSize = d["size"]
-			break
-		}
-	}
+	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
 	return out, nil
 }
 

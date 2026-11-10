@@ -189,3 +189,30 @@ func TestS2OwnedNICInternetToggleNeverEditsSharedACL(t *testing.T) {
 		t.Fatalf("unauthorized egress allowed without native ACL: %v", err)
 	}
 }
+
+func TestS2EffectiveNICAndDiskAlwaysReadRegardlessOfMapIteration(t *testing.T) {
+	devices := api.DevicesMap{
+		"root": map[string]string{
+			"type": "disk", "path": "/", "size": "3GiB",
+		},
+		"eth0": map[string]string{
+			"type": "nic", "network": "incusbr-test",
+			"security.acls.default.egress.action": "allow",
+		},
+	}
+	// The old production code broke on whichever map key it visited first,
+	// making native create success nondeterministically become UNKNOWN.
+	for i := 0; i < 256; i++ {
+		var state BoxState
+		observeBoxEffectiveDevices(&state, devices)
+		if !state.Internet || state.RootDiskSize != "3GiB" {
+			t.Fatalf("iteration %d lost a native resource: %+v", i, state)
+		}
+	}
+	devices["eth0"]["security.acls.default.egress.action"] = "reject"
+	var disabled BoxState
+	observeBoxEffectiveDevices(&disabled, devices)
+	if disabled.Internet || disabled.RootDiskSize != "3GiB" {
+		t.Fatalf("internet disabled did not preserve effective disk: %+v", disabled)
+	}
+}
