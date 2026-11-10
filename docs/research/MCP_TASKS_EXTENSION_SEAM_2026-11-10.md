@@ -1,0 +1,55 @@
+# MCP Tasks extension: preserve a future adapter seam, not a second executor
+
+**Date:** 2026-11-09 PT / 2026-11-10 UTC. **Status:** design/research only; **no MCP Tasks endpoint or capability is implemented or advertised in v1**. This review does not authorize new public tools, new database schema/tables, a task engine, an SDK fork, long-polling service, OAuth, or relaxed admission/UNKNOWN behavior. The v1 feature plan remains **S2 complete native operation delivery → S2.5 BRIDGEHEAD → S3/S4/S5**. Fetch this reference only when changing S2 operation receipts or revisiting SDK Tasks support.
+
+## Verified upstream facts, pinned to their protocol era
+
+- The [2026-07-28 official Tasks extension](https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks), identifier `io.modelcontextprotocol/tasks` (SEP-2663), is a separate extension. It offers server-directed `tools/call` task augmentation with `CreateTaskResult` (`resultType: "task"`), `tasks/get`, `tasks/update`, `tasks/cancel`; clients declare support in per-request `_meta.io.modelcontextprotocol/clientCapabilities.extensions`. **Never** return a task result to a client that did not advertise the extension on that request.
+- `tasks/get` is a scoped **read of a specific opaque task ID**, with `working`, `input_required`, `completed`, `cancelled`, `failed` statuses, optional `statusMessage`/`pollIntervalMs`, bounded retention `ttlMs`, and original Tool result when terminal. **There is no `tasks/list`** in this revision. `tasks/update` supplies answers to outstanding `inputRequests`; it does **not** update execution progress. `tasks/cancel` acknowledges a cancellation request and **does not prove** native cancellation. These names are MCP protocol methods, **not BoxWeave public MCP Tools**.
+- The **new extension is not wire-compatible** with the experimental core Tasks surface in `2025-11-25`: no `tasks/result` or `tasks/list` and no old opt-in `task` argument on 2026-era calls. Do not implement either historical surface just to future-proof v1. [Official SEP and compatibility table](https://tasks.extensions.modelcontextprotocol.io/seps/2663-tasks-extension).
+- The pinned [official Go MCP SDK v1.8.0 release](https://github.com/modelcontextprotocol/go-sdk/releases/tag/v1.8.0) supports protocol `2026-07-28`, but the SDK's [roadmap](https://github.com/modelcontextprotocol/go-sdk/blob/main/ROADMAP.md) and [upstream issue #626](https://github.com/modelcontextprotocol/go-sdk/issues/626) still list Tasks implementation as future/open work **at the time of this review**. Recheck latest tagged SDK and actual APIs before implementation; do not infer SDK support from a protocol specification.
+- Extension Task completion describes **completion of the augmented MCP method**, not automatically a verified Incus operation. In particular, protocol `Task.status=failed` means underlying **JSON-RPC error**; if `tools/call` completes with `CallToolResult.isError=true`, the Task is `completed` and returns the error Tool result. A BoxWeave native `UNKNOWN` is neither a proven native failure nor a success. The adapter needs an explicit and tested distinction; no naive string-state mapping.
+- The specification demands a `CreateTaskResult` **only after durable creation and immediate retrievability by `tasks/get`**. It allows protocol Task retention/expiration separate from business-operation evidence. Stateless MCP on `2026-07-28` uses authenticated request-specific metadata and capabilities; don't use an HTTP session or reconnect as an authorization or business identity.
+- [Official Tasks security](https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks): task IDs must be unguessable and `tasks/get/update/cancel` must authenticate and authorize **each** request. Even if an ID leaks, it is not permission to see another actor's sensitive guest stdout, file changes or resource actions. `Mcp-Name` task routing header is a transport detail to evaluate **only if** a future external proxy implementation needs Tasks. No speculative header parser now.
+
+## v1 preparation — small, protocol-neutral and reusable
+
+```text
+Authenticated tools/call (existing official SDK)
+    -> validated actor + optional client work reference, not authorization
+    -> S1/S2 domain admission (single key, single SQLite Operation)
+    -> native worker/Incus + verified original outcome
+    -> one durable operation snapshot and structured safe receipt
+          |                                    |
+          +-- existing operation_get/list/output_get (v1 S2)
+          +-- LATER, SDK-provided Tasks adapter (only after explicit approval)
+                    <MCP task ID, auth scope, TTL, method-result semantics>
+```
+
+**One source of execution truth:** S1's current `operations` + `operation_events` journal, keyed by immutable `operation_id`, `tracking_id`, actor and original idempotency key; S2 adds real native lifecycle, output retention and state observation. Do not introduce another worker, parallel queue, “Task” database or per-session progress state. A future adapter may store **minimal** mapping/retention data (`taskId` → original `operation_id` + original method/result semantics + authorized principal + expiry), after an explicit schema-versioned migration. **Do not add a speculative `mcp_task_id` column now**. No RPC method is enabled as part of the seam.
+
+**Keep operation identities independent:** `operation_id` (BoxWeave domain) is stable and queryable by authorized S2 APIs, `native_operation_id` (Incus) is a distinct upstream handle; future `taskId` (MCP protocol) is a separate opaque client handle with possibly shorter lifetime. `actor_id` comes from authenticated credentials; optional `work_ref`/Agent correlation is client-provided, non-authoritative and MUST NOT grant access. Token rotation and multiple Agents need independently verified access policy, never automatic cross-actor Task visibility. Cross-Agent operational search uses **authorized `operation_list`**; it is *not* recovered by inventing `tasks/list`.
+
+**Stable results before a new protocol:** S2's original immediate `CallToolResult` already returns a durable Operation receipt. Emit a structured, bounded, redactable result containing stable IDs, admitted state, last native observation, outcome/evidence level, whether further `operation_get` is appropriate and a safe next query suggestion. These fields are BoxWeave tool data, not a forged MCP Task. Keep legacy and clients without extension support working exactly as designed.
+
+**Adapter must not conflate meanings:** A Tool call may finish successfully by returning an asynchronous **admission receipt**, while its native mutation remains `RUNNING` or `UNKNOWN`. A future MCP Task could instead represent waiting for the final verified native outcome. Those are *different user-facing contracts*: do not silently redefine Tool success, declare a task `failed` for a tool-level error, silently leave an unresolved UNKNOWN as verified `working`, or treat task expiry as deletion of the durable original operation. Choose and test an adapter policy only after SDK implementation and real client negotiation are confirmed. `ttlMs` expires only the optional MCP handle; original audit/UNKNOWN resource locks survive under their own retention contract.
+
+**Cancellation must remain truthful:** Future `tasks/cancel` is an ack-only signal; it may invoke the same authorized, evidence-based S2 cancellation boundary where appropriate, but it cannot bypass separate original Operation rules. A client disconnect, expired Task, delayed poll or requested cancellation does not release an UNKNOWN lock, replay a write, terminate an unrelated Exec or prove a native cancellation. `tasks/update` should not become a general Agent command/approval path or privileged local UNKNOWN recovery interface.
+
+**No feature creep:** MCP Tasks supports *one augmented request*, not remembering an Agent's plan, reasoning, source changes, or multi-Agent scheduling. Project checkpoints and Git provide that distinct task-context dimension. MCP task progress/notifications are optional transport UX, never the durable audit authority. An unavailable SDK/client means **use ordinary S2 Operations**, not ship a home-grown Tasks protocol.
+
+## Future enablement gate — explicitly deferred
+
+1. Check a **new pinned official Go SDK release** for real server-side extension support, request-scoped negotiation and correct typed Task result, plus actual intended ChatGPT/other-client support. Protocol spec and another SDK are not sufficient.
+2. Document semantics of Tool completion versus native admission/verification/UNKNOWN, status and error mapping, bounded results, cancellation, expiry, worker crash/recovery, token rotation and cross-actor authorization. Decide whether any S2 Tool benefits at all: existing immediate durable receipts may already solve the user's use case.
+3. Add a narrow **SDK-native adapter only**, not a second operation store. Expose `io.modelcontextprotocol/tasks` **only after** full extension implementation, authorization and installed positive/negative integration tests. For clients that do not declare capability, retain current standard `CallToolResult` path unchanged.
+4. Adversarial tests: task handle is durably readable immediately after creation; lost client reply/retry same idempotency key has one native effect; independent reconnect/poll works; mismatched actor/token/foreign Project denied without existence leak; cancel ack does not claim native stop; worker restart and native UNKNOWN remain truthful; handle TTL does not unlock/delete domain work; legacy clients and complete original 20-tool interface unaffected.
+5. Verify host-local installer and externally managed `/mcp` proxy only **if** enabled. No premature release acceptance claim. Failing/absent SDK or client support leaves the extension **NOT_IMPLEMENTED** and does **not** make today's S2/S2.5 incomplete.
+
+**Consequence:** The useful “preparation” is a **one-way protocol-adapter seam and truthful domain snapshot**, with zero speculative SDK methods, zero new runtime features, zero additional mandatory scope. Reevaluate after an upstream Go SDK release and measured client support, not on a guessed date.
+
+## Source of truth
+
+- Official [Tasks extension specification](https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks) and [SEP-2663](https://tasks.extensions.modelcontextprotocol.io/seps/2663-tasks-extension)
+- Official [Go SDK v1.8.0 release](https://github.com/modelcontextprotocol/go-sdk/releases/tag/v1.8.0), [SDK roadmap](https://github.com/modelcontextprotocol/go-sdk/blob/main/ROADMAP.md), [Tasks issue #626](https://github.com/modelcontextprotocol/go-sdk/issues/626)
+- BoxWeave [MCP binding](../design/MCP_BINDING.md), [Tracking/Go context](../design/TRACKING_CONTEXT.md), [Operations](../design/OPERATIONS.md), [S2 phase](../development/phases/02_BOX_LIFECYCLE_OPERATIONS.md), [S2.5 BRIDGEHEAD](../development/phases/025_BRIDGEHEAD.md)

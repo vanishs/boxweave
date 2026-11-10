@@ -1,5 +1,7 @@
 # Upstream research and borrowed design patterns
 
+**Future protocol review (only when S2 receipts or a new Go SDK Tasks release becomes relevant):** [Official MCP Tasks extension vs BoxWeave's durable Operation seam](MCP_TASKS_EXTENSION_SEAM_2026-11-10.md), including incompatible 2025 experimental protocol, absent pinned Go SDK runtime implementation, and zero-new-Tool constraints.
+
 **Recent legacy operational input (read only for matching S2/S5 work):** [Incus I/O pressure, MCP wrong-path and Agent stall incident](LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md). The report separates observations from causation hypotheses and does not authorize Incus DB repair, old OAuth or a new heartbeat subsystem.
 
 References are **technical evidence and inspiration**, not dependencies or instructions to copy upstream code unreviewed. No licensing conclusion about copying source is implied.

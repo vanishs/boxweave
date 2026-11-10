@@ -27,6 +27,8 @@
 
 **Load on demand for slow-call/Agent-stall cases only:** [legacy Incus I/O + MCP outage incident](../../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) (O-027/O-028). Distinguish HTTP timeout from durable native state, test bounded reads/backpressure and never replay an original UNKNOWN. A separate heartbeat subsystem is not approved.
 
+**MCP future compatibility, no new S2 feature:** At the Operation receipt/output subtask, read the [Tasks extension future-adapter seam](../../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md) **only to avoid welding transport sessions, ad-hoc task IDs or client polling to business durability**. Keep stable typed result/operation ID and native evidence usable by all current clients. Do **not** implement or advertise `tasks/*` during S2 or add a speculative schema field, task worker or 21st MCP Tool. S2's original security, crash and UNKNOWN acceptance remains mandatory.
+
 ## Test and negative matrix
 
 - Real native create/read/list/start/stop/update/delete against the **same exact binary/instance UUID**; new image, storage pool, start=false, restart, nesting availability, name reuse, foreign Box, forged stale IDs, and omission-vs-zero/clear fields.

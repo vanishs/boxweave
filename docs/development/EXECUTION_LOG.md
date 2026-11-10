@@ -38,6 +38,13 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261110-MCP-TASKS-026 — research-only Tasks extension adapter seam (2026-11-09 PT / 2026-11-10 UTC)
+
+- **Scope and baseline:** user requested analysis of predesigning a future MCP Tasks extension integration. DOCS_ONLY from protected `v1` commit `219e4c1ed4391291d517f6b9d34419aa95587e19`. No code, runtime, live native Incus/Box, original UNKNOWN receipt, SQLite schema, current 20 public Tools, S2/S2.5 release gates or deployment altered.
+- **Verified upstream facts:** [2026-07-28 official Tasks extension](../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md) defines capability-gated `CreateTaskResult` and `tasks/get/update/cancel` (no `tasks/list`); `tasks/update` answers input requests, `tasks/cancel` is an ack only. It is not wire compatible with 2025-11-25 experimental Tasks. Official Go MCP SDK pinned at v1.8.0 still lists Tasks server implementation as future/open at review time.
+- **Design boundary:** S1/S2 original journal + native IDs + idempotency + UNKNOWN remain sole business truth. Reserve **only** a future official-SDK adapter, stable redacted operation snapshots and per-request auth; do not add task ID schema fields, another worker, custom JSON-RPC, premature capability advertisement or privileged client input pipeline. Optional work correlation IDs remain untrusted metadata, not authorization.
+- **Documentation placement:** new research note, MCP binding / Operations / Tracking cross-links, tiny S2/S2.5 just-in-time reminders, O-031 open risk, references/index. A future feature change needs an updated SDK/client proof and explicit owner decision with its own negative tests. No S2/S2.5/BH/SDK tests were executed or claimed in this docs intake.
+
 ### LOG-20261110-BRIDGEHEAD-025 — owner-approved S2.5 real-host development-base checkpoint (2026-11-09 PT / 2026-11-10 UTC)
 
 - **Scope and before state:** DOCS_ONLY on separate topic branch from protected `v1` `9ae9b5f6a6520b3a3a1cc9b8d0120ee66bb41247` (S1 PASS, S2 NOT_STARTED); no Go code, production host, native Incus/Box, old main, previous original UNKNOWN, version, tag or release changed. Owner wants earlier independent v1 development capability without postponing security or S4/S5 obligations.
