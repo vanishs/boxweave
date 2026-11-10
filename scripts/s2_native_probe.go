@@ -183,8 +183,25 @@ func main() {
 	check(len(inv.Tools) == len(expected), "13/13 actual S1+S2 discovery")
 	for _, t := range inv.Tools {
 		check(expected[t.Name], "unexpected Tool "+t.Name)
+		// A real SDK ListTools over HTTP must advertise safety/caching
+		// annotations, not just tool names in local registration code.
+		read := map[string]bool{
+			"host_status": true, "box_list": true, "box_get": true,
+			"operation_get": true, "operation_list": true,
+			"operation_output_get": true,
+		}[t.Name]
+		check(t.Annotations != nil && t.Annotations.ReadOnlyHint == read &&
+			t.Annotations.IdempotentHint == read &&
+			t.Annotations.OpenWorldHint != nil && !*t.Annotations.OpenWorldHint &&
+			t.Annotations.DestructiveHint != nil,
+			"actual advertised MCP annotations do not match tool mutation/reader contract: "+t.Name)
+		if read {
+			check(!*t.Annotations.DestructiveHint,
+				"read-only MCP Tool advertised destructive action: "+t.Name)
+		}
 	}
 	fmt.Println("S2_NATIVE_MCP_DISCOVERY_13_OF_13=PASS")
+	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
 
 	denied, err := view.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
 		Arguments: map[string]any{"name": "s2-denied", "idempotency_key": "native-viewer-create-denied-01"}})
