@@ -13,10 +13,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// Count wire-level progress notifications on the official MCP client.
+// Immediate durable Tool admission must not fabricate progress for native work.
+var nativeProgressNotifications atomic.Int64
 
 type bearer struct{ token string }
 
@@ -74,7 +79,11 @@ func wait(ctx context.Context, s *mcp.ClientSession, opID string) map[string]any
 	panic("native operation wait exceeded independent 210s budget")
 }
 func connect(ctx context.Context, url, token string) *mcp.ClientSession {
-	c := mcp.NewClient(&mcp.Implementation{Name: "s2-native-independent-prober", Version: "1"}, nil)
+	c := mcp.NewClient(&mcp.Implementation{Name: "s2-native-independent-prober", Version: "1"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(context.Context, *mcp.ProgressNotificationClientRequest) {
+			nativeProgressNotifications.Add(1)
+		},
+	})
 	session, err := c.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint: url, HTTPClient: &http.Client{Transport: bearer{token: token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
@@ -212,7 +221,14 @@ func main() {
 	key := "native-s2-create-once-20261110"
 	args := map[string]any{"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
 		"start": false, "idempotency_key": key, "work_ref": "lab/s2", "agent_ref": "prober-01"}
-	created := call(ctx, admin, "box_create", args)
+// Official SDK progress-token request: native asynchronous admission is
+	// immediately durable and is not a long-lived MCP progress stream.
+	createWithProgress := &mcp.CallToolParams{Name: "box_create", Arguments: args}
+	createWithProgress.SetProgressToken("s2-native-create-optional-progress-001")
+	createResponse, createErr := admin.CallTool(ctx, createWithProgress)
+	check(createErr == nil && createResponse != nil && !createResponse.IsError,
+		"progress-token native create failed immediate durable admission")
+	created := decoded(createResponse)
 	original := id(created)
 	again := call(ctx, admin, "box_create", args)
 	check(id(again) == original, "same key unexpectedly created second operation")
@@ -794,5 +810,12 @@ func main() {
 	wait(ctx, admin, id(lastDelete))
 	fmt.Println("S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED=PASS")
 
+// The original SDK request had a legitimate progress token. S2 does not
+	// advertise or send synthetic progress for detached native operations.
+	// A finite post-completion grace period also catches delayed notifications.
+	time.Sleep(200 * time.Millisecond)
+	check(nativeProgressNotifications.Load() == 0,
+		"native async operation emitted unexpected MCP progress notification")
+	fmt.Println("S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS=PASS")
 	fmt.Println("S2_NATIVE_END_TO_END=PASS")
 }
