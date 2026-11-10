@@ -26,12 +26,12 @@ func require(cond bool, msg string) {
 func admission(project, actorID string) state.Admission {
 	return state.Admission{
 		Layer: project, ActorID: actorID, TokenID: actorID,
-		Key: "s2-wal-committing-native-ack-immutable-key-01",
-		Action: "box_update",
-		SafeIntent: []byte("{\"fixture\":\"original-native-already-dispatched\"}"),
+		Key:         "s2-wal-committing-native-ack-immutable-key-01",
+		Action:      "box_update",
+		SafeIntent:  []byte("{\"fixture\":\"original-native-already-dispatched\"}"),
 		ResourceKey: "s2-fsync-lab:original-native-dispatched",
-		RequestID: "s2-fsync-original-request",
-		WorkRef: "lab/sqlite-fsync", AgentRef: "one-use-fault",
+		RequestID:   "s2-fsync-original-request",
+		WorkRef:     "lab/sqlite-fsync", AgentRef: "one-use-fault",
 	}
 }
 
