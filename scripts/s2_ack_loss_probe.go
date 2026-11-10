@@ -136,52 +136,66 @@ func testStaleNativeETag(ctx context.Context, s *mcp.ClientSession) {
 		"start": false, "internet": true,
 		"idempotency_key": "native-s2-stale-etag-create-once-001",
 	})
-	if err != nil { panic(err) }
-	originalCreate := field(created,"operation_id")
-	require(originalCreate!="", "native stale-ETag fixture was not admitted")
-	for n:=0; n<100; n++ {
-		ret,err:=invoke(ctx,s,"operation_get",map[string]any{"operation_id":originalCreate,"wait_ms":400})
-		if err!=nil { panic(err) }
-		receipt:=child(ret,"operation")
-		if field(receipt,"state")=="SUCCEEDED" { break }
-		if field(receipt,"state")=="FAILED" || field(receipt,"state")=="UNKNOWN" {
-			panic(fmt.Sprintf("native stale-ETag fixture failed create: %+v",receipt))
-		}
-		if n==99 { panic("native stale-ETag fixture create never completed") }
+	if err != nil {
+		panic(err)
 	}
-	boxID := field(childMustBox(ctx,s,fixture), "box_id")
+	originalCreate := field(created, "operation_id")
+	require(originalCreate != "", "native stale-ETag fixture was not admitted")
+	for n := 0; n < 100; n++ {
+		ret, err := invoke(ctx, s, "operation_get", map[string]any{"operation_id": originalCreate, "wait_ms": 400})
+		if err != nil {
+			panic(err)
+		}
+		receipt := child(ret, "operation")
+		if field(receipt, "state") == "SUCCEEDED" {
+			break
+		}
+		if field(receipt, "state") == "FAILED" || field(receipt, "state") == "UNKNOWN" {
+			panic(fmt.Sprintf("native stale-ETag fixture failed create: %+v", receipt))
+		}
+		if n == 99 {
+			panic("native stale-ETag fixture create never completed")
+		}
+	}
+	boxID := field(childMustBox(ctx, s, fixture), "box_id")
 	require(boxID != "", "no exact owned UUID for ETag fixture")
 	// The proxy advances this exact owned native instance ETag between
 	// BoxWeave's GET and PUT. Its original stale PUT must fail closed.
-	changes:=map[string]any{
+	changes := map[string]any{
 		"box_id": boxID,
-		"cpu": 2, "idempotency_key":"native-s2-stale-etag-update-001",
+		"cpu":    2, "idempotency_key": "native-s2-stale-etag-update-001",
 	}
-	reply,err:=invoke(ctx,s,"box_update",changes)
-	if err!=nil { panic(err) }
-	oid:=field(reply,"operation_id")
-	require(oid!="","stale native ETag original Update not admitted")
-	checkUnknown(ctx,s,oid)
-	again,err:=invoke(ctx,s,"box_update",changes)
-	if err!=nil { panic(err) }
-	require(field(again,"operation_id")==oid && again["duplicate"]==true,
+	reply, err := invoke(ctx, s, "box_update", changes)
+	if err != nil {
+		panic(err)
+	}
+	oid := field(reply, "operation_id")
+	require(oid != "", "stale native ETag original Update not admitted")
+	checkUnknown(ctx, s, oid)
+	again, err := invoke(ctx, s, "box_update", changes)
+	if err != nil {
+		panic(err)
+	}
+	require(field(again, "operation_id") == oid && again["duplicate"] == true,
 		"original stale native ETag operation not returned on same-key replay")
-	mismatch:=map[string]any{
-		"box_id":changes["box_id"],"cpu":3,
-		"idempotency_key":"native-s2-stale-etag-different-key-deny-01",
+	mismatch := map[string]any{
+		"box_id": changes["box_id"], "cpu": 3,
+		"idempotency_key": "native-s2-stale-etag-different-key-deny-01",
 	}
-	rejected,err:=invoke(ctx,s,"box_update",mismatch)
-	require(err!=nil,fmt.Sprintf("stale ETag UNKNOWN lock bypassed with new key: %+v",rejected))
+	rejected, err := invoke(ctx, s, "box_update", mismatch)
+	require(err != nil, fmt.Sprintf("stale ETag UNKNOWN lock bypassed with new key: %+v", rejected))
 	fmt.Println("S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED=PASS")
 }
 
 func childMustBox(ctx context.Context, s *mcp.ClientSession, name string) map[string]any {
-	page,err:=invoke(ctx,s,"box_list",map[string]any{})
-	if err!=nil { panic(err) }
-	raw,ok:=page["boxes"].([]any)
-	require(ok,"owned Box list absent")
-	for _,v:=range raw {
-		if row,ok:=v.(map[string]any); ok && field(row,"name")==name {
+	page, err := invoke(ctx, s, "box_list", map[string]any{})
+	if err != nil {
+		panic(err)
+	}
+	raw, ok := page["boxes"].([]any)
+	require(ok, "owned Box list absent")
+	for _, v := range raw {
+		if row, ok := v.(map[string]any); ok && field(row, "name") == name {
 			return row
 		}
 	}
@@ -199,7 +213,7 @@ func main() {
 	s := session(ctx)
 	defer s.Close()
 	if os.Args[1] == "etag" {
-		testStaleNativeETag(ctx,s)
+		testStaleNativeETag(ctx, s)
 		return
 	}
 	if os.Args[1] == "start" {

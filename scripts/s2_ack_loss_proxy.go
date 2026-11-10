@@ -6,8 +6,8 @@
 package main
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -60,7 +60,9 @@ func main() {
 	var etagUsed atomic.Bool
 	record := func(line string) error {
 		f, err := os.OpenFile(*marker, os.O_WRONLY|os.O_APPEND, 0600)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		defer f.Close()
 		_, err = f.WriteString(line + "\n")
 		return err
@@ -77,44 +79,68 @@ func main() {
 				http.Error(w, "unsafe or unguarded native ETag race", http.StatusBadRequest)
 				return
 			}
-			if !etagUsed.CompareAndSwap(false,true) {
+			if !etagUsed.CompareAndSwap(false, true) {
 				_ = record("UNEXPECTED_SECOND_ETAG_PUT")
-				reverse.ServeHTTP(w,r)
+				reverse.ServeHTTP(w, r)
 				return
 			}
-			d, err := incus.ConnectIncusUnix(*upstreamPath,nil)
-			if err != nil { http.Error(w, "cannot connect to isolated Incus", 502); return }
+			d, err := incus.ConnectIncusUnix(*upstreamPath, nil)
+			if err != nil {
+				http.Error(w, "cannot connect to isolated Incus", 502)
+				return
+			}
 			d = d.UseProject(*project)
 			inst, originalTag, err := d.GetInstance("bw-s2-etag-native-110e")
-			if err != nil { http.Error(w, "owned instance missing", 502); return }
-			if originalTag == "" { http.Error(w, "native ETag missing", 502); return }
-			if inst.Config == nil { inst.Config = map[string]string{} }
+			if err != nil {
+				http.Error(w, "owned instance missing", 502)
+				return
+			}
+			if originalTag == "" {
+				http.Error(w, "native ETag missing", 502)
+				return
+			}
+			if inst.Config == nil {
+				inst.Config = map[string]string{}
+			}
 			inst.Config["user.s2-etag-race"] = "native-proxy-race-witness"
-			op, err := d.UpdateInstance("bw-s2-etag-native-110e",inst.InstancePut,originalTag)
-			if err != nil { http.Error(w, "native race update rejected", 502); return }
-			if err := op.Wait(); err != nil { http.Error(w, "native race update did not settle", 502); return }
+			op, err := d.UpdateInstance("bw-s2-etag-native-110e", inst.InstancePut, originalTag)
+			if err != nil {
+				http.Error(w, "native race update rejected", 502)
+				return
+			}
+			if err := op.Wait(); err != nil {
+				http.Error(w, "native race update did not settle", 502)
+				return
+			}
 			if err := record("ETAG_RACE_NATIVE_CHANGED_BEFORE_STALE_PUT"); err != nil {
-				http.Error(w, "test marker write failed", 502); return
+				http.Error(w, "test marker write failed", 502)
+				return
 			}
 			req := r.Clone(r.Context())
 			req.URL.Scheme = "http"
 			req.URL.Host = "unix.socket"
 			req.RequestURI = ""
 			res, err := transport.RoundTrip(req)
-			if err != nil { http.Error(w,"stale native request failed transport", 502); return }
+			if err != nil {
+				http.Error(w, "stale native request failed transport", 502)
+				return
+			}
 			defer res.Body.Close()
 			if res.StatusCode != http.StatusPreconditionFailed {
 				http.Error(w, fmt.Sprintf("native stale ETag not rejected, status=%d", res.StatusCode), 502)
 				return
 			}
 			if err := record("ETAG_RACE_ORIGINAL_STALE_PUT_REFUSED"); err != nil {
-				http.Error(w, "test marker write failed", 502); return
+				http.Error(w, "test marker write failed", 502)
+				return
 			}
-			for k,values := range res.Header {
-				for _,v := range values { w.Header().Add(k,v) }
+			for k, values := range res.Header {
+				for _, v := range values {
+					w.Header().Add(k, v)
+				}
 			}
 			w.WriteHeader(res.StatusCode)
-			_,_ = io.Copy(w, res.Body)
+			_, _ = io.Copy(w, res.Body)
 			return
 		}
 		if r.Method != http.MethodPost || r.URL.Path != "/1.0/instances" {
@@ -125,21 +151,25 @@ func main() {
 			// After the original Create ACK-drop, only the explicitly
 			// named second ETag fixture is allowed; unexpected repeated
 			// original names become an audit failure (never redelivered).
-			raw,err := io.ReadAll(io.LimitReader(r.Body,1<<20))
-			if err!=nil { http.Error(w,"bad create body",400); return }
+			raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			if err != nil {
+				http.Error(w, "bad create body", 400)
+				return
+			}
 			_ = r.Body.Close()
 			var intent map[string]any
-			if json.Unmarshal(raw,&intent)!=nil || intent["name"]!="bw-s2-etag-native-110e" ||
-				r.URL.Query().Get("project")!=*project {
+			if json.Unmarshal(raw, &intent) != nil || intent["name"] != "bw-s2-etag-native-110e" ||
+				r.URL.Query().Get("project") != *project {
 				_ = record("UNEXPECTED_SECOND_CREATE_POST")
-				http.Error(w,"unapproved second native create",409)
+				http.Error(w, "unapproved second native create", 409)
 				return
 			}
 			r.Body = io.NopCloser(bytes.NewReader(raw))
 			if err := record("ETAG_FIXTURE_CREATE_FORWARDED"); err != nil {
-				http.Error(w,"test marker failure",502); return
+				http.Error(w, "test marker failure", 502)
+				return
 			}
-			reverse.ServeHTTP(w,r)
+			reverse.ServeHTTP(w, r)
 			return
 		}
 		// The native POST is forwarded exactly ONCE. Only AFTER the
