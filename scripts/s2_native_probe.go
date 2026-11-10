@@ -364,7 +364,7 @@ func main() {
 	foreignCancel, foreignCancelErr := admin.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_cancel", Arguments: map[string]any{
 			"target_operation_id": foreignLayerID,
-			"idempotency_key": "native-s2-foreign-layer-cancel-denied-0001"},
+			"idempotency_key":     "native-s2-foreign-layer-cancel-denied-0001"},
 	})
 	check(foreignCancelErr != nil || foreignCancel != nil && foreignCancel.IsError,
 		"configured Project admin requested cancellation of foreign-layer record")

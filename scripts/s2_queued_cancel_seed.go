@@ -74,11 +74,11 @@ func main() {
 	foreignLayer := project + "-foreign"
 	foreign, err := store.Admit(ctx, state.Admission{
 		Layer: foreignLayer, ActorID: actor.ID, TokenID: actor.ID,
-		Key: "native-s2-foreign-layer-same-actor-original-001",
-		Action: "box_exec",
+		Key:        "native-s2-foreign-layer-same-actor-original-001",
+		Action:     "box_exec",
 		SafeIntent: []byte(`{"fixture":"foreign-layer"}`),
-		RequestID: "native-s2-foreign-layer-original",
-		WorkRef: "lab/foreign-layer", AgentRef: "same-admin-foreign-layer",
+		RequestID:  "native-s2-foreign-layer-original",
+		WorkRef:    "lab/foreign-layer", AgentRef: "same-admin-foreign-layer",
 	})
 	if err != nil || foreign.State != "ADMITTED" || foreign.NativeOperationID != "" {
 		panic(fmt.Sprintf("refusing unsafe synthetic foreign-layer fixture: %v", err))
