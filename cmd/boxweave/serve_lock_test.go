@@ -44,7 +44,7 @@ func TestS2ServeLockRefusesSymlinkOrWorldReadableFile(t *testing.T) {
 		_ = f.Close()
 		t.Fatal("symlink to unrelated host file adopted as serve lock")
 	}
-	if err := os.Remove(database+".serve.lock"); err != nil {
+	if err := os.Remove(database + ".serve.lock"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(database+".serve.lock", []byte{}, 0600); err != nil {
