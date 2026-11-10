@@ -69,6 +69,11 @@ test -z "$(sudo incus list --all-projects --format csv -c n)"
 if [ ! -e /dev/loop-control ]; then
   sudo modprobe loop
 fi
+# Loop backing is sparse on the disposable runner root: require real host
+# headroom before allocating any guest/recorded data inside the 4GiB mount.
+host_available_before="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_available_before" -gt 8589934592
+echo "S2_NATIVE_DISPOSABLE_HOST_ROOT_FREE_SPACE_GUARD=PASS"
 truncate -s 4G "$work/exclusive-block.img"
 loop="$(sudo losetup --find --show "$work/exclusive-block.img")"
 test -n "$loop"
@@ -928,6 +933,8 @@ quota_fill_bytes=$((quota_limit - quota_used - quota_headroom))
 test "$quota_fill_bytes" -gt 1073741824
 physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
 test "$physical_available" -gt $((quota_fill_bytes + 268435456))
+host_available_before_fill="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_available_before_fill" -gt $((quota_fill_bytes + 4294967296))
 quota_filler="$native_quota_spool/.boxweave-s2-guest-quota-filler"
 sudo test ! -e "$quota_filler"
 sudo timeout 30s setpriv --bounding-set=-sys_resource --nnp -- \
@@ -949,6 +956,10 @@ s2_quota_native flood > "$work/quota-guest-flood.txt"
 quota_exec_id="$(sed -n 's/^S2_NATIVE_QUOTA_OP_ID=//p' "$work/quota-guest-flood.txt")"
 echo "$quota_exec_id" | grep -Eq '^[0-9a-f-]{36}$'
 grep -Fq 'S2_NATIVE_QUOTA_OP_STATUS=' "$work/quota-guest-flood.txt"
+grep -Fq 'S2_NATIVE_QUOTA_OP_STATUS_CODE=' "$work/quota-guest-flood.txt"
+# Only original Incus native status, operation ID and observed guest exit;
+# no auth material, guest output or arbitrary host paths are logged.
+cat "$work/quota-guest-flood.txt"
 quota_stdout="$(printf '%s/exec_%s.stdout' "$native_quota_spool" "$quota_exec_id")"
 sudo test -f "$quota_stdout"
 quota_stdout_bytes="$(sudo stat -c '%s' "$quota_stdout")"
