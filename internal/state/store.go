@@ -367,8 +367,8 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	// A non-secret digest avoids storing raw client key.
 	keyHash := digest(a.Key)
 	// Labels are stored immutably but are not part of the native intent hash.
-\t// A retry that omits optional attribution reuses the original labels.
-\tintentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
+	// A retry that omits optional attribution reuses the original labels.
+	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Receipt{}, err
