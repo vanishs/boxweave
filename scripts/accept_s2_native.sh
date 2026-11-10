@@ -236,13 +236,20 @@ sudo losetup -d "$noquota_loop"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin2.secret"
-chmod 0600 "$work/admin.secret" "$work/viewer.secret" "$work/admin2.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer -ttl 1s > "$work/expired-viewer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/revoked-viewer.secret"
+chmod 0600 "$work/admin.secret" "$work/viewer.secret" "$work/admin2.secret" "$work/expired-viewer.secret" "$work/revoked-viewer.secret"
+revoked_viewer_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/revoked-viewer.secret")"
+echo "$revoked_viewer_id" | grep -Eq '^[0-9a-f]{32}$'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-revoke -db "$db" -id "$revoked_viewer_id" > "$work/revoked-viewer-result.txt"
 admin="$(sed -n 's/^token=//p' "$work/admin.secret")"
 viewer="$(sed -n 's/^token=//p' "$work/viewer.secret")"
 admin2="$(sed -n 's/^token=//p' "$work/admin2.secret")"
+expired_viewer="$(sed -n 's/^token=//p' "$work/expired-viewer.secret")"
+revoked_viewer="$(sed -n 's/^token=//p' "$work/revoked-viewer.secret")"
 admin_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin.secret")"
 admin2_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin2.secret")"
-test -n "$admin" && test -n "$viewer" && test -n "$admin2"
+test -n "$admin" && test -n "$viewer" && test -n "$admin2" && test -n "$expired_viewer" && test -n "$revoked_viewer"
 echo "$admin_id" | grep -Eq '^[0-9a-f]{32}$'
 echo "$admin2_id" | grep -Eq '^[0-9a-f]{32}$'
 test "$admin_id" != "$admin2_id"
@@ -284,8 +291,12 @@ echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
 sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
   BW_S2_SEED_DB="$db" BW_S2_SEED_PROJECT="$project" \
   BW_S2_SEED_ADMIN_TOKEN="$admin" "$work/s2-queued-cancel-seed" > "$work/queued-cancel-id.txt"
-queued_cancel_id="$(cat "$work/queued-cancel-id.txt")"
+queued_cancel_id="$(sed -n '1p' "$work/queued-cancel-id.txt")"
+foreign_layer_id="$(sed -n '2p' "$work/queued-cancel-id.txt")"
+test "$(wc -l < "$work/queued-cancel-id.txt")" -eq 2
 echo "$queued_cancel_id" | grep -Eq '^[0-9a-f]{32}$'
+echo "$foreign_layer_id" | grep -Eq '^[0-9a-f]{32}$'
+test "$queued_cancel_id" != "$foreign_layer_id"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 
 # The independent official MCP SDK prober temporarily holds one completed
@@ -296,6 +307,8 @@ test -z "$(sudo incus list --all-projects --format csv -c n)"
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
   BW_S2_ADMIN2_TOKEN="$admin2" BW_S2_ADMIN1_ID="$admin_id" \
   BW_S2_ADMIN2_ID="$admin2_id" BW_S2_OUTPUT_WITNESS_DIR="$work" \
+  BW_S2_EXPIRED_TOKEN="$expired_viewer" BW_S2_REVOKED_TOKEN="$revoked_viewer" \
+  BW_S2_FOREIGN_LAYER_OPID="$foreign_layer_id" \
   BW_S2_QUEUED_CANCEL_OPID="$queued_cancel_id" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
 probe_pid=$!
 attempt=0

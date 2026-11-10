@@ -174,9 +174,14 @@ func main() {
 	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
 	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
 	admin2ID := os.Getenv("BW_S2_ADMIN2_ID")
+	expiredToken := os.Getenv("BW_S2_EXPIRED_TOKEN")
+	revokedToken := os.Getenv("BW_S2_REVOKED_TOKEN")
+	foreignLayerID := os.Getenv("BW_S2_FOREIGN_LAYER_OPID")
 	check(strings.HasPrefix(url, "http://127.0.0.1:"), "MCP must be loopback")
 	check(token != "" && viewer != "" && admin2Token != "" && len(admin1ID) == 32 &&
-		len(admin2ID) == 32 && admin1ID != admin2ID, "independent credential identities required")
+		len(admin2ID) == 32 && admin1ID != admin2ID &&
+		expiredToken != "" && revokedToken != "" && len(foreignLayerID) == 32,
+		"independent credential/layer identities required")
 	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute)
 	defer cancel()
 	admin := connect(ctx, url, token)
@@ -342,6 +347,49 @@ func main() {
 	check(ok && len(viewerHistoryRows) == 0,
 		"viewer borrowed 120 admin history operations by self-declared label")
 	fmt.Println("S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE=PASS")
+
+	// The same authenticated actor ID in a different controller layer is
+	// not permission to access that original, even for a scoped admin.
+	foreignRead, foreignErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_get", Arguments: map[string]any{"operation_id": foreignLayerID},
+	})
+	check(foreignErr != nil || foreignRead != nil && foreignRead.IsError,
+		"configured Project admin read cross-layer original by exact ID")
+	foreignPage := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/foreign-layer", "limit": 10,
+	}), "page")
+	foreignRows, ok := foreignPage["operations"].([]any)
+	check(ok && len(foreignRows) == 0,
+		"configured Project admin borrowed foreign-layer work label")
+	foreignCancel, foreignCancelErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_cancel", Arguments: map[string]any{
+			"target_operation_id": foreignLayerID,
+			"idempotency_key": "native-s2-foreign-layer-cancel-denied-0001"},
+	})
+	check(foreignCancelErr != nil || foreignCancel != nil && foreignCancel.IsError,
+		"configured Project admin requested cancellation of foreign-layer record")
+	fmt.Println("S2_NATIVE_SAME_ACTOR_DIFFERENT_LAYER_DENIED=PASS")
+
+	// A revoked or expired token must not invoke the indexed operation API.
+	// These requests go over the actual loopback MCP HTTP gate, while the
+	// positive functional reads above use the official SDK.
+	time.Sleep(2 * time.Second)
+	for _, forbidden := range []struct{ token, label string }{
+		{expiredToken, "expired"}, {revokedToken, "revoked"},
+	} {
+		body := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"operation_list","arguments":{"work_ref":"lab/history-120"}}}`)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+		check(err == nil, "cannot construct expired/revoked history request")
+		req.Header.Set("Authorization", "Bearer "+forbidden.token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		resp, err := http.DefaultClient.Do(req)
+		check(err == nil && resp != nil, forbidden.label+" token request transport failed")
+		check(resp.StatusCode == http.StatusUnauthorized,
+			forbidden.label+" token accessed native MCP history after disqualification")
+		_ = resp.Body.Close()
+	}
+	fmt.Println("S2_NATIVE_EXPIRED_AND_REVOKED_TOKENS_HISTORY_DENIED=PASS")
 
 	name := "bw-s2-ghci-110a"
 	key := "native-s2-create-once-20261110"

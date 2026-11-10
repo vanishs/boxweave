@@ -68,7 +68,25 @@ func main() {
 			panic(fmt.Sprintf("history fixture cancellation %03d: %v", i, err))
 		}
 	}
-	// Keep stdout one exact original queued ID for the caller's existing
-	// safe cancellation witness; history totals are verified over real MCP.
+	// A foreign layer ledger row with the SAME real admin actor credential is
+	// a purely synthetic authorization negative, not a foreign Incus Box.
+	// It must be hidden even from an admin of this server's configured Project.
+	foreignLayer := project + "-foreign"
+	foreign, err := store.Admit(ctx, state.Admission{
+		Layer: foreignLayer, ActorID: actor.ID, TokenID: actor.ID,
+		Key: "native-s2-foreign-layer-same-actor-original-001",
+		Action: "box_exec",
+		SafeIntent: []byte(`{"fixture":"foreign-layer"}`),
+		RequestID: "native-s2-foreign-layer-original",
+		WorkRef: "lab/foreign-layer", AgentRef: "same-admin-foreign-layer",
+	})
+	if err != nil || foreign.State != "ADMITTED" || foreign.NativeOperationID != "" {
+		panic(fmt.Sprintf("refusing unsafe synthetic foreign-layer fixture: %v", err))
+	}
+	if err := store.CancelQueued(ctx, foreignLayer, foreign.ID); err != nil {
+		panic(err)
+	}
+	// Exactly two public test receipts, no credential or native secrets.
 	fmt.Println(r.ID)
+	fmt.Println(foreign.ID)
 }
