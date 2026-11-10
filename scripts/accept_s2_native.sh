@@ -316,7 +316,13 @@ if [ "$disk_witness" = PASS ]; then
   # Incus's instance pathname is a symlink; lsattr on that link yields
   # EOPNOTSUPP. Inspect the real spool directory inode's inherited project ID.
   sudo lsattr -p -d "$native_spool_dir"
-  if sudo timeout 40s fallocate -l 2684354560 "$quota_test" > "$work/quota-fallocate.stderr" 2>&1; then
+  echo "S2_NATIVE_DIR_VOLUME_QUOTA_DIAGNOSTIC"
+  sudo incus storage volume info bw-s2-native-pool container/bw-s2-ghci-110a --project "$project" || :
+  sudo incus config show bw-s2-ghci-110a --expanded --project "$project" | grep -E 'pool:|size:|path:' || :
+  sudo findmnt -n -o FSTYPE,OPTIONS --target "$recorded_stdout" || :
+  # Root with CAP_SYS_RESOURCE may bypass quota even if guest/native writes
+  # cannot. Drop that specific capability for the independent probe.
+  if sudo timeout 40s setpriv --bounding-set=-sys_resource --nnp -- fallocate -l 2684354560 "$quota_test" > "$work/quota-fallocate.stderr" 2>&1; then
     sudo rm -f "$quota_test"
     echo "S2_NATIVE_FAIL: Incus size quota allowed >2GiB native Exec sibling allocation" >&2
     exit 105
