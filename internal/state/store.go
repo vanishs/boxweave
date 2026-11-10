@@ -247,7 +247,12 @@ func (s *Store) init(fresh bool) error {
 			return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
 		}
 		for _, expected := range schemaIndexes {
-			name := strings.Fields(expected)[2]
+			words := strings.Fields(expected)
+			nameOffset := 2 // CREATE INDEX <name>
+			if len(words) > 3 && words[1] == "UNIQUE" {
+				nameOffset = 3 // CREATE UNIQUE INDEX <name>
+			}
+			name := words[nameOffset]
 			if actualIndexes[name] != expected {
 				return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
 			}
