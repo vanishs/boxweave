@@ -52,7 +52,9 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
-		if in.Stream != "stdout" && in.Stream != "stderr" || in.Offset < 0 || in.Limit < 0 || in.Limit > 65536 {
+		if (in.Stream != "stdout" && in.Stream != "stderr") ||
+			in.Offset < 0 || in.Offset > native.MaxRecordedOutputBytes ||
+			in.Limit < 0 || in.Limit > 65536 {
 			return nil, operationOutputResult{}, state.ErrInvalid
 		}
 		if in.Limit == 0 {
@@ -94,6 +96,11 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended = true
 			return &mcp.CallToolResult{}, result, nil
 		}
+		if in.Offset == native.MaxRecordedOutputBytes {
+			result.Ended, result.Truncated = true, true
+			result.NextOffset = in.Offset
+			return &mcp.CallToolResult{}, result, nil
+		}
 		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
 		if err != nil {
 			return nil, operationOutputResult{}, err
@@ -101,6 +108,9 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		result.ContentBase64 = base64.StdEncoding.EncodeToString(data)
 		result.NextOffset = in.Offset + int64(len(data))
 		result.Ended = ended
+		if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
+			result.Ended, result.Truncated = true, true
+		}
 		return &mcp.CallToolResult{}, result, nil
 	})
 

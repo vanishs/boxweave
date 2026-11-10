@@ -220,6 +220,55 @@ func main() {
 	}
 	fmt.Println("S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR=PASS")
 
+	noisy := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "yes x | head -c 70000"},
+		"idempotency_key": "native-s2-noisy-paginated-exec-001"})
+	noisyID := id(noisy)
+	wait(ctx, admin, noisyID)
+	firstPage := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": noisyID, "stream": "stdout", "offset": 0, "limit": 65536})
+	firstBytes, err := base64.StdEncoding.DecodeString(field(firstPage, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(len(firstBytes) == 65536 && firstPage["ended"] == false,
+		"noisy output first page must be bounded, not silently truncated")
+	secondPage := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": noisyID, "stream": "stdout", "offset": 65536, "limit": 65536})
+	secondBytes, err := base64.StdEncoding.DecodeString(field(secondPage, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(len(firstBytes)+len(secondBytes) == 70000 && secondPage["ended"] == true,
+		"noisy output second page did not resume original native evidence")
+	fmt.Println("S2_NATIVE_NOISY_EXEC_PAGINATION_70K=PASS")
+
+	delayed := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 1; printf delayed-ok"},
+		"timeout_ms": 5000, "idempotency_key": "native-s2-delayed-time-bounded-exec-01"})
+	delayedID := id(delayed)
+	wait(ctx, admin, delayedID)
+	delayedOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": delayedID, "stream": "stdout"})
+	delayedData, err := base64.StdEncoding.DecodeString(field(delayedOut, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	check(string(delayedData) == "delayed-ok" && delayedOut["exit_code"] == float64(0) &&
+		delayedOut["command_success"] == true, "bounded delayed Exec lost exit/output")
+	fmt.Println("S2_NATIVE_DELAYED_EXEC_TIMEOUT_BUDGET=PASS")
+
+	quiet := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/true"},
+		"idempotency_key": "native-s2-quiet-exec-zero-001"})
+	quietID := id(quiet)
+	wait(ctx, admin, quietID)
+	quietOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": quietID, "stream": "stdout"})
+	check(field(quietOut, "content_base64") == "" && quietOut["ended"] == true &&
+		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
+	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
+
 	// Native detached/recorded Exec cannot be cancelled after it finishes.
 	// The cancellation request has its own failed receipt and must not
 	// retroactively change the original verified guest completion.

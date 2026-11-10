@@ -571,6 +571,10 @@ func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence, error) {
 	return out, nil
 }
 
+// MaxRecordedOutputBytes is a per-stream public read budget, not an assertion
+// that native Incus has already truncated the underlying recorded log.
+const MaxRecordedOutputBytes int64 = 16 << 20
+
 // verifiedRecordedOutputURL builds the URL expected by official SDK DoHTTP.
 // Unlike typed Incus queries, DoHTTP does not add the Project selector or
 // complete a relative URL. Both must be supplied from trusted SDK connection
@@ -596,8 +600,15 @@ func verifiedRecordedOutputURL(base, path, project string) (string, error) {
 // authenticated DoHTTP transport; URLs come only from verified native
 // operation metadata already journaled by BoxWeave, not from the client.
 func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, length int64) ([]byte, bool, error) {
-	if offset < 0 || length < 1 || length > 65536 || execPath(path) == "" {
+	if offset < 0 || offset > MaxRecordedOutputBytes ||
+		length < 1 || length > 65536 || execPath(path) == "" {
 		return nil, false, ErrNativeUnsupported
+	}
+	if offset == MaxRecordedOutputBytes {
+		return []byte{}, true, nil
+	}
+	if length > MaxRecordedOutputBytes-offset {
+		length = MaxRecordedOutputBytes-offset
 	}
 	c, err := r.confined(ctx)
 	if err != nil {
