@@ -67,7 +67,6 @@ func inspectDirPoolFilesystem(poolName, path, rootPath string) (uint64, bool, er
 	return free, separate, nil
 }
 
-
 // dirProjectQuotaMountReady is a conservative, read-only Linux mount
 // precondition. Incus 7.6 silently skips dir volume size quotas if project
 // quotas are unsupported; a valid size string alone is not quota evidence.

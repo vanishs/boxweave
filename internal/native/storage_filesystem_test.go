@@ -66,7 +66,6 @@ func TestS1PoolNameMayNotEscapeCanonicalPath(t *testing.T) {
 	}
 }
 
-
 // The longest effective mount wins. A project-quota mount hidden by a
 // non-quota bind mount is NOT proof that the selected native pool is safe.
 func TestS2QuotaMountSourceMustBeRealEnabledExt4OrXFS(t *testing.T) {
