@@ -56,6 +56,8 @@ If a local item cannot be repaired after a concrete reproduction and bounded rea
 
 **Environmental Cowsql issue:** nested Incus missing leader is recorded as **environment-only** until evidence proves otherwise. Never create a BoxWeave Incus/Cowsql database fixer/daemon; only ordinary exact-identity UNKNOWN reconciliation is within scope. See [final SDK evidence](../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md).
 
+**Broader Agent resumption uses a separate [client Task Checkpoint](TASK_CHECKPOINT_CONTRACT.md) for objective/Git/decisions and [native Operation receipts](../design/AGENT_OPERATION_CONTINUITY.md) for actual effects.** On interruption, read both then independently verify Git/CI/Incus state and original Operation before any new mutation. Work/Agent labels are untrusted audit references, not permissions or a concurrency lock. [Stage TC tests](../verification/CONTINUITY_ACCEPTANCE.md) require this in installed practice.
+
 ## 4. Continuity and context-compaction safety
 
 The execution log is an **append-only decision and operations trail**, not an infinitely growing prompt. Its [current checkpoint](EXECUTION_LOG.md#current-checkpoint) and newest entries have priority; read older entries by link/run ID only for a specific failure. If it grows too large, archive an older date range under docs/development/logs/ and preserve an index/link; do not discard incident IDs, decisions or test proofs.

@@ -29,6 +29,10 @@ Implement exclusive create only after verifying safe path traversal, symlink/har
 5. Run partial/error/restart/caller-disconnect scenarios: admitted mutation receipt remains durable, no accidental host-shell redirection, no false successful partial writes, test source SHA and guest Box identity recorded; the Guest needs **no BoxWeave Agent, SSH daemon or embedded Git helper API**.
 6. Fix code and docs on each discrepancy; rerun original failing test, regression and all earlier S1/S2 interfaces affected by file/Exec changes.
 
+## New TC-015–TC-016: true Agent handoff with guest Git evidence
+
+Use the [lightweight client-owned Task Checkpoint](../TASK_CHECKPOINT_CONTRACT.md), not a BoxWeave Tool or DB. [TC-015–TC-016](../../verification/CONTINUITY_ACCEPTANCE.md) require an interrupted Agent, actual guest Git SHA/dirty source, original failing test output via original Operation, a second Agent's safe fix/retest and independent postread. Two writers to checkpoint Git/external storage must detect revision conflicts; don't expose guest secrets. Full S3 file Tool and native CAS/security tests are unchanged.
+
 ## Phase acceptance and explicit carry-over
 
 Require at least one **real** end-to-end agent development loop with a failing and passing test plus native guest evidence, both actor roles and denied host/foreign/special-file access, safe memory/output limits, consistent original receipt after reconnect and owned-resource cleanup.

@@ -19,6 +19,10 @@ The tracking ID can appear in structured MCP tool results, safe diagnostic error
 
 Do not reuse BoxWeave's tracking IDs as native Incus UUIDs, file-path selectors, access tokens, or permission claims. Never treat a caller-provided `tracking_id` or HTTP tracing header as proof of authority or a unique task identity.
 
+## Optional work and Agent correlation — untrusted labels
+
+The [continuity design](AGENT_OPERATION_CONTINUITY.md) distinguishes authenticated `actor_id`/`token_id` from client-declared `work_ref` (broader work) and `agent_ref` (one execution). Neither label grants access, and SDK `clientInfo` identifies client software, not a trustworthy Agent. Normalize bounded optional SDK `_meta` or a tested optional existing-Tool parameter, reject conflicts **before admission**, and persist only safe original immutable labels. The [external Task Checkpoint](../development/TASK_CHECKPOINT_CONTRACT.md) may reference these IDs, Git SHA, evidence and next safe reads; it is not managed by BoxWeave. [TC matrix](../verification/CONTINUITY_ACCEPTANCE.md).
+
 ## Go `context.Context` propagation
 
 ```text

@@ -29,6 +29,21 @@
 
 **MCP future compatibility, no new S2 feature:** At the Operation receipt/output subtask, read the [Tasks extension future-adapter seam](../../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md) **only to avoid welding transport sessions, ad-hoc task IDs or client polling to business durability**. Keep stable typed result/operation ID and native evidence usable by all current clients. Do **not** implement or advertise `tasks/*` during S2 or add a speculative schema field, task worker or 21st MCP Tool. S2's original security, crash and UNKNOWN acceptance remains mandatory.
 
+## S2 additional implementation pack — 4 MCP + 4 domain
+
+Use [tagged SDK study](../../research/MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md), [continuity design](../../design/AGENT_OPERATION_CONTINUITY.md) and **mandatory [TC-001–TC-010](../../verification/CONTINUITY_ACCEPTANCE.md)** only at the affected subtask.
+
+1. **MCP `_meta`** via official SDK: optional bounded work/Agent labels, tested Tool-argument fallback for clients without custom metadata, never authorization.
+2. **MCP middleware:** one redacted request/method/actor/timing hook, no raw guest data or tracing server.
+3. **MCP typed output:** original IDs, last verified evidence and safe read-next hint; legacy text fallback.
+4. **MCP progress:** optional notification only for a still-live request when client/token supports it; does **not** delay immediate durable async admission.
+5. **Domain durability:** finish original worker/Incus postread, UNKNOWN and keyed replay prevention; reviewed safe migration/backups from exact S1 SQLite schema v1 before changing DDL.
+6. **Domain identity:** persist untrusted `work_ref`/`agent_ref` **once**, with trusted authenticated actor and immutable original receipt.
+7. **Domain search:** extend **existing** `operation_list` with bounded indexed, authorized actor/work/agent/state/time filters and private cursors.
+8. **Domain recovery:** deterministic structured `READ_OPERATION/READ_OUTPUT/INSPECT_OWNED_BOX/HOST_LOCAL_REVIEW/NONE` only; no automatic redo.
+
+**Extra small SDK wins:** correct Tool read-only/destructive/idempotency annotations, authenticated private cache, SDK-native old/new negotiated protocol errors. [MCP Tasks](../../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md) remains future adapter only, no task database or new Tool. All original S2 native and security tests still apply.
+
 ## Test and negative matrix
 
 - Real native create/read/list/start/stop/update/delete against the **same exact binary/instance UUID**; new image, storage pool, start=false, restart, nesting availability, name reuse, foreign Box, forged stale IDs, and omission-vs-zero/clear fields.

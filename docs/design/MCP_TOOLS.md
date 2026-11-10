@@ -2,6 +2,8 @@
 
 **Status:** accepted design only; no v1 runtime code exists. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
 
+**Continuity enhancement to existing Tools, not extra Tools:** [single design](AGENT_OPERATION_CONTINUITY.md) and [TC tests](../verification/CONTINUITY_ACCEPTANCE.md) extend S2 receipts and `operation_list/get/output_get` with authorized optional work/Agent correlation, structured evidence and safe next reads. Authenticated principal and untrusted label must never be confused.
+
 ## P0 — 20 tools
 
 | Tool | Kind | Contract |

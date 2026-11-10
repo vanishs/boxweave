@@ -29,6 +29,10 @@
 
 **Optional protocol observation, not a new gate:** For the actual development Agent/client, record current negotiated MCP version and whether it advertises `io.modelcontextprotocol/tasks` (if observable without invasive instrumentation). See the [future Tasks adapter research](../../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md). **BRIDGEHEAD must PASS or NO_GO using the existing S2 Operation receipts**; future Tasks support cannot substitute for a working actual Agent path, independent recovery evidence or a missing native result, and lack of Tasks support is **not** a failure of the currently agreed BH matrix.
 
+## Extra two-Agent native interruption verification (TC-011–TC-014)
+
+Alongside all original BH-001–BH-017, prove [TC-011–TC-014](../../verification/CONTINUITY_ACCEPTANCE.md) on independent authorized native state: two separately authenticated Agents use the same optional `work_ref` with distinct original `agent_ref`/keys; one disconnects after native dispatch and another uses its external [Task Checkpoint](../TASK_CHECKPOINT_CONTRACT.md) plus exact `operation_get`/UUID readback to continue **without repeating native effects**. Verify original UNKNOWN, rotated/revoked token, no Agent-label impersonation privilege and actual client compatibility (custom `_meta` if supported; safe Tool-input fallback if not). A stuck client may be unable to issue a second probe. No MCP Tasks extension or external deployment permission is implied. LAB_PASS remains separate from owner-authorized HOST_GO.
+
 ## Stronger mid-project acceptance contract
 
 The authoritative [BH-001–BH-017 matrix](../../verification/BRIDGEHEAD_ACCEPTANCE.md) is **additional** to S1/S2, not an alternative to any S1–S5 A-/SDK-G case. Each MUST have actual scoped evidence (`I` installed MCP/CLI, `N` native Incus/kernel/packet and `V` independent native post-read/Verifier as specified), exact binary/source and host/layer identities, explicit negatives and cleanup/rollback. A single mandatory security, persistence, foreign-resource, nesting or rollback failure means **BRIDGEHEAD != PASS** and **no pilot promotion**.

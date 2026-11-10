@@ -24,6 +24,8 @@ Evidence: **T** source/fixture-only support; **I** exact installed v1 MCP/host-l
 | **BH-016** | Exact-name/UUID task-owned cleanup or explicitly retained parent Box A with audit, preserved original unrelated UNKNOWN resources, verified old `main` availability, independent candidate-stop/fallback, no stable pointer/version tag/release claim. | I+N+V |
 | **BH-017** | **Physical-host-specific approval and postflight:** owner explicitly authorizes a named host, Project, service user, pool, network, ports and rollback; pre/post independently verify no old-main/foreign/native daemon disruption. Same-host Incus/Cowsql/storage failures are shared failure domain and block host GO even if isolated VM passed. | I+N+V |
 
+**New mandatory TC-011–TC-014 in addition to BH-001–BH-017:** two separately authenticated Agent clients on a disposable authorized native controller, work correlation with no privilege transfer, client disconnect after admission, independent Agent recovery using original Operation/native ID + [external checkpoint](../development/TASK_CHECKPOINT_CONTRACT.md), and no duplicate effect. The intended real Agent client's `_meta` support is tested rather than assumed. Original UNKNOWN and token rotation remain protected; LAB_PASS is not host authorization. [TC matrix](CONTINUITY_ACCEPTANCE.md).
+
 ## Two distinct verdicts, never collapsed
 
 **LAB_PASS** means BH-001–BH-016 passed on a real, isolated native host (with BH-010 executed as L0 on that disposable native host). It is **not** physical `dev` host ready. A physical host without explicit authorization is **HOST_NOT_AUTHORIZED**; failed shared-host baseline is **HOST_NO_GO**, not a pass.

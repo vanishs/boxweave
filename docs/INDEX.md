@@ -20,6 +20,8 @@ The **v1 base** started as a design-only baseline but now contains a real instal
 |---|---|
 | What is BoxWeave? | [Product](product/PRODUCT.md) |
 | Which permanent boundaries override superseded v1 plans? | [Permanent product boundary](decisions/PRODUCT_BOUNDARY.md) |
+| What supports multiple Agents, attributed native operations and safe restart? | [Agent Operation Continuity contract](design/AGENT_OPERATION_CONTINUITY.md) · [TC-001–TC-020 acceptance](verification/CONTINUITY_ACCEPTANCE.md) |
+| How is an Agent's broader goal/Git state checkpointed without new BoxWeave Tools? | [Lightweight client-owned Task Checkpoint](development/TASK_CHECKPOINT_CONTRACT.md) |
 | What is the primary P0 Agent workflow? | [Sustainable development loop](product/DEVELOPMENT_LOOP.md) |
 | How to simulate a real LAN Hello World, failed delete, nested candidate and release? | [Fault-driven release scenarios](verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) |
 | What is in/out? | [Scope](product/SCOPE.md) |
@@ -43,6 +45,8 @@ The **v1 base** started as a design-only baseline but now contains a real instal
 | How are dependency versions reconciled? | [Dependency lifecycle](process/DEPENDENCY_LIFECYCLE.md) |
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |
 | How is Incus integrated? | [Incus integration](design/INCUS_INTEGRATION.md) |
+| What small tagged Go SDK capabilities could improve Agent safety without expanding Tool count? | [SDK v1.8.0 continuity and Tool annotation/cache research](research/MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md) |
+| What is reusable from Temporal, LangGraph and CrewAI? | [Framework durability/Agent identity/visibility comparison](research/AGENT_CONTINUITY_FRAMEWORKS_2026-11-10.md) |
 | Which official SDK behaviors constrain the v1 architecture? | [Official Incus + MCP SDK fit review](research/OFFICIAL_SDK_FIT_2026-11-07.md) |
 | How does each of the 20 public MCP tools map to native SDK methods? | [Native SDK mapping: 20/20 tools](research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) |
 | Which further SDK call semantics still affect v1's design? | [Second-pass SDK gap closure: Tool auth, Bridge ACL, files, Exec, wait and Project bootstrap](research/SDK_GAP_CLOSURE_2026-11-07.md) |
