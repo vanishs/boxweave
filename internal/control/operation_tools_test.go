@@ -249,7 +249,9 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	actor, err := store.VerifyToken(ctx, admin)
-	if err != nil {t.Fatal(err)}
+	if err != nil {
+		t.Fatal(err)
+	}
 	boxID := "native-uuid-stale"
 	key := "s2-deleted-original-key-00001"
 	original, err := store.Admit(ctx, state.Admission{
@@ -257,28 +259,42 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 		Action: "box_delete", RequestID: "original-delete",
 		ResourceKey: "box:deleted-name", BoxUUID: boxID, Incarnation: boxID,
 		SafeIntent: []byte(`{"box_id":"native-uuid-stale"}`),
-		WorkRef: "deleted/old-work", AgentRef: "first-agent",
+		WorkRef:    "deleted/old-work", AgentRef: "first-agent",
 	})
-	if err != nil {t.Fatal(err)}
-	if err = store.Claim(ctx, original.ID); err != nil {t.Fatal(err)}
-	if err = store.Unknown(ctx, original.ID, "DISPATCHING", "LOST_NATIVE_ACK"); err != nil {t.Fatal(err)}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Claim(ctx, original.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Unknown(ctx, original.ID, "DISPATCHING", "LOST_NATIVE_ACK"); err != nil {
+		t.Fatal(err)
+	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "s2-replay-after-delete", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: httpServer.URL + "/mcp",
-		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: admin}},
+		Endpoint:             httpServer.URL + "/mcp",
+		HTTPClient:           &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: admin}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
-	if err != nil {t.Fatal(err)}
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer session.Close()
 	out, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "box_delete", Arguments: map[string]any{
 		"box_id": boxID, "idempotency_key": key,
 	}})
-	if err != nil || out.IsError {t.Fatalf("original delete was not read-only replayed: %+v %v", out, err)}
+	if err != nil || out.IsError {
+		t.Fatalf("original delete was not read-only replayed: %+v %v", out, err)
+	}
 	encoded, err := json.Marshal(out.StructuredContent)
-	if err != nil {t.Fatal(err)}
+	if err != nil {
+		t.Fatal(err)
+	}
 	var found state.Receipt
-	if err = json.Unmarshal(encoded, &found); err != nil {t.Fatal(err)}
+	if err = json.Unmarshal(encoded, &found); err != nil {
+		t.Fatal(err)
+	}
 	if found.ID != original.ID || found.TrackingID != original.TrackingID ||
 		!found.Duplicate || found.State != "UNKNOWN" ||
 		found.WorkRef != "deleted/old-work" || found.NextAction.Kind != "HOST_LOCAL_REVIEW" {
