@@ -232,11 +232,11 @@ func main() {
 		"target_operation_id": queuedID,
 		"idempotency_key":     "native-s2-queued-cancel-tool-original-01",
 	}
-	cancel := call(ctx, admin, "operation_cancel", cancelArgs)
-	cancelOp := child(cancel, "cancel_operation")
-	cancelID := id(cancelOp)
-	check(cancelID != queuedID, "cancel forged original native Operation")
-	cancelFinal := wait(ctx, admin, cancelID)
+	queuedCancelResponse := call(ctx, admin, "operation_cancel", cancelArgs)
+	cancelOp := child(queuedCancelResponse, "cancel_operation")
+	queuedCancelID := id(cancelOp)
+	check(queuedCancelID != queuedID, "cancel forged original native Operation")
+	cancelFinal := wait(ctx, admin, queuedCancelID)
 	check(field(cancelFinal, "native_operation_id") == "",
 		"queued cancellation invented a native Incus operation")
 	originalCancelled := child(call(ctx, admin, "operation_get", map[string]any{
@@ -245,7 +245,7 @@ func main() {
 		field(originalCancelled, "native_operation_id") == "",
 		"original queued claim not cancelled without native dispatch")
 	cancelReplay := call(ctx, admin, "operation_cancel", cancelArgs)
-	check(id(child(cancelReplay, "cancel_operation")) == cancelID &&
+	check(id(child(cancelReplay, "cancel_operation")) == queuedCancelID &&
 		child(cancelReplay, "cancel_operation")["duplicate"] == true,
 		"same cancel key did not replay original cancellation")
 	queuedPage := child(call(ctx, admin, "operation_list", map[string]any{
