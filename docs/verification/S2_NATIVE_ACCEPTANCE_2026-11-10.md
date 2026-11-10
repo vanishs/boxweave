@@ -243,6 +243,49 @@ SQLite commit, public HTTPS WAN and on-disk native Exec log retention
 remain S2 gaps. Neither ETag test nor cleanup affected any historical
 UNKNOWN Box or shared Incus.
 
+## Single active SQLite server, real in-flight guest Exec — accepted S2 CI
+
+Exact source `12855a16115ce4002d216f546a233e3de850ccea`,
+installed candidate binary SHA256
+`6313dab94aadde586cccdda248954f825c137852823b32931fd59625bc958167`.
+[Actual MCP/Incus 7.6 native job](https://github.com/vanishs/boxweave/actions/runs/42875681656/job/130038241566),
+[build/race](https://github.com/vanishs/boxweave/actions/runs/42875694146/job/130038287822)
+and [quality](https://github.com/vanishs/boxweave/actions/runs/42875681519/job/130038243404)
+all **SUCCESS**.
+
+- Added `cmd/boxweave/serve_lock.go`: an OS kernel exclusive flock on a
+  private service-user-only 0600 lock file is obtained **before** startup
+  `Store.Recover`. A second `serve` using the same absolute SQLite path
+  fails non-blocking with a clear message; neither the first process nor its
+  live Operations are modified. Symlinks, hardlinked lock files, wrong
+  ownership and unsafe modes fail closed. The lock file stays at rest
+  (never unlinked while another process could hold the inode). Non-serve
+  local commands such as `status` can still read authorized state.
+- `S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS`:
+  native installed first service accepted external local `status`; a
+  second separate real `serve` process with the exact same SQLite and
+  different listener was refused without changing the first service.
+- `S2_NATIVE_DUPLICATE_SERVE_DURING_REAL_EXEC_NO_RECOVERY=PASS`:
+  after actual guest Exec produced a native Operation ID and an original
+  SQLite VERIFYING record, independent administrator launched another
+  `serve` and independently read SQLite in read-only mode. The second
+  service was denied before recovery, and the live original was not
+  rewritten as UNKNOWN by the second process.
+- `S2_NATIVE_EXACT_SERVICE_PROCESS_KILLED=PASS`,
+  `S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED=PASS` and
+  `S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS` reprove
+  that a real SIGKILL releases the kernel lock; the only next owner
+  can reopen the same original DB, conservatively mark formerly
+  in-flight native work UNKNOWN and preserve the previously completed
+  stdout/stderr/exit evidence. No native work is automatically retried.
+- The complete real native Create lost-ACK, stale ETag, dual-stack guest
+  packet matrix, 16MiB bounded output and independent test-Box cleanup
+  reran in the same exact CI.
+
+**Unclosed:** interrupted SQLite commits, accepted Update ACK loss,
+full log-on-disk storage bounds, public WAN positive control and remaining
+TC/A-case negative tests. This is not a full S2 phase PASS.
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
