@@ -1,6 +1,6 @@
 # End-to-end Tracking ID, Go context, and asynchronous execution — P0
 
-**Owner decision:** Async-first operations and durable Tracking IDs, with safe execution context propagated as far as practical throughout each BoxWeave layer. This is a central product contract, not a logging-only feature. No v1 implementation exists yet.
+**Owner decision:** Async-first operations and durable Tracking IDs, with safe execution context propagated as far as practical throughout each BoxWeave layer. This is a central product contract, not a logging-only feature. **S1 has implemented the initial journal/admission/tracking foundation; S2 must still complete lifecycle tools and real operation retrieval/output.**
 
 ## Identity vocabulary: do not conflate identifiers
 
@@ -12,6 +12,8 @@
 | `native_operation_id` | Incus, where available | An upstream execution handle. May be absent or expire; never replace the BoxWeave operation ID. |
 | `trace_id` / `span_id` | Internal bounded diagnostic instrumentation | Correlate checked component transitions; trace/span data is **optional internal logging only**, not a separate product feature, store or required public identifier. Do not expose a generic tracing backend or secret-bearing logs to MCP. |
 | `idempotency_key` | **Required caller input for every mutating tool** | Client generates once per logical mutation and reuses on retry. Persist unique (layer/actor/key), then compare canonical action+intent (including exact native target identity when one exists). Conflicting reuse is denied. A new `box_create` has no UUID before admission. Not a tracking/operation ID or credential. |
+
+**Future extension vocabulary only:** `taskId` (MCP Tasks protocol handle, when officially supported) is a **different optional identifier** from both `operation_id` and `native_operation_id`, and its lifetime/authorization may differ. Do not add it to the S1/S2 schema solely as preparation. [Future adapter seam and Task semantics](../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md).
 
 The tracking ID can appear in structured MCP tool results, safe diagnostic errors, local CLI output and internal logs. Protocol-level MCP errors that cannot use a tool result include a safe correlation identifier where the protocol permits. An unauthenticated request may receive an opaque request ID but never a private operation trace. `operation_get`, `operation_list` and `operation_output_get` remain authorization- and ownership-scoped.
 
