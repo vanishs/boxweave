@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/vanishs/boxweave/internal/state"
 )
@@ -36,7 +37,7 @@ func admission(project, actorID string) state.Admission {
 }
 
 func main() {
-	if len(os.Args) != 2 || (os.Args[1] != "prepare" && os.Args[1] != "ack" && os.Args[1] != "verify") {
+	if len(os.Args) != 2 || (os.Args[1] != "prepare" && os.Args[1] != "ack" && os.Args[1] != "verify" && os.Args[1] != "diskfull") {
 		panic("explicit test-only mode required")
 	}
 	db, token, project := os.Getenv("BW_S2_FSYNC_DB"), os.Getenv("BW_S2_FSYNC_TOKEN"), os.Getenv("BW_S2_FSYNC_PROJECT")
@@ -87,6 +88,57 @@ func main() {
 		// An untriggered native acknowledgment is a deliberate CI FAILURE.
 		err = s.NativeAck(ctx, r.ID, fixtureNativeID)
 		panic(fmt.Sprintf("WAL fsync kill was not injected; NativeAck err=%v", err))
+	case "diskfull":
+		// A distinct small loop-mounted ext4 filesystem was created by the
+		// one-use GH CI runner. Its block device must NOT be the host root.
+		// Fill that real filesystem only after SQLite has already opened and
+		// verified the original, then require NativeAck to fail before commit.
+		r, err := s.Replay(ctx, a)
+		require(err == nil && r.State == "DISPATCHING" && r.NativeOperationID == "",
+			"disk-full fixture did not start with original durably claimed")
+		var fs syscall.Statfs_t
+		dir := filepath.Dir(db)
+		if err := syscall.Statfs(dir, &fs); err != nil {
+			panic(err)
+		}
+		available := uint64(fs.Bavail) * uint64(fs.Bsize)
+		require(available > 8<<20 && available < 256<<20,
+			"disk-full probe not on its own small, unused ext4 loop")
+		root, err := os.Stat("/")
+		if err != nil {
+			panic(err)
+		}
+		mounted, err := os.Stat(dir)
+		if err != nil {
+			panic(err)
+		}
+		rootSys, rootOK := root.Sys().(*syscall.Stat_t)
+		mountSys, mountOK := mounted.Sys().(*syscall.Stat_t)
+		require(rootOK && mountOK && rootSys.Dev != mountSys.Dev,
+			"refusing SQLite FULL test on host-root filesystem")
+		filler := filepath.Join(dir, ".s2-sqlite-diskfull-only-filler")
+		f, err := os.OpenFile(filler, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			panic(err)
+		}
+		reserve := int64(available) - int64(fs.Bsize)
+		if err := syscall.Fallocate(int(f.Fd()), 0, 0, reserve); err != nil {
+			_ = f.Close()
+			panic(fmt.Sprintf("independent ext4 quota filler setup failed: %v", err))
+		}
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+		if err := syscall.Statfs(dir, &fs); err != nil {
+			panic(err)
+		}
+		require(uint64(fs.Bavail)*uint64(fs.Bsize) <= 2*uint64(fs.Bsize),
+			"isolated filesystem not actually near ENOSPC")
+		err = s.NativeAck(ctx, r.ID, fixtureNativeID)
+		require(err != nil, "original NativeAck unexpectedly committed when ext4 full")
+		// Never remove the filler inside this actor; the CI supervisor
+		// removes only its exact file after recording this failure.
+		fmt.Println("S2_SQLITE_REAL_SEPARATE_EXT4_DISK_FULL_NATIVE_ACK_REFUSED=PASS")
 	case "verify":
 		before, err := s.Replay(ctx, a)
 		require(err == nil && (before.State == "DISPATCHING" || before.State == "VERIFYING"),
