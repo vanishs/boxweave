@@ -221,7 +221,7 @@ func main() {
 	key := "native-s2-create-once-20261110"
 	args := map[string]any{"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
 		"start": false, "idempotency_key": key, "work_ref": "lab/s2", "agent_ref": "prober-01"}
-// Official SDK progress-token request: native asynchronous admission is
+	// Official SDK progress-token request: native asynchronous admission is
 	// immediately durable and is not a long-lived MCP progress stream.
 	createWithProgress := &mcp.CallToolParams{Name: "box_create", Arguments: args}
 	createWithProgress.SetProgressToken("s2-native-create-optional-progress-001")
@@ -810,7 +810,7 @@ func main() {
 	wait(ctx, admin, id(lastDelete))
 	fmt.Println("S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED=PASS")
 
-// The original SDK request had a legitimate progress token. S2 does not
+	// The original SDK request had a legitimate progress token. S2 does not
 	// advertise or send synthetic progress for detached native operations.
 	// A finite post-completion grace period also catches delayed notifications.
 	time.Sleep(200 * time.Millisecond)
