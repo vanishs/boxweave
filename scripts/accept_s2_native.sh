@@ -271,21 +271,27 @@ if sudo test -d "$native_spool_dir"; then
   if sudo test -f "$recorded_stdout" && sudo test -f "$recorded_stderr"; then
     actual_stdout_bytes="$(sudo stat -c '%s' "$recorded_stdout")"
     actual_stderr_bytes="$(sudo stat -c '%s' "$recorded_stderr")"
-    actual_stdout_mount="$(findmnt -n -o TARGET --target "$recorded_stdout" || :)"
-    selected_pool_mount="$(findmnt -n -o TARGET --target "$work/mounted/native-pool" || :)"
+    # The Incus path is a protected root-owned symlink to the selected
+    # storage pool. Mount target strings differ across bind mounts; compare
+    # actual filesystem device IDs, not path strings or API read limits.
+    actual_stdout_mount="$(sudo findmnt -n -o TARGET --target "$recorded_stdout" || :)"
+    selected_pool_mount="$(sudo findmnt -n -o TARGET --target "$work/mounted/native-pool" || :)"
+    actual_spool_device="$(sudo stat -Lc '%d' "$recorded_stdout")"
+    selected_pool_device="$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+    host_root_device="$(sudo stat -Lc '%d' /)"
     echo "S2_NATIVE_EXEC_SPOOL_REAL_STDOUT_BYTES=$actual_stdout_bytes"
     echo "S2_NATIVE_EXEC_SPOOL_REAL_STDERR_BYTES=$actual_stderr_bytes"
     echo "S2_NATIVE_EXEC_SPOOL_PHYSICAL_MOUNT=$actual_stdout_mount"
     echo "S2_NATIVE_EXEC_SELECTED_POOL_MOUNT=$selected_pool_mount"
     if [ "$actual_stdout_bytes" -eq 16777220 ] &&
         [ "$actual_stderr_bytes" -eq 16777220 ] &&
-        [ -n "$actual_stdout_mount" ] && [ -n "$selected_pool_mount" ]; then
+        [ -n "$actual_stdout_mount" ] && [ -n "$selected_pool_mount" ] &&
+        [ "$actual_spool_device" = "$selected_pool_device" ] &&
+        [ "$actual_spool_device" != "$host_root_device" ]; then
       disk_witness=PASS
-      if [ "$actual_stdout_mount" != "$selected_pool_mount" ]; then
-        echo "S2_NATIVE_EXEC_SPOOL_OUTSIDE_SELECTED_BLOCK_POOL=OBSERVED"
-      else
-        echo "S2_NATIVE_EXEC_SPOOL_ON_SELECTED_BLOCK_POOL=OBSERVED"
-      fi
+      echo "S2_NATIVE_EXEC_SPOOL_ON_SELECTED_BLOCK_POOL=OBSERVED"
+    else
+      echo "S2_NATIVE_EXEC_SPOOL_BACKING_NOT_PROVED=UNVERIFIED"
     fi
   fi
 fi
