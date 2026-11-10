@@ -94,7 +94,7 @@ func wait(ctx context.Context, s *mcp.ClientSession, opID string) map[string]any
 
 func main() {
 	if len(os.Args) != 2 || (os.Args[1] != "create" && os.Args[1] != "seed" &&
-		os.Args[1] != "flood" && os.Args[1] != "cleanup") ||
+		os.Args[1] != "flood" && os.Args[1] != "missing" && os.Args[1] != "cleanup") ||
 		os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
 		panic("MCP quota test only on disposable GitHub runner")
@@ -174,6 +174,37 @@ func main() {
 		fmt.Println("S2_MCP_QUOTA_OPERATION_ID=" + originalID)
 		fmt.Println("S2_MCP_QUOTA_NATIVE_ID=" + nativeID)
 		fmt.Println("S2_MCP_QUOTA_GUEST_EXIT_ONE_PUBLIC_OUTPUT=PASS")
+	case "missing":
+		check(len(uuid) == 36, "missing quota box UUID")
+		originalID := os.Getenv("BW_S2_MCP_QUOTA_ORIGINAL_ID")
+		check(len(originalID) == 32, "exact original Exec ID for missing-log test required")
+		op := child(call(ctx, s, "operation_get", map[string]any{
+			"operation_id": originalID,
+		}), "operation")
+		check(field(op, "state") == "SUCCEEDED" &&
+			len(field(op, "native_operation_id")) == 36,
+			"original operation identity changed after explicit native log deletion")
+		out := call(ctx, s, "operation_output_get", map[string]any{
+			"operation_id": originalID, "stream": "stdout", "limit": 4096,
+		})
+		check(field(out, "availability") == "unavailable" &&
+			field(out, "unavailable_reason") == "NATIVE_RECORDED_OUTPUT_MISSING" &&
+			out["ended"] == true && field(out, "content_base64") == "" &&
+			out["exit_code"] == float64(1) && out["command_success"] == false,
+			"missing native file was misreported as successful, expired or available")
+		recheck := call(ctx, s, "operation_output_get", map[string]any{
+			"operation_id": originalID, "stream": "stdout", "limit": 4096,
+		})
+		check(field(recheck, "availability") == "unavailable" &&
+			field(recheck, "unavailable_reason") == "NATIVE_RECORDED_OUTPUT_MISSING",
+			"repeat original missing-log read mutated immutable availability evidence")
+		stderr := call(ctx, s, "operation_output_get", map[string]any{
+			"operation_id": originalID, "stream": "stderr", "limit": 4096,
+		})
+		check(field(stderr, "availability") == "available" &&
+			stderr["command_success"] == false,
+			"missing stdout was wrongly projected onto untouched native stderr")
+		fmt.Println("S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_TYPED_UNAVAILABLE=PASS")
 	case "cleanup":
 		check(len(uuid) == 36, "missing quota box UUID")
 		stop := call(ctx, s, "box_stop", map[string]any{

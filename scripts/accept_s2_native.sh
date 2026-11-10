@@ -1027,6 +1027,7 @@ s2_mcp_quota() {
   BW_S2_MCP_QUOTA_URL="http://127.0.0.1:18656/mcp" \
     BW_S2_MCP_QUOTA_TOKEN="$mcp_quota_token" \
     BW_S2_MCP_QUOTA_UUID="$mcp_quota_uuid" \
+    BW_S2_MCP_QUOTA_ORIGINAL_ID="${mcp_original:-}" \
     GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     "$work/s2-mcp-quota-probe" "$1"
 }
@@ -1096,6 +1097,16 @@ PY
 )"
 test "$mcp_after" -le "$mcp_limit"
 echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
+
+# The one-use test has already independently verified the exact immutable
+# native operation and stdout path. Delete only its ORIGINAL stdout through
+# the project-scoped official Incus API; do not delete stderr or foreign logs.
+# This is an independent deliberate log-loss negative, NOT automatic GC.
+sudo incus query -X DELETE "/1.0/instances/$mcp_quota_name/logs/exec-output/exec_$mcp_native.stdout?project=$project"   > "$work/mcp-quota-native-log-delete.json"
+sudo test ! -f "$mcp_output_file"
+s2_mcp_quota missing > "$work/mcp-quota-native-missing.txt"
+grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_TYPED_UNAVAILABLE=PASS'   "$work/mcp-quota-native-missing.txt"
+echo "S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY=PASS"
 
 # Remove only disposable quota preallocation, preserve original logs until
 # public MCP cleanup removes the verified exact UUID, never an UNKNOWN Box.
