@@ -10,6 +10,10 @@ Incus's stable foundation is its native management API. The Incus CLI and the of
 
 Incus is a mature authoritative Linux-container runtime: **trust the official daemon and typed Go SDK as the underlying infrastructure**. BoxWeave does not need a second Incus implementation, custom equivalent transaction engine, routine upstream reliability audit, or broad compatibility layer for old Containarium HTTP bugs. The necessary tests concern **our** ownership decisions, SDK argument mapping, supported API extensions, privilege boundary, and observed user workflows (e.g. LAN port publishing, safe peer policy, guest Exec state). Report unsupported SDK/runtime capabilities accurately; do not infer a flaw in Incus from an unverified BoxWeave request, network route or test fixture.
 
+## Legacy host resource-pressure incident, not a proven Incus defect
+
+A 2026-11-09 legacy `dev` host had 47 managed/49 native running Incus containers, severe I/O pressure and transient `no available cowsql leader server found`; after 31 operator-approved disposable deletions, its connected MCP listed 16 running managed Boxes and the owner reported improved responsiveness. Incus `dir` sat on tiered bcachefs SSD/HDD, but actual per-guest load and causation were **not established**; no on-disk Cowsql corruption was proved. [Evidence and caveats](../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md). Distinguish pressure, daemon/DB availability, application storage and HTTP client reachability. Use bounded official SDK calls, typed degraded/UNKNOWN results and independent native operation evidence; never build a Cowsql/bcachefs repair service, automatic deletion, host reboot or second Incus engine. Existing O-025 nested evidence remains separate.
+
 ## Runtime capabilities
 
 - Check the actual Incus daemon version and `api_extensions` during startup and before capability-sensitive actions. Version strings alone do not guarantee a feature.
