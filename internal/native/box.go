@@ -608,7 +608,7 @@ func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, erro
 	}
 	out = BoxState{Project: r.Project, Name: name, UUID: uuid,
 		NativeState: inst.Status, CPU: inst.ExpandedConfig["limits.cpu"],
-		Memory: inst.ExpandedConfig["limits.memory"],
+		Memory:  inst.ExpandedConfig["limits.memory"],
 		Nesting: inst.ExpandedConfig["security.nesting"] == "true"}
 	for _, d := range inst.ExpandedDevices {
 		if d["type"] == "disk" && d["path"] == "/" {

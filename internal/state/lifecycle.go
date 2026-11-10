@@ -200,7 +200,6 @@ func (s *Store) ExecOutput(ctx context.Context, originalID string) (NativeReadSn
 	return out, nil
 }
 
- 
 // RegisterCreatedBox commits the native UUID/incarnation together with the
 // original operation. A native create is never inferred from name alone.
 func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, name, uuid string) error {
