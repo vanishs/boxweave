@@ -15,7 +15,11 @@ import (
 // live worker must mark the original UNKNOWN rather than silently exit.
 func TestS2NativeAckEventRollbackRetainsOriginalUnknown(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "ack-fault.sqlite")
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "ack-fault.sqlite")
 	s, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -127,6 +131,9 @@ func TestS2SQLiteKilledDuringUncommittedNativeAck(t *testing.T) {
 	}
 	ctx := context.Background()
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "kill-uncommitted-ack.sqlite")
 	s, err := Open(path)
 	if err != nil {
