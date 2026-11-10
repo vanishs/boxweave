@@ -129,6 +129,36 @@ func main() {
 	again := call(ctx, admin, "box_create", args)
 	check(id(again) == original, "same key unexpectedly created second operation")
 	fmt.Println("S2_NATIVE_CREATE_IDEMPOTENCY=PASS")
+	contradictory := map[string]any{}
+	for k, v := range args {
+		contradictory[k] = v
+	}
+	contradictory["cpu"] = 2
+	conflict, conflictErr := admin.CallTool(ctx, &mcp.CallToolParams{Name: "box_create", Arguments: contradictory})
+	check(conflictErr != nil || conflict != nil && conflict.IsError,
+		"same actor/key with different native create intent was accepted")
+	distinctKey := map[string]any{}
+	for k, v := range args {
+		distinctKey[k] = v
+	}
+	distinctKey["idempotency_key"] = "native-s2-conflicting-name-second-key-01"
+	other, otherErr := admin.CallTool(ctx, &mcp.CallToolParams{Name: "box_create", Arguments: distinctKey})
+	if otherErr == nil && other != nil && !other.IsError {
+		// If original create already completed, the new key may be
+		// admitted but MUST fail before any duplicate native create.
+		retryOp := id(decoded(other))
+		outcome := ""
+		for i := 0; i < 50; i++ {
+			receipt := child(call(ctx, admin, "operation_get", map[string]any{
+				"operation_id": retryOp, "wait_ms": 300}), "operation")
+			outcome = field(receipt, "state")
+			if outcome == "FAILED" || outcome == "UNKNOWN" || outcome == "SUCCEEDED" {
+				break
+			}
+		}
+		check(outcome == "FAILED", "different key made duplicate native create: "+outcome)
+	}
+	fmt.Println("S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED=PASS")
 	cr := wait(ctx, admin, original)
 	uuid := field(cr, "box_uuid")
 	check(uuid != "", "verified native create did not persist UUID")
@@ -268,6 +298,33 @@ func main() {
 	check(field(quietOut, "content_base64") == "" && quietOut["ended"] == true &&
 		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
 	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
+
+	// A deliberately cancelled read-side long poll cannot cancel or undo
+	// the already accepted native Exec. Use a fresh client for the broken
+	// HTTP request so the original actor session remains independent.
+	slow := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 3; printf still-ran"},
+		"idempotency_key": "native-s2-cancel-only-read-poll-001"})
+	slowID := id(slow)
+	poller := connect(ctx, url, token)
+	readCtx, stopReading := context.WithTimeout(ctx, 250*time.Millisecond)
+	_, waitErr := poller.CallTool(readCtx, &mcp.CallToolParams{Name: "operation_get",
+		Arguments: map[string]any{"operation_id": slowID, "wait_ms": 20000}})
+	stopReading()
+	_ = poller.Close()
+	check(waitErr != nil, "canceled long read unexpectedly claimed native completion")
+	finished := wait(ctx, admin, slowID)
+	check(field(finished, "state") == "SUCCEEDED",
+		"canceled read-side poll changed original native execution")
+	pollOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": slowID, "stream": "stdout"})
+	pollBytes, pollErr := base64.StdEncoding.DecodeString(field(pollOut, "content_base64"))
+	if pollErr != nil {
+		panic(pollErr)
+	}
+	check(string(pollBytes) == "still-ran" && pollOut["exit_code"] == float64(0),
+		"client read cancellation propagated to guest Exec")
+	fmt.Println("S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY=PASS")
 
 	// Native detached/recorded Exec cannot be cancelled after it finishes.
 	// The cancellation request has its own failed receipt and must not

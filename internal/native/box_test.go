@@ -12,7 +12,7 @@ func TestS2NetworkMustBeVerifiedBeforeFirstStart(t *testing.T) {
 	device := api.DevicesMap{"eth0": map[string]string{
 		"type": "nic", "network": "boxweave-bridge", "security.acls": "boxweave-owned",
 		"security.acls.default.ingress.action": "reject",
-		"security.ipv4_filtering": "true", "security.ipv6_filtering": "true", "security.mac_filtering": "true",
+		"security.ipv4_filtering":              "true", "security.ipv6_filtering": "true", "security.mac_filtering": "true",
 	}}
 	if !nicPrivate(device) {
 		t.Fatal("safe exclusive NIC was not detected")
