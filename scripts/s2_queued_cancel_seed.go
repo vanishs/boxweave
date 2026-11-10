@@ -47,5 +47,28 @@ func main() {
 	if err != nil || r.State != "ADMITTED" || r.NativeOperationID != "" {
 		panic(fmt.Sprintf("queued native-free fixture admission not safe: %v", err))
 	}
+
+	// Entirely controller-local history, never an Incus native effect. These
+	// records belong to the same disposable authenticated admin actor but do
+	// not claim/lock an owned Box. Exercise real SDK indexed pagination,
+	// actor/label filters and bounds with >2 full 50-row pages.
+	for i := 0; i < 120; i++ {
+		item, err := store.Admit(ctx, state.Admission{
+			Layer: project, ActorID: actor.ID, TokenID: actor.ID,
+			Key: fmt.Sprintf("native-s2-history-indexed-seed-%03d", i),
+			Action: "box_exec",
+			SafeIntent: []byte(fmt.Sprintf("{\"fixture\":\"history-only\",\"i\":%d}", i)),
+			RequestID: fmt.Sprintf("s2-native-history-%03d", i),
+			WorkRef: "lab/history-120", AgentRef: "seed-only",
+		})
+		if err != nil || item.State != "ADMITTED" || item.NativeOperationID != "" {
+			panic(fmt.Sprintf("refusing fake/native history fixture %03d: %v", i, err))
+		}
+		if err := store.CancelQueued(ctx, project, item.ID); err != nil {
+			panic(fmt.Sprintf("history fixture cancellation %03d: %v", i, err))
+		}
+	}
+	// Keep stdout one exact original queued ID for the caller's existing
+	// safe cancellation witness; history totals are verified over real MCP.
 	fmt.Println(r.ID)
 }

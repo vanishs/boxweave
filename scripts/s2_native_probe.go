@@ -260,7 +260,88 @@ func main() {
 	check(ok && len(queuedRows) == 1 &&
 		field(queuedRows[0].(map[string]any), "operation_id") == queuedID,
 		"cancelled queued operation absent from scoped indexed history")
+
 	fmt.Println("S2_NATIVE_QUEUED_UNDISPATCHED_CANCEL_NO_NATIVE_EFFECT=PASS")
+
+	// TC-005 negative/indexed pagination of >100 fully durable records
+	// seeded in the same disposable ledger, observed only through the
+	// authenticated official MCP Go SDK and a distinct admin actor.
+	historyIDs := map[string]bool{}
+	historyCursor := ""
+	for pageNumber := 0; pageNumber < 3; pageNumber++ {
+		args := map[string]any{
+			"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
+		}
+		if historyCursor != "" {
+			args["cursor"] = historyCursor
+		}
+		historyPage := child(call(ctx, admin, "operation_list", args), "page")
+		rows, ok := historyPage["operations"].([]any)
+		want := 50
+		if pageNumber == 2 {
+			want = 20
+		}
+		check(ok && len(rows) == want, "native indexed >100 history page length mismatch")
+		for _, raw := range rows {
+			rec, ok := raw.(map[string]any)
+			check(ok && field(rec, "state") == "CANCELLED" &&
+				field(rec, "work_ref") == "lab/history-120" &&
+				field(rec, "native_operation_id") == "",
+				"history pagination admitted unrequested original or native ID")
+			opID := id(rec)
+			check(!historyIDs[opID], "history cursor repeated a prior immutable original")
+			historyIDs[opID] = true
+		}
+		historyCursor = field(historyPage, "next_cursor")
+		check((pageNumber == 2 && historyCursor == "") ||
+			(pageNumber < 2 && historyCursor != ""),
+			"native history cursor missing, stale or fabricating fourth page")
+		if pageNumber == 0 {
+			// The cursor is HMAC bound to original requester, role and filters.
+			otherActorAttempt, otherActorErr := admin2.CallTool(ctx, &mcp.CallToolParams{
+				Name: "operation_list", Arguments: map[string]any{
+					"work_ref": "lab/history-120", "state": "CANCELLED",
+					"limit": 50, "cursor": historyCursor},
+			})
+			check(otherActorErr != nil ||
+				otherActorAttempt != nil && otherActorAttempt.IsError,
+				"native HMAC history cursor crossed authenticated actor")
+			wrongFilterAttempt, wrongFilterErr := admin.CallTool(ctx, &mcp.CallToolParams{
+				Name: "operation_list", Arguments: map[string]any{
+					"work_ref": "lab/history-120", "state": "FAILED",
+					"limit": 50, "cursor": historyCursor},
+			})
+			check(wrongFilterErr != nil ||
+				wrongFilterAttempt != nil && wrongFilterAttempt.IsError,
+				"native HMAC cursor was reused with a different state filter")
+		}
+	}
+	check(len(historyIDs) == 120, "failed durable history total 120")
+	future := time.Now().Add(time.Hour).UnixNano()
+	past := time.Now().Add(-time.Hour).UnixNano()
+	historyFuture := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/history-120", "since_ns": future, "limit": 50,
+	}), "page")
+	futureRows, ok := historyFuture["operations"].([]any)
+	check(ok && len(futureRows) == 0, "future time boundary returned past operations")
+	historyPast := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/history-120", "until_ns": past, "limit": 50,
+	}), "page")
+	pastRows, ok := historyPast["operations"].([]any)
+	check(ok && len(pastRows) == 0, "historic time boundary leaked later operations")
+	invalidTime, invalidTimeErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{
+			"work_ref": "lab/history-120", "since_ns": future, "until_ns": past},
+	})
+	check(invalidTimeErr != nil || invalidTime != nil && invalidTime.IsError,
+		"reversed native history time filter accepted")
+	viewerHistory := child(call(ctx, view, "operation_list", map[string]any{
+		"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
+	}), "page")
+	viewerHistoryRows, ok := viewerHistory["operations"].([]any)
+	check(ok && len(viewerHistoryRows) == 0,
+		"viewer borrowed 120 admin history operations by self-declared label")
+	fmt.Println("S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE=PASS")
 
 	name := "bw-s2-ghci-110a"
 	key := "native-s2-create-once-20261110"
