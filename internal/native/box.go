@@ -178,6 +178,14 @@ func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) err
 
 // Create uses only a preinstalled approved Ubuntu LTS image fingerprint. No
 // remote image alias or arbitrary server is resolved from an MCP request.
+// Incus simplestreams images label Ubuntu 24.04 using its release codename
+// "noble". An operator-managed local alias and immutable fingerprint still
+// select the actual image; do not infer trust from display description alone.
+func approvedUbuntu2404(properties map[string]string) bool {
+	return strings.EqualFold(properties["os"], "Ubuntu") &&
+		(properties["release"] == "noble" || properties["release"] == "24.04")
+}
+
 func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) || a.Internet {
 		return "", ErrNativeUnsupported
@@ -205,8 +213,7 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 		return "", ErrNativeUnsupported
 	}
 	image, _, err := c.GetImage(alias.Target)
-	if err != nil || image == nil || !strings.EqualFold(image.Properties["os"], "Ubuntu") ||
-		image.Properties["release"] != "24.04" {
+	if err != nil || image == nil || !approvedUbuntu2404(image.Properties) {
 		return "", ErrNativeUnsupported
 	}
 	if _, _, err := c.GetInstance(a.Name); err == nil {
