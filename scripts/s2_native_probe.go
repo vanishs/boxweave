@@ -142,6 +142,53 @@ func main() {
 	check(!strings.Contains(string(private), original), "viewer borrowed original work_ref across token actors")
 	fmt.Println("S2_NATIVE_OPERATION_WORK_SCOPE=PASS")
 
+	// The real installed server must list only its bound native UUID, not
+	// an unrelated Project, guessed instance name, or database-only identity.
+	listed := call(ctx, admin, "box_list", map[string]any{"limit": 20})
+	foundBoxes, ok := listed["boxes"].([]any)
+	check(ok && len(foundBoxes) == 1, "box_list did not return exactly the owned native Box")
+	foundBox, ok := foundBoxes[0].(map[string]any)
+	check(ok && field(foundBox, "box_id") == uuid, "box_list returned a foreign or stale Box")
+	fmt.Println("S2_NATIVE_BOX_LIST_UUID=PASS")
+
+	// Change CPU and RAM in a single typed native UpdateInstance without
+	// replacing inherited NIC/root disk configuration.
+	changed := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "cpu": 2, "memory_mib": 768,
+		"idempotency_key": "native-s2-update-cpu-memory-01"})
+	wait(ctx, admin, id(changed))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(field(box, "cpu") == "2" && field(box, "memory") == "768MiB" &&
+		field(box, "root_disk_size") == "2GiB",
+		"CPU/RAM update erased omitted disk or did not persist")
+	fmt.Println("S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK=PASS")
+
+	grown := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "disk_gib": 3,
+		"idempotency_key": "native-s2-grow-owned-disk-01"})
+	wait(ctx, admin, id(grown))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(field(box, "root_disk_size") == "3GiB" && field(box, "cpu") == "2",
+		"disk growth failed or wiped CPU setting")
+	fmt.Println("S2_NATIVE_DISK_GROWTH_PRESERVES_CPU=PASS")
+
+	shrink := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "disk_gib": 2,
+		"idempotency_key": "native-s2-shrink-must-be-denied-01"})
+	shrinkID := id(shrink)
+	var shrinkState string
+	for i := 0; i < 30; i++ {
+		shrinkState = field(child(call(ctx, admin, "operation_get", map[string]any{
+			"operation_id": shrinkID, "wait_ms": 300}), "operation"), "state")
+		if shrinkState == "FAILED" || shrinkState == "UNKNOWN" || shrinkState == "SUCCEEDED" {
+			break
+		}
+	}
+	check(shrinkState == "FAILED", "disk shrink was accepted or ambiguously dispatched: "+shrinkState)
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(field(box, "root_disk_size") == "3GiB", "disk shrink changed native root device")
+	fmt.Println("S2_NATIVE_DISK_SHRINK_DENIED=PASS")
+
 	start := call(ctx, admin, "box_start", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-start-000000001"})
 	sr := wait(ctx, admin, id(start))
@@ -173,6 +220,28 @@ func main() {
 	}
 	fmt.Println("S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR=PASS")
 
+	// Native detached/recorded Exec cannot be cancelled after it finishes.
+	// The cancellation request has its own failed receipt and must not
+	// retroactively change the original verified guest completion.
+	cancelled := call(ctx, admin, "operation_cancel", map[string]any{
+		"target_operation_id": execID, "idempotency_key": "native-s2-exec-late-cancel-01"})
+	cancelReceipt := child(cancelled, "cancel_operation")
+	cancelID := field(cancelReceipt, "operation_id")
+	check(cancelID != "" && cancelID != execID, "cancellation forged original operation ID")
+	var cancelState string
+	for i := 0; i < 30; i++ {
+		cancelState = field(child(call(ctx, admin, "operation_get", map[string]any{
+			"operation_id": cancelID, "wait_ms": 300}), "operation"), "state")
+		if cancelState == "FAILED" || cancelState == "UNKNOWN" || cancelState == "SUCCEEDED" {
+			break
+		}
+	}
+	check(cancelState == "FAILED", "detached Exec cancellation lied: "+cancelState)
+	execAgain := child(call(ctx, admin, "operation_get", map[string]any{"operation_id": execID}), "operation")
+	check(field(execAgain, "state") == "SUCCEEDED",
+		"unsupported cancellation rewrote original Exec")
+	fmt.Println("S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL=PASS")
+
 	stop := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-stop-0000000001"})
 	wait(ctx, admin, id(stop))
@@ -183,6 +252,15 @@ func main() {
 	del := call(ctx, admin, "box_delete", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-delete-00000001"})
 	wait(ctx, admin, id(del))
-	fmt.Println("S2_NATIVE_DELETE_VERIFIED=PASS")
+	replayedDelete := call(ctx, admin, "box_delete", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-delete-00000001"})
+	check(id(replayedDelete) == id(del) && replayedDelete["duplicate"] == true,
+		"original delete did not replay after native instance disappeared")
+	fmt.Println("S2_NATIVE_DELETE_VERIFIED_AND_REPLAY=PASS")
+
+	empty := call(ctx, admin, "box_list", map[string]any{})
+	remaining, ok := empty["boxes"].([]any)
+	check(ok && len(remaining) == 0, "tombstoned Box still appeared in owned inventory")
+	fmt.Println("S2_NATIVE_DELETED_BOX_NOT_LISTED=PASS")
 	fmt.Println("S2_NATIVE_END_TO_END=PASS")
 }
