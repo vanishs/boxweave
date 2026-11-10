@@ -437,6 +437,25 @@ func main() {
 		"default ingress ACL did not deny IPv6 between owned Boxes")
 	fmt.Println("S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY=PASS")
 
+	// Optional external WAN control, never part of a fake PASS. A known
+	// fixed HTTPS endpoint with guest curl proves real public routing only
+	// when online control succeeds *before* and *after* the offline test.
+	// Some ephemeral hosted runners cannot provide guest WAN reachability.
+	externalSupported := false
+	_, hasCurl := guestRead(ctx, admin, uuid, "native-s2-wan-curl-available-01",
+		"command -v curl")
+	if hasCurl == 0 {
+		body, status := guestRead(ctx, admin, uuid, "native-s2-wan-online-before-01",
+			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
+		if status == 0 && strings.HasPrefix(body, "2") {
+			externalSupported = true
+		} else {
+			fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED")
+		}
+	} else {
+		fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_CURL=UNVERIFIED_MISSING_CLIENT")
+	}
+
 	// Real IPv4 traffic must change with the per-Box internet flag, while
 	// the separate private-peer default ingress denial remains unchanged.
 	offline := call(ctx, admin, "box_update", map[string]any{
@@ -450,6 +469,12 @@ func main() {
 	check(nativePing(ctx, admin, uuid,
 		"native-s2-running-offline-ipv6-gateway-denied", ga6, 6) != 0,
 		"internet=false still sent IPv6 packets to native gateway")
+	if externalSupported {
+		_, publicOfflineExit := guestRead(ctx, admin, uuid,
+			"native-s2-wan-offline-01",
+			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
+		check(publicOfflineExit != 0, "public HTTPS reached WAN despite internet=false")
+	}
 	online := call(ctx, admin, "box_update", map[string]any{
 		"box_id": uuid, "internet": true,
 		"idempotency_key": "native-s2-running-online-packets-01",
@@ -467,6 +492,14 @@ func main() {
 			"native-s2-peer-still-denied-after-internet-on-v6", b6, 6) == 1,
 		"re-enabling internet bypassed default private peer IPv4/IPv6 ingress")
 	fmt.Println("S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS=PASS")
+	if externalSupported {
+		publicOnline, publicExit := guestRead(ctx, admin, uuid,
+			"native-s2-wan-online-after-01",
+			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
+		check(publicExit == 0 && strings.HasPrefix(publicOnline, "2"),
+			"public WAN did not recover after internet=true")
+		fmt.Println("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS")
+	}
 	peerStop := call(ctx, admin, "box_stop", map[string]any{
 		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-stop-01"})
 	wait(ctx, admin, id(peerStop))
