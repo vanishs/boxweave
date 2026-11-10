@@ -66,7 +66,7 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		// transaction may have rolled back, committed with a lost reply, or
 		// remained inaccessible. Best-effort mark either possible journal
 		// state UNKNOWN; NEVER retry the native effect or release its lock.
-		markErr := w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
+		markErr := w.Store.NativeAckUnknown(context.Background(), operationID, nativeID)
 		if errors.Is(markErr, ErrState) {
 			_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
 		}
