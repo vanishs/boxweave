@@ -110,7 +110,17 @@ sudo incus profile device set default eth0 --project "$project" \
 # No arbitrary image URL/alias is accepted from MCP clients.
 sudo incus image copy images:ubuntu/24.04 local: --project "$project" \
   --alias boxweave-ubuntu-24.04
-sudo incus image alias list --project "$project" --format csv | grep -q boxweave-ubuntu-24.04
+echo "S2_NATIVE_IMAGE_ALIAS_LIST_ADMIN"
+sudo incus image alias list --project "$project"
+echo "S2_NATIVE_IMAGE_LIST_ADMIN"
+sudo incus image list --project "$project"
+echo "S2_NATIVE_IMAGE_ALIAS_LIST_RESTRICTED"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus image alias list --format csv
+if ! sudo incus image alias show boxweave-ubuntu-24.04 --project "$project"; then
+  echo "S2_NATIVE_IMAGE_ALIAS_NOT_VISIBLE_IN_OWNED_PROJECT" >&2
+  exit 86
+fi
+echo "S2_NATIVE_OWNED_UBUNTU_ALIAS_VERIFIED=PASS"
 
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/boxweave" ./cmd/boxweave
