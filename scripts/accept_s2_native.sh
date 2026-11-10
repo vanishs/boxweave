@@ -72,9 +72,15 @@ fi
 truncate -s 4G "$work/exclusive-block.img"
 loop="$(sudo losetup --find --show "$work/exclusive-block.img")"
 test -n "$loop"
-sudo mkfs.ext4 -F -q "$loop"
+# ext4 supports native Incus dir-volume project quotas only when the
+# filesystem project/quota features and project-quota mount are enabled.
+# A plain ext4 dir pool silently skips the root-disk size quota in Incus 7.6.
+sudo mkfs.ext4 -F -q -O quota,project "$loop"
 mkdir -m 0755 "$work/mounted"
-sudo mount -t ext4 -o nodev,nosuid "$loop" "$work/mounted"
+sudo mount -t ext4 -o nodev,nosuid,prjquota "$loop" "$work/mounted"
+sudo tune2fs -l "$loop" | grep -E '^Filesystem features:' | grep -qw project
+findmnt -n -o OPTIONS --target "$work/mounted" | grep -Eq '(^|,)prjquota(,|$)'
+echo "S2_NATIVE_EXT4_PROJECT_QUOTA_BACKING_CONFIGURED=PASS"
 sudo mkdir -m 0755 "$work/mounted/native-pool"
 sudo incus storage create bw-s2-native-pool dir source="$work/mounted/native-pool"
 test "$(findmnt -n -o FSTYPE --target "$work/mounted")" = ext4
@@ -297,6 +303,31 @@ if sudo test -d "$native_spool_dir"; then
 fi
 if [ "$disk_witness" = PASS ]; then
   echo "S2_NATIVE_EXEC_SPOOL_PHYSICAL_FILE_SIZE_WITNESSED=PASS"
+  # Prove the Incus dir root-disk size=2GiB restriction also covers its
+  # sibling native Exec spool. This test writes only on a newly authorized,
+  # isolated 4GiB loop-mounted CI pool. Require enough free capacity to
+  # distinguish the kernel's EDQUOT from physical ENOSPC.
+  # No recorded Exec file is changed; this unique disposable fixture is
+  # removed before releasing the still-live official MCP SDK client.
+  quota_test="$native_spool_dir/.boxweave-s2-disposable-quota-test"
+  test ! -e "$quota_test"
+  quota_free_before="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+  test "$quota_free_before" -gt 2800000000
+  sudo lsattr -p -d "$native_instance_dir" "$native_spool_dir"
+  if sudo timeout 40s fallocate -l 2684354560 "$quota_test" > "$work/quota-fallocate.stderr" 2>&1; then
+    sudo rm -f "$quota_test"
+    echo "S2_NATIVE_FAIL: Incus size quota allowed >2GiB native Exec sibling allocation" >&2
+    exit 105
+  fi
+  if ! grep -Fq 'Disk quota exceeded' "$work/quota-fallocate.stderr"; then
+    sudo rm -f "$quota_test"
+    echo "S2_NATIVE_FAIL: expected kernel EDQUOT from native Exec spool quota, not other failure" >&2
+    cat "$work/quota-fallocate.stderr" >&2
+    exit 106
+  fi
+  sudo rm -f "$quota_test"
+  test ! -e "$quota_test"
+  echo "S2_NATIVE_DIR_PROJECT_QUOTA_APPLIES_TO_EXEC_SPOOL=PASS"
 else
   echo "S2_NATIVE_EXEC_SPOOL_PHYSICAL_FILE_SIZE_WITNESSED=UNVERIFIED"
   sudo ls -ld "$native_instance_dir" "$native_spool_dir" 2>&1 || :
