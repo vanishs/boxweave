@@ -548,6 +548,15 @@ func (s *Store) NativeAck(ctx context.Context, id, nativeID string) error {
 	}
 	return s.transition(ctx, id, "DISPATCHING", "VERIFYING", nativeID, "")
 }
+// NativeAckUnknown preserves a trusted native Operation ID when a previously
+// accepted native effect could not be durably ACKed in the normal transaction.
+// The original remains UNKNOWN and retains its resource lock; no redispatch.
+func (s *Store) NativeAckUnknown(ctx context.Context, id, nativeID string) error {
+	if nativeID == "" {
+		return ErrInvalid
+	}
+	return s.transition(ctx, id, "DISPATCHING", "UNKNOWN", nativeID, "NATIVE_ACK_DURABILITY_UNVERIFIED")
+}
 func (s *Store) Verified(ctx context.Context, id string) error {
 	return s.transition(ctx, id, "VERIFYING", "SUCCEEDED", "", "")
 }
