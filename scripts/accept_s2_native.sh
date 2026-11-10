@@ -165,9 +165,10 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_pr
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_sqlite_fsync_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-sqlite-fsync-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -1112,4 +1113,64 @@ s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
 grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_MCP_QUOTA_FINAL_NATIVE_INVENTORY_EMPTY=PASS"
+
+# Disposable test-only LD_PRELOAD wrapper kills the exact SQLite WAL fsync
+# (before or just after the real syscall) during NativeAck.Commit on a
+# wholly separate, single-actor SQLite database. No native dispatch here:
+# the actual Incus post-acceptance ACK-loss proof is a different real gate.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra -o "$work/s2-fsync-cut.so" \
+  scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-fsync-cut.so"
+for phase in before after; do
+  test -z "$(sudo incus list --all-projects --format csv -c n)"
+  fsync_dir="$work/fsync-$phase/fsync-ledger"
+  mkdir -p "$fsync_dir"
+  chmod 0700 "$fsync_dir"
+  sudo chown boxweave:incus "$fsync_dir"
+  fsync_db="$fsync_dir/ledger.sqlite"
+  fsync_arm="$fsync_dir/arm"
+  fsync_witness="$fsync_dir/sync-triggered"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    > "$work/fsync-$phase-admin.secret"
+  chmod 0600 "$work/fsync-$phase-admin.secret"
+  fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
+  test -n "$fsync_token"
+  s2_fsync() {
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+      GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+      HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+      BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_TOKEN="$fsync_token" \
+      BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$fsync_arm" \
+      "$work/s2-sqlite-fsync-probe" "$1"
+  }
+  s2_fsync prepare > "$work/fsync-$phase-prepare.txt"
+  grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/fsync-$phase-prepare.txt"
+  test ! -e "$fsync_arm"
+  test ! -e "$fsync_witness"
+  set +e
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_DB_WAL="$fsync_db-wal" \
+    BW_S2_FSYNC_TOKEN="$fsync_token" BW_S2_FSYNC_PROJECT="$project" \
+    BW_S2_FSYNC_ARM_FILE="$fsync_arm" BW_S2_FSYNC_WITNESS_FILE="$fsync_witness" \
+    BW_S2_FSYNC_CUT_MODE="$phase" LD_PRELOAD="$work/s2-fsync-cut.so" \
+    "$work/s2-sqlite-fsync-probe" ack > "$work/fsync-$phase-kill.redacted.txt" 2>&1
+  fsync_exit=$?
+  set -e
+  test "$fsync_exit" -ne 0
+  sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$fsync_witness"
+  s2_fsync verify > "$work/fsync-$phase-verify.txt"
+  grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+    "$work/fsync-$phase-verify.txt"
+  if [ "$phase" = before ]; then
+    echo "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  else
+    echo "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  fi
+done
+test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
