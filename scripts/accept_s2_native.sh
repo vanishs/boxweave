@@ -566,4 +566,74 @@ test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-etag-native-1
 sudo incus delete bw-s2-etag-native-110e --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_STALE_ETAG_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# A distinct newly created, UUID-registered Box receives an actual native
+# Update (If-Match, HTTP 202), but the test proxy drops only the reply after
+# Incus acceptance. Unlike the stale ETag 412 test, the mutation must really
+# change CPU. Only the one-use CI administrator performs independent readback
+# and eventually removes this disposable fixture. No original UNKNOWN replay.
+update_ack_checkpoint="$work/update-ack-original.json"
+BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack
+sudo grep -Fqx "UPDATE_ACK_FIXTURE_CREATE_FORWARDED" "$ack_marker"
+sudo grep -Fqx "UPDATE_ACK_NATIVE_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: accepted Update ACK loss caused a forbidden second dispatch" >&2
+  exit 98
+fi
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 6
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-update-ack-native-110f
+update_ack_uuid="$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")"
+test -n "$update_ack_uuid"
+attempt=0
+until [ "$attempt" -ge 90 ]; do
+  if [ "$(sudo incus config get bw-s2-update-ack-native-110f limits.cpu --project "$project" 2>/dev/null || :)" = 2 ] &&
+      sudo incus operation list --project "$project" --format json |
+        python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 90 ]; then
+  echo "S2_NATIVE_FAIL: native accepted Update did not settle with CPU=2" >&2
+  exit 99
+fi
+test "$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")" = "$update_ack_uuid"
+echo "S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_REAL_NATIVE_READBACK=PASS"
+
+# Restart with the exact same SQLite and original unknown Update. Every
+# replay is read-only: neither the old accepted request nor any new key may
+# generate another native PUT for this name.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/update-ack-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack_resume
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 6
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: Update retransmitted after same-SQLite restart" >&2
+  exit 100
+fi
+test "$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")" = "$update_ack_uuid"
+test "$(sudo incus config get bw-s2-update-ack-native-110f limits.cpu --project "$project")" = 2
+sudo incus delete bw-s2-update-ack-native-110f --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_FIXTURE_ADMIN_TEARDOWN=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
