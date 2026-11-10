@@ -912,13 +912,15 @@ test "$(sudo stat -Lc '%d' "$native_quota_spool")" != "$(sudo stat -Lc '%d' /)"
 sudo lsattr -p -d "$native_quota_spool"
 quota_state_url="/1.0/storage-pools/bw-s2-native-pool/volumes/container/$quota_name/state?project=$project"
 sudo incus query "$quota_state_url" > "$work/quota-guest-before.json"
-read quota_used quota_limit < <(python3 - "$work/quota-guest-before.json" <<'PY'
+quota_values="$(python3 - "$work/quota-guest-before.json" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
 v=v.get("metadata",v)["usage"]
 print(int(v["used"]),int(v["total"]))
 PY
-)
+)"
+quota_used="$(printf '%s\n' "$quota_values" | awk '{print $1}')"
+quota_limit="$(printf '%s\n' "$quota_values" | awk '{print $2}')"
 test "$quota_limit" -eq 2147483648
 test "$quota_used" -gt 10485760
 quota_headroom=50331648
