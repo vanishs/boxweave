@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ type original struct {
 	BoxUUID           string `json:"box_uuid"`
 	OperationID       string `json:"operation_id"`
 	NativeOperationID string `json:"native_operation_id"`
+	RecordedOperationID string `json:"recorded_operation_id"`
 }
 
 type bearer struct{ secret string }
@@ -135,6 +137,18 @@ func main() {
 		c := waitCreate(ctx, s, createID)
 		uuid := str(c, "box_uuid")
 		must(uuid != "", "native created UUID absent")
+		// Persist a COMPLETED nonzero guest Exec and its native output paths
+		// before SIGKILL. The resume process must read the exact same
+		// bytes and exit code from reopened SQLite and native output logs.
+		saved := call(ctx, s, "box_exec", map[string]any{
+			"box_id": uuid, "argv": []string{"/bin/sh", "-c",
+				"printf saved-out; printf saved-err >&2; exit 7"},
+			"idempotency_key": "s2-crash-output-before-restart-01"})
+		savedID := str(saved, "operation_id")
+		must(savedID != "", "recorded Exec admission missing")
+		savedDone := waitCreate(ctx, s, savedID)
+		must(str(savedDone, "state") == "SUCCEEDED",
+			"original pre-crash recorded Exec not verified")
 		in := args()
 		in["box_id"] = uuid
 		in["work_ref"] = "lab/s2-crash"
@@ -154,7 +168,7 @@ func main() {
 			}
 		}
 		must(nativeID != "", "native execution was not persistently acknowledged before kill")
-		encoded, err := json.Marshal(original{BoxUUID: uuid, OperationID: id, NativeOperationID: nativeID})
+		encoded, err := json.Marshal(original{BoxUUID: uuid, OperationID: id, NativeOperationID: nativeID, RecordedOperationID: savedID})
 		if err != nil {
 			panic(err)
 		}
@@ -171,7 +185,22 @@ func main() {
 		if err = json.Unmarshal(bytes, &original); err != nil {
 			panic(err)
 		}
-		must(original.OperationID != "" && original.BoxUUID != "" && original.NativeOperationID != "", "original checkpoint absent")
+		must(original.OperationID != "" && original.BoxUUID != "" && original.NativeOperationID != "" &&
+			original.RecordedOperationID != "", "original checkpoint absent")
+		recorded := operation(ctx, s, original.RecordedOperationID)
+		must(str(recorded, "state") == "SUCCEEDED",
+			"previously completed Exec did not survive same-DB process restart")
+		for _, proof := range []struct{ stream, want string }{
+			{"stdout", "saved-out"}, {"stderr", "saved-err"},
+		} {
+			out := call(ctx, s, "operation_output_get", map[string]any{
+				"operation_id": original.RecordedOperationID, "stream": proof.stream})
+			content, e := base64.StdEncoding.DecodeString(str(out, "content_base64"))
+			must(e == nil && string(content) == proof.want &&
+				out["exit_code"] == float64(7) && out["command_success"] == false,
+				"completed original output/exit was lost after native worker SIGKILL: "+proof.stream)
+		}
+		fmt.Println("S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS")
 		observed := operation(ctx, s, original.OperationID)
 		must(str(observed, "state") == "UNKNOWN" && str(observed, "native_operation_id") == original.NativeOperationID,
 			"restart failed to preserve exact native op ID and lock UNKNOWN")
