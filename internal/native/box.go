@@ -465,6 +465,24 @@ func (r Reader) DeleteBox(ctx context.Context, name, uuid string) (string, error
 	return id, nil
 }
 
+// boundedGuestCommand is tested independently of a native server: the GNU
+// timeout end-of-options delimiter belongs BEFORE the duration argument.
+// The executed program and its argv always remain inside the exact guest.
+func boundedGuestCommand(spec ExecSpec) ([]string, error) {
+	if spec.TimeoutMS == 0 {
+		return spec.Argv, nil
+	}
+	if spec.TimeoutMS < 1000 || spec.TimeoutMS > 900000 {
+		return nil, ErrNativeUnsupported
+	}
+	// Incus recorded output and native WaitForWS cannot be combined in 7.6.
+	// Guest timeout bounds the command but does not promise rollback or
+	// remote cancellation of already dispatched effects.
+	return append([]string{"/usr/bin/timeout", "--signal=TERM",
+		"--kill-after=5s", "--", fmt.Sprintf("%.3fs", float64(spec.TimeoutMS)/1000)},
+		spec.Argv...), nil
+}
+
 func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (string, error) {
 	box, _, err := r.GetExactBox(ctx, name, uuid)
 	if err != nil {
@@ -498,17 +516,9 @@ func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (str
 	if err != nil {
 		return "", err
 	}
-	argv := spec.Argv
-	if spec.TimeoutMS != 0 {
-		if spec.TimeoutMS < 1000 || spec.TimeoutMS > 900000 {
-			return "", ErrNativeUnsupported
-		}
-		// This is a guest-local GNU coreutils timeout in the approved
-		// Ubuntu image, not a host command or detached Incus Cancel().
-		// Exit 124/137 remains an observed guest exit, never proof that
-		// arbitrary prior side effects were rolled back.
-		argv = append([]string{"/usr/bin/timeout", "--signal=TERM",
-			"--kill-after=5s", fmt.Sprintf("%.3fs", float64(spec.TimeoutMS)/1000), "--"}, spec.Argv...)
+	argv, err := boundedGuestCommand(spec)
+	if err != nil {
+		return "", err
 	}
 	op, err := c.ExecInstance(name, api.InstanceExecPost{
 		Command: argv, Cwd: spec.Cwd, User: spec.UID, Group: spec.GID,

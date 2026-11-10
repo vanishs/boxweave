@@ -1,6 +1,8 @@
 package native
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/lxc/incus/v7/shared/api"
@@ -93,6 +95,28 @@ func TestS2ApprovedUbuntuLTSImageMetadata(t *testing.T) {
 	} {
 		if got := approvedUbuntu2404(tc.fields); got != tc.ok {
 			t.Fatalf("%s approved=%v want=%v", tc.name, got, tc.ok)
+		}
+	}
+}
+
+func TestS2GuestTimeoutArgvHasOptionsSeparatorBeforeDuration(t *testing.T) {
+	argv, err := boundedGuestCommand(ExecSpec{Argv: []string{"/bin/sh", "-c", "printf safe"},
+		TimeoutMS: 5000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/usr/bin/timeout", "--signal=TERM", "--kill-after=5s",
+		"--", "5.000s", "/bin/sh", "-c", "printf safe"}
+	if !reflect.DeepEqual(argv, want) {
+		t.Fatalf("GNU timeout argv prefix incorrectly placed: got=%v want=%v", argv, want)
+	}
+	direct, err := boundedGuestCommand(ExecSpec{Argv: []string{"/bin/true"}})
+	if err != nil || !reflect.DeepEqual(direct, []string{"/bin/true"}) {
+		t.Fatalf("direct recorded Exec accidentally wrapped: %v %v", direct, err)
+	}
+	for _, ms := range []int{-1, 999, 900001} {
+		if _, err := boundedGuestCommand(ExecSpec{TimeoutMS: ms}); !errors.Is(err, ErrNativeUnsupported) {
+			t.Fatalf("invalid guest time budget %d accepted: %v", ms, err)
 		}
 	}
 }
