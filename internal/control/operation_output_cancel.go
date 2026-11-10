@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -118,11 +117,8 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
-		if target.State != "ADMITTED" {
-			// Never call detached Incus Operation.Cancel() or misrepresent
-			// a cancellation request as guest termination.
-			return nil, cancelOperationResult{}, native.ErrNativeUnsupported
-		}
+		// Journal independently before acting. Retried keys return their original
+		// cancellation receipt even when the target is now terminal.
 		r, err := s.admitNative(ctx, req, "operation_cancel", in.IdempotencyKey,
 			"", "", "cancel:"+target.ID, in.WorkRef, in.AgentRef,
 			struct {
@@ -132,6 +128,9 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return nil, cancelOperationResult{}, err
 		}
 		effect := func(ctx context.Context) (string, error) {
+			if target.State != "ADMITTED" {
+				return "", state.PreDispatchError{Class: "ORIGINAL_ALREADY_DISPATCHED_CANCEL_UNSUPPORTED"}
+			}
 			if err := s.Store.CancelQueued(ctx, layer, target.ID); err != nil {
 				return "", state.PreDispatchError{Class: "ORIGINAL_NOT_QUEUED_CANCEL_UNSUPPORTED"}
 			}

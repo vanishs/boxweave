@@ -119,3 +119,97 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 		t.Fatalf("MCP read produced a side effect: %+v %v", unchanged, err)
 	}
 }
+
+func TestS2ViewerCannotMutateAnyNativeTool(t *testing.T) {
+	st, ts, admin, viewer := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "s2-negative-viewer", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint: ts.URL + "/mcp",
+		HTTPClient: &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: viewer}},
+		DisableStandaloneSSE: true, MaxRetries: -1,
+	}, nil)
+	if err != nil { t.Fatal(err) }
+	defer session.Close()
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+	}{
+		{"box_create", map[string]any{"name":"negative-box", "idempotency_key":"viewer-unauthorized-create-1"}},
+		{"box_update", map[string]any{"box_id":"forged", "cpu":2, "idempotency_key":"viewer-unauthorized-update-1"}},
+		{"box_start", map[string]any{"box_id":"forged", "idempotency_key":"viewer-unauthorized-start-1"}},
+		{"box_stop", map[string]any{"box_id":"forged", "idempotency_key":"viewer-unauthorized-stop-01"}},
+		{"box_delete", map[string]any{"box_id":"forged", "idempotency_key":"viewer-unauthorized-delete1"}},
+		{"box_exec", map[string]any{"box_id":"forged","argv":[]string{"true"}, "idempotency_key":"viewer-unauthorized-exec-01"}},
+		{"operation_cancel", map[string]any{"target_operation_id":"forged","idempotency_key":"viewer-unauthorized-cancel"}},
+	} {
+		r, err := session.CallTool(ctx, &mcp.CallToolParams{Name:tc.name,Arguments:tc.args})
+		if err==nil && r!=nil && !r.IsError { t.Fatalf("viewer mutation succeeded: %s %+v",tc.name,r) }
+	}
+	tok,err:=st.VerifyToken(ctx,admin)
+	if err!=nil {t.Fatal(err)}
+	ops,err:=st.ListOperations(ctx,state.OperationQuery{
+		Layer:"bw-test",Role:"admin",Requester:tok.ID,
+	})
+	if err!=nil||len(ops.Operations)!=0 {
+		t.Fatalf("viewer denial created a durable native admission: %+v %v",ops,err)
+	}
+}
+
+func TestS2MCPQueuedCancelOriginalReceiptNeverIssuesNativeID(t *testing.T) {
+	st, ts, admin, _ := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tok, err := st.VerifyToken(ctx, admin)
+	if err != nil {t.Fatal(err)}
+	target, err := st.Admit(ctx, state.Admission{
+		Layer: "bw-test", ActorID:tok.ID,TokenID:tok.ID,
+		Key:"s2-original-queued-exec-0001",Action:"box_exec",
+		RequestID:"queued-before-worker",SafeIntent:[]byte(`{"guest_command_digest":"safe"}`),
+		ResourceKey:"box:alpha",
+	})
+	if err != nil {t.Fatal(err)}
+	client:=mcp.NewClient(&mcp.Implementation{Name:"s2-queued-cancel",Version:"1"},nil)
+	session,err:=client.Connect(ctx,&mcp.StreamableClientTransport{
+		Endpoint:ts.URL+"/mcp",
+		HTTPClient:&http.Client{Transport:bearerTransport{base:http.DefaultTransport,token:admin}},
+		DisableStandaloneSSE:true,MaxRetries:-1,
+	},nil)
+	if err!=nil{t.Fatal(err)}
+	defer session.Close()
+	args:=map[string]any{"target_operation_id":target.ID,"idempotency_key":"s2-cancel-queued-original-0001"}
+	first,err:=session.CallTool(ctx,&mcp.CallToolParams{Name:"operation_cancel",Arguments:args})
+	if err!=nil||first.IsError{t.Fatalf("cancel admission: %+v %v",first,err)}
+	body,err:=json.Marshal(first.StructuredContent)
+	if err!=nil{t.Fatal(err)}
+	var receipt struct {
+		CancelOperation state.Receipt `json:"cancel_operation"`
+		TargetOperationID string `json:"target_operation_id"`
+	}
+	if err=json.Unmarshal(body,&receipt);err!=nil{t.Fatal(err)}
+	if receipt.CancelOperation.ID==""||receipt.CancelOperation.ID==target.ID||receipt.TargetOperationID!=target.ID {
+		t.Fatalf("fake/non-distinct cancel receipt: %+v",receipt)
+	}
+	deadline:=time.Now().Add(2*time.Second)
+	for time.Now().Before(deadline){
+		got,e:=st.Get(ctx,target.ID)
+		if e!=nil{t.Fatal(e)}
+		if got.State=="CANCELLED"{break}
+		time.Sleep(25*time.Millisecond)
+	}
+	got,err:=st.Get(ctx,target.ID)
+	if err!=nil||got.State!="CANCELLED"||got.NativeOperationID!=""{
+		t.Fatalf("cancelled queue still dispatchable or fake native id: %+v %v",got,err)
+	}
+	after,err:=session.CallTool(ctx,&mcp.CallToolParams{Name:"operation_cancel",Arguments:args})
+	if err!=nil||after.IsError{t.Fatalf("original cancel key replay: %+v %v",after,err)}
+	bytes,err:=json.Marshal(after.StructuredContent)
+	if err!=nil{t.Fatal(err)}
+	var duplicate struct{CancelOperation state.Receipt `json:"cancel_operation"`}
+	if err=json.Unmarshal(bytes,&duplicate);err!=nil{t.Fatal(err)}
+	if duplicate.CancelOperation.ID!=receipt.CancelOperation.ID||!duplicate.CancelOperation.Duplicate {
+		t.Fatalf("cancellation double dispatch or new receipt: original=%+v replay=%+v",
+			receipt.CancelOperation,duplicate.CancelOperation)
+	}
+}

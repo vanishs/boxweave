@@ -96,9 +96,15 @@ func TestS2CreatedNativeUUIDAndOriginalOperationBindAtomically(t *testing.T) {
 		Action: "box_create", ResourceKey: "box:owned-alpha",
 		SafeIntent: []byte(`{"name":"owned-alpha"}`),
 	})
-	if err != nil { t.Fatal(err) }
-	if err = st.Claim(ctx, r.ID); err != nil { t.Fatal(err) }
-	if err = st.NativeAck(ctx, r.ID, "real-op-evidence-placeholder"); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Claim(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.NativeAck(ctx, r.ID, "real-op-evidence-placeholder"); err != nil {
+		t.Fatal(err)
+	}
 	if err = st.RegisterCreatedBox(ctx, r.ID, "project-s2", "wrong-name", "uuid-exact"); !errors.Is(err, ErrState) {
 		t.Fatalf("unbound name adopted: %v", err)
 	}
@@ -125,42 +131,56 @@ func TestS2NativeRecordedOutputNeverDefaultsGuestExit(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)
 	_, token, err := st.IssueToken(ctx, "admin", time.Hour)
-	if err != nil {t.Fatal(err)}
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := st.Admit(ctx, Admission{
-		Layer:"project-s2", ActorID:token.ID,TokenID:token.ID,
-		Key:"recorded-output-original-01",RequestID:"original-exec",
-		Action:"box_exec",SafeIntent:[]byte(`{"argv_hash":"test-only"}`),
+		Layer: "project-s2", ActorID: token.ID, TokenID: token.ID,
+		Key: "recorded-output-original-01", RequestID: "original-exec",
+		Action: "box_exec", SafeIntent: []byte(`{"argv_hash":"test-only"}`),
 	})
-	if err != nil {t.Fatal(err)}
-	if err = st.SaveExecOutput(ctx,r.ID,"/etc/shadow","",nil);!errors.Is(err,ErrInvalid){
-		t.Fatalf("untrusted host output URL accepted: %v",err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _,err=st.ExecOutput(ctx,r.ID);!errors.Is(err,ErrNotFound){
-		t.Fatalf("fake output after refused URL: %v",err)
+	if err = st.SaveExecOutput(ctx, r.ID, "/etc/shadow", "", nil); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("untrusted host output URL accepted: %v", err)
 	}
-	exit:=7
-	if err=st.SaveExecOutput(ctx,r.ID,"/1.0/instances/owned-alpha/logs/exec-output/stdout",
-		"/1.0/instances/owned-alpha/logs/exec-output/stderr",&exit);err!=nil {t.Fatal(err)}
-	output,err:=st.ExecOutput(ctx,r.ID)
-	if err!=nil||output.ExitCode==nil||*output.ExitCode!=7 || output.StdoutPath=="" {
-		t.Fatalf("nonzero guest exit/output evidence was lost: %+v %v",output,err)
+	if _, err = st.ExecOutput(ctx, r.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("fake output after refused URL: %v", err)
+	}
+	exit := 7
+	if err = st.SaveExecOutput(ctx, r.ID, "/1.0/instances/owned-alpha/logs/exec-output/stdout",
+		"/1.0/instances/owned-alpha/logs/exec-output/stderr", &exit); err != nil {
+		t.Fatal(err)
+	}
+	output, err := st.ExecOutput(ctx, r.ID)
+	if err != nil || output.ExitCode == nil || *output.ExitCode != 7 || output.StdoutPath == "" {
+		t.Fatalf("nonzero guest exit/output evidence was lost: %+v %v", output, err)
 	}
 }
 
-func TestS2RecoverUndispatchedDoesNotReplay(t *testing.T){
-	ctx:=context.Background()
-	st:=newStore(t)
-	_,token,err:=st.IssueToken(ctx,"admin",time.Hour)
-	if err!=nil{t.Fatal(err)}
-	r,err:=st.Admit(ctx,Admission{Layer:"project-s2",ActorID:token.ID,TokenID:token.ID,
-		Key:"undispatched-process-crash",Action:"box_create",ResourceKey:"box:new",
-		SafeIntent:[]byte(`{"name":"new"}`),RequestID:"original"})
-	if err!=nil{t.Fatal(err)}
-	n,err:=st.Recover(ctx)
-	if err!=nil||n!=1{t.Fatalf("recover=%d err=%v",n,err)}
-	got,err:=st.Get(ctx,r.ID)
-	if err!=nil||got.State!="FAILED"||got.ErrorClass!="PROCESS_RESTART_BEFORE_DISPATCH"{
-		t.Fatalf("queued crash was replayed/left locked: %+v %v",got,err)
+func TestS2RecoverUndispatchedDoesNotReplay(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	_, token, err := st.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err:=st.Claim(ctx,r.ID);!errors.Is(err,ErrState){t.Fatalf("undispatched task re-claimed: %v",err)}
+	r, err := st.Admit(ctx, Admission{Layer: "project-s2", ActorID: token.ID, TokenID: token.ID,
+		Key: "undispatched-process-crash", Action: "box_create", ResourceKey: "box:new",
+		SafeIntent: []byte(`{"name":"new"}`), RequestID: "original"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := st.Recover(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("recover=%d err=%v", n, err)
+	}
+	got, err := st.Get(ctx, r.ID)
+	if err != nil || got.State != "FAILED" || got.ErrorClass != "PROCESS_RESTART_BEFORE_DISPATCH" {
+		t.Fatalf("queued crash was replayed/left locked: %+v %v", got, err)
+	}
+	if err := st.Claim(ctx, r.ID); !errors.Is(err, ErrState) {
+		t.Fatalf("undispatched task re-claimed: %v", err)
+	}
 }
