@@ -20,16 +20,26 @@ import (
 
 const SchemaVersion = 1
 
-// Exact schema contract for v1. Any shape change MUST increment SchemaVersion
-// and go through an explicitly reviewed migration/rollback; do not silently
-// adopt another DB merely because it advertises version 1.
+// Fresh-install S2 baseline: there is no retained deployed v1 database yet.
+// Both tables and indexes are exact-fingerprinted; old S1 test DBs are refused,
+// never silently migrated, adopted or deleted. Once deployed, schema changes
+// will require reviewed migration and rollback.
 var schemaDDL = []string{
 	"CREATE TABLE schema_version (version INTEGER NOT NULL)",
 	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
 	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
-	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
+	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, work_ref TEXT NOT NULL DEFAULT '', agent_ref TEXT NOT NULL DEFAULT '', box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
 	"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
 	"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
+	"CREATE TABLE cursor_secrets (id INTEGER PRIMARY KEY CHECK(id=1), secret BLOB NOT NULL CHECK(length(secret)=32))",
+}
+
+var schemaIndexes = []string{
+	"CREATE INDEX operations_layer_time ON operations(layer,created_at,id)",
+	"CREATE INDEX operations_actor_time ON operations(layer,actor_id,created_at,id)",
+	"CREATE INDEX operations_work_time ON operations(layer,work_ref,created_at,id)",
+	"CREATE INDEX operations_agent_time ON operations(layer,agent_ref,created_at,id)",
+	"CREATE INDEX operations_state_time ON operations(layer,state,created_at,id)",
 }
 
 var (
@@ -62,6 +72,8 @@ type Admission struct {
 	BoxUUID     string
 	Incarnation string
 	RequestID   string
+	WorkRef     string
+	AgentRef    string
 }
 
 type Receipt struct {
@@ -70,6 +82,15 @@ type Receipt struct {
 	State             string `json:"state"`
 	NativeOperationID string `json:"native_operation_id,omitempty"`
 	Duplicate         bool   `json:"duplicate,omitempty"`
+	WorkRef           string `json:"work_ref,omitempty"`
+	AgentRef          string `json:"agent_ref,omitempty"`
+	Action            string `json:"action,omitempty"`
+	BoxUUID           string `json:"box_uuid,omitempty"`
+	Incarnation       string `json:"incarnation,omitempty"`
+	ErrorClass        string `json:"error_class,omitempty"`
+	CreatedAt         int64  `json:"created_at,omitempty"`
+	UpdatedAt         int64  `json:"updated_at,omitempty"`
+	NextAction        NextAction `json:"next_action"`
 }
 
 func newID() (string, error) {
@@ -194,6 +215,37 @@ func (s *Store) init(fresh bool) error {
 				return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
 			}
 		}
+		// Validate every index in the new initial schema as well as tables. No
+		// silently changed/foreign index may influence a security-scoped query.
+		indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+		if err != nil {
+			return err
+		}
+		actualIndexes := map[string]string{}
+		for indexRows.Next() {
+			var name, sqlText string
+			if err := indexRows.Scan(&name, &sqlText); err != nil {
+				_ = indexRows.Close()
+				return err
+			}
+			actualIndexes[name] = sqlText
+		}
+		if err := indexRows.Err(); err != nil {
+			_ = indexRows.Close()
+			return err
+		}
+		if err := indexRows.Close(); err != nil {
+			return err
+		}
+		if len(actualIndexes) != len(schemaIndexes) {
+			return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
+		}
+		for _, expected := range schemaIndexes {
+			name := strings.Fields(expected)[2]
+			if actualIndexes[name] != expected {
+				return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
+			}
+		}
 		// A foreign trigger/view can silently change mutation semantics even when
 		// the six declared table names and schema_version are unchanged.
 		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
@@ -227,11 +279,19 @@ func (s *Store) init(fresh bool) error {
 		return err
 	}
 	defer tx.Rollback()
-	schema := append(append([]string{}, schemaDDL...), "INSERT INTO schema_version(version) VALUES (1)")
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return err
+	}
+	schema := append(append([]string{}, schemaDDL...), schemaIndexes...)
+	schema = append(schema, "INSERT INTO schema_version(version) VALUES (1)")
 	for _, q := range schema {
 		if _, err := tx.Exec(q); err != nil {
 			return err
 		}
+	}
+	if _, err := tx.Exec("INSERT INTO cursor_secrets(id,secret) VALUES (1,?)", key); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -300,12 +360,13 @@ func (s *Store) tokenActive(ctx context.Context, id string) (bool, error) {
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || a.ActorID != a.TokenID || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
-		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" {
+		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
+		!validRef(a.WorkRef) || !validRef(a.AgentRef) {
 		return Receipt{}, ErrInvalid
 	}
 	// A non-secret digest avoids storing raw client key.
 	keyHash := digest(a.Key)
-	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
+	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation + "\x00" + a.WorkRef + "\x00" + a.AgentRef)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Receipt{}, err
@@ -313,7 +374,7 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	defer tx.Rollback()
 	var found Receipt
 	var priorHash, priorToken string
-	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID)
+	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id,work_ref,agent_ref FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID, &found.WorkRef, &found.AgentRef)
 	if err == nil {
 		if priorHash != intentHash || priorToken != a.TokenID {
 			return Receipt{}, ErrConflict
@@ -359,8 +420,8 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		return Receipt{}, err
 	}
 	now := time.Now().UnixNano()
-	_, err = tx.ExecContext(ctx, "INSERT INTO operations (id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,box_uuid,incarnation,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		id, tracking, a.RequestID, a.Layer, a.ActorID, a.TokenID, keyHash, a.Action, intentHash, a.SafeIntent, a.BoxUUID, a.Incarnation, "ADMITTED", now, now)
+	_, err = tx.ExecContext(ctx, "INSERT INTO operations (id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,work_ref,agent_ref,box_uuid,incarnation,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		id, tracking, a.RequestID, a.Layer, a.ActorID, a.TokenID, keyHash, a.Action, intentHash, a.SafeIntent, a.WorkRef, a.AgentRef, a.BoxUUID, a.Incarnation, "ADMITTED", now, now)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -370,13 +431,16 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if err = tx.Commit(); err != nil {
 		return Receipt{}, err
 	}
-	return Receipt{ID: id, TrackingID: tracking, State: "ADMITTED"}, nil
+	return Receipt{ID: id, TrackingID: tracking, State: "ADMITTED", WorkRef: a.WorkRef, AgentRef: a.AgentRef, Action: a.Action, BoxUUID: a.BoxUUID, Incarnation: a.Incarnation, CreatedAt: now, UpdatedAt: now, NextAction: nextAction("ADMITTED", a.Action, id)}, nil
 }
 func (s *Store) Get(ctx context.Context, id string) (Receipt, error) {
 	var r Receipt
-	err := s.db.QueryRowContext(ctx, "SELECT id,tracking_id,state,native_operation_id FROM operations WHERE id=?", id).Scan(&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID)
+	err := s.db.QueryRowContext(ctx, "SELECT id,tracking_id,state,native_operation_id,work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at FROM operations WHERE id=?", id).Scan(&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID, &r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation, &r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
+	}
+	if err == nil {
+		r.NextAction = nextAction(r.State, r.Action, r.ID)
 	}
 	return r, err
 }
