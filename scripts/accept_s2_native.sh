@@ -328,9 +328,12 @@ echo "S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS"
 # is intentionally constructed independently from the running journal.
 foreign_db="$work/ledger/foreign.sqlite"
 corrupt_db="$work/ledger/corrupt.sqlite"
-sudo runuser -u boxweave -- python3 - "$foreign_db" "$corrupt_db" <<'PY'
+legacy_db="$work/ledger/legacy.sqlite"
+ambiguous_db="$work/ledger/ambiguous.sqlite"
+versioned_foreign_db="$work/ledger/versioned-foreign.sqlite"
+sudo runuser -u boxweave -- python3 - "$foreign_db" "$corrupt_db" "$legacy_db" "$ambiguous_db" "$versioned_foreign_db" <<'PY'
 import os,sqlite3,sys
-foreign,corrupt=sys.argv[1:]
+foreign,corrupt,legacy,ambiguous,versioned_foreign=sys.argv[1:]
 conn=sqlite3.connect(foreign)
 conn.execute("CREATE TABLE foreign_marker (proof TEXT NOT NULL)")
 conn.execute("INSERT INTO foreign_marker VALUES ('do-not-adopt')")
@@ -338,15 +341,27 @@ conn.commit()
 conn.close()
 with open(corrupt,"wb") as f:
     f.write(b"not a SQLite database; must remain exactly unchanged")
-os.chmod(foreign,0o600)
-os.chmod(corrupt,0o600)
+for path,version,extra_row in ((legacy,0,False),(ambiguous,1,True),(versioned_foreign,1,False)):
+    conn=sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_version(version INTEGER NOT NULL)")
+    conn.execute("INSERT INTO schema_version VALUES (?)",(version,))
+    if extra_row:
+        conn.execute("INSERT INTO schema_version VALUES (1)")
+    if path==versioned_foreign:
+        conn.execute("CREATE TABLE outsider (proof TEXT)")
+    conn.commit()
+    conn.close()
+for path in sys.argv[1:]:
+    os.chmod(path,0o600)
 PY
-for case in foreign corrupt; do
-  if [ "$case" = foreign ]; then
-    f="$foreign_db"
-  else
-    f="$corrupt_db"
-  fi
+for case in foreign corrupt legacy ambiguous versioned_foreign; do
+  case "$case" in
+    foreign) f="$foreign_db" ;;
+    corrupt) f="$corrupt_db" ;;
+    legacy) f="$legacy_db" ;;
+    ambiguous) f="$ambiguous_db" ;;
+    versioned_foreign) f="$versioned_foreign_db" ;;
+  esac
   before="$(sudo sha256sum "$f" | cut -d' ' -f1)"
   if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$f" \
       -incus-socket "$socket" -project "$project" > "$work/sqlite-$case.stderr" 2>&1; then
@@ -360,4 +375,5 @@ for case in foreign corrupt; do
   fi
 done
 echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
+echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
