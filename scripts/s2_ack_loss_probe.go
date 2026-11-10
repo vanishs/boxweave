@@ -257,6 +257,12 @@ func testAcceptedUpdateAckLoss(ctx context.Context, s *mcp.ClientSession, resume
 	}
 	createID := field(created, "operation_id")
 	require(createID != "", "new native Update fixture missing original create")
+	// An earlier ACK-loss test was deliberately cleaned up by the one-use
+	// administrator, while its own journal still retains a historical claim.
+	// box_list intentionally refuses to hide that missing native UUID. Read
+	// only this just-finished original Create operation, which atomically
+	// records the exact owned Box UUID on independent successful postread.
+	var boxID string
 	for n := 0; n < 120; n++ {
 		ret, err := invoke(ctx, s, "operation_get", map[string]any{
 			"operation_id": createID, "wait_ms": 400,
@@ -266,14 +272,14 @@ func testAcceptedUpdateAckLoss(ctx context.Context, s *mcp.ClientSession, resume
 		}
 		r := child(ret, "operation")
 		if field(r, "state") == "SUCCEEDED" {
+			boxID = field(r, "box_uuid")
 			break
 		}
 		require(field(r, "state") != "UNKNOWN" && field(r, "state") != "FAILED" &&
 			field(r, "state") != "CANCELLED", "Update ACK fixture was not safely created")
 		require(n < 119, "native Update fixture never completed")
 	}
-	boxID := field(childMustBox(ctx, s, fixture), "box_id")
-	require(boxID != "", "native Update fixture lacks exact owned UUID")
+	require(boxID != "", "verified original Create receipt lacks exact Box UUID")
 	update, err := invoke(ctx, s, "box_update", updateAckArgs(boxID))
 	if err != nil {
 		panic(err)
