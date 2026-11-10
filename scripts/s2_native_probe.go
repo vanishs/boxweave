@@ -150,6 +150,11 @@ func nativePing(ctx context.Context, session *mcp.ClientSession, uuid, key, dest
 	check(ip != nil && (family == 4 && ip.To4() != nil || family == 6 && ip.To4() == nil),
 		"guest ping destination not an inspected address")
 	command := fmt.Sprintf("ping -%d -n -c 1 -W 2 %s", family, destination)
+	if family == 6 && ip.IsLinkLocalUnicast() {
+		// A link-local gateway must be addressed with an explicit egress
+		// interface, otherwise "invalid scope" looks like an ACL denial.
+		command = fmt.Sprintf("ping -6 -I eth0 -n -c 1 -W 2 %s", destination)
+	}
 	_, exit := guestRead(ctx, session, uuid, key, command)
 	return exit
 }
@@ -415,9 +420,15 @@ func main() {
 	check(a4 != b4 && a6 != b6, "two native guest NICs inherited the same address")
 	ga4 := guestGateway(ctx, admin, uuid, "a", 4)
 	gb4 := guestGateway(ctx, admin, peerUUID, "b", 4)
+	ga6 := guestGateway(ctx, admin, uuid, "a", 6)
+	gb6 := guestGateway(ctx, admin, peerUUID, "b", 6)
 	check(nativePing(ctx, admin, uuid, "native-s2-gateway-a4-positive", ga4, 4) == 0 &&
 		nativePing(ctx, admin, peerUUID, "native-s2-gateway-b4-positive", gb4, 4) == 0,
 		"baseline egress cannot even reach each guest's native bridge gateway")
+	check(nativePing(ctx, admin, uuid, "native-s2-gateway-a6-positive", ga6, 6) == 0 &&
+		nativePing(ctx, admin, peerUUID, "native-s2-gateway-b6-positive", gb6, 6) == 0,
+		"IPv6 baseline cannot reach assigned native gateway; no valid egress control")
+	fmt.Println("S2_NATIVE_PACKET_IPV6_GATEWAY_BASELINE=PASS")
 	check(nativePing(ctx, admin, uuid, "native-s2-private-a-to-b-v4-deny", b4, 4) == 1 &&
 		nativePing(ctx, admin, peerUUID, "native-s2-private-b-to-a-v4-deny", a4, 4) == 1,
 		"default ingress ACL did not deny IPv4 between owned Boxes")
@@ -436,15 +447,26 @@ func main() {
 	check(nativePing(ctx, admin, uuid,
 		"native-s2-running-offline-gateway-denied", ga4, 4) != 0,
 		"internet=false still sent IPv4 packets to native gateway")
+	check(nativePing(ctx, admin, uuid,
+		"native-s2-running-offline-ipv6-gateway-denied", ga6, 6) != 0,
+		"internet=false still sent IPv6 packets to native gateway")
 	online := call(ctx, admin, "box_update", map[string]any{
 		"box_id": uuid, "internet": true,
 		"idempotency_key": "native-s2-running-online-packets-01",
 	})
 	wait(ctx, admin, id(online))
 	check(nativePing(ctx, admin, uuid,
-		"native-s2-running-online-gateway-restored", ga4, 4) == 0,
-		"internet=true did not restore real native IPv4 egress")
-	fmt.Println("S2_NATIVE_PACKET_INTERNET_TOGGLE_GATEWAY_EGRESS=PASS")
+		"native-s2-running-online-gateway-restored", ga4, 4) == 0 &&
+		nativePing(ctx, admin, uuid,
+			"native-s2-running-online-ipv6-gateway-restored", ga6, 6) == 0,
+		"internet=true did not restore real native IPv4 AND IPv6 gateway egress")
+	fmt.Println("S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS=PASS")
+	check(nativePing(ctx, admin, uuid,
+		"native-s2-peer-still-denied-after-internet-on-v4", b4, 4) == 1 &&
+		nativePing(ctx, admin, uuid,
+			"native-s2-peer-still-denied-after-internet-on-v6", b6, 6) == 1,
+		"re-enabling internet bypassed default private peer IPv4/IPv6 ingress")
+	fmt.Println("S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS=PASS")
 	peerStop := call(ctx, admin, "box_stop", map[string]any{
 		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-stop-01"})
 	wait(ctx, admin, id(peerStop))
