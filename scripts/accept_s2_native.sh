@@ -239,9 +239,23 @@ cat "$work/native-probe.log"
 # Never restart the native effect; revive ONLY the same SQLite-backed MCP
 # process. Distinct earlier UNKNOWN tasks on any shared host are untouched.
 crash_state="$work/original-crash.json"
-BW_S2_CRASH_STATE_FILE="$crash_state" \
+if ! ( BW_S2_CRASH_STATE_FILE="$crash_state" \
   BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
-  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" start
+  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" start ) > "$work/crash-start.log" 2>&1; then
+  # Postmortem is read-only, on the exact disposable CI Project. Never
+  # reissue a possibly completed native create, nor touch a shared daemon.
+  cat "$work/crash-start.log"
+  echo "S2_NATIVE_DIAG_FAILED_CRASH_FIXTURE_CREATE"
+  sudo incus list --all-projects --format yaml || :
+  sudo incus config show bw-s2-crash-110b --expanded --project "$project" || :
+  sudo incus info bw-s2-crash-110b --project "$project" || :
+  original_id="$(sed -n 's/.*native_operation_id:\([0-9a-f-]*\).*/\1/p' "$work/crash-start.log" | head -n1)"
+  if [ -n "$original_id" ]; then
+    sudo incus operation show "$original_id" --project "$project" || :
+  fi
+  exit 93
+fi
+cat "$work/crash-start.log"
 test -s "$crash_state"
 if ! sudo pkill -KILL -u boxweave -f "^$work/boxweave serve"; then
   echo "S2_NATIVE_FAIL: exact disposable service process not found for kill" >&2
