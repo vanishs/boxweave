@@ -57,3 +57,24 @@ func TestS2ExecOutputIsNotGuestExitZeroByDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestS2RecordedOutputDoHTTPUsesExactSDKURLAndRestrictedProject(t *testing.T) {
+	want := "http://unix.socket/1.0/instances/alpha/logs/exec-output/out?project=user-1002"
+	got, err := verifiedRecordedOutputURL("http://unix.socket",
+		"/1.0/instances/alpha/logs/exec-output/out", "user-1002")
+	if err != nil || got != want {
+		t.Fatalf("raw relative DoHTTP URL cannot reach native output: got=%q err=%v", got, err)
+	}
+	for _, tc := range []struct{ base, path, project string }{
+		{"https://evil.example","/etc/shadow","owned"},
+		{"http://unix.socket","/1.0/instances/a/../b/logs/exec-output/out","owned"},
+		{"http://unix.socket","/1.0/instances/a/logs/exec-output/out",""},
+		{"http://unix.socket?project=default","/1.0/instances/a/logs/exec-output/out","owned"},
+		{"file:///var/lib/incus/unix.socket","/1.0/instances/a/logs/exec-output/out","owned"},
+		{"http://unix.socket","https://foreign/1.0/instances/a/logs/exec-output/out","owned"},
+	} {
+		if target, err := verifiedRecordedOutputURL(tc.base,tc.path,tc.project); err == nil {
+			t.Fatalf("unsafe native output read URL accepted: %q", target)
+		}
+	}
+}

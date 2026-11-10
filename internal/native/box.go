@@ -564,6 +564,27 @@ func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence, error) {
 	return out, nil
 }
 
+// verifiedRecordedOutputURL builds the URL expected by official SDK DoHTTP.
+// Unlike typed Incus queries, DoHTTP does not add the Project selector or
+// complete a relative URL. Both must be supplied from trusted SDK connection
+// data; guest/client arguments can never choose the host or arbitrary path.
+func verifiedRecordedOutputURL(base, path, project string) (string, error) {
+	if execPath(path) == "" || project == "" || len(project) > 128 {
+		return "", ErrNativeUnsupported
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.User != nil || u.Host == "" ||
+		(u.Scheme != "http" && u.Scheme != "https") ||
+		u.RawQuery != "" || u.Fragment != "" {
+		return "", ErrUnverified
+	}
+	u.Path = path
+	q := u.Query()
+	q.Set("project", project)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 // ReadRecordedOutput performs a bounded read through the official SDK's
 // authenticated DoHTTP transport; URLs come only from verified native
 // operation metadata already journaled by BoxWeave, not from the client.
@@ -575,7 +596,15 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 	if err != nil {
 		return nil, false, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	info, err := c.GetConnectionInfo()
+	if err != nil || info == nil {
+		return nil, false, ErrUnverified
+	}
+	readURL, err := verifiedRecordedOutputURL(info.URL, path, r.Project)
+	if err != nil {
+		return nil, false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, readURL, nil)
 	if err != nil {
 		return nil, false, err
 	}

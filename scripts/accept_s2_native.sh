@@ -108,7 +108,7 @@ sudo incus profile device set default eth0 --project "$project" \
 
 # Prepare the allowlisted immutable Ubuntu image alias for native Create.
 # No arbitrary image URL/alias is accepted from MCP clients.
-sudo incus image copy images:ubuntu/24.04 local: --project "$project" \
+sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" \
   --alias boxweave-ubuntu-24.04
 echo "S2_NATIVE_IMAGE_ALIAS_LIST_ADMIN"
 sudo incus image alias list --project "$project"
@@ -116,7 +116,7 @@ echo "S2_NATIVE_IMAGE_LIST_ADMIN"
 sudo incus image list --project "$project"
 echo "S2_NATIVE_IMAGE_ALIAS_LIST_RESTRICTED"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus image alias list --format csv
-if ! sudo incus image alias show boxweave-ubuntu-24.04 --project "$project"; then
+if ! sudo incus image info boxweave-ubuntu-24.04 --project "$project"; then
   echo "S2_NATIVE_IMAGE_ALIAS_NOT_VISIBLE_IN_OWNED_PROJECT" >&2
   exit 86
 fi
