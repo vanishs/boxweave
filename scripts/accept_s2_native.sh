@@ -466,6 +466,27 @@ echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
 # Only this **one-use CI host administrator**, NOT BoxWeave's original
 # UNKNOWN recovery API, deletes the exact known test fixture after native
 # effects were independently witnessed. Leave the SQLite record UNKNOWN.
+# An ACK was intentionally suppressed immediately after HTTP 202; the native
+# Create can still be running when its UUID becomes visible. Inspect Incus
+# asynchronous operations read-only and wait for the REAL native Create to
+# settle before attempting cleanup. Never retry the original MCP mutation.
+attempt=0
+while [ "$attempt" -lt 120 ]; do
+  if sudo incus operation list --project "$project" --format json |
+      python3 -c 'import json,sys; ops=json.load(sys.stdin); sys.exit(0 if len(ops)==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 120 ]; then
+  echo "S2_NATIVE_FAIL: lost-ACK native create still running; cannot safely teardown" >&2
+  sudo incus operation list --project "$project" --format yaml || :
+  sudo incus info bw-s2-ack-native-110d --project "$project" || :
+  exit 96
+fi
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
