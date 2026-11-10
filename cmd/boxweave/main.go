@@ -195,8 +195,15 @@ func run() error {
 	defer s.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// Never blindly replay an operation possibly sent to Incus before a restart.
+	// Only the active server may run startup recovery. A concurrent serve
+	// sharing SQLite could otherwise UNKNOWN the first server's live work.
+	// The kernel releases this private flock automatically on SIGKILL.
 	if command == "serve" {
+		locked, err := acquireServeLock(*db)
+		if err != nil {
+			return err
+		}
+		defer locked.Close()
 		if _, err := s.Recover(ctx); err != nil {
 			return err
 		}

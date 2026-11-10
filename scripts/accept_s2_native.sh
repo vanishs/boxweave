@@ -217,6 +217,21 @@ until [ "$attempt" -ge 40 ]; do
 done
 test "$attempt" -lt 40
 
+# A second serve on the identical SQLite must be rejected BEFORE it may
+# run Recover() on the original controller's still-live operations.
+# Read-only local status must still be available from a separate process.
+if timeout --signal=TERM 8s sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
+  -incus-socket "$socket" -project "$project" -listen 127.0.0.1:18655 > "$work/duplicate-serve.refusal" 2>&1; then
+  echo "S2_NATIVE_FAIL: second serve acquired already-owned SQLite" >&2
+  exit 98
+fi
+grep -Fq "serve already active for this database" "$work/duplicate-serve.refusal"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" status -db "$db" \
+  -incus-socket "$socket" -project "$project" > "$work/concurrent-status.json"
+test -s "$work/concurrent-status.json"
+test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp)" = 401
+echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
+
 # The independent original native Agent's own official MCP Go SDK client
 # reads the exact installed candidate's bytes, not in-process Go mocks.
 if ! ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
