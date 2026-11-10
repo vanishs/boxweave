@@ -61,6 +61,57 @@ Neither this run nor the earlier one establishes S2 exit, first-start
 packet-level IPv4/IPv6 isolation, running recorded Exec cancellation,
 internet toggle, interrupted SQLite commit, or S4 dependent deletion.
 
+## 2026-11-10 extended installed packet/isolation and continuity reacceptance
+
+**Exact accepted binary source:** `b679248d2ec1d112996a1da0e3ac2136cd7b5a1a`,
+**compiled SHA256:** `df89109f15d134c433c1539e4b5b28ff56cf2c41b27999463cb3e004fb316f2b`.
+[Native job](https://github.com/vanishs/boxweave/actions/runs/42845735407/job/129932568109)
+SUCCESS; [Go build/race](https://github.com/vanishs/boxweave/actions/runs/42845751449/job/129932625888)
+and [quality](https://github.com/vanishs/boxweave/actions/runs/42845735396/job/129932570441)
+SUCCESS on the exact candidate. This is an additional installed-binary/real
+Incus 7.6 evidence slice **NOT** an S2 phase or physical-host release PASS.
+
+**New real packet and identity proof:**
+
+- `S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY=PASS`: two original UUID-registered Boxes using the same managed NIC bridge/shared ACL each passed guest-to-bridge-gateway IPv4 Ping, while A→B and B→A native guest IPv4 and IPv6 Ping returned the true no-reply exit code 1. The probe checked actual `ping` binary availability and separately waited for assigned guest IPs, so missing client binaries or uninitialized guest routing could not be counted as isolation.
+- `S2_NATIVE_PACKET_INTERNET_TOGGLE_GATEWAY_EGRESS=PASS`: Box A was **already running**; the native `internet=false` update blocked an earlier working IPv4 gateway Ping, then `internet=true` restored real packets. Per-instance ETag updates preserved actual native inbound `reject` ACL attachment, IP/IPv6/MAC filtering and CPU/disk. **Caveat:** testing gateway packets is not proof of successful public WAN/HTTPS connection, IPv6 Internet toggling, full peer-grant/revoke, host LAN or S4 routing.
+- `S2_NATIVE_PACKET_PEER_EXACT_CLEANUP=PASS`: test peer was stopped/deleted by its own original MCP operations, then the earlier core and crash fixture were also removed. Independent host administrator's final all-Project inventory was empty.
+- `S2_NATIVE_CREATE_DEFAULT_INTERNET_ALLOW=PASS` and real `start=true` guest creation now survive repeated source runs. A **real defect** was caught: `GetExactBox` and `ObserveCreated` broke out of a Go `api.DevicesMap` range when visiting root disk; random map ordering skipped the NIC's `internet` field, returned false even though independent native expanded NIC showed egress `allow`, and marked otherwise successful create UNKNOWN. Commit `de9224e4` removed this order dependency via one full traversal. A 256-run pure regression and the new native/SDK full lifecycle verify both root size and Internet value together.
+- `S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS`: a completed guest Exec's real stdout, stderr and **exit 7** were recovered after a separate active Exec's BoxWeave service SIGKILL and reopening the **same original SQLite**. The killed original native Exec remains UNKNOWN/no re-dispatch; independent guest marker was observed exactly once.
+- The exact accepted binary also re-proved custom official MCP SDK `_meta` attribution + conflict, work/agent joint search, scoped HMAC cursor paging/tamper denial, true opt-in nesting, same-key conflict and name-reuse anti-adoption, truthful late cancel, read-only long-poll cancellation and 70KB paginated output.
+
+**Unclosed security limits:** Public Internet routing beyond the owned bridge,
+IPv6 egress-toggle policy, heavy output native storage exhaustion/retention,
+native response loss before Operation ID persistence, SQLite interrupted commit,
+unverified update readback and full TC/A phase gate remain PARTIAL or BLOCKED
+as specified in the [updated case crosswalk](S2_EXIT_CROSSWALK_2026-11-10.md).
+A **later exact installed candidate** `97df5d63005eea33d35155cb6862556027ea70c1`
+[real native run](https://github.com/vanishs/boxweave/actions/runs/42847588015/job/129939158833),
+[build/race](https://github.com/vanishs/boxweave/actions/runs/42847607027/job/129939222907)
+and [quality](https://github.com/vanishs/boxweave/actions/runs/42847587965/job/129939159097)
+all SUCCESS; compiled binary SHA256
+`46faf46df444133b7024a0b6271def19fc1537be31520f3bd3e282b0138f5235`.
+New `S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS`: a guest produced
+16MiB+4 stdout **and independently** 16MiB+4 stderr. Each native output
+read from offset 16MiB-16 returned exactly 16 bytes, `ended=true`,
+`truncated=true`, `next_offset=16777216`; an offset beyond 16MiB
+was rejected. No claim about underlying native output file storage
+truncation or garbage collection is made. First fixture use of
+`tee /dev/stderr` failed the stderr proof, so the final probe writes
+stdout and actual guest fd 2 independently, retaining the original
+unweakened byte/flag assertions. The complete native packet/identity,
+SIGKILL/recording-restart and empty-inventory matrix reran successfully.
+**Installed foreign/corrupt SQLite refusal now PASS:** exact source
+`21db2e9bdd76f6453cb0c149b1957f8b1efee158`,
+[full native CI](https://github.com/vanishs/boxweave/actions/runs/42848419436/job/129942104632)
+and [build/race](https://github.com/vanishs/boxweave/actions/runs/42848434191/job/129942159145)
+both succeeded. Native marker `S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS`
+means the compiled `boxweave doctor` refused both an independently constructed
+foreign schema and invalid SQLite file **without changing either input SHA256**.
+The earlier complete packet/dual-stream/worker SIGKILL/guest exactly-once
+matrix reran on that exact installed candidate. **Torn transactions and
+native lost-ACK failures are not accepted**.
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
@@ -97,9 +148,9 @@ internet toggle, interrupted SQLite commit, or S4 dependent deletion.
 ## Still open; not silently promoted to S2 PASS
 
 - True native SIGKILL **after the native Exec ACK was persisted**, original UNKNOWN and exactly-once guest side effect are now independently proved on later `facd9a0b`. **Still missing:** pre-ACK lost-response native create/resize, interrupted SQLite commit, positive nesting, live name reuse/foreign Project on the later candidate and hostile readback-failure injection. Earlier S1 tests alone are not a substitute.
-- Real **70KB noisy, quiet and delayed** Exec now PASS. Still open: full 16MiB per-stream upper-bound/truncation behavior, guest output after server restart, and **native log storage retention and exhaustion**; the 16MiB API read cap is not an Incus on-disk cap.
+- Real **70KB noisy, quiet and delayed** Exec plus 16MiB+4 native stdout AND stderr each return accurate 16MiB API truncation PASS, as does completed output after a server SIGKILL/restart. **Native log storage retention, garbage collection and exhaustion still have no accepted bound**; the API read cap is not an Incus on-disk cap.
 - **Running Exec cancellation:** tagged Incus 7.6 explicitly rejects `RecordOutput:true` combined with `WaitForWS:true`, and a detached recorded Exec does not guarantee a working `Operation.Cancel()`. This S2 implementation truthfully supports cancellation before dispatch and refuses detached/late cancellation. A separately bounded live-control WebSocket execution mode, if developed, needs its own native termination/return-code acceptance; it may not be mislabeled as durable recorded mode.
-- First-start network ACL isolation under actual IPv4/IPv6 packet tests and internet toggling, nesting, foreign NIC attachments, and the future S4 managed proxy/peer dependency removal seam are not covered by this single-Box native run. Current internet toggling is deliberately UNSUPPORTED.
+- The **earlier** single-Box run did not test IPv4/IPv6 peer packets, per-Box Internet or nesting. All now have positive **restricted-host** proof at later `b679248d` as above; **public WAN/IPv6 egress-toggle**, foreign NIC attachment and S4 peer/forward/dependent delete are still unaccepted. The prior Internet-UNSUPPORTED source state was superseded by the later independently native-verified typed NIC egress implementation; this does not imply an S4 packet policy PASS.
 - Complete `TC-001–TC-010` and phase acceptance IDs require a separate explicit evidence crosswalk, including test types (unit/mocked/native/fault injected) and failures. These are NOT covered by the one successful lifecycle run.
 - No installed v1 production database exists; initial schema can still change. Do not migrate or adopt old S1 disposable DBs.
 - Two older, **distinct** originally UNKNOWN create tasks described in the S1 development handoff are not part of this test and were neither redispatched nor cleaned.

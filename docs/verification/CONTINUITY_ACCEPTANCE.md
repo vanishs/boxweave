@@ -1,6 +1,8 @@
 # TC — Operation Attribution & Continuity additional real acceptance matrix
 
-**Status: PLANNED / UNTESTED, not a runtime PASS.** New TC cases supplement all original [A-/SDK-G release acceptance](ACCEPTANCE.md) and [BRIDGEHEAD BH-001–BH-017](BRIDGEHEAD_ACCEPTANCE.md), never replace them. **Exactly 20 existing public MCP Tools remain.** Evidence classes: **T** typed/unit, **I** actual installed candidate via real MCP/CLI, **N** native Incus/guest state and forbidden side-effects witness, **V** independent verifier/poststate. Any mandatory TC case missing evidence is BLOCKED/UNKNOWN, not PASS. Source SHA, exact binary digest, authentic actor, controller layer, original IDs and observed negative effects required.
+**Status: PARTIALLY EXECUTED / NOT AN S2 PHASE PASS.** New TC cases supplement all original [A-/SDK-G release acceptance](ACCEPTANCE.md) and [BRIDGEHEAD BH-001–BH-017](BRIDGEHEAD_ACCEPTANCE.md), never replace them. **Exactly 20 existing public MCP Tools remain.** Evidence classes: **T** typed/unit, **I** actual installed candidate via real MCP/CLI, **N** native Incus/guest state and forbidden side-effects witness, **V** independent verifier/poststate. Any mandatory TC case missing evidence is BLOCKED/UNKNOWN, not PASS. Source SHA, exact binary digest, authentic actor, controller layer, original IDs and observed negative effects required.
+
+Per-case real Incus+official SDK/SQLite evidence, remaining failure injections and explicit **PARTIAL/BLOCKED** disposition: [S2 exit crosswalk](S2_EXIT_CROSSWALK_2026-11-10.md), [native acceptance](S2_NATIVE_ACCEPTANCE_2026-11-10.md). These do not change the original mandatory TC cases; a successful lifecycle or source test alone does not satisfy a TC row.
 
 | ID | Phase | Mandatory test | Evidence |
 |---|---|---|---|
