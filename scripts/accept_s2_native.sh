@@ -274,6 +274,30 @@ if ! ( BW_S2_CRASH_STATE_FILE="$crash_state" \
 fi
 cat "$work/crash-start.log"
 test -s "$crash_state"
+
+# The first server now has an ACTUAL in-flight guest Exec with a persisted
+# native operation ID. Try a second serve on its SAME SQLite while it runs.
+# The second process must fail BEFORE startup Recover can rewrite that work.
+if timeout --signal=TERM 8s sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
+  -incus-socket "$socket" -project "$project" -listen 127.0.0.1:18655 > "$work/inflight-duplicate-serve.refusal" 2>&1; then
+  echo "S2_NATIVE_FAIL: concurrent serve adopted live original guest Exec" >&2
+  exit 99
+fi
+grep -Fq "serve already active for this database" "$work/inflight-duplicate-serve.refusal"
+sudo python3 - "$db" "$crash_state" <<'PY'
+import json,sqlite3,sys
+db,original_path=sys.argv[1:]
+with open(original_path) as f:
+    original=json.load(f)
+original_id=original["operation_id"]
+conn=sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3)
+row=conn.execute("SELECT state FROM operations WHERE id=?",(original_id,)).fetchone()
+conn.close()
+if not row or row[0] not in ("VERIFYING","SUCCEEDED"):
+    raise SystemExit("a second serve rewrote a live original operation")
+PY
+echo "S2_NATIVE_DUPLICATE_SERVE_DURING_REAL_EXEC_NO_RECOVERY=PASS"
+
 if ! sudo pkill -KILL -u boxweave -f "^$work/boxweave serve"; then
   echo "S2_NATIVE_FAIL: exact disposable service process not found for kill" >&2
   exit 88
