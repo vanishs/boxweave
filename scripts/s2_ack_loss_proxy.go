@@ -58,6 +58,9 @@ func main() {
 	}
 	var trapUsed atomic.Bool
 	var etagUsed atomic.Bool
+	var etagCreateUsed atomic.Bool
+	var updateAckUsed atomic.Bool
+	var updateCreateUsed atomic.Bool
 	record := func(line string) error {
 		f, err := os.OpenFile(*marker, os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
@@ -68,6 +71,69 @@ func main() {
 		return err
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The native Update is accepted with HTTP 202, then its acknowledgment
+		// is lost to BoxWeave. A separate administrator later verifies that
+		// this exact owned instance really received limits.cpu=2. This is not
+		// the stale-ETag/412 rejection case.
+		if r.Method == http.MethodPut &&
+			r.URL.Path == "/1.0/instances/bw-s2-update-ack-native-110f" {
+			if r.URL.Query().Get("project") != *project || r.Header.Get("If-Match") == "" {
+				http.Error(w, "unsafe or unguarded native Update", http.StatusBadRequest)
+				return
+			}
+			if !updateAckUsed.CompareAndSwap(false, true) {
+				_ = record("UNEXPECTED_SECOND_UPDATE_ACK_PUT")
+				http.Error(w, "native Update ACK-loss must never repeat", http.StatusConflict)
+				return
+			}
+			raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			if err != nil {
+				http.Error(w, "invalid native Update payload", http.StatusBadRequest)
+				return
+			}
+			_ = r.Body.Close()
+			var intent struct {
+				Config map[string]string `json:"config"`
+			}
+			if json.Unmarshal(raw, &intent) != nil || intent.Config["limits.cpu"] != "2" {
+				http.Error(w, "unexpected native Update intent", http.StatusBadRequest)
+				return
+			}
+			request := r.Clone(r.Context())
+			request.URL.Scheme = "http"
+			request.URL.Host = "unix.socket"
+			request.RequestURI = ""
+			request.Body = io.NopCloser(bytes.NewReader(raw))
+			request.ContentLength = int64(len(raw))
+			response, err := transport.RoundTrip(request)
+			if err != nil {
+				http.Error(w, "native Update unavailable", http.StatusBadGateway)
+				return
+			}
+			defer response.Body.Close()
+			body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			if err != nil || response.StatusCode != http.StatusAccepted ||
+				!strings.Contains(string(body), "\"operation\"") {
+				http.Error(w, fmt.Sprintf("native Update not accepted (%d)", response.StatusCode),
+					http.StatusBadGateway)
+				return
+			}
+			if err := record("UPDATE_ACK_NATIVE_ACCEPTED_ONCE_AND_ACK_SUPPRESSED"); err != nil {
+				http.Error(w, "native Update marker failure", http.StatusBadGateway)
+				return
+			}
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				http.Error(w, "cannot simulate native Update ACK loss", http.StatusBadGateway)
+				return
+			}
+			connection, _, err := hijacker.Hijack()
+			if err != nil {
+				log.Fatal(err)
+			}
+			_ = connection.Close()
+			return
+		}
 		// Deterministic native ETag conflict: BoxWeave already selected its
 		// If-Match. The one-use proxy advances the *actual same* Incus
 		// instance ETag using a harmless user.* key before forwarding the
@@ -158,14 +224,30 @@ func main() {
 			}
 			_ = r.Body.Close()
 			var intent map[string]any
-			if json.Unmarshal(raw, &intent) != nil || intent["name"] != "bw-s2-etag-native-110e" ||
-				r.URL.Query().Get("project") != *project {
+			if json.Unmarshal(raw, &intent) != nil || r.URL.Query().Get("project") != *project {
 				_ = record("UNEXPECTED_SECOND_CREATE_POST")
 				http.Error(w, "unapproved second native create", 409)
 				return
 			}
+			name, _ := intent["name"].(string)
+			var label string
+			switch name {
+			case "bw-s2-etag-native-110e":
+				if etagCreateUsed.CompareAndSwap(false, true) {
+					label = "ETAG_FIXTURE_CREATE_FORWARDED"
+				}
+			case "bw-s2-update-ack-native-110f":
+				if updateCreateUsed.CompareAndSwap(false, true) {
+					label = "UPDATE_ACK_FIXTURE_CREATE_FORWARDED"
+				}
+			}
+			if label == "" {
+				_ = record("UNEXPECTED_SECOND_CREATE_POST")
+				http.Error(w, "repeated or unapproved native create", http.StatusConflict)
+				return
+			}
 			r.Body = io.NopCloser(bytes.NewReader(raw))
-			if err := record("ETAG_FIXTURE_CREATE_FORWARDED"); err != nil {
+			if err := record(label); err != nil {
 				http.Error(w, "test marker failure", 502)
 				return
 			}
