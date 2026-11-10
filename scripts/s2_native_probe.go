@@ -174,6 +174,49 @@ func main() {
 		"already-stopped no-op invented a native Operation ID")
 	fmt.Println("S2_NATIVE_STOP_ALREADY_STOPPED_NOOP=PASS")
 
+	// Real client->HTTP MCP->typed server metadata extraction, not a
+	// fabricated in-process CallToolRequest. A non-meta legacy caller is
+	// already checked above; metadata labels are attribution, not auth.
+	metaStop, metaErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Meta: mcp.Meta{
+			"io.boxweave.work_ref":  "lab/native-meta",
+			"io.boxweave.agent_ref": "native-agent-meta",
+		},
+		Name: "box_stop",
+		Arguments: map[string]any{
+			"box_id": uuid, "idempotency_key": "native-s2-meta-attribution-stop-01",
+		},
+	})
+	check(metaErr == nil && metaStop != nil && !metaStop.IsError,
+		"official Go SDK metadata-only request rejected unexpectedly")
+	metaID := id(decoded(metaStop))
+	metaReceipt := wait(ctx, admin, metaID)
+	check(field(metaReceipt, "work_ref") == "lab/native-meta" &&
+		field(metaReceipt, "agent_ref") == "native-agent-meta",
+		"metadata labels were not immutably stored in original receipt")
+	metaPage := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/native-meta", "agent_ref": "native-agent-meta"}), "page")
+	foundMeta := false
+	if records, ok := metaPage["operations"].([]any); ok {
+		for _, raw := range records {
+			if op, ok := raw.(map[string]any); ok && field(op, "operation_id") == metaID {
+				foundMeta = true
+			}
+		}
+	}
+	check(foundMeta, "metadata-correlated original cannot be found by authorized list")
+	conflictingMeta, metaConflictErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Meta: mcp.Meta{"io.boxweave.work_ref": "lab/native-meta"},
+		Name: "box_stop",
+		Arguments: map[string]any{
+			"box_id": uuid, "idempotency_key": "native-s2-meta-mismatch-deny-01",
+			"work_ref": "lab/conflicting-client-arg",
+		},
+	})
+	check(metaConflictErr != nil || conflictingMeta != nil && conflictingMeta.IsError,
+		"metadata/argument mismatch escaped typed conflict validation")
+	fmt.Println("S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH=PASS")
+
 	foreignList := call(ctx, view, "operation_list", map[string]any{"work_ref": "lab/s2"})
 	private, _ := json.Marshal(foreignList)
 	check(!strings.Contains(string(private), original), "viewer borrowed original work_ref across token actors")
