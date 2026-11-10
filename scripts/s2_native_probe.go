@@ -596,7 +596,7 @@ func main() {
 		"idempotency_key": "native-s2-dual-stream-over-16m-001",
 	})
 	largeID := id(large)
-	wait(ctx, admin, largeID)
+	largeFinal := wait(ctx, admin, largeID)
 	for _, stream := range []string{"stdout", "stderr"} {
 		bounded := call(ctx, admin, "operation_output_get", map[string]any{
 			"operation_id": largeID, "stream": stream,
@@ -621,6 +621,29 @@ func main() {
 	check(tooLargeErr != nil || tooLarge != nil && tooLarge.IsError,
 		"oversized native recorded output offset unexpectedly accepted")
 	fmt.Println("S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS")
+
+	// Only the single-use CI test harness requests this rendezvous. Keep the
+	// original completed native Exec logs present until an *independent* host
+	// witness has measured the actual spool files and backing filesystem.
+	// The MCP byte cap alone cannot establish any physical storage bound.
+	if dir := os.Getenv("BW_S2_OUTPUT_WITNESS_DIR"); dir != "" {
+		check(strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci."),
+			"native output witness requires the disposable GitHub CI workspace")
+		nativeID := field(largeFinal, "native_operation_id")
+		check(nativeID != "", "completed large Exec has no original native operation ID")
+		if err := os.WriteFile(dir+"/output-witness.ready", []byte(nativeID), 0600); err != nil {
+			panic(err)
+		}
+		released := false
+		for n := 0; n < 180; n++ {
+			if _, err := os.Stat(dir + "/output-witness.release"); err == nil {
+				released = true
+				break
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		check(released, "independent native disk witness did not release the original completed Exec")
+	}
 
 	delayed := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 1; printf delayed-ok"},
