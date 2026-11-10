@@ -504,7 +504,7 @@ func main() {
 	// then demand an exactly bounded page and explicit truncation marker.
 	large := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
-			"head -c 16777220 /dev/zero | tr '\\000' Z | tee /dev/stderr"},
+			"head -c 16777220 /dev/zero | tr '\\000' Z; head -c 16777220 /dev/zero | tr '\\000' Z >&2"},
 		"idempotency_key": "native-s2-dual-stream-over-16m-001",
 	})
 	largeID := id(large)
@@ -518,6 +518,8 @@ func main() {
 		if e != nil {
 			panic(e)
 		}
+		fmt.Printf("S2_NATIVE_DUAL_STREAM_META stream=%s got=%d ended=%v truncated=%v next=%v exit=%v\\n",
+			stream, len(chunk), bounded["ended"], bounded["truncated"], bounded["next_offset"], bounded["exit_code"])
 		check(len(chunk) == 16 && strings.Trim(string(chunk), "Z") == "" &&
 			bounded["ended"] == true && bounded["truncated"] == true &&
 			bounded["next_offset"] == float64(16777216),
