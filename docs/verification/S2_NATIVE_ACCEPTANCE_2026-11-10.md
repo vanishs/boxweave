@@ -112,6 +112,59 @@ The earlier complete packet/dual-stream/worker SIGKILL/guest exactly-once
 matrix reran on that exact installed candidate. **Torn transactions and
 native lost-ACK failures are not accepted**.
 
+## Latest exact installed reacceptance — `cd4ac36` (2026-11-10)
+
+**Actual installed-source SHA:** `cd4ac36d15f689ed1c054e9991c4d9958c94dbd4`;
+**independent test-built binary SHA256:**
+`c4f27f4c44f0d04af06cdfbf17f3e21a9fecff0f401ffb16857f980e575613d1`.
+[Real MCP/Incus 7.6/guest/SQLite black-box](https://github.com/vanishs/boxweave/actions/runs/42857519652/job/129974501751),
+[Go build/race](https://github.com/vanishs/boxweave/actions/runs/42857537255/job/129974563073),
+and [quality](https://github.com/vanishs/boxweave/actions/runs/42857519569/job/129974501188)
+**all SUCCESS**. This is a **core-native-subset PASS**, not overall S2
+release/phase acceptance or proof of physical/shared-host deployment.
+
+New actual native markers on this exact installed candidate:
+
+- `S2_NATIVE_PACKET_IPV6_GATEWAY_BASELINE=PASS` and
+  `S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS=PASS`:
+  after first-start packet isolation, an owned running Box reached its real
+  native IPv4 and IPv6 bridge gateways; `internet=false` blocked both and
+  `internet=true` restored both. Link-local IPv6 gateway requests explicitly
+  bound `eth0`; absent interface scope must not count as a firewall denial.
+- `S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS=PASS`:
+  IPv4/IPv6 peer traffic remained denied even after egress was restored.
+  The guest had actual IPv4/IPv6 addresses and a positive bridge route,
+  and the true guest Ping exit status was checked.
+- `S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS`:
+  real compiled `boxweave doctor` refused an old `schema_version`, duplicate
+  version rows and version 1 with unexpected foreign table; original SQLite
+  file SHA256 remained identical. This supplements foreign/unparseable DB
+  refusal, not a migration or interrupted-commit fault-injection PASS.
+- `S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS`:
+  genuine official Go SDK `ListTools` over HTTP returned 13 exact tools
+  with correct read-only/mutation/idempotent/open-world/destructive hints.
+- All earlier core real lifecycle/Exec tests also reran: optional nesting,
+  CPU/memory/disk, original UUID/name/key checks, 70KB paging and >16MiB
+  dual-stream truncation, canceled long-poll without canceling native effect,
+  real BoxWeave process SIGKILL, completed stdout+stderr/exit after reopening
+  original SQLite, original in-flight UNKNOWN/no replay, independent guest
+  effect exactly once, native inventory empty.
+
+**Important WAN distinction:** `ec22a5e` printed
+`S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED`, because the disposable
+runner's guest could not demonstrate its initial public HTTPS control.
+This is neither an external WAN PASS nor evidence of a BoxWeave bug; a
+separate Internet-enabled environment with independent positive routing
+is still needed to prove public HTTPS on/off/on. IPv4/IPv6 **bridge
+gateway** reachability is not equivalent to public Internet.
+
+Still open: installed fault injection of lost native ACK before ledger
+persistence, interrupted SQLite commit, stale ETag/ambiguous update postread,
+on-disk Incus Exec log storage bounds/retention, and remaining TC/A-case
+negative tests. Running detached recorded Exec cancellation stays
+truthfully unsupported. **Do not merge protected `v1` or remove the two
+unrelated historical UNKNOWN creates.**
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
