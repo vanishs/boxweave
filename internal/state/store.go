@@ -28,10 +28,11 @@ var schemaDDL = []string{
 	"CREATE TABLE schema_version (version INTEGER NOT NULL)",
 	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
 	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
-	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, work_ref TEXT NOT NULL DEFAULT '', agent_ref TEXT NOT NULL DEFAULT '', box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
+	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, work_ref TEXT NOT NULL DEFAULT '', agent_ref TEXT NOT NULL DEFAULT '', resource_key TEXT NOT NULL DEFAULT '', box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
 	"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
 	"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
 	"CREATE TABLE cursor_secrets (id INTEGER PRIMARY KEY CHECK(id=1), secret BLOB NOT NULL CHECK(length(secret)=32))",
+	"CREATE TABLE exec_outputs (operation_id TEXT PRIMARY KEY REFERENCES operations(id), stdout_path TEXT NOT NULL DEFAULT '', stderr_path TEXT NOT NULL DEFAULT '', exit_code INTEGER, truncation INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)",
 }
 
 var schemaIndexes = []string{
@@ -40,6 +41,8 @@ var schemaIndexes = []string{
 	"CREATE INDEX operations_work_time ON operations(layer,work_ref,created_at,id)",
 	"CREATE INDEX operations_agent_time ON operations(layer,agent_ref,created_at,id)",
 	"CREATE INDEX operations_state_time ON operations(layer,state,created_at,id)",
+	"CREATE INDEX operations_resource_claim ON operations(layer,resource_key,state)",
+	"CREATE UNIQUE INDEX owned_active_name ON owned_boxes(project,name) WHERE state='OWNED'",
 }
 
 var (
@@ -72,6 +75,9 @@ type Admission struct {
 	BoxUUID     string
 	Incarnation string
 	RequestID   string
+	// ResourceKey is a typed, domain-constructed per-native-Box name lock, never
+	// a caller-provided arbitrary SQL scope. It survives create before UUID exists.
+	ResourceKey string
 	WorkRef     string
 	AgentRef    string
 }
@@ -361,7 +367,8 @@ func (s *Store) tokenActive(ctx context.Context, id string) (bool, error) {
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || a.ActorID != a.TokenID || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
-		!validRef(a.WorkRef) || !validRef(a.AgentRef) {
+		!validRef(a.WorkRef) || !validRef(a.AgentRef) || len(a.ResourceKey) > 192 ||
+		strings.ContainsAny(a.ResourceKey, "\x00\n\r") {
 		return Receipt{}, ErrInvalid
 	}
 	// A non-secret digest avoids storing raw client key.
@@ -391,6 +398,23 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
+	}
+	// Reserve the native Box name across any potentially in-flight effect,
+	// including a create that cannot know the native UUID until postread.
+	// This is transactional with admission, not a process-local mutex.
+	if a.ResourceKey != "" {
+		var busy int
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.layer=? AND o.resource_key=?
+			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+			AND NOT EXISTS (SELECT 1 FROM recovery_audit ra WHERE ra.operation_id=o.id AND ra.decision='RELEASED')`,
+			a.Layer, a.ResourceKey).Scan(&busy)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if busy != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
 	}
 	if a.BoxUUID != "" && a.Incarnation != "" {
 		// A different idempotency key cannot bypass an original UNKNOWN
@@ -427,8 +451,8 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		return Receipt{}, err
 	}
 	now := time.Now().UnixNano()
-	_, err = tx.ExecContext(ctx, "INSERT INTO operations (id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,work_ref,agent_ref,box_uuid,incarnation,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		id, tracking, a.RequestID, a.Layer, a.ActorID, a.TokenID, keyHash, a.Action, intentHash, a.SafeIntent, a.WorkRef, a.AgentRef, a.BoxUUID, a.Incarnation, "ADMITTED", now, now)
+	_, err = tx.ExecContext(ctx, "INSERT INTO operations (id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,work_ref,agent_ref,resource_key,box_uuid,incarnation,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		id, tracking, a.RequestID, a.Layer, a.ActorID, a.TokenID, keyHash, a.Action, intentHash, a.SafeIntent, a.WorkRef, a.AgentRef, a.ResourceKey, a.BoxUUID, a.Incarnation, "ADMITTED", now, now)
 	if err != nil {
 		return Receipt{}, err
 	}

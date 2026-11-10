@@ -1,0 +1,29 @@
+name: S2 temporary source formatter (disposable PR branch)
+
+on:
+  push:
+    branches:
+      - feat/v1-s2-operations-20261110
+
+permissions:
+  contents: read
+
+jobs:
+  source-format-snapshot:
+    if: github.repository == 'vanishs/boxweave'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Print gofmt-only source snapshots for review
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in internal/state/store.go internal/state/lifecycle.go internal/state/lifecycle_test.go internal/native/box.go internal/native/box_test.go; do
+            gofmt -w "$f"
+            printf 'BOXWEAVE_FORMAT_BEGIN:%s\n' "$f"
+            base64 -w0 "$f"
+            printf '\nBOXWEAVE_FORMAT_END:%s\n' "$f"
+          done
