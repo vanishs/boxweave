@@ -366,7 +366,9 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	// A non-secret digest avoids storing raw client key.
 	keyHash := digest(a.Key)
-	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation + "\x00" + a.WorkRef + "\x00" + a.AgentRef)
+	// Labels are stored immutably but are not part of the native intent hash.
+\t// A retry that omits optional attribution reuses the original labels.
+\tintentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Receipt{}, err
@@ -374,12 +376,17 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	defer tx.Rollback()
 	var found Receipt
 	var priorHash, priorToken string
-	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id,work_ref,agent_ref FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID, &found.WorkRef, &found.AgentRef)
+	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id,work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID, &found.WorkRef, &found.AgentRef, &found.Action, &found.BoxUUID, &found.Incarnation, &found.ErrorClass, &found.CreatedAt, &found.UpdatedAt)
 	if err == nil {
-		if priorHash != intentHash || priorToken != a.TokenID {
+		// Omitted optional labels do not erase the original attribution.
+		// Explicitly contradicting a prior label always conflicts.
+		if priorHash != intentHash || priorToken != a.TokenID ||
+			(a.WorkRef != "" && a.WorkRef != found.WorkRef) ||
+			(a.AgentRef != "" && a.AgentRef != found.AgentRef) {
 			return Receipt{}, ErrConflict
 		}
 		found.Duplicate = true
+		found.NextAction = nextAction(found.State, found.Action, found.ID)
 		return found, tx.Commit()
 	}
 	if !errors.Is(err, sql.ErrNoRows) {

@@ -51,6 +51,18 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		duplicate.TrackingID != first.TrackingID || duplicate.AgentRef != "agent-a" {
 		t.Fatalf("original correlation receipt lost on retry: %+v %v", duplicate, err)
 	}
+	// A legacy client may retry without optional work/Agent metadata.
+	// It must receive the original immutable attribution and safe next read.
+	legacy, err := s.Admit(ctx, Admission{
+		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
+		RequestID: "legacy-transport-retry", Action: "box_exec",
+		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
+	})
+	if err != nil || !legacy.Duplicate || legacy.ID != first.ID ||
+		legacy.WorkRef != first.WorkRef || legacy.AgentRef != first.AgentRef ||
+		legacy.Action != "box_exec" || legacy.NextAction.Kind != "READ_OPERATION" {
+		t.Fatalf("legacy retry erased original evidence: %+v %v", legacy, err)
+	}
 	_, err = s.Admit(ctx, Admission{
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "relabel-attempt", Action: "box_exec",
