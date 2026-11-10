@@ -244,7 +244,7 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) {
 		return "", ErrNativeUnsupported
 	}
-	if err := r.CheckBootstrap(ctx); err != nil {
+	if err := r.Strict(ctx); err != nil {
 		return "", err
 	}
 	c, err := r.confined(ctx)
@@ -364,6 +364,9 @@ func (r Reader) SetPower(ctx context.Context, name, uuid, action string) (string
 		return "", err
 	}
 	if action == "start" {
+		if err := r.Strict(ctx); err != nil {
+			return "", err
+		}
 		if state.NativeState == "Running" {
 			return "", ErrNativeUnsupported
 		}
@@ -389,6 +392,9 @@ func (r Reader) SetPower(ctx context.Context, name, uuid, action string) (string
 }
 
 func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes InstanceChanges) (string, error) {
+	if err := r.Strict(ctx); err != nil {
+		return "", err
+	}
 	_, etag, err := r.GetExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err
@@ -546,6 +552,9 @@ func boundedGuestCommand(spec ExecSpec) ([]string, error) {
 }
 
 func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (string, error) {
+	if err := r.Strict(ctx); err != nil {
+		return "", err
+	}
 	box, _, err := r.GetExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err

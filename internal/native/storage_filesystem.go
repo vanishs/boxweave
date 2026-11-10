@@ -66,3 +66,61 @@ func inspectDirPoolFilesystem(poolName, path, rootPath string) (uint64, bool, er
 	}
 	return free, separate, nil
 }
+
+
+// dirProjectQuotaMountReady is a conservative, read-only Linux mount
+// precondition. Incus 7.6 silently skips dir volume size quotas if project
+// quotas are unsupported; a valid size string alone is not quota evidence.
+// Accept only a dedicated ext4/XFS mount whose effective mount options
+// explicitly enable project quotas. This is necessary but not sufficient:
+// the installed native CI also checks real per-instance EDQUOT, including
+// the sibling Exec output spool. No mount/provision/repair occurs here.
+func dirProjectQuotaMountReady(selectedPath string, mountinfo string) bool {
+	if selectedPath == "" || !filepath.IsAbs(selectedPath) || strings.ContainsAny(selectedPath, " \t\r\n") {
+		return false
+	}
+	longest := -1
+	verified := false
+	for _, line := range strings.Split(mountinfo, "\n") {
+		halves := strings.SplitN(line, " - ", 2)
+		if len(halves) != 2 {
+			continue
+		}
+		left, right := strings.Fields(halves[0]), strings.Fields(halves[1])
+		if len(left) < 6 || len(right) < 3 {
+			continue
+		}
+		point := left[4]
+		if point != selectedPath && !(point == "/" || strings.HasPrefix(selectedPath, point+"/")) {
+			continue
+		}
+		if len(point) <= longest {
+			continue
+		}
+		longest = len(point)
+		verified = (right[0] == "ext4" || right[0] == "xfs") &&
+			(hasQuotaOption(left[5]) || hasQuotaOption(right[2]))
+	}
+	return longest >= 0 && verified
+}
+
+func hasQuotaOption(options string) bool {
+	for _, opt := range strings.Split(options, ",") {
+		if opt == "prjquota" || opt == "pquota" {
+			return true
+		}
+	}
+	return false
+}
+
+func localDirPoolQuotaReady(poolName string) bool {
+	if poolName == "" || filepath.Base(poolName) != poolName ||
+		strings.ContainsAny(poolName, "/\\\x00") {
+		return false
+	}
+	info, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil || len(info) > 4<<20 {
+		return false
+	}
+	return dirProjectQuotaMountReady(filepath.Join("/var/lib/incus/storage-pools", poolName), string(info))
+}

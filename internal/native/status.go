@@ -21,6 +21,7 @@ type Status struct {
 	StorageSpaceChecked   bool            `json:"selected_storage_space_checked"`
 	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
 	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
+	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
 	NICConfigured         bool            `json:"default_nic_configured"`
 	APIExtensions         map[string]bool `json:"required_extensions"`
 	ErrorClass            string          `json:"error_class,omitempty"`
@@ -147,6 +148,19 @@ func (r Reader) Read(ctx context.Context) Status {
 			return s
 		}
 		s.StorageSpaceChecked = true
+		// Incus 7.6 dir driver silently skips size enforcement without
+		// filesystem project-quota support. A separately mounted ext4 pool
+		// alone is not enough to bound native Exec recording.
+		if !localDirPoolQuotaReady(selectedPool) {
+			s.ErrorClass = "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED"
+			return s
+		}
+		s.StorageQuotaVerified = true
+	} else {
+		// Do not claim other storage drivers' *whole-instance* Exec sibling
+		// quotas before a separately accepted native driver contract.
+		s.ErrorClass = "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED"
+		return s
 	}
 	s.StorageReady = true
 	// Share the exact admission guard with doctor/host_status so a
@@ -171,10 +185,13 @@ func (r Reader) Strict(ctx context.Context) error {
 	v := r.Read(ctx)
 	if !v.Ready {
 		if v.ErrorClass == "DEFAULT_NIC_NOT_CONFIGURED" {
-			// No native effect has been admitted or dispatched yet.
-			// Make unsafe NIC configuration a typed pre-dispatch denial,
-			// rather than a spurious UNKNOWN mutation in the worker.
 			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrUnsafeNetwork)
+		}
+		if v.ErrorClass == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED" ||
+			v.ErrorClass == "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED" {
+			// The requirement is checked before ANY new native request,
+			// so a scoped worker may safely fail this admission without UNKNOWN.
+			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrNativeUnsupported)
 		}
 		return fmt.Errorf("native preflight: %s", v.ErrorClass)
 	}
