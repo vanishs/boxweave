@@ -313,7 +313,9 @@ if [ "$disk_witness" = PASS ]; then
   test ! -e "$quota_test"
   quota_free_before="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
   test "$quota_free_before" -gt 2800000000
-  sudo lsattr -p -d "$native_instance_dir" "$native_spool_dir"
+  # Incus's instance pathname is a symlink; lsattr on that link yields
+  # EOPNOTSUPP. Inspect the real spool directory inode's inherited project ID.
+  sudo lsattr -p -d "$native_spool_dir"
   if sudo timeout 40s fallocate -l 2684354560 "$quota_test" > "$work/quota-fallocate.stderr" 2>&1; then
     sudo rm -f "$quota_test"
     echo "S2_NATIVE_FAIL: Incus size quota allowed >2GiB native Exec sibling allocation" >&2
