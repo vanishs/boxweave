@@ -1,6 +1,6 @@
 # Public MCP tool catalog — intentionally narrow v1 P0
 
-**Status:** accepted design only; no v1 runtime code exists. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
+**Status:** accepted 20-tool P0 design; the protected `v1` branch has accepted S1 `host_status` only. [S2 Draft PR #130](https://github.com/vanishs/boxweave/pull/130) currently adds source-verified `operation_get` and `operation_list`, not the remaining 10 S2 tools, native installed acceptance, or a release. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
 
 **Continuity enhancement to existing Tools, not extra Tools:** [single design](AGENT_OPERATION_CONTINUITY.md) and [TC tests](../verification/CONTINUITY_ACCEPTANCE.md) extend S2 receipts and `operation_list/get/output_get` with authorized optional work/Agent correlation, structured evidence and safe next reads. Authenticated principal and untrusted label must never be confused.
 
