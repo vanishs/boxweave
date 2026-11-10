@@ -258,9 +258,19 @@ echo "$recorded_native_id" | grep -Eq '^[0-9a-f-]{36}$'
 # Restrict the witness to Incus's own container state tree, not arbitrary
 # host files. Only the exact native Operation ID from the accepted guest
 # Exec can match both recorded output files.
-recorded_stdout="$(sudo find /var/lib/incus/containers -maxdepth 4 -type f -name "exec_${recorded_native_id}.stdout" -print)"
-recorded_stderr="$(sudo find /var/lib/incus/containers -maxdepth 4 -type f -name "exec_${recorded_native_id}.stderr" -print)"
-test -n "$recorded_stdout" && test -n "$recorded_stderr"
+# The Incus per-instance directory may be a symlink into the selected
+# driver; resolve links without changing any native file. Do not equate an
+# absent find result with absence of the original native Exec.
+recorded_stdout="$(sudo find -L /var/lib/incus/containers -maxdepth 7 -type f -name "exec_${recorded_native_id}.stdout" -print)"
+recorded_stderr="$(sudo find -L /var/lib/incus/containers -maxdepth 7 -type f -name "exec_${recorded_native_id}.stderr" -print)"
+if [ -z "$recorded_stdout" ] || [ -z "$recorded_stderr" ]; then
+  echo "S2_NATIVE_SPOOL_PATH_UNVERIFIED: original file not found via instance tree" >&2
+  sudo find /var/lib/incus -maxdepth 6 -type d -name exec-output -print || :
+  sudo find -L /var/lib/incus -maxdepth 8 -type f -name 'exec_*.stdout' -printf '%p bytes=%s\n' | head -n 15 || :
+  sudo incus query "/1.0/instances/bw-s2-ghci-110a/logs/exec-output?project=$project" || :
+  touch "$work/output-witness.release"
+  exit 104
+fi
 test "$(printf '%s\n' "$recorded_stdout" | wc -l)" -eq 1
 test "$(printf '%s\n' "$recorded_stderr" | wc -l)" -eq 1
 actual_stdout_bytes="$(sudo stat -c '%s' "$recorded_stdout")"
