@@ -117,6 +117,20 @@ sudo incus profile device set default eth0 --project "$project" \
   security.ipv6_filtering=true \
   security.mac_filtering=true
 
+# Capability probe only on this one-use, admin-owned Project; preserve the
+# existing fail-closed runtime default after the experiment. Accepting a
+# config value is not proof of internet packet routing, peer isolation or a
+# supported BoxWeave internet toggle. It is merely tagged SDK fit evidence.
+if sudo incus profile device set default eth0 --project "$project" \
+  security.acls.default.egress.action=allow > "$work/egress-setting.txt" 2>&1; then
+  observed_egress="$(sudo incus profile device get default eth0 security.acls.default.egress.action --project "$project")"
+  test "$observed_egress" = allow
+  sudo incus profile device unset default eth0 security.acls.default.egress.action --project "$project"
+  echo "S2_NATIVE_BRIDGE_NIC_EGRESS_ALLOW_CONFIG_SUPPORTED=PASS"
+else
+  echo "S2_NATIVE_BRIDGE_NIC_EGRESS_ALLOW_CONFIG=UNSUPPORTED"
+fi
+
 # Prepare the allowlisted immutable Ubuntu image alias for native Create.
 # No arbitrary image URL/alias is accepted from MCP clients.
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" \
