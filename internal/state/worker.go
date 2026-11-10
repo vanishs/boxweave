@@ -62,13 +62,26 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = w.Store.NativeAck(context.Background(), operationID, nativeID); err != nil {
+		// The native effect may already have committed. The SQLite ACK
+		// transaction may have rolled back, committed with a lost reply, or
+		// remained inaccessible. Best-effort mark either possible journal
+		// state UNKNOWN; NEVER retry the native effect or release its lock.
+		markErr := w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
+		if errors.Is(markErr, ErrState) {
+			_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
+		}
 		return
 	}
 	if err = verify(ctx); err != nil {
 		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "POSTCONDITION_UNVERIFIED")
 		return
 	}
-	_ = w.Store.Verified(context.Background(), operationID)
+	if err = w.Store.Verified(context.Background(), operationID); err != nil {
+		// A lost final SQLite COMMIT acknowledgment must not be reported as
+		// success without a durable receipt. If it did commit, this guarded
+		// transition cannot overwrite the terminal SUCCEEDED state.
+		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "FINAL_RECEIPT_DURABILITY_UNVERIFIED")
+	}
 }
 
 func (w Worker) Submit(id string, effect NativeEffect, verify VerifyEffect) error {
