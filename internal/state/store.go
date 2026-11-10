@@ -560,18 +560,22 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('DISPATCHING','RUNNING','VERIFYING')")
+	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING')")
 	if err != nil {
 		return 0, err
 	}
-	var ids []string
+	type original struct {
+		id    string
+		state string
+	}
+	var ids []original
 	for rows.Next() {
-		var id, old string
-		if err = rows.Scan(&id, &old); err != nil {
+		var record original
+		if err = rows.Scan(&record.id, &record.state); err != nil {
 			_ = rows.Close()
 			return 0, err
 		}
-		ids = append(ids, id)
+		ids = append(ids, record)
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()
@@ -580,12 +584,23 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 	if err = rows.Close(); err != nil {
 		return 0, err
 	}
-	for _, id := range ids {
+	for _, item := range ids {
 		now := time.Now().UnixNano()
-		if _, err = tx.ExecContext(ctx, "UPDATE operations SET state='UNKNOWN',error_class='PROCESS_RESTART_OR_LOST_ACK',updated_at=? WHERE id=?", now, id); err != nil {
+		next, reason := "UNKNOWN", "PROCESS_RESTART_OR_LOST_ACK"
+		if item.state == "ADMITTED" {
+			// No Claim was committed and therefore the process was forbidden
+			// from dispatching native work. The in-memory handler is gone:
+			// do not silently replay an arbitrary old guest command.
+			next, reason = "FAILED", "PROCESS_RESTART_BEFORE_DISPATCH"
+		}
+		if _, err = tx.ExecContext(ctx,
+			"UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state=?",
+			next, reason, now, item.id, item.state); err != nil {
 			return 0, err
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, now, "UNKNOWN", "PROCESS_RESTART_OR_LOST_ACK"); err != nil {
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",
+			item.id, now, next, reason); err != nil {
 			return 0, err
 		}
 	}

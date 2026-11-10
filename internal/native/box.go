@@ -582,3 +582,71 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 	}
 	return buf[:n], ended, nil
 }
+
+// ObserveCreated is only for a previously admitted create with its actual
+// successful native operation ID. An isolated GET by name is NOT authority
+// to adopt a foreign or originally UNKNOWN instance.
+func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, error) {
+	var out BoxState
+	if !safeName.MatchString(name) {
+		return out, ErrNotOwned
+	}
+	c, err := r.confined(ctx)
+	if err != nil {
+		return out, err
+	}
+	inst, _, err := c.GetInstance(name)
+	if err != nil {
+		return out, err
+	}
+	uuid := inst.Config["volatile.uuid"]
+	if uuid == "" || inst.Project != "" && inst.Project != r.Project {
+		return out, ErrUnverified
+	}
+	if !nicPrivate(inst.ExpandedDevices) {
+		return out, ErrUnsafeNetwork
+	}
+	out = BoxState{Project: r.Project, Name: name, UUID: uuid,
+		NativeState: inst.Status, CPU: inst.ExpandedConfig["limits.cpu"],
+		Memory: inst.ExpandedConfig["limits.memory"],
+		Nesting: inst.ExpandedConfig["security.nesting"] == "true"}
+	for _, d := range inst.ExpandedDevices {
+		if d["type"] == "disk" && d["path"] == "/" {
+			out.RootDiskSize = d["size"]
+			break
+		}
+	}
+	return out, nil
+}
+
+// ConfirmDeleteAbsence requires an independently completed native Delete
+// Operation and two subsequent exact Project/name 404 observations. It never
+// treats the pre-operation 404 (or name reuse) as permission to delete.
+func (r Reader) ConfirmDeleteAbsence(ctx context.Context, name string) error {
+	if !safeName.MatchString(name) {
+		return ErrNotOwned
+	}
+	c, err := r.confined(ctx)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < 2; i++ {
+		_, _, err = c.GetInstance(name)
+		if !api.StatusErrorCheck(err, http.StatusNotFound) {
+			if err == nil {
+				return ErrUnverified
+			}
+			return err
+		}
+		if i == 0 {
+			timer := time.NewTimer(350 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return nil
+}

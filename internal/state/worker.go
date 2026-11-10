@@ -11,6 +11,16 @@ import (
 type NativeEffect func(context.Context) (nativeOperationID string, err error)
 type VerifyEffect func(context.Context) error
 
+// A local validation error is eligible for a terminal pre-dispatch failure
+// only if the implementation proves no Incus mutation request was sent.
+type PreDispatchError struct{ Class string }
+
+func (e PreDispatchError) Error() string { return e.Class }
+
+// An already achieved state is not a native Operation ID. Call verify again
+// before acknowledging it, and never invent a native operation receipt.
+var ErrNoNativeChange = errors.New("native readback proves no change necessary")
+
 type Worker struct {
 	Store  *Store
 	Budget time.Duration
@@ -29,6 +39,20 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 	}
 	nativeID, err := effect(ctx)
 	if err != nil {
+		var pre PreDispatchError
+		if errors.As(err, &pre) {
+			_ = w.Store.FailPreDispatch(context.Background(), operationID, pre.Class)
+			return
+		}
+		if errors.Is(err, ErrNoNativeChange) {
+			if verify(ctx) == nil {
+				_ = w.Store.CompleteWithoutNative(context.Background(), operationID)
+			} else {
+				_ = w.Store.Unknown(context.Background(), operationID,
+					"DISPATCHING", "NOOP_POSTCONDITION_UNVERIFIED")
+			}
+			return
+		}
 		// A native SDK error/timeout cannot prove the request was not dispatched.
 		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS")
 		return

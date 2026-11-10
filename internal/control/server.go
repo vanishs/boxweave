@@ -100,6 +100,8 @@ func (s *Service) Handler() http.Handler {
 			return &mcp.CallToolResult{}, result, nil
 		})
 	s.registerOperationReadTools(server)
+	s.registerBoxTools(server)
+	s.registerOperationOutputCancel(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, PropagateRequestCancellation: false})
 	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)

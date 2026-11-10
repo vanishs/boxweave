@@ -199,3 +199,67 @@ func (s *Store) ExecOutput(ctx context.Context, originalID string) (NativeReadSn
 	out.Truncated = truncated != 0
 	return out, nil
 }
+
+ 
+// RegisterCreatedBox commits the native UUID/incarnation together with the
+// original operation. A native create is never inferred from name alone.
+func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, name, uuid string) error {
+	if operationID == "" || project == "" || name == "" || uuid == "" ||
+		len(name) > 63 || len(uuid) > 128 {
+		return ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var action, state, resource, existingUUID, layer, nativeID string
+	err = tx.QueryRowContext(ctx, `SELECT action,state,resource_key,box_uuid,layer,
+		native_operation_id FROM operations WHERE id=?`, operationID).
+		Scan(&action, &state, &resource, &existingUUID, &layer, &nativeID)
+	if err != nil {
+		return err
+	}
+	if action != "box_create" || state != "VERIFYING" || layer != project ||
+		resource != "box:"+name || existingUUID != "" || nativeID == "" {
+		return ErrState
+	}
+	now := time.Now().UnixNano()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO owned_boxes
+		(uuid,project,name,incarnation,state,created_at)
+		VALUES (?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE operations
+		SET box_uuid=?,incarnation=?,updated_at=? WHERE id=? AND box_uuid=''`,
+		uuid, uuid, now, operationID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n != 1 {
+		return ErrState
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO operation_events
+		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
+		operationID, now, "VERIFYING", "NATIVE_UUID_CONFIRMED"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// CompleteWithoutNative requires separate postcondition proof before an
+// already-started or already-stopped Box is marked a successful no-op.
+func (s *Store) CompleteWithoutNative(ctx context.Context, operationID string) error {
+	return s.transition(ctx, operationID, "DISPATCHING", "SUCCEEDED", "",
+		"VERIFIED_ALREADY_IN_DESIRED_STATE")
+}
+
+// FailPreDispatch is limited to provably local validation that occurred
+// BEFORE any Incus mutation request. Never use it on HTTP errors/timeouts.
+func (s *Store) FailPreDispatch(ctx context.Context, operationID, reason string) error {
+	if reason == "" || len(reason) > 120 || strings.ContainsAny(reason, "\x00\n\r") {
+		return ErrInvalid
+	}
+	return s.transition(ctx, operationID, "DISPATCHING", "FAILED", "", reason)
+}
