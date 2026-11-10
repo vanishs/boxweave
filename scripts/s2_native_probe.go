@@ -499,6 +499,39 @@ func main() {
 		"noisy output second page did not resume original native evidence")
 	fmt.Println("S2_NATIVE_NOISY_EXEC_PAGINATION_70K=PASS")
 
+	// Read cap is a public API budget, not proof that Incus truncated its
+	// underlying recorded files. Produce >16MiB on each real guest stream,
+	// then demand an exactly bounded page and explicit truncation marker.
+	large := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
+			"head -c 16777220 /dev/zero | tr '\\000' Z | tee /dev/stderr"},
+		"idempotency_key": "native-s2-dual-stream-over-16m-001",
+	})
+	largeID := id(large)
+	wait(ctx, admin, largeID)
+	for _, stream := range []string{"stdout", "stderr"} {
+		bounded := call(ctx, admin, "operation_output_get", map[string]any{
+			"operation_id": largeID, "stream": stream,
+			"offset": 16777200, "limit": 65536,
+		})
+		chunk, e := base64.StdEncoding.DecodeString(field(bounded, "content_base64"))
+		if e != nil {
+			panic(e)
+		}
+		check(len(chunk) == 16 && strings.Trim(string(chunk), "Z") == "" &&
+			bounded["ended"] == true && bounded["truncated"] == true &&
+			bounded["next_offset"] == float64(16777216),
+			"real recorded "+stream+" breached 16MiB public read cap or hid truncation")
+	}
+	tooLarge, tooLargeErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_output_get", Arguments: map[string]any{
+			"operation_id": largeID, "stream": "stdout",
+			"offset": 16777217, "limit": 1,
+		}})
+	check(tooLargeErr != nil || tooLarge != nil && tooLarge.IsError,
+		"oversized native recorded output offset unexpectedly accepted")
+	fmt.Println("S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET=PASS")
+
 	delayed := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "sleep 1; printf delayed-ok"},
 		"timeout_ms": 5000, "idempotency_key": "native-s2-delayed-time-bounded-exec-01"})
