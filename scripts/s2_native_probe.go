@@ -594,7 +594,7 @@ func main() {
 	actorOne := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf actor-one"},
 		"idempotency_key": "native-s2-actor-one-shared-work-exec-01",
-		"work_ref": sharedWork, "agent_ref": "claimed-agent-alpha",
+		"work_ref":        sharedWork, "agent_ref": "claimed-agent-alpha",
 	})
 	actorOneID := id(actorOne)
 	actorOneFinal := wait(ctx, admin, actorOneID)
@@ -604,7 +604,7 @@ func main() {
 	actorTwo := call(ctx, admin2, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf actor-two"},
 		"idempotency_key": "native-s2-actor-two-shared-work-exec-01",
-		"work_ref": sharedWork, "agent_ref": "claimed-agent-beta",
+		"work_ref":        sharedWork, "agent_ref": "claimed-agent-beta",
 	})
 	actorTwoID := id(actorTwo)
 	actorTwoFinal := wait(ctx, admin2, actorTwoID)
