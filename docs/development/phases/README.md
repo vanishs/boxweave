@@ -19,4 +19,6 @@
 
 **BRIDGEHEAD is a stronger intermediate gate, not a shortcut:** S2 PASS is prerequisite, and BRIDGEHEAD LAB_PASS does not authorize physical host installation; HOST_GO needs explicit owner approval, independent real proof and rollback. S3 continues the original three-tool phase and S4/S5 retain their full contracts. If physical pilot cannot be authorized, record BLOCKED and continue safe isolated S3 without claiming early host readiness. [Acceptance matrix](../../verification/BRIDGEHEAD_ACCEPTANCE.md).
 
+**Pre-deployment schema freedom:** [S2 may redesign the first installed schema and internal worker/admission flow directly](../../process/VERSIONING.md#initial-schema-freeze--no-user-data-migration-before-first-deployment), without migrating disposable S1 lab SQLite data; reverify all affected S1 safety paths and preserve unrelated native UNKNOWN. Retained S2.5/first formal installation starts future data compatibility obligations.
+
 **First start:** read S1 only; do not preload cards S2–S5. **Subsequent starts:** read only the current card and preceding phase's handoff checkpoint. Any newly discovered cross-phase dependency must be entered in the shared log with an owner and explicit closure phase; adjust cards via links, not repeated large descriptions.
