@@ -1,5 +1,7 @@
 # S2 installed-candidate Incus 7.6 black-box — 2026-11-10
 
+**Current reacceptance:** exact `4206aaff3aecaa9a10817efd0920749797ec65b1` [real installed official SDK/Incus 7.6 native job](https://github.com/vanishs/boxweave/actions/runs/42899371303/job/130120916590) SUCCESS; binary SHA256 `9399c4441daa63052fa742706067c2d727b5d00cf4479fb314d5de18c064d38c`. Independent native disk witness now proves **both recorded Exec stream files are 16,777,220 bytes on the selected separate 4GiB ext4 `dir` pool**, not the runner host root (`S2_NATIVE_EXEC_SPOOL_PHYSICAL_FILE_SIZE_WITNESSED=PASS`). This is **not a quota or log-retention PASS**, as native `dir` explicitly lacks per-Box quotas. The current complete test reran previously green lost-ACK, postread-503, restarted UNKNOWN, progress/no-fake-events, exact UUID lifecycle and cleanup. See [storage boundary detail](S2_EXEC_OUTPUT_STORAGE_BOUNDARY_2026-11-10.md), [live crosswalk](S2_EXIT_CROSSWALK_2026-11-10.md).
+
 **Result: S2 CORE NATIVE SUBSET PASS; S2 PHASE NOT YET PASS.** This is a
 single-use GitHub-hosted Ubuntu 24.04 VM run on an isolated daemon and never
 a deployed BoxWeave v1 instance, shared Incus host, or product release.
