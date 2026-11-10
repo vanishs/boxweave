@@ -55,11 +55,11 @@ func main() {
 	for i := 0; i < 120; i++ {
 		item, err := store.Admit(ctx, state.Admission{
 			Layer: project, ActorID: actor.ID, TokenID: actor.ID,
-			Key: fmt.Sprintf("native-s2-history-indexed-seed-%03d", i),
-			Action: "box_exec",
+			Key:        fmt.Sprintf("native-s2-history-indexed-seed-%03d", i),
+			Action:     "box_exec",
 			SafeIntent: []byte(fmt.Sprintf("{\"fixture\":\"history-only\",\"i\":%d}", i)),
-			RequestID: fmt.Sprintf("s2-native-history-%03d", i),
-			WorkRef: "lab/history-120", AgentRef: "seed-only",
+			RequestID:  fmt.Sprintf("s2-native-history-%03d", i),
+			WorkRef:    "lab/history-120", AgentRef: "seed-only",
 		})
 		if err != nil || item.State != "ADMITTED" || item.NativeOperationID != "" {
 			panic(fmt.Sprintf("refusing fake/native history fixture %03d: %v", i, err))
