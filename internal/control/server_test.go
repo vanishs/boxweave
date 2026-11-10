@@ -108,7 +108,7 @@ func TestHTTPAuthorizationHostOriginAndRevocation(t *testing.T) {
 		t.Fatalf("revoked: HTTP %d", resp.StatusCode)
 	}
 }
-func TestOfficialMCPHandshakeAndOnlyOneTool(t *testing.T) {
+func TestOfficialMCPHandshakeAndS2ReadTools(t *testing.T) {
 	_, ts, admin, viewer := fixture(t)
 	for _, tok := range []string{admin, viewer} {
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -128,8 +128,13 @@ func TestOfficialMCPHandshakeAndOnlyOneTool(t *testing.T) {
 		if err != nil {
 			t.Fatalf("tools/list: %v", err)
 		}
-		if len(tools.Tools) != 1 || tools.Tools[0].Name != "host_status" {
-			t.Fatalf("S1 leaked unexpected tools: %+v", tools.Tools)
+		gotNames := make(map[string]bool, len(tools.Tools))
+		for _, tool := range tools.Tools {
+			gotNames[tool.Name] = true
+		}
+		if len(gotNames) != 3 || !gotNames["host_status"] ||
+			!gotNames["operation_get"] || !gotNames["operation_list"] {
+			t.Fatalf("unexpected S2 tool inventory: %+v", tools.Tools)
 		}
 		got, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "host_status", Arguments: map[string]any{}})
 		if err != nil {

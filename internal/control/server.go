@@ -80,7 +80,7 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 }
 func (s *Service) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory."},
+	mcp.AddTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
 				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")
@@ -99,6 +99,7 @@ func (s *Service) Handler() http.Handler {
 			result.BinarySHA256 = binaryDigest()
 			return &mcp.CallToolResult{}, result, nil
 		})
+	s.registerOperationReadTools(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, PropagateRequestCancellation: false})
 	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)
