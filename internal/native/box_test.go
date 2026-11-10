@@ -148,12 +148,12 @@ func TestS2OwnedNICInternetToggleNeverEditsSharedACL(t *testing.T) {
 	base := api.DevicesMap{
 		"eth0": map[string]string{
 			"type": "nic", "name": "eth0", "network": "incusbr-owned",
-			"security.acls": "boxweave-owned",
+			"security.acls":                        "boxweave-owned",
 			"security.acls.default.ingress.action": "reject",
-			"security.ipv4_filtering": "true",
-			"security.ipv6_filtering": "true",
-			"security.mac_filtering": "true",
-			"security.acls.default.egress.action": "reject",
+			"security.ipv4_filtering":              "true",
+			"security.ipv6_filtering":              "true",
+			"security.mac_filtering":               "true",
+			"security.acls.default.egress.action":  "reject",
 		},
 		"root": map[string]string{"type": "disk", "path": "/", "pool": "owned-pool", "size": "2GiB"},
 	}

@@ -264,7 +264,6 @@ func main() {
 		"per-box internet=true lost typed resource config or failed native readback")
 	fmt.Println("S2_NATIVE_INTERNET_EGRESS_FALSE_TRUE_READBACK_PRESERVES_RESOURCES=PASS")
 
-
 	grown := call(ctx, admin, "box_update", map[string]any{
 		"box_id": uuid, "disk_gib": 3,
 		"idempotency_key": "native-s2-grow-owned-disk-01"})
@@ -533,7 +532,7 @@ func main() {
 	// acquire authority over the new guest.
 	reused := call(ctx, admin, "box_create", map[string]any{
 		"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": false,
-		"internet": false,
+		"internet":        false,
 		"idempotency_key": "native-s2-reused-name-fresh-uuid-01"})
 	reuseOutcome := wait(ctx, admin, id(reused))
 	newUUID := field(reuseOutcome, "box_uuid")
