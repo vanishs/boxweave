@@ -322,4 +322,42 @@ if [ -n "$(sudo incus list --all-projects --format csv -c n)" ]; then
   exit 87
 fi
 echo "S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS"
+
+# The installed candidate must refuse arbitrary/foreign SQLite histories
+# BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
+# is intentionally constructed independently from the running journal.
+foreign_db="$work/ledger/foreign.sqlite"
+corrupt_db="$work/ledger/corrupt.sqlite"
+sudo runuser -u boxweave -- python3 - "$foreign_db" "$corrupt_db" <<'PY'
+import os,sqlite3,sys
+foreign,corrupt=sys.argv[1:]
+conn=sqlite3.connect(foreign)
+conn.execute("CREATE TABLE foreign_marker (proof TEXT NOT NULL)")
+conn.execute("INSERT INTO foreign_marker VALUES ('do-not-adopt')")
+conn.commit()
+conn.close()
+with open(corrupt,"wb") as f:
+    f.write(b"not a SQLite database; must remain exactly unchanged")
+os.chmod(foreign,0o600)
+os.chmod(corrupt,0o600)
+PY
+for case in foreign corrupt; do
+  if [ "$case" = foreign ]; then
+    f="$foreign_db"
+  else
+    f="$corrupt_db"
+  fi
+  before="$(sudo sha256sum "$f" | cut -d' ' -f1)"
+  if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$f" \
+      -incus-socket "$socket" -project "$project" > "$work/sqlite-$case.stderr" 2>&1; then
+    echo "S2_NATIVE_FAIL: adopted unauthorized $case SQLite layout" >&2
+    exit 94
+  fi
+  after="$(sudo sha256sum "$f" | cut -d' ' -f1)"
+  if [ "$before" != "$after" ]; then
+    echo "S2_NATIVE_FAIL: foreign SQLite bytes modified during refusal: $case" >&2
+    exit 95
+  fi
+done
+echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"

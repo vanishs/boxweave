@@ -518,7 +518,7 @@ func main() {
 		if e != nil {
 			panic(e)
 		}
-		fmt.Printf("S2_NATIVE_DUAL_STREAM_META stream=%s got=%d ended=%v truncated=%v next=%v exit=%v\\n",
+		fmt.Printf("S2_NATIVE_DUAL_STREAM_META stream=%s got=%d ended=%v truncated=%v next=%v exit=%v\n",
 			stream, len(chunk), bounded["ended"], bounded["truncated"], bounded["next_offset"], bounded["exit_code"])
 		check(len(chunk) == 16 && strings.Trim(string(chunk), "Z") == "" &&
 			bounded["ended"] == true && bounded["truncated"] == true &&
