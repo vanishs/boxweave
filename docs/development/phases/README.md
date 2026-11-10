@@ -11,6 +11,8 @@
 | **S4** | [Native network + nesting + delete integration](04_NETWORK_NESTING.md) | three TCP/UDP forward tools, directional box_peer_set, one shared ACL/Scriptlet, two-layer parity and dependency-aware delete | **4** |
 | **S5** | [Adversarial full acceptance, candidate and release](05_RELEASE_ACCEPTANCE.md) | 20/20 installed black-box, CLI leaves, Finder/Fixer/independent Verifier, exact artifact provenance and release gate | **0** |
 
+**Additional stage-specific operation continuity:** S2 [TC-001–TC-010](../../verification/CONTINUITY_ACCEPTANCE.md) implements [4 MCP + 4 domain abilities](../../design/AGENT_OPERATION_CONTINUITY.md); BRIDGEHEAD TC-011–014, S3 TC-015–016 with [client checkpoint](../TASK_CHECKPOINT_CONTRACT.md), S4 TC-017–018, S5 TC-019–020. This supplements, never replaces, A-/SDK-G/BH native gates. Future MCP Tasks adapter is not activated; no new Tool or task engine.
+
 **Five feature phases + one inserted S2.5 acceptance/deployment checkpoint; not six feature releases. 20 public MCP tools exactly: 1 + 12 + 0 + 3 + 4 = 20.** A phase can also test and strengthen earlier tools without creating more public tools. Tool names and contracts remain authoritative in [MCP_TOOLS](../../design/MCP_TOOLS.md).
 
 **Run instruction:** Execute one **S#** end to end following its card, including internal focused research, implementation, tests, independent acceptance and bug-fix iterations; keep changing docs with code as necessary. Log every durable action and any BLOCKED/UNKNOWN with original identifiers. Do not stop because one subcase requires an owner decision; continue unaffected work while retaining honest phase status. Do not publish unless S5 mandatory gate is genuinely PASS.

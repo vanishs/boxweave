@@ -10,6 +10,10 @@
 
 **Mandatory additional mid-project evidence:** [S2.5 BRIDGEHEAD](025_BRIDGEHEAD.md) and [BH-001–BH-017](../../verification/BRIDGEHEAD_ACCEPTANCE.md) supply independent early pilot/rollback/native proof; they **never substitute** for this S5 exact-current-candidate 20/20 Tool and CLI, full S4 networking/L0/L1/L2, realistic failure, physical LAN, independent verifier and immutable Release gate. Re-run affected BRIDGEHEAD cases against the final S5 binary if intervening S3/S4 code changed their contracts. A failed or unauthorized pilot is not retroactively PASS; S5 still needs all its own mandatory evidence.
 
+## TC-019–TC-020: final independent continuity calibration
+
+Add [TC-019–TC-020](../../verification/CONTINUITY_ACCEPTANCE.md) to exact-candidate 20/20 Tool + CLI acceptance. Independent verifier deliberately reproduces broken attribution/authorization or duplicate-dispatch native failure and verifies the test **fails**, then checks original case repaired. Reaccept SDK legacy/new clients, optional `_meta` and tested fallback, private caching, Tool hints, typed/legacy result, dropped optional progress and genuine Agent/checkpoint recovery. The MCP Tasks extension remains future only; original S5 native/LAN/UNKNOWN and release tests are not substituted.
+
 ## Mandatory complete coverage — no guessed PASS
 
 1. **Enumerate actual installed interface inventory:** all **20 public MCP tools**, every actual host-local CLI subcommand/leaf, installer/upgrade/status/recovery paths, current Incus daemon/SDK and real running candidate SHA/binary digest. The source catalog is a promise, not proof of what was installed. Produce **per-tool functional coverage**, not merely “80/80 tests passed”.

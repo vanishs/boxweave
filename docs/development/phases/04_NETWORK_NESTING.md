@@ -24,6 +24,10 @@ No Caddy, HTTP route API, generic ACL editor, direct host firewall API, network-
 6. **Nested L1/L2 parity:** install exact v1 build inside a supported nested Box, using new local credentials at that layer only. Guest-local client connects to inner loopback MCP via allowed parent guest Exec; never pass parent Incus sockets or root credentials to child. Same 20 Tool schemas, Box agent loop and native owned-resource semantics where supported; nesting must not silently disable anti-spoof. Parent↔child routing uses ordinary explicitly configured per-layer native forwards, not an orchestration feature.
 7. **Real independent network witnesses:** A↔B same bridge IPv4 and enabled IPv6 with reply/reverse tests, revoke and new established connection evidence; host native TCP+UDP, alternate bind/port collision, real service daemon surviving original Exec; physical LAN machine to L0 LAN bind, and L0→L1 through separate forwards where authorized. Label loopback-only evidence as partial, not public LAN PASS.
 
+## TC-017–TC-018: dependent native operations and nested attribution
+
+[TC-017–TC-018](../../verification/CONTINUITY_ACCEPTANCE.md) test multi-Agent same-work attribution during peer/forward/dependent `box_delete`, lost replies, partial native cleanup and UNKNOWN; no duplicate native effects or foreign resources. Identical untrusted `work_ref` in L0/L1 does not imply cross-layer permissions or common native operation ID. S4 IPv4/IPv6/ACL/Scriptlet/physical LAN and full nesting/dependent delete gates all remain mandatory.
+
 ## Missing proofs must not disappear
 
 **SDK capability proofs already exist:** three NICs shared one ACL; A→B IPv4/IPv6 allowed and B→A/C→B denied, revoke restored denial; native TCP/UDP loopback proxy survived peer revoke; exact-ACL Scriptlet restricted TLS authorization worked with simulated old-client compatibility; one-NIC IPv4 anti-spoof dropped fake source. Those were **nested Incus SDK tests, not deployed v1 acceptance**.
