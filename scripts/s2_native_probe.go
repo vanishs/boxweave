@@ -403,5 +403,33 @@ func main() {
 	remaining, ok := empty["boxes"].([]any)
 	check(ok && len(remaining) == 0, "tombstoned Box still appeared in owned inventory")
 	fmt.Println("S2_NATIVE_DELETED_BOX_NOT_LISTED=PASS")
+
+	// A native name may be reused only by a NEW independently verified
+	// incarnation. The tombstoned UUID and original Delete key must never
+	// acquire authority over the new guest.
+	reused := call(ctx, admin, "box_create", map[string]any{
+		"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": false,
+		"idempotency_key": "native-s2-reused-name-fresh-uuid-01"})
+	reuseOutcome := wait(ctx, admin, id(reused))
+	newUUID := field(reuseOutcome, "box_uuid")
+	check(newUUID != "" && newUUID != uuid,
+		"same-name new Box adopted the old native UUID or failed to create")
+	stale, staleErr := admin.CallTool(ctx, &mcp.CallToolParams{Name: "box_get",
+		Arguments: map[string]any{"box_id": uuid}})
+	check(staleErr != nil || stale != nil && stale.IsError,
+		"old tombstoned UUID accessed a new same-name Box")
+	priorDelete := call(ctx, admin, "box_delete", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-delete-00000001"})
+	check(id(priorDelete) == id(del) && priorDelete["duplicate"] == true,
+		"original Delete key lost immutability after name reuse")
+	newBox := child(call(ctx, admin, "box_get", map[string]any{"box_id": newUUID}), "box")
+	check(field(newBox, "box_id") == newUUID &&
+		field(newBox, "native_state") == "Stopped",
+		"old Delete incorrectly removed or modified new incarnation")
+	lastDelete := call(ctx, admin, "box_delete", map[string]any{"box_id": newUUID,
+		"idempotency_key": "native-s2-delete-new-incarnation-01"})
+	wait(ctx, admin, id(lastDelete))
+	fmt.Println("S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED=PASS")
+
 	fmt.Println("S2_NATIVE_END_TO_END=PASS")
 }

@@ -85,6 +85,11 @@ project="user-$uid"
 test "$(sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config id -nG)" = incus
 echo "S2_NATIVE_SERVICE_INCUS_XDG_CONFIG=/home/boxweave/.config"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project list --format csv
+if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project show default > "$work/foreign-project-denied.txt" 2>&1; then
+  echo "S2_NATIVE_FAIL: nonroot BoxWeave service can inspect the foreign default Project" >&2
+  exit 90
+fi
+echo "S2_NATIVE_RESTRICTED_USER_FOREIGN_PROJECT_DENIED=PASS"
 sudo incus project show "$project" | grep -q 'restricted: "true"'
 
 # All edits are performed only on the new, empty single-use Project. Do not
