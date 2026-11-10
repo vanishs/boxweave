@@ -2,13 +2,14 @@
 
 The **v1 base** began as a design-only baseline; active Draft PR #115 has a runnable, independently tested **S1 development candidate**, not a merged or released product. See [actual native Issue #116 verification](verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md) and [remaining GitHub owner merge-rule action #117](https://github.com/vanishs/boxweave/issues/117).
 
-**Start development without loading the whole repository:** [single five-stage implementation entry](process/IMPLEMENTATION_PLAN.md) → [phase execution and context protocol](development/PHASE_EXECUTION_PROTOCOL.md) → [current checkpoint / append-only operations + decision log](development/EXECUTION_LOG.md#current-checkpoint) → **only the current** [S1–S5 phase card](development/phases/README.md). Phase cards reference the **smallest relevant sections** of the detailed documents below. Do not treat upstream SDK probes as installed v1 acceptance.
+**Start development without loading the whole repository:** [five feature phases + S2.5 BRIDGEHEAD checkpoint entry](process/IMPLEMENTATION_PLAN.md) → [phase execution and context protocol](development/PHASE_EXECUTION_PROTOCOL.md) → [current checkpoint / append-only operations + decision log](development/EXECUTION_LOG.md#current-checkpoint) → **only the current** [S1–S5 card or S2.5 BRIDGEHEAD gate](development/phases/README.md). Phase cards reference the **smallest relevant sections** of the detailed documents below. Do not treat upstream SDK probes as installed v1 acceptance.
 
 | Development question | One entrypoint |
 |---|---|
 | What source formatting, staged commit hooks, PR checks and required merge rules apply? | [Contributing](../CONTRIBUTING.md) · [quality / GitHub gate](process/QUALITY_GATES.md) |
 | Which old Incus migration, rollback and crash windows were really accepted? | [S1 Issue #116 native acceptance](verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md) |
-| What big stages and which MCP tool ownership? | [Five-phase implementation plan](process/IMPLEMENTATION_PLAN.md) |
+| What big stages and which MCP tool ownership? | [Five feature phases + S2.5 acceptance/deployment checkpoint](process/IMPLEMENTATION_PLAN.md) |
+| When can the accepted S1+S2 candidate become an early real-host development base without weakening S4/S5? | [S2.5 BRIDGEHEAD phase card](development/phases/025_BRIDGEHEAD.md) · [BH-001–BH-017 exact native acceptance](verification/BRIDGEHEAD_ACCEPTANCE.md) |
 | How to execute continuously, handle repeated failures and avoid context loss? | [Execution protocol](development/PHASE_EXECUTION_PROTOCOL.md) |
 | What did earlier Agents do, decide, leave UNKNOWN or require the owner to decide? | [Execution log and live checkpoint](development/EXECUTION_LOG.md) |
 | Which focused inputs and exit gates belong to the current phase? | [Phase cards index](development/phases/README.md) |

@@ -2,9 +2,11 @@
 
 **State: NOT_STARTED (2026-11-08).** Run in one end-to-end pass, including research specific to missing contracts, implementation, real guest evidence, negative security tests, fix/retest and durable handoff. Do not stop after adding only the three file handlers.
 
-**Minimal entry:** [Current S2/S1 artifact and handoff](../EXECUTION_LOG.md#current-checkpoint), [phase protocol](../PHASE_EXECUTION_PROTOCOL.md), [Agent workflow requirement](../../product/DEVELOPMENT_LOOP.md) and [guest management](../../design/GUEST_MANAGEMENT.md). Reuse installed v1 typed MCP, journal, worker and exact Box UUID from S1/S2; no new guest management process.
+**Minimal entry:** [Current S2/S2.5 BRIDGEHEAD/S1 artifact and handoff](../EXECUTION_LOG.md#current-checkpoint), [phase protocol](../PHASE_EXECUTION_PROTOCOL.md), [Agent workflow requirement](../../product/DEVELOPMENT_LOOP.md) and [guest management](../../design/GUEST_MANAGEMENT.md). Reuse installed v1 typed MCP, journal, worker and exact Box UUID from S1/S2; no new guest management process.
 
 **Read on demand:** [MCP_TOOL_CONTRACTS — file modes](../../design/MCP_TOOL_CONTRACTS.md#box_file_apply), [official SDK P0 file/native evidence](../../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md), [tool/native SDK mapping](../../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md) for each native method, [security](../../design/SECURITY.md) for viewer/host paths, and relevant [ACCEPTANCE](../../verification/ACCEPTANCE.md) **A-009–015, A-020, A-039–040, A-063–065, A-075–077**.
+
+**Inserted predecessor:** [S2.5 BRIDGEHEAD](025_BRIDGEHEAD.md) tests whether S1+S2 can safely operate as a real-host early development base; it does **not** replace this S3 file-tool implementation or guest-file/Agent-loop acceptance. Use the approved pinned v1 candidate after **BRIDGEHEAD HOST_GO**, or continue in independent disposable labs if real-host pilot is NO_GO/BLOCKED while preserving the unmet gate. Always rerun affected S1/S2/BRIDGEHEAD native regressions if this phase changes shared Exec/auth/SQLite or installation semantics.
 
 ## Three new public tools
 

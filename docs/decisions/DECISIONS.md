@@ -74,4 +74,6 @@ The following final decisions supersede earlier broad commitments where they con
 
 | D-058 | **Accepted — owner approved minimal UNKNOWN recovery** | A host-local operator can review exact UNKNOWN task/resource evidence, receive a short-lived challenge, confirm a second time with reason/risk acknowledgement, and durably audit release of **only the local claim**. Never auto-retry, cancel, mark success or modify the original receipt; no new MCP tool. |
 
+| D-059 | **Accepted — owner-approved S2.5 BRIDGEHEAD plan** | Insert a zero-new-tool **independent native early development-base acceptance and reversible physical-host pilot** between fully accepted S2 and S3. Preserve all S1/S2/S3/S4/S5 security, acceptance and release rules. LAB_PASS is not HOST_GO; actual host/Project/pool/service/port modification requires a new separate explicit operator authorization, and unsafe shared Incus/network prerequisites mean NO_GO. S3 may proceed safely in isolated labs if physical pilot is blocked; no legacy OAuth, global Incus repair, new SDK transport or automatic `main` adoption. [Phase](../development/phases/025_BRIDGEHEAD.md) · [BH cases](../verification/BRIDGEHEAD_ACCEPTANCE.md). |
+
 Canonical narrow policy: [PRODUCT_BOUNDARY.md](PRODUCT_BOUNDARY.md).

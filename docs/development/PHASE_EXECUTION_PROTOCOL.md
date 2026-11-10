@@ -1,6 +1,6 @@
 # Development phase execution protocol — context-safe, continuous and evidence-bound
 
-**Role:** Rules for running the five development phases in [the single implementation entrypoint](../process/IMPLEMENTATION_PLAN.md). Read this once when beginning or resuming any phase. This is a **workflow document, not another implementation plan**. The immutable v1 product boundary remains [PRODUCT_BOUNDARY](../decisions/PRODUCT_BOUNDARY.md); the baseline `v1` branch was a design-only starting point, but **feature-branch implementation status must be established from current HEAD and the execution-log checkpoint**, not this static sentence.
+**Role:** Rules for running the five feature-development phases and intervening **S2.5 BRIDGEHEAD** native deployment checkpoint in [the single implementation entrypoint](../process/IMPLEMENTATION_PLAN.md). Read this once when beginning or resuming any phase. This is a **workflow document, not another implementation plan**. The immutable v1 product boundary remains [PRODUCT_BOUNDARY](../decisions/PRODUCT_BOUNDARY.md); the baseline `v1` branch was a design-only starting point, but **feature-branch implementation status must be established from current HEAD and the execution-log checkpoint**, not this static sentence.
 
 ## 1. Entry, context budget and just-in-time reading
 
@@ -13,6 +13,8 @@ Before an actual task: record branch/current HEAD, existing local/remote edits, 
 For phase-specific context, each phase card has two tiers: **required on entry** (few files) and **read only at named subtask**. Open the relevant path/section, not the whole repo. A referenced acceptance ID may be fetched just before its test; no need to preload all of [ACCEPTANCE](../verification/ACCEPTANCE.md).
 
 ## 2. One phase = one continuous end-to-end execution
+
+**Exception in ordering, not a weakened gate:** after formally accepted S2, execute [S2.5 BRIDGEHEAD](phases/025_BRIDGEHEAD.md) as one separate bounded, rigorous real-host/nested safety campaign before S3. Its [BH-001–BH-017](../verification/BRIDGEHEAD_ACCEPTANCE.md) need exact deployed/native/independent evidence and fresh physical-host authority; they do not count as S4/S5 PASS. The owner approving this plan does **not** authorize a production installation or global Incus modifications. If the early physical-host pilot cannot meet security/host-readiness requirements, record NO_GO, preserve evidence and proceed with **safe S3 work in an independent lab**, without pretending host readiness. Never create an unreviewed 'minimum MVP' code fork. Read the new card **only after S2**, not during S1/S2 unrelated work.
 
 Each major phase is meant to be completed **in one autonomous development pass** by the next executing Agent, not split into "only investigate", "only write plan" or "only test" deliveries. Subtasks may be delegated or developed in isolated branches/Boxes, but the phase owner remains responsible for integrating and verifying the **same source SHA and artifact**.
 

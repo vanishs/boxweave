@@ -8,6 +8,8 @@
 
 **MCP proxy/client incident input (on demand):** [legacy main wrong-path/negotiation/Agent-stall observations](../../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) (O-026–O-028). Check real `/mcp` initialization, SDK protocol negotiation, authenticated Tool catalog/read and intentionally incorrect `POST /` as distinct results. Legacy OAuth/OIDC does not become a v1 feature or gate.
 
+**Mandatory additional mid-project evidence:** [S2.5 BRIDGEHEAD](025_BRIDGEHEAD.md) and [BH-001–BH-017](../../verification/BRIDGEHEAD_ACCEPTANCE.md) supply independent early pilot/rollback/native proof; they **never substitute** for this S5 exact-current-candidate 20/20 Tool and CLI, full S4 networking/L0/L1/L2, realistic failure, physical LAN, independent verifier and immutable Release gate. Re-run affected BRIDGEHEAD cases against the final S5 binary if intervening S3/S4 code changed their contracts. A failed or unauthorized pilot is not retroactively PASS; S5 still needs all its own mandatory evidence.
+
 ## Mandatory complete coverage — no guessed PASS
 
 1. **Enumerate actual installed interface inventory:** all **20 public MCP tools**, every actual host-local CLI subcommand/leaf, installer/upgrade/status/recovery paths, current Incus daemon/SDK and real running candidate SHA/binary digest. The source catalog is a promise, not proof of what was installed. Produce **per-tool functional coverage**, not merely “80/80 tests passed”.
