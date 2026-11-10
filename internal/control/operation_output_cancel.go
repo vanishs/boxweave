@@ -6,8 +6,8 @@ import (
 	"errors"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vanishs/boxweave/internal/state"
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/state"
 )
 
 type operationOutputInput struct {
