@@ -25,6 +25,10 @@ Use native `auth.RequireBearerToken` with BoxWeave's own revocation-aware `Token
 
 For the full 20-tool SDK and middleware interface mapping, see [native SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md); this is source research, not deployed validation.
 
+## Small SDK-native continuity and privacy improvements
+
+[Tagged Go SDK v1.8.0 research](../research/MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md): receive bounded optional namespaced `_meta` through SDK types, attach one redacted `AddReceivingMiddleware` observation, return typed structured original Operation receipts and bounded next-read hints, classify Tools truthfully with `ToolAnnotations`, and set authenticated `cacheScope=private` via SDK `SetCacheable` where applicable (default may be public). `work_ref`/`agent_ref` are **untrusted**; authorization still comes from verified TokenInfo, never raw client metadata. SDK Progress Notifications are optional **live** UX with progress token, not a persistent heartbeat. Protocol `2026-07-28` removed ping; the SDK's legacy KeepAlive is not an operation liveness signal. Avoid MRTR reinvocation of mutating handlers without original key, remote approval, or a new messaging service. [TC negative tests](../verification/CONTINUITY_ACCEPTANCE.md).
+
 ## MCP Tasks future extension: capability-gated, not yet implemented
 
 The [2026-07-28 official `io.modelcontextprotocol/tasks` extension](../research/MCP_TASKS_EXTENSION_SEAM_2026-11-10.md) is **not** the 2025-11-25 experimental Tasks wire format. The pinned official Go SDK v1.8.0 does not yet expose a complete server-side Tasks implementation. **V1 must not advertise this extension, fabricate `resultType:"task"`, or register raw `tasks/*` RPCs now**. Keep existing ordinary authenticated, stateless `/mcp` `tools/call` and S2 immediate durable Operation receipts for all supported/legacy clients.

@@ -16,6 +16,10 @@ Report native post-state, observed SHA/hash coverage and errors; do not invent s
 
 A staging-file rename by itself only guarantees whole-file visibility, **not** compare-and-swap against a concurrent guest writer. Do not weaken the existing conditional `replace/delete` contract based on an upstream example; return `UNSUPPORTED` when native point-of-use safety cannot be proven. An Incus file response identifying a symlink or directory is not ordinary regular-file bytes.
 
+## Additional S2 correlation and recovery results, same 20 Tools
+
+[Agent Operation Continuity](AGENT_OPERATION_CONTINUITY.md) adds optional bounded `work_ref`/`agent_ref` from SDK-native `_meta` or supported existing Tool arguments, never a new Agent API. Authenticated actor remains independent. Original labels are immutable on same idempotency key, and the same work label doesn't grant permissions. Existing `operation_list` gains authorization-first indexed actor/work/agent/state/time filters; `operation_get` and output retain original permissions/IDs. Typed `next_action` hints contain only safe reads/host-local review, never speculative mutations. [TC-001–TC-010](../verification/CONTINUITY_ACCEPTANCE.md) are additive to original S2 tests.
+
 ## `box_exec` and operation tools
 
 `box_exec(box_id,argv,cwd?,guest_uid?,guest_gid?,env?,timeout_ms?,output_limit?,idempotency_key)` uses nonempty typed argv, guest-root UID 0 by default, bounded guest cwd/environment/time/output and no implicit host shell. A caller may explicitly invoke a shell **inside the owned Box**. It is a durable async mutation, with original exit/status/output obtained via `operation_get` and paginated `operation_output_get`. Nonzero observed exit is a completed failed command, not native UNKNOWN.

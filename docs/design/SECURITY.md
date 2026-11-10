@@ -2,6 +2,8 @@
 
 **Invariant:** A BoxWeave MCP caller, including an `admin` token, can inspect or mutate **only** this layer's BoxWeave-owned Incus resources and their approved consequences. It cannot acquire host shell, foreign Incus admin, host file, parent BoxWeave or arbitrary network/Caddy authority.
 
+**Multi-Agent continuity does not expand authority.** Verified `actor_id`/`token_id` is from server authentication; `work_ref`, `agent_ref`, clientInfo, MCP sessions and future Task handles are never credentials, ownership grants or a reason to read other controllers. For `operation_list`, restrict the permitted controller/layer/role/owned resources **before** filtering and pagination; honor existing viewer and Exec output limits. Use separate revocable credentials for trustworthy per-Agent attribution, and never log raw guest args/tokens/prompt chains. [Design](AGENT_OPERATION_CONTINUITY.md) and [TC security cases](../verification/CONTINUITY_ACCEPTANCE.md).
+
 ## Owned native boundary
 
 - Confirm exact Incus instance UUID/incarnation and local SQLite ownership before sensitive calls. Names/IPs are not identities; reuse cannot attach old peer grants or forwards. A restricted Incus Project assists isolation but is not by itself ownership or private packet isolation proof.
