@@ -235,10 +235,17 @@ sudo losetup -d "$noquota_loop"
 
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
-chmod 0600 "$work/admin.secret" "$work/viewer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin2.secret"
+chmod 0600 "$work/admin.secret" "$work/viewer.secret" "$work/admin2.secret"
 admin="$(sed -n 's/^token=//p' "$work/admin.secret")"
 viewer="$(sed -n 's/^token=//p' "$work/viewer.secret")"
-test -n "$admin" && test -n "$viewer"
+admin2="$(sed -n 's/^token=//p' "$work/admin2.secret")"
+admin_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin.secret")"
+admin2_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin2.secret")"
+test -n "$admin" && test -n "$viewer" && test -n "$admin2"
+echo "$admin_id" | grep -Eq '^[0-9a-f]{32}$'
+echo "$admin2_id" | grep -Eq '^[0-9a-f]{32}$'
+test "$admin_id" != "$admin2_id"
 
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
   -incus-socket "$socket" -project "$project" \
@@ -287,7 +294,8 @@ test -z "$(sudo incus list --all-projects --format csv -c n)"
 # A failure is not an excuse to retry an original native mutation.
 ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
-  BW_S2_OUTPUT_WITNESS_DIR="$work" \
+  BW_S2_ADMIN2_TOKEN="$admin2" BW_S2_ADMIN1_ID="$admin_id" \
+  BW_S2_ADMIN2_ID="$admin2_id" BW_S2_OUTPUT_WITNESS_DIR="$work" \
   BW_S2_QUEUED_CANCEL_OPID="$queued_cancel_id" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
 probe_pid=$!
 attempt=0

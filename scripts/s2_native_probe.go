@@ -171,12 +171,18 @@ func nativePing(ctx context.Context, session *mcp.ClientSession, uuid, key, dest
 func main() {
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
 	viewer := os.Getenv("BW_S2_VIEWER_TOKEN")
+	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
+	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
+	admin2ID := os.Getenv("BW_S2_ADMIN2_ID")
 	check(strings.HasPrefix(url, "http://127.0.0.1:"), "MCP must be loopback")
-	check(token != "" && viewer != "", "both independent credentials required")
+	check(token != "" && viewer != "" && admin2Token != "" && len(admin1ID) == 32 &&
+		len(admin2ID) == 32 && admin1ID != admin2ID, "independent credential identities required")
 	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Minute)
 	defer cancel()
 	admin := connect(ctx, url, token)
 	defer admin.Close()
+	admin2 := connect(ctx, url, admin2Token)
+	defer admin2.Close()
 	view := connect(ctx, url, viewer)
 	defer view.Close()
 	inv, err := admin.ListTools(ctx, nil)
@@ -579,6 +585,61 @@ func main() {
 		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-delete-01"})
 	wait(ctx, admin, id(peerDelete))
 	fmt.Println("S2_NATIVE_PACKET_PEER_EXACT_CLEANUP=PASS")
+
+	// TC-006: Two distinct authenticated admin identities intentionally share
+	// a self-declared work label. That label is *not* an identity credential.
+	// Separate guest effects and indexed actor scopes must retain exact
+	// original operation IDs, while viewer label borrowing cannot read either.
+	const sharedWork = "lab/shared-actor-label-not-authentication"
+	actorOne := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf actor-one"},
+		"idempotency_key": "native-s2-actor-one-shared-work-exec-01",
+		"work_ref": sharedWork, "agent_ref": "claimed-agent-alpha",
+	})
+	actorOneID := id(actorOne)
+	actorOneFinal := wait(ctx, admin, actorOneID)
+	check(field(actorOneFinal, "work_ref") == sharedWork &&
+		field(actorOneFinal, "agent_ref") == "claimed-agent-alpha",
+		"first independent actor lost immutable correlation labels")
+	actorTwo := call(ctx, admin2, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf actor-two"},
+		"idempotency_key": "native-s2-actor-two-shared-work-exec-01",
+		"work_ref": sharedWork, "agent_ref": "claimed-agent-beta",
+	})
+	actorTwoID := id(actorTwo)
+	actorTwoFinal := wait(ctx, admin2, actorTwoID)
+	check(actorOneID != actorTwoID &&
+		field(actorTwoFinal, "work_ref") == sharedWork &&
+		field(actorTwoFinal, "agent_ref") == "claimed-agent-beta",
+		"second authenticated actor borrowed first immutable native Operation")
+	for _, scoped := range []struct {
+		actorID, operation string
+	}{{admin1ID, actorOneID}, {admin2ID, actorTwoID}} {
+		page := child(call(ctx, admin, "operation_list", map[string]any{
+			"work_ref": sharedWork, "actor_id": scoped.actorID, "limit": 10}), "page")
+		rows, ok := page["operations"].([]any)
+		check(ok && len(rows) == 1, "attributed same-work actor scope leaked/missed original")
+		row, ok := rows[0].(map[string]any)
+		check(ok && field(row, "operation_id") == scoped.operation,
+			"client work labels forged authenticated actor ownership")
+	}
+	viewerPage := child(call(ctx, view, "operation_list", map[string]any{
+		"work_ref": sharedWork, "limit": 10}), "page")
+	viewerRows, ok := viewerPage["operations"].([]any)
+	check(ok && len(viewerRows) == 0,
+		"viewer inherited independent admin Operations by a self-declared work label")
+	borrowedResult, borrowedErr := view.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_get", Arguments: map[string]any{"operation_id": actorOneID},
+	})
+	check(borrowedErr != nil || borrowedResult != nil && borrowedResult.IsError,
+		"viewer borrowed original admin Operation by guessed ID")
+	spoofResult, spoofErr := view.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{
+			"work_ref": sharedWork, "actor_id": admin2ID, "limit": 10},
+	})
+	check(spoofErr != nil || spoofResult != nil && spoofResult.IsError,
+		"viewer actor_id filter widened privileges to a foreign token")
+	fmt.Println("S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED=PASS")
 
 	cmd := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
