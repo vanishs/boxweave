@@ -25,6 +25,8 @@
 5. **Cancel:** queued-undispatched cancellation through journal; live SDK Exec control-WebSocket signal **only while the owning worker holds that socket**, verified guest termination; a detached Exec Operation.Cancel() was actually unsupported. Report CANCEL_REQUESTED/unsupported/UNKNOWN honestly; caller disconnect is not task cancellation. No custom guest process supervisor.
 6. **Delete integration seam:** phase-local delete must safely delete only a Box **without active owned network dependents**; for any potential future forwarding/peer record, refuse/hold unless claims are verified. **S4 explicitly finishes and reaccepts** box_delete with owned proxy/peer dependency removal and mid-delete failures. Do not falsely mark A-043–046 fully PASS here.
 
+**Load on demand for slow-call/Agent-stall cases only:** [legacy Incus I/O + MCP outage incident](../../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) (O-027/O-028). Distinguish HTTP timeout from durable native state, test bounded reads/backpressure and never replay an original UNKNOWN. A separate heartbeat subsystem is not approved.
+
 ## Test and negative matrix
 
 - Real native create/read/list/start/stop/update/delete against the **same exact binary/instance UUID**; new image, storage pool, start=false, restart, nesting availability, name reuse, foreign Box, forged stale IDs, and omission-vs-zero/clear fields.

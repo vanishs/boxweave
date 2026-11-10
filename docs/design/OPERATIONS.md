@@ -42,6 +42,10 @@ The same probe and earlier native nested creates confirm timeouts can coexist wi
 
 The official [Incus SDK v7.6.0 source](https://github.com/lxc/incus/blob/v7.6.0/client/operations.go#L183-L249) explicitly calls `op.Cancel()` on context cancellation in the listener path of `WaitContext`. Distinguish polling, native explicit cancellation, worker deadline and uncertain native dispatch. Only `operation_cancel` may initiate native cancellation; it remains an independently tracked mutation with evidence-based results. This is a **use-the-SDK-correctly** rule, not an allegation of upstream instability.
 
+## Stalled MCP versus an ongoing durable operation
+
+The [legacy main incident](../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) included owner-observed Agent progress stopping while MCP calls failed or appeared hung. No instrumented trace proved a particular native task was indefinitely blocked. **HTTP listener reachability, provider readiness, original journal/native operation progress and client ability to continue are different states.** A heartbeat cannot prove the original irreversible effect succeeded or is safe to retry. For S2, start with existing `host_status`, finite read-only `operation_get(wait_ms)`, native IDs, bounded per-layer deadlines, sanitized phase/progress evidence, and read-only checks where client concurrency permits. A blocked client may be unable to run a second probe. Do not cancel an admitted durable effect when its HTTP read wait expires; do not auto-replay UNKNOWN. No new heartbeat daemon or MCP host-health Tool is approved here.
+
 ## Worker and reconciliation
 
 - Acquire per-Box/per-port/owned peer-pair resource locks transactionally. Do not block unrelated resources unnecessarily.

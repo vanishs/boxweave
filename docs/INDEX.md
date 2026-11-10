@@ -36,6 +36,7 @@ The **v1 base** began as a design-only baseline; active Draft PR #115 has a runn
 | What was learned from Containarium current main and 2,577 commit subjects? | [Containarium study — source and historical counterexamples](research/CONTAINARIUM_MAIN_HISTORY_2026-11-07.md) |
 | What did two smaller Incus MCP implementations teach? | [Incus MCP source review, Python and Go](research/INCUS_MCP_IMPLEMENTATIONS_2026-11-07.md) |
 | Why did BoxWeave `main` become troublesome around MCP→REST changes, and what must v1 avoid? | [Pinned main source/814-commit history and owner retrospective — primarily counterexamples](research/MAIN_HISTORY_LESSONS_2026-11-07.md) |
+| What can the legacy host I/O/Cowsql incident, wrong MCP root and Agent stalls teach v1? | [Observed incident and bounded architecture discussion](research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) |
 | How are requests correlated across services? | [Tracking ID and Go context](design/TRACKING_CONTEXT.md) |
 | How are dependency versions reconciled? | [Dependency lifecycle](process/DEPENDENCY_LIFECYCLE.md) |
 | How do networking and exposure work? | [Networking](design/NETWORK.md) |

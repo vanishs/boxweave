@@ -6,6 +6,8 @@
 
 **On demand:** [fault-driven L0/L1/L2, LAN and failed-delete scenario](../../verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md), [core full Agent loop](../../product/DEVELOPMENT_LOOP.md), [dep/install/upgrade](../../process/DEPENDENCY_LIFECYCLE.md), [UNKNOWN recovery](../../process/UNKNOWN_MANUAL_RECOVERY.md), [P0 SDK results](../../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md). Historical v0.x/research only if reproducing a specific old bug.
 
+**MCP proxy/client incident input (on demand):** [legacy main wrong-path/negotiation/Agent-stall observations](../../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md) (O-026–O-028). Check real `/mcp` initialization, SDK protocol negotiation, authenticated Tool catalog/read and intentionally incorrect `POST /` as distinct results. Legacy OAuth/OIDC does not become a v1 feature or gate.
+
 ## Mandatory complete coverage — no guessed PASS
 
 1. **Enumerate actual installed interface inventory:** all **20 public MCP tools**, every actual host-local CLI subcommand/leaf, installer/upgrade/status/recovery paths, current Incus daemon/SDK and real running candidate SHA/binary digest. The source catalog is a promise, not proof of what was installed. Produce **per-tool functional coverage**, not merely “80/80 tests passed”.
