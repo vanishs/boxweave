@@ -77,19 +77,19 @@ type Admission struct {
 }
 
 type Receipt struct {
-	ID                string `json:"operation_id"`
-	TrackingID        string `json:"tracking_id"`
-	State             string `json:"state"`
-	NativeOperationID string `json:"native_operation_id,omitempty"`
-	Duplicate         bool   `json:"duplicate,omitempty"`
-	WorkRef           string `json:"work_ref,omitempty"`
-	AgentRef          string `json:"agent_ref,omitempty"`
-	Action            string `json:"action,omitempty"`
-	BoxUUID           string `json:"box_uuid,omitempty"`
-	Incarnation       string `json:"incarnation,omitempty"`
-	ErrorClass        string `json:"error_class,omitempty"`
-	CreatedAt         int64  `json:"created_at,omitempty"`
-	UpdatedAt         int64  `json:"updated_at,omitempty"`
+	ID                string     `json:"operation_id"`
+	TrackingID        string     `json:"tracking_id"`
+	State             string     `json:"state"`
+	NativeOperationID string     `json:"native_operation_id,omitempty"`
+	Duplicate         bool       `json:"duplicate,omitempty"`
+	WorkRef           string     `json:"work_ref,omitempty"`
+	AgentRef          string     `json:"agent_ref,omitempty"`
+	Action            string     `json:"action,omitempty"`
+	BoxUUID           string     `json:"box_uuid,omitempty"`
+	Incarnation       string     `json:"incarnation,omitempty"`
+	ErrorClass        string     `json:"error_class,omitempty"`
+	CreatedAt         int64      `json:"created_at,omitempty"`
+	UpdatedAt         int64      `json:"updated_at,omitempty"`
 	NextAction        NextAction `json:"next_action"`
 }
 

@@ -30,7 +30,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
 			Key: key, RequestID: "original", Action: "box_exec",
 			SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
-			WorkRef: "project-x/test-cycle", AgentRef: agent,
+			WorkRef:    "project-x/test-cycle", AgentRef: agent,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -45,7 +45,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "transport-retry", Action: "box_exec",
 		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
-		WorkRef: "project-x/test-cycle", AgentRef: "agent-a",
+		WorkRef:    "project-x/test-cycle", AgentRef: "agent-a",
 	})
 	if err != nil || !duplicate.Duplicate || duplicate.ID != first.ID ||
 		duplicate.TrackingID != first.TrackingID || duplicate.AgentRef != "agent-a" {
@@ -55,7 +55,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		Layer: "L0", ActorID: a.ID, TokenID: a.ID, Key: "s2-original-intent-0001",
 		RequestID: "relabel-attempt", Action: "box_exec",
 		SafeIntent: []byte(`{"sanitized":"guest-exec"}`),
-		WorkRef: "project-x/test-cycle", AgentRef: "spoofed",
+		WorkRef:    "project-x/test-cycle", AgentRef: "spoofed",
 	})
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("relabel original key must conflict: %v", err)
