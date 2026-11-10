@@ -9,6 +9,7 @@ The **v1 base** started as a design-only baseline but now contains a real instal
 | What source formatting, staged commit hooks, PR checks and required merge rules apply? | [Contributing](../CONTRIBUTING.md) · [quality / GitHub gate](process/QUALITY_GATES.md) |
 | Which old Incus migration, rollback and crash windows were really accepted? | [S1 Issue #116 native acceptance](verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md) |
 | What big stages and which MCP tool ownership? | [Five feature phases + S2.5 acceptance/deployment checkpoint](process/IMPLEMENTATION_PLAN.md) |
+| Must S2 migrate S1 SQLite test databases, or may it redesign the first supported schema? | [Pre-deployment schema freedom and first-retained-install boundary](process/VERSIONING.md#initial-schema-freeze--no-user-data-migration-before-first-deployment) · [decision D-061](decisions/DECISIONS.md) · [TC-003 fresh DB test](verification/CONTINUITY_ACCEPTANCE.md) |
 | When can the accepted S1+S2 candidate become an early real-host development base without weakening S4/S5? | [S2.5 BRIDGEHEAD phase card](development/phases/025_BRIDGEHEAD.md) · [BH-001–BH-017 exact native acceptance](verification/BRIDGEHEAD_ACCEPTANCE.md) |
 | How to execute continuously, handle repeated failures and avoid context loss? | [Execution protocol](development/PHASE_EXECUTION_PROTOCOL.md) |
 | What did earlier Agents do, decide, leave UNKNOWN or require the owner to decide? | [Execution log and live checkpoint](development/EXECUTION_LOG.md) |
