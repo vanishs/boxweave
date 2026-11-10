@@ -21,6 +21,8 @@ from .mcp_gate import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS, SERVER_INFO_VERSI
 from .remote_create import CreateFault, CreateJournal, PREDISPATCH_FAILURE_CODES, validated_request, validate_upstream_payload
 
 PROTOCOL = "2025-11-25"
+# Legacy Streamable HTTP versions share the same initialize/tools wire contract.
+SUPPORTED_PROTOCOLS = frozenset(("2025-03-26", "2025-06-18", PROTOCOL))
 GATE = "/usr/local/lib/boxweave/default/mcp_gate.py"
 METHODS = frozenset(("tools/list", "tools/call", "resources/list", "resources/read",
                      "prompts/list", "prompts/get", "ping"))
@@ -370,7 +372,7 @@ I authorize this client to use BoxWeave MCP tools.</label>
                 "text/event-stream" not in accepted):
             raise RemoteError("not_acceptable", 406)
         version = request.headers.get("MCP-Protocol-Version")
-        if version is not None and version != PROTOCOL:
+        if version is not None and version not in SUPPORTED_PROTOCOLS:
             raise RemoteError("unsupported_protocol_version", 400)
         message = request.get_json(silent=True)
         if (not isinstance(message, dict) or message.get("jsonrpc") != "2.0"
@@ -387,16 +389,21 @@ I authorize this client to use BoxWeave MCP tools.</label>
             if "id" not in message:
                 raise RemoteError("invalid_json_rpc")
             params = message["params"]
-            if params.get("protocolVersion") != PROTOCOL:
-                raise RemoteError("unsupported_protocol_version", 400)
+            requested_version = params.get("protocolVersion")
+            if not isinstance(requested_version, str) or not requested_version:
+                raise RemoteError("invalid_json_rpc")
+            # The MCP initialize handshake negotiates rather than rejecting
+            # a client whose preferred revision is not supported.
+            negotiated_version = (requested_version if requested_version in SUPPORTED_PROTOCOLS
+                                  else PROTOCOL)
             return out({"jsonrpc": "2.0", "id": message["id"],
-                        "result": {"protocolVersion": PROTOCOL,
+                        "result": {"protocolVersion": negotiated_version,
                                    "capabilities": {"tools": {"listChanged": False},
                                                     "resources": {"listChanged": False}},
                                    "serverInfo": {"name": "boxweave", "version": SERVER_INFO_VERSION,
                                                   "description": SERVER_DESCRIPTION},
                                    "instructions": SERVER_INSTRUCTIONS}},
-                       headers={"MCP-Protocol-Version": PROTOCOL})
+                       headers={"MCP-Protocol-Version": negotiated_version})
         if method == "notifications/initialized":
             return Response(status=202, headers={"Cache-Control": "no-store"})
         if method not in METHODS:

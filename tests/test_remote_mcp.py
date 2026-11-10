@@ -142,6 +142,32 @@ class RemoteTests(unittest.TestCase):
                 self.assertEqual(reply.json["error"], "invalid_json_rpc")
         self.assertEqual(self.calls, [])
 
+    def test_legacy_protocol_negotiation_and_catalog(self):
+        token = self.auth.issue("api", "legacy protocol compatibility")
+        for version in ("2025-03-26", "2025-06-18", "2025-11-25"):
+            with self.subTest(version=version):
+                headers = {"MCP-Protocol-Version": version}
+                payload = {"jsonrpc": "2.0", "id": 100, "method": "initialize",
+                           "params": {"protocolVersion": version, "capabilities": {},
+                                      "clientInfo": {"name": "fixture", "version": "1"}}}
+                init = self.call(token, payload=payload, headers=headers)
+                self.assertEqual(init.status_code, 200)
+                self.assertEqual(init.json["result"]["protocolVersion"], version)
+                self.assertEqual(init.headers["MCP-Protocol-Version"], version)
+                catalog = self.call(token, headers=headers)
+                self.assertEqual(catalog.status_code, 200)
+                self.assertIn("boxweave_create_status",
+                              [tool["name"] for tool in catalog.json["result"]["tools"]])
+
+        # MCP negotiation offers the latest supported revision if the requested
+        # revision is unknown; unsupported HTTP headers still fail closed.
+        payload["params"]["protocolVersion"] = "1900-01-01"
+        answer = self.call(token, payload=payload,
+                           headers={"MCP-Protocol-Version": "2025-06-18"})
+        self.assertEqual(answer.status_code, 200)
+        self.assertEqual(answer.json["result"]["protocolVersion"], "2025-11-25")
+        self.assertEqual(self.call(token, headers={"MCP-Protocol-Version": "1900"}).status_code, 400)
+
     def test_bad_headers_origin_and_version_fail_before_dispatch(self):
         token = self.auth.issue("api", "fixture")
         self.assertEqual(self.call(token, headers={"Origin": "https://evil.test"}).status_code, 403)
