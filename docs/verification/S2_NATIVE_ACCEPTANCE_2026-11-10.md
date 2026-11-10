@@ -11,6 +11,56 @@ a deployed BoxWeave v1 instance, shared Incus host, or product release.
 - **Native isolation:** newly initialized daemon on one-use runner, non-root dedicated `incus`-only account and restricted `user-1002` Project, distinct mounted loop/ext4 backing storage pool, single dedicated pre-created NetworkACL, Profile NIC with filtering, Ubuntu 24.04 `noble` image imported into the **target** Project. CI refuses an existing Incus data dir/service identity.
 - **Probe mechanism:** official MCP Go SDK client talks to actual compiled candidate binary's loopback HTTP MCP listener, then real native Incus operation readback. Final inventory is independently checked by administrator-only `incus list --all-projects` and must be empty.
 
+## Follow-up exact-candidate reacceptance (later on 2026-11-10)
+
+The original `d50371ac` proof below is preserved as historical evidence.
+A verified earlier expansion is `facd9a0b03894db64d81577b5b0978508a69ade2`:
+[full native black-box](https://github.com/vanishs/boxweave/actions/runs/42803767377/job/129787650466),
+[build/race](https://github.com/vanishs/boxweave/actions/runs/42803776642/job/129787688238)
+and [quality](https://github.com/vanishs/boxweave/actions/runs/42803767463/job/129787651269)
+all SUCCESS on that exact new candidate. Recorded stderr/stdout after a fresh
+client, guest exit 7, 70KB stdout paging, quiet and delayed exit 0, CPU/RAM
+and root growth, native postread after delete and source auth remain green.
+
+Additional independent native witnesses:
+
+- `S2_NATIVE_UNSAFE_INGRESS_DOCTOR_DENIED=PASS`: on a **disposable owned Project**, changing native NIC default inbound to `allow` made BoxWeave `doctor` refuse readiness. Restoring `reject` returned native readiness. The *same* safety rule now gates runtime admissions. This is configuration fail-closed, **not yet packet-level isolation**.
+- `S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED=PASS`: two original create intents cannot use one actor key, and a new key cannot induce a second native same-name effect.
+- `S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY=PASS`: official MCP client canceled a 20-second operation reader while real guest Exec ran; the original command later completed with its recorded content and no native cancellation.
+- `S2_NATIVE_STOP_ALREADY_STOPPED_NOOP=PASS` and `S2_NATIVE_START_ALREADY_RUNNING_NOOP=PASS`: no invented native operation IDs for verified already-desired states.
+- `S2_NATIVE_STOP_START_STOP_DISTINCT_KEYS=PASS`: an earlier Stop key returned its original immutable receipt; a new Start and later new Stop performed a second genuine native cycle.
+- `S2_NATIVE_CRASH_DISPATCHED_ORIGINAL_RECEIPT=PASS`,
+  `S2_NATIVE_EXACT_SERVICE_PROCESS_KILLED=PASS`,
+  `S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED=PASS`,
+  `S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE=PASS`: original
+  persisted Exec native Operation ID, actual runtime SIGKILL during guest command,
+  fresh instance reopening **same SQLite** and protected UNKNOWN, same-key
+  replay/no re-dispatch, and independent guest file line count **1**. The
+  single-use fixture was removed by its test-host admin after evidence;
+  this is not MCP force-unlock and did not touch either old UNKNOWN create.
+- `S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS` verified no residual
+  native instance in the single-use daemon after all phases.
+
+A newer **exact installed candidate** `74577cbe2ddda8e228fce76111db68279ba3b5f4`
+also passed [real native black-box](https://github.com/vanishs/boxweave/actions/runs/42804739893/job/129790881090),
+[Go build/race](https://github.com/vanishs/boxweave/actions/runs/42804750212/job/129790917094)
+and [quality gate](https://github.com/vanishs/boxweave/actions/runs/42804740092/job/129790886009).
+The actual compiled candidate digest printed in the native job is
+`1008c96d9eaa8ae546519cde327faab1f42016dbdf90e518cd4b713f601f9efd`.
+Additional native PASS:
+`S2_NATIVE_RESTRICTED_USER_FOREIGN_PROJECT_DENIED` and
+`S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED`. A deleted name was
+recreated with a different native UUID, the old Box ID was denied, and replay
+of the original deletion receipt while the new Box still existed did not
+affect it. The second Box was then explicitly deleted and a separate
+administrator inventory showed no remaining native instance.
+
+The latest **per-case** progress and residual blockers are in
+[S2 acceptance crosswalk](S2_EXIT_CROSSWALK_2026-11-10.md).
+Neither this run nor the earlier one establishes S2 exit, first-start
+packet-level IPv4/IPv6 isolation, running recorded Exec cancellation,
+internet toggle, interrupted SQLite commit, or S4 dependent deletion.
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
@@ -46,8 +96,8 @@ a deployed BoxWeave v1 instance, shared Incus host, or product release.
 
 ## Still open; not silently promoted to S2 PASS
 
-- Native worker crash and lost-ACK **after a real native mutation**, uncertain postread, native stale name reuse, foreign-Project mutation, and independently orchestrated recovery/UNKNOWN negative controls on this **exact S2 binary**. Existing S1 tests alone are not a substitute.
-- Guest **large/noisy/delayed** output paging and bounded storage retention after server restart, as distinct from the already-proved fresh-MCP-session recording.
+- True native SIGKILL **after the native Exec ACK was persisted**, original UNKNOWN and exactly-once guest side effect are now independently proved on later `facd9a0b`. **Still missing:** pre-ACK lost-response native create/resize, interrupted SQLite commit, positive nesting, live name reuse/foreign Project on the later candidate and hostile readback-failure injection. Earlier S1 tests alone are not a substitute.
+- Real **70KB noisy, quiet and delayed** Exec now PASS. Still open: full 16MiB per-stream upper-bound/truncation behavior, guest output after server restart, and **native log storage retention and exhaustion**; the 16MiB API read cap is not an Incus on-disk cap.
 - **Running Exec cancellation:** tagged Incus 7.6 explicitly rejects `RecordOutput:true` combined with `WaitForWS:true`, and a detached recorded Exec does not guarantee a working `Operation.Cancel()`. This S2 implementation truthfully supports cancellation before dispatch and refuses detached/late cancellation. A separately bounded live-control WebSocket execution mode, if developed, needs its own native termination/return-code acceptance; it may not be mislabeled as durable recorded mode.
 - First-start network ACL isolation under actual IPv4/IPv6 packet tests and internet toggling, nesting, foreign NIC attachments, and the future S4 managed proxy/peer dependency removal seam are not covered by this single-Box native run. Current internet toggling is deliberately UNSUPPORTED.
 - Complete `TC-001–TC-010` and phase acceptance IDs require a separate explicit evidence crosswalk, including test types (unit/mocked/native/fault injected) and failures. These are NOT covered by the one successful lifecycle run.
