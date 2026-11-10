@@ -422,7 +422,7 @@ BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
 sudo grep -q '^UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED
  "$ack_marker"
-test "$(sudo wc -l < "$ack_marker")" = 1
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
 echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
 
 # Second oracle: independent daemon administrator verifies exactly one
@@ -459,7 +459,7 @@ test "$attempt" -lt 40
 BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume
-test "$(sudo wc -l < "$ack_marker")" = 1
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
 test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
 test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
 echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
