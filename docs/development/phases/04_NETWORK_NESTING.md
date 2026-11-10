@@ -6,6 +6,8 @@
 
 **Read precisely at corresponding operation:** [shared ACL three-Box SDK proof](../../verification/SINGLE_SHARED_ACL_SCRIPTLET_ACCEPTANCE_2026-11-08.md) for peer/grant/normal packet tests; [security](../../design/SECURITY.md) and [native TLS/Scriptlet proof](../../verification/INCUS_ACL_AUTHZ_TLS_SCRIPTLET_2026-11-08.md) for global auth changes; [final SDK P0](../../verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md) for anti-spoof; [dependency installer](../../process/DEPENDENCY_LIFECYCLE.md) for local takeover/rollback; [nesting](../../design/NESTING.md) for L1/L2; [ops/delete](../../design/OPERATIONS.md) only at dependency cleanup. Acceptance **A-007–008, A-023–031, A-035–036, A-041–049, A-053 conditional, A-056, A-059, A-069–070, SDK-G03/G07**, plus changed contracts.
 
+**BRIDGEHEAD carry-over, not an exemption:** [S2.5 BRIDGEHEAD](025_BRIDGEHEAD.md) may already have demonstrated a *minimum* secure L0 v1 → L1 v1 → L2 native child workflow under exact pilot conditions, using only S1/S2 functions. Read its [BH-001–BH-017 real results](../../verification/BRIDGEHEAD_ACCEPTANCE.md) on demand; replicate/extend the *same native identity and packet evidence* under this stage's complete S4 host-global ACL/Scriptlet, IPv4/IPv6 anti-spoof, peers, forwards, dependent delete, LAN and full nested-controller parity. Any early minimal native network prerequisite pulled forward under S2.5 remains **S4-owned for full validation and rollback**; a LAB_PASS/HOST_GO never closes S4 A-023–A-031/A-035–A-036/A-043–A-049.
+
 ## Exactly four additional public tools — completes 20/20
 
 **port_forward_list, port_forward_create, port_forward_delete, box_peer_set.**

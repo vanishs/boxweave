@@ -39,6 +39,12 @@ Every inner controller's MCP endpoint listens only at its own guest **`127.0.0.1
 
 L1 service publishing to the physical LAN similarly requires two **separate, explicit, owned native forwards**, one at L1 and another at L0, where supported. Testing inside the Dev Box is **not** proof of reachability from a different machine on L0's physical LAN. A candidate L1 may create an L2 nested installation for the full original bug reproduction, but unavailable native nesting capabilities must be reported honestly. Do not silently weaken isolation or grant the inner Incus access to L0's socket.
 
+## Earlier S2.5 BRIDGEHEAD gate versus full S4 nested parity
+
+[BRIDGEHEAD](../development/phases/025_BRIDGEHEAD.md) is a deliberately limited **intermediate native development-base gate**: after all S2 acceptance, an explicitly authorized exact v1 L0 binary creates one L1 development Box with nesting; an independently installed, credential-isolated v1 L1 controller uses a **guest-local** authenticated client to create/Exec/delete one L2 native child Box. It requires independently witnessed private IPv4/IPv6 safe default, NAT/anti-spoof, exact UUID, SQLite/worker restart/UNKNOWN and operator recovery. The inner v1 endpoint remains loopback; no outer controller gets inner credentials or native socket. **Not** a full v1 L2 controller, not public/LAN peer/forward publishing, not S4's global native TLS Scriptlet change and **not** A-035/A-036 complete parity. [Exact BH matrix](../verification/BRIDGEHEAD_ACCEPTANCE.md).
+
+If this minimal chain cannot work without relaxing the approved network/ownership boundary, classify NO_GO and continue S3 in an isolated lab rather than installing a weakened candidate on a production/shared host. S4 still verifies all native networking, new public tools, complete L0/L1/L2 controller and LAN acceptance on its exact binary, then S5 repeats release acceptance.
+
 ## Development and acceptance use
 
 Use an isolated parent-owned Box as a complete nested Linux host for building, installing, upgrading and testing a candidate BoxWeave. The first-version L0 remains unchanged until an explicitly authorized local host upgrade; a candidate tested in L1 **does not** repair any earlier failed L0 operation. A failing inner controller must not be relied on to collect its own failure evidence; an authorized outer controller may inspect its **owned containing Box** using ordinary Box lifecycle/Exec tools. It does not get special access to the inner controller's managed resources.
