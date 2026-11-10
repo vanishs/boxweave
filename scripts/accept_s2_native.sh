@@ -158,9 +158,10 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -871,4 +872,111 @@ fi
 sudo incus delete bw-s2-update-postread-native-110g --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_UPDATE_POSTREAD_UNKNOWN_RESTART_AND_TEARDOWN=PASS"
+
+# Independent actual guest recorded-output quota exhaustion, on the same
+# specially created 4GiB ext4 Project Quota mount. Never fill host root.
+# This is a SECOND, unique, untracked CI-only Incus fixture, created only
+# after all main MCP/SQLite/native replay tests have finished and cleaned.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+quota_name="bw-s2-quota-native-110h"
+quota_uuid=""
+s2_quota_native() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_QUOTA_PROJECT="$project" BW_S2_QUOTA_SOCKET="$socket" \
+    BW_S2_QUOTA_UUID="$quota_uuid" "$work/s2-native-guest-quota" "$1"
+}
+s2_quota_native create > "$work/quota-guest-create.txt"
+quota_uuid="$(sed -n 's/^S2_NATIVE_QUOTA_GUEST_UUID=//p' "$work/quota-guest-create.txt")"
+echo "$quota_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")" = "$quota_uuid"
+
+# Wait for read-only guest shell readiness, never retry a native mutation.
+ready=0
+for attempt in $(seq 1 40); do
+  if sudo incus exec "$quota_name" --project "$project" -- /bin/true >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+test "$ready" -eq 1
+s2_quota_native seed > "$work/quota-guest-seed.txt"
+grep -Fqx "S2_NATIVE_QUOTA_SPOOL_SEEDED=PASS" "$work/quota-guest-seed.txt"
+
+native_quota_spool="$(printf '/var/lib/incus/containers/%s_%s/exec-output' "$project" "$quota_name")"
+sudo test -d "$native_quota_spool"
+test "$(sudo stat -Lc '%d' "$native_quota_spool")" = "$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+test "$(sudo stat -Lc '%d' "$native_quota_spool")" != "$(sudo stat -Lc '%d' /)"
+sudo lsattr -p -d "$native_quota_spool"
+quota_state_url="/1.0/storage-pools/bw-s2-native-pool/volumes/container/$quota_name/state?project=$project"
+sudo incus query "$quota_state_url" > "$work/quota-guest-before.json"
+read quota_used quota_limit < <(python3 - "$work/quota-guest-before.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+v=v.get("metadata",v)["usage"]
+print(int(v["used"]),int(v["total"]))
+PY
+)
+test "$quota_limit" -eq 2147483648
+test "$quota_used" -gt 10485760
+quota_headroom=50331648
+quota_fill_bytes=$((quota_limit - quota_used - quota_headroom))
+test "$quota_fill_bytes" -gt 1073741824
+physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+test "$physical_available" -gt $((quota_fill_bytes + 268435456))
+quota_filler="$native_quota_spool/.boxweave-s2-guest-quota-filler"
+sudo test ! -e "$quota_filler"
+sudo timeout 30s setpriv --bounding-set=-sys_resource --nnp -- \
+  fallocate -l "$quota_fill_bytes" "$quota_filler"
+sudo incus query "$quota_state_url" > "$work/quota-guest-filled.json"
+quota_used_filled="$(python3 - "$work/quota-guest-filled.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$quota_used_filled" -gt $((quota_limit - 100663296))
+test "$quota_used_filled" -le "$quota_limit"
+echo "S2_NATIVE_GUEST_EXEC_QUOTA_NEAR_LIMIT_PRECONDITION=PASS"
+
+# This original Incus operation is dispatched ONCE by the test-only native
+# SDK helper. It tries to record 128MiB with only ~48MiB of quota left.
+s2_quota_native flood > "$work/quota-guest-flood.txt"
+quota_exec_id="$(sed -n 's/^S2_NATIVE_QUOTA_OP_ID=//p' "$work/quota-guest-flood.txt")"
+echo "$quota_exec_id" | grep -Eq '^[0-9a-f-]{36}$'
+grep -Fq 'S2_NATIVE_QUOTA_OP_STATUS=' "$work/quota-guest-flood.txt"
+quota_stdout="$(printf '%s/exec_%s.stdout' "$native_quota_spool" "$quota_exec_id")"
+sudo test -f "$quota_stdout"
+quota_stdout_bytes="$(sudo stat -c '%s' "$quota_stdout")"
+echo "S2_NATIVE_GUEST_QUOTA_PARTIAL_STDOUT_BYTES=$quota_stdout_bytes"
+test "$quota_stdout_bytes" -gt 0
+test "$quota_stdout_bytes" -lt 134217728
+sudo incus query "$quota_state_url" > "$work/quota-guest-after-output.json"
+quota_used_output="$(python3 - "$work/quota-guest-after-output.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$quota_used_output" -le "$quota_limit"
+echo "S2_NATIVE_REAL_GUEST_RECORDED_EXEC_QUOTA_PARTIAL_OUTPUT=PASS"
+
+# Remove only the unique quota-test filler, NEVER original native
+# stdout/stderr or an unresolved task. Independently confirm recovered space.
+sudo rm -f -- "$quota_filler"
+sudo test ! -e "$quota_filler"
+sudo incus query "$quota_state_url" > "$work/quota-guest-reclaimed.json"
+quota_used_reclaimed="$(python3 - "$work/quota-guest-reclaimed.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$quota_used_reclaimed" -lt $((quota_used_output - quota_fill_bytes / 2))
+test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")" = "$quota_uuid"
+sudo incus delete --force "$quota_name" --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_GUEST_QUOTA_SPACE_RECOVERED_AND_FIXTURE_REMOVED=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
