@@ -37,4 +37,3 @@ The owner's practical concern is valid: a single stalled MCP call can stop the A
 | **S5** | Agent tool call stalls or client disconnects after native dispatch | Client behavior limitation recorded; journal survives, original outcome reconciled without replay |
 
 **Decision status:** discussion/measurement only. No extra required public Tool, OAuth support, release gate bypass, S2 implementation or new Incus responsibilities authorized. See [O-025–O-028](../verification/OPEN_RISKS.md), [MCP binding](../design/MCP_BINDING.md), [operations](../design/OPERATIONS.md) and [Incus integration](../design/INCUS_INTEGRATION.md).
-
