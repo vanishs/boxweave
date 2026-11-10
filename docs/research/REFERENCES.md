@@ -6,6 +6,8 @@
 
 References are **technical evidence and inspiration**, not dependencies or instructions to copy upstream code unreviewed. No licensing conclusion about copying source is implied.
 
+**Scoped 2026-11-10 studies:** [Current MCP Go SDK v1.8.0 small adoption opportunities](MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md) and [Temporal/LangGraph/CrewAI attributed operation/crash/visibility lessons](AGENT_CONTINUITY_FRAMEWORKS_2026-11-10.md). Only load these during their matching [S2 continuity work](../design/AGENT_OPERATION_CONTINUITY.md), not as new dependencies or a workflow-platform feature request.
+
 ## Existing BoxWeave main
 
 - https://github.com/vanishs/boxweave/blob/main/AGENTS.md

@@ -36,6 +36,14 @@ New entries go **newest first after this template**, or append by monotonically 
 | After state | New commit/PR, original residual UNKNOWN claims, task-owned cleanup, remaining blockers |
 | Resume | Next safe action, relevant **smallest** docs to read, do-not-repeat warnings |
 
+### LOG-20261110-AGENT-CONTINUITY-027 — official Go SDK and workflow studies, staged 4+4+2 acceptance (2026-11-09 PT / 2026-11-10 UTC)
+
+- **Baseline and scope:** DOCS_ONLY from protected `v1` `be1e231950a1efb815b8f05b56ae51ec1cb858ef`; no code, live old main, Incus/Box, SQLite, existing original UNKNOWN, version, tag, release or production installation modified. Owner requested detailed latest official SDK/Incus and Temporal/LangGraph/CrewAI research plus feature assignment to S2/S2.5/S3/S4/S5.
+- **Research:** [tagged Go MCP v1.8.0](../research/MCP_GO_SDK_CONTINUITY_REVIEW_2026-11-10.md) (already pinned), official typed request metadata/middleware, structured responses, progress-token-only notifications, useful ToolAnnotations and private cache control; 2026-07-28 ping/MCP Logging deprecated; protocol Tasks future-only. [Temporal/Agent systems](../research/AGENT_CONTINUITY_FRAMEWORKS_2026-11-10.md) reveal stable work vs attempt, indexed visibility, checkpoint/replay, and side-effect idempotency, **not** a need for BoxWeave to embed their schedulers.
+- **Architecture:** [Operation Attribution and Continuity](../design/AGENT_OPERATION_CONTINUITY.md) reuses one S1 SQLite journal and S2 native worker, immutable original receipt, authenticated actor, optional untrusted `work_ref`/`agent_ref`, authorized `operation_list` filters, bounded safe read-next hints. Exact S1 SchemaVersion=1 requires approved migration/rollback. [Task Checkpoint](TASK_CHECKPOINT_CONTRACT.md) is project/workflow-owned goal/Git/evidence, not a new MCP Tool or true native state. No Agent registry, new worker/DB, tasks protocol advertised, added public Tools or relaxation of prior decisions.
+- **Staged verification:** [TC-001–010](../verification/CONTINUITY_ACCEPTANCE.md) required alongside full S2; TC-011–014 **additional** to S2.5 BRIDGEHEAD BH-001–017; TC-015–016 S3 guest Git/checkpoint; TC-017–018 S4 forward/peer/nested; TC-019–020 independent S5 full installed/20 Tool/CLI release. Original A-/SDK-G/BH native/security gates unchanged; SDK progress is optional but must be observed or explicitly not claimed. Risks O-032–034 and decision D-060 link evidence.
+- **Handoff:** next Agent executes all S2 functionality, loads focused SDK/data/TC excerpt at each relevant subtask, records exact installed/native test results; no S2 implementation was performed in this research PR.
+
 ## Recorded entries
 
 ### LOG-20261110-MCP-TASKS-026 — research-only Tasks extension adapter seam (2026-11-09 PT / 2026-11-10 UTC)
