@@ -82,8 +82,8 @@ test "$(findmnt -n -o FSTYPE --target "$work/mounted")" = ext4
 sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 uid="$(id -u boxweave)"
 project="user-$uid"
-test "$(sudo runuser -u boxweave -- id -nG)" = incus
-sudo runuser -u boxweave -- incus project list --format csv
+test "$(sudo runuser -u boxweave -- env HOME=/home/boxweave id -nG)" = incus
+sudo runuser -u boxweave -- env HOME=/home/boxweave incus project list --format csv
 sudo incus project show "$project" | grep -q 'restricted: "true"'
 
 # All edits are performed only on the new, empty single-use Project. Do not
@@ -122,7 +122,7 @@ socket=/var/lib/incus/unix.socket.user
 
 # No native instance mutation until this real non-root OS + Project +
 # selected block pool + default NIC preflight is actually ready.
-sudo runuser -u boxweave -- "$work/boxweave" doctor -db "$db" \
+sudo runuser -u boxweave -- env HOME=/home/boxweave "$work/boxweave" doctor -db "$db" \
   -incus-socket "$socket" -project "$project" > "$work/preflight.json"
 python3 - "$work/preflight.json" <<'PY'
 import json, sys
@@ -134,14 +134,14 @@ assert n["default_nic_configured"]
 print("S2_NATIVE_PRECONDITION_EXACT_NONROOT_BLOCK_POOL=PASS")
 PY
 
-sudo runuser -u boxweave -- "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
-sudo runuser -u boxweave -- "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
+sudo runuser -u boxweave -- env HOME=/home/boxweave "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
+sudo runuser -u boxweave -- env HOME=/home/boxweave "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
 chmod 0600 "$work/admin.secret" "$work/viewer.secret"
 admin="$(sed -n 's/^token=//p' "$work/admin.secret")"
 viewer="$(sed -n 's/^token=//p' "$work/viewer.secret")"
 test -n "$admin" && test -n "$viewer"
 
-sudo runuser -u boxweave -- "$work/boxweave" serve -db "$db" \
+sudo runuser -u boxweave -- env HOME=/home/boxweave "$work/boxweave" serve -db "$db" \
   -incus-socket "$socket" -project "$project" \
   -listen 127.0.0.1:18650 > "$work/service.redacted.log" 2>&1 &
 service_pid=$!
