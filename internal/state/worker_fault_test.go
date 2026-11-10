@@ -62,7 +62,7 @@ func TestS2NativeAckEventRollbackRetainsOriginalUnknown(t *testing.T) {
 	}
 	got, err := s.Get(ctx, r.ID)
 	if err != nil || got.State != "UNKNOWN" || got.ErrorClass != "NATIVE_ACK_DURABILITY_UNVERIFIED" ||
-		got.NativeOperationID != "" || got.NextAction.Kind != "HOST_LOCAL_REVIEW" {
+		got.NativeOperationID != "native-accepted-once" || got.NextAction.Kind != "HOST_LOCAL_REVIEW" {
 		t.Fatalf("NativeAck failed yet original was not safely UNKNOWN: %+v %v", got, err)
 	}
 	var n int
