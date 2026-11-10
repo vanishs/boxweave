@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/state"
+	"github.com/vanishs/boxweave/internal/native"
 )
 
 type operationOutputInput struct {

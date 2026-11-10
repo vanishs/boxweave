@@ -125,7 +125,8 @@ echo "S2_NATIVE_OWNED_UBUNTU_ALIAS_VERIFIED=PASS"
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
-chmod 0755 "$work/boxweave" "$work/s2-probe"
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -172,6 +173,72 @@ test "$attempt" -lt 40
 BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
   "$work/s2-probe"
+
+# Independently kill the exact disposable BoxWeave service WHILE a native
+# guest Exec (whose original native ID is already durably acknowledged) runs.
+# Never restart the native effect; revive ONLY the same SQLite-backed MCP
+# process. Distinct earlier UNKNOWN tasks on any shared host are untouched.
+crash_state="$work/original-crash.json"
+BW_S2_CRASH_STATE_FILE="$crash_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" start
+test -s "$crash_state"
+if ! sudo pkill -KILL -u boxweave -f "^$work/boxweave serve"; then
+  echo "S2_NATIVE_FAIL: exact disposable service process not found for kill" >&2
+  exit 88
+fi
+wait "$service_pid" 2>/dev/null || :
+echo "S2_NATIVE_EXACT_SERVICE_PROCESS_KILLED=PASS"
+
+# Reopen THE SAME journal. The host's native Incus daemon is not restarted,
+# touched, or reconciled by a privileged repair.
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
+  -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_STATE_FILE="$crash_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" resume
+
+# SECOND ORACLE: The original guest process must have produced exactly ONE
+# marker. A successful operation_get is never enough to prove that. This is
+# a separate administrator-only read of the single-use Incus test daemon.
+crash_uuid="$(python3 - "$crash_state" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))["box_uuid"])
+PY
+)"
+native_uuid="$(sudo incus config get bw-s2-crash-110b volatile.uuid --project "$project")"
+test -n "$native_uuid" && test "$native_uuid" = "$crash_uuid"
+attempt=0
+marker_count=""
+until [ "$attempt" -ge 45 ]; do
+  marker_count="$(sudo incus exec bw-s2-crash-110b --project "$project" -- /bin/sh -c 'wc -l < /tmp/bw-s2-crash-marker' 2>/dev/null || :)"
+  if [ "$marker_count" = 1 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$marker_count" = 1
+echo "S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE=PASS"
+
+# The ONE-USE runner owns this exact test instance. Administrator-only test
+# fixture teardown after independent evidence is NOT BoxWeave's remote
+# UNKNOWN unlock and does not change this original journal's UNKNOWN state.
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-crash-110b
+sudo incus stop bw-s2-crash-110b --project "$project"
+sudo incus delete bw-s2-crash-110b --project "$project"
+echo "S2_NATIVE_DISPOSABLE_CRASH_FIXTURE_ADMIN_TEARDOWN=PASS"
 
 # Separate administrator's read-only inventory is a SECOND native oracle:
 # after exact delete no guest from this run remains in any Project.

@@ -608,7 +608,7 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 		return []byte{}, true, nil
 	}
 	if length > MaxRecordedOutputBytes-offset {
-		length = MaxRecordedOutputBytes-offset
+		length = MaxRecordedOutputBytes - offset
 	}
 	c, err := r.confined(ctx)
 	if err != nil {

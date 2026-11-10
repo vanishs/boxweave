@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in internal/state/store.go internal/state/replay.go internal/state/replay_test.go internal/state/lifecycle.go internal/state/lifecycle_test.go internal/state/worker.go internal/native/box.go internal/native/box_test.go internal/control/box_tools.go internal/control/operation_output_cancel.go internal/control/server.go internal/control/server_test.go internal/control/operation_tools_test.go internal/control/continuity_test.go scripts/s2_native_probe.go; do
+          for f in internal/state/store.go internal/state/replay.go internal/state/replay_test.go internal/state/lifecycle.go internal/state/lifecycle_test.go internal/state/worker.go internal/native/box.go internal/native/box_test.go internal/control/box_tools.go internal/control/operation_output_cancel.go internal/control/server.go internal/control/server_test.go internal/control/operation_tools_test.go internal/control/continuity_test.go scripts/s2_native_probe.go scripts/s2_crash_probe.go; do
             gofmt -w "$f"
             printf 'BOXWEAVE_FORMAT_BEGIN:%s\n' "$f"
             base64 -w0 "$f"
