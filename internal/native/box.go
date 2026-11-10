@@ -58,6 +58,7 @@ type BoxState struct {
 	Memory       string `json:"memory"`
 	RootDiskSize string `json:"root_disk_size"`
 	Nesting      bool   `json:"nesting"`
+	Internet     bool   `json:"internet"`
 }
 
 type ExecSpec struct {
@@ -113,6 +114,47 @@ func nicPrivate(devices api.DevicesMap) bool {
 
 // CheckBootstrap is intentionally stricter than native existence: a running
 // unisolated bridge NIC is unacceptable even in an exclusive Incus Project.
+// ownedPrivateNICEgress shadows exactly one verified private NIC without
+// editing the shared Incus network, Profile or ACL. Incus 7.6's bridge NIC
+// default egress is reject when an ACL is attached; an explicitly requested
+// per-Box "internet" capability is represented by a local allow action.
+// The inbound default reject and MAC/IPv4/IPv6 anti-spoof are preserved.
+func ownedPrivateNICEgress(local, effective api.DevicesMap, enabled bool) (api.DevicesMap, error) {
+	if !nicPrivate(effective) {
+		return nil, ErrUnsafeNetwork
+	}
+	out := api.DevicesMap{}
+	for k, d := range local {
+		copyDevice := map[string]string{}
+		for dk, dv := range d {
+			copyDevice[dk] = dv
+		}
+		out[k] = copyDevice
+	}
+	for name, d := range effective {
+		if d["type"] != "nic" {
+			continue
+		}
+		// Prefer fully verified effective configuration rather than a
+		// partial or stale shadow that could discard ACL/anti-spoof keys.
+		copyNIC := map[string]string{}
+		for dk, dv := range d {
+			copyNIC[dk] = dv
+		}
+		if enabled {
+			copyNIC["security.acls.default.egress.action"] = "allow"
+		} else {
+			copyNIC["security.acls.default.egress.action"] = "reject"
+		}
+		out[name] = copyNIC
+		if !nicPrivate(out) {
+			return nil, ErrUnsafeNetwork
+		}
+		return out, nil
+	}
+	return nil, ErrUnsafeNetwork
+}
+
 func (r Reader) CheckBootstrap(ctx context.Context) error {
 	c, err := r.confined(ctx)
 	if err != nil {
@@ -150,6 +192,9 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.Memory = inst.ExpandedConfig["limits.memory"]
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
 	for _, d := range inst.ExpandedDevices {
+		if d["type"] == "nic" {
+			out.Internet = d["security.acls.default.egress.action"] == "allow"
+		}
 		if d["type"] == "disk" && d["path"] == "/" {
 			out.RootDiskSize = d["size"]
 			break
@@ -189,7 +234,7 @@ func approvedUbuntu2404(properties map[string]string) bool {
 }
 
 func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
-	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) || a.Internet {
+	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) {
 		return "", ErrNativeUnsupported
 	}
 	if err := r.CheckBootstrap(ctx); err != nil {
@@ -249,12 +294,16 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if rootKey == "" {
 		return "", ErrNativeUnsupported
 	}
+	devices, err := ownedPrivateNICEgress(api.DevicesMap{rootKey: root}, p.Devices, a.Internet)
+	if err != nil {
+		return "", err
+	}
 	// No magic host mount, arbitrary device or profile edit.
 	op, err := c.CreateInstance(api.InstancesPost{
 		Name: a.Name, Type: api.InstanceTypeContainer, Start: a.Start,
 		Source: api.InstanceSource{Type: "image", Fingerprint: alias.Target},
 		InstancePut: api.InstancePut{Profiles: []string{"default"}, Config: config,
-			Devices: api.DevicesMap{rootKey: root}},
+			Devices: devices},
 	})
 	if err != nil {
 		return "", err
@@ -379,9 +428,13 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 		config["security.nesting"] = strconv.FormatBool(*changes.Nesting)
 	}
 	if changes.Internet != nil {
-		// A per-instance internet toggle cannot safely override a shared
-		// Bridge ACL until the S4 network policy path is proven.
-		return "", ErrNativeUnsupported
+		// Modify only this owned instance NIC. The shared ACL/rules and
+		// immutable native identity are unchanged; ETag protects the merge.
+		updated, err := ownedPrivateNICEgress(w.Devices, inst.ExpandedDevices, *changes.Internet)
+		if err != nil {
+			return "", err
+		}
+		w.Devices = updated
 	}
 	if changes.DiskGiB != nil {
 		if *changes.DiskGiB < 2 || *changes.DiskGiB > 2048 {
@@ -692,6 +745,9 @@ func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, erro
 		Memory:  inst.ExpandedConfig["limits.memory"],
 		Nesting: inst.ExpandedConfig["security.nesting"] == "true"}
 	for _, d := range inst.ExpandedDevices {
+		if d["type"] == "nic" {
+			out.Internet = d["security.acls.default.egress.action"] == "allow"
+		}
 		if d["type"] == "disk" && d["path"] == "/" {
 			out.RootDiskSize = d["size"]
 			break

@@ -143,3 +143,49 @@ func TestS2GuestTimeoutArgvHasOptionsSeparatorBeforeDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestS2OwnedNICInternetToggleNeverEditsSharedACL(t *testing.T) {
+	base := api.DevicesMap{
+		"eth0": map[string]string{
+			"type": "nic", "name": "eth0", "network": "incusbr-owned",
+			"security.acls": "boxweave-owned",
+			"security.acls.default.ingress.action": "reject",
+			"security.ipv4_filtering": "true",
+			"security.ipv6_filtering": "true",
+			"security.mac_filtering": "true",
+			"security.acls.default.egress.action": "reject",
+		},
+		"root": map[string]string{"type": "disk", "path": "/", "pool": "owned-pool", "size": "2GiB"},
+	}
+	local := api.DevicesMap{"root": map[string]string{
+		"type": "disk", "path": "/", "pool": "owned-pool", "size": "3GiB",
+	}}
+	allowed, err := ownedPrivateNICEgress(local, base, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !nicPrivate(allowed) ||
+		allowed["eth0"]["security.acls.default.egress.action"] != "allow" ||
+		allowed["eth0"]["security.acls.default.ingress.action"] != "reject" ||
+		allowed["eth0"]["security.acls"] != "boxweave-owned" ||
+		allowed["eth0"]["security.ipv6_filtering"] != "true" ||
+		allowed["root"]["size"] != "3GiB" ||
+		base["eth0"]["security.acls.default.egress.action"] != "reject" ||
+		local["eth0"] != nil {
+		t.Fatalf("internet allow modified shared profile, spoof defense or unrelated disk: %#v", allowed)
+	}
+	denied, err := ownedPrivateNICEgress(allowed, allowed, false)
+	if err != nil || !nicPrivate(denied) ||
+		denied["eth0"]["security.acls.default.egress.action"] != "reject" ||
+		denied["root"]["size"] != "3GiB" {
+		t.Fatalf("internet deny did not preserve root/ACL and block egress: %#v %v", denied, err)
+	}
+	missingACL := api.DevicesMap{"eth0": map[string]string{
+		"type": "nic", "network": "incusbr-owned", "security.acls.default.ingress.action": "reject",
+		"security.ipv4_filtering": "true", "security.ipv6_filtering": "true",
+		"security.mac_filtering": "true",
+	}}
+	if _, err := ownedPrivateNICEgress(nil, missingACL, true); !errors.Is(err, ErrUnsafeNetwork) {
+		t.Fatalf("unauthorized egress allowed without native ACL: %v", err)
+	}
+}

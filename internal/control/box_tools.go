@@ -38,7 +38,7 @@ type createBoxInput struct {
 	DiskGiB        int64  `json:"disk_gib,omitempty"`
 	Start          *bool  `json:"start,omitempty"`
 	Nesting        bool   `json:"nesting,omitempty"`
-	Internet       bool   `json:"internet,omitempty"`
+	Internet       *bool  `json:"internet,omitempty"`
 	WorkRef        string `json:"work_ref,omitempty"`
 	AgentRef       string `json:"agent_ref,omitempty"`
 }
@@ -269,7 +269,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "Admit one owned Ubuntu LTS Box creation using the installed restricted Incus Project and its preverified private NIC; asynchronous durable receipt.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if !validBoxName.MatchString(in.Name) || in.Internet {
+			if !validBoxName.MatchString(in.Name) {
 				return nil, state.Receipt{}, state.ErrInvalid
 			}
 			if in.CPU == 0 {
@@ -289,6 +289,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if in.Start != nil {
 				start = *in.Start
 			}
+			internet := true
+			if in.Internet != nil {
+				internet = *in.Internet
+			}
 			r, err := s.admitNative(ctx, req, "box_create", in.IdempotencyKey, "", "",
 				"box:"+in.Name, in.WorkRef, in.AgentRef, struct {
 					Name      string `json:"name"`
@@ -298,7 +302,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 					Start     bool   `json:"start"`
 					Nesting   bool   `json:"nesting"`
 					Internet  bool   `json:"internet"`
-				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, start, in.Nesting, in.Internet})
+				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, start, in.Nesting, internet})
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
@@ -306,7 +310,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			effect := func(ctx context.Context) (string, error) {
 				id, e := s.Native.Create(ctx, native.InstanceAction{
 					Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-					Start: start, Nesting: in.Nesting, Internet: in.Internet})
+					Start: start, Nesting: in.Nesting, Internet: internet})
 				nativeID = id
 				return id, preflightNative(e)
 			}
@@ -318,7 +322,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
-				if start && observed.NativeState != "Running" || !start && observed.NativeState != "Stopped" {
+				if (start && observed.NativeState != "Running") ||
+					(!start && observed.NativeState != "Stopped") || observed.Internet != internet {
 					return native.ErrUnverified
 				}
 				// Original durable operation already has the exact native ID.
@@ -448,13 +453,13 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 	}
 
 	mcp.AddTool(server, &mcp.Tool{Name: "box_update",
-		Description: "Update exact owned CPU/RAM/root disk-growth/nesting by presence-aware typed fields; unsupported internet changes fail closed.",
+		Description: "Update exact owned CPU/RAM/root disk-growth/nesting and per-Box Internet egress by presence-aware typed fields.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, _, err := requireAdmin(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
-			if in.Internet != nil || in.CPU == nil && in.MemoryMiB == nil &&
+			if in.Internet == nil && in.CPU == nil && in.MemoryMiB == nil &&
 				in.DiskGiB == nil && in.Nesting == nil {
 				return nil, state.Receipt{}, native.ErrNativeUnsupported
 			}
@@ -500,7 +505,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				if in.CPU != nil && actual.CPU != fmt.Sprint(*in.CPU) ||
 					in.MemoryMiB != nil && actual.Memory != fmt.Sprintf("%dMiB", *in.MemoryMiB) ||
-					in.Nesting != nil && actual.Nesting != *in.Nesting {
+					in.Nesting != nil && actual.Nesting != *in.Nesting ||
+					in.Internet != nil && actual.Internet != *in.Internet {
 					return native.ErrUnverified
 				}
 				// Root disk size postread must also be proved, never only

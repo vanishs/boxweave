@@ -165,6 +165,9 @@ func main() {
 	box := child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "box_id") == uuid && field(box, "native_state") == "Stopped",
 		"created native UUID/stopped state not confirmed")
+	check(box["internet"] == true,
+		"omitted internet must create a Box with effective egress allow")
+	fmt.Println("S2_NATIVE_CREATE_DEFAULT_INTERNET_ALLOW=PASS")
 	fmt.Println("S2_NATIVE_CREATE_STOPPED_UUID=PASS")
 
 	noopStop := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
@@ -242,6 +245,25 @@ func main() {
 		field(box, "root_disk_size") == "2GiB",
 		"CPU/RAM update erased omitted disk or did not persist")
 	fmt.Println("S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK=PASS")
+
+	internetOff := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "internet": false,
+		"idempotency_key": "native-s2-internet-explicit-deny-001"})
+	wait(ctx, admin, id(internetOff))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(box["internet"] == false && field(box, "cpu") == "2" &&
+		field(box, "memory") == "768MiB" && field(box, "root_disk_size") == "2GiB",
+		"per-box internet=false lost typed resource config or failed native readback")
+	internetOn := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "internet": true,
+		"idempotency_key": "native-s2-internet-explicit-allow-001"})
+	wait(ctx, admin, id(internetOn))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(box["internet"] == true && field(box, "cpu") == "2" &&
+		field(box, "memory") == "768MiB" && field(box, "root_disk_size") == "2GiB",
+		"per-box internet=true lost typed resource config or failed native readback")
+	fmt.Println("S2_NATIVE_INTERNET_EGRESS_FALSE_TRUE_READBACK_PRESERVES_RESOURCES=PASS")
+
 
 	grown := call(ctx, admin, "box_update", map[string]any{
 		"box_id": uuid, "disk_gib": 3,
@@ -449,6 +471,49 @@ func main() {
 		"new keys returned stale completed Operation instead of native lifecycle")
 	fmt.Println("S2_NATIVE_STOP_START_STOP_DISTINCT_KEYS=PASS")
 
+	// Cursor comes from actual SQLite history on a real restricted native
+	// service, not a fake in-process store. Its scope must be bound to
+	// authenticated actor/layer/filter and cannot be transplanted.
+	first := child(call(ctx, admin, "operation_list", map[string]any{
+		"limit": 2}), "page")
+	firstRows, ok := first["operations"].([]any)
+	check(ok && len(firstRows) == 2, "first operation history page was not bounded")
+	cursor := field(first, "next_cursor")
+	check(cursor != "", "cursor missing despite known additional operations")
+	second := child(call(ctx, admin, "operation_list", map[string]any{
+		"limit": 2, "cursor": cursor}), "page")
+	secondRows, ok := second["operations"].([]any)
+	check(ok && len(secondRows) != 0 && len(secondRows) <= 2,
+		"cursor continuation returned an empty/unbounded page")
+	seen := map[string]bool{}
+	for _, raw := range firstRows {
+		if row, ok := raw.(map[string]any); ok {
+			seen[field(row, "operation_id")] = true
+		}
+	}
+	for _, raw := range secondRows {
+		row, ok := raw.(map[string]any)
+		check(ok && field(row, "operation_id") != "" &&
+			!seen[field(row, "operation_id")],
+			"cursor returned repeated original Operation")
+	}
+	mismatched, mismatchErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{
+			"limit": 2, "cursor": cursor, "work_ref": "lab/native-meta"}})
+	check(mismatchErr != nil || mismatched != nil && mismatched.IsError,
+		"cursor from another filter was accepted")
+	borrowed, borrowedErr := view.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{
+			"limit": 2, "cursor": cursor}})
+	check(borrowedErr != nil || borrowed != nil && borrowed.IsError,
+		"viewer reused administrator's HMAC cursor")
+	forged, forgedErr := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{
+			"limit": 2, "cursor": cursor + "x"}})
+	check(forgedErr != nil || forged != nil && forged.IsError,
+		"tampered operation-list cursor accepted")
+	fmt.Println("S2_NATIVE_PRIVATE_INDEXED_CURSOR_TAMPER_AND_PAGINATION=PASS")
+
 	del := call(ctx, admin, "box_delete", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-delete-00000001"})
 	wait(ctx, admin, id(del))
@@ -468,6 +533,7 @@ func main() {
 	// acquire authority over the new guest.
 	reused := call(ctx, admin, "box_create", map[string]any{
 		"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": false,
+		"internet": false,
 		"idempotency_key": "native-s2-reused-name-fresh-uuid-01"})
 	reuseOutcome := wait(ctx, admin, id(reused))
 	newUUID := field(reuseOutcome, "box_uuid")
@@ -483,7 +549,7 @@ func main() {
 		"original Delete key lost immutability after name reuse")
 	newBox := child(call(ctx, admin, "box_get", map[string]any{"box_id": newUUID}), "box")
 	check(field(newBox, "box_id") == newUUID &&
-		field(newBox, "native_state") == "Stopped",
+		field(newBox, "native_state") == "Stopped" && newBox["internet"] == false,
 		"old Delete incorrectly removed or modified new incarnation")
 	lastDelete := call(ctx, admin, "box_delete", map[string]any{"box_id": newUUID,
 		"idempotency_key": "native-s2-delete-new-incarnation-01"})
