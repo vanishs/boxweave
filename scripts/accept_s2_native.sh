@@ -91,6 +91,12 @@ if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONF
 fi
 echo "S2_NATIVE_RESTRICTED_USER_FOREIGN_PROJECT_DENIED=PASS"
 sudo incus project show "$project" | grep -q 'restricted: "true"'
+# Only this one-use restricted Project is allowed to opt in to nested
+# unprivileged containers. Native instance security.nesting stays false
+# unless a separately authorized Box field explicitly requests true.
+sudo incus project set "$project" restricted.containers.nesting=allow
+sudo incus project get "$project" restricted.containers.nesting | grep -qx allow
+echo "S2_NATIVE_SCOPED_NESTING_CAPABILITY_CONFIGURED=PASS"
 
 # All edits are performed only on the new, empty single-use Project. Do not
 # edit global/default instances or attach ACLs to any foreign NIC.
