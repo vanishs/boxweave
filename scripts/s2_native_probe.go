@@ -89,6 +89,7 @@ func id(m map[string]any) string {
 	check(s != "", "missing original operation ID")
 	return s
 }
+
 // guestRead runs actual guest argv through the candidate MCP binary. A
 // nonzero guest exit is a completed native Exec, not an MCP transport error.
 // Deliberate network-denial probes must never be mistaken for missing ping.
