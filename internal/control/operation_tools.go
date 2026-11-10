@@ -58,7 +58,7 @@ type operationListInput struct {
 }
 
 type operationListResult struct {
-	TrackingID string        `json:"tracking_id"`
+	TrackingID string              `json:"tracking_id"`
 	Page       state.OperationPage `json:"page"`
 }
 
