@@ -165,6 +165,50 @@ negative tests. Running detached recorded Exec cancellation stays
 truthfully unsupported. **Do not merge protected `v1` or remove the two
 unrelated historical UNKNOWN creates.**
 
+## Lost upstream Incus Create acknowledgment — exact isolated native fault, now PASS
+
+**Accepted installed candidate:** `84a404df6d5d0fcf5cffccf57e347478d931f044`;
+**binary SHA256:** `8df6eaa642d62af2d11aabc4f492fa4355b821393b224bbe558d166aa52b977b`.
+[Real MCP/Incus 7.6 native CI](https://github.com/vanishs/boxweave/actions/runs/42869634382/job/130017098796),
+[build/race](https://github.com/vanishs/boxweave/actions/runs/42869647451/job/130017141813),
+[quality](https://github.com/vanishs/boxweave/actions/runs/42869634604/job/130017100934):
+**all SUCCESS**. The native job independently confirmed these exact markers:
+
+- `S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS`: one-use,
+  non-root restricted Unix-socket proxy forwarded the real native Create
+  request **once**; actual upstream Incus HTTP 202 was received and the
+  proxy then closed the socket before returning it to the BoxWeave SDK.
+  The proxy code is **only** a CI fixture, not an installed component.
+- `S2_NATIVE_CREATE_ACK_LOSS_ORIGINAL_UNKNOWN=PASS` and
+  `S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY=PASS`: official MCP
+  client observed persisted `UNKNOWN` with safe next action, original
+  key returned original receipt; a different key was blocked by the
+  original persistent name lock. Restarting the **same SQLite** did not
+  redispatch or falsely mark Create successful.
+- `S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS`:
+  a separate test administrator observed the **exact original native
+  instance's UUID** in the isolated Incus Project even though the
+  control plane never saw a native Create ACK. Proxy marker had exactly
+  one accepted upstream Create and no second Create after restart.
+- `S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS`
+  and `S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS`:
+  the first attempt to delete the disposable fixture correctly failed
+  because the native Create operation was still active. The revised
+  independent administrator verifier polls native operations **read-only**
+  until original Create finishes, verifies the same UUID, and only then
+  deletes the disposable test fixture; BoxWeave's UNKNOWN remains locked.
+  This cleanup is **not** an automated recovery of an actual user's Box.
+- The full standard S2 native lifecycle, real two-Box IPv4/IPv6 network
+  isolation and egress toggle, official MCP Tool annotations, metadata,
+  >16MiB dual-stream output/read cap, crash/SQLite recovery, old/foreign
+  database refusal and final empty inventory also reran and passed.
+
+**Limits:** This proves the native Create lost-ACK window, not a generic
+worker scheduler, arbitrary failure recovery, other mutation ACK loss,
+torn SQLite commit, ETag stale-writer contention or external WAN HTTPS.
+Do not retry or delete the **two older historical UNKNOWN** task
+records outside this single-use test environment.
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
