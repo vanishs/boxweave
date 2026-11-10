@@ -58,12 +58,13 @@ sudo incus project show "$project" | grep -q 'restricted: "true"'
 
 # All edits are performed only on the new, empty single-use Project. Do not
 # edit global/default instances or attach ACLs to any foreign NIC.
+# The installed Ubuntu Incus rejects the optional NIC egress override; leave
+# its stricter native default reject intact rather than widen access.
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
 sudo incus network acl create bw-s2-native-acl
 sudo incus profile device set default eth0 --project "$project" \
   security.acls=bw-s2-native-acl \
   security.acls.default.ingress.action=reject \
-  security.acls.default.egress.action=allow \
   security.ipv4_filtering=true \
   security.ipv6_filtering=true \
   security.mac_filtering=true
