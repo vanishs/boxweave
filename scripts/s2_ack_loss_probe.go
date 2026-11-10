@@ -202,9 +202,99 @@ func childMustBox(ctx context.Context, s *mcp.ClientSession, name string) map[st
 	panic("exact owned ETag fixture missing from authorized list")
 }
 
+type savedUpdate struct {
+	OriginalID string `json:"original_id"`
+	BoxID      string `json:"box_id"`
+}
+
+func updateAckArgs(boxID string) map[string]any {
+	return map[string]any{
+		"box_id": boxID, "cpu": 2,
+		"idempotency_key": "native-s2-update-accepted-ack-dropped-once-001",
+	}
+}
+
+func checkUpdateAckLocked(ctx context.Context, s *mcp.ClientSession, original savedUpdate) {
+	checkUnknown(ctx, s, original.OriginalID)
+	again, err := invoke(ctx, s, "box_update", updateAckArgs(original.BoxID))
+	if err != nil || field(again, "operation_id") != original.OriginalID || again["duplicate"] != true {
+		panic(fmt.Sprintf("accepted native Update lost original receipt: %+v %v", again, err))
+	}
+	mismatch := map[string]any{
+		"box_id": original.BoxID, "cpu": 3,
+		"idempotency_key": "native-s2-update-new-key-must-be-denied-001",
+	}
+	rejected, err := invoke(ctx, s, "box_update", mismatch)
+	require(err != nil, fmt.Sprintf("new-key Update bypassed original unknown: %+v", rejected))
+}
+
+func testAcceptedUpdateAckLoss(ctx context.Context, s *mcp.ClientSession, resume bool) {
+	const fixture = "bw-s2-update-ack-native-110f"
+	file := os.Getenv("BW_S2_UPDATE_ACK_STATE_FILE")
+	require(strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") &&
+		strings.HasSuffix(file, "/update-ack-original.json"), "disposable Update ACK checkpoint required")
+	if resume {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			panic(err)
+		}
+		var original savedUpdate
+		if err := json.Unmarshal(raw, &original); err != nil {
+			panic(err)
+		}
+		require(original.OriginalID != "" && original.BoxID != "", "original Update witness missing")
+		checkUpdateAckLocked(ctx, s, original)
+		fmt.Println("S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_RESTART_NO_REPLAY=PASS")
+		return
+	}
+	created, err := invoke(ctx, s, "box_create", map[string]any{
+		"name": fixture, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"start": false, "internet": true,
+		"idempotency_key": "native-s2-update-ack-fixture-create-001",
+	})
+	if err != nil {
+		panic(err)
+	}
+	createID := field(created, "operation_id")
+	require(createID != "", "new native Update fixture missing original create")
+	for n := 0; n < 120; n++ {
+		ret, err := invoke(ctx, s, "operation_get", map[string]any{
+			"operation_id": createID, "wait_ms": 400,
+		})
+		if err != nil {
+			panic(err)
+		}
+		r := child(ret, "operation")
+		if field(r, "state") == "SUCCEEDED" {
+			break
+		}
+		require(field(r, "state") != "UNKNOWN" && field(r, "state") != "FAILED" &&
+			field(r, "state") != "CANCELLED", "Update ACK fixture was not safely created")
+		require(n < 119, "native Update fixture never completed")
+	}
+	boxID := field(childMustBox(ctx, s, fixture), "box_id")
+	require(boxID != "", "native Update fixture lacks exact owned UUID")
+	update, err := invoke(ctx, s, "box_update", updateAckArgs(boxID))
+	if err != nil {
+		panic(err)
+	}
+	original := savedUpdate{OriginalID: field(update, "operation_id"), BoxID: boxID}
+	require(original.OriginalID != "", "native Update not durably admitted before ACK loss")
+	checkUpdateAckLocked(ctx, s, original)
+	raw, err := json.Marshal(original)
+	if err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(file, raw, 0600); err != nil {
+		panic(err)
+	}
+	fmt.Println("S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_ORIGINAL_UNKNOWN=PASS")
+}
+
 func main() {
-	require(len(os.Args) == 2 && (os.Args[1] == "start" || os.Args[1] == "resume" || os.Args[1] == "etag"),
-		"start/resume/etag mode required")
+	require(len(os.Args) == 2 && (os.Args[1] == "start" || os.Args[1] == "resume" || os.Args[1] == "etag" ||
+		os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume"),
+		"start/resume/etag/update_ack/update_ack_resume mode required")
 	file := os.Getenv("BW_S2_ACK_STATE_FILE")
 	require(strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") &&
 		strings.HasSuffix(file, "/ack-original.json"), "only disposable original checkpoint permitted")
@@ -214,6 +304,10 @@ func main() {
 	defer s.Close()
 	if os.Args[1] == "etag" {
 		testStaleNativeETag(ctx, s)
+		return
+	}
+	if os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume" {
+		testAcceptedUpdateAckLoss(ctx, s, os.Args[1] == "update_ack_resume")
 		return
 	}
 	if os.Args[1] == "start" {
