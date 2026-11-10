@@ -420,8 +420,7 @@ test "$attempt" -lt 40
 BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
-sudo grep -q '^UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED
- "$ack_marker"
+sudo grep -Fqx "UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
 echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
 
