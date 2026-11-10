@@ -387,7 +387,7 @@ func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence,error) {
 	if !ok {return out,ErrUnverified}
 	switch v:=exit.(type) {
 	case float64:
-		if v<-2147483648 || v>2147483647 || float64(int(v))!=v {return out,ErrUnverified}
+		if v < -2147483648 || v>2147483647 || float64(int(v))!=v {return out,ErrUnverified}
 		e:=int(v);out.Exit=&e
 	case int:
 		e:=v;out.Exit=&e
