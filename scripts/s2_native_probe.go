@@ -230,7 +230,7 @@ func main() {
 		"test fixture already dispatched; cancellation cannot be proven")
 	cancelArgs := map[string]any{
 		"target_operation_id": queuedID,
-		"idempotency_key": "native-s2-queued-cancel-tool-original-01",
+		"idempotency_key":     "native-s2-queued-cancel-tool-original-01",
 	}
 	cancel := call(ctx, admin, "operation_cancel", cancelArgs)
 	cancelOp := child(cancel, "cancel_operation")

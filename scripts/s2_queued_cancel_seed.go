@@ -37,12 +37,12 @@ func main() {
 	}
 	r, err := store.Admit(ctx, state.Admission{
 		Layer: project, ActorID: actor.ID, TokenID: actor.ID,
-		Key: "native-s2-queued-undispatched-cancel-original-01",
-		Action: "box_exec",
-		SafeIntent: []byte("{\"fixture\":\"admitted-not-dispatched\"}"),
+		Key:         "native-s2-queued-undispatched-cancel-original-01",
+		Action:      "box_exec",
+		SafeIntent:  []byte("{\"fixture\":\"admitted-not-dispatched\"}"),
 		ResourceKey: "s2-ci:queued-undispatched-cancel",
-		RequestID: "s2-ci-queued-cancel-seed",
-		WorkRef: "lab/queued-cancel", AgentRef: "native-seed",
+		RequestID:   "s2-ci-queued-cancel-seed",
+		WorkRef:     "lab/queued-cancel", AgentRef: "native-seed",
 	})
 	if err != nil || r.State != "ADMITTED" || r.NativeOperationID != "" {
 		panic(fmt.Sprintf("queued native-free fixture admission not safe: %v", err))
