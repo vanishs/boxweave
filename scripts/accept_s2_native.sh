@@ -157,9 +157,10 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -269,13 +270,25 @@ test -s "$work/concurrent-status.json"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp)" = 401
 echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
 
+# Seed a single original ADMITTED operation with no native dispatch under
+# the SAME restricted service actor/database. The official SDK prober then
+# exercises operation_cancel as an actual MCP mutation, proving no Incus side
+# effect or fabricated native ID and immutable same-key cancellation replay.
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_SEED_DB="$db" BW_S2_SEED_PROJECT="$project" \
+  BW_S2_SEED_ADMIN_TOKEN="$admin" "$work/s2-queued-cancel-seed" > "$work/queued-cancel-id.txt"
+queued_cancel_id="$(cat "$work/queued-cancel-id.txt")"
+echo "$queued_cancel_id" | grep -Eq '^[0-9a-f]{32}$'
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+
 # The independent official MCP SDK prober temporarily holds one completed
 # 16MiB+4-byte dual-stream Exec until this CI VM administrator measures its
 # ACTUAL native spool files. This is read-only and never deletes native logs.
 # A failure is not an excuse to retry an original native mutation.
 ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
-  BW_S2_OUTPUT_WITNESS_DIR="$work" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
+  BW_S2_OUTPUT_WITNESS_DIR="$work" \
+  BW_S2_QUEUED_CANCEL_OPID="$queued_cancel_id" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
 probe_pid=$!
 attempt=0
 while [ ! -s "$work/output-witness.ready" ] && [ "$attempt" -lt 200 ]; do

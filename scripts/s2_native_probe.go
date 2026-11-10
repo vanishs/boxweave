@@ -217,6 +217,45 @@ func main() {
 	check(err != nil || denied != nil && denied.IsError, "viewer created native Box")
 	fmt.Println("S2_NATIVE_VIEWER_CREATE_REFUSED=PASS")
 
+	// Deterministic original ADMITTED but never dispatched, seeded using the
+	// exact candidate's SQLite Store under the same nonroot service actor.
+	// Official SDK cancellation must return a *separate* durable receipt and
+	// cannot fabricate an Incus operation or undo an already running guest.
+	queuedID := os.Getenv("BW_S2_QUEUED_CANCEL_OPID")
+	check(len(queuedID) == 32, "missing one-use original queued Operation")
+	queued := child(call(ctx, admin, "operation_get", map[string]any{
+		"operation_id": queuedID}), "operation")
+	check(field(queued, "state") == "ADMITTED" &&
+		field(queued, "native_operation_id") == "",
+		"test fixture already dispatched; cancellation cannot be proven")
+	cancelArgs := map[string]any{
+		"target_operation_id": queuedID,
+		"idempotency_key": "native-s2-queued-cancel-tool-original-01",
+	}
+	cancel := call(ctx, admin, "operation_cancel", cancelArgs)
+	cancelOp := child(cancel, "cancel_operation")
+	cancelID := id(cancelOp)
+	check(cancelID != queuedID, "cancel forged original native Operation")
+	cancelFinal := wait(ctx, admin, cancelID)
+	check(field(cancelFinal, "native_operation_id") == "",
+		"queued cancellation invented a native Incus operation")
+	originalCancelled := child(call(ctx, admin, "operation_get", map[string]any{
+		"operation_id": queuedID}), "operation")
+	check(field(originalCancelled, "state") == "CANCELLED" &&
+		field(originalCancelled, "native_operation_id") == "",
+		"original queued claim not cancelled without native dispatch")
+	cancelReplay := call(ctx, admin, "operation_cancel", cancelArgs)
+	check(id(child(cancelReplay, "cancel_operation")) == cancelID &&
+		child(cancelReplay, "cancel_operation")["duplicate"] == true,
+		"same cancel key did not replay original cancellation")
+	queuedPage := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/queued-cancel", "state": "CANCELLED", "limit": 10}), "page")
+	queuedRows, ok := queuedPage["operations"].([]any)
+	check(ok && len(queuedRows) == 1 &&
+		field(queuedRows[0].(map[string]any), "operation_id") == queuedID,
+		"cancelled queued operation absent from scoped indexed history")
+	fmt.Println("S2_NATIVE_QUEUED_UNDISPATCHED_CANCEL_NO_NATIVE_EFFECT=PASS")
+
 	name := "bw-s2-ghci-110a"
 	key := "native-s2-create-once-20261110"
 	args := map[string]any{"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
