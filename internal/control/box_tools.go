@@ -149,6 +149,38 @@ func safeJSON(v any) ([]byte, error) {
 	return b, nil
 }
 
+// replayNative checks an already accepted original before live Box inspection.
+// This preserves exact idempotent receipts across verified deletion, native
+// timeout, UNKNOWN and process restart without redispatch or name adoption.
+func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
+	action, key, boxID, work, agent string, intent any) (state.Receipt, bool, error) {
+	actor, layer, err := requireAdmin(req, s)
+	if err != nil {
+		return state.Receipt{}, false, err
+	}
+	if key == "" || boxID == "" {
+		return state.Receipt{}, false, state.ErrInvalid
+	}
+	work, agent, err = boundedWorkLabels(req, work, agent)
+	if err != nil {
+		return state.Receipt{}, false, err
+	}
+	safe, err := safeJSON(intent)
+	if err != nil {
+		return state.Receipt{}, false, err
+	}
+	rec, err := s.Store.Replay(ctx, state.Admission{
+		Layer: layer, ActorID: actor, TokenID: actor,
+		Key: key, Action: action, BoxUUID: boxID,
+		Incarnation: boxID, SafeIntent: safe,
+		WorkRef: work, AgentRef: agent,
+	})
+	if errors.Is(err, state.ErrNotFound) {
+		return state.Receipt{}, false, nil
+	}
+	return rec, err == nil, err
+}
+
 func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	action, key, boxUUID, incarnation, resourceKey, work, agent string, intent any) (state.Receipt, error) {
 	actor, layer, err := requireAdmin(req, s)
@@ -354,6 +386,17 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if _, _, err := requireAdmin(req, s); err != nil {
 					return nil, state.Receipt{}, err
 				}
+				intent := struct {
+					BoxID string `json:"box_id"`
+				}{in.BoxID}
+				original, already, err := s.replayNative(ctx, req, action, in.IdempotencyKey,
+					in.BoxID, in.WorkRef, in.AgentRef, intent)
+				if err != nil {
+					return nil, state.Receipt{}, err
+				}
+				if already {
+					return &mcp.CallToolResult{}, original, nil
+				}
 				box, err := s.readOwned(ctx, req, in.BoxID)
 				if err != nil {
 					return nil, state.Receipt{}, err
@@ -415,12 +458,24 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				in.DiskGiB == nil && in.Nesting == nil {
 				return nil, state.Receipt{}, native.ErrNativeUnsupported
 			}
+			changes := native.InstanceChanges{CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
+				Nesting: in.Nesting, Internet: in.Internet}
+			intent := struct {
+				BoxID   string                 `json:"box_id"`
+				Changes native.InstanceChanges `json:"changes"`
+			}{in.BoxID, changes}
+			original, already, err := s.replayNative(ctx, req, "box_update", in.IdempotencyKey,
+				in.BoxID, in.WorkRef, in.AgentRef, intent)
+			if err != nil {
+				return nil, state.Receipt{}, err
+			}
+			if already {
+				return &mcp.CallToolResult{}, original, nil
+			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
-			changes := native.InstanceChanges{CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-				Nesting: in.Nesting, Internet: in.Internet}
 			r, err := s.admitNative(ctx, req, "box_update", in.IdempotencyKey, box.UUID, box.Incarnation,
 				"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
 					BoxID   string                 `json:"box_id"`
@@ -465,6 +520,17 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, _, err := requireAdmin(req, s); err != nil {
 				return nil, state.Receipt{}, err
+			}
+			intent := struct {
+				BoxID string `json:"box_id"`
+			}{in.BoxID}
+			original, already, err := s.replayNative(ctx, req, "box_delete", in.IdempotencyKey,
+				in.BoxID, in.WorkRef, in.AgentRef, intent)
+			if err != nil {
+				return nil, state.Receipt{}, err
+			}
+			if already {
+				return &mcp.CallToolResult{}, original, nil
 			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
@@ -513,12 +579,6 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 					return nil, state.Receipt{}, state.ErrInvalid
 				}
 			}
-			box, err := s.readOwned(ctx, req, in.BoxID)
-			if err != nil {
-				return nil, state.Receipt{}, err
-			}
-			spec := native.ExecSpec{Argv: in.Argv, Cwd: in.Cwd, UID: in.GuestUID,
-				GID: in.GuestGID, Environment: in.Environment, TimeoutMS: in.TimeoutMS}
 			canonical, _ := json.Marshal(struct {
 				Argv []string          `json:"argv"`
 				Cwd  string            `json:"cwd"`
@@ -527,12 +587,27 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				Env  map[string]string `json:"env"`
 			}{in.Argv, in.Cwd, in.GuestUID, in.GuestGID, in.Environment})
 			hash := sha256.Sum256(canonical)
+			intent := struct {
+				BoxID              string `json:"box_id"`
+				GuestCommandDigest string `json:"guest_command_digest"`
+				TimeoutMS          int    `json:"timeout_ms"`
+			}{in.BoxID, hex.EncodeToString(hash[:]), in.TimeoutMS}
+			original, already, err := s.replayNative(ctx, req, "box_exec", in.IdempotencyKey,
+				in.BoxID, in.WorkRef, in.AgentRef, intent)
+			if err != nil {
+				return nil, state.Receipt{}, err
+			}
+			if already {
+				return &mcp.CallToolResult{}, original, nil
+			}
+			box, err := s.readOwned(ctx, req, in.BoxID)
+			if err != nil {
+				return nil, state.Receipt{}, err
+			}
+			spec := native.ExecSpec{Argv: in.Argv, Cwd: in.Cwd, UID: in.GuestUID,
+				GID: in.GuestGID, Environment: in.Environment, TimeoutMS: in.TimeoutMS}
 			r, err := s.admitNative(ctx, req, "box_exec", in.IdempotencyKey, box.UUID, box.Incarnation,
-				"box:"+box.Name, in.WorkRef, in.AgentRef, struct {
-					BoxID              string `json:"box_id"`
-					GuestCommandDigest string `json:"guest_command_digest"`
-					TimeoutMS          int    `json:"timeout_ms"`
-				}{in.BoxID, hex.EncodeToString(hash[:]), in.TimeoutMS})
+				"box:"+box.Name, in.WorkRef, in.AgentRef, intent)
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
