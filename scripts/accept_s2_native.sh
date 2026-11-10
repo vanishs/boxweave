@@ -164,9 +164,10 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.g
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -992,4 +993,123 @@ test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")"
 sudo incus delete --force "$quota_name" --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_GUEST_QUOTA_SPACE_RECOVERED_AND_FIXTURE_REMOVED=PASS"
+
+# FINAL S2 native fault witness must pass the public BoxWeave MCP Tool,
+# original SQLite journal, 16MiB output-get and exact guest-exit semantics,
+# not merely a separate direct native SDK call. Entirely new Box/ledger.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+mkdir -m 0700 "$work/mcp-quota-ledger"
+sudo chown boxweave:incus "$work/mcp-quota-ledger"
+mcp_quota_db="$work/mcp-quota-ledger/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" token-create -db "$mcp_quota_db" -role admin > "$work/mcp-quota-admin.secret"
+chmod 0600 "$work/mcp-quota-admin.secret"
+mcp_quota_token="$(sed -n 's/^token=//p' "$work/mcp-quota-admin.secret")"
+test -n "$mcp_quota_token"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-quota-server.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+mcp_quota_uuid=""
+s2_mcp_quota() {
+  BW_S2_MCP_QUOTA_URL="http://127.0.0.1:18656/mcp" \
+    BW_S2_MCP_QUOTA_TOKEN="$mcp_quota_token" \
+    BW_S2_MCP_QUOTA_UUID="$mcp_quota_uuid" \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    "$work/s2-mcp-quota-probe" "$1"
+}
+mcp_quota_name="bw-s2-mcp-quota-110i"
+s2_mcp_quota create > "$work/mcp-quota-create.txt"
+mcp_quota_uuid="$(sed -n 's/^S2_MCP_QUOTA_BOX_UUID=//p' "$work/mcp-quota-create.txt")"
+echo "$mcp_quota_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+test "$(sudo incus config get "$mcp_quota_name" volatile.uuid --project "$project")" = "$mcp_quota_uuid"
+mcp_ready=0
+for attempt in $(seq 1 40); do
+  if sudo incus exec "$mcp_quota_name" --project "$project" -- /bin/true >/dev/null 2>&1; then
+    mcp_ready=1
+    break
+  fi
+  sleep 1
+done
+test "$mcp_ready" -eq 1
+s2_mcp_quota seed > "$work/mcp-quota-seed.txt"
+grep -Fqx "S2_MCP_QUOTA_SEED_RECORDED=PASS" "$work/mcp-quota-seed.txt"
+
+mcp_spool="$(printf '/var/lib/incus/containers/%s_%s/exec-output' "$project" "$mcp_quota_name")"
+sudo test -d "$mcp_spool"
+test "$(sudo stat -Lc '%d' "$mcp_spool")" = "$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+mcp_state_url="/1.0/storage-pools/bw-s2-native-pool/volumes/container/$mcp_quota_name/state?project=$project"
+sudo incus query "$mcp_state_url" > "$work/mcp-quota-before.json"
+mcp_quota_values="$(python3 - "$work/mcp-quota-before.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+v=v.get("metadata",v)["usage"]
+print(int(v["used"]),int(v["total"]))
+PY
+)"
+mcp_used="$(printf '%s\n' "$mcp_quota_values" | awk '{print $1}')"
+mcp_limit="$(printf '%s\n' "$mcp_quota_values" | awk '{print $2}')"
+test "$mcp_limit" -eq 2147483648
+test "$mcp_used" -gt 10485760
+mcp_fill_bytes=$((mcp_limit - mcp_used - 50331648))
+test "$mcp_fill_bytes" -gt 1073741824
+physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+host_available="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$physical_available" -gt $((mcp_fill_bytes + 268435456))
+test "$host_available" -gt $((mcp_fill_bytes + 4294967296))
+mcp_filler="$mcp_spool/.boxweave-s2-public-mcp-quota-filler"
+sudo test ! -e "$mcp_filler"
+sudo timeout 30s setpriv --bounding-set=-sys_resource --nnp -- \
+  fallocate -l "$mcp_fill_bytes" "$mcp_filler"
+echo "S2_MCP_QUOTA_NEAR_LIMIT_SAFE_MOUNT=PASS"
+
+s2_mcp_quota flood > "$work/mcp-quota-flood.txt"
+grep -Fqx "S2_MCP_QUOTA_GUEST_EXIT_ONE_PUBLIC_OUTPUT=PASS" "$work/mcp-quota-flood.txt"
+mcp_original="$(sed -n 's/^S2_MCP_QUOTA_OPERATION_ID=//p' "$work/mcp-quota-flood.txt")"
+mcp_native="$(sed -n 's/^S2_MCP_QUOTA_NATIVE_ID=//p' "$work/mcp-quota-flood.txt")"
+echo "$mcp_original" | grep -Eq '^[0-9a-f]{32}$'
+echo "$mcp_native" | grep -Eq '^[0-9a-f-]{36}$'
+mcp_output_file="$(printf '%s/exec_%s.stdout' "$mcp_spool" "$mcp_native")"
+sudo test -f "$mcp_output_file"
+mcp_output_bytes="$(sudo stat -c '%s' "$mcp_output_file")"
+echo "S2_MCP_QUOTA_PHYSICAL_STDOUT_BYTES=$mcp_output_bytes"
+test "$mcp_output_bytes" -gt 16777216
+test "$mcp_output_bytes" -lt 134217728
+sudo incus query "$mcp_state_url" > "$work/mcp-quota-after.json"
+mcp_after="$(python3 - "$work/mcp-quota-after.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$mcp_after" -le "$mcp_limit"
+echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
+
+# Remove only disposable quota preallocation, preserve original logs until
+# public MCP cleanup removes the verified exact UUID, never an UNKNOWN Box.
+sudo rm -f -- "$mcp_filler"
+sudo test ! -e "$mcp_filler"
+sudo incus query "$mcp_state_url" > "$work/mcp-quota-reclaimed.json"
+mcp_reclaimed="$(python3 - "$work/mcp-quota-reclaimed.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$mcp_reclaimed" -lt $((mcp_after - mcp_fill_bytes / 2))
+s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
+grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_MCP_QUOTA_FINAL_NATIVE_INVENTORY_EMPTY=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
