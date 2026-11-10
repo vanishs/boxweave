@@ -139,9 +139,9 @@ func main() {
 	case "flood":
 		check(len(uuid) == 36, "missing quota box UUID")
 		args := map[string]any{
-			"box_id": uuid,
-			"argv": []string{"/bin/sh", "-c", "head -c 134217728 /dev/zero"},
-			"timeout_ms": 30000,
+			"box_id":          uuid,
+			"argv":            []string{"/bin/sh", "-c", "head -c 134217728 /dev/zero"},
+			"timeout_ms":      30000,
 			"idempotency_key": "native-s2-mcp-quota-guest-flood-once-001",
 		}
 		request := call(ctx, s, "box_exec", args)
