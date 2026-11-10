@@ -18,11 +18,11 @@ import (
 )
 
 var (
-	ErrNotOwned          = errors.New("native instance UUID/project identity differs from owned ledger")
-	ErrUnsafeNetwork     = errors.New("native private NIC ACL and IPv4/IPv6 anti-spoof not verified")
-	ErrNativeUnsupported = errors.New("required safe native capability or approved image unavailable")
-	ErrNativeDependents  = errors.New("instance has native dependent or foreign proxy devices")
-	ErrUnverified        = errors.New("native operation or postcondition not independently verified")
+	ErrNotOwned                  = errors.New("native instance UUID/project identity differs from owned ledger")
+	ErrUnsafeNetwork             = errors.New("native private NIC ACL and IPv4/IPv6 anti-spoof not verified")
+	ErrNativeUnsupported         = errors.New("required safe native capability or approved image unavailable")
+	ErrNativeDependents          = errors.New("instance has native dependent or foreign proxy devices")
+	ErrUnverified                = errors.New("native operation or postcondition not independently verified")
 	ErrRecordedOutputUnavailable = errors.New("verified original native recorded output file is unavailable")
 )
 

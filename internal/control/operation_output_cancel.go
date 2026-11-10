@@ -18,18 +18,18 @@ type operationOutputInput struct {
 }
 
 type operationOutputResult struct {
-	TrackingID     string `json:"tracking_id"`
-	OperationID    string `json:"operation_id"`
-	Stream         string `json:"stream"`
-	ContentBase64  string `json:"content_base64"`
-	Offset         int64  `json:"offset"`
-	NextOffset     int64  `json:"next_offset"`
-	Ended          bool   `json:"ended"`
-	Truncated      bool   `json:"truncated"`
-	Availability   string `json:"availability"`
+	TrackingID        string `json:"tracking_id"`
+	OperationID       string `json:"operation_id"`
+	Stream            string `json:"stream"`
+	ContentBase64     string `json:"content_base64"`
+	Offset            int64  `json:"offset"`
+	NextOffset        int64  `json:"next_offset"`
+	Ended             bool   `json:"ended"`
+	Truncated         bool   `json:"truncated"`
+	Availability      string `json:"availability"`
 	UnavailableReason string `json:"unavailable_reason,omitempty"`
-	ExitCode       *int   `json:"exit_code,omitempty"`
-	CommandSuccess *bool  `json:"command_success,omitempty"`
+	ExitCode          *int   `json:"exit_code,omitempty"`
+	CommandSuccess    *bool  `json:"command_success,omitempty"`
 }
 
 type cancelOperationInput struct {
