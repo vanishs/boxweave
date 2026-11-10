@@ -217,9 +217,22 @@ test "$attempt" -lt 40
 
 # The independent original native Agent's own official MCP Go SDK client
 # reads the exact installed candidate's bytes, not in-process Go mocks.
-BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+if ! ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
-  "$work/s2-probe"
+  "$work/s2-probe" ) > "$work/native-probe.log" 2>&1; then
+  # Dedicated one-use CI VM only. Safe native metadata diagnosis after the
+  # failed original operation; do not repeat native creates or expose tokens.
+  cat "$work/native-probe.log"
+  echo "S2_NATIVE_DIAG_ORIGINAL_CREATE_FINAL_STATE"
+  sudo incus list --all-projects --format yaml || :
+  sudo incus config show bw-s2-ghci-110a --expanded --project "$project" || :
+  native_diagnose_id="$(sed -n 's/.*native_operation_id:\([0-9a-f-]*\).*/\1/p' "$work/native-probe.log" | head -n1)"
+  if [ -n "$native_diagnose_id" ]; then
+    sudo incus operation show "$native_diagnose_id" --project "$project" || :
+  fi
+  exit 92
+fi
+cat "$work/native-probe.log"
 
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.
