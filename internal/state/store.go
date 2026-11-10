@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -110,13 +111,25 @@ func digest(s string) string          { h := sha256.Sum256([]byte(s)); return he
 func DigestToken(token string) string { return digest(token) }
 
 func Open(path string) (*Store, error) {
-	if path == "" || !filepath.IsAbs(path) || strings.ContainsAny(path, "?\x00") {
-		return nil, fmt.Errorf("absolute literal database path required")
+	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path ||
+		strings.ContainsAny(path, "?\x00") {
+		return nil, fmt.Errorf("absolute canonical literal database path required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	parent := filepath.Dir(path)
+	if err := os.MkdirAll(parent, 0700); err != nil {
 		return nil, err
 	}
-	if st, err := os.Lstat(filepath.Dir(path)); err != nil {
+	// A private final parent alone is not enough: a symlink anywhere in the
+	// ancestor path would permit two names for the same SQLite inode and two
+	// independent .serve.lock files. Refuse aliases before opening the DB.
+	physical, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		return nil, err
+	}
+	if physical != parent {
+		return nil, fmt.Errorf("database parent path contains a symlink alias")
+	}
+	if st, err := os.Lstat(parent); err != nil {
 		return nil, err
 	} else if !st.IsDir() || st.Mode().Perm()&0077 != 0 {
 		return nil, fmt.Errorf("database parent must be a private real directory")
@@ -141,6 +154,12 @@ func Open(path string) (*Store, error) {
 	}
 	if !st.Mode().IsRegular() || st.Mode().Perm()&0077 != 0 {
 		return nil, fmt.Errorf("database file permissions unsafe")
+	}
+	// Two hardlinked DB filenames have different adjacent serve-lock paths
+	// but the same underlying SQLite inode; reject before init/recovery.
+	stat, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || stat.Nlink != 1 {
+		return nil, fmt.Errorf("database hardlinks or unknown inode metadata refused")
 	}
 	db, err := sql.Open("sqlite3", "file:"+path+"?_busy_timeout=5000&_foreign_keys=on")
 	if err != nil {
