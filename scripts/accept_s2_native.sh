@@ -151,7 +151,9 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe"
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -376,4 +378,96 @@ for case in foreign corrupt legacy ambiguous versioned_foreign; do
 done
 echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
 echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
+
+# Deliberate ACK loss after the REAL Incus server accepts a Create. This
+# does not retry or adopt any historical task; it uses a new independent
+# SQLite ledger, exact disposable original name and the same non-root Incus
+# user/Project. The MITM Unix socket cannot access privileged daemon APIs.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+ack_proxy="$work/ledger/ack-proxy.sock"
+ack_marker="$work/ledger/ack-trap.txt"
+ack_db="$work/ledger/ack.sqlite"
+ack_checkpoint="$work/ack-original.json"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  "$work/s2-ack-loss-proxy" -listen "$ack_proxy" -upstream "$socket" \
+  -marker "$ack_marker" > "$work/ack-proxy.log" 2>&1 &
+proxy_pid=$!
+trap 'kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; kill "$proxy_pid" 2>/dev/null || :; wait "$proxy_pid" 2>/dev/null || :' EXIT
+attempt=0
+until sudo test -S "$ack_proxy" || [ "$attempt" -ge 30 ]; do
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo test -S "$ack_proxy"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" -role admin > "$work/ack-admin.secret"
+chmod 0600 "$work/ack-admin.secret"
+ack_admin="$(sed -n 's/^token=//p' "$work/ack-admin.secret")"
+test -n "$ack_admin"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/ack-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
+sudo grep -q '^UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED
+ "$ack_marker"
+test "$(sudo wc -l < "$ack_marker")" = 1
+echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
+
+# Second oracle: independent daemon administrator verifies exactly one
+# native Box of the original name actually exists. The MCP journal remains
+# UNKNOWN and cannot adopt it merely by this read.
+attempt=0
+ack_uuid=""
+until [ "$attempt" -ge 50 ]; do
+  ack_uuid="$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null || :)"
+  if [ -n "$ack_uuid" ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test -n "$ack_uuid"
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
+
+# Reopen the SAME unknown journal; do not replay the original Create.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/ack-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume
+test "$(sudo wc -l < "$ack_marker")" = 1
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
+
+# Only this **one-use CI host administrator**, NOT BoxWeave's original
+# UNKNOWN recovery API, deletes the exact known test fixture after native
+# effects were independently witnessed. Leave the SQLite record UNKNOWN.
+sudo incus delete bw-s2-ack-native-110d --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
