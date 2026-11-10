@@ -636,4 +636,66 @@ test "$(sudo incus config get bw-s2-update-ack-native-110f limits.cpu --project 
 sudo incus delete bw-s2-update-ack-native-110f --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# ACK DELIVERED but the first exact native postcondition GET is refused by
+# the one-use restricted socket proxy AFTER the genuine 202. BoxWeave must
+# preserve the originally acknowledged native operation ID and UNKNOWN lock.
+postread_checkpoint="$work/postread-original.json"
+BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread
+for event in POSTREAD_FIXTURE_CREATE_FORWARDED POSTREAD_NATIVE_UPDATE_202_ACK_DELIVERED POSTREAD_AFTER_NATIVE_ACK_INSTANCE_GET_REFUSED_ONCE; do
+  sudo grep -Fqx "$event" "$ack_marker"
+done
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 9
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: postread fault retransmitted Update" >&2
+  exit 101
+fi
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-update-postread-native-110g
+postread_uuid="$(sudo incus config get bw-s2-update-postread-native-110g volatile.uuid --project "$project")"
+test -n "$postread_uuid"
+attempt=0
+until [ "$attempt" -ge 90 ]; do
+  if [ "$(sudo incus config get bw-s2-update-postread-native-110g limits.cpu --project "$project" 2>/dev/null || :)" = 2 ] &&
+      sudo incus operation list --project "$project" --format json |
+        python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 90
+echo "S2_NATIVE_UPDATE_RECEIVED_ACK_LOST_POSTREAD_NATIVE_EFFECT_CONFIRMED=PASS"
+
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/postread-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread_resume
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 9
+test "$(sudo incus config get bw-s2-update-postread-native-110g volatile.uuid --project "$project")" = "$postread_uuid"
+test "$(sudo incus config get bw-s2-update-postread-native-110g limits.cpu --project "$project")" = 2
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: postread uncertainty bypassed original lock" >&2
+  exit 102
+fi
+sudo incus delete bw-s2-update-postread-native-110g --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_UPDATE_POSTREAD_UNKNOWN_RESTART_AND_TEARDOWN=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"

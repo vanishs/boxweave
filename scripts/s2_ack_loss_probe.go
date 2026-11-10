@@ -297,9 +297,118 @@ func testAcceptedUpdateAckLoss(ctx context.Context, s *mcp.ClientSession, resume
 	fmt.Println("S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_ORIGINAL_UNKNOWN=PASS")
 }
 
+type savedPostread struct {
+	OriginalID string `json:"original_id"`
+	BoxID      string `json:"box_id"`
+}
+
+func postreadArgs(boxID string) map[string]any {
+	return map[string]any{
+		"box_id": boxID, "cpu": 2,
+		"idempotency_key": "native-s2-update-accepted-postread-failed-once-001",
+	}
+}
+
+func checkPostreadLocked(ctx context.Context, s *mcp.ClientSession, original savedPostread) {
+	var observed map[string]any
+	for n := 0; n < 100; n++ {
+		reply, err := invoke(ctx, s, "operation_get", map[string]any{
+			"operation_id": original.OriginalID, "wait_ms": 300,
+		})
+		if err != nil {
+			panic(err)
+		}
+		observed = child(reply, "operation")
+		state := field(observed, "state")
+		if state == "UNKNOWN" {
+			require(field(observed, "native_operation_id") != "" &&
+				field(observed, "error_class") == "POSTCONDITION_UNVERIFIED" &&
+				field(child(observed, "next_action"), "kind") == "HOST_LOCAL_REVIEW",
+				"accepted native Update lost postread but no original native ID/UNKNOWN receipt")
+			break
+		}
+		require(state != "FAILED" && state != "SUCCEEDED" && state != "CANCELLED",
+			"unverified native postcondition incorrectly settled operation")
+		require(n < 99, "native postread fault did not settle to UNKNOWN")
+	}
+	again, err := invoke(ctx, s, "box_update", postreadArgs(original.BoxID))
+	require(err == nil && field(again, "operation_id") == original.OriginalID &&
+		again["duplicate"] == true, "same-key Update postread replay was not original")
+	different := postreadArgs(original.BoxID)
+	different["idempotency_key"] = "native-s2-postread-new-key-must-deny-001"
+	different["cpu"] = 3
+	bad, err := invoke(ctx, s, "box_update", different)
+	require(err != nil, fmt.Sprintf("new-key Update bypassed postread UNKNOWN lock: %+v", bad))
+}
+
+func testAcceptedUpdatePostread(ctx context.Context, s *mcp.ClientSession, resume bool) {
+	const fixture = "bw-s2-update-postread-native-110g"
+	file := os.Getenv("BW_S2_POSTREAD_STATE_FILE")
+	require(strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") &&
+		strings.HasSuffix(file, "/postread-original.json"), "disposable postread checkpoint required")
+	if resume {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			panic(err)
+		}
+		var original savedPostread
+		if err := json.Unmarshal(raw, &original); err != nil {
+			panic(err)
+		}
+		require(original.OriginalID != "" && original.BoxID != "", "postread original checkpoint missing")
+		checkPostreadLocked(ctx, s, original)
+		fmt.Println("S2_NATIVE_UPDATE_POSTREAD_UNKNOWN_RESTART_NO_REPLAY=PASS")
+		return
+	}
+	created, err := invoke(ctx, s, "box_create", map[string]any{
+		"name": fixture, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"start": false, "internet": true,
+		"idempotency_key": "native-s2-update-postread-fixture-create-001",
+	})
+	if err != nil {
+		panic(err)
+	}
+	createID := field(created, "operation_id")
+	require(createID != "", "postread test fixture create missing original ID")
+	var boxID string
+	for n := 0; n < 120; n++ {
+		ret, e := invoke(ctx, s, "operation_get", map[string]any{
+			"operation_id": createID, "wait_ms": 400,
+		})
+		if e != nil {
+			panic(e)
+		}
+		r := child(ret, "operation")
+		if field(r, "state") == "SUCCEEDED" {
+			boxID = field(r, "box_uuid")
+			break
+		}
+		require(field(r, "state") != "FAILED" && field(r, "state") != "UNKNOWN",
+			"postread fixture create failed")
+		require(n < 119, "postread fixture create did not finish")
+	}
+	require(boxID != "", "verified postread fixture missing exact native UUID")
+	update, err := invoke(ctx, s, "box_update", postreadArgs(boxID))
+	if err != nil {
+		panic(err)
+	}
+	original := savedPostread{OriginalID: field(update, "operation_id"), BoxID: boxID}
+	require(original.OriginalID != "", "postread Update admission missing original ID")
+	checkPostreadLocked(ctx, s, original)
+	raw, err := json.Marshal(original)
+	if err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(file, raw, 0600); err != nil {
+		panic(err)
+	}
+	fmt.Println("S2_NATIVE_UPDATE_ACCEPTED_ACK_DELIVERED_POSTREAD_UNKNOWN=PASS")
+}
+
 func main() {
 	require(len(os.Args) == 2 && (os.Args[1] == "start" || os.Args[1] == "resume" || os.Args[1] == "etag" ||
-		os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume"),
+		os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume" ||
+		os.Args[1] == "postread" || os.Args[1] == "postread_resume"),
 		"start/resume/etag/update_ack/update_ack_resume mode required")
 	file := os.Getenv("BW_S2_ACK_STATE_FILE")
 	require(strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") &&
@@ -308,6 +417,10 @@ func main() {
 	defer cancel()
 	s := session(ctx)
 	defer s.Close()
+	if os.Args[1] == "postread" || os.Args[1] == "postread_resume" {
+		testAcceptedUpdatePostread(ctx, s, os.Args[1] == "postread_resume")
+		return
+	}
 	if os.Args[1] == "etag" {
 		testStaleNativeETag(ctx, s)
 		return

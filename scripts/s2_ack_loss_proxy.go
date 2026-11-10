@@ -61,6 +61,9 @@ func main() {
 	var etagCreateUsed atomic.Bool
 	var updateAckUsed atomic.Bool
 	var updateCreateUsed atomic.Bool
+	var postreadUpdateUsed atomic.Bool
+	var postreadCreateUsed atomic.Bool
+	var postreadArmed atomic.Bool
 	record := func(line string) error {
 		f, err := os.OpenFile(*marker, os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
@@ -71,6 +74,75 @@ func main() {
 		return err
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// After an Incus 202 for this exact ETag-protected Update was delivered
+		// to BoxWeave, corrupt exactly ONE later native instance readback.
+		// The original native ID was already acknowledged in SQLite; a lost
+		// postcondition must remain UNKNOWN, never be treated as success.
+		if r.Method == http.MethodGet &&
+			r.URL.Path == "/1.0/instances/bw-s2-update-postread-native-110g" &&
+			r.URL.Query().Get("project") == *project &&
+			postreadArmed.CompareAndSwap(true, false) {
+			if err := record("POSTREAD_AFTER_NATIVE_ACK_INSTANCE_GET_REFUSED_ONCE"); err != nil {
+				http.Error(w, "test witness failure", http.StatusBadGateway)
+				return
+			}
+			http.Error(w, "disposable fault: native postcondition temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if r.Method == http.MethodPut &&
+			r.URL.Path == "/1.0/instances/bw-s2-update-postread-native-110g" {
+			if r.URL.Query().Get("project") != *project || r.Header.Get("If-Match") == "" {
+				http.Error(w, "unguarded native postread-test Update", http.StatusBadRequest)
+				return
+			}
+			if !postreadUpdateUsed.CompareAndSwap(false, true) {
+				_ = record("UNEXPECTED_SECOND_POSTREAD_PUT")
+				http.Error(w, "original Update cannot redispatch", http.StatusConflict)
+				return
+			}
+			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			if err != nil {
+				http.Error(w, "native Update body unavailable", http.StatusBadRequest)
+				return
+			}
+			_ = r.Body.Close()
+			var intent struct {
+				Config map[string]string `json:"config"`
+			}
+			if json.Unmarshal(body, &intent) != nil || intent.Config["limits.cpu"] != "2" {
+				http.Error(w, "unexpected native Update CPU", http.StatusBadRequest)
+				return
+			}
+			req := r.Clone(r.Context())
+			req.URL.Scheme, req.URL.Host, req.RequestURI = "http", "unix.socket", ""
+			req.Body = io.NopCloser(bytes.NewReader(body))
+			req.ContentLength = int64(len(body))
+			res, err := transport.RoundTrip(req)
+			if err != nil {
+				http.Error(w, "native Update transport error", http.StatusBadGateway)
+				return
+			}
+			defer res.Body.Close()
+			accepted, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+			if err != nil || res.StatusCode != http.StatusAccepted ||
+				!strings.Contains(string(accepted), "\"operation\"") {
+				http.Error(w, fmt.Sprintf("native Update not accepted (%d)", res.StatusCode), http.StatusBadGateway)
+				return
+			}
+			if err := record("POSTREAD_NATIVE_UPDATE_202_ACK_DELIVERED"); err != nil {
+				http.Error(w, "native Update witness failure", http.StatusBadGateway)
+				return
+			}
+			postreadArmed.Store(true)
+			for k, values := range res.Header {
+				for _, v := range values {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(res.StatusCode)
+			_, _ = w.Write(accepted)
+			return
+		}
 		// The native Update is accepted with HTTP 202, then its acknowledgment
 		// is lost to BoxWeave. A separate administrator later verifies that
 		// this exact owned instance really received limits.cpu=2. This is not
@@ -239,6 +311,10 @@ func main() {
 			case "bw-s2-update-ack-native-110f":
 				if updateCreateUsed.CompareAndSwap(false, true) {
 					label = "UPDATE_ACK_FIXTURE_CREATE_FORWARDED"
+				}
+			case "bw-s2-update-postread-native-110g":
+				if postreadCreateUsed.CompareAndSwap(false, true) {
+					label = "POSTREAD_FIXTURE_CREATE_FORWARDED"
 				}
 			}
 			if label == "" {
