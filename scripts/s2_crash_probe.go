@@ -25,9 +25,9 @@ const (
 )
 
 type original struct {
-	BoxUUID           string `json:"box_uuid"`
-	OperationID       string `json:"operation_id"`
-	NativeOperationID string `json:"native_operation_id"`
+	BoxUUID             string `json:"box_uuid"`
+	OperationID         string `json:"operation_id"`
+	NativeOperationID   string `json:"native_operation_id"`
 	RecordedOperationID string `json:"recorded_operation_id"`
 }
 
