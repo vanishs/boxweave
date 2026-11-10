@@ -209,6 +209,40 @@ torn SQLite commit, ETag stale-writer contention or external WAN HTTPS.
 Do not retry or delete the **two older historical UNKNOWN** task
 records outside this single-use test environment.
 
+## Native stale ETag vs updated native state — installed real fault PASS
+
+- **Exact source:** `18be917683a9ebb9508a7281f8d29faeb6cc8397`; native
+  binary digest `9808e113aa1401178ee69923fa57ce8c64b5e0bd110b54863b44cac5b256983c`.
+  [Installed MCP/native job](https://github.com/vanishs/boxweave/actions/runs/42872347464/job/130026581755),
+  [Go build/race](https://github.com/vanishs/boxweave/actions/runs/42872357783/job/130026618109)
+  and [quality](https://github.com/vanishs/boxweave/actions/runs/42872347511/job/130026581589)
+  all succeeded.
+- The one-use restricted Incus Unix-socket proxy intercepted exactly one
+  original BoxWeave typed `box_update(cpu=2)` PUT after BoxWeave had read
+  its ETag. A **separate accepted native UpdateInstance** first changed
+  `user.s2-etag-race` on that exact owned, stopped, native Box using the
+  previously current ETag. Then the proxy passed the original older
+  `If-Match` unchanged to the real Incus server; the server returned
+  actual HTTP **412 Precondition Failed**, not a fabricated test response.
+- `S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED=PASS`: official MCP
+  client observed original Update UNKNOWN (conservative fail closed),
+  original-key replay same Operation and different-key refusal; no
+  attempted second PUT escaped the proxy or replaced the now-newer native
+  configuration.
+- `S2_NATIVE_STALE_ETAG_UPDATE_REJECTED_ORIGINAL_NATIVE_UNCHANGED=PASS`:
+  independent administrator inspected native `limits.cpu=1` (the intended
+  stale CPU=2 was not applied) and the new native `user.s2-etag-race`
+  marker still present. Test-only admin then confirmed no outstanding
+  native operations, exact UUID identity and cleaned only the disposable
+  new ETag fixture. Full existing Create ACK-loss and other S2 native
+  tests reran successfully.
+
+**No overclaim:** definitive stale ETag 412 is now independently proven;
+uncertain **successful** native Update after lost response, interrupted
+SQLite commit, public HTTPS WAN and on-disk native Exec log retention
+remain S2 gaps. Neither ETag test nor cleanup affected any historical
+UNKNOWN Box or shared Incus.
+
 ## Native proof matrix (all observed PASS in this run)
 
 | Proof | Assertion |
