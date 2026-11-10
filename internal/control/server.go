@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -79,7 +80,34 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 	return &auth.TokenInfo{UserID: t.ID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
 }
 func (s *Service) Handler() http.Handler {
-	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
+		&mcp.ServerOptions{SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
+			// Every resource and Operation is project/actor-private and
+			// status changes while work is in flight. Never cache publicly.
+			c.CacheScope = "private"
+			c.TTLMs = 0
+		}})
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			start := time.Now()
+			result, err := next(ctx, method, req)
+			actor := "unauthenticated"
+			if extra := req.GetExtra(); extra != nil && extra.TokenInfo != nil {
+				// Redacted immutable credential reference, NOT token, params,
+				// argv, env, guest output, prompt or private native message.
+				h := sha256.Sum256([]byte(extra.TokenInfo.UserID))
+				actor = hex.EncodeToString(h[:4])
+			}
+			outcome := "ok"
+			if err != nil {
+				outcome = "error"
+			}
+			slog.InfoContext(ctx, "mcp_request", "method", method,
+				"actor", actor, "duration_ms", time.Since(start).Milliseconds(),
+				"result", outcome)
+			return result, err
+		}
+	})
 	mcp.AddTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {

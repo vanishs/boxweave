@@ -503,8 +503,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if _, _, err := requireAdmin(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
-			if len(in.Argv) == 0 || len(in.Argv) > 64 || in.TimeoutMS < 0 ||
-				in.TimeoutMS > 900000 || len(in.Environment) > 32 {
+			if len(in.Argv) == 0 || len(in.Argv) > 64 ||
+				(in.TimeoutMS != 0 && (in.TimeoutMS < 1000 || in.TimeoutMS > 900000)) ||
+				len(in.Environment) > 32 {
 				return nil, state.Receipt{}, state.ErrInvalid
 			}
 			for _, arg := range in.Argv {
@@ -517,7 +518,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				return nil, state.Receipt{}, err
 			}
 			spec := native.ExecSpec{Argv: in.Argv, Cwd: in.Cwd, UID: in.GuestUID,
-				GID: in.GuestGID, Environment: in.Environment}
+				GID: in.GuestGID, Environment: in.Environment, TimeoutMS: in.TimeoutMS}
 			canonical, _ := json.Marshal(struct {
 				Argv []string          `json:"argv"`
 				Cwd  string            `json:"cwd"`

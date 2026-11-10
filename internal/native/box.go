@@ -66,6 +66,7 @@ type ExecSpec struct {
 	UID         uint32
 	GID         uint32
 	Environment map[string]string
+	TimeoutMS   int
 }
 
 type ExecEvidence struct {
@@ -203,6 +204,11 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if err != nil || alias.Target == "" {
 		return "", ErrNativeUnsupported
 	}
+	image, _, err := c.GetImage(alias.Target)
+	if err != nil || image == nil || !strings.EqualFold(image.Properties["os"], "Ubuntu") ||
+		image.Properties["release"] != "24.04" {
+		return "", ErrNativeUnsupported
+	}
 	if _, _, err := c.GetInstance(a.Name); err == nil {
 		return "", ErrNotOwned
 	} else if !api.StatusErrorCheck(err, http.StatusNotFound) {
@@ -215,14 +221,15 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if a.Nesting {
 		config["security.nesting"] = "true"
 	}
-	root := map[string]string{"type": "disk", "path": "/", "size": fmt.Sprintf("%dGiB", a.DiskGiB)}
+	root := map[string]string{}
 	p, _, err := c.GetProfile("default")
 	if err != nil {
 		return "", err
 	}
-	for _, d := range p.Devices {
-		if d["type"] == "disk" && d["path"] == "/" {
-			root = map[string]string{}
+	rootKey := ""
+	for name, d := range p.Devices {
+		if d["type"] == "disk" && d["path"] == "/" && d["pool"] != "" {
+			rootKey = name
 			for k, v := range d {
 				root[k] = v
 			}
@@ -230,12 +237,15 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 			break
 		}
 	}
+	if rootKey == "" {
+		return "", ErrNativeUnsupported
+	}
 	// No magic host mount, arbitrary device or profile edit.
 	op, err := c.CreateInstance(api.InstancesPost{
 		Name: a.Name, Type: api.InstanceTypeContainer, Start: a.Start,
 		Source: api.InstanceSource{Type: "image", Fingerprint: alias.Target},
 		InstancePut: api.InstancePut{Profiles: []string{"default"}, Config: config,
-			Devices: api.DevicesMap{"root": root}},
+			Devices: api.DevicesMap{rootKey: root}},
 	})
 	if err != nil {
 		return "", err
@@ -481,8 +491,20 @@ func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (str
 	if err != nil {
 		return "", err
 	}
+	argv := spec.Argv
+	if spec.TimeoutMS != 0 {
+		if spec.TimeoutMS < 1000 || spec.TimeoutMS > 900000 {
+			return "", ErrNativeUnsupported
+		}
+		// This is a guest-local GNU coreutils timeout in the approved
+		// Ubuntu image, not a host command or detached Incus Cancel().
+		// Exit 124/137 remains an observed guest exit, never proof that
+		// arbitrary prior side effects were rolled back.
+		argv = append([]string{"/usr/bin/timeout", "--signal=TERM",
+			"--kill-after=5s", fmt.Sprintf("%.3fs", float64(spec.TimeoutMS)/1000), "--"}, spec.Argv...)
+	}
 	op, err := c.ExecInstance(name, api.InstanceExecPost{
-		Command: spec.Argv, Cwd: spec.Cwd, User: spec.UID, Group: spec.GID,
+		Command: argv, Cwd: spec.Cwd, User: spec.UID, Group: spec.GID,
 		Environment: spec.Environment, RecordOutput: true, WaitForWS: false,
 	}, nil)
 	if err != nil {
