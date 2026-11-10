@@ -201,6 +201,37 @@ assert n["default_nic_configured"]
 print("S2_NATIVE_PRECONDITION_EXACT_NONROOT_BLOCK_POOL=PASS")
 PY
 
+# An independent disposable ext4 mount without project quota must NOT pass
+# the candidate native doctor, even though its backing device is separate
+# from the CI runner's root. Restore the original eligible pool afterward.
+truncate -s 512M "$work/noquota-only.img"
+noquota_loop="$(sudo losetup --find --show "$work/noquota-only.img")"
+sudo mkfs.ext4 -F -q "$noquota_loop"
+mkdir -m 0755 "$work/noquota-mounted"
+sudo mount -t ext4 -o nodev,nosuid "$noquota_loop" "$work/noquota-mounted"
+sudo mkdir -m 0755 "$work/noquota-mounted/native-pool"
+sudo incus storage create bw-s2-noquota-pool dir source="$work/noquota-mounted/native-pool"
+sudo incus profile device set default root pool=bw-s2-noquota-pool --project "$project"
+if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
+  -incus-socket "$socket" -project "$project" > "$work/noquota-doctor.json"; then
+  echo "S2_NATIVE_FAIL: separately mounted no-quota dir pool reported ready" >&2
+  exit 107
+fi
+python3 - "$work/noquota-doctor.json" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f:
+    obj=json.load(f)
+native=obj["native"]
+assert obj["ready"] is False and native["ready"] is False, native
+assert native["error_class"] == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED", native
+assert native["selected_storage_separate_mount"] is True, native
+print("S2_NATIVE_DIR_SEPARATE_MOUNT_WITHOUT_PROJECT_QUOTA_FAILS_CLOSED=PASS")
+PY
+sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
+sudo incus storage delete bw-s2-noquota-pool
+sudo umount "$work/noquota-mounted"
+sudo losetup -d "$noquota_loop"
+
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
 chmod 0600 "$work/admin.secret" "$work/viewer.secret"
@@ -303,7 +334,7 @@ if sudo test -d "$native_spool_dir"; then
 fi
 if [ "$disk_witness" = PASS ]; then
   echo "S2_NATIVE_EXEC_SPOOL_PHYSICAL_FILE_SIZE_WITNESSED=PASS"
-  # Prove the Incus dir root-disk size=2GiB restriction also covers its
+  # Prove the current Incus dir root-disk size=3GiB restriction covers its
   # sibling native Exec spool. This test writes only on a newly authorized,
   # isolated 4GiB loop-mounted CI pool. Require enough free capacity to
   # distinguish the kernel's EDQUOT from physical ENOSPC.
@@ -316,6 +347,7 @@ if [ "$disk_witness" = PASS ]; then
   # Incus's instance pathname is a symlink; lsattr on that link yields
   # EOPNOTSUPP. Inspect the real spool directory inode's inherited project ID.
   sudo lsattr -p -d "$native_spool_dir"
+  test "$(sudo incus config device get bw-s2-ghci-110a root size --project "$project")" = "3GiB"
   echo "S2_NATIVE_DIR_VOLUME_QUOTA_DIAGNOSTIC"
   sudo incus storage volume info bw-s2-native-pool container/bw-s2-ghci-110a --project "$project" || :
   sudo incus config show bw-s2-ghci-110a --expanded --project "$project" | grep -E 'pool:|size:|path:' || :
