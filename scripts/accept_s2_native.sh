@@ -391,7 +391,7 @@ ack_db="$work/ledger/ack.sqlite"
 ack_checkpoint="$work/ack-original.json"
 sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
   "$work/s2-ack-loss-proxy" -listen "$ack_proxy" -upstream "$socket" \
-  -marker "$ack_marker" > "$work/ack-proxy.log" 2>&1 &
+  -marker "$ack_marker" -project "$project" > "$work/ack-proxy.log" 2>&1 &
 proxy_pid=$!
 trap 'kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; kill "$proxy_pid" 2>/dev/null || :; wait "$proxy_pid" 2>/dev/null || :' EXIT
 attempt=0
@@ -490,4 +490,41 @@ echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# Same isolated native/proxy service, a separate new Box and request keys.
+# Advance the real native ETag just between S2's GetInstance and
+# UpdateInstance, proving the stale update cannot override newer settings.
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" etag
+sudo grep -Fqx "ETAG_FIXTURE_CREATE_FORWARDED" "$ack_marker"
+sudo grep -Fqx "ETAG_RACE_NATIVE_CHANGED_BEFORE_STALE_PUT" "$ack_marker"
+sudo grep -Fqx "ETAG_RACE_ORIGINAL_STALE_PUT_REFUSED" "$ack_marker"
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: stale ETag conflict caused a forbidden second native dispatch" >&2
+  exit 97
+fi
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 4
+test "$(sudo incus config get bw-s2-etag-native-110e user.s2-etag-race --project "$project")" = "native-proxy-race-witness"
+test "$(sudo incus config get bw-s2-etag-native-110e limits.cpu --project "$project")" = 1
+etag_uuid="$(sudo incus config get bw-s2-etag-native-110e volatile.uuid --project "$project")"
+test -n "$etag_uuid"
+echo "S2_NATIVE_STALE_ETAG_UPDATE_REJECTED_ORIGINAL_NATIVE_UNCHANGED=PASS"
+
+# This is independent CI admin teardown, not a BoxWeave recovery. Verify
+# no outstanding native work and only the exact disposable fixture exists.
+attempt=0
+while [ "$attempt" -lt 60 ]; do
+  if sudo incus operation list --project "$project" --format json |
+      python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 60
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-etag-native-110e
+sudo incus delete bw-s2-etag-native-110e --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_STALE_ETAG_FIXTURE_ADMIN_TEARDOWN=PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
