@@ -25,8 +25,38 @@ chmod 0711 "$work"
 mkdir -m 0700 "$work/ledger"
 echo "S2_NATIVE_CANDIDATE_SOURCE_SHA=$(git rev-parse HEAD)"
 
+# CI only: install an exact upstream 7.6 signed package on the pristine
+# disposable VM. Ubuntu 24.04's archive ships 6.0.0, whose bridged NIC does
+# not accept the required ACL options. Never silently relax the S2 safety
+# precondition or enable unreviewed unsigned package sources.
 sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends incus incus-client dnsmasq-base e2fsprogs util-linux >/dev/null
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  ca-certificates curl gpg dnsmasq-base e2fsprogs util-linux >/dev/null
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$work/zabbly-key.asc"
+fingerprint="$(gpg --show-keys --with-colons "$work/zabbly-key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+test "$fingerprint" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+echo "S2_NATIVE_SIGNED_PACKAGE_KEY_FINGERPRINT_VERIFIED=PASS"
+sudo install -m 0644 "$work/zabbly-key.asc" /etc/apt/keyrings/boxweave-s2-zabbly.asc
+sudo tee /etc/apt/sources.list.d/boxweave-s2-zabbly.sources >/dev/null <<'EOF'
+Enabled: yes
+Types: deb
+URIs: https://pkgs.zabbly.com/incus/stable
+Suites: noble
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/boxweave-s2-zabbly.asc
+EOF
+sudo apt-get update -qq
+native_pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ { print $3; exit }')"
+if [ -z "$native_pkg" ]; then
+  echo "S2_NATIVE_BLOCKED: exact signed upstream 7.6 is unavailable in CI apt" >&2
+  apt-cache policy incus
+  exit 85
+fi
+echo "S2_NATIVE_SIGNED_PACKAGE_VERSION=$native_pkg"
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  "incus=$native_pkg" "incus-client=$native_pkg" "incus-base=$native_pkg" >/dev/null
 sudo systemctl start incus.service
 sudo systemctl is-active --quiet incus.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"
