@@ -61,6 +61,12 @@ sudo incus project show "$project" | grep -q 'restricted: "true"'
 # The installed Ubuntu Incus rejects the optional NIC egress override; leave
 # its stricter native default reject intact rather than widen access.
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
+echo "S2_NATIVE_INCUS_VERSION"
+sudo incus version
+echo "S2_NATIVE_PROFILE_BEFORE_ACL"
+sudo incus profile show default --project "$project"
+echo "S2_NATIVE_NETWORKS"
+sudo incus network list
 sudo incus network acl create bw-s2-native-acl
 sudo incus profile device set default eth0 --project "$project" \
   security.acls=bw-s2-native-acl \
