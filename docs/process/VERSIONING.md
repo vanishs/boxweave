@@ -13,7 +13,7 @@ Use `1.X.Y` where:
 
 ## This initial branch
 
-`v1` contains **only the new specification**, no inherited v0.x runtime, build, updater or tests. Therefore `1.0.0` is the **source design baseline**, not a claim that a production-ready 1.0.0 executable exists. No `v1.0.0` Git tag, functional release assets, stable installer pointer update or installed acceptance is justified by these **design-only** documents. When an actual verified v1.0.0 application artifact is first available, the branch CI may automatically issue the initial `v1.0.0` Release if the immutable tag has not been published yet.
+`v1` began as a new source tree without inherited v0.x runtime. It now has a real [independently accepted S1 development candidate](../verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md), but the root `1.0.0` remains a **source baseline**, not a claim of production-ready 1.0.0 or completed S2–S5. No `v1.0.0` tag, formal release, stable installer pointer update or production deployment is justified by S1 acceptance or the new BRIDGEHEAD **plan** alone. Only an exact independently verified **release-qualified full candidate** may enter the immutable v1 publication gate later.
 
 ## Early BRIDGEHEAD candidate deployment is **not** publication
 

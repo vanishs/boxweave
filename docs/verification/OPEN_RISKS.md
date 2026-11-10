@@ -1,6 +1,6 @@
 # v1 open technical risks and explicit exclusions
 
-**Status:** design-only; these are **validation tasks**, not permission to expand the product. Current 20-tool [scope](../product/SCOPE.md) and [permanent boundary](../decisions/PRODUCT_BOUNDARY.md) supersede the previous broad Caddy/ACL/RBAC/P1 risk register.
+**Status:** S1 accepted development runtime exists, while S2–S5 and S2.5 BRIDGEHEAD remain unaccepted; the rows below are **open validation tasks**, not permission to expand the product. Current 20-tool [scope](../product/SCOPE.md) and [permanent boundary](../decisions/PRODUCT_BOUNDARY.md) supersede the previous broad Caddy/ACL/RBAC/P1 risk register.
 
 **Context-efficient development use:** read the **risk ID row** relevant to the [current S1–S5 phase](../development/phases/README.md), not every historical section below. The [single plan](../process/IMPLEMENTATION_PLAN.md) owns stage order; [execution log](../development/EXECUTION_LOG.md) records live incidents, attempted fixes, owner decisions and original UNKNOWN identifiers. Sections beneath the current status table include **historical, later-superseded evidence**; use the latest linked real report for current truth. An unresolved item may be handed forward with exact case ID, but never automatically marked release PASS. Nested Cowsql events remain environment-only with **no BoxWeave database patch**.
 

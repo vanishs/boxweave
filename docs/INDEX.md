@@ -1,6 +1,6 @@
 # Documentation index
 
-The **v1 base** began as a design-only baseline; active Draft PR #115 has a runnable, independently tested **S1 development candidate**, not a merged or released product. See [actual native Issue #116 verification](verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md) and [remaining GitHub owner merge-rule action #117](https://github.com/vanishs/boxweave/issues/117).
+The **v1 base** started as a design-only baseline but now contains a real installed **S1 development candidate** accepted with independent native evidence; [PR #115](https://github.com/vanishs/boxweave/pull/115) merged into protected `v1`. [S1 formal exit](verification/S1_FINAL_EXIT_AUDIT_2026-11-09.md) and [GitHub quality protection](process/QUALITY_GATES.md) are accepted, **not a released or automatically deployed v1**. S2 has not begun; the newly approved S2.5 BRIDGEHEAD plan remains unexecuted.
 
 **Start development without loading the whole repository:** [five feature phases + S2.5 BRIDGEHEAD checkpoint entry](process/IMPLEMENTATION_PLAN.md) → [phase execution and context protocol](development/PHASE_EXECUTION_PROTOCOL.md) → [current checkpoint / append-only operations + decision log](development/EXECUTION_LOG.md#current-checkpoint) → **only the current** [S1–S5 card or S2.5 BRIDGEHEAD gate](development/phases/README.md). Phase cards reference the **smallest relevant sections** of the detailed documents below. Do not treat upstream SDK probes as installed v1 acceptance.
 
