@@ -1,0 +1,29 @@
+name: S2 disposable real native acceptance (non-release)
+
+on:
+  push:
+    branches:
+      - feat/v1-s2-operations-20261110
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s2-native-blackbox:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s2-operations-20261110'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Reject unsafe test hosts and execute original MCP/native lifecycle
+        shell: bash
+        run: sh scripts/accept_s2_native.sh
