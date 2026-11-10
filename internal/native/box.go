@@ -99,7 +99,9 @@ func nicPrivate(devices api.DevicesMap) bool {
 			continue
 		}
 		count++
-		if d["network"] == "" || d["security.acls"] == "" ||
+		if d["network"] == "" || strings.TrimSpace(d["security.acls"]) == "" ||
+			strings.Contains(d["security.acls"], ",") ||
+			d["security.acls.default.ingress.action"] != "reject" ||
 			d["security.ipv4_filtering"] != "true" ||
 			d["security.ipv6_filtering"] != "true" ||
 			d["security.mac_filtering"] != "true" {

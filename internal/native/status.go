@@ -116,12 +116,9 @@ func (r Reader) Read(ctx context.Context) Status {
 			s.ProfileReady = true
 			selectedPool = d["pool"]
 		}
-		if d["type"] == "nic" && d["network"] != "" {
-			// A confined service user cannot directly read daemon-global
-			// network objects. This proves only its assigned Profile NIC,
-			// not that the physical network/hairpin is reachable.
-			s.NICConfigured = true
-		}
+		// Do not label a present NIC as safely configured merely because
+		// it references a managed network. ACL default ingress and native
+		// IPv4/IPv6/MAC filtering are mandatory before the first Box starts.
 	}
 	if !s.ProfileReady {
 		s.ErrorClass = "ROOT_DISK_NOT_CONFIGURED"
@@ -152,6 +149,10 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.StorageSpaceChecked = true
 	}
 	s.StorageReady = true
+	// Share the exact admission guard with doctor/host_status so a
+	// misconfigured NIC is rejected before any mutation, not only at
+	// the later Create/Start call. This is not packet-level acceptance.
+	s.NICConfigured = nicPrivate(profile.Devices)
 	if !s.NICConfigured {
 		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s
@@ -169,6 +170,12 @@ func (r Reader) Read(ctx context.Context) Status {
 func (r Reader) Strict(ctx context.Context) error {
 	v := r.Read(ctx)
 	if !v.Ready {
+		if v.ErrorClass == "DEFAULT_NIC_NOT_CONFIGURED" {
+			// No native effect has been admitted or dispatched yet.
+			// Make unsafe NIC configuration a typed pre-dispatch denial,
+			// rather than a spurious UNKNOWN mutation in the worker.
+			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrUnsafeNetwork)
+		}
 		return fmt.Errorf("native preflight: %s", v.ErrorClass)
 	}
 	if !v.APIExtensions["projects"] {

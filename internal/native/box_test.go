@@ -11,12 +11,13 @@ import (
 func TestS2NetworkMustBeVerifiedBeforeFirstStart(t *testing.T) {
 	device := api.DevicesMap{"eth0": map[string]string{
 		"type": "nic", "network": "boxweave-bridge", "security.acls": "boxweave-owned",
+		"security.acls.default.ingress.action": "reject",
 		"security.ipv4_filtering": "true", "security.ipv6_filtering": "true", "security.mac_filtering": "true",
 	}}
 	if !nicPrivate(device) {
 		t.Fatal("safe exclusive NIC was not detected")
 	}
-	for _, key := range []string{"security.acls", "security.ipv4_filtering", "security.ipv6_filtering", "security.mac_filtering"} {
+	for _, key := range []string{"security.acls", "security.acls.default.ingress.action", "security.ipv4_filtering", "security.ipv6_filtering", "security.mac_filtering"} {
 		changed := api.DevicesMap{"eth0": map[string]string{}}
 		for k, v := range device["eth0"] {
 			changed["eth0"][k] = v
@@ -24,6 +25,28 @@ func TestS2NetworkMustBeVerifiedBeforeFirstStart(t *testing.T) {
 		delete(changed["eth0"], key)
 		if nicPrivate(changed) {
 			t.Fatalf("unverified private NIC accepted without %s", key)
+		}
+	}
+	// A foreign ACL or policy that defaults to allowing inbound traffic
+	// is not proof of isolation, even when MAC/IP filtering is enabled.
+	for _, changedACL := range []string{"boxweave-owned,other-acl", "boxweave-owned,", ","} {
+		changed := api.DevicesMap{"eth0": map[string]string{}}
+		for k, v := range device["eth0"] {
+			changed["eth0"][k] = v
+		}
+		changed["eth0"]["security.acls"] = changedACL
+		if nicPrivate(changed) {
+			t.Fatalf("multiple/empty ACL attachment accepted: %q", changedACL)
+		}
+	}
+	for _, unsafeAction := range []string{"allow", "log", "drop"} {
+		changed := api.DevicesMap{"eth0": map[string]string{}}
+		for k, v := range device["eth0"] {
+			changed["eth0"][k] = v
+		}
+		changed["eth0"]["security.acls.default.ingress.action"] = unsafeAction
+		if nicPrivate(changed) {
+			t.Fatalf("unexpected/non-reject default ingress accepted: %q", unsafeAction)
 		}
 	}
 	withForeign := api.DevicesMap{"eth0": device["eth0"], "other": map[string]string{"type": "nic", "network": "foreign"}}

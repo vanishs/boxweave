@@ -132,6 +132,28 @@ sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
 socket=/var/lib/incus/unix.socket.user
 
+# Negative control: the same real Incus daemon may accept a NIC with
+# ingress default allow. Our own doctor MUST fail closed before native
+# Create/Start when that setting is weaker than the owned ACL contract.
+# This is a one-use VM/profile only, never a shared daemon modification.
+sudo incus profile device set default eth0 --project "$project" \
+  security.acls.default.ingress.action=allow
+if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
+  -incus-socket "$socket" -project "$project" > "$work/unsafe-preflight.json"; then
+  echo "S2_NATIVE_FAIL: unsafe ingress accepted as ready" >&2
+  exit 89
+fi
+python3 - "$work/unsafe-preflight.json" <<'PY'
+import json,sys
+out=json.load(open(sys.argv[1]))
+n=out["native"]
+assert not out["ready"] and not n["ready"]
+assert n["error_class"] == "DEFAULT_NIC_NOT_CONFIGURED", n
+print("S2_NATIVE_UNSAFE_INGRESS_DOCTOR_DENIED=PASS")
+PY
+sudo incus profile device set default eth0 --project "$project" \
+  security.acls.default.ingress.action=reject
+
 # No native instance mutation until this real non-root OS + Project +
 # selected block pool + default NIC preflight is actually ready.
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
