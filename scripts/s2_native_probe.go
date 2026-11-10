@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -88,6 +89,70 @@ func id(m map[string]any) string {
 	check(s != "", "missing original operation ID")
 	return s
 }
+// guestRead runs actual guest argv through the candidate MCP binary. A
+// nonzero guest exit is a completed native Exec, not an MCP transport error.
+// Deliberate network-denial probes must never be mistaken for missing ping.
+func guestRead(ctx context.Context, session *mcp.ClientSession, uuid, key, command string) (string, int) {
+	request := call(ctx, session, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", command},
+		"idempotency_key": key,
+	})
+	opID := id(request)
+	wait(ctx, session, opID)
+	result := call(ctx, session, "operation_output_get", map[string]any{
+		"operation_id": opID, "stream": "stdout", "limit": 4096,
+	})
+	encoded := field(result, "content_base64")
+	body, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		panic(err)
+	}
+	exit, ok := result["exit_code"].(float64)
+	check(ok, "native guest network probe returned no actual exit code")
+	return strings.TrimSpace(string(body)), int(exit)
+}
+
+// Wait for guest DHCP/RA to converge after native Running. This is a LAB
+// readiness test, not an inference that RUNNING proves GuestReady.
+func guestAddress(ctx context.Context, session *mcp.ClientSession, uuid string, family int, name string) string {
+	script := fmt.Sprintf("ip -o -%d addr show dev eth0 scope global | awk 'NR==1 {split($4,a,\"/\"); print a[1]}'", family)
+	for attempt := 0; attempt < 12; attempt++ {
+		key := fmt.Sprintf("native-s2-address-%s-v%d-attempt-%02d", name, family, attempt)
+		result, exit := guestRead(ctx, session, uuid, key, script)
+		ip := net.ParseIP(result)
+		if exit == 0 && ip != nil && (family == 4 && ip.To4() != nil ||
+			family == 6 && ip.To4() == nil) {
+			return result
+		}
+		time.Sleep(time.Second)
+	}
+	panic(fmt.Sprintf("native IPv%d guest address absent on %s; packet isolation unverified", family, name))
+}
+
+func guestGateway(ctx context.Context, session *mcp.ClientSession, uuid, name string, family int) string {
+	script := fmt.Sprintf("ip -%d route show default | awk 'NR==1 {print $3}'", family)
+	for attempt := 0; attempt < 12; attempt++ {
+		key := fmt.Sprintf("native-s2-gateway-%s-v%d-%02d", name, family, attempt)
+		result, exit := guestRead(ctx, session, uuid, key, script)
+		ip := net.ParseIP(result)
+		if exit == 0 && ip != nil && (family == 4 && ip.To4() != nil ||
+			family == 6 && ip.To4() == nil) {
+			return result
+		}
+		time.Sleep(time.Second)
+	}
+	panic(fmt.Sprintf("no IPv%d gateway on %s: cannot distinguish ACL denial from broken guest routing", family, name))
+}
+
+func nativePing(ctx context.Context, session *mcp.ClientSession, uuid, key, destination string, family int) int {
+	ip := net.ParseIP(destination)
+	check(ip != nil && (family == 4 && ip.To4() != nil || family == 6 && ip.To4() == nil),
+		"guest ping destination not an inspected address")
+	command := fmt.Sprintf("ping -%d -n -c 1 -W 2 %s", family, destination)
+	_, exit := guestRead(ctx, session, uuid, key, command)
+	return exit
+}
+
 func main() {
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
 	viewer := os.Getenv("BW_S2_VIEWER_TOKEN")
@@ -320,6 +385,72 @@ func main() {
 	check(field(noopStartResult, "native_operation_id") == "",
 		"already-running no-op invented a native Operation ID")
 	fmt.Println("S2_NATIVE_START_ALREADY_RUNNING_NOOP=PASS")
+
+	// S2 first-start packet gate: both Boxes are created through official
+	// MCP calls; only the installed non-root Project is used. The existing
+	// native shared ACL has no peer-allow rules. A/B must each reach their
+	// assigned bridge gateway (working routing), but not one another.
+	peerCreate := call(ctx, admin, "box_create", map[string]any{
+		"name": "bw-s2-peer-native-110c", "cpu": 1, "memory_mib": 512,
+		"disk_gib": 2, "start": true, "internet": true,
+		"idempotency_key": "native-s2-second-private-box-start-001",
+	})
+	peerReceipt := wait(ctx, admin, id(peerCreate))
+	peerUUID := field(peerReceipt, "box_uuid")
+	check(peerUUID != "" && peerUUID != uuid,
+		"new native peer did not get its separate true incarnation")
+	peerBox := child(call(ctx, admin, "box_get", map[string]any{"box_id": peerUUID}), "box")
+	check(field(peerBox, "native_state") == "Running" && peerBox["internet"] == true,
+		"native first-start peer not running with internet=true")
+	for _, entry := range []struct{ boxID, label string }{{uuid, "a"}, {peerUUID, "b"}} {
+		_, pingExit := guestRead(ctx, admin, entry.boxID,
+			"native-s2-ping-capability-"+entry.label+"-01", "command -v ping")
+		check(pingExit == 0, "guest ping missing; cannot count missing executable as ACL denial")
+	}
+	a4 := guestAddress(ctx, admin, uuid, 4, "a")
+	a6 := guestAddress(ctx, admin, uuid, 6, "a")
+	b4 := guestAddress(ctx, admin, peerUUID, 4, "b")
+	b6 := guestAddress(ctx, admin, peerUUID, 6, "b")
+	check(a4 != b4 && a6 != b6, "two native guest NICs inherited the same address")
+	ga4 := guestGateway(ctx, admin, uuid, "a", 4)
+	gb4 := guestGateway(ctx, admin, peerUUID, "b", 4)
+	check(nativePing(ctx, admin, uuid, "native-s2-gateway-a4-positive", ga4, 4) == 0 &&
+		nativePing(ctx, admin, peerUUID, "native-s2-gateway-b4-positive", gb4, 4) == 0,
+		"baseline egress cannot even reach each guest's native bridge gateway")
+	check(nativePing(ctx, admin, uuid, "native-s2-private-a-to-b-v4-deny", b4, 4) == 1 &&
+		nativePing(ctx, admin, peerUUID, "native-s2-private-b-to-a-v4-deny", a4, 4) == 1,
+		"default ingress ACL did not deny IPv4 between owned Boxes")
+	check(nativePing(ctx, admin, uuid, "native-s2-private-a-to-b-v6-deny", b6, 6) == 1 &&
+		nativePing(ctx, admin, peerUUID, "native-s2-private-b-to-a-v6-deny", a6, 6) == 1,
+		"default ingress ACL did not deny IPv6 between owned Boxes")
+	fmt.Println("S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY=PASS")
+
+	// Real IPv4 traffic must change with the per-Box internet flag, while
+	// the separate private-peer default ingress denial remains unchanged.
+	offline := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "internet": false,
+		"idempotency_key": "native-s2-running-offline-packets-01",
+	})
+	wait(ctx, admin, id(offline))
+	check(nativePing(ctx, admin, uuid,
+		"native-s2-running-offline-gateway-denied", ga4, 4) != 0,
+		"internet=false still sent IPv4 packets to native gateway")
+	online := call(ctx, admin, "box_update", map[string]any{
+		"box_id": uuid, "internet": true,
+		"idempotency_key": "native-s2-running-online-packets-01",
+	})
+	wait(ctx, admin, id(online))
+	check(nativePing(ctx, admin, uuid,
+		"native-s2-running-online-gateway-restored", ga4, 4) == 0,
+		"internet=true did not restore real native IPv4 egress")
+	fmt.Println("S2_NATIVE_PACKET_INTERNET_TOGGLE_GATEWAY_EGRESS=PASS")
+	peerStop := call(ctx, admin, "box_stop", map[string]any{
+		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-stop-01"})
+	wait(ctx, admin, id(peerStop))
+	peerDelete := call(ctx, admin, "box_delete", map[string]any{
+		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-delete-01"})
+	wait(ctx, admin, id(peerDelete))
+	fmt.Println("S2_NATIVE_PACKET_PEER_EXACT_CLEANUP=PASS")
 
 	cmd := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
