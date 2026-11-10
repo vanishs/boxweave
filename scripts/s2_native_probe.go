@@ -167,6 +167,13 @@ func main() {
 		"created native UUID/stopped state not confirmed")
 	fmt.Println("S2_NATIVE_CREATE_STOPPED_UUID=PASS")
 
+	noopStop := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-already-stopped-noop-001"})
+	noopStopResult := wait(ctx, admin, id(noopStop))
+	check(field(noopStopResult, "native_operation_id") == "",
+		"already-stopped no-op invented a native Operation ID")
+	fmt.Println("S2_NATIVE_STOP_ALREADY_STOPPED_NOOP=PASS")
+
 	foreignList := call(ctx, view, "operation_list", map[string]any{"work_ref": "lab/s2"})
 	private, _ := json.Marshal(foreignList)
 	check(!strings.Contains(string(private), original), "viewer borrowed original work_ref across token actors")
@@ -226,6 +233,13 @@ func main() {
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "native_state") == "Running", "native box did not start")
 	fmt.Println("S2_NATIVE_START=PASS")
+
+	noopStart := call(ctx, admin, "box_start", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-already-running-noop-001"})
+	noopStartResult := wait(ctx, admin, id(noopStart))
+	check(field(noopStartResult, "native_operation_id") == "",
+		"already-running no-op invented a native Operation ID")
+	fmt.Println("S2_NATIVE_START_ALREADY_RUNNING_NOOP=PASS")
 
 	cmd := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
@@ -354,6 +368,27 @@ func main() {
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "native_state") == "Stopped", "native Box failed to stop")
 	fmt.Println("S2_NATIVE_STOP=PASS")
+
+	// A prior completed stop must not permanently lock the same UUID.
+	// Its duplicate key is immutable, but subsequent legitimate Start/Stop
+	// with distinct keys must really reach native Incus again.
+	stopReplay := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-stop-0000000001"})
+	check(id(stopReplay) == id(stop) && stopReplay["duplicate"] == true,
+		"original Stop key was wrongly re-executed")
+	secondStart := call(ctx, admin, "box_start", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-start-second-cycle-001"})
+	wait(ctx, admin, id(secondStart))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(field(box, "native_state") == "Running", "second cycle failed to start original Box")
+	secondStop := call(ctx, admin, "box_stop", map[string]any{"box_id": uuid,
+		"idempotency_key": "native-s2-stop-second-cycle-001"})
+	wait(ctx, admin, id(secondStop))
+	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
+	check(field(box, "native_state") == "Stopped", "second cycle failed to stop original Box")
+	check(id(secondStop) != id(stop) && id(secondStart) != id(stop),
+		"new keys returned stale completed Operation instead of native lifecycle")
+	fmt.Println("S2_NATIVE_STOP_START_STOP_DISTINCT_KEYS=PASS")
 
 	del := call(ctx, admin, "box_delete", map[string]any{"box_id": uuid,
 		"idempotency_key": "native-s2-delete-00000001"})
