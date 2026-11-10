@@ -26,6 +26,8 @@ type operationOutputResult struct {
 	NextOffset     int64  `json:"next_offset"`
 	Ended          bool   `json:"ended"`
 	Truncated      bool   `json:"truncated"`
+	Availability   string `json:"availability"`
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 	ExitCode       *int   `json:"exit_code,omitempty"`
 	CommandSuccess *bool  `json:"command_success,omitempty"`
 }
@@ -88,13 +90,15 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return nil, operationOutputResult{}, err
 		}
 		result := operationOutputResult{TrackingID: tracking, OperationID: original.ID,
-			Stream: in.Stream, Offset: in.Offset, Truncated: out.Truncated, ExitCode: out.ExitCode}
+			Stream: in.Stream, Offset: in.Offset, Truncated: out.Truncated, ExitCode: out.ExitCode, Availability: "available"}
 		if out.ExitCode != nil {
 			ok := *out.ExitCode == 0
 			result.CommandSuccess = &ok
 		}
 		if path == "" {
 			result.Ended = true
+			result.Availability = "unavailable"
+			result.UnavailableReason = "NO_NATIVE_RECORDED_STREAM_PATH"
 			return &mcp.CallToolResult{}, result, nil
 		}
 		if in.Offset == native.MaxRecordedOutputBytes {
@@ -103,6 +107,13 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return &mcp.CallToolResult{}, result, nil
 		}
 		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
+		if errors.Is(err, native.ErrRecordedOutputUnavailable) {
+			result.Availability = "unavailable"
+			result.UnavailableReason = "NATIVE_RECORDED_OUTPUT_MISSING"
+			result.Ended = true
+			result.NextOffset = in.Offset
+			return &mcp.CallToolResult{}, result, nil
+		}
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}

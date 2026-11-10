@@ -23,6 +23,7 @@ var (
 	ErrNativeUnsupported = errors.New("required safe native capability or approved image unavailable")
 	ErrNativeDependents  = errors.New("instance has native dependent or foreign proxy devices")
 	ErrUnverified        = errors.New("native operation or postcondition not independently verified")
+	ErrRecordedOutputUnavailable = errors.New("verified original native recorded output file is unavailable")
 )
 
 var safeName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
@@ -712,6 +713,12 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 		return nil, false, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		// HTTP 404 is only interpreted after exact owned UUID and original
+		// native path/project checks by the caller. A missing file is not
+		// proof that a retention policy expired it.
+		return nil, false, ErrRecordedOutputUnavailable
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, false, fmt.Errorf("native recorded output HTTP %d", resp.StatusCode)
 	}
