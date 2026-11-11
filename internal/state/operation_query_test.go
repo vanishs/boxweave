@@ -324,10 +324,10 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		rec, err := s.Admit(ctx, Admission{
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
-			Key: fmt.Sprintf("s2-live-state-cursor-%02d", i),
+			Key:    fmt.Sprintf("s2-live-state-cursor-%02d", i),
 			Action: "box_exec", RequestID: fmt.Sprintf("req-%02d", i),
 			SafeIntent: []byte(fmt.Sprintf(`{"seq":%d}`, i)),
-			WorkRef: "lab/live-state-pagination", AgentRef: "probe",
+			WorkRef:    "lab/live-state-pagination", AgentRef: "probe",
 		})
 		if err != nil || rec.State != "ADMITTED" {
 			t.Fatalf("failed original admission %d: %+v %v", i, rec, err)
