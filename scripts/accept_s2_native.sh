@@ -176,7 +176,9 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-proxy" ./scripts/s2
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-token-inflight-probe" ./scripts/s2_p1_token_inflight_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-two-controllers-probe" ./scripts/s2_p1_two_controllers_probe.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe"
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-proxy" ./scripts/s2_p1_private_read_delay_proxy.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-private-read-probe" ./scripts/s2_p1_private_read_inflight_probe.go
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -1483,4 +1485,5 @@ sh scripts/s2_p0_native_sqlite_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_stop_delete_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_token_inflight.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_two_controllers.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_private_read_inflight.sh "$work" "$project" "$socket"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
