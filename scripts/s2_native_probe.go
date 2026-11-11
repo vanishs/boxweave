@@ -1187,7 +1187,7 @@ func main() {
 	continuous := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
 			"while :; do printf 'continuous-guest-stdout-110x\\n'; sleep 0.05; done"},
-		"timeout_ms": 1600,
+		"timeout_ms":      1600,
 		"idempotency_key": "native-s2-continuous-output-timeout-01",
 	})
 	continuousID := id(continuous)
