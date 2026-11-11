@@ -1046,14 +1046,34 @@ quota_stdout_bytes="$(sudo stat -c '%s' "$quota_stdout")"
 echo "S2_NATIVE_GUEST_QUOTA_PARTIAL_STDOUT_BYTES=$quota_stdout_bytes"
 test "$quota_stdout_bytes" -gt 0
 test "$quota_stdout_bytes" -lt 134217728
-sudo incus query "$quota_state_url" > "$work/quota-guest-after-output.json"
+# Native quota recovery may briefly overlap Incus's accounting refresh.
+# A failed read is NOT proof of safe quota; bounded read-only retries leave
+# the original native Exec, SQLite and output files completely untouched.
+quota_read_pass=0
+for quota_attempt in 1 2 3 4; do
+  if sudo incus query "$quota_state_url" > "$work/quota-guest-after-output.json"; then
+    quota_read_pass=1
+    break
+  fi
+  echo "S2_NATIVE_GUEST_QUOTA_STATE_TRANSIENT_READ_FAIL_ATTEMPT=$quota_attempt"
+  sleep 1
+done
+if [ "$quota_read_pass" -ne 1 ]; then
+  echo "S2_NATIVE_FAIL: actual native post-quota used/total unavailable" >&2
+  exit 121
+fi
 quota_used_output="$(python3 - "$work/quota-guest-after-output.json" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
 print(int(v.get("metadata",v)["usage"]["used"]))
 PY
 )"
-test "$quota_used_output" -le "$quota_limit"
+echo "S2_NATIVE_GUEST_QUOTA_USAGE_AFTER_OUTPUT_BYTES=$quota_used_output"
+echo "S2_NATIVE_GUEST_QUOTA_VERIFIED_LIMIT_BYTES=$quota_limit"
+if [ "$quota_used_output" -gt "$quota_limit" ]; then
+  echo "S2_NATIVE_FAIL: actual native quota usage exceeded real limit" >&2
+  exit 122
+fi
 echo "S2_NATIVE_REAL_GUEST_RECORDED_EXEC_QUOTA_PARTIAL_OUTPUT=PASS"
 
 # Remove only the unique quota-test filler, NEVER original native
