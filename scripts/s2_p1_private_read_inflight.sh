@@ -98,8 +98,12 @@ probe read > "$work/private-read-inflight-results.txt"
 for method in HOST_STATUS BOX_LIST BOX_GET OPERATION_OUTPUT_GET; do
   grep -Fqx "S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_$method=PASS" \
     "$work/private-read-inflight-results.txt"
+  grep -Fqx "S2_P1_PRIVATE_READ_EXPIRED_AFTER_REAL_NATIVE_HTTP_200_$method=PASS" \
+    "$work/private-read-inflight-results.txt"
 done
 grep -Fqx S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK=PASS \
+  "$work/private-read-inflight-results.txt"
+grep -Fqx S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS \
   "$work/private-read-inflight-results.txt"
 test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$uuid"
 echo "S2_P1_PRIVATE_READ_REVOKED_CALLS_LEFT_NATIVE_UUID_UNCHANGED=PASS"
