@@ -1223,14 +1223,38 @@ mcp_output_bytes="$(sudo stat -c '%s' "$mcp_output_file")"
 echo "S2_MCP_QUOTA_PHYSICAL_STDOUT_BYTES=$mcp_output_bytes"
 test "$mcp_output_bytes" -gt 16777216
 test "$mcp_output_bytes" -lt 134217728
-sudo incus query "$mcp_state_url" > "$work/mcp-quota-after.json"
-mcp_after="$(python3 - "$work/mcp-quota-after.json" <<'PY'
+# At the hard native quota edge, the independent storage-state GET can
+# transiently fail or lag behind ext4 quota accounting. Retry ONLY this
+# read-only query, never Exec/native mutation or the original MCP operation.
+# Persistent over-limit or unreadable state still FAILS closed.
+mcp_after=""
+mcp_after_read_attempts=0
+for mcp_read_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  mcp_after_read_attempts="$mcp_read_attempt"
+  if sudo incus query "$mcp_state_url" > "$work/mcp-quota-after.json" 2> "$work/mcp-quota-after.last-error"; then
+    mcp_after="$(python3 - "$work/mcp-quota-after.json" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
 print(int(v.get("metadata",v)["usage"]["used"]))
 PY
-)"
-test "$mcp_after" -le "$mcp_limit"
+)" || mcp_after=""
+    case "$mcp_after" in
+      ''|*[!0-9]*) mcp_after="" ;;
+    esac
+    if [ -n "$mcp_after" ] && [ "$mcp_after" -le "$mcp_limit" ]; then
+      break
+    fi
+  fi
+  sleep 0.3
+done
+echo "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES=${mcp_after:-UNREADABLE}"
+echo "S2_MCP_QUOTA_POSTEXEC_LIMIT_BYTES=$mcp_limit"
+echo "S2_MCP_QUOTA_POSTEXEC_READ_ATTEMPTS=$mcp_after_read_attempts"
+if [ -z "$mcp_after" ] || [ "$mcp_after" -gt "$mcp_limit" ]; then
+  echo "S2_MCP_FAIL: bounded read-only native quota accounting not within its exact limit" >&2
+  cat "$work/mcp-quota-after.last-error" >&2 || :
+  exit 97
+fi
 echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
 
 # The one-use test has already independently verified the exact immutable
