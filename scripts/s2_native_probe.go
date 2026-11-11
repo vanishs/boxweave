@@ -185,7 +185,7 @@ func hostileProtocolMatrix(ctx context.Context, admin, viewer *mcp.ClientSession
 	for i, tc := range cases {
 		args := map[string]any{
 			"name": fmt.Sprintf("bw-s2-meta-negative-%02d", i),
-			"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"cpu":  1, "memory_mib": 512, "disk_gib": 2,
 			"start": false, "internet": false,
 			"idempotency_key": fmt.Sprintf("s2-meta-negative-%02d-once", i),
 		}
