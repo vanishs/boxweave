@@ -66,7 +66,7 @@ func main() {
 			log.Fatal("refusing existing native/ACK witness or listener")
 		}
 	}
-	name := "bw-s2-p1-"+*phase+"-110p"
+	name := "bw-s2-p1-" + *phase + "-110p"
 	method, path := http.MethodPut, "/1.0/instances/"+name+"/state"
 	if *phase == "delete" {
 		method, path = http.MethodDelete, "/1.0/instances/"+name
