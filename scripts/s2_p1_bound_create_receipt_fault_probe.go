@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type bearer struct{ token string }
@@ -29,7 +29,7 @@ func (t bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 func ensure(ok bool, what string) {
 	if !ok {
-		panic("S2_P1_BOUND_CREATE_FAULT_FAIL: "+what)
+		panic("S2_P1_BOUND_CREATE_FAULT_FAIL: " + what)
 	}
 }
 func invoke(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any) (map[string]any, error) {
@@ -74,8 +74,8 @@ func main() {
 	ensure(err == nil, "test-only final receipt trigger not installed")
 	client := mcp.NewClient(&mcp.Implementation{Name: "s2-bound-original-native-prober", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: "http://127.0.0.1:18663/mcp",
-		HTTPClient: &http.Client{Transport: bearer{token}},
+		Endpoint:             "http://127.0.0.1:18663/mcp",
+		HTTPClient:           &http.Client{Transport: bearer{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	ensure(err == nil && session != nil, "original admin client connection refused")
@@ -98,7 +98,7 @@ func main() {
 		if state := stringField(pending, "state"); state == "UNKNOWN" {
 			break
 		} else if state == "FAILED" || state == "SUCCEEDED" || state == "CANCELLED" {
-			panic("S2_P1_BOUND_CREATE_FAULT_FAIL: original incorrectly terminal: "+state)
+			panic("S2_P1_BOUND_CREATE_FAULT_FAIL: original incorrectly terminal: " + state)
 		}
 	}
 	uuid, nativeID := stringField(pending, "box_uuid"), stringField(pending, "native_operation_id")
@@ -121,7 +121,9 @@ func main() {
 		stringField(replay, "state") == "UNKNOWN",
 		"same original key redispatched or changed receipt")
 	otherCreate := map[string]any{}
-	for k, v := range args { otherCreate[k] = v }
+	for k, v := range args {
+		otherCreate[k] = v
+	}
 	otherCreate["idempotency_key"] = "s2-bound-final-different-create"
 	_, err = invoke(ctx, session, "box_create", otherCreate)
 	ensure(err != nil, "different-key Create bypassed bound original lock")
