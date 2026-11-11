@@ -39,8 +39,7 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 			t.Fatal(err)
 		}
 		schema := string(raw)
-		if !strings.Contains(schema, "\"additionalProperties\"") ||
-			!strings.Contains(schema, "\"not\":{}") {
+		if !strings.Contains(schema, "\"additionalProperties\":false") {
 			t.Fatalf("public tool %s is open to silently discarded intent: %s", tool.Name, schema)
 		}
 	}

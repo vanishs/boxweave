@@ -330,8 +330,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	check(err == nil && len(list.Tools) == 13, "strict schema discovery unavailable")
 	for _, tool := range list.Tools {
 		schema, marshalErr := json.Marshal(tool.InputSchema)
-		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\"")) &&
-			bytes.Contains(schema, []byte("\"not\":{}")),
+		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\":false")),
 			"tool silently permits unsupported top-level arguments: "+tool.Name)
 	}
 	for _, test := range []struct {
