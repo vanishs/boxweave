@@ -2,7 +2,10 @@ package state
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -189,5 +192,105 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	})
 	if err != nil || len(page.Operations) != 1 || page.Operations[0].State != "UNKNOWN" {
 		t.Fatalf("recovered indexed history lost: %+v %v", page, err)
+	}
+}
+
+
+func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	raw, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	if err != nil || raw == "" {
+		t.Fatal("missing durable test identity", err)
+	}
+	admit := func(i int) string {
+		t.Helper()
+		r, err := s.Admit(ctx, Admission{
+			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
+			Key: fmt.Sprintf("history-stable-original-%03d", i),
+			Action: "box_exec", RequestID: fmt.Sprintf("stable-%03d", i),
+			SafeIntent: []byte(fmt.Sprintf("{\"i\":%d}", i)),
+			WorkRef: "lab/stable-cursor", AgentRef: "writer",
+		})
+		if err != nil || r.Duplicate {
+			t.Fatalf("durable original #%d: %+v %v", i, r, err)
+		}
+		return r.ID
+	}
+	originals := make(map[string]bool, 5)
+	for i := 0; i < 5; i++ {
+		originals[admit(i)] = true
+	}
+	q := OperationQuery{
+		Layer: "L0", Requester: actor.ID, Role: "viewer",
+		WorkRef: "lab/stable-cursor", Limit: 2,
+	}
+	first, err := s.ListOperations(ctx, q)
+	if err != nil || len(first.Operations) != 2 || first.NextCursor == "" {
+		t.Fatalf("first snapshot page failed: %+v %v", first, err)
+	}
+	// A second writer inserts after the original cursor was issued.
+	// A page's signed bound must not include these later rows.
+	added := make(map[string]bool, 3)
+	for i := 5; i < 8; i++ {
+		added[admit(i)] = true
+	}
+	seen := make(map[string]bool)
+	for _, r := range first.Operations {
+		if !originals[r.ID] {
+			t.Fatalf("new row unexpectedly in first page: %s", r.ID)
+		}
+		seen[r.ID] = true
+	}
+	q.Cursor = first.NextCursor
+	var cursorID string
+	for page := 0; page < 2; page++ {
+		next, err := s.ListOperations(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 2
+		if page == 1 {
+			want = 1
+		}
+		if len(next.Operations) != want {
+			t.Fatalf("snapshot page %d changed size: %+v", page+2, next)
+		}
+		for _, r := range next.Operations {
+			if !originals[r.ID] || seen[r.ID] || added[r.ID] {
+				t.Fatalf("concurrent admission entered old cursor walk: %+v", r)
+			}
+			seen[r.ID] = true
+		}
+		cursorID = q.Cursor
+		q.Cursor = next.NextCursor
+	}
+	if len(seen) != 5 || q.Cursor != "" {
+		t.Fatalf("old cursor lost/duplicated rows, len=%d cursor=%q", len(seen), q.Cursor)
+	}
+	// Independent fresh read exposes the newly committed append.
+	q.Cursor = ""
+	fresh, err := s.ListOperations(ctx, q)
+	if err != nil || len(fresh.Operations) != 2 || fresh.NextCursor == "" {
+		t.Fatalf("fresh pagination missed new results: %+v %v", fresh, err)
+	}
+	// HMAC also binds the first-page upper rowid so a client cannot
+	// force a later snapshot using a foreign/mutated anchor.
+	data, err := base64.RawURLEncoding.DecodeString(cursorID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tampered operationCursor
+	if err := json.Unmarshal(data, &tampered); err != nil {
+		t.Fatal(err)
+	}
+	tampered.MaxRowID++
+	data, err = json.Marshal(tampered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Cursor = base64.RawURLEncoding.EncodeToString(data)
+	if _, err := s.ListOperations(ctx, q); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unsigned rowid ceiling escalation accepted: %v", err)
 	}
 }

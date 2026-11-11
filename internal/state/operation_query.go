@@ -80,6 +80,10 @@ type OperationPage struct {
 type operationCursor struct {
 	CreatedAt int64  `json:"t"`
 	ID        string `json:"i"`
+	// SQLite operations are append-only. A first-page, authorized rowid
+	// ceiling keeps later commits out of the original pagination walk.
+	// This upper bound is HMAC-protected along with scope and position.
+	MaxRowID  int64  `json:"r"`
 	Scope     string `json:"s"`
 	MAC       string `json:"m"`
 }
@@ -135,7 +139,7 @@ func cursorScope(q OperationQuery) string {
 
 func cursorMAC(secret []byte, c operationCursor) string {
 	h := hmac.New(sha256.New, secret)
-	_, _ = fmt.Fprintf(h, "%s\x00%d\x00%s", c.Scope, c.CreatedAt, c.ID)
+	_, _ = fmt.Fprintf(h, "%s\x00%d\x00%s\x00%d", c.Scope, c.CreatedAt, c.ID, c.MaxRowID)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -159,7 +163,7 @@ func (s *Store) ListOperations(ctx context.Context, query OperationQuery) (Opera
 	if q.Cursor != "" {
 		raw, e := base64.RawURLEncoding.DecodeString(q.Cursor)
 		if e != nil || len(raw) > 256 || json.Unmarshal(raw, &cursor) != nil ||
-			!validHexID(cursor.ID) || cursor.CreatedAt <= 0 || cursor.Scope != scope ||
+			!validHexID(cursor.ID) || cursor.CreatedAt <= 0 || cursor.MaxRowID <= 0 || cursor.Scope != scope ||
 			!hmac.Equal([]byte(cursor.MAC), []byte(cursorMAC(secret, cursor))) {
 			return OperationPage{}, ErrInvalid
 		}
@@ -195,6 +199,23 @@ func (s *Store) ListOperations(ctx context.Context, query OperationQuery) (Opera
 		parts = append(parts, "created_at<=?")
 		args = append(args, q.UntilNS)
 	}
+	// A cursor without a stable admission watermark is not a snapshot:
+	// later rows inserted while a client pages ASC would appear in the old
+	// walk and silently change the last page. The highest authorized
+	// SQLite rowid observed on page one cannot be exceeded by any later
+	// insert committed to this append-only operations table. Bind it to
+	// the cursor MAC, never trust a client-selected upper bound.
+	var maxRowID int64
+	if q.Cursor == "" {
+		anchorSQL := "SELECT COALESCE(MAX(rowid),0) FROM operations WHERE " + strings.Join(parts, " AND ")
+		if err := s.db.QueryRowContext(ctx, anchorSQL, args...).Scan(&maxRowID); err != nil {
+			return OperationPage{}, err
+		}
+	} else {
+		maxRowID = cursor.MaxRowID
+	}
+	parts = append(parts, "rowid<=?")
+	args = append(args, maxRowID)
 	if q.Cursor != "" {
 		parts = append(parts, "(created_at>? OR (created_at=? AND id>?))")
 		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
@@ -220,7 +241,7 @@ func (s *Store) ListOperations(ctx context.Context, query OperationQuery) (Opera
 		if len(out.Operations) == q.Limit {
 			// A lookahead row proves that the next page actually exists.
 			last := out.Operations[len(out.Operations)-1]
-			c := operationCursor{CreatedAt: last.CreatedAt, ID: last.ID, Scope: scope}
+			c := operationCursor{CreatedAt: last.CreatedAt, ID: last.ID, MaxRowID: maxRowID, Scope: scope}
 			c.MAC = cursorMAC(secret, c)
 			b, err := json.Marshal(c)
 			if err != nil {
