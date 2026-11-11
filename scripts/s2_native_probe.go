@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -253,6 +254,42 @@ func legacyTextReceipt(ctx context.Context, admin *mcp.ClientSession, opID strin
 	}
 	check(found, "legacy text-only client could not decode original Operation receipt")
 	fmt.Println("S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS")
+}
+
+// TC-004 and A-007: twelve independent official MCP client sessions racing
+// the original admitted Create key must see one immutable operation. There is
+// no native retry or special cancellation path in this read/replay test.
+func concurrentOriginalCreate(ctx context.Context, url, token string, args map[string]any, original string) {
+	const clients = 12
+	var wg sync.WaitGroup
+	ids := make(chan string, clients)
+	for i := 0; i < clients; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			clientCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			session := connect(clientCtx, url, token)
+			defer session.Close()
+			result, err := session.CallTool(clientCtx, &mcp.CallToolParams{
+				Name: "box_create", Arguments: args,
+			})
+			if err != nil || result == nil || result.IsError {
+				ids <- "ERROR"
+				return
+			}
+			ids <- field(decoded(result), "operation_id")
+		}()
+	}
+	wg.Wait()
+	close(ids)
+	count := 0
+	for operationID := range ids {
+		count++
+		check(operationID == original, "parallel same-key Create lost immutable original receipt")
+	}
+	check(count == clients, "parallel same-key Create sessions were not all observed")
+	fmt.Println("S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT=PASS")
 }
 
 func main() {
@@ -548,6 +585,7 @@ func main() {
 		"progress-token native create failed immediate durable admission")
 	created := decoded(createResponse)
 	original := id(created)
+	concurrentOriginalCreate(ctx, url, token, args, original)
 	again := call(ctx, admin, "box_create", args)
 	check(id(again) == original, "same key unexpectedly created second operation")
 	fmt.Println("S2_NATIVE_CREATE_IDEMPOTENCY=PASS")
