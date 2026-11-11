@@ -28,7 +28,10 @@ printf '%s\n' "$operation" | grep -Eq '^[0-9a-f]{32}$'
 printf '%s\n' "$native" | grep -Eq '^[0-9a-f-]{36}$'
 printf '%s\n' "$uuid" | grep -Eq '^[0-9a-f-]{36}$'
 test -f "$work/boxweave"
-test -f "$source_db"
+# This state directory is intentionally private to the nonroot service user.
+# A CI runner has no permission even to stat it; only verified local root may.
+sudo test -f "$source_db"
+echo "S2_GC_INSTALLED_DISPOSABLE_CANONICAL_PATH_PRECHECK=PASS"
 if [ -e /var/lib/boxweave ] || [ -e /usr/local/bin/boxweave ] ||
    [ -e /etc/systemd/system/boxweave.service ]; then
   echo "S2_INSTALLED_GC_REVIEW_BLOCKED: existing install identity" >&2
