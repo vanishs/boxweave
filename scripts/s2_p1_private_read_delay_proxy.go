@@ -66,6 +66,15 @@ func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mode := ""
 		if r.Method == http.MethodGet {
+			// A separate P2 scenario holds the actual native recorded-output
+			// HTTP 200 while the MCP caller disconnects. This is NOT a
+			// synthetic stream or a canceled guest native Operation.
+			if exists(filepath.Join(*dir, "arm-stalled-output")) &&
+				strings.HasPrefix(r.URL.Path, "/1.0/instances/"+*name+"/logs/exec-output/") &&
+				r.URL.Query().Get("project") == *project {
+				mode = "stalled-output"
+			}
+			if mode == "" {
 			for _, m := range []string{"host_status", "box_list", "box_get", "operation_output_get"} {
 				if !exists(filepath.Join(*dir, "arm-"+m)) {
 					continue
@@ -78,6 +87,7 @@ func main() {
 					mode = m
 				}
 				break
+			}
 			}
 		}
 		if mode == "" || exists(filepath.Join(*dir, "held-"+mode)) {
