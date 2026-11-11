@@ -278,7 +278,7 @@ func TestS2BoundCreateBeforeCompletionRejectsDifferentKeyDeleteAdmits(t *testing
 		Key: "delete-after-original-verified", RequestID: "post-create",
 		Action: "box_delete", BoxUUID: uuid, Incarnation: uuid,
 		ResourceKey: "box:bound-box",
-		SafeIntent: []byte(`{"box_id":"exact-created-uuid-bound"}`),
+		SafeIntent:  []byte(`{"box_id":"exact-created-uuid-bound"}`),
 	})
 	if err != nil || after.ID == original.ID || after.BoxUUID != uuid {
 		t.Fatalf("verified original failed to release exact-resource lock: %+v %v", after, err)
