@@ -299,6 +299,30 @@ test -s "$work/concurrent-status.json"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp)" = 401
 echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
 
+# Prove a *shipped* older official Go SDK (v1.6.1, protocol <=2025-11-25)
+# negotiates against the current v1.8.0 server. Its independent temp module
+# cannot silently use the candidate's newer SDK. No native writes are allowed.
+legacy_client_dir="$work/legacy-sdk-client"
+mkdir -m 0700 "$legacy_client_dir"
+cp scripts/s2_legacy_sdk_probe.go "$legacy_client_dir/main.go"
+(
+  cd "$legacy_client_dir"
+  GOWORK=off go mod init boxweave-s2-legacy-client
+  GOWORK=off go get github.com/modelcontextprotocol/go-sdk@v1.6.1
+  GOWORK=off go mod tidy
+  GOWORK=off CGO_ENABLED=0 go build -trimpath -o "$work/s2-legacy-sdk-probe" .
+)
+chmod 0755 "$work/s2-legacy-sdk-probe"
+GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_LEGACY_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_LEGACY_TOKEN="$admin" "$work/s2-legacy-sdk-probe" > "$work/legacy-sdk-probe.log" 2>&1 || {
+    cat "$work/legacy-sdk-probe.log"
+    echo "S2_P1_FAIL: old SDK interoperability probe" >&2
+    exit 125
+  }
+grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
+echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS"
+
 # Seed a single original ADMITTED operation with no native dispatch under
 # the SAME restricted service actor/database. The official SDK prober then
 # exercises operation_cancel as an actual MCP mutation, proving no Incus side
