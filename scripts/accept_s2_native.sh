@@ -1515,16 +1515,13 @@ sh scripts/s2_p0_native_sqlite_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_stop_delete_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_token_inflight.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_operation_list_boundary.sh "$work" "$project" "$socket"
-# P1 experimental only: three attempts to hold exact bound UUID after native
-# Create used GDB source line 79, which is not a trustworthy post-bind
-# instruction boundary under optimized Go. Do NOT fail the verified native
-# acceptance suite for test-harness ambiguity or claim the race passed.
-# Manual opt-in is permitted ONLY within the same fresh single-use CI VM.
-if [ "${BW_S2_RUN_EXPERIMENTAL_BOUND_OVERLAP:-}" = true ]; then
-  sh scripts/s2_p1_native_create_delete_overlap.sh "$work" "$project" "$socket"
-else
-  echo "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_MCP_DELETE=UNVERIFIED_TESTER_BOUNDARY"
-fi
+# This separate test-only Go overlay adds ONE post-RegisterCreatedBox COMMIT
+# pause in an independently compiled disposable binary, without altering
+# the original release candidate used by the complete native suite. Unlike
+# prior GDB source-line experiments, its exact post-bind boundary is
+# verified by independent SQLite + Incus before 12 real MCP Deletes.
+# A failure is a real required CI failure, not an invented S2 PASS.
+sh scripts/s2_p1_native_create_delete_overlap.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_two_controllers.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_private_read_inflight.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_bound_create_receipt_fault.sh "$work" "$project" "$socket"

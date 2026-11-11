@@ -65,6 +65,13 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-CLOSURE-061 — scope lock and deterministic post-UUID-bind official SDK race
+
+- **Before:** source `3dc712413705257b9992c13a339cf48bb46c6bf8` five-check native SUCCESS; exactly 17 of 19 grouped TC/A rows incomplete, plus 1 S4-deferred row. Three attempts at optimized Go GDB source-line timing were inconclusive; P1 overlap remains UNVERIFIED.
+- **Implementation:** new single-use Go build `-overlay` generator inserts one private post-`verify(ctx)` pause **after native Create UUID/owned SQLite COMMIT**, before original `Verified`; normal release binary/checked-in product worker untouched. Genuine native UUID + read-only original state must both be independently witnessed before 12 concurrent cross-token MCP Delete refusals, then original success and legitimate delete. Local fastlab confirmed strict overlay source digest, exact single insertion, instrumented binary build and unchanged working tree. Go probe now demands the precise lock error, not any unrelated tool failure.
+- **Exit framing:** [Nine-package S2 closure plan](../verification/S2_GATE_CLOSURE_PLAN_2026-11-11.md). No hardware/WAN/Guest Ready simulated PASS, no S4 A-043–047 carry-forward as S2 PASS. Source-specific hosted native CI for deterministic P1 remains PENDING until checked.
+- **Immutable unknowns:** `7e1cbf043d1fd4ea3d9ec0093a04371e`, `f811afeeb778c422fe99b9881baa40f2`, `192a6601c54078f8eaf1437a6a3dc13b`; no retries/adoptions. Draft PR #130, protected v1 unmerged.
+
 ### LOG-20261111-S2-CONTINUITY-060 — discriminate ChatGPT stop, transport failure, and GDB harness; continue WAN and P3
 
 - **Latest exact accepted source:** `8200934587f361e3cfe5ffbacdde4224b49f8ba6` with five successful CI checks ([full native](https://github.com/vanishs/boxweave/actions/runs/43072427218/job/130703538866)). Product-native `operation_list` mid-response bearer revocation/expiry and all previously validated 13 tools still PASS.

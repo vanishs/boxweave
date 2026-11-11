@@ -46,6 +46,13 @@ func call(ctx context.Context, s *mcp.ClientSession, n string, args map[string]a
 	r, e := s.CallTool(ctx, &mcp.CallToolParams{Name: n, Arguments: args})
 	must(e == nil && r != nil, "transport failed or stalled (cannot count as native lock refusal) on "+n)
 	if r.IsError {
+		// An HTTP/MCP refusal is not enough to establish a safe lock:
+		// distinguish the expected original-resource lock from generic
+		// internal/server errors and invalid request failures.
+		encoded, encodeErr := json.Marshal(r.Content)
+		must(encodeErr == nil && strings.Contains(string(encoded),
+			"original unresolved resource claim is still locked"),
+			"unexpected error instead of original bound-UUID resource lock on "+n)
 		return nil, false
 	}
 	b, e := json.Marshal(r.StructuredContent)
@@ -65,7 +72,7 @@ func newMarker(path, value string) {
 	must(f.Sync() == nil && f.Close() == nil, "marker durable sync failure")
 }
 func awaitMarker(ctx context.Context, path string) {
-	for i := 0; i < 240; i++ {
+	for i := 0; i < 900; i++ {
 		if present(path) {
 			return
 		}
@@ -102,7 +109,7 @@ func main() {
 		project == "user-"+os.Getenv("BW_S2_TEST_UID") &&
 		strings.HasPrefix(token, "bw1_") && strings.HasPrefix(other, "bw1_"),
 		"requires fresh restricted original-only native CI")
-	ctx, cancel := context.WithTimeout(context.Background(), 185*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
 	mainSession := session(ctx, token)
 	defer mainSession.Close()
