@@ -152,6 +152,6 @@ PY
   sudo incus delete --force "$name" --project "$project"
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   kill "$proxy_pid" 2>/dev/null || :; wait "$proxy_pid" 2>/dev/null || :; proxy_pid=""
-  echo "S2_P0_REAL_NATIVE_202_SQLITE_WAL_$phase_SAFE_RECOVERY=PASS"
+  printf 'S2_P0_REAL_NATIVE_202_SQLITE_WAL_%s_SAFE_RECOVERY=PASS\n' "$phase"
 done
 echo S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES=PASS
