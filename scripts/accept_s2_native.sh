@@ -311,6 +311,28 @@ echo "$foreign_layer_id" | grep -Eq '^[0-9a-f]{32}$'
 test "$queued_cancel_id" != "$foreign_layer_id"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 
+# TC-006: a real, separately authorized FOREIGN Project has a stopped
+# native instance with the SAME NAME as the one this candidate will create.
+# Neither the ordinary restricted user nor the SDK should adopt/read/delete it.
+foreign_project=bw-s2-foreign-ci-project
+foreign_name=bw-s2-ghci-110a
+sudo incus project create "$foreign_project" --config features.images=false
+sudo incus profile device add default root disk path=/ pool=bw-s2-native-pool \
+  --project "$foreign_project"
+sudo incus init --empty "$foreign_name" --project "$foreign_project"
+foreign_uuid="$(sudo incus config get "$foreign_name" volatile.uuid --project "$foreign_project")"
+echo "$foreign_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+test "$(sudo incus list "$foreign_name" --project "$foreign_project" --format csv -c n)" = "$foreign_name"
+if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    incus info "$foreign_name" --project "$foreign_project" \
+    > "$work/foreign-project-native-denied.txt" 2>&1; then
+  echo "S2_NATIVE_FAIL: restricted service accessed foreign Project instance" >&2
+  exit 121
+fi
+echo "S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS"
+
 # The independent official MCP SDK prober temporarily holds one completed
 # 16MiB+4-byte dual-stream Exec until this CI VM administrator measures its
 # ACTUAL native spool files. This is read-only and never deletes native logs.
@@ -469,6 +491,15 @@ fi
 grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
 grep -Fqx "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS" "$work/native-probe.log"
 echo "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES=PASS"
+
+# SDK has now independently created, accessed and destroyed its own
+# same-named Box while this foreign original remained stopped throughout.
+test "$(sudo incus config get "$foreign_name" volatile.uuid --project "$foreign_project")" = "$foreign_uuid"
+test "$(sudo incus list "$foreign_name" --project "$foreign_project" --format csv -c n)" = "$foreign_name"
+sudo incus delete "$foreign_name" --project "$foreign_project"
+sudo incus project delete "$foreign_project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
 
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.
