@@ -35,6 +35,32 @@ func main() {
 	if err != nil || actor.Role != "admin" {
 		panic("one-use seed requires original authenticated administrator")
 	}
+	if len(os.Args) == 2 && os.Args[1] == "append" {
+		// Real second SQLite connection during an official SDK paginated read.
+		// These immutable history rows never claim an Incus Box and never
+		// dispatch an effect; cancellation is durable before release.
+		for i := 120; i < 132; i++ {
+			item, err := store.Admit(ctx, state.Admission{
+				Layer: project, ActorID: actor.ID, TokenID: actor.ID,
+				Key: fmt.Sprintf("native-s2-history-indexed-seed-%03d", i),
+				Action: "box_exec",
+				SafeIntent: []byte(fmt.Sprintf("{\"fixture\":\"history-only\",\"i\":%d}", i)),
+				RequestID: fmt.Sprintf("s2-native-history-%03d", i),
+				WorkRef: "lab/history-120", AgentRef: "seed-only",
+			})
+			if err != nil || item.State != "ADMITTED" || item.NativeOperationID != "" {
+				panic(fmt.Sprintf("refusing invalid concurrent history insert %03d: %v", i, err))
+			}
+			if err := store.CancelQueued(ctx, project, item.ID); err != nil {
+				panic(fmt.Sprintf("concurrent history cancellation %03d: %v", i, err))
+			}
+		}
+		fmt.Println("S2_SQLITE_CONCURRENT_HISTORY_APPEND_12=PASS")
+		return
+	}
+	if len(os.Args) != 1 {
+		panic("seed supports only original and explicit append mode")
+	}
 	r, err := store.Admit(ctx, state.Admission{
 		Layer: project, ActorID: actor.ID, TokenID: actor.ID,
 		Key:         "native-s2-queued-undispatched-cancel-original-01",

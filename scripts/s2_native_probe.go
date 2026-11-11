@@ -319,9 +319,44 @@ func main() {
 			check(wrongFilterErr != nil ||
 				wrongFilterAttempt != nil && wrongFilterAttempt.IsError,
 				"native HMAC cursor was reused with a different state filter")
+			// Before requesting page two, a separate non-root process commits
+			// 12 more operations to the same original SQLite while MCP serve
+			// stays active. The original signed cursor must not shift its page.
+			dir := os.Getenv("BW_S2_HISTORY_CURSOR_WITNESS_DIR")
+			check(strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci."),
+				"concurrent SQLite witness needs one-use CI workspace")
+			if err := os.WriteFile(dir+"/history-cursor.ready", []byte("first-page-observed"), 0600); err != nil {
+				panic(err)
+			}
+			released := false
+			for i := 0; i < 200; i++ {
+				if _, err := os.Stat(dir + "/history-cursor.release"); err == nil {
+					released = true
+					break
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			check(released, "independent SQLite concurrent writer failed to release cursor")
 		}
 	}
 	check(len(historyIDs) == 120, "failed durable history total 120")
+	// A fresh unpaginated request MUST now expose the 12 newer rows while
+	// the previously issued cursor returned only the 120 originals.
+	recent := child(call(ctx, admin, "operation_list", map[string]any{
+		"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
+	}), "page")
+	recentRows, ok := recent["operations"].([]any)
+	check(ok && len(recentRows) == 50, "fresh history page invalid after concurrent append")
+	newlyVisible := 0
+	for _, raw := range recentRows {
+		rec, ok := raw.(map[string]any)
+		check(ok, "concurrent history response malformed")
+		if !historyIDs[id(rec)] {
+			newlyVisible++
+		}
+	}
+	check(newlyVisible == 12, "fresh cursor did not reveal exactly 12 durable concurrent inserts")
+	fmt.Println("S2_NATIVE_CONCURRENT_HISTORY_PAGING_STABLE_NEW_ROWS_VISIBLE=PASS")
 	future := time.Now().Add(time.Hour).UnixNano()
 	past := time.Now().Add(-time.Hour).UnixNano()
 	historyFuture := child(call(ctx, admin, "operation_list", map[string]any{

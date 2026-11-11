@@ -317,8 +317,33 @@ test -z "$(sudo incus list --all-projects --format csv -c n)"
   BW_S2_ADMIN2_ID="$admin2_id" BW_S2_OUTPUT_WITNESS_DIR="$work" \
   BW_S2_EXPIRED_TOKEN="$expired_viewer" BW_S2_REVOKED_TOKEN="$revoked_viewer" \
   BW_S2_FOREIGN_LAYER_OPID="$foreign_layer_id" \
+  BW_S2_HISTORY_CURSOR_WITNESS_DIR="$work" \
   BW_S2_QUEUED_CANCEL_OPID="$queued_cancel_id" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
 probe_pid=$!
+# The official SDK client pauses immediately after its first 50 records.
+# Commit 12 new durable CANCELLED history rows from a separate restricted
+# writer before allowing the original HMAC cursor to page older originals.
+attempt=0
+while [ ! -s "$work/history-cursor.ready" ] && [ "$attempt" -lt 90 ]; do
+  if ! kill -0 "$probe_pid" 2>/dev/null; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ ! -s "$work/history-cursor.ready" ]; then
+  echo "S2_NATIVE_FAIL: installed MCP client never reached history cursor handshake" >&2
+  cat "$work/native-probe.log"
+  exit 108
+fi
+test "$(cat "$work/history-cursor.ready")" = "first-page-observed"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_SEED_DB="$db" BW_S2_SEED_PROJECT="$project" \
+  BW_S2_SEED_ADMIN_TOKEN="$admin" "$work/s2-queued-cancel-seed" append \
+  > "$work/history-append.txt"
+grep -Fqx "S2_SQLITE_CONCURRENT_HISTORY_APPEND_12=PASS" "$work/history-append.txt"
+touch "$work/history-cursor.release"
+echo "S2_NATIVE_REAL_SQLITE_HISTORY_WRITER_DURING_MCP_PAGE=PASS"
 attempt=0
 while [ ! -s "$work/output-witness.ready" ] && [ "$attempt" -lt 200 ]; do
   if ! kill -0 "$probe_pid" 2>/dev/null; then
