@@ -88,6 +88,27 @@ PY
   service_pid=$!; online
   p0_probe resume > "$work/p0-$phase-replay.txt"
   grep -Fqx S2_P0_REAL_NATIVE_SQLITE_CRASH_UNKNOWN_REPLAY_AND_CONCURRENT_READS=PASS "$work/p0-$phase-replay.txt"
+  # Independent read-only SQLite connection and separately witnessed native
+  # operation ID must agree with the original public MCP receipt. No native
+  # operation is inferred from an uncommitted SQLite ACK.
+  sudo python3 - "$db" "$lab/original.json" "$marker" "$phase" "$uuid" <<'PY'
+import json,re,sqlite3,sys
+db,path,marker,phase,uuid=sys.argv[1:]
+saved=json.load(open(path))
+native=open(marker).read().strip()
+assert re.fullmatch(r"NATIVE_REAL_UPDATE_202_ACCEPTED=[0-9a-f-]{36}",native)
+native=native.split("=",1)[1]
+with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as conn:
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
+    op=conn.execute("SELECT state,native_operation_id,tracking_id,box_uuid,work_ref,agent_ref FROM operations WHERE id=?",(saved["update_id"],)).fetchone()
+    assert op and op[0]=="UNKNOWN" and op[1] in ("",native)
+    assert op[2]==saved["tracking_id"] and op[3]==uuid
+    assert op[4]=="lab/p0-native-sqlite" and op[5]=="p0-combined-verifier"
+    if phase=="after": assert op[1]==native,("post-fsync native ID missing",op)
+    events=[r[0] for r in conn.execute("SELECT state FROM operation_events WHERE operation_id=? ORDER BY seq",(saved["update_id"],))]
+    assert events.count("UNKNOWN")==1,events
+print("S2_P0_INDEPENDENT_SQLITE_NATIVE_MCP_RECEIPT_CROSSCHECK=PASS")
+PY
   sudo test ! -e "$lab/unexpected-native-dispatch.txt"
   kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; service_pid=""
   sh scripts/s2_p0_unknown_review.sh "$work" "$lab" "$project" "$socket" "$uuid"
