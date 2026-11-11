@@ -101,7 +101,12 @@ until [ "$attempt" -ge 55 ]; do
  attempt=$((attempt+1)); sleep 1
 done
 test "$attempt" -lt 55
-grep -Eq 'Breakpoint 1 at|Breakpoint 1,|Breakpoint 1 \(' "$work/p1-overlap-debugger.redacted.log"
+if ! grep -Eq 'Breakpoint 1 at|=breakpoint-created,bkpt=.*worker[.]go.*line="79"' "$work/p1-overlap-debugger.redacted.log"; then
+ tail -90 "$work/p1-overlap-debugger.redacted.log"
+ echo "S2_P1_OVERLAP_FAIL: exact worker.go:79 MI breakpoint not confirmed" >&2
+ exit 98
+fi
+echo "S2_P1_REAL_NATIVE_WORKER_VERIFYING_MI_SOURCE_BREAKPOINT_CONFIRMED=PASS"
 actor BW_S2_OVERLAP_LAB="$lab" BW_S2_OVERLAP_TOKEN="$token" \
  BW_S2_OVERLAP_SECOND_TOKEN="$other" BW_S2_OVERLAP_PROJECT="$project" \
  "$work/s2-p1-native-overlap-probe" > "$work/p1-native-overlap-results.txt" 2>&1 &
