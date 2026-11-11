@@ -1180,13 +1180,15 @@ func main() {
 		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
 	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
 
-	// A command that would emit indefinitely must be terminated by the
-	// explicitly admitted guest timeout, not by the MCP request lifetime.
+	// A command that emits continuously for far longer than its admitted
+	// timeout must stop on the guest budget, not on the MCP request lifetime.
+// The guest command also has a finite outer loop so a broken timeout yields
+// an explicit failed assertion rather than trapping the disposable runner.
 	// The native Operation can finish successfully while the guest command
 	// has the distinct nonzero timeout exit and bounded recorded stdout.
 	continuous := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
-			"while :; do printf 'continuous-guest-stdout-110x\\n'; sleep 0.05; done"},
+			"i=0; while [ \"$i\" -lt 200 ]; do printf 'continuous-guest-stdout-110x\\n'; i=$((i+1)); sleep 0.05; done"},
 		"timeout_ms":      1600,
 		"idempotency_key": "native-s2-continuous-output-timeout-01",
 	})
