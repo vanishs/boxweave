@@ -114,6 +114,20 @@ func main() {
 		"omitted disk default not observed as exact 10GiB native root")
 	data, e := json.Marshal(map[string]string{"box_id": uuid, "create_id": field(receipt, "operation_id")})
 	assert(e == nil && os.WriteFile(filepath.Join(dir, "original.json"), data, 0600) == nil, "save exact native witness")
+	// Retain the *live* instance until an independent Incus administrator
+	// confirms expanded root device, actual UUID and selected pool, rather
+	// than merely trusting the MCP response or checking after deletion.
+	assert(os.WriteFile(filepath.Join(dir, "live.ready"), []byte("native UUID bound; awaiting independent readback\n"), 0600) == nil,
+		"cannot signal independent native readback")
+	confirmed := false
+	for i := 0; i < 240; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "native-verified.release")); err == nil {
+			confirmed = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	assert(confirmed, "independent live Incus pool witness never released")
 	fmt.Println("S2_P2_ALTERNATE_SELECTED_PROFILE_POOL_DEFAULT_TEN_GIB=PASS")
 	del, e := call(ctx, s, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-altpool-original-delete"})
