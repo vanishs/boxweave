@@ -452,9 +452,13 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM exec_output_gc WHERE project=? "+
 			"AND state IN ('DELETE_SENT','REVIEW_REQUIRED') AND "+
 			"((?<>'' AND box_uuid=?) OR (?<>'' AND ('box:'||name)=?))",
-			a.Layer,a.BoxUUID,a.BoxUUID,a.ResourceKey,a.ResourceKey).Scan(&gcBusy)
-		if err != nil { return Receipt{},err }
-		if gcBusy > 0 { return Receipt{},ErrResourceLocked }
+			a.Layer, a.BoxUUID, a.BoxUUID, a.ResourceKey, a.ResourceKey).Scan(&gcBusy)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if gcBusy > 0 {
+			return Receipt{}, ErrResourceLocked
+		}
 	}
 	if a.BoxUUID != "" && a.Incarnation != "" {
 		// A different idempotency key cannot bypass an original UNKNOWN
