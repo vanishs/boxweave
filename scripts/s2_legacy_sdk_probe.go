@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -156,8 +157,11 @@ func legacyLifecycle(ctx context.Context, session *mcp.ClientSession) {
 		"operation_id": execID, "stream": "stdout", "offset": 0, "limit": 16384,
 	})
 	verify(objectField(out, "availability") == "available" &&
-		objectField(out, "operation_id") == execID,
-		"legacy client could not retrieve its completed recorded guest output")
+		objectField(out, "operation_id") == execID && out["command_success"] == true,
+		"legacy client could not retrieve its completed successful guest output")
+	data, decodeErr := base64.StdEncoding.DecodeString(objectField(out, "content_base64"))
+	verify(decodeErr == nil && string(data) == "legacy-sdk-ok",
+		"legacy SDK recorded stdout bytes changed or were discarded")
 	legacyCall(ctx, session, "operation_list", map[string]any{})
 
 	stop := legacyCall(ctx, session, "box_stop", map[string]any{
