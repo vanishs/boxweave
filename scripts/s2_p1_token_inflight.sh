@@ -44,5 +44,6 @@ actor BW_S2_AUTH_LAB="$lab" BW_S2_AUTH_PROJECT="$project" \
 grep -Fqx S2_P1_INSTALLED_MCP_REVOKED_DURING_READ_NO_LEAK=PASS "$work/p1-token-results.txt"
 grep -Fqx S2_P1_INSTALLED_MCP_EXPIRED_DURING_READ_NO_LEAK=PASS "$work/p1-token-results.txt"
 grep -Fqx S2_P1_INSTALLED_INFLIGHT_BEARER_REVOCATION_AND_EXPIRY=PASS "$work/p1-token-results.txt"
+grep -Fqx S2_P1_REAL_INSTALLED_MCP_STATUS_CHANGED_DURING_SIGNED_CURSOR=PASS "$work/p1-token-results.txt"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_REAL_INSTALLED_TOKEN_RACE_ISOLATED_NO_NATIVE_EFFECT=PASS"
