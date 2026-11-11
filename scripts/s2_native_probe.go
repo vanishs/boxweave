@@ -323,6 +323,42 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	visible, ok := boxes["boxes"].([]any)
 	check(ok && len(visible) == 0,
 		"malformed public tool matrix produced native Box side effect")
+	// A real SDK must advertise and enforce a single type-derived closed
+	// argument object for every public tool, not silently ignore an
+	// unsupported native Project or root-pool selection.
+	list, err := admin.ListTools(ctx, nil)
+	check(err == nil && len(list.Tools) == 13, "strict schema discovery unavailable")
+	for _, tool := range list.Tools {
+		schema, marshalErr := json.Marshal(tool.InputSchema)
+		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\"")) &&
+			bytes.Contains(schema, []byte("\"not\":{}")),
+			"tool silently permits unsupported top-level arguments: "+tool.Name)
+	}
+	for _, test := range []struct {
+		name string
+		args map[string]any
+	}{
+		{"host_status", map[string]any{"native_project": "foreign-project"}},
+		{"box_list", map[string]any{"native_project": "foreign-project"}},
+		{"box_create", map[string]any{
+			"name": "bw-s2-unknown-pool-must-not-create",
+			"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"start": false, "internet": false,
+			"idempotency_key": "s2-unknown-pool-must-not-create-01",
+			"root_pool": "foreign-storage-pool",
+		}},
+	} {
+		result, callErr := admin.CallTool(ctx, &mcp.CallToolParams{
+			Name: test.name, Arguments: test.args,
+		})
+		check(callErr != nil || result != nil && result.IsError,
+			"SDK silently ignored unsupported top-level argument on "+test.name)
+	}
+	boxList := call(ctx, admin, "box_list", map[string]any{})
+	items, ok := boxList["boxes"].([]any)
+	check(ok && len(items) == 0,
+		"unsupported root_pool attempted a native Create despite schema refusal")
+	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
 }
 

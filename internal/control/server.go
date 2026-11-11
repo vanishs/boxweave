@@ -149,7 +149,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
 				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")

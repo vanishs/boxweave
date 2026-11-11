@@ -46,7 +46,7 @@ type cancelOperationResult struct {
 }
 
 func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_output_get",
 		Description: "Read up to 65536 bytes from the original recorded guest Exec stdout or stderr by offset, with observed nonzero exit retained.",
 		Annotations: readToolAnnotations(),
@@ -136,7 +136,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		return &mcp.CallToolResult{}, result, nil
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_cancel",
 		Description: "Journal a separate cancellation request for a proven queued-undispatched owned Operation. Detached running Exec/native operations are not cancelable with the proved SDK path.",
 		Annotations: mutationAnnotations(true),

@@ -71,7 +71,7 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 }
 
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{
+	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
 		Description: "Read an original authorized durable Operation. wait_ms <= 20000 never cancels or retries native work.",
 		Annotations: readToolAnnotations(),
@@ -124,7 +124,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit}, nil
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_list",
 		Description: "Read a bounded, authenticated, indexed page of controller-local Operations. Client work/Agent labels never grant visibility.",
 		Annotations: readToolAnnotations(),

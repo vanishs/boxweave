@@ -265,7 +265,7 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 }
 
 func (s *Service) registerBoxTools(server *mcp.Server) {
-	mcp.AddTool(server, &mcp.Tool{Name: "box_create",
+	addStrictTool(server, &mcp.Tool{Name: "box_create",
 		Description: "Admit one owned Ubuntu LTS Box creation using the installed restricted Incus Project and its preverified private NIC; asynchronous durable receipt.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
@@ -334,7 +334,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			return &mcp.CallToolResult{}, r, err
 		})
 
-	mcp.AddTool(server, &mcp.Tool{Name: "box_list",
+	addStrictTool(server, &mcp.Tool{Name: "box_list",
 		Description: "List only UUID-registered owned Boxes with independently observed exact native identity.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listBoxesInput) (*mcp.CallToolResult, listBoxesResult, error) {
@@ -361,7 +361,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			return &mcp.CallToolResult{}, out, nil
 		})
 
-	mcp.AddTool(server, &mcp.Tool{Name: "box_get",
+	addStrictTool(server, &mcp.Tool{Name: "box_get",
 		Description: "Get exact locally owned Box UUID and independently observed native state; native running is not guest readiness.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
@@ -386,7 +386,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		if action == "box_stop" {
 			desc = "Stop one exact owned running Box without host execution."
 		}
-		mcp.AddTool(server, &mcp.Tool{Name: action, Description: desc, Annotations: mutationAnnotations(false)},
+		addStrictTool(server, &mcp.Tool{Name: action, Description: desc, Annotations: mutationAnnotations(false)},
 			func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 				if _, _, err := requireAdmin(req, s); err != nil {
 					return nil, state.Receipt{}, err
@@ -452,7 +452,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			})
 	}
 
-	mcp.AddTool(server, &mcp.Tool{Name: "box_update",
+	addStrictTool(server, &mcp.Tool{Name: "box_update",
 		Description: "Update exact owned CPU/RAM/root disk-growth/nesting and per-Box Internet egress by presence-aware typed fields.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
@@ -520,7 +520,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			return &mcp.CallToolResult{}, r, err
 		})
 
-	mcp.AddTool(server, &mcp.Tool{Name: "box_delete",
+	addStrictTool(server, &mcp.Tool{Name: "box_delete",
 		Description: "Delete only an exact owned STOPPED Box after refusing native proxy/peer dependencies; retain UNKNOWN on unverified deletion.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
@@ -568,7 +568,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			return &mcp.CallToolResult{}, r, err
 		})
 
-	mcp.AddTool(server, &mcp.Tool{Name: "box_exec",
+	addStrictTool(server, &mcp.Tool{Name: "box_exec",
 		Description: "Durable asynchronous argv execution INSIDE an exact owned guest, guest UID/GID typed; original stdout/stderr through operation_output_get.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in execBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
