@@ -108,6 +108,15 @@ grep -Fqx S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS \
 test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$uuid"
 echo "S2_P1_PRIVATE_READ_REVOKED_CALLS_LEFT_NATIVE_UUID_UNCHANGED=PASS"
 
+# Separate P2 I/O test on the SAME exact original: the native stdout HTTP
+# 200 is held, the caller disconnects, then a fresh SDK session recovers
+# its original journal, stdout and guest exit without a second guest Exec.
+probe stall > "$work/private-read-stalled-output-results.txt"
+grep -Fqx S2_P2_REAL_NATIVE_RECORDED_STDOUT_STALLED_CLIENT_DISCONNECT_RECOVER=PASS \
+  "$work/private-read-stalled-output-results.txt"
+test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$uuid"
+echo "S2_P2_STALLED_NATIVE_OUTPUT_CANCEL_NO_NATIVE_CHANGE=PASS"
+
 # Cleanup only this acknowledged original UUID via still-valid seeded admin.
 probe cleanup > "$work/private-read-cleanup-results.txt"
 grep -Fqx S2_P1_PRIVATE_READ_EXACT_FIXTURE_CLEANUP=PASS "$work/private-read-cleanup-results.txt"
