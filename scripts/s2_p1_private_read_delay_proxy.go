@@ -75,19 +75,19 @@ func main() {
 				mode = "stalled-output"
 			}
 			if mode == "" {
-			for _, m := range []string{"host_status", "box_list", "box_get", "operation_output_get"} {
-				if !exists(filepath.Join(*dir, "arm-"+m)) {
-					continue
+				for _, m := range []string{"host_status", "box_list", "box_get", "operation_output_get"} {
+					if !exists(filepath.Join(*dir, "arm-"+m)) {
+						continue
+					}
+					if m == "host_status" && r.URL.Path == "/1.0/projects/"+*project {
+						mode = m
+					}
+					if m != "host_status" && r.URL.Path == "/1.0/instances/"+*name &&
+						r.URL.Query().Get("project") == *project {
+						mode = m
+					}
+					break
 				}
-				if m == "host_status" && r.URL.Path == "/1.0/projects/"+*project {
-					mode = m
-				}
-				if m != "host_status" && r.URL.Path == "/1.0/instances/"+*name &&
-					r.URL.Query().Get("project") == *project {
-					mode = m
-				}
-				break
-			}
 			}
 		}
 		if mode == "" || exists(filepath.Join(*dir, "held-"+mode)) {
