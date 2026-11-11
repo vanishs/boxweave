@@ -437,13 +437,17 @@ func main() {
 		actual := os.Getenv("BW_S2_ACK_NATIVE_UUID")
 		require(len(actual) == 36, "native admin's exact UUID witness missing")
 		data, err := os.ReadFile(file)
-		if err != nil { panic(err) }
+		if err != nil {
+			panic(err)
+		}
 		var original saved
-		if err := json.Unmarshal(data, &original); err != nil { panic(err) }
+		if err := json.Unmarshal(data, &original); err != nil {
+			panic(err)
+		}
 		require(original.OriginalID != "", "original accepted Create receipt missing")
 		checkUnknown(ctx, s, original.OriginalID)
 		result, err := invoke(ctx, s, "box_delete", map[string]any{
-			"box_id": actual,
+			"box_id":          actual,
 			"idempotency_key": "s2-p1-unbound-create-delete-must-deny",
 		})
 		require(err != nil, fmt.Sprintf("unbound real native UUID was deleted or adopted: %+v", result))
