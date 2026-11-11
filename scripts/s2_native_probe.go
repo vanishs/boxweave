@@ -929,15 +929,32 @@ func main() {
 	// when online control succeeds *before* and *after* the offline test.
 	// Some ephemeral hosted runners cannot provide guest WAN reachability.
 	externalSupported := false
+	externalURL := ""
 	_, hasCurl := guestRead(ctx, admin, uuid, "native-s2-wan-curl-available-01",
 		"command -v curl")
 	if hasCurl == 0 {
-		body, status := guestRead(ctx, admin, uuid, "native-s2-wan-online-before-01",
-			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
-		if status == 0 && strings.HasPrefix(body, "2") {
-			externalSupported = true
-		} else {
+		// Public HTTPS endpoints can be individually blocked by upstream
+		// policies on hosted runners. Count only a genuine verified IPv4/TLS
+		// 2xx, never an HTTP proxy error or gateway-only packet success.
+		for i, candidate := range []string{
+			"https://example.com",
+			"https://www.google.com/generate_204",
+			"https://www.cloudflare.com/cdn-cgi/trace",
+			"https://github.com",
+		} {
+			body, status := guestRead(ctx, admin, uuid,
+				fmt.Sprintf("native-s2-wan-online-before-%02d", i+1),
+				"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+candidate)
+			if status == 0 && strings.HasPrefix(strings.TrimSpace(body), "2") {
+				externalURL = candidate
+				externalSupported = true
+				break
+			}
+		}
+		if !externalSupported {
 			fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED")
+		} else {
+			fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_HTTPS_POSITIVE_CONTROL=PASS")
 		}
 	} else {
 		fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_CURL=UNVERIFIED_MISSING_CLIENT")
@@ -959,7 +976,7 @@ func main() {
 	if externalSupported {
 		_, publicOfflineExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-offline-01",
-			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
+			"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
 		check(publicOfflineExit != 0, "public HTTPS reached WAN despite internet=false")
 	}
 	online := call(ctx, admin, "box_update", map[string]any{
@@ -982,8 +999,8 @@ func main() {
 	if externalSupported {
 		publicOnline, publicExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-online-after-01",
-			"curl -4 -L -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 https://example.com")
-		check(publicExit == 0 && strings.HasPrefix(publicOnline, "2"),
+			"curl -4 -L -f -sS -o /dev/null -w '%{http_code}' --max-time 7 --connect-timeout 5 "+externalURL)
+		check(publicExit == 0 && strings.HasPrefix(strings.TrimSpace(publicOnline), "2"),
 			"public WAN did not recover after internet=true")
 		fmt.Println("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS")
 	}
