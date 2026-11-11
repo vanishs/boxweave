@@ -28,6 +28,25 @@ online() {
   done
   return 1
 }
+# A runuser supervisor PID is not proof that its child listener exited.
+# Kill ONLY the exact disposable nonroot BoxWeave and independently prove
+# the previous scoped HTTP listener closed before changing the native socket.
+stop_service() {
+  sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+  if [ -n "$service_pid" ]; then
+    wait "$service_pid" 2>/dev/null || :
+    service_pid=""
+  fi
+  attempt=0
+  until [ "$attempt" -ge 30 ]; do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18657/mcp 2>/dev/null || :)"
+    if [ "$code" != 401 ]; then return 0; fi
+    attempt=$((attempt+1))
+    sleep 1
+  done
+  echo "S2_P0_FAIL: previous one-use MCP listener still active" >&2
+  return 1
+}
 for phase in before after; do
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   lab="$work/p0-$phase"
@@ -54,7 +73,7 @@ PY
 )"
   test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$uuid"
   test "$(sudo incus config get "$name" limits.cpu --project "$project")" = 1
-  kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; service_pid=""
+  stop_service
   proxy="$lab/proxy.sock"; marker="$lab/native-202.txt"; arm="$lab/arm"; witness="$lab/witness"
   actor "$work/s2-p0-native-sqlite-proxy" -listen "$proxy" -upstream "$socket" \
     -project "$project" -name "$name" -arm "$arm" -marker "$marker" \
@@ -127,7 +146,7 @@ with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as conn:
 print("S2_P0_INDEPENDENT_SQLITE_NATIVE_MCP_RECEIPT_CROSSCHECK=PASS")
 PY
   sudo test ! -e "$lab/unexpected-native-dispatch.txt"
-  kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; service_pid=""
+  stop_service
   sh scripts/s2_p0_unknown_review.sh "$work" "$lab" "$project" "$socket" "$uuid"
   # The independent CI admin tears down ONLY this exact observed disposable UUID.
   sudo incus delete --force "$name" --project "$project"
