@@ -1,0 +1,34 @@
+# S2 exit — still-open proof, priority buckets and non-S2 dependencies
+
+**Report scope:** 2026-11-10 PST / 2026-11-11 UTC, Draft PR #130 against protected `v1`. Latest tested source is **not necessarily latest code**. Last independently accepted full native and source/race evidence before this report: [`ab45539` disposable native Incus 7.6](https://github.com/vanishs/boxweave/actions/runs/42980888602); [`52d4f07` native + cursor source/race](https://github.com/vanishs/boxweave/actions/runs/42974549026). Current development HEAD `f5aa9150b70c5a5aa6d33cd04c906a9c5745b59d` adds further test-only cases and limited native quota-diagnostic retries; **its complete native acceptance must be separately checked** before calling the new cases PASS.
+
+## P1 — safety and exact original continuity
+
+- **Bearer revoked/expired during MCP `operation_get(wait_ms)`:** product now rechecks durable credential before yielding the original receipt; prior `ab45539` completed the real installed nonroot MCP original plus revoke/expire via official SDK. Current HEAD adds the same installed service's signed operation cursor status-change control. Does *not* claim all read-tools have identical post-work reauthorization, or an arbitrary revocation race after the response commit.
+- **Create/Delete overlap:** real accepted Create with lost 202 ACK/unbound original UUID has a special test. Current HEAD adds an actual independently observed UUID sent to MCP `box_delete`, which must refuse unbound ownership with zero native redispatch; **different-key Create/Delete after UUID is bound but before Create completion remains unverified**.
+- **Older SDK compatibility:** JSON TextContent fallback with the current official SDK PASS, but a previously shipped older SDK version against *all* tools remains UNVERIFIED.
+- **Exact identity/actor:** real separate Incus Project, same-name foreign native UUID survives; a separate installed BoxWeave process under another service OS identity and native Project has not been independently built.
+- **Guest Ready:** real `native_state=Running` is not evidence of guest readiness. Product still refuses to claim guest ready without an actual guest probe; any positive GuestReady contract needs independent verification rather than being guessed.
+
+## P2 — resilience, negative returns and deployment boundary
+
+- **Exec return and output:** genuine nonzero exit, dual 16MiB bounded output, 7-day native GC, quota partial-output and restart are independently observed. Current HEAD adds strict Go tests for malformed native `return` and stream metadata, with no fake native success, but **no independent Incus malformed-metadata fault proxy yet**.
+- **Slow/stalled/disconnected output:** arbitrary asynchronous no-output/continuous-output cancellation and native side errors still need complete signal/timeout/race checks.
+- **Alternate selected storage pool:** isolated mounted ext4+project quota PASS; requesting an alternate root pool with omitted disk size, when that interface is supported, must never silently select a profile/foreign pool. This wider exact pool contract remains PARTIAL; never relax root pool quota fail-close to make CI green.
+- **Public WAN:** packet-level IPv4/IPv6 bridge gateway toggle and same-bridge peer isolation PASS, but the GitHub-hosted guest did not establish an independently online public HTTPS positive control. `S2_NATIVE_EXTERNAL_IPV4_WAN_BASELINE=UNVERIFIED`. Do not claim broad internet allow/deny solely from gateway packets.
+- **Native quota lab:** a recent red native job had an accepted native guest Exec with exit 1 and partial output, followed by an unclassified quota-state read failure. Current HEAD adds bounded read-only retries and prints actual quota-usage numbers, **not** a weaker capacity limit. It must be rerun and resolved before S2 exit.
+
+## P3 — independent acceptance and release hygiene
+
+- Revisit every original mandatory TC-001–010 and grouped A-case row in [S2 exit crosswalk](S2_EXIT_CROSSWALK_2026-11-10.md); a passing subgate must not upgrade an entire row if it still contains unverified demands.
+- Record exact source SHA, candidate executable SHA256, fully completed Go quality/S1 race and real Incus native job for every accepted change. Pending CI and source-only tests never imply native PASS.
+- Retain reproducible red CI history and distinguish test fixture/format/scope failures from product defects; document final no-retry and auth security boundaries. Run independent verifier on exact final candidate before any S2 exit claim.
+- Keep Draft PR #130 **unmerged** until the full S2 exit is documented and approved. `v1`, shared Incus, and the two historical UNKNOWN originals are untouched.
+
+## Environmental blockers and cross-phase separation
+
+- **Physical host power removal / storage-controller crash:** GitHub-hosted process `SIGKILL` at real SQLite WAL fsync proves an important crash boundary, but it is **not** a real physical outage; this remains UNVERIFIED without an authorized controlled physical lab. Do not reinterpret it as PASS.
+- **S4 dependency:** delete with active peer/forward topology and network-dependent tombstones is explicitly reserved for S4; do not silently promote A-043–047 to S2 PASS.
+- Hardware-only, internet-upstream and intentionally unsupported native SDK behaviors require honest `BLOCKED` / `UNVERIFIED`/ `UNSUPPORTED` outcomes with cause, not invented success or unsafe work on shared hosts.
+
+**Phase status remains S2 PARTIAL.** No manual decision is being used to weaken the existing safety acceptance; work not requiring the external environment may proceed independently.

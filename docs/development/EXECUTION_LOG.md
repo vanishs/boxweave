@@ -1,5 +1,7 @@
 # v1 development execution log — actions, decisions, failures and handoffs
 
+**S2 post-P1 remaining proof / external blockers (2026-11-10 PST):** [source-grounded open gate register](../verification/S2_OPEN_GATES_AND_ENVIRONMENT_BLOCKERS_2026-11-10.md) tracks distinct-key lifecycle race, older SDK, guest readiness, malformed native return/stalled I/O, alternate pool, public WAN online control, physical power outage and S4 dependencies. Current HEAD `f5aa9150b` has pending exact-source CI and must not be called green merely because earlier native sources passed. **S2 overall PARTIAL; Draft PR #130 unmerged.**
+
 **Latest independently accepted S2 P1 checkpoint:** source `52d4f07690ef6eb15671ffabb4ba58640172375c`, executable SHA256 `e02b0826f8eca1eca0967ce5029ad9565a80c50d85debdd3f3cddb46700a1539`. [Real Incus 7.6 / authenticated official MCP SDK](https://github.com/vanishs/boxweave/actions/runs/42974549026), [required quality](https://github.com/vanishs/boxweave/actions/runs/42974554716), [S1/Go race](https://github.com/vanishs/boxweave/actions/runs/42974554715) all SUCCESS. Real private HTTP no-store despite SDK late response overrides, all 12 S2 tool malformed types, same-name **real second Project** foreign UUID isolation, accepted Stop/Delete native 202 lost ACK and same-ledger UNKNOWN/no replay are PASS. Go race/source test also covers a signed operation cursor when an unvisited original transitions ADMITTED→CANCELLED; this is **not** an installed in-flight token-expiry test. [New scoped P1 proof](../verification/S2_P1_NATIVE_HTTP_PROJECT_STOP_DELETE_2026-11-10.md). **Overall S2 remains PARTIAL; Draft PR #130 unmerged; historical UNKNOWN and protected v1 untouched.**
 
 **Latest independently accepted P1 scoped negative checkpoint:** `36336403c03338553cac2497fc5e386f3060c60b`, binary SHA256 `f14a1e5772f8f973309e3b1f78b18466b6949c49c49fc39ecd4d55d938c9e7c7`. [Real official SDK/Incus 7.6](https://github.com/vanishs/boxweave/actions/runs/42967338261), [quality](https://github.com/vanishs/boxweave/actions/runs/42967343347), [S1/race](https://github.com/vanishs/boxweave/actions/runs/42967343390) all SUCCESS.
@@ -48,6 +50,13 @@ New entries go **newest first after this template**, or append by monotonically 
 | Resume | Next safe action, relevant **smallest** docs to read, do-not-repeat warnings |
 
 ## Recorded entries
+
+### LOG-20261110-S2-GATE-053 — remaining P1/P2/P3 evidence and environment blockers preserved
+
+- **Current development HEAD:** `f5aa9150b70c5a5aa6d33cd04c906a9c5745b59d`, new original unbound-Create Delete refusal and read-only quota postread diagnostics now in PR #130. CI pending at time of this log entry; the last individually accepted real-native checkpoint is earlier [`ab45539`](https://github.com/vanishs/boxweave/actions/runs/42980888602). Do not mark the new HEAD or S2 exit PASS prematurely.
+- **Recovery and safety:** physical host power removal UNVERIFIED; real WAN online positive control UNVERIFIED; separate installed second OS/controller and full older SDK matrix pending; S4 network-dependent Delete excluded. [Detailed open gate list](../verification/S2_OPEN_GATES_AND_ENVIRONMENT_BLOCKERS_2026-11-10.md).
+- **New native red classification awaiting probe:** after real partial stdout/exit 1 in isolated guest quota lab, the Incus read-back stage ended without a clear value. Added bounded read-only diagnostic retries while preserving the actual quota cap and no native redispatch. Need final CI evidence before acceptance.
+- **Safety boundaries:** no shared Incus, no historical UNKNOWN change, no protected v1 merge, no S1 schema migration of never-deployed v1.
 
 ### LOG-20261110-S2-P1-052 — real private MCP HTTP, foreign Project and original Stop/Delete 202 ACK-loss PASS
 
