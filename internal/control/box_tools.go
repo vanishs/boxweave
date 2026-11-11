@@ -338,7 +338,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "List only UUID-registered owned Boxes with independently observed exact native identity.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listBoxesInput) (*mcp.CallToolResult, listBoxesResult, error) {
-			_, _, project, err := s.operationPrincipal(req)
+			actor, _, project, err := s.operationPrincipal(req)
 			if err != nil {
 				return nil, listBoxesResult{}, err
 			}
@@ -358,13 +358,17 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				out.Boxes = append(out.Boxes, status)
 			}
-			return &mcp.CallToolResult{}, out, nil
+			return privateReadReply(ctx, s, actor, out)
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
 		Description: "Get exact locally owned Box UUID and independently observed native state; native running is not guest readiness.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
+			actor, _, _, err := s.operationPrincipal(req)
+			if err != nil {
+				return nil, getBoxResult{}, err
+			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
 				return nil, getBoxResult{}, err
@@ -377,7 +381,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, getBoxResult{}, err
 			}
-			return &mcp.CallToolResult{}, getBoxResult{TrackingID: tracking, Box: status}, nil
+			return privateReadReply(ctx, s, actor, getBoxResult{TrackingID: tracking, Box: status})
 		})
 
 	for _, action := range []string{"box_start", "box_stop"} {

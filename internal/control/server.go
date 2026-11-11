@@ -166,7 +166,7 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
-			return &mcp.CallToolResult{}, result, nil
+			return privateReadReply(ctx, s, info.UserID, result)
 		})
 	s.registerOperationReadTools(server)
 	s.registerBoxTools(server)

@@ -146,6 +146,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
-		return &mcp.CallToolResult{}, operationListResult{TrackingID: tracking, Page: page}, nil
+		return privateReadReply(ctx, s, actor, operationListResult{TrackingID: tracking, Page: page})
 	})
 }
