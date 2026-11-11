@@ -40,7 +40,7 @@ func (s *Store) ExecGCCandidates(ctx context.Context, now time.Time, limit int) 
 		"WHERE o.action='box_exec' AND o.state='SUCCEEDED' AND o.native_operation_id<>'' "+
 		"AND e.exit_code IS NOT NULL AND e.observed_at>0 AND e.observed_at<=? AND b.state='OWNED' "+
 		"AND NOT EXISTS (SELECT 1 FROM exec_output_gc blocked WHERE blocked.project=o.layer AND blocked.box_uuid=o.box_uuid "+
-		"AND blocked.state IN ('DELETE_SENT','REVIEW_REQUIRED')) "+
+		"AND blocked.state IN ('DELETE_SENT','REVIEW_REQUIRED','REVIEWED_RELEASED')) "+
 		"AND NOT EXISTS (SELECT 1 FROM operations pending WHERE pending.layer=o.layer "+
 		"AND pending.box_uuid=o.box_uuid AND pending.incarnation=o.incarnation "+
 		"AND pending.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') "+
@@ -144,7 +144,7 @@ func (s *Store) PrepareExecGC(ctx context.Context, opID, stream string, now time
 	// the entire native incarnation: never silently delete its other stream.
 	var gcBusy int
 	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM exec_output_gc WHERE project=? "+
-		"AND box_uuid=? AND state IN ('DELETE_SENT','REVIEW_REQUIRED')",
+		"AND box_uuid=? AND state IN ('DELETE_SENT','REVIEW_REQUIRED','REVIEWED_RELEASED')",
 		out.Project, out.BoxUUID).Scan(&gcBusy)
 	if err != nil {
 		return ExecGCIntent{}, err
