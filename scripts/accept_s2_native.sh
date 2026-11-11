@@ -730,6 +730,12 @@ done
 test -n "$ack_uuid"
 test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
 echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
+# Genuine accepted-but-unbound native Create is an explicit negative Delete
+# boundary: even an independently witnessed UUID cannot authorize adoption.
+BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
 
 # Reopen the SAME unknown journal; do not replay the original Create.
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :

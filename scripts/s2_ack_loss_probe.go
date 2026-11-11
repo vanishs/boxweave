@@ -408,7 +408,8 @@ func testAcceptedUpdatePostread(ctx context.Context, s *mcp.ClientSession, resum
 func main() {
 	require(len(os.Args) == 2 && (os.Args[1] == "start" || os.Args[1] == "resume" || os.Args[1] == "etag" ||
 		os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume" ||
-		os.Args[1] == "postread" || os.Args[1] == "postread_resume"),
+		os.Args[1] == "postread" || os.Args[1] == "postread_resume" ||
+		os.Args[1] == "unbound_delete"),
 		"start/resume/etag/update_ack/update_ack_resume mode required")
 	file := os.Getenv("BW_S2_ACK_STATE_FILE")
 	require(strings.HasPrefix(file, "/tmp/bw-v1-s2-ghci.") &&
@@ -427,6 +428,27 @@ func main() {
 	}
 	if os.Args[1] == "update_ack" || os.Args[1] == "update_ack_resume" {
 		testAcceptedUpdateAckLoss(ctx, s, os.Args[1] == "update_ack_resume")
+		return
+	}
+	if os.Args[1] == "unbound_delete" {
+		// The native Incus operation may already have accepted Create 202
+		// and assigned this exact UUID; BoxWeave must NOT adopt/delete it
+		// until its original durable Create has independently verified it.
+		actual := os.Getenv("BW_S2_ACK_NATIVE_UUID")
+		require(len(actual) == 36, "native admin's exact UUID witness missing")
+		data, err := os.ReadFile(file)
+		if err != nil { panic(err) }
+		var original saved
+		if err := json.Unmarshal(data, &original); err != nil { panic(err) }
+		require(original.OriginalID != "", "original accepted Create receipt missing")
+		checkUnknown(ctx, s, original.OriginalID)
+		result, err := invoke(ctx, s, "box_delete", map[string]any{
+			"box_id": actual,
+			"idempotency_key": "s2-p1-unbound-create-delete-must-deny",
+		})
+		require(err != nil, fmt.Sprintf("unbound real native UUID was deleted or adopted: %+v", result))
+		checkUnknown(ctx, s, original.OriginalID)
+		fmt.Println("S2_P1_REAL_UNBOUND_CREATE_UUID_DELETE_REFUSED_WITHOUT_REDISPATCH=PASS")
 		return
 	}
 	if os.Args[1] == "start" {
