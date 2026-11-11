@@ -1180,6 +1180,32 @@ func main() {
 		quietOut["exit_code"] == float64(0), "quiet Exec fabricated output or lost return")
 	fmt.Println("S2_NATIVE_QUIET_EXEC_RECORDED_ZERO_EXIT=PASS")
 
+	// A command that would emit indefinitely must be terminated by the
+	// explicitly admitted guest timeout, not by the MCP request lifetime.
+	// The native Operation can finish successfully while the guest command
+	// has the distinct nonzero timeout exit and bounded recorded stdout.
+	continuous := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c",
+			"while :; do printf 'continuous-guest-stdout-110x\\n'; sleep 0.05; done"},
+		"timeout_ms": 1600,
+		"idempotency_key": "native-s2-continuous-output-timeout-01",
+	})
+	continuousID := id(continuous)
+	continuousFinal := wait(ctx, admin, continuousID)
+	check(field(continuousFinal, "state") == "SUCCEEDED",
+		"guest timeout falsely marked native Operation as unknown or failed")
+	continuousOut := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": continuousID, "stream": "stdout", "offset": 0, "limit": 65536,
+	})
+	continuousBytes, continuousErr := base64.StdEncoding.DecodeString(field(continuousOut, "content_base64"))
+	check(continuousErr == nil && len(continuousBytes) > 0 &&
+		len(continuousBytes) <= 65536 &&
+		strings.Contains(string(continuousBytes), "continuous-guest-stdout-110x") &&
+		continuousOut["command_success"] == false &&
+		continuousOut["exit_code"] == float64(124),
+		"bounded continuously emitting guest did not stop with GNU timeout exit 124")
+	fmt.Println("S2_P2_REAL_CONTINUOUS_STDOUT_GUEST_TIMEOUT_NOT_MCP_CANCELLATION=PASS")
+
 	// A deliberately cancelled read-side long poll cannot cancel or undo
 	// the already accepted native Exec. Use a fresh client for the broken
 	// HTTP request so the original actor session remains independent.
