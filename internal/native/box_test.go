@@ -220,7 +220,7 @@ func TestS2EffectiveNICAndDiskAlwaysReadRegardlessOfMapIteration(t *testing.T) {
 func TestS2MalformedNativeExecReturnAndStreamMetadataFailClosed(t *testing.T) {
 	goodPath := "/1.0/instances/alpha/logs/exec-output/a.stdout"
 	samples := []struct {
-		name string
+		name     string
 		metadata map[string]any
 	}{
 		{"string-exit", map[string]any{"return": "0", "output": map[string]any{"1": goodPath}}},
