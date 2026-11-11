@@ -1067,6 +1067,39 @@ func main() {
 		"viewer actor_id filter widened privileges to a foreign token")
 	fmt.Println("S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED=PASS")
 
+	// Cross-actor idempotency cannot be borrowed by intentionally choosing
+	// the SAME untrusted key. Each authenticated principal owns its own
+	// original durable effect, native ID and typed output. Only the same
+	// principal replay returns that exact original receipt without new Exec.
+	sharedKey := "native-s2-same-key-two-independent-admin-actors-01"
+	crossActorArgs := map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf cross-actor-original"},
+		"idempotency_key": sharedKey, "work_ref": sharedWork,
+		"agent_ref": "cross-actor-independent",
+	}
+	crossOne := call(ctx, admin, "box_exec", crossActorArgs)
+	crossOneID := id(crossOne)
+	wait(ctx, admin, crossOneID)
+	crossTwo := call(ctx, admin2, "box_exec", crossActorArgs)
+	crossTwoID := id(crossTwo)
+	wait(ctx, admin2, crossTwoID)
+	check(crossOneID != crossTwoID, "second authenticated actor borrowed first actor's idempotency key")
+	for _, proof := range []struct {
+		session *mcp.ClientSession
+		original string
+	}{{admin, crossOneID}, {admin2, crossTwoID}} {
+		replay := call(ctx, proof.session, "box_exec", crossActorArgs)
+		check(id(replay) == proof.original && replay["duplicate"] == true,
+			"same principal key did not reuse exact original receipt")
+		output := call(ctx, proof.session, "operation_output_get", map[string]any{
+			"operation_id": proof.original, "stream": "stdout", "limit": 4096,
+		})
+		decodedOutput, err := base64.StdEncoding.DecodeString(field(output, "content_base64"))
+		check(err == nil && string(decodedOutput) == "cross-actor-original",
+			"one authenticated actor lost immutable guest stdout after replay")
+	}
+	fmt.Println("S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL=PASS")
+
 	cmd := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf s2-out; printf s2-err >&2; exit 7"},
 		"idempotency_key": "native-s2-exec-nonzero-001",
