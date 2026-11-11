@@ -684,6 +684,7 @@ func main() {
 	box := child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "box_id") == uuid && field(box, "native_state") == "Stopped",
 		"created native UUID/stopped state not confirmed")
+	check(box["guest_ready"] == false, "stopped Box claimed guest readiness without a guest probe")
 	check(box["internet"] == true,
 		"omitted internet must create a Box with effective egress allow")
 	fmt.Println("S2_NATIVE_CREATE_DEFAULT_INTERNET_ALLOW=PASS")
@@ -831,6 +832,9 @@ func main() {
 	check(field(sr, "state") == "SUCCEEDED", "native start failed")
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "native_state") == "Running", "native box did not start")
+	check(box["guest_ready"] == false,
+		"native Running was incorrectly presented as independently proved guest-ready")
+	fmt.Println("S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY=PASS")
 	fmt.Println("S2_NATIVE_START=PASS")
 
 	noopStart := call(ctx, admin, "box_start", map[string]any{"box_id": uuid,
