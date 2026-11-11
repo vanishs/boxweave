@@ -342,10 +342,10 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 		{"box_list", map[string]any{"native_project": "foreign-project"}},
 		{"box_create", map[string]any{
 			"name": "bw-s2-unknown-pool-must-not-create",
-			"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"cpu":  1, "memory_mib": 512, "disk_gib": 2,
 			"start": false, "internet": false,
 			"idempotency_key": "s2-unknown-pool-must-not-create-01",
-			"root_pool": "foreign-storage-pool",
+			"root_pool":       "foreign-storage-pool",
 		}},
 	} {
 		result, callErr := admin.CallTool(ctx, &mcp.CallToolParams{
