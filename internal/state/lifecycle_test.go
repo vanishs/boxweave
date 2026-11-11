@@ -3,6 +3,8 @@ package state
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -182,5 +184,104 @@ func TestS2RecoverUndispatchedDoesNotReplay(t *testing.T) {
 	}
 	if err := st.Claim(ctx, r.ID); !errors.Is(err, ErrState) {
 		t.Fatalf("undispatched task re-claimed: %v", err)
+	}
+}
+
+
+// The native Create 202 can have been acknowledged and its exact UUID
+// atomically registered while the original operation is still VERIFYING.
+// Independently keyed Deletes must not race into this ownership window.
+// This is a SQLite admission/race proof, not a substitute for installed
+// Incus/MCP fault injection at the same boundary.
+func TestS2BoundCreateBeforeCompletionRejectsDifferentKeyDeleteAdmits(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	_, owner, err := st.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, other, err := st.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createInput := Admission{
+		Layer: "project-bound", ActorID: owner.ID, TokenID: owner.ID,
+		Key: "create-bound-inflight-original", RequestID: "original-create",
+		Action: "box_create", ResourceKey: "box:bound-box",
+		SafeIntent: []byte(`{"name":"bound-box"}`),
+	}
+	original, err := st.Admit(ctx, createInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Claim(ctx, original.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.NativeAck(ctx, original.ID, "original-native-create-202"); err != nil {
+		t.Fatal(err)
+	}
+	const uuid = "exact-created-uuid-bound"
+	if err := st.RegisterCreatedBox(ctx, original.ID, "project-bound", "bound-box", uuid); err != nil {
+		t.Fatal(err)
+	}
+	bound, err := st.OwnedBox(ctx, "project-bound", uuid)
+	if err != nil || bound.UUID != uuid {
+		t.Fatalf("original native UUID not bound: %+v %v", bound, err)
+	}
+	pending, err := st.Get(ctx, original.ID)
+	if err != nil || pending.State != "VERIFYING" || pending.BoxUUID != uuid {
+		t.Fatalf("lost pending original while already bound: %+v %v", pending, err)
+	}
+
+	// Competing callers/keys enter SQLite concurrently while the already
+	// bound original has not yet durably transitioned to SUCCEEDED.
+	var wg sync.WaitGroup
+	failures := make(chan error, 24)
+	for i := 0; i < 24; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			actor := owner.ID
+			if i%2 != 0 {
+				actor = other.ID
+			}
+			key := fmt.Sprintf("delete-different-key-%03d", i)
+			_, e := st.Admit(ctx, Admission{
+				Layer: "project-bound", ActorID: actor, TokenID: actor,
+				Key: key, RequestID: key, Action: "box_delete",
+				BoxUUID: uuid, Incarnation: uuid, ResourceKey: "box:bound-box",
+				SafeIntent: []byte(`{"box_id":"exact-created-uuid-bound"}`),
+			})
+			if !errors.Is(e, ErrResourceLocked) {
+				failures <- fmt.Errorf("parallel Delete admitted under original Create lock, index %d: %v", i, e)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(failures)
+	for failure := range failures {
+		t.Error(failure)
+	}
+	if t.Failed() {
+		return
+	}
+	replay, err := st.Admit(ctx, createInput)
+	if err != nil || !replay.Duplicate || replay.ID != original.ID || replay.State != "VERIFYING" {
+		t.Fatalf("different-key Delete race damaged original Create replay: %+v %v", replay, err)
+	}
+	if err := st.Verified(ctx, original.ID); err != nil {
+		t.Fatal(err)
+	}
+	// The lock is releasable only after successful independent verification,
+	// while the original operation ID and exact UUID remain unchanged.
+	after, err := st.Admit(ctx, Admission{
+		Layer: "project-bound", ActorID: owner.ID, TokenID: owner.ID,
+		Key: "delete-after-original-verified", RequestID: "post-create",
+		Action: "box_delete", BoxUUID: uuid, Incarnation: uuid,
+		ResourceKey: "box:bound-box",
+		SafeIntent: []byte(`{"box_id":"exact-created-uuid-bound"}`),
+	})
+	if err != nil || after.ID == original.ID || after.BoxUUID != uuid {
+		t.Fatalf("verified original failed to release exact-resource lock: %+v %v", after, err)
 	}
 }
