@@ -344,7 +344,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, rec := range first.Operations {
-		if rec.State != "ADMITTED" || rec.ID == ids[0] {
+		if rec.State != "ADMITTED" || rec.ID == ids[4] {
 			t.Fatalf("first page unexpectedly included the oldest later-changed row: %+v", rec)
 		}
 		seen[rec.ID] = true
@@ -352,7 +352,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	// Independently change a not-yet-visited originally ADMITTED row to a
 	// durable terminal state. The old signed cursor may not duplicate rows
 	// or return an out-of-filter receipt.
-	if err := s.CancelQueued(ctx, "L0", ids[0]); err != nil {
+	if err := s.CancelQueued(ctx, "L0", ids[4]); err != nil {
 		t.Fatal(err)
 	}
 	q.Cursor = first.NextCursor
@@ -361,7 +361,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 		t.Fatalf("continuation across status transition: %+v %v", second, err)
 	}
 	for _, rec := range second.Operations {
-		if rec.State != "ADMITTED" || rec.ID == ids[0] || seen[rec.ID] {
+		if rec.State != "ADMITTED" || rec.ID == ids[4] || seen[rec.ID] {
 			t.Fatalf("status-changing cursor duplicated/leaked receipt: %+v", rec)
 		}
 		seen[rec.ID] = true
@@ -372,7 +372,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	q.Cursor = ""
 	q.State = "CANCELLED"
 	cancelled, err := s.ListOperations(ctx, q)
-	if err != nil || len(cancelled.Operations) != 1 || cancelled.Operations[0].ID != ids[0] {
+	if err != nil || len(cancelled.Operations) != 1 || cancelled.Operations[0].ID != ids[4] {
 		t.Fatalf("fresh state-filtered cursor omitted newly terminal original: %+v %v", cancelled, err)
 	}
 	// An unrelated actor may have an identical untrusted work_ref, but must
