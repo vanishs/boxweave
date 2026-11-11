@@ -135,6 +135,12 @@ func (s *Service) Handler() http.Handler {
 	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)
 	origin := http.NewCrossOriginProtection()
 	return origin.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// MCP resources/Operations are actor-scoped and may contain sensitive
+		// output. Official SDK SetCacheable is advisory and did not emit a
+		// defensive HTTP header in the real S2 protocol black box. Prevent
+		// shared/private HTTP caches from persisting authenticated results.
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Add("Vary", "Authorization")
 		h, _, err := net.SplitHostPort(r.Host)
 		if err != nil || (h != "127.0.0.1" && h != "localhost") {
 			http.Error(w, "invalid Host", http.StatusForbidden)
