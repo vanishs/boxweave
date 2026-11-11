@@ -313,8 +313,8 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 
 func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) {
 	for _, test := range []struct {
-		name string
-		ttl time.Duration
+		name   string
+		ttl    time.Duration
 		revoke bool
 	}{
 		{name: "revoked-during-read", ttl: time.Hour, revoke: true},
@@ -352,7 +352,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 			defer session.Close()
 			response := make(chan struct {
 				result *mcp.CallToolResult
-				err error
+				err    error
 			}, 1)
 			go func() {
 				r, callErr := session.CallTool(ctx, &mcp.CallToolParams{
@@ -363,7 +363,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 				})
 				response <- struct {
 					result *mcp.CallToolResult
-					err error
+					err    error
 				}{r, callErr}
 			}()
 			if test.revoke {
