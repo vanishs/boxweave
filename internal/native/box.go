@@ -54,7 +54,7 @@ type BoxState struct {
 	UUID         string `json:"box_id"`
 	Project      string `json:"project"`
 	NativeState  string `json:"native_state"`
-	GuestReady   bool   `json:"guest_ready"`
+	GuestReady   *bool  `json:"guest_ready"`
 	CPU          string `json:"cpu"`
 	Memory       string `json:"memory"`
 	RootDiskSize string `json:"root_disk_size"`
@@ -208,8 +208,13 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.Memory = inst.ExpandedConfig["limits.memory"]
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
-	// Only a real guest probe may establish GuestReady. Native RUNNING
-	// and guest shell readiness are different truths.
+	// A stopped instance cannot be ready; a Running native instance has
+	// UNKNOWN guest readiness until a separate real guest probe succeeds.
+	// JSON null is deliberately different from false or true.
+	if inst.Status == "Stopped" {
+		notReady := false
+		out.GuestReady = &notReady
+	}
 	return out, etag, nil
 }
 

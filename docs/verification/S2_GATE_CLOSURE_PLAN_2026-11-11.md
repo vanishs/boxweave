@@ -1,5 +1,7 @@
 # S2 scope lock and one-pass exit plan — 2026-11-11
 
+**Candidate-bound changes (2026-11-11):** Real native first overlay run already independently confirmed actual UUID + SQLite VERIFYING with **12 authenticated MCP Deletes refused**. Run failed only because the old GDB tester attempted to remove a nonexistent `armed` marker before releasing the original; this stale harness check has been deleted. New tri-state `guest_ready` is `false` for native Stopped and JSON `null` for Running without a real positive probe — not an invented true/false. Eight nested invalid JSON model cases were SDK/typed decoder rejected locally. The independent evidence index now requires original source, release-candidate SHA256 and named native witnesses, while explicitly keeping WAN/hardware as unresolved. **This is pending source-exact complete CI and not final S2 signoff.**
+
 ## Status and hard boundary
 
 **Current development source:** test-only deterministic post-native-UUID-bind Go overlay on [Draft PR #130](https://github.com/vanishs/boxweave/pull/130). Do **not** call the new overlap PASS before this exact source's disposable Incus suite succeeds. The last fully passed unmodified Incus candidate preceding this change is source `3dc712413705257b9992c13a339cf48bb46c6bf8`, binary SHA256 `2cd6a632831cc3244d6aff4214370e00c8c7769f82633962b5014249dfe0fad0` ([native proof](https://github.com/vanishs/boxweave/actions/runs/43113771010/job/130836335122); all five checks SUCCESS).

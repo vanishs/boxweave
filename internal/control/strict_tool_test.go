@@ -69,3 +69,39 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 		t.Fatalf("box_create ignored explicit unsupported root_pool: %+v", denied)
 	}
 }
+
+// Nested JSON model errors must fail in the official SDK or the typed Tool
+// decoder, before any native handler can interpret them as a safe default.
+func TestS2NestedModelErrorsNeverBecomeNativeIntent(t *testing.T) {
+	_, server, admin, _ := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cli := mcp.NewClient(&mcp.Implementation{Name: "s2-nested-model-negative", Version: "1"}, nil)
+	s, err := cli.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: server.URL + "/mcp",
+		HTTPClient:           &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: admin}},
+		DisableStandaloneSSE: true, MaxRetries: -1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, trial := range []struct {
+		name, label string
+		args        map[string]any
+	}{
+		{"box_create", "nested_start", map[string]any{"name": "bw-s2-model-invalid", "idempotency_key": "s2-model-invalid-create", "start": map[string]any{"value": true}}},
+		{"box_update", "nested_cpu", map[string]any{"box_id": "not-owned", "idempotency_key": "s2-model-invalid-update", "cpu": map[string]any{"value": 1}}},
+		{"box_exec", "nested_argv", map[string]any{"box_id": "not-owned", "idempotency_key": "s2-model-invalid-exec", "argv": []any{map[string]any{"shell": "sh"}}}},
+		{"box_exec", "nested_env_value", map[string]any{"box_id": "not-owned", "idempotency_key": "s2-model-invalid-env", "argv": []string{"true"}, "env": map[string]any{"SAFE_KEY": map[string]any{"value": "secret"}}}},
+		{"operation_list", "nested_since_ns", map[string]any{"since_ns": map[string]any{"value": 100}}},
+		{"operation_get", "nested_wait_ms", map[string]any{"operation_id": "nonexistent", "wait_ms": map[string]any{"value": 15}}},
+		{"operation_output_get", "nested_offset", map[string]any{"operation_id": "nonexistent", "stream": "stdout", "offset": map[string]any{"value": 1}}},
+		{"box_get", "array_uuid", map[string]any{"box_id": []any{"wrong"}}},
+	} {
+		t.Run(trial.label, func(t *testing.T) {
+			r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: trial.name, Arguments: trial.args})
+			if err == nil && (r == nil || !r.IsError) {
+				t.Fatalf("nested invalid model accepted %s: %+v", trial.name, r)
+			}
+		})
+	}
+}

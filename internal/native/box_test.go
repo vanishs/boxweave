@@ -1,6 +1,7 @@
 package native
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -259,5 +260,35 @@ func TestS2MalformedNativeExecReturnAndStreamMetadataFailClosed(t *testing.T) {
 	})
 	if err != nil || out.Exit == nil || *out.Exit != 9 || out.StdoutPath != "" || out.StderrPath == "" {
 		t.Fatalf("stderr-only nonzero native guest result lost distinction: %+v err=%v", out, err)
+	}
+}
+
+// Guest readiness is a tri-state truth: native Stopped gives a verified false;
+// native Running without an actual guest probe gives null, not a false fact.
+func TestS2GuestReadyJSONTriStateDoesNotInferFromNativeRunning(t *testing.T) {
+	running := BoxState{Name: "test", NativeState: "Running"}
+	raw, err := json.Marshal(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err = json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	value, exists := m["guest_ready"]
+	if !exists || value != nil {
+		t.Fatalf("unprobed running guest readiness must be null: %s", raw)
+	}
+	notReady := false
+	stopped := BoxState{Name: "test", NativeState: "Stopped", GuestReady: &notReady}
+	raw, err = json.Marshal(stopped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["guest_ready"] != false {
+		t.Fatalf("stopped guest must report false: %s", raw)
 	}
 }

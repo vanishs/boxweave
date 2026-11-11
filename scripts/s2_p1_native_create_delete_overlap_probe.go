@@ -175,7 +175,8 @@ func main() {
 	must(e == nil && verify.State == "VERIFYING" && verify.BoxUUID == uuid,
 		"real concurrent Delete changed still-held original")
 	fmt.Println("S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS")
-	must(os.Remove(filepath.Join(dir, "armed")) == nil, "failed to disarm future Delete worker")
+	// The test-only Go overlay pauses only box_create; subsequent verified
+	// box_delete does not need any GDB-style disarm marker.
 	newMarker(filepath.Join(dir, "release"), "safe to complete native original\n")
 	final := finish(ctx, mainSession, id)
 	must(field(final, "box_uuid") == uuid, "final Create changed original native UUID")

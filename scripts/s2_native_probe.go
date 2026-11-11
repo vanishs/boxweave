@@ -867,8 +867,8 @@ func main() {
 	check(field(sr, "state") == "SUCCEEDED", "native start failed")
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(field(box, "native_state") == "Running", "native box did not start")
-	check(box["guest_ready"] == false,
-		"native Running was incorrectly presented as independently proved guest-ready")
+	check(box["guest_ready"] == nil,
+		"native Running must report unknown guest readiness (JSON null), not false/true without a real probe")
 	fmt.Println("S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY=PASS")
 	fmt.Println("S2_NATIVE_START=PASS")
 

@@ -65,6 +65,14 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-CLOSURE-062 — actual bound UUID / 12 native MCP Delete refusals, test harness correction and tri-state
+
+- **First exact native overlay attempt:** source `ac194b1d6620dc7f966ad0877895c0127471b6ab`, [disposable Incus/SDK run](https://github.com/vanishs/boxweave/actions/runs/43117248786/job/130848287651) rejected at test-only cleanup, **not** product safety. Independent original native UUID + SQLite VERIFYING and `S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS` were observed. Probe then tried deleting legacy GDB `armed` file, absent in deterministic overlay, and exited before release/legitimate Delete. **Full P1 remains UNVERIFIED** until exact source-specific final PASS.
+- **Correction:** remove obsolete `armed` marker assertion; test-only overlay still a separate CI-only instrumented binary, no committed product worker hook or native fake. Full native full-lifecycle + explicit required marker index added to same job.
+- **Guest Ready:** bool that always returned `false` despite unknown readiness is replaced with `*bool` JSON tri-state: Stopped→false, Running and not actually probed→null. Positive `true` remains unsupported, never inferred. Source/unit and installed official SDK probes must verify.
+- **Input hardening:** eight nested malformed schemas (argv, environment, uint/int, status and cursor fields) rejected by official typed SDK/decoder in independent fastlab; no real guest effect. Another full native/quality/race run pending.
+- **Safety:** old three original UNKNOWNs preserved; protected v1 unchanged, PR #130 still Draft. Public WAN positive and physical power cut remain environmental blockers; S4-dependent delete excluded.
+
 ### LOG-20261111-S2-CLOSURE-061 — scope lock and deterministic post-UUID-bind official SDK race
 
 - **Before:** source `3dc712413705257b9992c13a339cf48bb46c6bf8` five-check native SUCCESS; exactly 17 of 19 grouped TC/A rows incomplete, plus 1 S4-deferred row. Three attempts at optimized Go GDB source-line timing were inconclusive; P1 overlap remains UNVERIFIED.
