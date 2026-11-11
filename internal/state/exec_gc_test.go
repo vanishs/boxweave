@@ -179,64 +179,80 @@ func TestS2ExecGCRejectsTamperedNativePaths(t *testing.T) {
 	}
 }
 
-
 func TestS2ExecGCManualChallengeRecoveryNeverRedispatchesOriginal(t *testing.T) {
 	ctx := context.Background()
 	s, op, actor, boxUUID, _ := setupS2ExecGCTest(t)
 	now := time.Now()
-	if _,err:=s.db.ExecContext(ctx,"UPDATE exec_outputs SET observed_at=? WHERE operation_id=?",
-		now.Add(-8*24*time.Hour).UnixNano(),op);err!=nil{t.Fatal(err)}
-	if _,err:=s.PrepareExecGC(ctx,op,"stdout",now);err!=nil{t.Fatal(err)}
-	if err:=s.FinishExecGC(ctx,op,"stdout","REVIEW_REQUIRED");err!=nil{t.Fatal(err)}
-	inspect,err:=s.ExecGCReviewInspect(ctx,op,"stdout")
-	if err!=nil||inspect.Project!="L0"||inspect.BoxUUID!=boxUUID||inspect.State!="REVIEW_REQUIRED"{
-		t.Fatalf("exact GC review failed: %+v %v",inspect,err)
+	if _, err := s.db.ExecContext(ctx, "UPDATE exec_outputs SET observed_at=? WHERE operation_id=?",
+		now.Add(-8*24*time.Hour).UnixNano(), op); err != nil {
+		t.Fatal(err)
 	}
-	if _,err:=s.IssueExecGCReviewChallenge(ctx,inspect,"reviewer-one","MAYBE");!errors.Is(err,ErrInvalid){
-		t.Fatalf("unproven native status got challenge: %v",err)
+	if _, err := s.PrepareExecGC(ctx, op, "stdout", now); err != nil {
+		t.Fatal(err)
 	}
-	challenge,err:=s.IssueExecGCReviewChallenge(ctx,inspect,"reviewer-one","NATIVE_PRESENT")
-	if err!=nil||len(challenge)!=64{t.Fatalf("no authentic reviewer challenge: %v",err)}
-	reason:="Operator inspected exact native UUID and retained output"
-	cases:=[]struct{ reviewer,challenge,confirm,reason,observed string;ack bool }{
-		{"wrong-reviewer",challenge,boxUUID,reason,"NATIVE_PRESENT",true},
-		{"reviewer-one",challenge,"foreign-uuid",reason,"NATIVE_PRESENT",true},
-		{"reviewer-one",challenge,boxUUID,reason,"NATIVE_MISSING",true},
-		{"reviewer-one",challenge,boxUUID,"short","NATIVE_PRESENT",true},
-		{"reviewer-one",challenge,boxUUID,reason,"NATIVE_PRESENT",false},
+	if err := s.FinishExecGC(ctx, op, "stdout", "REVIEW_REQUIRED"); err != nil {
+		t.Fatal(err)
 	}
-	for _,tc:=range cases{
-		if err:=s.ReleaseExecGCReview(ctx,inspect,tc.reviewer,tc.challenge,
-			tc.confirm,tc.reason,tc.observed,tc.ack);err==nil{
-			t.Fatalf("unauthorized GC release allowed: %+v",tc)
+	inspect, err := s.ExecGCReviewInspect(ctx, op, "stdout")
+	if err != nil || inspect.Project != "L0" || inspect.BoxUUID != boxUUID || inspect.State != "REVIEW_REQUIRED" {
+		t.Fatalf("exact GC review failed: %+v %v", inspect, err)
+	}
+	if _, err := s.IssueExecGCReviewChallenge(ctx, inspect, "reviewer-one", "MAYBE"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unproven native status got challenge: %v", err)
+	}
+	challenge, err := s.IssueExecGCReviewChallenge(ctx, inspect, "reviewer-one", "NATIVE_PRESENT")
+	if err != nil || len(challenge) != 64 {
+		t.Fatalf("no authentic reviewer challenge: %v", err)
+	}
+	reason := "Operator inspected exact native UUID and retained output"
+	cases := []struct {
+		reviewer, challenge, confirm, reason, observed string
+		ack                                            bool
+	}{
+		{"wrong-reviewer", challenge, boxUUID, reason, "NATIVE_PRESENT", true},
+		{"reviewer-one", challenge, "foreign-uuid", reason, "NATIVE_PRESENT", true},
+		{"reviewer-one", challenge, boxUUID, reason, "NATIVE_MISSING", true},
+		{"reviewer-one", challenge, boxUUID, "short", "NATIVE_PRESENT", true},
+		{"reviewer-one", challenge, boxUUID, reason, "NATIVE_PRESENT", false},
+	}
+	for _, tc := range cases {
+		if err := s.ReleaseExecGCReview(ctx, inspect, tc.reviewer, tc.challenge,
+			tc.confirm, tc.reason, tc.observed, tc.ack); err == nil {
+			t.Fatalf("unauthorized GC release allowed: %+v", tc)
 		}
 	}
-	if err:=s.ReleaseExecGCReview(ctx,inspect,"reviewer-one",challenge,
-		boxUUID,reason,"NATIVE_PRESENT",true);err!=nil{t.Fatal(err)}
-	if err:=s.ReleaseExecGCReview(ctx,inspect,"reviewer-one",challenge,
-		boxUUID,reason,"NATIVE_PRESENT",true);!errors.Is(err,ErrState){
-		t.Fatalf("already released GC reused challenge: %v",err)
+	if err := s.ReleaseExecGCReview(ctx, inspect, "reviewer-one", challenge,
+		boxUUID, reason, "NATIVE_PRESENT", true); err != nil {
+		t.Fatal(err)
 	}
-	status,err:=s.ExecGCStreamState(ctx,op,"stdout")
-	if err!=nil||status!="REVIEWED_RELEASED"{t.Fatalf("operator review not durable: %q %v",status,err)}
-	if _,err:=s.PrepareExecGC(ctx,op,"stdout",now);!errors.Is(err,ErrState){
-		t.Fatalf("reviewed original DELETE was automatically requeued: %v",err)
+	if err := s.ReleaseExecGCReview(ctx, inspect, "reviewer-one", challenge,
+		boxUUID, reason, "NATIVE_PRESENT", true); !errors.Is(err, ErrState) {
+		t.Fatalf("already released GC reused challenge: %v", err)
 	}
-	if ids,err:=s.ExecGCCandidates(ctx,now,16);err!=nil||len(ids)!=0{
-		t.Fatalf("unreviewed stderr was automatically erased after a partial lost ACK: %+v %v",ids,err)
+	status, err := s.ExecGCStreamState(ctx, op, "stdout")
+	if err != nil || status != "REVIEWED_RELEASED" {
+		t.Fatalf("operator review not durable: %q %v", status, err)
+	}
+	if _, err := s.PrepareExecGC(ctx, op, "stdout", now); !errors.Is(err, ErrState) {
+		t.Fatalf("reviewed original DELETE was automatically requeued: %v", err)
+	}
+	if ids, err := s.ExecGCCandidates(ctx, now, 16); err != nil || len(ids) != 0 {
+		t.Fatalf("unreviewed stderr was automatically erased after a partial lost ACK: %+v %v", ids, err)
 	}
 	// The manual action releases only the coordination claim, so a NEW
 	// idempotency key can be considered normally; the original is unchanged.
-	_,err=s.Admit(ctx,Admission{
-		Layer:"L0",ActorID:actor,TokenID:actor,Key:"fresh-after-reviewed-gc-0001",
-		Action:"box_stop",SafeIntent:[]byte("{}"),RequestID:"new",
-		BoxUUID:boxUUID,Incarnation:boxUUID,ResourceKey:"box:bw-s2-retention-test",
+	_, err = s.Admit(ctx, Admission{
+		Layer: "L0", ActorID: actor, TokenID: actor, Key: "fresh-after-reviewed-gc-0001",
+		Action: "box_stop", SafeIntent: []byte("{}"), RequestID: "new",
+		BoxUUID: boxUUID, Incarnation: boxUUID, ResourceKey: "box:bw-s2-retention-test",
 	})
-	if err!=nil{t.Fatalf("manually reviewed GC left Box permanently locked: %v",err)}
+	if err != nil {
+		t.Fatalf("manually reviewed GC left Box permanently locked: %v", err)
+	}
 	var total int
-	if err:=s.db.QueryRowContext(ctx,"SELECT COUNT(*) FROM exec_output_gc_audit "+
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM exec_output_gc_audit "+
 		"WHERE operation_id=? AND stream=? AND event IN ('BEFORE_DELETE','REVIEW_REQUIRED','CHALLENGE_ISSUED','REVIEWED_RELEASED')",
-		op,"stdout").Scan(&total);err!=nil||total!=4{
-		t.Fatalf("protected GC review audit incomplete: %d %v",total,err)
+		op, "stdout").Scan(&total); err != nil || total != 4 {
+		t.Fatalf("protected GC review audit incomplete: %d %v", total, err)
 	}
 }

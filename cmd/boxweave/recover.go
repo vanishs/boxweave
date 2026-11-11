@@ -20,8 +20,8 @@ import (
 
 type recoverArgs struct {
 	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer, Stream string
-	Challenge, ConfirmUUID, Reason                                string
-	Approved, Acknowledge                                         bool
+	Challenge, ConfirmUUID, Reason                                        string
+	Approved, Acknowledge                                                 bool
 }
 
 func recoveryPlan(a recoverArgs) install.Plan {
@@ -189,7 +189,6 @@ func performRecovery(a recoverArgs) error {
 	}
 	return errors.New("unsupported recovery mode")
 }
-
 
 // performGCRecovery is reachable ONLY through the existing root-reviewed
 // Unix peer/credential-drop path. It NEVER dispatches a native DELETE;
