@@ -28,7 +28,7 @@ func TestMCPHTTPNeverCachesPrivateOrDeniedResponses(t *testing.T) {
 			if response.Code != tc.want {
 				t.Fatalf("status %d, want %d", response.Code, tc.want)
 			}
-			if got := strings.ToLower(response.Header().Get("Cache-Control")); got != "private, no-store" {
+			if got := strings.ToLower(response.Header().Get("Cache-Control")); got != "private, no-store, no-cache, no-transform" {
 				t.Fatalf("private MCP response has unsafe cache policy: %q", got)
 			}
 			if got := response.Header().Values("Vary"); !strings.Contains(strings.Join(got, ","), "Authorization") {
@@ -40,7 +40,7 @@ func TestMCPHTTPNeverCachesPrivateOrDeniedResponses(t *testing.T) {
 
 func TestPrivateMCPWriterOverridesLateSDKCacheControl(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name  string
 		write func(http.ResponseWriter)
 	}{
 		{name: "write-header", write: func(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) }},
