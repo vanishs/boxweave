@@ -183,6 +183,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-proxy" ./scripts/s2
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-probe" ./scripts/s2_p2_malformed_exec_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-altpool-probe" ./scripts/s2_p2_alternate_pool_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-native-overlap-probe" ./scripts/s2_p1_native_create_delete_overlap_probe.go
 chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
@@ -1490,6 +1491,7 @@ sh scripts/s2_p0_native_sqlite_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_stop_delete_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_token_inflight.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_operation_list_boundary.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_native_create_delete_overlap.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_two_controllers.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_private_read_inflight.sh "$work" "$project" "$socket"
 sh scripts/s2_p1_bound_create_receipt_fault.sh "$work" "$project" "$socket"
