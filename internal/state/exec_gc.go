@@ -207,7 +207,7 @@ func (s *Store) ExecGCStreamState(ctx context.Context, opID, stream string) (str
 		return "", ErrInvalid
 	}
 	var st string
-	err := s.db.QueryRowContext(ctx, "SELECT state FROM exec_output_gc WHERE operation_id=? AND stream=?", opID, stream).Scan(&st)
+	err := s.db.QueryRowContext(ctx, "SELECT j.state FROM exec_output_gc j JOIN operations o ON o.id=j.operation_id AND o.native_operation_id=j.native_operation_id AND o.box_uuid=j.box_uuid AND o.incarnation=j.incarnation AND o.layer=j.project WHERE j.operation_id=? AND j.stream=?", opID, stream).Scan(&st)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}

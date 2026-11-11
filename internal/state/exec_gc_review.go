@@ -33,8 +33,8 @@ func (s *Store) ExecGCReviewInspect(ctx context.Context, opID, stream string) (E
 	var opState,ownedState,action string
 	err:=s.db.QueryRowContext(ctx,"SELECT j.operation_id,j.stream,j.project,j.box_uuid,j.incarnation,"+
 		"j.name,j.native_operation_id,j.path,j.state,j.claimed_at,j.decided_at,o.state,b.state,o.action "+
-		"FROM exec_output_gc j JOIN operations o ON o.id=j.operation_id "+
-		"JOIN owned_boxes b ON b.uuid=j.box_uuid AND b.incarnation=j.incarnation AND b.project=j.project "+
+		"FROM exec_output_gc j JOIN operations o ON o.id=j.operation_id AND o.box_uuid=j.box_uuid AND o.incarnation=j.incarnation AND o.layer=j.project AND o.native_operation_id=j.native_operation_id "+
+		"JOIN owned_boxes b ON b.uuid=j.box_uuid AND b.incarnation=j.incarnation AND b.project=j.project AND b.name=j.name "+
 		"WHERE j.operation_id=? AND j.stream=?",opID,stream).Scan(
 		&r.OperationID,&r.Stream,&r.Project,&r.BoxUUID,&r.Incarnation,&r.Name,
 		&r.NativeOperationID,&r.Path,&r.State,&r.ClaimedAt,&r.DecidedAt,
