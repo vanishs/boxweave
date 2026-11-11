@@ -304,7 +304,9 @@ echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
 # cannot silently use the candidate's newer SDK. No native writes are allowed.
 legacy_client_dir="$work/legacy-sdk-client"
 mkdir -m 0700 "$legacy_client_dir"
-cp scripts/s2_legacy_sdk_probe.go "$legacy_client_dir/main.go"
+# The tracked probe is build-tagged "ignore"; remove only that tag in
+# the isolated client module so go mod tidy also resolves its imports.
+sed '1,2d' scripts/s2_legacy_sdk_probe.go > "$legacy_client_dir/main.go"
 (
   cd "$legacy_client_dir"
   GOWORK=off go mod init boxweave-s2-legacy-client
