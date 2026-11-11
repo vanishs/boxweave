@@ -30,6 +30,9 @@ jobs:
       - name: Independently reject forged or incomplete P3 native evidence
         shell: bash
         run: python3 scripts/test_s2_p3_evidence_audit.py
+      - name: Reject forged S2 grouped TC/A scoped acceptance evidence before native setup
+        shell: bash
+        run: python3 scripts/test_s2_p3_scoped_acceptance.py
       - name: Reject unsafe test hosts and execute original MCP/native lifecycle
         shell: bash
         run: |
@@ -39,3 +42,7 @@ jobs:
             --log "$RUNNER_TEMP/s2-native-acceptance.log" \
             --source "$GITHUB_SHA" \
             --output "$RUNNER_TEMP/s2-native-acceptance-report.json"
+          python3 scripts/s2_p3_scoped_acceptance.py \
+            --log "$RUNNER_TEMP/s2-native-acceptance.log" \
+            --source "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/s2-scope-tc-a-report.json"
