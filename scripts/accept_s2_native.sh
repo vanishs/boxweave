@@ -1246,6 +1246,8 @@ echo "S2_GC_REAL_NATIVE_DELETE_ACK_LOST_ORIGINAL_NOT_REPLAYED=PASS"
 kill "$gc_proxy_pid" 2>/dev/null || :
 wait "$gc_proxy_pid" 2>/dev/null || :
 # Direct-ledger fixture teardown, NOT proof of installed root CLI recovery.
+sh scripts/s2_exec_gc_installed_review.sh "$work" "$mcp_quota_db" "$project" "$socket" \
+  "$retention_op" "$retention_native" "$mcp_quota_uuid"
 s2_gc_nonroot release-test-fixture > "$work/s2-gc-loss-reviewed.txt"
 grep -Fqx "S2_GC_DISPOSABLE_LEDGER_REVIEW_RELEASE_NO_NATIVE_RETRY=PASS" "$work/s2-gc-loss-reviewed.txt"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
