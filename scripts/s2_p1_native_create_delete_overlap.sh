@@ -40,12 +40,30 @@ set print thread-events off
 set non-stop on
 handle SIGURG nostop noprint pass
 handle SIGPIPE nostop noprint pass
-break github.com/vanishs/boxweave/internal/state/worker.go:79
-commands 1
-silent
-shell /bin/sh -c "if test -e $lab/armed; then touch $lab/held; timeout 155 /bin/sh -c 'until test -e $lab/release; do sleep 0.1; done'; fi"
-continue
+python
+import gdb, os, time
+
+def s2_bound_create_pause(event):
+    # A Go GDB breakpoint in non-stop mode delivers an asynchronous
+    # BreakpointEvent; CLI breakpoint command lists do not reliably run.
+    # The callback pauses only the worker's OS thread while the MCP
+    # listener and unrelated goroutines remain live (independently tested).
+    if not isinstance(event, gdb.BreakpointEvent):
+        return
+    if os.path.exists("$lab/armed"):
+        with open("$lab/held", "x") as marker:
+            marker.write("ORIGINAL_NATIVE_UUID_ALREADY_BOUND_VERIFYING\n")
+        for _ in range(1550):
+            if os.path.exists("$lab/release"):
+                break
+            time.sleep(0.1)
+        else:
+            gdb.write("S2_P1_FAIL: worker source-boundary never released\n", gdb.STDERR)
+    gdb.execute("continue", from_tty=False)
+
+gdb.events.stop.connect(s2_bound_create_pause)
 end
+break github.com/vanishs/boxweave/internal/state/worker.go:79
 run
 EOF
 sudo chown boxweave:incus "$work/p1-overlap.gdb"
@@ -55,12 +73,20 @@ probe_pid=""
 cleanup() {
  sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
  if [ -n "$probe_pid" ]; then kill "$probe_pid" 2>/dev/null || :; wait "$probe_pid" 2>/dev/null || :; fi
- if [ -n "$debug_pid" ]; then kill "$debug_pid" 2>/dev/null || :; wait "$debug_pid" 2>/dev/null || :; fi
+ if [ -n "$debug_pid" ]; then
+  kill "$debug_pid" 2>/dev/null || :
+  wait "$debug_pid" 2>/dev/null || :
+ fi
+ sudo pkill -TERM -u boxweave -f "^gdb -nx -q --interpreter=mi2 -x $work/p1-overlap.gdb" || :
 }
 trap cleanup EXIT
-actor gdb -nx -q --batch -x "$work/p1-overlap.gdb" --args \
- "$work/boxweave" serve -db "$db" -incus-socket "$socket" \
- -project "$project" -listen 127.0.0.1:18668 \
+# GDB --batch exits as soon as a non-stop inferior starts. Keep MI's
+# event loop alive with a pipe (no CLI commands); Python BreakpointEvent
+# resumes exactly the stopped thread. This was tested inside the fast lab.
+actor BW_S2_OVERLAP_GDB="$work/p1-overlap.gdb" \
+ BW_S2_OVERLAP_BIN="$work/boxweave" BW_S2_OVERLAP_DB="$db" \
+ BW_S2_OVERLAP_SOCKET="$socket" BW_S2_OVERLAP_PROJECT="$project" \
+ sh -c 'tail -f /dev/null | gdb -nx -q --interpreter=mi2 -x "$BW_S2_OVERLAP_GDB" --args "$BW_S2_OVERLAP_BIN" serve -db "$BW_S2_OVERLAP_DB" -incus-socket "$BW_S2_OVERLAP_SOCKET" -project "$BW_S2_OVERLAP_PROJECT" -listen 127.0.0.1:18668' \
  > "$work/p1-overlap-debugger.redacted.log" 2>&1 &
 debug_pid=$!
 attempt=0
