@@ -345,7 +345,7 @@ func privateHTTPMCPResponse(ctx context.Context, endpoint, token string) {
 	check(strings.Contains(cache, "private") && !strings.Contains(cache, "public") &&
 		(strings.Contains(cache, "no-store") || strings.Contains(cache, "no-cache") ||
 			strings.Contains(cache, "max-age=0")),
-		"MCP private response missing explicit zero-public-freshness policy")
+		fmt.Sprintf("MCP private response cache policy insufficient (cache_control=%q)", cache))
 	fmt.Println("S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL=PASS")
 }
 
