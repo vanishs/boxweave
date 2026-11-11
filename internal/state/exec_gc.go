@@ -39,6 +39,8 @@ func (s *Store) ExecGCCandidates(ctx context.Context, now time.Time, limit int) 
 		"JOIN owned_boxes b ON b.uuid=o.box_uuid AND b.incarnation=o.incarnation AND b.project=o.layer "+
 		"WHERE o.action='box_exec' AND o.state='SUCCEEDED' AND o.native_operation_id<>'' "+
 		"AND e.exit_code IS NOT NULL AND e.observed_at>0 AND e.observed_at<=? AND b.state='OWNED' "+
+		"AND NOT EXISTS (SELECT 1 FROM exec_output_gc blocked WHERE blocked.project=o.layer AND blocked.box_uuid=o.box_uuid "+ 
+		"AND blocked.state IN ('DELETE_SENT','REVIEW_REQUIRED')) "+
 		"AND NOT EXISTS (SELECT 1 FROM operations pending WHERE pending.layer=o.layer "+
 		"AND pending.box_uuid=o.box_uuid AND pending.incarnation=o.incarnation "+
 		"AND pending.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') "+
@@ -120,6 +122,14 @@ func (s *Store) PrepareExecGC(ctx context.Context, opID, stream string, now time
 	var present int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM exec_output_gc WHERE operation_id=? AND stream=?",opID,stream).Scan(&present); err!=nil { return ExecGCIntent{}, err }
 	if present != 0 { return ExecGCIntent{}, ErrState }
+	// A partial/ambiguous prior deletion on ANY stream of this Box holds
+	// the entire native incarnation: never silently delete its other stream.
+	var gcBusy int
+	err=tx.QueryRowContext(ctx,"SELECT COUNT(*) FROM exec_output_gc WHERE project=? "+
+		"AND box_uuid=? AND state IN ('DELETE_SENT','REVIEW_REQUIRED')",
+		out.Project,out.BoxUUID).Scan(&gcBusy)
+	if err!=nil{return ExecGCIntent{},err}
+	if gcBusy!=0{return ExecGCIntent{},ErrResourceLocked}
 	at := now.UnixNano()
 	_,err = tx.ExecContext(ctx, "INSERT INTO exec_output_gc(operation_id,stream,project,box_uuid,incarnation,name,native_operation_id,path,state,claimed_at) "+
 		"VALUES(?,?,?,?,?,?,?,?,?,?)",opID,stream,out.Project,out.BoxUUID,out.Incarnation,out.Name,out.NativeOperationID,out.Path,"DELETE_SENT",at)
