@@ -72,6 +72,23 @@ PY
   grep -Fqx S2_P0_COMBINED_ORIGINAL_NATIVE_UPDATE_ADMITTED=PASS "$work/p0-$phase-admitted.txt"
   attempt=0
   until sudo test -f "$witness" || [ "$attempt" -ge 40 ]; do attempt=$((attempt+1)); sleep 1; done
+  if ! sudo test -f "$witness"; then
+    echo "S2_P0_FAIL: no exact SQLite WAL fd sync-cut witness" >&2
+    if sudo test -f "$marker"; then
+      echo "S2_P0_DIAGNOSTIC: upstream native HTTP 202 marker PRESENT" >&2
+    else
+      echo "S2_P0_DIAGNOSTIC: upstream native HTTP 202 marker ABSENT" >&2
+    fi
+    if sudo test -f "$arm"; then
+      echo "S2_P0_DIAGNOSTIC: post-acceptance WAL-cut arm PRESENT" >&2
+    else
+      echo "S2_P0_DIAGNOSTIC: post-acceptance WAL-cut arm ABSENT" >&2
+    fi
+    # No raw native HTTP content or tokens: only a compiled marker emitted
+    # by the restricted one-use proxy for this exact disposable Update.
+    grep -F "S2_P0_SCOPED_NATIVE_UPDATE_HTTP_STATUS=" "$work/p0-$phase-proxy.redacted.log" >&2 || :
+    exit 96
+  fi
   sudo grep -Fqx ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED "$witness"
   sudo grep -Eq '^NATIVE_REAL_UPDATE_202_ACCEPTED=[0-9a-f-]{36}$' "$marker"
   set +e; wait "$service_pid"; rc=$?; set -e; test "$rc" -ne 0; service_pid=""

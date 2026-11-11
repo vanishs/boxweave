@@ -122,12 +122,21 @@ func main() {
 		var native struct {
 			Operation string `json:"operation"`
 		}
-		if err != nil || response.StatusCode != http.StatusAccepted ||
-			json.Unmarshal(ack, &native) != nil || !nativeUUID.MatchString(filepath.Base(native.Operation)) {
+		jsonErr := json.Unmarshal(ack, &native)
+		nativeURL, urlErr := url.Parse(native.Operation)
+		nativeID := ""
+		if nativeURL != nil && strings.HasPrefix(nativeURL.Path, "/1.0/operations/") {
+			nativeID = strings.TrimPrefix(nativeURL.Path, "/1.0/operations/")
+		}
+		log.Printf("S2_P0_SCOPED_NATIVE_UPDATE_HTTP_STATUS=%d native_id_well_formed=%t",
+			response.StatusCode, nativeUUID.MatchString(nativeID))
+		if err != nil || response.StatusCode != http.StatusAccepted || jsonErr != nil ||
+			urlErr != nil || !nativeUUID.MatchString(nativeID) ||
+			nativeURL.Query().Get("project") != "" && nativeURL.Query().Get("project") != *project {
 			http.Error(w, "exact original native operation was not accepted", http.StatusBadGateway)
 			return
 		}
-		if err := writeDurable(*marker, "NATIVE_REAL_UPDATE_202_ACCEPTED="+filepath.Base(native.Operation)+"\n"); err != nil {
+		if err := writeDurable(*marker, "NATIVE_REAL_UPDATE_202_ACCEPTED="+nativeID+"\n"); err != nil {
 			http.Error(w, "cannot record original native acceptance", http.StatusBadGateway)
 			return
 		}
