@@ -22,6 +22,41 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
+// privateMCPWriter applies the actor-private policy at the actual response
+// commit boundary. The pinned MCP SDK writes "no-cache, no-transform" AFTER
+// our handler sets headers; no-cache alone permits storage in shared caches.
+// Preserve the SDK no-transform intent and keep flushing/ResponseController
+// capabilities, without buffering guest output in the controller.
+type privateMCPWriter struct {
+	http.ResponseWriter
+}
+
+func (w *privateMCPWriter) applyPolicy() {
+	w.Header().Set("Cache-Control", "private, no-store, no-cache, no-transform")
+	w.Header().Add("Vary", "Authorization")
+}
+
+func (w *privateMCPWriter) WriteHeader(status int) {
+	w.applyPolicy()
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *privateMCPWriter) Write(p []byte) (int, error) {
+	w.applyPolicy()
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *privateMCPWriter) Flush() {
+	w.applyPolicy()
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *privateMCPWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 type Service struct {
 	Store        *state.Store
 	Native       native.Reader
@@ -135,12 +170,9 @@ func (s *Service) Handler() http.Handler {
 	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)
 	origin := http.NewCrossOriginProtection()
 	return origin.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// MCP resources/Operations are actor-scoped and may contain sensitive
-		// output. Official SDK SetCacheable is advisory and did not emit a
-		// defensive HTTP header in the real S2 protocol black box. Prevent
-		// shared/private HTTP caches from persisting authenticated results.
-		w.Header().Set("Cache-Control", "private, no-store")
-		w.Header().Add("Vary", "Authorization")
+		// The SDK may reset Cache-Control after entering the handler, so wrap
+		// the original writer and re-apply the policy at WriteHeader/Write/Flush.
+		w = &privateMCPWriter{ResponseWriter: w}
 		h, _, err := net.SplitHostPort(r.Host)
 		if err != nil || (h != "127.0.0.1" && h != "localhost") {
 			http.Error(w, "invalid Host", http.StatusForbidden)

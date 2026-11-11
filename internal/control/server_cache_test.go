@@ -37,3 +37,27 @@ func TestMCPHTTPNeverCachesPrivateOrDeniedResponses(t *testing.T) {
 		})
 	}
 }
+
+func TestPrivateMCPWriterOverridesLateSDKCacheControl(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		write func(http.ResponseWriter)
+	}{
+		{name: "write-header", write: func(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) }},
+		{name: "implicit-write", write: func(w http.ResponseWriter) { _, _ = w.Write([]byte("ok")) }},
+		{name: "flush", write: func(w http.ResponseWriter) { w.(http.Flusher).Flush() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			protected := &privateMCPWriter{ResponseWriter: rec}
+			protected.Header().Set("Cache-Control", "no-cache, no-transform")
+			tc.write(protected)
+			cache := strings.ToLower(rec.Header().Get("Cache-Control"))
+			if !strings.Contains(cache, "private") || !strings.Contains(cache, "no-store") ||
+				!strings.Contains(cache, "no-transform") {
+				t.Fatalf("SDK cache header was not replaced at response commit: %q", cache)
+			}
+		})
+	}
+}
+
