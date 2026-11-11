@@ -34,6 +34,8 @@ var schemaDDL = []string{
 	"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
 	"CREATE TABLE cursor_secrets (id INTEGER PRIMARY KEY CHECK(id=1), secret BLOB NOT NULL CHECK(length(secret)=32))",
 	"CREATE TABLE exec_outputs (operation_id TEXT PRIMARY KEY REFERENCES operations(id), stdout_path TEXT NOT NULL DEFAULT '', stderr_path TEXT NOT NULL DEFAULT '', exit_code INTEGER, truncation INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)",
+	"CREATE TABLE exec_output_gc (operation_id TEXT NOT NULL REFERENCES operations(id), stream TEXT NOT NULL CHECK(stream IN ('stdout','stderr')), project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, name TEXT NOT NULL, native_operation_id TEXT NOT NULL, path TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('DELETE_SENT','EXPIRED','REVIEW_REQUIRED')), claimed_at INTEGER NOT NULL, decided_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation_id,stream))",
+	"CREATE TABLE exec_output_gc_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, stream TEXT NOT NULL, at INTEGER NOT NULL, event TEXT NOT NULL CHECK(event IN ('BEFORE_DELETE','EXPIRED','REVIEW_REQUIRED','RECOVERED_UNCERTAIN')), FOREIGN KEY(operation_id,stream) REFERENCES exec_output_gc(operation_id,stream))",
 }
 
 var schemaIndexes = []string{
@@ -44,6 +46,7 @@ var schemaIndexes = []string{
 	"CREATE INDEX operations_state_time ON operations(layer,state,created_at,id)",
 	"CREATE INDEX operations_resource_claim ON operations(layer,resource_key,state)",
 	"CREATE UNIQUE INDEX owned_active_name ON owned_boxes(project,name) WHERE state='OWNED'",
+	"CREATE INDEX exec_output_gc_box_status ON exec_output_gc(project,box_uuid,state)",
 }
 
 var (
@@ -439,6 +442,19 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		if busy != 0 {
 			return Receipt{}, ErrResourceLocked
 		}
+	}
+	// An original retained-output deletion currently in progress or requiring
+	// independent review forbids admission of a new effect on the same native
+	// Box/name. This participates in the SAME admission transaction as the
+	// original mutation resource lock, preventing name-reuse TOCTOU.
+	if a.BoxUUID != "" || a.ResourceKey != "" {
+		var gcBusy int
+		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM exec_output_gc WHERE project=? "+
+			"AND state IN ('DELETE_SENT','REVIEW_REQUIRED') AND "+
+			"((?<>'' AND box_uuid=?) OR (?<>'' AND ('box:'||name)=?))",
+			a.Layer,a.BoxUUID,a.BoxUUID,a.ResourceKey,a.ResourceKey).Scan(&gcBusy)
+		if err != nil { return Receipt{},err }
+		if gcBusy > 0 { return Receipt{},ErrResourceLocked }
 	}
 	if a.BoxUUID != "" && a.Incarnation != "" {
 		// A different idempotency key cannot bypass an original UNKNOWN

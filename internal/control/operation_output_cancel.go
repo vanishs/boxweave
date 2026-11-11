@@ -70,13 +70,6 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if original.Action != "box_exec" || original.BoxUUID == "" {
 			return nil, operationOutputResult{}, state.ErrNotFound
 		}
-		box, err := s.Store.OwnedBox(ctx, layer, original.BoxUUID)
-		if err != nil {
-			return nil, operationOutputResult{}, err
-		}
-		if _, _, err = s.Native.GetExactBox(ctx, box.Name, box.UUID); err != nil {
-			return nil, operationOutputResult{}, err
-		}
 		out, err := s.Store.ExecOutput(ctx, original.ID)
 		if err != nil {
 			return nil, operationOutputResult{}, err
@@ -94,6 +87,23 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if out.ExitCode != nil {
 			ok := *out.ExitCode == 0
 			result.CommandSuccess = &ok
+		}
+		gcState, err := s.Store.ExecGCStreamState(ctx, original.ID, in.Stream)
+		if err != nil {
+			return nil, operationOutputResult{}, err
+		}
+		if gcState == "EXPIRED" {
+			result.Ended, result.NextOffset = true, in.Offset
+			result.Availability = "expired"
+			result.UnavailableReason = "RETENTION_EXPIRED_VERIFIED"
+			return &mcp.CallToolResult{}, result, nil
+		}
+		box, err := s.Store.OwnedBox(ctx, layer, original.BoxUUID)
+		if err != nil {
+			return nil, operationOutputResult{}, err
+		}
+		if _, _, err = s.Native.GetExactBox(ctx, box.Name, box.UUID); err != nil {
+			return nil, operationOutputResult{}, err
 		}
 		if path == "" {
 			result.Ended = true

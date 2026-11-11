@@ -172,5 +172,8 @@ func (s *Service) ListenAndServe() error {
 		return errors.New("refusing to run MCP service as root")
 	}
 	server := &http.Server{Addr: s.Listener, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 16}
+	gcCtx,gcCancel:=context.WithCancel(context.Background())
+	defer gcCancel()
+	go s.execGCLoop(gcCtx)
 	return server.ListenAndServe()
 }

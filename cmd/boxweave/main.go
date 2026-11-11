@@ -207,6 +207,11 @@ func run() error {
 		if _, err := s.Recover(ctx); err != nil {
 			return err
 		}
+		// A crash between native DELETE and its verification is NEVER
+		// interpreted as safe to reissue. Audit and hold the exact Box.
+		if _, err := s.RecoverExecGC(ctx); err != nil {
+			return err
+		}
 	}
 	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener}
 	switch command {
