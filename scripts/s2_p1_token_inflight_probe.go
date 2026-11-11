@@ -113,9 +113,9 @@ func statusChangeDuringInstalledPaging(ctx context.Context, st *state.Store, pro
 	for i := 0; i < 5; i++ {
 		receipt, e := st.Admit(ctx, state.Admission{
 			Layer: project, ActorID: actor.ID, TokenID: actor.ID,
-			Key: fmt.Sprintf("s2-p1-installed-cursor-%02d-original", i),
+			Key:       fmt.Sprintf("s2-p1-installed-cursor-%02d-original", i),
 			RequestID: fmt.Sprintf("cursor-request-%02d", i),
-			Action: "box_exec", SafeIntent: []byte("{\"kind\":\"controller-only\"}"),
+			Action:    "box_exec", SafeIntent: []byte("{\"kind\":\"controller-only\"}"),
 			WorkRef: "lab/p1-installed-cursor", AgentRef: "p1-cursor",
 		})
 		check(e == nil && receipt.State == "ADMITTED",
