@@ -312,3 +312,78 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 		t.Fatalf("unsigned rowid ceiling escalation accepted: %v", err)
 	}
 }
+
+func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	_, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, 0, 5)
+	for i := 0; i < 5; i++ {
+		rec, err := s.Admit(ctx, Admission{
+			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
+			Key: fmt.Sprintf("s2-live-state-cursor-%02d", i),
+			Action: "box_exec", RequestID: fmt.Sprintf("req-%02d", i),
+			SafeIntent: []byte(fmt.Sprintf(`{"seq":%d}`, i)),
+			WorkRef: "lab/live-state-pagination", AgentRef: "probe",
+		})
+		if err != nil || rec.State != "ADMITTED" {
+			t.Fatalf("failed original admission %d: %+v %v", i, rec, err)
+		}
+		ids = append(ids, rec.ID)
+	}
+	q := OperationQuery{
+		Layer: "L0", Requester: actor.ID, Role: "viewer",
+		WorkRef: "lab/live-state-pagination", State: "ADMITTED", Limit: 2,
+	}
+	first, err := s.ListOperations(ctx, q)
+	if err != nil || len(first.Operations) != 2 || first.NextCursor == "" {
+		t.Fatalf("original in-flight page: %+v %v", first, err)
+	}
+	seen := map[string]bool{}
+	for _, rec := range first.Operations {
+		if rec.State != "ADMITTED" || rec.ID == ids[0] {
+			t.Fatalf("first page unexpectedly included the oldest later-changed row: %+v", rec)
+		}
+		seen[rec.ID] = true
+	}
+	// Independently change a not-yet-visited originally ADMITTED row to a
+	// durable terminal state. The old signed cursor may not duplicate rows
+	// or return an out-of-filter receipt.
+	if err := s.CancelQueued(ctx, "L0", ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	q.Cursor = first.NextCursor
+	second, err := s.ListOperations(ctx, q)
+	if err != nil || len(second.Operations) != 2 || second.NextCursor != "" {
+		t.Fatalf("continuation across status transition: %+v %v", second, err)
+	}
+	for _, rec := range second.Operations {
+		if rec.State != "ADMITTED" || rec.ID == ids[0] || seen[rec.ID] {
+			t.Fatalf("status-changing cursor duplicated/leaked receipt: %+v", rec)
+		}
+		seen[rec.ID] = true
+	}
+	if len(seen) != 4 {
+		t.Fatalf("stable original cursor lost rows: %d", len(seen))
+	}
+	q.Cursor = ""
+	q.State = "CANCELLED"
+	cancelled, err := s.ListOperations(ctx, q)
+	if err != nil || len(cancelled.Operations) != 1 || cancelled.Operations[0].ID != ids[0] {
+		t.Fatalf("fresh state-filtered cursor omitted newly terminal original: %+v %v", cancelled, err)
+	}
+	// An unrelated actor may have an identical untrusted work_ref, but must
+	// never borrow the original row or signed cursor.
+	_, other, err := s.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q.Requester = other.ID
+	foreign, err := s.ListOperations(ctx, q)
+	if err != nil || len(foreign.Operations) != 0 {
+		t.Fatalf("unrelated actor borrowed a status-changing original: %+v %v", foreign, err)
+	}
+}
