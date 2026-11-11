@@ -211,6 +211,7 @@ func read(ctx context.Context, dir, project string) {
 	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK=PASS")
 	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS")
 }
+
 // A true native recorded stdout HTTP 200 is deliberately held at a
 // restricted Unix proxy. Aborting this read must neither cancel the stored
 // native Exec nor prevent another authenticated client from reading it.
