@@ -165,10 +165,11 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_pr
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-exec-gc-probe" ./scripts/s2_exec_gc_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_sqlite_fsync_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-sqlite-fsync-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-sqlite-fsync-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -1145,6 +1146,62 @@ print(int(v.get("metadata",v)["usage"]["used"]))
 PY
 )"
 test "$mcp_reclaimed" -lt $((mcp_after - mcp_fill_bytes / 2))
+# 7-day retention real Incus/MCP proof on a new disposable original.
+retention_op=""
+retention_native=""
+s2_gc() {
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    BW_S2_GC_DB="$mcp_quota_db" BW_S2_GC_TOKEN="$mcp_quota_token" \
+    BW_S2_GC_PROJECT="$project" BW_S2_GC_UUID="$mcp_quota_uuid" \
+    BW_S2_GC_OPERATION="$retention_op" BW_S2_GC_NATIVE="$retention_native" \
+    BW_S2_GC_SOCKET="$socket" "$work/s2-exec-gc-probe" "$1"
+}
+s2_gc create > "$work/s2-gc-original.txt"
+grep -Fqx "S2_GC_PUBLIC_FRESH_BOTH_STREAMS=PASS" "$work/s2-gc-original.txt"
+retention_op="$(sed -n 's/^S2_GC_ORIGINAL_ID=//p' "$work/s2-gc-original.txt")"
+retention_native="$(sed -n 's/^S2_GC_NATIVE_ID=//p' "$work/s2-gc-original.txt")"
+echo "$retention_op" | grep -Eq '^[0-9a-f]{32}$'
+echo "$retention_native" | grep -Eq '^[0-9a-f-]{36}$'
+for stream in stdout stderr; do
+  sudo test -f "$mcp_spool/exec_$retention_native.$stream"
+done
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+s2_gc_nonroot() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_GC_DB="$mcp_quota_db" BW_S2_GC_TOKEN="$mcp_quota_token" \
+    BW_S2_GC_PROJECT="$project" BW_S2_GC_UUID="$mcp_quota_uuid" \
+    BW_S2_GC_OPERATION="$retention_op" BW_S2_GC_NATIVE="$retention_native" \
+    BW_S2_GC_SOCKET="$socket" "$work/s2-exec-gc-probe" "$1"
+}
+s2_gc_nonroot age > "$work/s2-gc-age.txt"
+grep -Fqx "S2_GC_SEVEN_DAYS_NOT_PREMATURELY_EXPIRED=PASS" "$work/s2-gc-age.txt"
+s2_gc_nonroot sweep > "$work/s2-gc-sweep.txt"
+grep -Fqx "S2_GC_NATIVE_7D_TWO_STREAMS_DELETE_AUDIT_404_NO_REPLAY=PASS" "$work/s2-gc-sweep.txt"
+for stream in stdout stderr; do
+  sudo test ! -f "$mcp_spool/exec_$retention_native.$stream"
+done
+echo "S2_GC_INDEPENDENT_PHYSICAL_TWO_NATIVE_LOGS_REMOVED=PASS"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-retention-restart.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+s2_gc check > "$work/s2-gc-public-expired.txt"
+grep -Fqx "S2_GC_PUBLIC_ORIGINAL_TWO_STREAMS_EXPIRED=PASS" "$work/s2-gc-public-expired.txt"
+echo "S2_GC_APPROVED_SEVEN_DAY_COMPLETE_NATIVE_MCP_CYCLE=PASS"
+
 s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
 grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
