@@ -1085,7 +1085,7 @@ func main() {
 	wait(ctx, admin2, crossTwoID)
 	check(crossOneID != crossTwoID, "second authenticated actor borrowed first actor's idempotency key")
 	for _, proof := range []struct {
-		session *mcp.ClientSession
+		session  *mcp.ClientSession
 		original string
 	}{{admin, crossOneID}, {admin2, crossTwoID}} {
 		replay := call(ctx, proof.session, "box_exec", crossActorArgs)
