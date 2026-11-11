@@ -267,11 +267,30 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 	if len(seen) != 5 || q.Cursor != "" {
 		t.Fatalf("old cursor lost/duplicated rows, len=%d cursor=%q", len(seen), q.Cursor)
 	}
-	// Independent fresh read exposes the newly committed append.
+	// A fresh cursor now traverses all eight committed rows, including
+	// three that could not appear in the original five-row cursor.
 	q.Cursor = ""
-	fresh, err := s.ListOperations(ctx, q)
-	if err != nil || len(fresh.Operations) != 2 || fresh.NextCursor == "" {
-		t.Fatalf("fresh pagination missed new results: %+v %v", fresh, err)
+	freshSeen := make(map[string]bool)
+	newCount := 0
+	for page := 0; page < 4; page++ {
+		fresh, err := s.ListOperations(ctx, q)
+		if err != nil || len(fresh.Operations) != 2 {
+			t.Fatalf("fresh pagination page %d: %+v %v", page, fresh, err)
+		}
+		for _, r := range fresh.Operations {
+			if freshSeen[r.ID] {
+				t.Fatalf("fresh cursor duplicated operation %s", r.ID)
+			}
+			freshSeen[r.ID] = true
+			if added[r.ID] {
+				newCount++
+			}
+		}
+		q.Cursor = fresh.NextCursor
+	}
+	if len(freshSeen) != 8 || newCount != 3 || q.Cursor != "" {
+		t.Fatalf("fresh cursor failed to see all 8 (3 new) rows: count=%d new=%d cursor=%q",
+			len(freshSeen), newCount, q.Cursor)
 	}
 	// HMAC also binds the first-page upper rowid so a client cannot
 	// force a later snapshot using a foreign/mutated anchor.

@@ -342,20 +342,40 @@ func main() {
 	check(len(historyIDs) == 120, "failed durable history total 120")
 	// A fresh unpaginated request MUST now expose the 12 newer rows while
 	// the previously issued cursor returned only the 120 originals.
-	recent := child(call(ctx, admin, "operation_list", map[string]any{
-		"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
-	}), "page")
-	recentRows, ok := recent["operations"].([]any)
-	check(ok && len(recentRows) == 50, "fresh history page invalid after concurrent append")
+	// A new cursor traverses ALL 132 rows in ascending original order.
+	// Later inserts cannot appear at the beginning of the first page.
+	// The new 12 rows are visible only on that cursor's final page.
 	newlyVisible := 0
-	for _, raw := range recentRows {
-		rec, ok := raw.(map[string]any)
-		check(ok, "concurrent history response malformed")
-		if !historyIDs[id(rec)] {
-			newlyVisible++
+	freshCount := 0
+	freshCursor := ""
+	for pageNumber := 0; pageNumber < 3; pageNumber++ {
+		args := map[string]any{
+			"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
 		}
+		if freshCursor != "" {
+			args["cursor"] = freshCursor
+		}
+		recent := child(call(ctx, admin, "operation_list", args), "page")
+		recentRows, ok := recent["operations"].([]any)
+		want := 50
+		if pageNumber == 2 {
+			want = 32
+		}
+		check(ok && len(recentRows) == want, "fresh history page count changed after concurrent append")
+		for _, raw := range recentRows {
+			rec, ok := raw.(map[string]any)
+			check(ok, "concurrent history response malformed")
+			if !historyIDs[id(rec)] {
+				newlyVisible++
+			}
+			freshCount++
+		}
+		freshCursor = field(recent, "next_cursor")
+		check((pageNumber == 2 && freshCursor == "") ||
+			(pageNumber < 2 && freshCursor != ""), "fresh history cursor termination invalid")
 	}
-	check(newlyVisible == 12, "fresh cursor did not reveal exactly 12 durable concurrent inserts")
+	check(newlyVisible == 12 && freshCount == 132,
+		"new signed cursor did not expose exactly 12 additional durable rows")
 	fmt.Println("S2_NATIVE_CONCURRENT_HISTORY_PAGING_STABLE_NEW_ROWS_VISIBLE=PASS")
 	future := time.Now().Add(time.Hour).UnixNano()
 	past := time.Now().Add(-time.Hour).UnixNano()
