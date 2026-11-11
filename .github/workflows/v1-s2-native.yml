@@ -24,6 +24,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Reject malformed disposable native acceptance shell
+        shell: bash
+        run: sh -n scripts/accept_s2_native.sh
       - name: Reject unsafe test hosts and execute original MCP/native lifecycle
         shell: bash
         run: sh scripts/accept_s2_native.sh
