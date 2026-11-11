@@ -154,4 +154,5 @@ PY
   kill "$proxy_pid" 2>/dev/null || :; wait "$proxy_pid" 2>/dev/null || :; proxy_pid=""
   printf 'S2_P0_REAL_NATIVE_202_SQLITE_WAL_%s_SAFE_RECOVERY=PASS\n' "$phase"
 done
+sh scripts/s2_p0_unbound_create_review.sh "$work" "$project" "$socket"
 echo S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES=PASS
