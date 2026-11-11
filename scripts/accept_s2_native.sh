@@ -323,7 +323,9 @@ GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     exit 125
   }
 grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
+grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS" "$work/legacy-sdk-probe.log"
 echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS"
+echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS"
 
 # Seed a single original ADMITTED operation with no native dispatch under
 # the SAME restricted service actor/database. The official SDK prober then
