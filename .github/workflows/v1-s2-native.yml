@@ -26,7 +26,7 @@ jobs:
           cache: true
       - name: Reject malformed disposable native acceptance shell
         shell: bash
-        run: sh -n scripts/accept_s2_native.sh && sh -n scripts/s2_exec_gc_installed_review.sh && sh -n scripts/s2_p0_native_sqlite_fault.sh && sh -n scripts/s2_p0_unknown_review.sh && sh -n scripts/s2_p0_unbound_create_review.sh && sh -n scripts/s2_p1_stop_delete_fault.sh && sh -n scripts/s2_p1_token_inflight.sh && sh -n scripts/s2_p1_two_controllers.sh
+        run: sh -n scripts/accept_s2_native.sh && sh -n scripts/s2_exec_gc_installed_review.sh && sh -n scripts/s2_p0_native_sqlite_fault.sh && sh -n scripts/s2_p0_unknown_review.sh && sh -n scripts/s2_p0_unbound_create_review.sh && sh -n scripts/s2_p1_stop_delete_fault.sh && sh -n scripts/s2_p1_token_inflight.sh && sh -n scripts/s2_p1_two_controllers.sh && sh -n scripts/s2_p1_private_read_inflight.sh
       - name: Reject unsafe test hosts and execute original MCP/native lifecycle
         shell: bash
         run: sh scripts/accept_s2_native.sh
