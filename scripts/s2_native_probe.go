@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -292,6 +293,62 @@ func concurrentOriginalCreate(ctx context.Context, url, token string, args map[s
 	fmt.Println("S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT=PASS")
 }
 
+// Reject malformed typed requests across all S2 public method classes using
+// the real official MCP SDK, not a local schema-only mock. Never use valid
+// mutation arguments or guess a resource identity in a negative test.
+func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
+	invalid := []struct {
+		name string
+		args map[string]any
+	}{
+		{"box_create", map[string]any{"name": 17, "idempotency_key": "s2-schema-negative-create"}},
+		{"box_list", map[string]any{"limit": "not-a-number"}},
+		{"box_get", map[string]any{"box_id": false}},
+		{"box_update", map[string]any{"box_id": 99, "idempotency_key": "s2-schema-negative-update", "cpu": 2}},
+		{"box_start", map[string]any{"box_id": []string{"unsafe"}, "idempotency_key": "s2-schema-negative-start"}},
+		{"box_stop", map[string]any{"box_id": true, "idempotency_key": "s2-schema-negative-stop"}},
+		{"box_delete", map[string]any{"box_id": map[string]string{"target": "unsafe"}, "idempotency_key": "s2-schema-negative-delete"}},
+		{"box_exec", map[string]any{"box_id": "no-such-owned-box", "argv": "not-typed-argv", "idempotency_key": "s2-schema-negative-exec"}},
+		{"operation_get", map[string]any{"operation_id": 42}},
+		{"operation_list", map[string]any{"limit": []string{"50"}}},
+		{"operation_output_get", map[string]any{"operation_id": 42, "stream": "stdout"}},
+		{"operation_cancel", map[string]any{"target_operation_id": 1, "idempotency_key": "s2-schema-negative-cancel"}},
+	}
+	for _, test := range invalid {
+		result, err := admin.CallTool(ctx, &mcp.CallToolParams{Name: test.name, Arguments: test.args})
+		check(err != nil || result != nil && result.IsError,
+			"untyped invalid public MCP method unexpectedly succeeded: "+test.name)
+	}
+	boxes := call(ctx, admin, "box_list", map[string]any{})
+	visible, ok := boxes["boxes"].([]any)
+	check(ok && len(visible) == 0,
+		"malformed public tool matrix produced native Box side effect")
+	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
+}
+
+// Inspect the actual stateless MCP HTTP response, not merely a source-level
+// SetCacheable declaration: private operations must not be reusable by shared
+// HTTP intermediaries or sent with positive public freshness.
+func privateHTTPMCPResponse(ctx context.Context, endpoint, token string) {
+	raw := []byte(`{"jsonrpc":"2.0","id":711,"method":"tools/call","params":{"name":"host_status","arguments":{}}}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
+	check(err == nil, "cannot build real MCP cache-control request")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	check(err == nil && resp != nil, "real authenticated HTTP cache-control response unavailable")
+	defer resp.Body.Close()
+	check(resp.StatusCode == http.StatusOK, "real authenticated MCP HTTP response was not 200")
+	cache := strings.ToLower(resp.Header.Get("Cache-Control"))
+	check(strings.Contains(cache, "private") && !strings.Contains(cache, "public") &&
+		(strings.Contains(cache, "no-store") || strings.Contains(cache, "no-cache") ||
+			strings.Contains(cache, "max-age=0")),
+		"MCP private response missing explicit zero-public-freshness policy")
+	fmt.Println("S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL=PASS")
+}
+
 func main() {
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
 	viewer := os.Getenv("BW_S2_VIEWER_TOKEN")
@@ -347,6 +404,8 @@ func main() {
 	fmt.Println("S2_NATIVE_MCP_DISCOVERY_13_OF_13=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
 	hostileProtocolMatrix(ctx, admin, view)
+	hostileTypedToolMatrix(ctx, admin)
+	privateHTTPMCPResponse(ctx, url, token)
 
 	denied, err := view.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
 		Arguments: map[string]any{"name": "s2-denied", "idempotency_key": "native-viewer-create-denied-01"}})
