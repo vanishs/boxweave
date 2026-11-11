@@ -104,5 +104,11 @@ grep -Fqx S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS \
  "$work/p1-native-overlap-results.txt"
 grep -Fqx S2_P1_REAL_NATIVE_OVERLAP_RELEASE_VERIFIED_DELETE_SUCCEEDED=PASS \
  "$work/p1-native-overlap-results.txt"
+# Both positive claims were independently checked above, but the SDK probe
+# stdout was deliberately written to a private fixture results file. Emit
+# only the verified, non-secret PASS markers so the separate P3 audit can
+# require them from the public CI witness transcript.
+echo "S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS"
+echo "S2_P1_REAL_NATIVE_OVERLAP_RELEASE_VERIFIED_DELETE_SUCCEEDED=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE=PASS"

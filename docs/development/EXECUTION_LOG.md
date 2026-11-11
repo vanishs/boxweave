@@ -65,6 +65,13 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-CLOSURE-063 — complete actual post-UUID-bind P1 native observed; P3 witness echo fixed
+
+- **Native actual product evidence:** `97e10be2d830ff276d64843f14baf4fd75c7f345`, candidate executable SHA256 `d3b8b27296b040c1df8e86c0cd3786f8c404780afcb918eacba93b1bb8e872b3` reproduced bit-for-bit independently in fastlab. [Single-use Incus/SDK CI](https://github.com/vanishs/boxweave/actions/runs/43118592287/job/130852924733) completed **full original native** plus real Post-RegisterCreatedBox UUID/SQLite VERIFYING pause with 12 different-key/actor MCP Delete denials, then original Verified and legitimate Delete to zero native inventory.
+- **CI red at P3 auditor only:** native emitted `S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE=PASS` and `S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS`; separate read-only audit required the 12-way inner SDK marker, which the shell verified in an internal fixture log but had not printed to stdout. Corrected **witness emission only**, no product lock/ACL/no-retry/quota changes.
+- **Additional exact native:** Stopped GuestReady=false and Running GuestReady=null (no unsupported Guest Ready true claim) PASS, all earlier P2 malformed Exec/recorded stdout/alt project quota/SDK compatibility tests completed. 8 nested invalid model-error cases returned actual MCP schema type errors in Go/race, no native effects.
+- **Next:** frozen code SHA's full native+auditor must succeed before S2 P3 signoff. Public WAN TLS positive and literal power loss remain BLOCKED/UNVERIFIED; S4-dependent delete deferred. Draft PR #130 unmerged; all three historical/fastlab original UNKNOWNs preserved.
+
 ### LOG-20261111-S2-CLOSURE-062 — actual bound UUID / 12 native MCP Delete refusals, test harness correction and tri-state
 
 - **First exact native overlay attempt:** source `ac194b1d6620dc7f966ad0877895c0127471b6ab`, [disposable Incus/SDK run](https://github.com/vanishs/boxweave/actions/runs/43117248786/job/130848287651) rejected at test-only cleanup, **not** product safety. Independent original native UUID + SQLite VERIFYING and `S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS` were observed. Probe then tried deleting legacy GDB `armed` file, absent in deterministic overlay, and exited before release/legitimate Delete. **Full P1 remains UNVERIFIED** until exact source-specific final PASS.
