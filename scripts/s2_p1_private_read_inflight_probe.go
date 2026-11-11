@@ -114,8 +114,12 @@ type response struct {
 	err    error
 }
 
-func invalidate(ctx context.Context, st *state.Store, dir, method string, args map[string]any) {
-	raw, t, e := st.IssueToken(ctx, "admin", time.Hour)
+func invalidate(ctx context.Context, st *state.Store, dir, method string, args map[string]any, expire bool) {
+	ttl := time.Hour
+	if expire {
+		ttl = 7 * time.Second
+	}
+	raw, t, e := st.IssueToken(ctx, "admin", ttl)
 	check(e == nil && t.ID != "" && raw != "", "cannot create fresh per-read credential")
 	s := connected(ctx, raw)
 	defer s.Close()
@@ -145,10 +149,21 @@ func invalidate(ctx context.Context, st *state.Store, dir, method string, args m
 	check(observed, "real successful native GET not held: "+method)
 	// The proxy has already received HTTP 200 with real native bytes;
 	// the product handler cannot yet return until its SDK call resumes.
-	check(st.RevokeToken(ctx, t.ID) == nil, "cannot revoke exact in-flight bearer")
+	if expire {
+		remaining := time.Until(t.Expires.Add(time.Second))
+		if remaining > 0 {
+			select {
+			case <-done:
+				panic("S2_P1_PRIVATE_INFLIGHT_FAIL: request returned before token expiry while upstream was held")
+			case <-time.After(remaining):
+			}
+		}
+	} else {
+		check(st.RevokeToken(ctx, t.ID) == nil, "cannot revoke exact in-flight bearer")
+	}
 	_, e = st.VerifyToken(ctx, raw)
 	check(e != nil, "bearer remained authorized during delayed read")
-	check(os.WriteFile(release, []byte("release after revoke\n"), 0600) == nil,
+	check(os.WriteFile(release, []byte("release after invalidation\n"), 0600) == nil,
 		"cannot release the single held native GET")
 	var got response
 	select {
@@ -164,8 +179,13 @@ func invalidate(ctx context.Context, st *state.Store, dir, method string, args m
 			!strings.Contains(string(data), "bw-s2-read-revoke-110r"),
 			"private native data leaked to revoked token: "+method)
 	}
-	check(os.Remove(arm) == nil, "arm removal failed")
-	fmt.Println("S2_P1_PRIVATE_READ_REVOKED_AFTER_REAL_NATIVE_HTTP_200_" + strings.ToUpper(method) + "=PASS")
+	check(os.Remove(arm) == nil && os.Remove(held) == nil && os.Remove(release) == nil,
+		"test-only native hold/release cleanup failed")
+	mode := "REVOKED"
+	if expire {
+		mode = "EXPIRED"
+	}
+	fmt.Println("S2_P1_PRIVATE_READ_" + mode + "_AFTER_REAL_NATIVE_HTTP_200_" + strings.ToUpper(method) + "=PASS")
 }
 func read(ctx context.Context, dir, project string) {
 	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
@@ -183,10 +203,12 @@ func read(ctx context.Context, dir, project string) {
 		{"box_get", map[string]any{"box_id": o.UUID}},
 		{"operation_output_get", map[string]any{"operation_id": o.ExecID, "stream": "stdout", "offset": 0, "limit": 512}},
 	} {
-		invalidate(ctx, st, dir, test.name, test.args)
+		invalidate(ctx, st, dir, test.name, test.args, false)
+		invalidate(ctx, st, dir, test.name, test.args, true)
 	}
 	_ = project
 	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK=PASS")
+	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS")
 }
 func cleanup(ctx context.Context, dir, token string) {
 	o := saved(dir)
