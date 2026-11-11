@@ -460,6 +460,15 @@ if ! wait "$probe_pid"; then
   exit 92
 fi
 cat "$work/native-probe.log"
+# The receiving middleware logs only a hashed actor and coarse method/outcome.
+# A deliberately injected hostile _meta test string must never appear in logs.
+if grep -Fq "S2_P1_META_REDACTION_SENTINEL_110" "$work/service.redacted.log"; then
+  echo "S2_P1_FAIL: untrusted _meta content appeared in service logs" >&2
+  exit 119
+fi
+grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
+grep -Fqx "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS" "$work/native-probe.log"
+echo "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES=PASS"
 
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.

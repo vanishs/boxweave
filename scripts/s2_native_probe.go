@@ -168,6 +168,93 @@ func nativePing(ctx context.Context, session *mcp.ClientSession, uuid, key, dest
 	return exit
 }
 
+// P1 real installed official SDK hostile protocol matrix. All calls must
+// fail admission before native dispatch; foreign metadata never grants auth.
+func hostileProtocolMatrix(ctx context.Context, admin, viewer *mcp.ClientSession) {
+	cases := []struct {
+		name string
+		meta mcp.Meta
+		work string
+	}{
+		{"work-not-string", mcp.Meta{"io.boxweave.work_ref": map[string]any{"actor": "admin"}}, ""},
+		{"agent-not-string", mcp.Meta{"io.boxweave.agent_ref": true}, ""},
+		{"work-control", mcp.Meta{"io.boxweave.work_ref": "lab/redaction\nS2_P1_META_REDACTION_SENTINEL_110"}, ""},
+		{"untrusted-work-url", mcp.Meta{"io.boxweave.work_ref": "https://not-an-actor.example"}, ""},
+		{"meta-argument-conflict", mcp.Meta{"io.boxweave.work_ref": "lab/other"}, "lab/legacy"},
+	}
+	for i, tc := range cases {
+		args := map[string]any{
+			"name": fmt.Sprintf("bw-s2-meta-negative-%02d", i),
+			"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"start": false, "internet": false,
+			"idempotency_key": fmt.Sprintf("s2-meta-negative-%02d-once", i),
+		}
+		if tc.work != "" {
+			args["work_ref"] = tc.work
+		}
+		out, err := admin.CallTool(ctx, &mcp.CallToolParams{
+			Meta: tc.meta, Name: "box_create", Arguments: args,
+		})
+		check(err != nil || out != nil && out.IsError,
+			"hostile _meta accepted native create: "+tc.name)
+	}
+	forged, err := viewer.CallTool(ctx, &mcp.CallToolParams{
+		Meta: mcp.Meta{
+			"io.boxweave.work_ref":  "lab/admin-work",
+			"io.boxweave.agent_ref": "admin-impersonation",
+		},
+		Name: "box_create",
+		Arguments: map[string]any{
+			"name": "bw-s2-viewer-meta-deny", "cpu": 1, "memory_mib": 512,
+			"disk_gib": 2, "start": false, "internet": false,
+			"idempotency_key": "s2-viewer-meta-deny-once",
+		},
+	})
+	check(err != nil || forged != nil && forged.IsError,
+		"viewer metadata pretended to grant native Create")
+	badCPU, err := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "box_create", Arguments: map[string]any{
+			"name": "bw-s2-schema-negative", "cpu": "not-an-integer",
+			"memory_mib": 512, "disk_gib": 2,
+			"idempotency_key": "s2-schema-invalid-cpu-once",
+		},
+	})
+	check(err != nil || badCPU != nil && badCPU.IsError,
+		"invalid MCP schema CPU type produced a native side effect")
+	unchanged := call(ctx, admin, "box_list", map[string]any{})
+	boxes, ok := unchanged["boxes"].([]any)
+	check(ok && len(boxes) == 0,
+		"hostile metadata, viewer spoof or schema error admitted a native Box")
+	fmt.Println("S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS")
+}
+
+// SDK structured result is optional for old clients. Read-only legacy JSON
+// text must resolve the exact same original receipt, not a new operation.
+func legacyTextReceipt(ctx context.Context, admin *mcp.ClientSession, opID string) {
+	out, err := admin.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_get", Arguments: map[string]any{"operation_id": opID},
+	})
+	check(err == nil && out != nil && !out.IsError,
+		"old no-metadata Tool call did not return original receipt")
+	structured := decoded(out)
+	check(field(child(structured, "operation"), "operation_id") == opID,
+		"structured receipt changed original Operation ID")
+	found := false
+	for _, content := range out.Content {
+		text, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		var body map[string]any
+		if json.Unmarshal([]byte(text.Text), &body) == nil &&
+			field(child(body, "operation"), "operation_id") == opID {
+			found = true
+		}
+	}
+	check(found, "legacy text-only client could not decode original Operation receipt")
+	fmt.Println("S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS")
+}
+
 func main() {
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
 	viewer := os.Getenv("BW_S2_VIEWER_TOKEN")
@@ -222,6 +309,7 @@ func main() {
 	}
 	fmt.Println("S2_NATIVE_MCP_DISCOVERY_13_OF_13=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
+	hostileProtocolMatrix(ctx, admin, view)
 
 	denied, err := view.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
 		Arguments: map[string]any{"name": "s2-denied", "idempotency_key": "native-viewer-create-denied-01"}})
@@ -234,6 +322,7 @@ func main() {
 	// cannot fabricate an Incus operation or undo an already running guest.
 	queuedID := os.Getenv("BW_S2_QUEUED_CANCEL_OPID")
 	check(len(queuedID) == 32, "missing one-use original queued Operation")
+	legacyTextReceipt(ctx, admin, queuedID)
 	queued := child(call(ctx, admin, "operation_get", map[string]any{
 		"operation_id": queuedID}), "operation")
 	check(field(queued, "state") == "ADMITTED" &&
