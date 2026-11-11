@@ -216,3 +216,48 @@ func TestS2EffectiveNICAndDiskAlwaysReadRegardlessOfMapIteration(t *testing.T) {
 		t.Fatalf("internet disabled did not preserve effective disk: %+v", disabled)
 	}
 }
+
+func TestS2MalformedNativeExecReturnAndStreamMetadataFailClosed(t *testing.T) {
+	goodPath := "/1.0/instances/alpha/logs/exec-output/a.stdout"
+	samples := []struct {
+		name string
+		metadata map[string]any
+	}{
+		{"string-exit", map[string]any{"return": "0", "output": map[string]any{"1": goodPath}}},
+		{"fractional-exit", map[string]any{"return": float64(0.75), "output": map[string]any{"1": goodPath}}},
+		{"overflow-exit", map[string]any{"return": 1e40, "output": map[string]any{"1": goodPath}}},
+		{"boolean-exit", map[string]any{"return": true, "output": map[string]any{"1": goodPath}}},
+		{"null-exit", map[string]any{"return": nil, "output": map[string]any{"1": goodPath}}},
+		{"array-exit", map[string]any{"return": []any{float64(0)}, "output": map[string]any{"1": goodPath}}},
+		{"missing-output", map[string]any{"return": float64(0)}},
+		{"wrong-output-type", map[string]any{"return": float64(0), "output": "not-a-stream-map"}},
+		{"empty-output", map[string]any{"return": float64(0), "output": map[string]any{}}},
+		{"unsafe-output-path", map[string]any{"return": float64(0), "output": map[string]any{"1": "/etc/shadow"}}},
+		{"foreign-output-url", map[string]any{"return": float64(0), "output": map[string]any{"1": "https://untrusted.example/log"}}},
+	}
+	for _, tc := range samples {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ExecEvidenceFromFinal(&api.Operation{
+				StatusCode: api.Success, Metadata: tc.metadata,
+			})
+			if !errors.Is(err, ErrUnverified) {
+				t.Fatalf("malformed native guest outcome treated as verified: %v", err)
+			}
+		})
+	}
+	// A successful native envelope with a distinct nonzero guest exit is
+	// completed work, NOT command_success=true. A stderr-only native stream
+	// does not imply a fabricated stdout log or a missing exit code.
+	out, err := ExecEvidenceFromFinal(&api.Operation{
+		StatusCode: api.Success,
+		Metadata: map[string]any{
+			"return": float64(9),
+			"output": map[string]any{
+				"2": "/1.0/instances/alpha/logs/exec-output/a.stderr",
+			},
+		},
+	})
+	if err != nil || out.Exit == nil || *out.Exit != 9 || out.StdoutPath != "" || out.StderrPath == "" {
+		t.Fatalf("stderr-only nonzero native guest result lost distinction: %+v err=%v", out, err)
+	}
+}
