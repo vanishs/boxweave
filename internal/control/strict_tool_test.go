@@ -50,7 +50,7 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 			t.Fatalf("valid empty request for %s now rejected: %+v %v", name, ok, err)
 		}
 		denied, err := s.CallTool(ctx, &mcp.CallToolParams{
-			Name: name,
+			Name:      name,
 			Arguments: map[string]any{"native_project": "foreign-incus-project"},
 		})
 		if err == nil && (denied == nil || !denied.IsError) {
@@ -60,9 +60,9 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 	denied, err := s.CallTool(ctx, &mcp.CallToolParams{
 		Name: "box_create",
 		Arguments: map[string]any{
-			"name": "bw-unknown-storage-pool",
+			"name":            "bw-unknown-storage-pool",
 			"idempotency_key": "s2-strict-schema-unsupported-root-pool",
-			"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"cpu":             1, "memory_mib": 512, "disk_gib": 2,
 			"start": false, "root_pool": "foreign-root-pool",
 		},
 	})
