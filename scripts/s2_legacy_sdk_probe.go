@@ -57,6 +57,121 @@ func readBoxes(ctx context.Context, session *mcp.ClientSession) {
 	verify(ok && len(boxes) == 0, "unexpected owned Box before or after negative legacy calls")
 }
 
+// Legacy releases can return only TextContent. Never require the newer
+// SDK's StructuredContent when validating a real native lifecycle.
+func successfulObject(result *mcp.CallToolResult) map[string]any {
+	verify(result != nil && !result.IsError, "legacy tool returned an error")
+	var obj map[string]any
+	if result.StructuredContent != nil {
+		data, err := json.Marshal(result.StructuredContent)
+		verify(err == nil && json.Unmarshal(data, &obj) == nil,
+			"legacy structured result malformed")
+	}
+	if obj == nil {
+		for _, entry := range result.Content {
+			text, ok := entry.(*mcp.TextContent)
+			if ok && json.Unmarshal([]byte(text.Text), &obj) == nil {
+				break
+			}
+		}
+	}
+	verify(obj != nil, "legacy tool emitted no decodable object")
+	return obj
+}
+
+func legacyCall(ctx context.Context, session *mcp.ClientSession, name string, args map[string]any) map[string]any {
+	result, err := invoke(ctx, session, name, args)
+	verify(err == nil, "legacy tool request failed: "+name)
+	return successfulObject(result)
+}
+
+func objectField(obj map[string]any, key string) string {
+	value, _ := obj[key].(string)
+	return value
+}
+
+func legacyOperationID(receipt map[string]any) string {
+	id := objectField(receipt, "operation_id")
+	verify(len(id) == 32, "missing exact original legacy operation ID")
+	return id
+}
+
+func legacyCompleted(ctx context.Context, session *mcp.ClientSession, operationID string) map[string]any {
+	for i := 0; i < 90; i++ {
+		got := legacyCall(ctx, session, "operation_get", map[string]any{
+			"operation_id": operationID, "wait_ms": 2000,
+		})
+		op, _ := got["operation"].(map[string]any)
+		verify(op != nil, "legacy operation_get lost nested operation")
+		switch objectField(op, "state") {
+		case "SUCCEEDED":
+			return op
+		case "FAILED", "UNKNOWN", "CANCELLED":
+			verify(false, "legacy operation left exact original not successful: "+operationID)
+		}
+	}
+	verify(false, "legacy original operation did not complete within polling budget")
+	return nil
+}
+
+func legacyLifecycle(ctx context.Context, session *mcp.ClientSession) {
+	// This unique fixture exists only inside an already verified single-use
+	// GitHub-hosted Incus Project and is deleted through the same MCP service.
+	name := "bw-s2-legacy-compat-110e"
+	create := legacyCall(ctx, session, "box_create", map[string]any{
+		"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"start": false, "internet": false,
+		"idempotency_key": "s2-old-sdk-positive-create",
+	})
+	created := legacyCompleted(ctx, session, legacyOperationID(create))
+	uuid := objectField(created, "box_uuid")
+	verify(uuid != "", "legacy create did not bind an exact native UUID")
+	box := legacyCall(ctx, session, "box_get", map[string]any{"box_id": uuid})
+	detail, _ := box["box"].(map[string]any)
+	verify(detail != nil && objectField(detail, "box_id") == uuid &&
+		objectField(detail, "native_state") == "Stopped",
+		"legacy client could not observe exactly owned stopped guest")
+
+	update := legacyCall(ctx, session, "box_update", map[string]any{
+		"box_id": uuid, "cpu": 2,
+		"idempotency_key": "s2-old-sdk-positive-update",
+	})
+	legacyCompleted(ctx, session, legacyOperationID(update))
+	start := legacyCall(ctx, session, "box_start", map[string]any{
+		"box_id": uuid, "idempotency_key": "s2-old-sdk-positive-start",
+	})
+	legacyCompleted(ctx, session, legacyOperationID(start))
+	running := legacyCall(ctx, session, "box_get", map[string]any{"box_id": uuid})
+	current, _ := running["box"].(map[string]any)
+	verify(current != nil && objectField(current, "native_state") == "Running",
+		"legacy client start not reflected by exact native read")
+
+	exec := legacyCall(ctx, session, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf legacy-sdk-ok"},
+		"idempotency_key": "s2-old-sdk-positive-exec",
+	})
+	execID := legacyOperationID(exec)
+	legacyCompleted(ctx, session, execID)
+	out := legacyCall(ctx, session, "operation_output_get", map[string]any{
+		"operation_id": execID, "stream": "stdout", "offset": 0, "limit": 16384,
+	})
+	verify(objectField(out, "availability") == "available" &&
+		objectField(out, "operation_id") == execID,
+		"legacy client could not retrieve its completed recorded guest output")
+	legacyCall(ctx, session, "operation_list", map[string]any{})
+
+	stop := legacyCall(ctx, session, "box_stop", map[string]any{
+		"box_id": uuid, "idempotency_key": "s2-old-sdk-positive-stop",
+	})
+	legacyCompleted(ctx, session, legacyOperationID(stop))
+	remove := legacyCall(ctx, session, "box_delete", map[string]any{
+		"box_id": uuid, "idempotency_key": "s2-old-sdk-positive-delete",
+	})
+	legacyCompleted(ctx, session, legacyOperationID(remove))
+	readBoxes(ctx, session)
+	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS")
+}
+
 func main() {
 	verify(os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted",
@@ -65,7 +180,7 @@ func main() {
 	verify(strings.HasPrefix(endpoint, "http://127.0.0.1:") &&
 		strings.HasSuffix(endpoint, "/mcp") && len(token) > 0,
 		"endpoint must be local and caller must be authenticated")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "boxweave-s2-pinned-old-sdk", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
@@ -131,4 +246,5 @@ func main() {
 	}
 	readBoxes(ctx, session)
 	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS")
+	legacyLifecycle(ctx, session)
 }
