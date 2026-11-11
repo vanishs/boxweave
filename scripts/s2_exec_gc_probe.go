@@ -69,8 +69,8 @@ func main() {
 		strings.HasSuffix(db, "/mcp-quota-ledger/ledger.sqlite") && filepath.Clean(db) == db &&
 		strings.HasPrefix(project, "user-") && strings.HasPrefix(token, "bw1_") &&
 		len(uuid) == 36 &&
-			(socket == "/var/lib/incus/unix.socket.user" ||
-				socket == filepath.Join(filepath.Dir(filepath.Dir(db)), "ledger", "gc-delete-proxy.sock")),
+		(socket == "/var/lib/incus/unix.socket.user" ||
+			socket == filepath.Join(filepath.Dir(filepath.Dir(db)), "ledger", "gc-delete-proxy.sock")),
 		"exact CI-only DB, Project, UUID and restricted socket required")
 	if mode != "create" {
 		require(len(opID) == 32 && len(nativeID) == 36, "original immutable receipt required")
