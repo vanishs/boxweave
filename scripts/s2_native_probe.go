@@ -1182,8 +1182,8 @@ func main() {
 
 	// A command that emits continuously for far longer than its admitted
 	// timeout must stop on the guest budget, not on the MCP request lifetime.
-// The guest command also has a finite outer loop so a broken timeout yields
-// an explicit failed assertion rather than trapping the disposable runner.
+	// The guest command also has a finite outer loop so a broken timeout yields
+	// an explicit failed assertion rather than trapping the disposable runner.
 	// The native Operation can finish successfully while the guest command
 	// has the distinct nonzero timeout exit and bounded recorded stdout.
 	continuous := call(ctx, admin, "box_exec", map[string]any{
