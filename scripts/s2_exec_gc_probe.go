@@ -55,7 +55,9 @@ func receipt(v map[string]any) map[string]any {
 func main() {
 	require(len(os.Args) == 2, "one explicit CI mode required")
 	mode := os.Args[1]
-	require(mode == "create" || mode == "age" || mode == "sweep" || mode == "check", "unknown mode")
+	require(mode == "create" || mode == "create-loss" || mode == "age" || mode == "sweep" ||
+		mode == "check" || mode == "loss-check" || mode == "lossy-sweep" ||
+		mode == "release-test-fixture", "unknown mode")
 	db, token := os.Getenv("BW_S2_GC_DB"), os.Getenv("BW_S2_GC_TOKEN")
 	project, uuid := os.Getenv("BW_S2_GC_PROJECT"), os.Getenv("BW_S2_GC_UUID")
 	opID, nativeID := os.Getenv("BW_S2_GC_OPERATION"), os.Getenv("BW_S2_GC_NATIVE")
@@ -66,14 +68,16 @@ func main() {
 	require(strings.HasPrefix(db, "/tmp/bw-v1-s2-ghci.") &&
 		strings.HasSuffix(db, "/mcp-quota-ledger/ledger.sqlite") && filepath.Clean(db) == db &&
 		strings.HasPrefix(project, "user-") && strings.HasPrefix(token, "bw1_") &&
-		len(uuid) == 36 && socket == "/var/lib/incus/unix.socket.user",
+		len(uuid) == 36 &&
+			(socket == "/var/lib/incus/unix.socket.user" ||
+				socket == filepath.Join(filepath.Dir(filepath.Dir(db)), "ledger", "gc-delete-proxy.sock")),
 		"exact CI-only DB, Project, UUID and restricted socket required")
 	if mode != "create" {
 		require(len(opID) == 32 && len(nativeID) == 36, "original immutable receipt required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	if mode == "create" || mode == "check" {
+	if mode == "create" || mode == "create-loss" || mode == "check" || mode == "loss-check" {
 		c := mcp.NewClient(&mcp.Implementation{Name: "s2-seven-day-retention-test", Version: "1"}, nil)
 		session, err := c.Connect(ctx, &mcp.StreamableClientTransport{
 			Endpoint:             "http://127.0.0.1:18656/mcp",
@@ -82,10 +86,14 @@ func main() {
 		}, nil)
 		require(err == nil, "official authenticated SDK connection unavailable")
 		defer session.Close()
-		if mode == "create" {
+		if mode == "create" || mode == "create-loss" {
+			key := "native-s2-gc-native-both-streams-once-001"
+			if mode == "create-loss" {
+				key = "native-s2-gc-native-lost-delete-ack-001"
+			}
 			arg := map[string]any{"box_id": uuid,
 				"argv":            []string{"/bin/sh", "-c", "printf retained-out; printf retained-err >&2"},
-				"idempotency_key": "native-s2-gc-native-both-streams-once-001"}
+				"idempotency_key": key}
 			start := sdkCall(ctx, session, "box_exec", arg)
 			original := attr(start, "operation_id")
 			require(len(original) == 32, "missing immutable original operation id")
@@ -120,6 +128,22 @@ func main() {
 		op := receipt(sdkCall(ctx, session, "operation_get", map[string]any{"operation_id": opID}))
 		require(attr(op, "state") == "SUCCEEDED" && attr(op, "native_operation_id") == nativeID,
 			"original receipt changed after native GC")
+		if mode == "loss-check" {
+			stdout := sdkCall(ctx, session, "operation_output_get", map[string]any{
+				"operation_id": opID, "stream": "stdout", "limit": 128})
+			stderr := sdkCall(ctx, session, "operation_output_get", map[string]any{
+				"operation_id": opID, "stream": "stderr", "limit": 128})
+			errBytes, decodeErr := base64.StdEncoding.DecodeString(attr(stderr, "content_base64"))
+			require(attr(stdout, "availability") == "unavailable" &&
+				attr(stdout, "unavailable_reason") == "NATIVE_RECORDED_OUTPUT_MISSING" &&
+				stdout["exit_code"] == float64(0) && stdout["command_success"] == true &&
+				attr(stderr, "availability") == "available" &&
+				decodeErr == nil && string(errBytes) == "retained-err" &&
+				stderr["exit_code"] == float64(0) && stderr["command_success"] == true,
+				"lost native DELETE ACK invented expiry or erased untouched stderr")
+			fmt.Println("S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS")
+			return
+		}
 		for _, stream := range []string{"stdout", "stderr"} {
 			out := sdkCall(ctx, session, "operation_output_get", map[string]any{
 				"operation_id": opID, "stream": stream, "limit": 128})
@@ -178,9 +202,53 @@ func main() {
 		fmt.Println("S2_GC_SEVEN_DAYS_NOT_PREMATURELY_EXPIRED=PASS")
 		return
 	}
+	if mode == "release-test-fixture" {
+		review, e := s.ExecGCReviewInspect(ctx, opID, "stdout")
+		require(e == nil && review.Project == project && review.BoxUUID == uuid &&
+			review.NativeOperationID == nativeID, "lost ACK original review identity changed")
+		_, _, e = r.ReadRecordedOutput(ctx, out.StdoutPath, 0, 1)
+		require(errors.Is(e, native.ErrRecordedOutputUnavailable),
+			"lost ACK review must independently re-observe native stdout absence")
+		_, _, e = r.ReadRecordedOutput(ctx, out.StderrPath, 0, 1)
+		require(e == nil, "untouched native stderr lost during review")
+		challenge, e := s.IssueExecGCReviewChallenge(ctx, review, "ci-reviewer", "NATIVE_MISSING")
+		require(e == nil, "scoped reviewer challenge failed")
+		reason := "Disposable CI original native stdout DELETE ACK was lost; no retry."
+		e = s.ReleaseExecGCReview(ctx, review, "ci-reviewer", challenge, uuid,
+			reason, "NATIVE_MISSING", true)
+		require(e == nil, "reviewed fixture coordination release failed")
+		st, e := s.ExecGCStreamState(ctx, opID, "stdout")
+		require(e == nil && st == "REVIEWED_RELEASED", "review did not preserve audited decision")
+		ids, e := s.ExecGCCandidates(ctx, time.Now(), 16)
+		require(e == nil && len(ids) == 0, "reviewed DELETE was requeued for automatic cleanup")
+		fmt.Println("S2_GC_DISPOSABLE_LEDGER_REVIEW_RELEASE_NO_NATIVE_RETRY=PASS")
+		return
+	}
 	ids, e := s.ExecGCCandidates(ctx, time.Now(), 16)
 	require(e == nil && len(ids) == 1 && ids[0] == opID, "only one aged authorized operation eligible")
 	svc := control.Service{Store: s, Native: r}
+	if mode == "lossy-sweep" {
+		n, e := svc.SweepExecRetention(ctx, time.Now())
+		require(e == nil && n == 0, "uncertain native DELETE was falsely counted as expiry")
+		stdoutState, e := s.ExecGCStreamState(ctx, opID, "stdout")
+		require(e == nil && stdoutState == "REVIEW_REQUIRED",
+			"lost ACK did not persist REVIEW_REQUIRED")
+		stderrState, e := s.ExecGCStreamState(ctx, opID, "stderr")
+		require(e == nil && stderrState == "", "sibling stream was automatically deleted")
+		_, _, e = r.ReadRecordedOutput(ctx, out.StdoutPath, 0, 1)
+		require(errors.Is(e, native.ErrRecordedOutputUnavailable),
+			"upstream ACK loss did not follow a real native stdout deletion")
+		_, _, e = r.ReadRecordedOutput(ctx, out.StderrPath, 0, 1)
+		require(e == nil, "uncertain first DELETE incorrectly erased stderr")
+		other, e := svc.SweepExecRetention(ctx, time.Now())
+		require(e == nil && other == 0, "repeat sweep re-dispatched a lost native DELETE")
+		ids, e = s.ExecGCCandidates(ctx, time.Now(), 16)
+		require(e == nil && len(ids) == 0, "lost ACK left original or sibling auto-eligible")
+		_, e = s.ExecGCReviewInspect(ctx, opID, "stdout")
+		require(e == nil, "durable exact original stream missing from manual-review queue")
+		fmt.Println("S2_GC_REAL_NATIVE_DELETE_ACK_LOSS_REVIEW_REQUIRED_SIBLING_LOCKED=PASS")
+		return
+	}
 	n, e := svc.SweepExecRetention(ctx, time.Now())
 	require(e == nil && n == 2, "two-stream exact SDK DELETE and native recheck failed")
 	for _, stream := range []string{"stdout", "stderr"} {

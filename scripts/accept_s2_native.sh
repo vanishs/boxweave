@@ -166,10 +166,11 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_q
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-mcp-quota-probe" ./scripts/s2_mcp_quota_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-exec-gc-probe" ./scripts/s2_exec_gc_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-gc-delete-proxy" ./scripts/s2_gc_delete_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_sqlite_fsync_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-sqlite-fsync-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -1201,6 +1202,294 @@ test "$attempt" -lt 40
 s2_gc check > "$work/s2-gc-public-expired.txt"
 grep -Fqx "S2_GC_PUBLIC_ORIGINAL_TWO_STREAMS_EXPIRED=PASS" "$work/s2-gc-public-expired.txt"
 echo "S2_GC_APPROVED_SEVEN_DAY_COMPLETE_NATIVE_MCP_CYCLE=PASS"
+
+
+# Another original on the SAME disposable, owned Box: the REAL Incus native
+# stdout DELETE succeeds, but a restricted Unix proxy intentionally suppresses
+# only its ACK. The surviving sibling stderr must never be silently deleted.
+s2_gc create-loss > "$work/s2-gc-loss-original.txt"
+grep -Fqx "S2_GC_PUBLIC_FRESH_BOTH_STREAMS=PASS" "$work/s2-gc-loss-original.txt"
+retention_op="$(sed -n 's/^S2_GC_ORIGINAL_ID=//p' "$work/s2-gc-loss-original.txt")"
+retention_native="$(sed -n 's/^S2_GC_NATIVE_ID=//p' "$work/s2-gc-loss-original.txt")"
+echo "$retention_op" | grep -Eq '^[0-9a-f]{32}
+grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_MCP_QUOTA_FINAL_NATIVE_INVENTORY_EMPTY=PASS"
+
+# Disposable test-only LD_PRELOAD wrapper kills the exact SQLite WAL fsync
+# (before or just after the real syscall) during NativeAck.Commit on a
+# wholly separate, single-actor SQLite database. No native dispatch here:
+# the actual Incus post-acceptance ACK-loss proof is a different real gate.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra -o "$work/s2-fsync-cut.so" \
+  scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-fsync-cut.so"
+for phase in before after; do
+  test -z "$(sudo incus list --all-projects --format csv -c n)"
+  fsync_dir="$work/fsync-$phase/fsync-ledger"
+  mkdir -p "$fsync_dir"
+  chmod 0700 "$fsync_dir"
+  sudo chown boxweave:incus "$fsync_dir"
+  fsync_db="$fsync_dir/ledger.sqlite"
+  fsync_arm="$fsync_dir/arm"
+  fsync_witness="$fsync_dir/sync-triggered"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    > "$work/fsync-$phase-admin.secret"
+  chmod 0600 "$work/fsync-$phase-admin.secret"
+  fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
+  test -n "$fsync_token"
+  s2_fsync() {
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+      GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+      HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+      BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_TOKEN="$fsync_token" \
+      BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$fsync_arm" \
+      "$work/s2-sqlite-fsync-probe" "$1"
+  }
+  s2_fsync prepare > "$work/fsync-$phase-prepare.txt"
+  grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/fsync-$phase-prepare.txt"
+  test ! -e "$fsync_arm"
+  test ! -e "$fsync_witness"
+  set +e
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_DB_WAL="$fsync_db-wal" \
+    BW_S2_FSYNC_TOKEN="$fsync_token" BW_S2_FSYNC_PROJECT="$project" \
+    BW_S2_FSYNC_ARM_FILE="$fsync_arm" BW_S2_FSYNC_WITNESS_FILE="$fsync_witness" \
+    BW_S2_FSYNC_CUT_MODE="$phase" LD_PRELOAD="$work/s2-fsync-cut.so" \
+    "$work/s2-sqlite-fsync-probe" ack > "$work/fsync-$phase-kill.redacted.txt" 2>&1
+  fsync_exit=$?
+  set -e
+  test "$fsync_exit" -ne 0
+  sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$fsync_witness"
+  s2_fsync verify > "$work/fsync-$phase-verify.txt"
+  grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+    "$work/fsync-$phase-verify.txt"
+  if [ "$phase" = before ]; then
+    echo "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  else
+    echo "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  fi
+done
+
+# A separate ~128MiB ext4 loop device supplies an actual SQLite FULL
+# fault: unlike WAL SIGKILL, this NativeAck cannot durably write while
+# free space is exhausted. The guest/Incus native effects are never
+# re-dispatched; the original is only a controller-local journal fixture.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+host_space="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_space" -gt 8589934592
+sqlite_full_backing="$work/s2-sqlite-full-loop.img"
+truncate -s 128M "$sqlite_full_backing"
+sqlite_full_loop="$(sudo losetup --find --show "$sqlite_full_backing")"
+sudo mkfs.ext4 -F -q "$sqlite_full_loop"
+sqlite_full_dir="$work/sqlite-full/fsync-ledger"
+mkdir -p "$sqlite_full_dir"
+sudo mount -t ext4 -o nodev,nosuid "$sqlite_full_loop" "$sqlite_full_dir"
+sudo chown boxweave:incus "$sqlite_full_dir"
+sudo chmod 0700 "$sqlite_full_dir"
+test "$(sudo stat -Lc '%d' "$sqlite_full_dir")" != "$(stat -Lc '%d' /)"
+sqlite_full_db="$sqlite_full_dir/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" token-create -db "$sqlite_full_db" -role admin \
+  > "$work/sqlite-full-admin.secret"
+chmod 0600 "$work/sqlite-full-admin.secret"
+sqlite_full_token="$(sed -n 's/^token=//p' "$work/sqlite-full-admin.secret")"
+test -n "$sqlite_full_token"
+s2_sqlite_full() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$sqlite_full_db" BW_S2_FSYNC_TOKEN="$sqlite_full_token" \
+    BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$sqlite_full_dir/unused" \
+    "$work/s2-sqlite-fsync-probe" "$1"
+}
+s2_sqlite_full prepare > "$work/sqlite-full-prepare.txt"
+grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/sqlite-full-prepare.txt"
+s2_sqlite_full diskfull > "$work/sqlite-full-native-ack.txt"
+grep -Fqx 'S2_SQLITE_REAL_SEPARATE_EXT4_DISK_FULL_NATIVE_ACK_REFUSED=PASS' "$work/sqlite-full-native-ack.txt"
+sudo test -f "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo rm -f -- "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo test ! -e "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+s2_sqlite_full verify > "$work/sqlite-full-verify.txt"
+grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+  "$work/sqlite-full-verify.txt"
+sudo umount "$sqlite_full_dir"
+sudo losetup -d "$sqlite_full_loop"
+echo "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY=PASS"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
+
+echo "$retention_native" | grep -Eq '^[0-9a-f-]{36}
+grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_MCP_QUOTA_FINAL_NATIVE_INVENTORY_EMPTY=PASS"
+
+# Disposable test-only LD_PRELOAD wrapper kills the exact SQLite WAL fsync
+# (before or just after the real syscall) during NativeAck.Commit on a
+# wholly separate, single-actor SQLite database. No native dispatch here:
+# the actual Incus post-acceptance ACK-loss proof is a different real gate.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra -o "$work/s2-fsync-cut.so" \
+  scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-fsync-cut.so"
+for phase in before after; do
+  test -z "$(sudo incus list --all-projects --format csv -c n)"
+  fsync_dir="$work/fsync-$phase/fsync-ledger"
+  mkdir -p "$fsync_dir"
+  chmod 0700 "$fsync_dir"
+  sudo chown boxweave:incus "$fsync_dir"
+  fsync_db="$fsync_dir/ledger.sqlite"
+  fsync_arm="$fsync_dir/arm"
+  fsync_witness="$fsync_dir/sync-triggered"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    > "$work/fsync-$phase-admin.secret"
+  chmod 0600 "$work/fsync-$phase-admin.secret"
+  fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
+  test -n "$fsync_token"
+  s2_fsync() {
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+      GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+      HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+      BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_TOKEN="$fsync_token" \
+      BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$fsync_arm" \
+      "$work/s2-sqlite-fsync-probe" "$1"
+  }
+  s2_fsync prepare > "$work/fsync-$phase-prepare.txt"
+  grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/fsync-$phase-prepare.txt"
+  test ! -e "$fsync_arm"
+  test ! -e "$fsync_witness"
+  set +e
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_DB_WAL="$fsync_db-wal" \
+    BW_S2_FSYNC_TOKEN="$fsync_token" BW_S2_FSYNC_PROJECT="$project" \
+    BW_S2_FSYNC_ARM_FILE="$fsync_arm" BW_S2_FSYNC_WITNESS_FILE="$fsync_witness" \
+    BW_S2_FSYNC_CUT_MODE="$phase" LD_PRELOAD="$work/s2-fsync-cut.so" \
+    "$work/s2-sqlite-fsync-probe" ack > "$work/fsync-$phase-kill.redacted.txt" 2>&1
+  fsync_exit=$?
+  set -e
+  test "$fsync_exit" -ne 0
+  sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$fsync_witness"
+  s2_fsync verify > "$work/fsync-$phase-verify.txt"
+  grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+    "$work/fsync-$phase-verify.txt"
+  if [ "$phase" = before ]; then
+    echo "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  else
+    echo "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  fi
+done
+
+# A separate ~128MiB ext4 loop device supplies an actual SQLite FULL
+# fault: unlike WAL SIGKILL, this NativeAck cannot durably write while
+# free space is exhausted. The guest/Incus native effects are never
+# re-dispatched; the original is only a controller-local journal fixture.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+host_space="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_space" -gt 8589934592
+sqlite_full_backing="$work/s2-sqlite-full-loop.img"
+truncate -s 128M "$sqlite_full_backing"
+sqlite_full_loop="$(sudo losetup --find --show "$sqlite_full_backing")"
+sudo mkfs.ext4 -F -q "$sqlite_full_loop"
+sqlite_full_dir="$work/sqlite-full/fsync-ledger"
+mkdir -p "$sqlite_full_dir"
+sudo mount -t ext4 -o nodev,nosuid "$sqlite_full_loop" "$sqlite_full_dir"
+sudo chown boxweave:incus "$sqlite_full_dir"
+sudo chmod 0700 "$sqlite_full_dir"
+test "$(sudo stat -Lc '%d' "$sqlite_full_dir")" != "$(stat -Lc '%d' /)"
+sqlite_full_db="$sqlite_full_dir/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" token-create -db "$sqlite_full_db" -role admin \
+  > "$work/sqlite-full-admin.secret"
+chmod 0600 "$work/sqlite-full-admin.secret"
+sqlite_full_token="$(sed -n 's/^token=//p' "$work/sqlite-full-admin.secret")"
+test -n "$sqlite_full_token"
+s2_sqlite_full() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$sqlite_full_db" BW_S2_FSYNC_TOKEN="$sqlite_full_token" \
+    BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$sqlite_full_dir/unused" \
+    "$work/s2-sqlite-fsync-probe" "$1"
+}
+s2_sqlite_full prepare > "$work/sqlite-full-prepare.txt"
+grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/sqlite-full-prepare.txt"
+s2_sqlite_full diskfull > "$work/sqlite-full-native-ack.txt"
+grep -Fqx 'S2_SQLITE_REAL_SEPARATE_EXT4_DISK_FULL_NATIVE_ACK_REFUSED=PASS' "$work/sqlite-full-native-ack.txt"
+sudo test -f "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo rm -f -- "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo test ! -e "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+s2_sqlite_full verify > "$work/sqlite-full-verify.txt"
+grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+  "$work/sqlite-full-verify.txt"
+sudo umount "$sqlite_full_dir"
+sudo losetup -d "$sqlite_full_loop"
+echo "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY=PASS"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
+
+for stream in stdout stderr; do
+  sudo test -f "$mcp_spool/exec_$retention_native.$stream"
+done
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+s2_gc_nonroot age > "$work/s2-gc-loss-age.txt"
+grep -Fqx "S2_GC_SEVEN_DAYS_NOT_PREMATURELY_EXPIRED=PASS" "$work/s2-gc-loss-age.txt"
+gc_socket="$work/ledger/gc-delete-proxy.sock"
+gc_marker="$work/ledger/gc-native-delete.txt"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  "$work/s2-gc-delete-proxy" -listen "$gc_socket" -upstream "$socket" \
+  -marker "$gc_marker" -project "$project" -native-id "$retention_native" \
+  > "$work/gc-delete-proxy.redacted.log" 2>&1 &
+gc_proxy_pid=$!
+attempt=0
+until sudo test -S "$gc_socket" || [ "$attempt" -ge 30 ]; do
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo test -S "$gc_socket"
+real_socket="$socket"
+socket="$gc_socket"
+s2_gc_nonroot lossy-sweep > "$work/s2-gc-loss-sweep.txt"
+socket="$real_socket"
+grep -Fqx "S2_GC_REAL_NATIVE_DELETE_ACK_LOSS_REVIEW_REQUIRED_SIBLING_LOCKED=PASS" "$work/s2-gc-loss-sweep.txt"
+sudo grep -Fqx "GC_EXACT_NATIVE_STDOUT_DELETE_ACCEPTED_ACK_SUPPRESSED" "$gc_marker"
+sudo test ! -e "$gc_marker.unexpected"
+sudo test ! -f "$mcp_spool/exec_$retention_native.stdout"
+sudo test -f "$mcp_spool/exec_$retention_native.stderr"
+echo "S2_GC_REAL_NATIVE_DELETE_ACK_LOST_ORIGINAL_NOT_REPLAYED=PASS"
+kill "$gc_proxy_pid" 2>/dev/null || :
+wait "$gc_proxy_pid" 2>/dev/null || :
+# This next direct-ledger call is ONLY fixture teardown/negative-logic
+# acceptance, not proof of the installed root-local recover CLI.
+s2_gc_nonroot release-test-fixture > "$work/s2-gc-loss-reviewed.txt"
+grep -Fqx "S2_GC_DISPOSABLE_LEDGER_REVIEW_RELEASE_NO_NATIVE_RETRY=PASS" "$work/s2-gc-loss-reviewed.txt"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-gc-loss-restart.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+s2_gc loss-check > "$work/s2-gc-loss-public.txt"
+grep -Fqx "S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS" "$work/s2-gc-loss-public.txt"
+echo "S2_GC_LOST_NATIVE_DELETE_ACK_SAME_SQLITE_RESTART_NO_FALSE_EXPIRY=PASS"
 
 s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
 grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
