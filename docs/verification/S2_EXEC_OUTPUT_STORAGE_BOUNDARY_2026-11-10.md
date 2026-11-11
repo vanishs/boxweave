@@ -7,6 +7,15 @@
 
 [Exact native MCP/Incus 7.6 acceptance](https://github.com/vanishs/boxweave/actions/runs/42917991207/job/130185272573) · [Go source/race](https://github.com/vanishs/boxweave/actions/runs/42918000486) · [quality](https://github.com/vanishs/boxweave/actions/runs/42918000540) all SUCCESS. Installed binary SHA256 `260d11d3744298eb41136a05ef363ba3ebfb42f5be8757ae5b5eac5ca3a9d4bc`. The one-use CI independently observed the original native spool, read-only quota/pool state and empty final native inventory; no shared Incus host was touched.
 
+
+## Approved seven-day retention and conservative GC failure review
+
+The owner explicitly approved 7 days on 2026-11-10. In the fresh-install v1 schema the service records a per-stream before-DELETE intent and immutable audit. The existing restricted non-root process scans at startup and every 15 minutes, limited to exact verified terminal original Exec records whose recorded output is at least 7 days old. It uses only the original Project, Box UUID/incarnation, name, native Operation ID and exact stdout/stderr path; UNKNOWN, in-flight and identity mismatches never qualify.
+
+[Full real Incus CI](https://github.com/vanishs/boxweave/actions/runs/42939755998/job/130258487415) proves both streams were present before expiry, deleted via Incus, physically absent and typed expired via a fresh MCP session after SQLite restart. The production TTL was not shortened; only a disposable controller-only test record was aged by CI. A missing native file without this completed audit still returns unavailable, not expired.
+
+If a native DELETE reply is lost, any native status is unverified, or a process dies after DELETE_SENT, the record becomes REVIEW_REQUIRED. Other automatic cleanup of that Box stops, and the original Box resource is locked until independent local recovery. The [host-local procedure](S2_EXEC_OUTPUT_GC_REVIEW_2026-11-10.md) never resends DELETE or manufactures expiry. Installed root-local challenge/release and partial native DELETE injection remain unverified; normal 7-day GC is PASS but the failure subgate remains PARTIAL.
+
 ## Actual native missing-record negative — not automatic TTL
 
 [Exact isolated accepted test](https://github.com/vanishs/boxweave/actions/runs/42925853590/job/130212011795) used project-scoped Incus 7.6 `DELETE /1.0/instances/{name}/logs/exec-output/exec_<nativeID>.stdout` **only on a newly created disposable, already verified owned Box/Operation**. A fresh authenticated MCP read returned `availability=unavailable` and `unavailable_reason=NATIVE_RECORDED_OUTPUT_MISSING`, with original `exit_code=1`, `command_success=false`, immutable original IDs and untouched stderr `availability=available`; repeat reads did not manufacture data. The API does **not** claim `expired` without an actual approved, durable retention policy. This proves clear missing-file semantics and the scoped native DELETE API can operate, **not** complete TTL/GC or safe handling of partial/ambiguous DELETE under crash. Host file deletion daemon remains prohibited.

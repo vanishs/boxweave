@@ -41,6 +41,14 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261110-S2-GC-047 — approved seven-day native output expiry PASS, local review source PASS
+
+- **Exact accepted code:** 24f072f3e1e4ddd603cd34aec5b13f612eea7eaa, binary SHA256 29a2532708cfe98897aa16bd40156b8f556a29cbec992a9997b5b53c6ed07ff9, [real official MCP SDK + Incus 7.6](https://github.com/vanishs/boxweave/actions/runs/42939755998/job/130258487415), [required quality](https://github.com/vanishs/boxweave/actions/runs/42939763488), [S1 compatibility/race](https://github.com/vanishs/boxweave/actions/runs/42939763866) all SUCCESS.
+- **Decision implemented:** owner-approved seven-day per original terminal Exec stdout/stderr, with bounded existing nonroot service loop, exact original UUID/Project/native operation/path, durable pre-DELETE audit, separate native readback and typed expired only on independently verified deletion. Real CI confirmed two physical spool files removed, no duplicate native deletion and original guest exit preserved across MCP restart. Non-retention missing native file still typed unavailable. No background host shell, guest Agent, new MCP Tool or second worker.
+- **Source-level failure recovery:** a lost ACK/partial failure is REVIEW_REQUIRED and blocks sibling cleanup and resource mutation; service restart never resends it. Host-local root socket peer reviews exact native identity and log existence; a five-minute challenge binds actor/UUID/native IDs/stream, and explicit reason+ack releases only coordination with audit, not the native effect or false expiry. Unit negatives include wrong reviewer, UUID, native observation, reason, no acknowledgment, reused challenge and untrusted native path.
+- **Still open:** installed root-local positive review, actual native DELETE ambiguous/partial fault, combined accepted native action+SQLite durability failure, other TC/A cases, and environmental WAN/hardware witnesses. Overall S2 PARTIAL, Draft PR #130 unmerged, protected v1 and historical UNKNOWN untouched.
+
+
 ### LOG-20261110-S2-CURSOR-045 — real concurrent SQLite pagination uncovered and fixed
 
 - **Accepted source:** `ae6b4605148cbf0d5beabeb2b993de7e3262bc63`, compiled candidate SHA256 `31945eef7c70e8ac9bdd5f97c7c3c752cb83e50db478df860089394085ea0aeb`; [official MCP SDK and installed real Incus 7.6 black-box](https://github.com/vanishs/boxweave/actions/runs/42931331895/job/130230530774), [quality](https://github.com/vanishs/boxweave/actions/runs/42931343299), [S1 compatibility](https://github.com/vanishs/boxweave/actions/runs/42931343314) all SUCCESS. Earlier `d7742c7` exposed real defect in ascending keyset pagination when a second SQLite process inserted 12 records while the first 120-row cursor was open. Failed snapshot was NOT misreported as product PASS.
