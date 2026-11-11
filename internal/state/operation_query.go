@@ -83,9 +83,9 @@ type operationCursor struct {
 	// SQLite operations are append-only. A first-page, authorized rowid
 	// ceiling keeps later commits out of the original pagination walk.
 	// This upper bound is HMAC-protected along with scope and position.
-	MaxRowID  int64  `json:"r"`
-	Scope     string `json:"s"`
-	MAC       string `json:"m"`
+	MaxRowID int64  `json:"r"`
+	Scope    string `json:"s"`
+	MAC      string `json:"m"`
 }
 
 func validHexID(id string) bool {

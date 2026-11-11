@@ -195,7 +195,6 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	}
 }
 
-
 func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
@@ -207,10 +206,10 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 		t.Helper()
 		r, err := s.Admit(ctx, Admission{
 			Layer: "L0", ActorID: actor.ID, TokenID: actor.ID,
-			Key: fmt.Sprintf("history-stable-original-%03d", i),
+			Key:    fmt.Sprintf("history-stable-original-%03d", i),
 			Action: "box_exec", RequestID: fmt.Sprintf("stable-%03d", i),
 			SafeIntent: []byte(fmt.Sprintf("{\"i\":%d}", i)),
-			WorkRef: "lab/stable-cursor", AgentRef: "writer",
+			WorkRef:    "lab/stable-cursor", AgentRef: "writer",
 		})
 		if err != nil || r.Duplicate {
 			t.Fatalf("durable original #%d: %+v %v", i, r, err)
