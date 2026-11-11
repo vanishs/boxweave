@@ -310,3 +310,76 @@ func TestS2MCPOriginalDeleteReplaysAfterBoxGoneWithoutNativeRead(t *testing.T) {
 		t.Fatal("new key bypassed native ownership readback after original UNKNOWN")
 	}
 }
+
+func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		ttl time.Duration
+		revoke bool
+	}{
+		{name: "revoked-during-read", ttl: time.Hour, revoke: true},
+		{name: "expired-during-read", ttl: 2 * time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			st, server, _, _ := fixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer cancel()
+			raw, actor, err := st.IssueToken(ctx, "viewer", test.ttl)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original, err := st.Admit(ctx, state.Admission{
+				Layer: "bw-test", ActorID: actor.ID, TokenID: actor.ID,
+				Key: "s2-inflight-read-original-key", RequestID: "read-before-revocation",
+				Action: "box_exec", SafeIntent: []byte(`{"test":"no native effect"}`),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := mcp.NewClient(&mcp.Implementation{
+				Name: "s2-expiring-inflight-request", Version: "1",
+			}, nil)
+			session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+				Endpoint: server.URL + "/mcp",
+				HTTPClient: &http.Client{Transport: bearerTransport{
+					base: http.DefaultTransport, token: raw,
+				}},
+				DisableStandaloneSSE: true, MaxRetries: -1,
+			}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer session.Close()
+			response := make(chan struct {
+				result *mcp.CallToolResult
+				err error
+			}, 1)
+			go func() {
+				r, callErr := session.CallTool(ctx, &mcp.CallToolParams{
+					Name: "operation_get",
+					Arguments: map[string]any{
+						"operation_id": original.ID, "wait_ms": 3000,
+					},
+				})
+				response <- struct {
+					result *mcp.CallToolResult
+					err error
+				}{r, callErr}
+			}()
+			if test.revoke {
+				time.Sleep(200 * time.Millisecond)
+				if err := st.RevokeToken(ctx, actor.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := <-response
+			if got.err == nil && got.result != nil && !got.result.IsError {
+				t.Fatalf("private long-poll released original after token invalidation: %+v", got.result)
+			}
+			unchanged, err := st.Get(ctx, original.ID)
+			if err != nil || unchanged.ID != original.ID || unchanged.State != "ADMITTED" {
+				t.Fatalf("read invalidation mutated durable original: %+v %v", unchanged, err)
+			}
+		})
+	}
+}
