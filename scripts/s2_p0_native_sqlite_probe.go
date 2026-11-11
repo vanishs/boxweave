@@ -47,8 +47,8 @@ func child(m map[string]any, key string) map[string]any {
 func session(ctx context.Context, token string) *mcp.ClientSession {
 	c := mcp.NewClient(&mcp.Implementation{Name: "s2-p0-combined-witness", Version: "1"}, nil)
 	s, err := c.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: "http://127.0.0.1:18657/mcp",
-		HTTPClient: &http.Client{Transport: transport{token}},
+		Endpoint:             "http://127.0.0.1:18657/mcp",
+		HTTPClient:           &http.Client{Transport: transport{token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	if err != nil {
@@ -92,8 +92,8 @@ func write(path string, s saved) {
 func updateArgs(uuid, phase string) map[string]any {
 	return map[string]any{
 		"box_id": uuid, "cpu": 2,
-		"idempotency_key": "s2-p0-combined-native-wal-"+phase+"-original",
-		"work_ref": "lab/p0-native-sqlite", "agent_ref": "p0-combined-verifier",
+		"idempotency_key": "s2-p0-combined-native-wal-" + phase + "-original",
+		"work_ref":        "lab/p0-native-sqlite", "agent_ref": "p0-combined-verifier",
 	}
 }
 func main() {
@@ -125,7 +125,7 @@ func main() {
 		created, err := call(ctx, s, "box_create", map[string]any{
 			"name": name, "cpu": 1, "memory_mib": 512, "disk_gib": 2,
 			"start": false, "internet": true,
-			"idempotency_key": "s2-p0-combined-seed-"+phase+"-once",
+			"idempotency_key": "s2-p0-combined-seed-" + phase + "-once",
 		})
 		must(err == nil && get(created, "operation_id") != "", "durable fixture Create not admitted")
 		record := saved{CreateID: get(created, "operation_id")}
@@ -169,7 +169,7 @@ func main() {
 		must(e == nil && get(again, "operation_id") == record.UpdateID &&
 			again["duplicate"] == true, "same-key P0 mutation replayed rather than original")
 		newArgs := updateArgs(record.BoxID, phase)
-		newArgs["idempotency_key"] = "s2-p0-new-key-must-stay-locked-"+phase
+		newArgs["idempotency_key"] = "s2-p0-new-key-must-stay-locked-" + phase
 		newArgs["cpu"] = 3
 		_, e = call(ctx, s, "box_update", newArgs)
 		must(e != nil, "new-key Update bypassed P0 original UNKNOWN lock")
