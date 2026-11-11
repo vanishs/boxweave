@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -210,6 +211,79 @@ func read(ctx context.Context, dir, project string) {
 	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_REVOKE_NO_LEAK=PASS")
 	fmt.Println("S2_P1_FOUR_REAL_MCP_NATIVE_PRIVATE_READ_BEARER_EXPIRY_NO_LEAK=PASS")
 }
+// A true native recorded stdout HTTP 200 is deliberately held at a
+// restricted Unix proxy. Aborting this read must neither cancel the stored
+// native Exec nor prevent another authenticated client from reading it.
+func stalledNativeOutput(ctx context.Context, dir, token string) {
+	o := saved(dir)
+	arm := filepath.Join(dir, "arm-stalled-output")
+	held := filepath.Join(dir, "held-stalled-output")
+	release := filepath.Join(dir, "release-stalled-output")
+	check(!present(arm) && !present(held) && !present(release),
+		"native output stall reused witness")
+	check(os.WriteFile(arm, []byte("hold native stdout before delivery\n"), 0600) == nil,
+		"failed to arm native read stall")
+	session := connected(ctx, token)
+	requestCtx, cancel := context.WithCancel(ctx)
+	done := make(chan response, 1)
+	go func() {
+		result, err := session.CallTool(requestCtx, &mcp.CallToolParams{
+			Name: "operation_output_get",
+			Arguments: map[string]any{
+				"operation_id": o.ExecID, "stream": "stdout", "offset": 0, "limit": 512,
+			},
+		})
+		done <- response{result, err}
+	}()
+	seen := false
+	for i := 0; i < 160; i++ {
+		if present(held) {
+			seen = true
+			break
+		}
+		select {
+		case <-done:
+			panic("S2_P2_STALLED_OUTPUT_FAIL: read finished before real native HTTP 200 hold")
+		default:
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	check(seen, "real Incus stdout GET never reached held-response boundary")
+	cancel()
+	var aborted response
+	select {
+	case aborted = <-done:
+	case <-time.After(7 * time.Second):
+		panic("S2_P2_STALLED_OUTPUT_FAIL: MCP caller disconnect did not terminate pending read")
+	}
+	check(aborted.err != nil || aborted.result != nil && aborted.result.IsError,
+		"canceled output read exposed native stdout despite caller disconnect")
+	if aborted.result != nil {
+		data, err := json.Marshal(aborted.result.StructuredContent)
+		check(err == nil && !strings.Contains(string(data), "private-read-sentinel-110r"),
+			"canceled read leaked old stdout content")
+	}
+	check(os.WriteFile(release, []byte("unblock native GET after disconnect\n"), 0600) == nil,
+		"cannot release native stdout after disconnect")
+	session.Close()
+	check(os.Remove(arm) == nil, "cannot disarm test-only stalled-output fixture")
+	// The other live client has a distinct SDK session, not a continuation
+	// of the canceled request, and must receive the same exact original.
+	fresh := connected(ctx, token)
+	defer fresh.Close()
+	operationGet := tool(ctx, fresh, "operation_get", map[string]any{"operation_id": o.ExecID})
+	check(value(operationGet["operation"].(map[string]any), "state") == "SUCCEEDED",
+		"caller disconnect canceled original guest Exec")
+	output := tool(ctx, fresh, "operation_output_get", map[string]any{
+		"operation_id": o.ExecID, "stream": "stdout", "offset": 0, "limit": 512,
+	})
+	recorded, err := base64.StdEncoding.DecodeString(value(output, "content_base64"))
+	check(err == nil && string(recorded) == "private-read-sentinel-110r" &&
+		output["command_success"] == true,
+		"new MCP client could not recover exactly recorded stdout")
+	fmt.Println("S2_P2_REAL_NATIVE_RECORDED_STDOUT_STALLED_CLIENT_DISCONNECT_RECOVER=PASS")
+}
+
 func cleanup(ctx context.Context, dir, token string) {
 	o := saved(dir)
 	s := connected(ctx, token)
@@ -240,6 +314,8 @@ func main() {
 		seed(ctx, dir, token)
 	case "read":
 		read(ctx, dir, project)
+	case "stall":
+		stalledNativeOutput(ctx, dir, token)
 	case "cleanup":
 		cleanup(ctx, dir, token)
 	default:
