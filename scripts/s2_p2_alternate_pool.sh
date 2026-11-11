@@ -48,9 +48,14 @@ chmod 0600 "$work/p2-alt-token.secret"
 token="$(sed -n 's/^token=//p' "$work/p2-alt-token.secret")"
 test -n "$token"
 service_pid=""
+probe_pid=""
 cleanup() {
  sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
  if [ -n "$service_pid" ]; then wait "$service_pid" 2>/dev/null || :; fi
+ if [ -n "$probe_pid" ]; then
+  kill "$probe_pid" 2>/dev/null || :
+  wait "$probe_pid" 2>/dev/null || :
+ fi
 }
 trap cleanup EXIT
 actor "$work/boxweave" serve -db "$db" -incus-socket "$socket" \
@@ -65,10 +70,42 @@ until [ "$attempt" -ge 45 ]; do
 done
 test "$attempt" -lt 45
 actor BW_S2_ALT_LAB="$lab" BW_S2_ALT_PROJECT="$project" \
-  BW_S2_ALT_TOKEN="$token" "$work/s2-altpool-probe" > "$work/p2-altpool-results.txt"
-grep -Fqx S2_P2_ALTERNATE_SELECTED_PROFILE_POOL_DEFAULT_TEN_GIB=PASS "$work/p2-altpool-results.txt"
-grep -Fqx S2_P2_ALTERNATE_POOL_NO_EXPLICIT_SELECTION_NO_RESIDUAL_BOX=PASS "$work/p2-altpool-results.txt"
+  BW_S2_ALT_TOKEN="$token" "$work/s2-altpool-probe" > "$work/p2-altpool-results.txt" 2>&1 &
+probe_pid=$!
+attempt=0
+while [ "$attempt" -lt 100 ] && ! sudo test -s "$lab/live.ready"; do
+ if ! kill -0 "$probe_pid" 2>/dev/null; then
+  cat "$work/p2-altpool-results.txt"
+  echo "S2_P2_ALT_POOL_FAIL: SDK probe ended before live native witness" >&2
+  exit 95
+ fi
+ attempt=$((attempt + 1))
+ sleep 1
+done
+if ! sudo test -s "$lab/live.ready"; then
+ cat "$work/p2-altpool-results.txt"
+ echo "S2_P2_ALT_POOL_FAIL: live exact UUID never exposed" >&2
+ exit 96
+fi
 name=bw-s2-alternate-pool-110w
+# Independent administrator reads the actual Incus expanded device while
+# the Box remains alive, before the MCP client is permitted to delete it.
+sudo incus list --project "$project" --format json > "$work/p2-alt-live-native.json"
+sudo python3 - "$work/p2-alt-live-native.json" "$lab/original.json" "$pool" "$name" <<'PY'
+import json,sys
+items=json.load(open(sys.argv[1]))
+original=json.load(open(sys.argv[2]))
+pool,name=sys.argv[3:]
+assert len(items)==1 and items[0]["name"]==name, items
+inst=items[0]
+assert inst["config"]["volatile.uuid"]==original["box_id"], "native UUID differs"
+root=[dev for dev in inst["expanded_devices"].values()
+      if dev.get("type")=="disk" and dev.get("path")=="/"]
+assert len(root)==1 and root[0].get("pool")==pool, root
+assert root[0].get("size")=="10GiB", root
+assert inst["status"]=="Stopped", inst
+print("S2_P2_ALTERNATE_POOL_LIVE_EXPANDED_ROOT_MATCHES_UUID_POOL_QUOTA=PASS")
+PY
 uuid="$(sudo python3 - "$lab/original.json" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
@@ -76,7 +113,16 @@ assert len(v["box_id"])==36 and len(v["create_id"])==32
 print(v["box_id"])
 PY
 )"
-# Native independent readback after the original Box was deleted:
+sudo touch "$lab/native-verified.release"
+if ! wait "$probe_pid"; then
+ cat "$work/p2-altpool-results.txt"
+ echo "S2_P2_ALT_POOL_FAIL: exact native MCP removal failed" >&2
+ exit 97
+fi
+probe_pid=""
+grep -Fqx S2_P2_ALTERNATE_SELECTED_PROFILE_POOL_DEFAULT_TEN_GIB=PASS "$work/p2-altpool-results.txt"
+grep -Fqx S2_P2_ALTERNATE_POOL_NO_EXPLICIT_SELECTION_NO_RESIDUAL_BOX=PASS "$work/p2-altpool-results.txt"
+# Native independent readback after the verified original was deleted:
 # no residual instance may remain in either the alternate or foreign pool.
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P2_ALTERNATE_POOL_NATIVE_UUID_JOURNAL_WITNESS=$uuid"
