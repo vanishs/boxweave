@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -33,7 +34,12 @@ type privateMCPWriter struct {
 
 func (w *privateMCPWriter) applyPolicy() {
 	w.Header().Set("Cache-Control", "private, no-store, no-cache, no-transform")
-	w.Header().Add("Vary", "Authorization")
+	// An SSE response may flush many times. Never append duplicate Vary
+	// values on each chunk, and preserve any other SDK-supplied Vary keys.
+	if !strings.Contains(strings.ToLower(strings.Join(w.Header().Values("Vary"), ",")),
+		"authorization") {
+		w.Header().Add("Vary", "Authorization")
+	}
 }
 
 func (w *privateMCPWriter) WriteHeader(status int) {
