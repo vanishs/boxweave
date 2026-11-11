@@ -113,6 +113,13 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			case <-timer.C:
 			}
 		}
+		// A token that was valid when the HTTP request arrived may have
+		// expired or been revoked during this bounded long poll. Refuse to
+		// release the private original receipt after that event. Never
+		// cancel/retry the durable operation as a side-effect.
+		if err := s.Store.RequireActiveTokenID(ctx, actor); err != nil {
+			return nil, operationGetResult{}, err
+		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
 			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit}, nil
 	})

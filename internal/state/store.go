@@ -389,6 +389,24 @@ func (s *Store) tokenActive(ctx context.Context, id string) (bool, error) {
 	return n == 1, err
 }
 
+// RequireActiveTokenID rechecks the durable credential immediately before a
+// private long-poll result leaves the controller. Bearer auth at HTTP ingress
+// is not sufficient when a token may expire or be revoked during wait_ms.
+// This never retries, cancels, or alters the already-admitted native operation.
+func (s *Store) RequireActiveTokenID(ctx context.Context, tokenID string) error {
+	if !validHexID(tokenID) {
+		return ErrRevoked
+	}
+	active, err := s.tokenActive(ctx, tokenID)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return ErrRevoked
+	}
+	return nil
+}
+
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
