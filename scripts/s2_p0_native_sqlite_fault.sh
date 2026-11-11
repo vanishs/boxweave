@@ -90,6 +90,7 @@ PY
   grep -Fqx S2_P0_REAL_NATIVE_SQLITE_CRASH_UNKNOWN_REPLAY_AND_CONCURRENT_READS=PASS "$work/p0-$phase-replay.txt"
   sudo test ! -e "$lab/unexpected-native-dispatch.txt"
   kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; service_pid=""
+  sh scripts/s2_p0_unknown_review.sh "$work" "$lab" "$project" "$socket" "$uuid"
   # The independent CI admin tears down ONLY this exact observed disposable UUID.
   sudo incus delete --force "$name" --project "$project"
   test -z "$(sudo incus list --all-projects --format csv -c n)"
