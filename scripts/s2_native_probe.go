@@ -978,7 +978,19 @@ func main() {
 		"--resolve s2-wan.example.test:18443:198.18.0.2 " +
 		"--connect-timeout 3 --max-time 8 https://s2-wan.example.test:18443/s2-probe"
 	simulatedBefore, simulatedBeforeExit := guestRead(ctx, admin, uuid,
-		"native-s2-simulated-wan-online-before-01", simulatedWANRequest)
+		"native-s2-simulated-wan-online-before-01", simulatedWANRequest+" 2>&1")
+	if simulatedBeforeExit != 0 || simulatedBefore != "S2_SIMULATED_WAN_HTTPS_OK" {
+		route, _ := guestRead(ctx, admin, uuid, "native-s2-simulated-wan-routed-guest-diag-01",
+			"ip -4 route get 198.18.0.2; ip -4 route show default; ip -4 addr show dev eth0")
+		if len(route) > 700 {
+			route = route[:700]
+		}
+		if len(simulatedBefore) > 700 {
+			simulatedBefore = simulatedBefore[:700]
+		}
+		fmt.Fprintf(os.Stderr, "S2_P1_SIMULATED_WAN_GUEST_DIAG: exit=%d curl=%q route=%q\\n",
+			simulatedBeforeExit, simulatedBefore, route)
+	}
 	check(simulatedBeforeExit == 0 && simulatedBefore == "S2_SIMULATED_WAN_HTTPS_OK",
 		"isolated routed HTTPS WAN emulator has no independent positive TLS baseline")
 	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE=PASS")
