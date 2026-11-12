@@ -960,6 +960,29 @@ func main() {
 		fmt.Println("S2_NATIVE_EXTERNAL_IPV4_WAN_CURL=UNVERIFIED_MISSING_CLIENT")
 	}
 
+	// One-use isolated HTTPS WAN emulator: NOT real public Internet. A
+	// distinct namespace, veth, routed 198.18.0.2/30 address and trusted
+	// test-local TLS certificate live OUTSIDE the guest's Incus bridge.
+	// Host bootstraps this route independently and counts genuine guest GETs.
+	caB64 := os.Getenv("BW_S2_SIMULATED_WAN_CA_CERT_B64")
+	ca, caErr := base64.StdEncoding.DecodeString(caB64)
+	check(caErr == nil && len(ca) > 400 && len(ca) < 8192 &&
+		strings.Contains(string(ca), "BEGIN CERTIFICATE"),
+		"missing/invalid one-use independently generated simulated WAN TLS CA")
+	_, caExit := guestRead(ctx, admin, uuid,
+		"native-s2-simulated-wan-ca-bundle-write-01",
+		"printf '%s' '"+caB64+"' | base64 -d > /tmp/s2-wan-test-ca.pem")
+	check(caExit == 0, "failed to stage public-only test CA in owned Guest")
+	simulatedWANRequest := "curl -4 --noproxy '*' -f -sS " +
+		"--cacert /tmp/s2-wan-test-ca.pem " +
+		"--resolve s2-wan.example.test:18443:198.18.0.2 " +
+		"--connect-timeout 3 --max-time 8 https://s2-wan.example.test:18443/s2-probe"
+	simulatedBefore, simulatedBeforeExit := guestRead(ctx, admin, uuid,
+		"native-s2-simulated-wan-online-before-01", simulatedWANRequest)
+	check(simulatedBeforeExit == 0 && simulatedBefore == "S2_SIMULATED_WAN_HTTPS_OK",
+		"isolated routed HTTPS WAN emulator has no independent positive TLS baseline")
+	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE=PASS")
+
 	// Real IPv4 traffic must change with the per-Box internet flag, while
 	// the separate private-peer default ingress denial remains unchanged.
 	offline := call(ctx, admin, "box_update", map[string]any{
@@ -973,6 +996,11 @@ func main() {
 	check(nativePing(ctx, admin, uuid,
 		"native-s2-running-offline-ipv6-gateway-denied", ga6, 6) != 0,
 		"internet=false still sent IPv6 packets to native gateway")
+	simulatedOffline, simulatedOfflineExit := guestRead(ctx, admin, uuid,
+		"native-s2-simulated-wan-disabled-01", simulatedWANRequest)
+	check(simulatedOfflineExit != 0 && simulatedOffline != "S2_SIMULATED_WAN_HTTPS_OK",
+		"isolated HTTPS destination reachable with the Box's internet=false")
+	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED=PASS")
 	if externalSupported {
 		_, publicOfflineExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-offline-01",
@@ -996,6 +1024,11 @@ func main() {
 			"native-s2-peer-still-denied-after-internet-on-v6", b6, 6) == 1,
 		"re-enabling internet bypassed default private peer IPv4/IPv6 ingress")
 	fmt.Println("S2_NATIVE_PACKET_INTERNET_ON_DOES_NOT_UNBLOCK_PEERS=PASS")
+	simulatedAfter, simulatedAfterExit := guestRead(ctx, admin, uuid,
+		"native-s2-simulated-wan-online-after-01", simulatedWANRequest)
+	check(simulatedAfterExit == 0 && simulatedAfter == "S2_SIMULATED_WAN_HTTPS_OK",
+		"isolated routed HTTPS WAN failed to recover after re-enabling Internet")
+	fmt.Println("S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST=PASS")
 	if externalSupported {
 		publicOnline, publicExit := guestRead(ctx, admin, uuid,
 			"native-s2-wan-online-after-01",
