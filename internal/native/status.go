@@ -23,6 +23,7 @@ type Status struct {
 	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
 	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
 	NICConfigured         bool            `json:"default_nic_configured"`
+	ImageReady            bool            `json:"approved_ubuntu_image_ready"`
 	APIExtensions         map[string]bool `json:"required_extensions"`
 	ErrorClass            string          `json:"error_class,omitempty"`
 }
@@ -171,6 +172,20 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s
 	}
+	// Readiness must cover the same immutable local image requirement as
+	// Create. A profile and ACL alone cannot produce the first owned Box.
+	// Never pull or trust a remote alias from the controller preflight.
+	alias, _, err := scoped.GetImageAlias("boxweave-ubuntu-24.04")
+	if err != nil || alias == nil || alias.Target == "" {
+		s.ErrorClass = "APPROVED_IMAGE_ALIAS_UNAVAILABLE"
+		return s
+	}
+	image, _, err := scoped.GetImage(alias.Target)
+	if err != nil || image == nil || !approvedUbuntu2404(image.Properties) {
+		s.ErrorClass = "APPROVED_IMAGE_UNVERIFIED"
+		return s
+	}
+	s.ImageReady = true
 	for _, required := range requiredExtensions {
 		if !s.APIExtensions[required] {
 			s.ErrorClass = "REQUIRED_EXTENSION_MISSING"

@@ -123,3 +123,15 @@ func localDirPoolQuotaReady(poolName string) bool {
 	}
 	return dirProjectQuotaMountReady(filepath.Join("/var/lib/incus/storage-pools", poolName), string(info))
 }
+
+// InspectNativeDirPool is used only by the host-local installer review. It
+// exposes the same nonmutating pool backing/quota prerequisites as host_status;
+// it never mounts, configures or takes ownership of another native pool.
+func InspectNativeDirPool(poolName string) (free uint64, separate bool, quota bool, err error) {
+	free, separate, err = localDirPoolSpace(poolName)
+	if err != nil {
+		return free, separate, false, err
+	}
+	quota = localDirPoolQuotaReady(poolName)
+	return free, separate, quota, nil
+}

@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -52,6 +52,7 @@ func run() error {
 	nativePackageVersion := f.String("incus-package-version", "", "exact signed Ubuntu Incus package version (for fresh bootstrap)")
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
+	prereqSHA := f.String("native-prereq-sha256", "", "operator-reviewed exact host and native prerequisite snapshot")
 	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
 	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
@@ -73,7 +74,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -89,6 +90,21 @@ func run() error {
 			return err
 		}
 		defer release()
+	}
+	if command == "native-prereq-plan" || command == "native-prereq-verify" {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		var report install.NativePrereqReport
+		var err error
+		if command == "native-prereq-plan" {
+			report, err = install.NativePrerequisites(ctx, *project)
+		} else {
+			report, err = install.NativePrerequisiteVerify(ctx, *project, *prereqSHA, *approveLocal)
+		}
+		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
+			return e
+		}
+		return err
 	}
 	if command == "native-migrate-plan" || command == "native-migrate-apply" ||
 		command == "native-migrate-status" || command == "native-migrate-reconcile" || command == "native-migrate-rollback" ||

@@ -160,6 +160,31 @@ echo "S2_NATIVE_OWNED_UBUNTU_ALIAS_VERIFIED=PASS"
 
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/boxweave" ./cmd/boxweave
+# S2.5 optional exact native pre-first-Box operator-prepared prerequisite
+# review, on a one-use lab only. It makes NO configuration or packet-proof
+# claim for a real physical host. No fixture behavior changes for S2 runs.
+if [ "${S25_NATIVE_PREREQ_PROBE:-}" = true ]; then
+  sudo "$work/boxweave" native-prereq-plan -project "$project" > "$work/s25-native-prereq-plan.json"
+  python3 - "$work/s25-native-prereq-plan.json" <<'PY_S25_PREREQ'
+import json,sys
+data=json.load(open(sys.argv[1],encoding="utf-8"))
+for check in data["checks"]:
+    print("S25_NATIVE_PREREQ_%s=%s" % (check["id"].upper(), "PASS" if check["ok"] else "BLOCKED"))
+if not data["config_ready"] or not data["packet_witness_required"]:
+    raise SystemExit("S25 native operator prerequisite review is BLOCKED")
+PY_S25_PREREQ
+  s25_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/s25-native-prereq-plan.json")"
+  sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > "$work/s25-native-prereq-verified.json"
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local \
+    > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: wrong plan digest accepted" >&2
+    exit 92
+  fi
+  echo "S25_NATIVE_PREREQ_CONFIG_AND_DIGEST=PASS"
+  echo "S25_NATIVE_PREREQ_PACKET_WITNESS=REQUIRED_SEPARATE"
+fi
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
