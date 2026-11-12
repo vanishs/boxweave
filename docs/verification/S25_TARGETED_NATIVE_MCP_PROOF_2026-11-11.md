@@ -1,3 +1,5 @@
+**Later evidence supersedes this historical 2026-11-11 targeted LAB:** exact 7a01000 candidate passed all five latest Actions with additional same-L2 lifecycle, real IPv4/IPv6 gateway witnesses, and an independent Guest Git failure/repair acceptance. The current full matrix and remaining BLOCKED cases are in [2026-11-12 exact-head report](S25_EXACT_HEAD_FINAL_LAB_2026-11-12.md). Formal LAB_PASS remains NO; do not infer exact-host deployment approval.
+
 # S2.5 source-bound standalone nested MCP evidence (2026-11-11 PT)
 
 ## Verdict and non-equivalence

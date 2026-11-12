@@ -1,3 +1,5 @@
+**Latest 2026-11-12 exact-source validation:** The one-use full nested SDK MCP/Incus 7.6 candidate at 7a01000 passed all five same-source Actions, including full L0-to-L1-to-L2 lifecycle, positive v4/v6 gateway packet witnesses, two Agents, durable quiet read/restart, real Guest Git failure/fix and independent cleanup. **This is NOT formal S2.5 LAB_PASS**: the full BH/TC case matrix still has hard blockers. Read the [case-by-case exact-head report](S25_EXACT_HEAD_FINAL_LAB_2026-11-12.md) before using older partial evidence or marking any gate complete.
+
 **2026-11-12 Box-first real packet/negative evidence before final Actions:**
 isolated L1 native IPv4/IPv6 gateway and direct HTTPS positive witnesses,
 bidirectional peer denial, forged v4/v6 source and forged MAC denial on
