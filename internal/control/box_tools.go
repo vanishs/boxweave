@@ -268,15 +268,23 @@ func exactCreateNativeShape(g native.BoxState, in createBoxInput) bool {
 		g.Nesting == in.Nesting
 }
 
-func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet bool) (native.BoxState, error) {
-	return settleOriginalCreate(ctx, 6*time.Second, func(readCtx context.Context) (native.BoxState, error) {
+func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet, nativeFailed bool) (native.BoxState, error) {
+	return settleOriginalCreateWithNativeFailure(ctx, 6*time.Second, func(readCtx context.Context) (native.BoxState, error) {
 		return s.Native.ObserveCreatedByOperation(readCtx, name, originalID)
-	}, start, internet)
+	}, start, internet, nativeFailed)
 }
 
 // The injected read-only observation makes the settle rules testable without
 // inventing native operation replies or issuing additional mutations.
 func settleOriginalCreate(ctx context.Context, budget time.Duration, observe func(context.Context) (native.BoxState, error), start, internet bool) (native.BoxState, error) {
+	return settleOriginalCreateWithNativeFailure(ctx, budget, observe, start, internet, false)
+}
+
+// A terminal FAILED Incus Create operation must never be reconciled from an
+// instantaneous Running observation: Incus can transiently report Running
+// before a failed LXC start settles back to Stopped. Require two consistent
+// STOPPED readbacks with the same native UUID, or leave the original UNKNOWN.
+func settleOriginalCreateWithNativeFailure(ctx context.Context, budget time.Duration, observe func(context.Context) (native.BoxState, error), start, internet, nativeFailed bool) (native.BoxState, error) {
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	var stopped native.BoxState
@@ -289,12 +297,26 @@ func settleOriginalCreate(ctx context.Context, budget time.Duration, observe fun
 			if observed.Internet != internet {
 				return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_EGRESS_UNVERIFIED"}
 			}
-			if (start && observed.NativeState == "Running") ||
-				(!start && observed.NativeState == "Stopped") {
-				return observed, nil
-			}
-			if start && observed.NativeState == "Stopped" {
-				stopped = observed
+			if nativeFailed {
+				if observed.NativeState == "Stopped" && observed.UUID != "" {
+					if stopped.UUID != "" && stopped.UUID != observed.UUID {
+						return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED"}
+					}
+					if stopped.UUID == observed.UUID && stopped.UUID != "" {
+						return observed, nil
+					}
+					stopped = observed
+				} else {
+					stopped = native.BoxState{}
+				}
+			} else {
+				if (start && observed.NativeState == "Running") ||
+					(!start && observed.NativeState == "Stopped") {
+					return observed, nil
+				}
+				if start && observed.NativeState == "Stopped" {
+					stopped = observed
+				}
 			}
 		}
 		timer := time.NewTimer(350 * time.Millisecond)
@@ -399,7 +421,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
 					}
 				}
-				observed, err := s.observeOriginalCreateSettled(ctx, in.Name, r.ID, start, internet)
+				observed, err := s.observeOriginalCreateSettled(ctx, in.Name, r.ID, start, internet,
+					!originalNativeOutcomeMissing && op.StatusCode != api.Success)
 				if err != nil {
 					return err
 				}

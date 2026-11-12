@@ -85,3 +85,51 @@ func TestCreatePostreadBoundedAndNeverReDispatches(t *testing.T) {
 		}
 	})
 }
+
+// Native Create can return a terminal failure while Incus still reports
+// the requested guest momentarily Running before it settles to Stopped.
+// The original must not turn UNKNOWN from that transient observation.
+func TestTerminalFailedCreateRequiresStableStoppedReadback(t *testing.T) {
+	base := native.BoxState{Project: "user-1002", Name: "failed-start", UUID: "native-verified-uuid",
+		NativeState: "Running", Internet: false}
+	t.Run("transient_running_then_stable_stopped", func(t *testing.T) {
+		calls := 0
+		got, err := settleOriginalCreateWithNativeFailure(context.Background(), 2*time.Second,
+			func(context.Context) (native.BoxState, error) {
+				calls++
+				out := base
+				if calls >= 2 {
+					out.NativeState = "Stopped"
+				}
+				return out, nil
+			}, true, false, true)
+		if err != nil || got.NativeState != "Stopped" || got.UUID != base.UUID || calls < 3 {
+			t.Fatalf("terminal failed-start not confirmed: %+v / %v / calls=%d", got, err, calls)
+		}
+	})
+	t.Run("running_never_stopped_stays_unknown", func(t *testing.T) {
+		_, err := settleOriginalCreateWithNativeFailure(context.Background(), 60*time.Millisecond,
+			func(context.Context) (native.BoxState, error) { return base, nil }, true, false, true)
+		var unknown state.VerificationUncertain
+		if !errors.As(err, &unknown) || unknown.Class != "NATIVE_CREATE_POSTREAD_UNVERIFIED" {
+			t.Fatalf("failed native op with running guest was falsely accepted: %v", err)
+		}
+	})
+	t.Run("reused_name_uuid_between_stopped_reads_denied", func(t *testing.T) {
+		calls := 0
+		_, err := settleOriginalCreateWithNativeFailure(context.Background(), 750*time.Millisecond,
+			func(context.Context) (native.BoxState, error) {
+				calls++
+				out := base
+				out.NativeState = "Stopped"
+				if calls > 1 {
+					out.UUID = "other-uuid"
+				}
+				return out, nil
+			}, true, false, true)
+		var unknown state.VerificationUncertain
+		if !errors.As(err, &unknown) || unknown.Class != "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED" {
+			t.Fatalf("changed uuid in terminal failure was accepted: %v", err)
+		}
+	})
+}
