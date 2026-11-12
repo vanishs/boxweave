@@ -560,12 +560,12 @@ func nestedExec(ctx context.Context) {
 func cleanInnerViaParent(ctx context.Context) {
 	must(!isInner(), "nested cleanup requires L0 authorized guest Exec")
 	m := readCheckpoint()
-	script := "BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1 " +
+	script := "export BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1 " +
 		"BW_S25_URL=http://127.0.0.1:18650/mcp " +
 		"BW_S25_ADMIN1_FILE=/root/s25-admin1.secret " +
 		"BW_S25_ADMIN2_FILE=/root/s25-admin2.secret " +
 		"BW_S25_VIEWER_FILE=/root/s25-viewer.secret " +
-		"BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json " +
+		"BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json; " +
 		"/usr/local/bin/s25-lab-agent wan6-clean && " +
 		"/usr/local/bin/s25-lab-agent cleanup"
 	s := connectActor(ctx, "a")
