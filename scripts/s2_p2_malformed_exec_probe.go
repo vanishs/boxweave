@@ -124,7 +124,7 @@ func main() {
 		x := load(path)
 		check(len(x.BoxID) == 36 && len(x.CreateID) == 32, "missing original native identity")
 		execArgs := map[string]any{"box_id": x.BoxID,
-			"argv":            []string{"/bin/sh", "-c", "printf 'native-once-110v\\n' >> /tmp/bw-s2-malformed-exec-once-110v"},
+			"argv":            []string{"/bin/sh", "-c", "printf 'native-once-110v\\n' >> /root/bw-s2-malformed-exec-once-110v"},
 			"idempotency_key": "s2-p2-malformed-exec-original",
 			"work_ref":        "lab/p2-malformed-return", "agent_ref": "sdk-malform"}
 		if mode == "malform" {
