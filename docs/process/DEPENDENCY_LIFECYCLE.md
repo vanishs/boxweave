@@ -24,6 +24,12 @@ On both fresh and already-running Incus hosts, provision/verify the exact native
 
 Stage the installation as **observe native state → choose and configure owned Project/Profiles/networks → prove rights and effective devices → create only owned instances**. Real cross-version checks must distinguish the observed daemon (last Box host: 7.5.1) from pinned SDK source v7.6.0. See [second-pass findings](../research/SDK_GAP_CLOSURE_2026-11-07.md).
 
+## S2.5 dedicated-host first-Box completion and nested quota gate
+
+A verified `native-bootstrap` result currently establishes the daemon and restricted OS identity **only**. Before an actual S2 `box_create`, a host-local operator must provision or independently validate the confined Project's effective `default` Profile root disk, selected real quota-backed `dir` pool, reviewed Ubuntu 24.04 image alias `boxweave-ubuntu-24.04`, one exclusively owned precreated ACL/NIC with ingress reject and IPv4/enabled IPv6/MAC anti-spoof, and native packet behavior. S2.5 must make this an **explicit plan/approve/apply/readback/rollback work package**, not rely on invisible S2 CI fixtures or an overprivileged MCP runtime. Stage only the **minimum default-deny prerequisite**; S4 still owns live peer/forward and daemon-global Scriptlet changes.
+
+The nested L1 must independently pass the same `dir` project-quota/readback/Exec-spool gate, actual inner Project/root Profile and NAT/idmap requirements before an L2 is created. Because Incus silently skips unsupported `dir` size quotas, neither an L1 `security.nesting=true` property nor an L0 root-disk cap is proof. Check supported **installed APT package version per layer** separately from Go SDK v7.6.0; do not assume equality. [S2.5 source audit](../research/S25_PREDEPLOY_REALITY_AUDIT_2026-11-11.md). All host changes require local explicit authority; this preparatory work does not authorize a shared Incus migration or legacy `main` coexistence.
+
 ## Host-local controlled reconciliation
 
 1. A local administrator explicitly invokes `boxweave install` or `boxweave upgrade`. Observe the existing daemon and its consumers before change; do not take over unrelated Incus instances just because they exist.
