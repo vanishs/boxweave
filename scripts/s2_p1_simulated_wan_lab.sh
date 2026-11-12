@@ -35,7 +35,7 @@ setup)
   sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
   sudo touch "$log"
   sudo chmod 0644 "$log"
-  sudo ip netns exec "$ns" python3 "$work/s2_p1_simulated_wan_server.py" \
+  sudo ip netns exec "$ns" python3 "$(pwd)/scripts/s2_p1_simulated_wan_server.py" \
     "$cert" "$key" "$log" > "$work/s2-simwan-server.log" 2>&1 &
   echo "$!" > "$work/s2-simwan.pid"
   attempt=0
@@ -50,7 +50,19 @@ setup)
     attempt=$((attempt+1))
     sleep 1
   done
-  test "$attempt" -lt 35
+  if [ "$attempt" -ge 35 ]; then
+    echo "S2_SIMULATED_WAN_TEST_HARNESS_FAIL: no host-side verified HTTPS baseline" >&2
+    sudo ip -brief address show "$uplink" >&2 || :
+    sudo ip route get 198.18.0.2 >&2 || :
+    sudo ip netns exec "$ns" ip -brief addr >&2 || :
+    sudo ip netns exec "$ns" ip route >&2 || :
+    cat "$work/s2-simwan-server.log" >&2 || :
+    curl -4 --noproxy '*' -v --max-time 4 --connect-timeout 2 \
+      --cacert "$cert" --resolve s2-wan.example.test:18443:198.18.0.2 \
+      https://s2-wan.example.test:18443/s2-probe > /dev/null 2> "$work/s2-simwan-curl.last-error" || :
+    sed -n '1,45p' "$work/s2-simwan-curl.last-error" >&2 || :
+    exit 105
+  fi
   # Discard one independent host-side TLS bootstrap request. Native guest
   # must account for exactly two later GETs: before and after disabled egress.
   sudo truncate -s 0 "$log"
