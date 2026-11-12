@@ -738,3 +738,14 @@ handled cleanup. Corrective commit now preserves the exact overlay
 worker import and supplies an explicit `0600` copy of checkpoint and
 SQLite fixture owned by the restricted test UID. No original gateway/
 native UNKNOWN or shared host resource changed.
+
+Round-12 source-only native-expired-Operation safeguard: a typed 404 for
+a durable original native Operation ID now falls back only to two
+Project-scoped active-Operation list observations, exact operation marker,
+UUID, effective network/egress, CPU/memory/disk/nesting, bounded stable
+Running/Stopped postread, and a second no-active verification. Explicitly
+never interpret 404 alone as completion or re-issue any native effect.
+Misconfigured or still-active originals remain UNKNOWN. Added pure/native
+listing and resource-shape Go race negative tests, pending same-source
+real native acceptance. The latest exact-source actions remain separately
+reported.

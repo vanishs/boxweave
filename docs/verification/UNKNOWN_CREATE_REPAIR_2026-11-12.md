@@ -92,6 +92,35 @@ product/runtime and is not repaired by this v1 patch.
   `boxweave-test-ser2` source worktree. Independent Actions and verified
   native post-fix acceptance remain required.
 
+## New expired-native-Operation recovery boundary (candidate source)
+
+A native Incus 7.6 Create Operation ID can expire after the dispatch is
+accepted, while the **exact instance and original native marker** remain.
+A native `GET /operations/<id>` **404 is never alone an outcome**.
+The Create verifier now requires:
+
+1. Original durable native Operation ID exists in SQLite, and Incus
+   `GET` returns specifically a typed 404 (not a timeout/auth failure).
+2. Twice read the restricted Project's native active Operation list,
+   separated in time, and refuse if the original native ID is active,
+   or if either list read fails.
+3. Read the exact `user.boxweave.create_operation` original marker,
+   current native UUID/Project and effective private NIC/egress;
+   wait boundedly for a stable Guest Running/Stopped state and verify
+   requested CPU, memory, root disk and nesting, with no Create/Start
+   redispatch.
+4. Re-read the original native active Operation list before a terminal
+   receipt. Only verified requested postconditions can be SUCCEEDED;
+   a requested Running guest still stable STOPPED may be FAILED
+   **with its actual residual owned UUID recorded**. Any missing, changing
+   or inconsistent proof retains UNKNOWN and the original lock.
+
+Unit/race negatives cover active original `Running`/`Pending`,
+conflicting native resource configuration, and operation-list status
+classification. This is deliberately not considered proven against the
+outer-nesting-disabled real failed-start case until a safety-approved
+native acceptance of the new exact source exists.
+
 ## Added exact-ACK-loss native recovery acceptance probe (pending CI)
 
 The independent one-use GitHub Actions acceptance now also verifies that

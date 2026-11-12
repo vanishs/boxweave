@@ -395,6 +395,52 @@ func (r Reader) NativeOperation(ctx context.Context, id string) (*api.Operation,
 	return op, err
 }
 
+// OriginalOperationInactive verifies a vanished native Operation ID is no
+// longer visible as an active, project-confined effect. It never infers that
+// the original native Operation succeeded; callers must also verify the
+// exact original marker/UUID, every native config postcondition and guest
+// state. This observation is read-only and deliberately double-checked.
+func (r Reader) OriginalOperationInactive(ctx context.Context, id string) error {
+	if id == "" || len(id) > 128 {
+		return ErrUnverified
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		c, err := r.confined(ctx)
+		if err != nil {
+			return err
+		}
+		ops, err := c.GetOperations()
+		if err != nil {
+			return err
+		}
+		if nativeOriginalStillActive(id, ops) {
+			return ErrUnverified
+		}
+		if attempt == 0 {
+			timer := time.NewTimer(350 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return nil
+}
+
+func nativeOriginalStillActive(id string, ops []api.Operation) bool {
+	for _, op := range ops {
+		if op.ID == id && !op.StatusCode.IsFinal() {
+			return true
+		}
+	}
+	return false
+}
+
 // ObserveUntilFinal only polls native GET, never WaitContext (which can send
 // Cancel on a timed-out context in the pinned Incus SDK).
 func (r Reader) ObserveUntilFinal(ctx context.Context, id string) (*api.Operation, error) {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -257,6 +258,16 @@ func nativeDone(ctx context.Context, r native.Reader, nativeID string) error {
 // unsafe NIC evidence refuses immediately; other transient observations get
 // a bounded read window. A stable stopped guest is returned as a residual
 // only after giving the requested startup a chance to settle.
+// A postread must prove the requested native shape as well as the user
+// marker and effective ACL. A native operation that left a same-name but
+// differently sized/resourced guest is NOT considered a complete Create.
+func exactCreateNativeShape(g native.BoxState, in createBoxInput) bool {
+	return g.CPU == strconv.Itoa(in.CPU) &&
+		g.Memory == fmt.Sprintf("%dMiB", in.MemoryMiB) &&
+		g.RootDiskSize == fmt.Sprintf("%dGiB", in.DiskGiB) &&
+		g.Nesting == in.Nesting
+}
+
 func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet bool) (native.BoxState, error) {
 	return settleOriginalCreate(ctx, 6*time.Second, func(readCtx context.Context) (native.BoxState, error) {
 		return s.Native.ObserveCreatedByOperation(readCtx, name, originalID)
@@ -370,10 +381,20 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			verify := func(ctx context.Context) error {
 				op, err := s.Native.ObserveUntilFinal(ctx, nativeID)
-				if err != nil {
+				originalNativeOutcomeMissing := false
+				if api.StatusErrorCheck(err, http.StatusNotFound) {
+					// Incus may discard a short Create Operation immediately
+					// after finalization. Native 404 alone NEVER proves
+					// success/failure: independently query the native active
+					// Operation set twice, then verify exact postconditions.
+					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_ACTIVE_OR_UNVERIFIED"}
+					}
+					originalNativeOutcomeMissing = true
+				} else if err != nil {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_FINAL_OP_UNVERIFIED"}
 				}
-				if op.StatusCode != api.Success {
+				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
 					if err := s.Native.ConfirmDeleteAbsence(ctx, in.Name); err == nil {
 						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
 					}
@@ -382,13 +403,20 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
-				if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
+				if !exactCreateNativeShape(observed, in) {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_RESOURCE_SHAPE_UNVERIFIED"}
+				}
+				if originalNativeOutcomeMissing {
+					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_REAPPEARED"}
+					}
+				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
 				}
 				if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
 				}
-				if op.StatusCode != api.Success {
+				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
 					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
 				}
 				if start && observed.NativeState == "Stopped" {
