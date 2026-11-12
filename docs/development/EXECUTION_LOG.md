@@ -654,3 +654,10 @@ New entries go **newest first after this template**, or append by monotonically 
 A new Agent adds a separate entry whenever an S# phase starts, a risk decision changes, a native mutation becomes UNKNOWN, a fix is independently accepted or a phase hands off. Long machine logs and full acceptance proofs live under verification/ (or protected test-artifact paths) and are linked by exact ID.
 
 When this file exceeds a reasonable one-session reading size, move **older immutable entries** into year/month archives under docs/development/logs/ with backlinks here and a searchable run-ID index. Preserve the **checkpoint + latest few entries** in this file; never erase evidence. For future Agents, read old archives **only by needed run ID**.
+
+### LOG-20261112-HOSTGO-THREE-ROUND-PLAN — instructions only; NO HOST_GO
+
+- **Owner request:** prepare three separate user-invoked Agent rounds for eventual S2.5 real development-host HOST_GO, each executing as one bounded Box-first test/fix/independent-verify/CI cycle and reporting before the next turn. New trigger commands are `完成HOST_GO 第一阶段`, `完成HOST_GO 第二阶段`, `完成HOST_GO 第三阶段`.
+- **Documents:** [three-round runbook](HOST_GO_THREE_STAGE_RUNBOOK.md), [live gate scoreboard](../verification/HOST_GO_STAGE_STATUS.md), references in AGENTS/BRIDGEHEAD phase/implementation plan/index/acceptance matrix. This turn added **instructions only**, no native Box/physical deployment or new LAB/CI acceptance. Tested baseline is Draft PR #133 documentation head 31d9158; actual final RUN head to be resolved when first round executes.
+- **Contract:** preserve BH-001–017 and TC-011–014 authority; prioritize P0 safety/UNKNOWN/network/Agent/rollback, reuse S1/S2 only with evidence; no unspecified physical host authority. Quota stress remains waived, non-ext4/XFS `dir` unverified quota warning remains. Each round commits source-bound results, reports to owner, then stops.
+- **Current status:** three rounds NOT_STARTED; LAB_PASS=NO, HOST_GO=NOT_AUTHORIZED. Next safe action requires a fresh user turn `完成HOST_GO 第一阶段`.
