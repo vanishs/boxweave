@@ -73,3 +73,16 @@ keep DIR_QUOTA_UNVERIFIED / host-disk-exhaustion warnings when no enforceable
 size limit is established. Do not mislabel this as a guaranteed size cap.
 Exact final native Actions, full Client/Agent, crash UNKNOWN, independent
 Verifier and physical-host approval remain separate acceptance gates.
+
+**Native user-Profile identity guard (new):** Incus 7.6
+[upstream incus-user/server.go](https://github.com/lxc/incus/blob/v7.6.0/cmd/incus-user/server.go)
+automatically supplies the dedicated user's exact two-line raw.idmap mapping
+when its host UID/GID range permits it. The first independent L0 lab emitted
+an empty default Profile config, while the nested L1 emitted
+raw.idmap for UID 1001 / primary incus GID 990. v1 accepts *only* an empty
+Profile config or the byte-equivalent documented own UID/incus GID mapping,
+and rejects all unreviewed raw.lxc, arbitrary raw.idmap, broad default
+security.nesting and extra Profile configuration. The same rule now applies
+to the confined runtime doctor/host_status and the root-local operator
+preparation; the rule is tested with exact allowed and unsafe negatives.
+No parent host mounts are authorized.

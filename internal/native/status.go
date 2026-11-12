@@ -113,6 +113,10 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "PROFILE_UNAVAILABLE"
 		return s
 	}
+	if !SafePerUserProfileConfig(profile.Config, current.Uid, incusGroup.Gid) {
+		s.ErrorClass = "UNSAFE_DEFAULT_PROFILE_CONFIG"
+		return s
+	}
 	var selectedPool string
 	for _, d := range profile.Devices {
 		if d["type"] == "disk" && d["path"] == "/" && d["pool"] != "" {

@@ -179,6 +179,17 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	if err != nil {
 		return plan, rec, err
 	}
+	actor, err := user.Lookup("boxweave")
+	if err != nil {
+		return plan, rec, err
+	}
+	incusGroup, err := user.LookupGroup("incus")
+	if err != nil {
+		return plan, rec, err
+	}
+	if !native.SafePerUserProfileConfig(profile.Config, actor.Uid, incusGroup.Gid) {
+		return plan, rec, errors.New("unreviewed native default Profile config: refuse takeover")
+	}
 	if err := nativePrepareProfileEligible(profile.Devices, t); err != nil {
 		return plan, rec, err
 	}

@@ -267,6 +267,11 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 	devicesOK := false
 	if err == nil && profile != nil {
 		poolName, netName, aclName, devicesOK = prereqDevices(profile.Devices)
+		incusGroup, groupErr := user.LookupGroup("incus")
+		if u == nil || groupErr != nil ||
+			!native.SafePerUserProfileConfig(profile.Config, u.Uid, incusGroup.Gid) {
+			devicesOK = false
+		}
 	}
 	r.Pool, r.Network, r.ACL = poolName, netName, aclName
 	prereqRecord(&r, "root_disk_and_safe_nic", devicesOK, "exact root disk and one default-deny v4/v6 anti-spoofed NIC")
