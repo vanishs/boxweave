@@ -191,8 +191,8 @@ def inspect_simwan6(inner_layer=False, cleaned=False):
         name = "bw-s25-mcp-l1"
         instances = as_json(native("list", "--project", project, "--format", "json"))
         cert_path = os.environ["BW_S25_SIMWAN6_CERT_FILE"]
-        log = Path(os.environ["BW_S25_SIMWAN6_WORKDIR"], "server.log").read_text()
-        namespace = native("ip", "netns", "list") if False else cli("sudo", "ip", "netns", "list")
+        log = cli("sudo", "cat", str(Path(os.environ["BW_S25_SIMWAN6_WORKDIR"], "server.log")))
+        namespace = cli("sudo", "ip", "netns", "list")
     require("s25simwan6" in namespace, "separate routed upstream namespace absent")
     require("SIM_WAN6_REMOTE=" in log, "upstream HTTPS accepted no packets")
     require(data.get("wan6_peer_uuid") and data.get("wan6_peer_create_op"),
