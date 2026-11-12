@@ -150,6 +150,10 @@ func (r Reader) Read(ctx context.Context) Status {
 			return s
 		}
 		s.StorageSpaceChecked = true
+		if !separate {
+			s.Warnings = append(s.Warnings,
+				"DIR_POOL_HOST_ROOT_SHARED: native dir storage shares the host root filesystem; monitor host-wide capacity.")
+		}
 		// All usable Incus dir backings are supported. A filesystem name
 		// cannot establish whether the native daemon enforces size quotas.
 		// Incus 7.6 may log a skipped-quota warning without returning it

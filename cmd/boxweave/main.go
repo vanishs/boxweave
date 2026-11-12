@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -53,6 +53,10 @@ func run() error {
 	nativePlanSHA := f.String("native-plan-sha256", "", "operator-reviewed native APT simulation digest")
 	approveNative := f.Bool("approve-native-bootstrap", false, "approve exact signed APT plan on an empty local host")
 	prereqSHA := f.String("native-prereq-sha256", "", "operator-reviewed exact host and native prerequisite snapshot")
+	preparePool := f.String("pool", "", "existing reviewed native dir pool for pre-first-Box preparation")
+	prepareNetwork := f.String("network", "", "existing reviewed managed native bridge")
+	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
+	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
 	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
 	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
@@ -74,7 +78,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -84,12 +88,46 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
+		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback",
+		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
 			return err
 		}
 		defer release()
+	}
+	if command == "native-prepare-plan" || command == "native-prepare-apply" ||
+		command == "native-prepare-status" || command == "native-prepare-rollback" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		target := install.NativePrepareTarget{Project: *project, Pool: *preparePool, Network: *prepareNetwork, ACL: *prepareACL}
+		enc := json.NewEncoder(os.Stdout)
+		switch command {
+		case "native-prepare-plan":
+			report, err := install.NativePreparePlanReview(ctx, target)
+			if err != nil {
+				return err
+			}
+			return enc.Encode(report)
+		case "native-prepare-apply":
+			record, err := install.NativePrepareApply(ctx, target, *prepareSHA, *approveLocal)
+			if e := enc.Encode(record); e != nil {
+				return e
+			}
+			return err
+		case "native-prepare-status":
+			record, err := install.NativePrepareStatus()
+			if err != nil {
+				return err
+			}
+			return enc.Encode(record)
+		case "native-prepare-rollback":
+			record, err := install.NativePrepareRollback(ctx, *prepareSHA, *approveLocal)
+			if e := enc.Encode(record); e != nil {
+				return e
+			}
+			return err
+		}
 	}
 	if command == "native-prereq-plan" || command == "native-prereq-verify" {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
