@@ -109,6 +109,27 @@ the original S2 acceptance contract. This new I+N+SQLite test is not a
 protected root-local installed CLI acceptance, nor a success until Actions
 reports the exact check's PASS.
 
+## Exact Actions red results (fixed test harness, native follow-up pending)
+
+- `5092f668` / [run 43324672518](https://github.com/vanishs/boxweave/actions/runs/43324672518):
+  all source/race checks passed; native acceptance progressed through real
+  create/exec/delete/ack-loss and many safety tests but was blocked by
+  the old test-only overlap-overlay generator expecting the previous
+  `worker.go` import layout. The protective fail-closed check itself
+  worked, but its pinned source expectation needed updating.
+- `7264d910` / [run 43325581720](https://github.com/vanishs/boxweave/actions/runs/43325581720):
+  all source/race checks passed and the actual Incus one-use
+  lost-ACK Create original native identity marker independently matched
+  **PASS**. The new copied SQLite bind probe couldn't read the runner-owned
+  private `ack-original.json` as the restricted service UID and failed
+  before binding, correctly not bypassing filesystem permissions.
+- Corrected harness explicitly copies just that checkpoint as `0600`
+  owned by the verifier service account, ensures the copied ledger is
+  private `0600`, and preserves strict original source-only import
+  matching for the overlay. Until a **new exact-head** Actions succeeds,
+  the original two runs remain FAILED and native create-binding is not
+  accepted.
+
 **Remaining gate:** obtain a safety-approved disposable real Incus test for
 the bounded-postread source and prove positive/negative official SDK/SQLite/
 native result plus independent verifier, then run same-head Actions. Until

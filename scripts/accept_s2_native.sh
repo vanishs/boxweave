@@ -895,6 +895,9 @@ test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operati
 echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
 ack_copy="$work/ledger/unknown-create-bind-copy"
 sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
+# The original checkpoint belongs to the runner and is deliberately 0600.
+# Give the restricted probe ONLY a new exact byte-copy owned by its UID.
+sudo install -m 0600 -o boxweave -g incus "$ack_checkpoint" "$ack_copy/ack-original.json"
 sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
 import sqlite3,sys
 src,dst=sys.argv[1:]
@@ -903,10 +906,11 @@ with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
     with sqlite3.connect(dst) as copy:
         original.backup(copy)
 PY_SCRIPT
+sudo chmod 0600 "$ack_copy/ledger.sqlite"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  "$work/s2-unknown-create-bind-probe" "$ack_checkpoint" \
+  "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
   "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
 # This original database remains truly unbound UNKNOWN; the test binding
 # happened ONLY on a disposable standalone copy.

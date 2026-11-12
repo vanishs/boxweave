@@ -722,3 +722,19 @@ Create after binding; source SQLite is not mutated, only its isolated
 backup. This extra CI has not yet reported a native result at the time
 of this log entry. Never treat the earlier failed on-Box start probes as
 successful.
+
+**Actions failure investigation, exact runs:** `5092f668` run
+`43324672518` passed full Go/race and progressed through real Incus S2
+Create/Exec/DELETE/faults, but test-only source overlay generator
+`scripts/s2_p1_build_overlap_overlay.py` intentionally rejected changed
+`worker.go` import layout (new `strings` needed for typed diagnostic
+classes). `7264d910` run `43325581720` passed full Go/race and real
+native ACK-loss marker equality
+`S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS`, then the new
+restricted binding probe failed `checkpoint missing`: runner-owned
+`0600` checkpoint is not readable under the `boxweave` UID. Both are
+**real failed CI runs**, not product PASS; one-use GitHub Incus runner
+handled cleanup. Corrective commit now preserves the exact overlay
+worker import and supplies an explicit `0600` copy of checkpoint and
+SQLite fixture owned by the restricted test UID. No original gateway/
+native UNKNOWN or shared host resource changed.
