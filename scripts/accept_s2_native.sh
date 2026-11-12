@@ -373,6 +373,13 @@ if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
 fi
 echo "S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS"
 
+# Physical public WAN routing may not be available to a hosted Guest.
+# A separately routed namespace+veth+TLS server gives an explicit, stricter
+# SIMULATED-WAN ON/OFF/ON proof, but never counts as public Internet.
+sh scripts/s2_p1_simulated_wan_lab.sh setup "$work"
+simulated_wan_ca_b64="$(base64 -w0 "$work/s2-simwan-cert.pem")"
+test -n "$simulated_wan_ca_b64"
+
 # The independent official MCP SDK prober temporarily holds one completed
 # 16MiB+4-byte dual-stream Exec until this CI VM administrator measures its
 # ACTUAL native spool files. This is read-only and never deletes native logs.
@@ -384,6 +391,7 @@ echo "S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS
   BW_S2_EXPIRED_TOKEN="$expired_viewer" BW_S2_REVOKED_TOKEN="$revoked_viewer" \
   BW_S2_FOREIGN_LAYER_OPID="$foreign_layer_id" \
   BW_S2_HISTORY_CURSOR_WITNESS_DIR="$work" \
+  BW_S2_SIMULATED_WAN_CA_CERT_B64="$simulated_wan_ca_b64" \
   BW_S2_QUEUED_CANCEL_OPID="$queued_cancel_id" "$work/s2-probe" ) > "$work/native-probe.log" 2>&1 &
 probe_pid=$!
 # The official SDK client pauses immediately after its first 50 records.
