@@ -186,6 +186,26 @@ func observeBoxEffectiveDevices(out *BoxState, devices api.DevicesMap) {
 	}
 }
 
+// nativeGuestReadiness returns false only when the instance is proven
+// stopped, true only for an actual Incus guest-declared Ready state, and
+// otherwise nil (unknown). It never dispatches a guest/native write from
+// box_get/box_list. Native Incus updates its volatile ready flag on startup
+// and shutdown; S2 native tests verify the false->true->false transition.
+func nativeGuestReadiness(status string, config api.ConfigMap) *bool {
+	if status == "Stopped" {
+		value := false
+		return &value
+	}
+	if status != "Running" && status != "Ready" {
+		return nil
+	}
+	if status == "Ready" || config["volatile.last_state.ready"] == "true" {
+		value := true
+		return &value
+	}
+	return nil
+}
+
 func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, string, error) {
 	out := BoxState{Project: r.Project, Name: name}
 	if !safeName.MatchString(name) || uuid == "" {
@@ -203,18 +223,22 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 		return out, "", ErrNotOwned
 	}
 	out.UUID = uuid
+	// Incus's instance_ready_state extension is a *guest-originated*
+	// readiness signal (PATCH via /dev/incus), not a Controller guess from
+	// Running. The volatile.last_state.ready flag is maintained and cleared
+	// by Incus over the instance lifecycle; never accept user.* labels or
+	// a successful unrelated /bin/true as equivalent evidence.
+	out.GuestReady = nativeGuestReadiness(inst.Status, inst.Config)
+	// Incus may report the dedicated Ready status; clients and the Worker
+	// continue to use the existing Running/Stopped power-state contract.
 	out.NativeState = inst.Status
+	if inst.Status == "Ready" {
+		out.NativeState = "Running"
+	}
 	out.CPU = inst.ExpandedConfig["limits.cpu"]
 	out.Memory = inst.ExpandedConfig["limits.memory"]
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
-	// A stopped instance cannot be ready; a Running native instance has
-	// UNKNOWN guest readiness until a separate real guest probe succeeds.
-	// JSON null is deliberately different from false or true.
-	if inst.Status == "Stopped" {
-		notReady := false
-		out.GuestReady = &notReady
-	}
 	return out, etag, nil
 }
 
