@@ -44,11 +44,19 @@ fi
 echo S25_INNER_SCOPED_PACKAGE_HTTPS=PASS
 printf 'Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-s25-ipv4
 printf 'Acquire::https::Proxy "%s";\n' "$package_proxy" > /etc/apt/apt.conf.d/98-s25-relay
-if [ -f /etc/apt/sources.list.d/ubuntu.sources ];then
- sed -i -e 's#http://archive.ubuntu.com/ubuntu/#https://archive.ubuntu.com/ubuntu/#g' \
-  -e 's#http://security.ubuntu.com/ubuntu/#https://security.ubuntu.com/ubuntu/#g' \
-  /etc/apt/sources.list.d/ubuntu.sources
+# Ubuntu 24.04 images may use either legacy /etc/apt/sources.list
+# (verified in actual L1 native guest) or deb822 ubuntu.sources.
+for sources in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+ [ ! -f "$sources" ] && continue
+ sed -i -e 's#http://archive.ubuntu.com#https://archive.ubuntu.com#g' \
+  -e 's#http://security.ubuntu.com#https://security.ubuntu.com#g' \
+  "$sources"
+done
+if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+ echo S25_INNER_APT_PLAINTEXT_SOURCE_REFUSED >&2
+ exit 63
 fi
+echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
 apt-get update -qq
 apt-get install -y --no-install-recommends ca-certificates curl gpg >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
@@ -73,6 +81,12 @@ systemctl start incus.service
 systemctl is-active --quiet incus.service
 incus admin init --auto --storage-backend=dir
 test -z "$(incus list --all-projects --format csv -c n)"
+# Incus image copy default pull is performed by the TARGET daemon,
+# not necessarily by the incus CLI. Configure only the fresh, exclusively
+# nested LAB daemon to reach the same constrained public HTTPS hosts.
+incus config set core.proxy_https="$package_proxy"
+test "$(incus config get core.proxy_https)" = "$package_proxy"
+echo S25_INNER_INCUS_DAEMON_SCOPED_HTTPS_PROXY=PASS
 echo S25_INNER_PINNED_INCUS_DAEMON=PASS
 
 useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
