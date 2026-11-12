@@ -206,6 +206,30 @@ echo S25_RESTART_AUTHENTIC_HTTP_READY=PASS
 "$work/staging/s25-lab-agent" post-restart
 python3 scripts/s25_independent_verifier.py agents
 echo S25_ONE_USE_CONTROLLER_RESTART_NATIVE_SQLITE_RECONCILED=PASS
+# Round 2 fault: kill the exact disposable L0 BoxWeave systemd main process,
+# NOT Incus and not a shared/physical host. Original L1 and peer lifecycle
+# receipts must remain immutable and be independently recovered after the
+# actual process has been replaced. Active systemd alone is not HTTP ready.
+old_main="$(sudo systemctl show boxweave.service -p MainPID --value)"
+test "$old_main" -gt 1
+sudo systemctl kill --kill-whom=main --signal=SIGKILL boxweave.service
+kill_recovered=no
+attempt=0
+while [ "$attempt" -lt 40 ]; do
+ new_main="$(sudo systemctl show boxweave.service -p MainPID --value)"
+ state="$(sudo systemctl show boxweave.service -p ActiveState --value)"
+ code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+ if [ "$new_main" -gt 1 ] && [ "$new_main" != "$old_main" ] && [ "$state" = active ] && [ "$code" = 401 ]; then
+  kill_recovered=yes; break
+ fi
+ attempt=$((attempt+1))
+ sleep 1
+done
+test "$kill_recovered" = yes
+echo S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY=PASS
+"$work/staging/s25-lab-agent" post-restart
+python3 scripts/s25_independent_verifier.py agents
+echo S25_R2_SIGKILL_ORIGINAL_TWO_AGENT_SQLITE_AND_NATIVE_NO_REPLAY=PASS
 # Token revocation is a direct dedicated-user local CLI action; the old
 # HTTP bearer is tested by a separate process but never logged/exported.
 viewer_id="$(sed -n 's/^id=\([0-9a-f]*\) .*/\1/p' "$work/private/viewer.secret")"
@@ -261,5 +285,57 @@ python3 scripts/s25_independent_verifier.py l2clean
 python3 scripts/s25_independent_verifier.py clean
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 test -z "$(sudo incus list --project "$project" --format csv -c n)"
+# Round 2 independent operator rollback: run only *after* original SDK
+# cleanup. The upgrade canary uses identical source with only a distinct
+# build label; always verify actual install digest and preserve original
+# SQLite receipt history. No quota stress and no native guest writes.
+mkdir -m 0755 "$work/canary-readable"
+CGO_ENABLED=1 go build -trimpath \
+  -ldflags "-X main.version=1.0.25-hostgo-r2-canary -X main.commit=$(git rev-parse HEAD)" \
+  -o "$work/canary-readable/boxweave-r2-canary" ./cmd/boxweave
+canary_sha="$(sha256sum "$work/canary-readable/boxweave-r2-canary" | awk '{print $1}')"
+test "$canary_sha" != "$binary_sha"
+test ! -e /var/lib/boxweave-installer-backup
+if sudo /usr/local/bin/boxweave rollback -project "$project" -approve-local > "$work/private/unbacked-rollback.json" 2>&1; then
+ echo S25_R2_FAIL_UNBACKED_ROLLBACK_ACCEPTED >&2; exit 95
+fi
+if sudo /usr/local/bin/boxweave upgrade -project "$project" \
+  -source-binary "$work/canary-readable/boxweave-r2-canary" \
+  -expect-sha256 0000000000000000000000000000000000000000000000000000000000000000 \
+  -approve-local > "$work/private/wrong-upgrade.json" 2>&1; then
+ echo S25_R2_FAIL_WRONG_UPGRADE_SHA_ACCEPTED >&2; exit 95
+fi
+test "$(sha256sum /usr/local/bin/boxweave | awk '{print $1}')" = "$binary_sha"
+sudo systemctl is-active --quiet boxweave.service
+echo S25_R2_UNBACKED_ROLLBACK_AND_BAD_UPGRADE_DIGEST_REFUSED=PASS
+sudo /usr/local/bin/boxweave upgrade -project "$project" \
+  -source-binary "$work/canary-readable/boxweave-r2-canary" \
+  -expect-sha256 "$canary_sha" -approve-local > "$work/private/upgraded.json"
+test "$(sha256sum /usr/local/bin/boxweave | awk '{print $1}')" = "$canary_sha"
+sudo systemctl is-active --quiet boxweave.service
+sudo test -d /var/lib/boxweave-installer-backup
+echo S25_R2_EXACT_SOURCE_CANARY_UPGRADE_WITH_LEDGER_BACKUP=PASS
+sudo systemctl stop boxweave.service
+test "$(sudo systemctl is-active boxweave.service)" = inactive
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp || :)"
+test "$code" != 401
+echo S25_R2_OPERATOR_FALLBACK_WHILE_MCP_UNAVAILABLE=PASS
+sudo /usr/local/bin/boxweave rollback -project "$project" -approve-local > "$work/private/rollback.json"
+test "$(sha256sum /usr/local/bin/boxweave | awk '{print $1}')" = "$binary_sha"
+rollback_ready=no
+attempt=0
+while [ "$attempt" -lt 40 ]; do
+ sudo systemctl is-active --quiet boxweave.service
+ code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp || :)"
+ if [ "$code" = 401 ]; then rollback_ready=yes; break; fi
+ attempt=$((attempt+1));sleep 1
+done
+test "$rollback_ready" = yes
+echo S25_R2_OPERATOR_ROOT_LOCAL_EXACT_BINARY_ROLLBACK=PASS
+"$work/staging/s25-lab-agent" round2-postrollback
+python3 scripts/s25_independent_verifier.py round2-postrollback
+cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
+printf 'round2_original_binary_sha256=%s\nround2_canary_binary_sha256=%s\n' "$binary_sha" "$canary_sha" > "$proof/round2-binary-identities.txt"
+echo S25_R2_ORIGINAL_SQLITE_NATIVE_CLEAN_AFTER_ROLLBACK=PASS
 echo S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS
 echo S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET

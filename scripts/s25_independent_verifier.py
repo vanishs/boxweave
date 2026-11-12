@@ -371,6 +371,54 @@ def nested_cleaned():
     inner("python3","-c",code,checkpoint["delete_op"],checkpoint["uuid"])
     print("S25_V_INNER_ORIGINAL_MCP_L2_DELETE_NATIVE_ABSENCE=PASS")
 
+
+def verify_round2_offline_rollback():
+    """Independent no-token post-mortem on exact installed rollback binary.
+
+    Not a substitute for in-flight lost native ACK/SQLite kill injection:
+    verifies safe local operator fallback with full original MCP history.
+    """
+    m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    project = os.environ["BW_S25_PROJECT"]
+    require(m.get("create_op") and m.get("delete_op") and m.get("uuid"),
+            "original rollback checkpoint lacks actual L0 lifecycle")
+    expected_sha = os.environ["BW_S25_BINARY_SHA256"]
+    installed = cli("sudo", "sha256sum", "/usr/local/bin/boxweave").split()[0]
+    require(installed == expected_sha,
+            "offline operator rollback did not restore exact originally accepted binary")
+    status = as_json(cli("sudo", "/usr/local/bin/boxweave",
+                         "install-status", "-project", project))
+    require(status.get("binary_sha256") == expected_sha and
+            status.get("build_commit") == os.environ.get("GITHUB_SHA") and
+            status.get("service_active") and
+            status.get("restart_required") is False,
+            "rollback installer status inconsistent with original candidate")
+    require(cli("sudo", "systemctl", "is-active", "boxweave.service") == "active",
+            "BoxWeave service was not recovered after root-local rollback")
+    # After externally admitted lifecycle cleanup, NO native Box is adopted,
+    # re-created, or removed by an implicit installer fallback.
+    boxes = as_json(native("list", "--project", project, "--format", "json"))
+    require(boxes == [], "native Box leaked or recreated after rollback")
+    original = [
+        ("create_op", "uuid", "agent-outer-alpha"),
+        ("delete_op", "uuid", "agent-s25-cleanup"),
+        ("peer_delete_op", "peer_uuid", "agent-s25-beta"),
+        ("quiet_op", "uuid", "agent-outer-alpha"),
+        ("wan6_peer_delete_op", "wan6_peer_uuid", "agent-s25-simwan6"),
+        ("agent_a_exec", "uuid", "agent-s25-alpha"),
+        ("agent_b_exec", "peer_uuid", "agent-s25-beta"),
+    ]
+    for op, uuid, actor in original:
+        require(m.get(op) and m.get(uuid), "original fault receipt missing "+op)
+        read_ledger(os.environ["BW_S25_OUTER_DB"], m[op], m[uuid], actor)
+    integrity = (
+        "import sqlite3,sys;"
+        "d=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3);"
+        "assert d.execute('PRAGMA integrity_check').fetchone()==('ok',)"
+    )
+    cli("sudo", "python3", "-c", integrity, os.environ["BW_S25_OUTER_DB"])
+    print("S25_V_R2_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_ROLLBACK=PASS")
+
 def cleaned():
     m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
     require(m.get("delete_op") and m.get("uuid"),
@@ -405,6 +453,8 @@ if __name__ == "__main__":
         inspect_quiet_operation()
     elif sys.argv[1] == "l2clean":
         nested_cleaned()
+    elif sys.argv[1] == "round2-postrollback":
+        verify_round2_offline_rollback()
     elif sys.argv[1] == "clean":
         cleaned()
     else:

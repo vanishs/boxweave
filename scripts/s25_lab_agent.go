@@ -496,6 +496,36 @@ func afterControllerRestart(ctx context.Context) {
 	fmt.Println("S25_CONTROLLER_RESTART_ORIGINAL_MULTI_AGENT_RECEIPTS=PASS")
 	fmt.Println("S25_CONTROLLER_RESTART_NO_NATIVE_CREATE_REPLAY=PASS")
 }
+
+// round2PostRollback is a fresh official-SDK client process after the
+// original L1/L2 and peer Boxes were deleted, and after local *offline*
+// installer rollback. It reads ONLY the durable original receipts, then
+// replays one already-SUCCEEDED idempotency key with byte-identical intent.
+// This must never dispatch a new native Create or adopt a Box by name.
+func round2PostRollback(ctx context.Context) {
+	must(!isInner(), "offline rollback original recovery is L0-only")
+	m := readCheckpoint()
+	require := []string{
+		"create_op", "delete_op", "peer_delete_op",
+		"quiet_op", "wan6_peer_delete_op", "agent_a_exec", "agent_b_exec",
+	}
+	s := connectActor(ctx, "b")
+	defer s.Close()
+	tools(ctx, s)
+	for _, field := range require {
+		must(m[field] != "", "missing external original for "+field)
+		rec := child(request(ctx, s, "operation_get",
+			map[string]any{"operation_id": m[field]}), "operation")
+		must(str(rec, "operation_id") == m[field] && str(rec, "state") == "SUCCEEDED",
+			"offline rollback lost original durable receipt "+field)
+	}
+	a := connectActor(ctx, "a")
+	defer a.Close()
+	replay := request(ctx, a, "box_create", firstCreateArgs())
+	must(opid(replay) == m["create_op"] && replay["duplicate"] == true,
+		"offline rollback redispatched previously succeeded Create")
+	fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
+}
 func rotatedViewer(ctx context.Context) {
 	must(!isInner(), "token rotation assertion is L0-only")
 	viewer := connectActor(ctx, "viewer")
@@ -660,6 +690,8 @@ func main() {
 		quietLongPoll(ctx)
 	case "post-restart":
 		afterControllerRestart(ctx)
+	case "round2-postrollback":
+		round2PostRollback(ctx)
 	case "rotated-viewer":
 		rotatedViewer(ctx)
 	case "nested-exec":
