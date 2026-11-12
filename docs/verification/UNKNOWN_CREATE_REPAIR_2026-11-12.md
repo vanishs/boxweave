@@ -1,6 +1,8 @@
 # v1 native Create UNKNOWN: iterative root-cause and repair evidence, 2026-11-12
 
-**Verdict:** FIX IN PROGRESS / NOT NATIVE-ACCEPTED. Separate topic branch
+**Verdict:** installed failed-start recovery and exact-source disposable
+Incus 7.6 CI PASS at 172115e; independent physical-host acceptance and
+test-owned residual Delete remain BLOCKED/NOT SIGNED. Separate topic branch
 `fix/v1-unknown-create-reconciliation-20261112` starts from PR #133's
 `7e47c109c0da03ad50da6d5fb3e3fa6a06258f1d`. This work is **not**
 a HOST_GO stage invocation, LAB_PASS, permission for a physical host or
@@ -164,3 +166,92 @@ the bounded-postread source and prove positive/negative official SDK/SQLite/
 native result plus independent verifier, then run same-head Actions. Until
 then `UNKNOWN_CREATE_FIX=NATIVE_BLOCKED`, `HOST_GO=NOT_AUTHORIZED`;
 do not promote this branch as release-ready.
+
+## 2026-11-12 continuation: real Incus terminal failed-start fixed
+
+- Source 381121b failed on isolated bwracc-1106-v2: one original
+  Create 8701e9e2fdba924894891c5679b173fd, native operation
+  20e97752-3183-481e-be1f-00835355114b, STOPPED native UUID
+  f8194b2a-ad2c-4fa8-b800-b36284b8a40d. SQLite remained
+  UNKNOWN/NATIVE_CREATE_FAILED_STATE_UNVERIFIED despite the exact
+  original create marker. This original is preserved and never retried.
+- Root cause: Incus may briefly report Running for a guest that then
+  stops after a terminal failed Create; the verifier accepted the
+  instantaneous Running state, then rejected terminal native failure.
+  Fix: on confirmed native failed Create require two consistent, spaced
+  STOPPED readbacks of the same exact UUID, original admission marker
+  and safe native configuration; reject any UUID drift. A guest that
+  stays Running or has conflicting evidence remains UNKNOWN.
+  Positive and negative unit tests and full make verify/race passed.
+- Fixed exact source 172115eab8379c391a9b5fc0ac6d7d347f41fba6,
+  binary SHA256
+  768337e0d9e8a92a818716724d403378d237aa96da28f4f85c6d80cd9c4edccd.
+  One original SDK MCP Create f36b99af9e748eff20de243d9dd086ff,
+  native operation de006402-7abe-400a-9e6e-f6013eac659e,
+  created STOPPED instance bw-unk-1721-start-1112 native UUID
+  f76b7655-97ae-412a-8e94-2b5d07a84e30. Native original
+  marker matched; final SQLite result was
+  FAILED/NATIVE_CREATE_FAILED_OWNED_STOPPED with the original
+  native operation ID and exact UUID atomically registered OWNED.
+  Event journal recorded UUID confirmation and terminal failure.
+- Separate-process official Go MCP SDK operation_get and box_get
+  passed for this failed-start receipt and STOPPED UUID. Same original
+  idempotency key replay returned duplicate=true and the unchanged
+  FAILED receipt, with one original operation and one native instance.
+  Restart of only the isolated test service preserved both answers;
+  an initial immediate connect before listener startup was transient.
+  Main boxweave.service stayed active and unmodified.
+- This is REAL SOURCE+INSTALLED MCP+NATIVE scoped PASS for terminal
+  failed-start only, with a same-host independent reader, not a
+  distinct-host verifier. The outer no-nesting EPERM remains a genuine
+  environment failure, not modified. The older eight UNKNOWN
+  (six external gateway + two earlier native) and this additional
+  381121b UNKNOWN are retained, not replayed/adopted/deleted.
+  Exact-head broad Actions / lost-ACK proof and formal HOST_GO
+  remain pending; PR #133 stays Draft.
+
+## Independent Actions, binary reproducibility, and retained cleanup gate
+
+- Exact source 172115e Actions run 43329153954 SUCCESS. Real one-use
+  Incus 7.6 MCP blackbox PASS, including original lost-ACK Create
+  marker/UUID, copied SQLite UNKNOWN binding with no retry, immutable
+  original journal and lock, injected ACK loss restart, native teardown,
+  source format/vet and full race. Log markers:
+  S2_NATIVE_CREATE_REAL_LOST_ACK_MARKER_UUID_COPIED_SQLITE_BIND_NO_RETRY=PASS,
+  S2_NATIVE_CREATE_REAL_LOST_ACK_BIND_ORIGINAL_REPLAY_AND_LOCK=PASS,
+  S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS.
+  https://github.com/vanishs/boxweave/actions/runs/43329153954
+- Historical 381121b independent Actions run 43328408896 also SUCCESS
+  for true lost-ACK recovery. That source had the native failed-start
+  bug reproduced locally, so its green Actions do NOT replace the
+  later 172115e installed failed-start proof.
+- Independent second Box regular clone with Go 1.26.9, identical
+  compile flags and source 172115e reproduced executable SHA256
+  768337e0d9e8a92a818716724d403378d237aa96da28f4f85c6d80cd9c4edccd
+  exactly. An initial Git worktree build differed because the Go
+  linker did not automatically stamp vcs.revision metadata into
+  that worktree; it was not claimed binary-identical. The ordinary
+  clone positive control proved same-byte reproducibility.
+- A one-use normal v1 box_delete for the known FAILED/owned
+  bw-unk-1721-start-1112 UUID was proposed but the connected
+  tool safety check explicitly blocked the full command BEFORE
+  dispatch. No cleanup intent file or new Delete Operation exists.
+  Independent read-only follow-up confirmed the original FAILED
+  journal, UUID and STOPPED native guest unchanged; the original
+  controller service remained active. No alternate-path bypass,
+  manual native delete or original Create retry was attempted.
+  The older native UNKNOWN and six external gateway UNKNOWN
+  remain locked and untouched.
+- The isolated temporary test controller services for earlier
+  bc9cc and 381121b candidates were stopped without touching
+  their separate protected ledgers or native residuals.
+  The latest 172115e temporary service remains a separate
+  non-production controller for original receipt readback.
+- **Result classification:** FAILED-START_UNKNOWN_REDUCTION=PASS,
+  REAL_LOST_ACK_ORIGINAL_BOUND_COPY=PASS,
+  SAME_SOURCE_CI=PASS, SAME_BINARY_TWO_BOX=PASS,
+  REAL_RESIDUAL_DELETE=TOOL_SAFETY_BLOCKED,
+  HOST_LOCAL_MANUAL_RECOVERY_INSTALLED=UNVERIFIED,
+  HOST_GO=NOT_AUTHORIZED. Original UNKNOWN receipts are never
+  automatically rewritten or replayed, and v1 code does not
+  retroactively repair older external-gateway UNKNOWNs.

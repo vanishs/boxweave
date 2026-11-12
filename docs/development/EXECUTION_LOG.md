@@ -749,3 +749,39 @@ Misconfigured or still-active originals remain UNKNOWN. Added pure/native
 listing and resource-shape Go race negative tests, pending same-source
 real native acceptance. The latest exact-source actions remain separately
 reported.
+
+### 2026-11-12 — v1 UNKNOWN Create terminal failed-start fix
+
+- Isolated source 381121b, native original
+  8701e9e2fdba924894891c5679b173fd:
+  UNKNOWN/NATIVE_CREATE_FAILED_STATE_UNVERIFIED after real native
+  terminal failure and STOPPED UUID f8194b2a-ad2c-4fa8-b800-b36284b8a40d.
+  Confirmed a transient Running readback caused premature rejection.
+- Corrected only the native-failure branch: two stable STOPPED reads
+  of exact original UUID/marker, with fail-closed UUID drift.
+  New positive/negative tests and full Go race/quality PASS.
+- Fresh source 172115eab8379c391a9b5fc0ac6d7d347f41fba6,
+  binary SHA256 768337e0d9e8a92a818716724d403378d237aa96da28f4f85c6d80cd9c4edccd:
+  original f36b99af9e748eff20de243d9dd086ff, native operation
+  de006402-7abe-400a-9e6e-f6013eac659e, UUID
+  f76b7655-97ae-412a-8e94-2b5d07a84e30 ended terminal
+  FAILED/NATIVE_CREATE_FAILED_OWNED_STOPPED with owned UUID.
+  Real SDK read, original-key duplicate-no-dispatch and
+  post-service-restart persistence PASS. Legacy UNKNOWN untouched.
+  Same-head full native Actions and independent host still pending.
+
+- Same source 172115e native Actions
+  https://github.com/vanishs/boxweave/actions/runs/43329153954
+  SUCCESS: exact original ACK-loss marker, native independent
+  UUID, copied-original-UNKNOWN restricted-UID challenge binding,
+  unchanged original journal, no-retry and native S2 regression.
+  Separate ordinary Git clone rebuilt SHA256
+  768337e0d9e8a92a818716724d403378d237aa96da28f4f85c6d80cd9c4edccd
+  in a second Box (Go 1.26.9, same ldflags); the initial worktree
+  VCS-stamping difference was identified, not misreported as equivalent.
+- Scoped native residual Delete attempt for test-owned known FAILED
+  UUID f76b7655-97ae-412a-8e94-2b5d07a84e30 was stopped by
+  connected-tool safety before dispatch; read-only check confirmed
+  no cleanup record, no Delete journal, native STOPPED and exact
+  original FAILED/owned UUID unchanged. No bypass or retry.
+  REAL_RESIDUAL_DELETE=TOOL_SAFETY_BLOCKED remains a distinct gate.
