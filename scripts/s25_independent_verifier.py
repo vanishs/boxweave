@@ -113,6 +113,36 @@ def inspect_l2():
             "v=c.execute('SELECT state,box_uuid FROM operations WHERE id=?',(sys.argv[1],)).fetchone();"
             "assert v==('SUCCEEDED',sys.argv[2]),v")
     inner("python3", "-c", code, data["create_op"], data["uuid"])
+    # All lifecycle Operations are independently reconciled with the same
+    # original native UUID and the actor that actually submitted them.
+    for key in ("update_op","restart_stop_op","restart_start_op"):
+        require(data.get(key), "inner MCP L2 lifecycle original missing: "+key)
+        inner("python3","-c",code,data[key],data["uuid"])
+    # The real MCP-created L2 (internet=true) must have an explicit
+    # per-instance egress permit, but still default-deny incoming and
+    # enforce anti-spoof. The safe default Profile retains implicit reject.
+    nic=inst.get("expanded_devices",{}).get("eth0",{})
+    require(nic.get("security.acls.default.ingress.action")=="reject" and
+            nic.get("security.acls.default.egress.action")=="allow" and
+            nic.get("security.ipv4_filtering")=="true" and
+            nic.get("security.ipv6_filtering")=="true" and
+            nic.get("security.mac_filtering")=="true" and
+            nic.get("security.acls"),
+            "MCP requested Internet but native effective NIC unsafe")
+    uid=innerproj.split("-")[-1]
+    gw4=inner("incus","network","get","incusbr-"+uid,"ipv4.address").split("/")[0]
+    gw6=inner("incus","network","get","incusbr-"+uid,"ipv6.address").split("/")[0]
+    require(gw4 and gw6, "inner native bridge address unavailable")
+    inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
+          "--","ping","-4","-c","1","-W","2",gw4)
+    inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
+          "--","ping","-6","-c","1","-W","2",gw6)
+    print("S25_V_MCP_L2_NATIVE_IPV4_IPV6_GATEWAY_EGRESS=PASS")
+    # This gateway witness does NOT prove direct upstream WAN on a GitHub
+    # runner. The native WAN field remains explicitly BLOCKED separately.
+    require(inst.get("config",{}).get("limits.cpu")=="2",
+            "same native L2 UUID did not retain revised CPU limit")
+    print("S25_V_L1_MCP_L2_UPDATE_STOP_START_SAME_NATIVE_UUID=PASS")
     print("S25_V_L1_MCP_CREATED_L2_NATIVE_UUID_SQLITE_BINARY=PASS")
 
 def inspect_agents():
@@ -133,6 +163,38 @@ def inspect_agents():
     read_ledger(os.environ["BW_S25_OUTER_DB"],m["agent_b_exec"],
                 m["peer_uuid"],"agent-s25-beta")
     print("S25_V_TWO_AGENT_SEPARATE_NATIVE_ORIGINALS_AND_CLEANUP=PASS")
+
+def inspect_quiet_operation():
+    inspect_l1()
+    m=as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    require(m.get("quiet_op"), "lost external quiet Operation checkpoint")
+    read_ledger(os.environ["BW_S25_OUTER_DB"],m["quiet_op"],m["uuid"],
+                "agent-outer-alpha")
+    print("S25_V_QUIET_ORIGINAL_SQLITE_RECONCILED=PASS")
+
+
+def inspect_git_workflow():
+    inspect_l1()
+    m=as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    for k in ("git_setup_op","git_failure_op","git_repair_op"):
+        require(m.get(k) and len(m[k])==32,
+                "missing independently verifiable original Git Operation "+k)
+        read_ledger(os.environ["BW_S25_OUTER_DB"],m[k],m["uuid"],
+                    "agent-outer-alpha")
+    script = (
+       "set -eu; cd /root/s25-git-loop; "
+       "test \"$(git rev-list --count HEAD)\" = 2; "
+       "test -z \"$(git status --porcelain)\"; "
+       "git show HEAD~1:calc.py | grep -q 'return value + value + 1'; "
+       "grep -q 'return value + value$' calc.py; "
+       "python3 -B -m unittest -q test_calc; "
+       "echo S25_V_GUEST_GIT_TWO_COMMITS_AND_REPAIR=PASS"
+    )
+    witness=inner("sh","-c",script)
+    require("S25_V_GUEST_GIT_TWO_COMMITS_AND_REPAIR=PASS" in witness,
+            "independent Guest Git/source/test repair failed")
+    print("S25_V_MCP_ORIGINAL_GIT_FAIL_AND_REPAIR_OPS=PASS")
+
 
 def nested_cleaned():
     inspect_l1()
@@ -170,6 +232,10 @@ if __name__ == "__main__":
         inspect_l2()
     elif sys.argv[1] == "agents":
         inspect_agents()
+    elif sys.argv[1] == "git":
+        inspect_git_workflow()
+    elif sys.argv[1] == "quiet":
+        inspect_quiet_operation()
     elif sys.argv[1] == "l2clean":
         nested_cleaned()
     elif sys.argv[1] == "clean":

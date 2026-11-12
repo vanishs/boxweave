@@ -100,6 +100,18 @@ sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local
 sudo systemctl is-active --quiet boxweave.service
 test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}')" = 401
 echo S25_LAB_LOOPBACK_MCP_UNAUTH_DENIAL=PASS
+# Independent HTTP boundary negatives, no issued token material.
+for path in /not-mcp /; do
+ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST    "http://127.0.0.1:18650$path" -H 'Content-Type: application/json' -d '{}')"
+ test "$code" = 404
+done
+for field in 'Origin: https://attacker.invalid' 'Host: attacker.invalid'; do
+ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST    http://127.0.0.1:18650/mcp -H "$field"    -H 'Content-Type: application/json' -d '{}')"
+ test "$code" = 403
+done
+code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST  http://127.0.0.1:18650/mcp -H 'Authorization: Bearer definitely-invalid'  -H 'Content-Type: application/json' -d '{}')"
+test "$code" = 401
+echo S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS
 
 # Read-only binary staging on the disposable private Incus bridge only;
 # credentials and SQLite are in a different 0700 directory.
@@ -149,6 +161,8 @@ python3 scripts/s25_independent_verifier.py l1
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" double-agent
 python3 scripts/s25_independent_verifier.py agents
+"$work/staging/s25-lab-agent" quiet-long-poll
+python3 scripts/s25_independent_verifier.py quiet
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 # Installer/runtime durability requires *same SQLite* surviving actual
 # systemd service restart, independently recovered by separate SDK process.
@@ -200,6 +214,9 @@ export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
 python3 scripts/s25_independent_verifier.py l2
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
+"$work/staging/s25-lab-agent" guest-git
+python3 scripts/s25_independent_verifier.py git
+cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" inner-clean
 python3 scripts/s25_independent_verifier.py l2clean
 "$work/staging/s25-lab-agent" cleanup

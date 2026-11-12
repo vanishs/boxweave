@@ -1,3 +1,15 @@
+**2026-11-12 Box-first real packet/negative evidence before final Actions:**
+isolated L1 native IPv4/IPv6 gateway and direct HTTPS positive witnesses,
+bidirectional peer denial, forged v4/v6 source and forged MAC denial on
+exactly identified, then deleted native-only temporary guests.
+This proved per-Box Internet egress semantics, but not a same-binary MCP
+I+N+V replay: shared default Profile must deny egress until Box explicitly
+Internet-enabled. Isolated Guest Git failing test, repair and passing test
+was also witnessed using native guest Exec; final suite additionally
+requires official SDK MCP Guest Exec and independent Git/SQLite readback.
+Evidence: [Box-first S2.5 log](S25_FULL_LAB_WORKLOG_2026-11-12.md).
+No quota stress per owner decision; LAB_PASS/HOST_GO unchanged.
+
 **Latest targeted one-use v1 nested SDK MCP I+N+V:** The L0 MCP ->
 L1 installed v1 MCP -> L2 Create/Exec/Delete, dual authenticated SDK
 Agents, checkpoint recovery, controller restart, token rotation and separate

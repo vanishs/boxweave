@@ -38,6 +38,17 @@ jobs:
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/s25-evidence"
           sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_ORIGINAL_KEY_DIFFERENT_INTENT_DENIED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_QUIET_RUNNING_BOUNDED_WAIT=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_QUIET_FINISH_UNCANCELLED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_QUIET_ORIGINAL_SQLITE_RECONCILED=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_L1_MCP_L2_UPDATE_STOP_START_SAME_NATIVE_UUID=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_MCP_L2_NATIVE_IPV4_IPV6_GATEWAY_EGRESS=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_GUEST_GIT_TEST_ORIGINAL_FAILURE=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_MCP_GUEST_GIT_FIX_AND_RETEST=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx "S25_V_MCP_ORIGINAL_GIT_FAIL_AND_REPAIR_OPS=PASS" "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET' "$RUNNER_TEMP/s25-evidence/console.log"
       - name: Retain exact test metadata and independently observed results

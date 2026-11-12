@@ -236,6 +236,11 @@ func recoverOriginal(ctx context.Context) {
 	defer original.Close()
 	replay := request(ctx, original, "box_create", firstCreateArgs())
 	must(opid(replay) == m["create_op"] && replay["duplicate"] == true, "reconnect redispatched native create")
+	changed := firstCreateArgs()
+	changed["cpu"] = 5
+	must(denied(ctx, original, "box_create", changed),
+		"same idempotency key with different intent was accepted")
+	fmt.Println("S25_ORIGINAL_KEY_DIFFERENT_INTENT_DENIED=PASS")
 	fmt.Printf("S25_RECOVERED_ORIGINAL_UUID=%s\n", uuid)
 	fmt.Println("S25_SECOND_AGENT_RECOVERED_ORIGINAL_OPERATION=PASS")
 	fmt.Println("S25_IDEMPOTENT_CREATE_NO_REDISPATCH=PASS")
@@ -421,6 +426,46 @@ func doubleAgent(ctx context.Context) {
 	fmt.Println("S25_SAME_WORK_DISTINCT_AGENT_OPERATIONS=PASS")
 	fmt.Println("S25_VIEWER_CANNOT_BORROW_WORK_REF=PASS")
 }
+
+// quietLongPoll proves that a completed MCP request and a bounded
+// quiet reader never automatically cancel an admitted native Guest Exec.
+func quietLongPoll(ctx context.Context) {
+	must(!isInner(), "quiet operation is scoped to isolated L0")
+	m := readCheckpoint()
+	a := connectActor(ctx, "a")
+	defer a.Close()
+	args := map[string]any{"box_id": m["uuid"],
+		"argv":       []string{"/bin/sh", "-c", "sleep 5; printf s25-quiet-exec-done"},
+		"timeout_ms": 15000, "idempotency_key": "s25-quiet-long-poll-once",
+		"work_ref": "lab/s25/quiet", "agent_ref": "agent-outer-alpha"}
+	rec := request(ctx, a, "box_exec", args)
+	original := opid(rec)
+	m["quiet_op"] = original
+	saveCheckpoint(m)
+	b := connectActor(ctx, "b")
+	defer b.Close()
+	early := child(request(ctx, b, "operation_get",
+		map[string]any{"operation_id": original, "wait_ms": 150}), "operation")
+	switch str(early, "state") {
+	case "ADMITTED", "PENDING", "RUNNING", "DISPATCHED", "QUEUED":
+	default:
+		must(false, "quiet native Exec unexpectedly terminal before 5-second Guest sleep: "+str(early, "state"))
+	}
+	must(str(early, "operation_id") == original, "bounded wait lost original Operation ID")
+	fmt.Println("S25_MCP_QUIET_RUNNING_BOUNDED_WAIT=PASS")
+	_ = wait(ctx, b, original)
+	out := request(ctx, b, "operation_output_get", map[string]any{
+		"operation_id": original, "stream": "stdout", "limit": 4096,
+	})
+	text, err := base64.StdEncoding.DecodeString(str(out, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	must(string(text) == "s25-quiet-exec-done",
+		"quiet original completion/output lost after bounded read")
+	fmt.Println("S25_MCP_QUIET_FINISH_UNCANCELLED=PASS")
+}
+
 func afterControllerRestart(ctx context.Context) {
 	must(!isInner(), "restart cross-process proof is L0-only")
 	m := readCheckpoint()
@@ -432,7 +477,7 @@ func afterControllerRestart(ctx context.Context) {
 	original := child(request(ctx, s, "operation_get", map[string]any{"operation_id": m["create_op"]}), "operation")
 	must(str(original, "state") == "SUCCEEDED" && str(original, "box_uuid") == m["uuid"],
 		"controller restart lost verified original create")
-	for _, op := range []string{m["agent_a_exec"], m["agent_b_exec"], m["peer_delete_op"]} {
+	for _, op := range []string{m["agent_a_exec"], m["agent_b_exec"], m["peer_delete_op"], m["quiet_op"]} {
 		r := child(request(ctx, s, "operation_get", map[string]any{"operation_id": op}), "operation")
 		must(str(r, "state") == "SUCCEEDED", "original Agent/cleanup receipt lost on service restart")
 	}
@@ -469,6 +514,44 @@ func nestedExec(ctx context.Context) {
 	_, _, badExit := execGuest(ctx, s, m["uuid"], "s25-inner-l2-exec-nonzero", "exit 9", "agent-inner-beta", 90000)
 	must(badExit == 9, "L2 nonzero original native exit not preserved")
 	fmt.Println("S25_L1_MCP_L2_EXEC_EXIT_OUTPUT=PASS")
+	// Complete the same UUID's v1 Update, Stop, Start, and post-start
+	// observed Guest execution before the final MCP Stop/Delete.
+	update := request(ctx, s, "box_update", map[string]any{
+		"box_id": m["uuid"], "cpu": 2,
+		"idempotency_key": "s25-inner-l2-update-cpu-once",
+		"work_ref":        "lab/s25/nested", "agent_ref": "agent-inner-beta",
+	})
+	m["update_op"] = opid(update)
+	saveCheckpoint(m)
+	_ = wait(ctx, s, m["update_op"])
+	box := child(request(ctx, s, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+	must(str(box, "cpu") == "2", "L1 MCP Update CPU had no verified native post-state")
+	stop := request(ctx, s, "box_stop", map[string]any{
+		"box_id": m["uuid"], "idempotency_key": "s25-inner-l2-mid-stop-once",
+		"work_ref": "lab/s25/nested", "agent_ref": "agent-inner-beta",
+	})
+	m["restart_stop_op"] = opid(stop)
+	saveCheckpoint(m)
+	_ = wait(ctx, s, m["restart_stop_op"])
+	box = child(request(ctx, s, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+	must(str(box, "native_state") == "Stopped", "L1 MCP Stop had no native stopped post-state")
+	start := request(ctx, s, "box_start", map[string]any{
+		"box_id": m["uuid"], "idempotency_key": "s25-inner-l2-mid-start-once",
+		"work_ref": "lab/s25/nested", "agent_ref": "agent-inner-beta",
+	})
+	m["restart_start_op"] = opid(start)
+	saveCheckpoint(m)
+	_ = wait(ctx, s, m["restart_start_op"])
+	box = child(request(ctx, s, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+	must(str(box, "native_state") == "Running" &&
+		str(box, "box_id") == m["uuid"], "restart changed UUID or not running")
+	_, out, exit = execGuest(ctx, s, m["uuid"],
+		"s25-inner-l2-after-start-exec-once",
+		"printf s25-guest-after-start",
+		"agent-inner-beta", 90000)
+	must(exit == 0 && strings.TrimSpace(out) == "s25-guest-after-start",
+		"restarted original L2 Guest Exec failed")
+	fmt.Println("S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS")
 }
 func cleanInnerViaParent(ctx context.Context) {
 	must(!isInner(), "nested cleanup requires L0 authorized guest Exec")
@@ -488,6 +571,50 @@ func cleanInnerViaParent(ctx context.Context) {
 		"nested original L2 MCP delete did not complete; preserve original operation")
 	fmt.Println("S25_L0_AUTHORIZED_GUEST_EXEC_L1_MCP_L2_CLEANUP=PASS")
 }
+
+// guestGitWorkflow uses only v1 MCP box_exec and durable operation output to
+// prove BH-014 before the independent native/Git verifier reads the Guest.
+func guestGitWorkflow(ctx context.Context) {
+	must(!isInner(), "guest Git workflow must use L0 MCP-owned L1")
+	m := readCheckpoint()
+	must(m["uuid"] != "", "original L1 missing")
+	s := connectActor(ctx, "a")
+	defer s.Close()
+	setupScript := "set -eu\ntest ! -e /root/s25-git-loop/.git\nmkdir -p /root/s25-git-loop\ncd /root/s25-git-loop\ngit init -q\ngit config user.name \"BoxWeave S2.5 Lab\"\ngit config user.email \"s25-lab@example.invalid\"\nprintf 'def double(value):\\n    return value + value + 1\\n' > calc.py\nprintf 'import unittest\\nfrom calc import double\\nclass TestCalc(unittest.TestCase):\\n    def test_double(self):\\n        self.assertEqual(double(2), 4)\\n' > test_calc.py\ngit add calc.py test_calc.py\ngit commit -q -m \"test: deliberately failing regression\"\necho S25_GIT_ORIGINAL_COMMIT=$(git rev-parse HEAD)\n"
+	original, output, code := execGuest(ctx, s, m["uuid"],
+		"s25-guest-git-setup-once", setupScript, "agent-outer-alpha", 120000)
+	must(code == 0 && strings.Contains(output, "S25_GIT_ORIGINAL_COMMIT="), "Git setup failed")
+	m["git_setup_op"] = str(original, "operation_id")
+	saveCheckpoint(m)
+
+	failScript := "set -eu\ncd /root/s25-git-loop\npython3 -B -m unittest -v test_calc\n"
+	failed, _, code := execGuest(ctx, s, m["uuid"],
+		"s25-guest-git-failing-test-once", failScript, "agent-outer-alpha", 120000)
+	m["git_failure_op"] = str(failed, "operation_id")
+	saveCheckpoint(m)
+	must(code == 1, "deliberate Guest test did not fail with exit=1")
+	errOutput := request(ctx, s, "operation_output_get", map[string]any{
+		"operation_id": m["git_failure_op"], "stream": "stderr", "limit": 4096,
+	})
+	raw, err := base64.StdEncoding.DecodeString(str(errOutput, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	must(strings.Contains(string(raw), "AssertionError: 5 != 4"),
+		"original persisted native stderr lacks real regression failure")
+	fmt.Println("S25_MCP_GUEST_GIT_TEST_ORIGINAL_FAILURE=PASS")
+
+	repairScript := "set -eu\ncd /root/s25-git-loop\nsed -i 's/return value + value + 1/return value + value/' calc.py\ngit add calc.py\ngit commit -q -m \"fix: repair failing test\"\npython3 -B -m unittest -q test_calc\ntest \"$(git rev-list --count HEAD)\" = 2\ntest -z \"$(git status --porcelain)\"\necho S25_GIT_REPAIRED_COMMIT=$(git rev-parse HEAD)\necho S25_GUEST_GIT_FIX_TEST=PASS\n"
+	fixed, stdout, code := execGuest(ctx, s, m["uuid"],
+		"s25-guest-git-repair-and-retest-once", repairScript,
+		"agent-outer-alpha", 120000)
+	must(code == 0 && strings.Contains(stdout, "S25_GUEST_GIT_FIX_TEST=PASS"),
+		"Guest repaired Git test did not pass")
+	m["git_repair_op"] = str(fixed, "operation_id")
+	saveCheckpoint(m)
+	fmt.Println("S25_MCP_GUEST_GIT_FIX_AND_RETEST=PASS")
+}
+
 func cleanup(ctx context.Context) {
 	m := readCheckpoint()
 	must(m["uuid"] != "", "original Box missing")
@@ -524,6 +651,8 @@ func main() {
 		bootstrap(ctx)
 	case "double-agent":
 		doubleAgent(ctx)
+	case "quiet-long-poll":
+		quietLongPoll(ctx)
 	case "post-restart":
 		afterControllerRestart(ctx)
 	case "rotated-viewer":
@@ -534,6 +663,8 @@ func main() {
 		cleanup(ctx)
 	case "inner-clean":
 		cleanInnerViaParent(ctx)
+	case "guest-git":
+		guestGitWorkflow(ctx)
 	default:
 		panic(errors.New("unknown LAB mode"))
 	}

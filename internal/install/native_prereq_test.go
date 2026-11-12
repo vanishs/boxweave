@@ -24,6 +24,8 @@ func TestPrereqDevicesFailClosed(t *testing.T) {
 	}{
 		{"missing_ipv6_filter", func(m api.DevicesMap) { delete(m["eth0"], "security.ipv6_filtering") }},
 		{"open_ingress", func(m api.DevicesMap) { m["eth0"]["security.acls.default.ingress.action"] = "allow" }},
+		{"open_default_egress", func(m api.DevicesMap) { m["eth0"]["security.acls.default.egress.action"] = "allow" }},
+		{"unexpected_default_egress", func(m api.DevicesMap) { m["eth0"]["security.acls.default.egress.action"] = "unsafe" }},
 		{"shared_acls", func(m api.DevicesMap) { m["eth0"]["security.acls"] = "bw-acl,foreign" }},
 		{"missing_root", func(m api.DevicesMap) { delete(m, "root") }},
 		{"host_mount", func(m api.DevicesMap) { m["etc"] = map[string]string{"type": "disk", "path": "/etc", "source": "/etc"} }},

@@ -112,6 +112,7 @@ func nativePrepareProfileEligible(devices api.DevicesMap, t NativePrepareTarget)
 			if d["type"] != "nic" || d["network"] != t.Network ||
 				(d["name"] != "" && d["name"] != "eth0") ||
 				d["security.acls"] != "" || d["security.acls.default.ingress.action"] != "" ||
+				d["security.acls.default.egress.action"] != "" ||
 				d["security.ipv4_filtering"] != "" || d["security.ipv6_filtering"] != "" ||
 				d["security.mac_filtering"] != "" || len(d) > 4 {
 				return errors.New("owned NIC not untouched native bridge default")

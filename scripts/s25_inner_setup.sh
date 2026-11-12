@@ -58,7 +58,7 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
 fi
 echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
 apt-get update -qq
-apt-get install -y --no-install-recommends ca-certificates curl gpg >/dev/null
+apt-get install -y --no-install-recommends ca-certificates curl gpg git >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
 fingerprint="$(gpg --show-keys --with-colons /tmp/s25-zabbly.asc | awk -F: '$1=="fpr"{print $10;exit}')"
 test "$fingerprint" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD

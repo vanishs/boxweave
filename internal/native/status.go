@@ -177,7 +177,7 @@ func (r Reader) Read(ctx context.Context) Status {
 	// Share the exact admission guard with doctor/host_status so a
 	// misconfigured NIC is rejected before any mutation, not only at
 	// the later Create/Start call. This is not packet-level acceptance.
-	s.NICConfigured = nicPrivate(profile.Devices)
+	s.NICConfigured = nicProfilePrivate(profile.Devices)
 	if !s.NICConfigured {
 		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s

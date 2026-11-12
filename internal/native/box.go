@@ -113,6 +113,26 @@ func nicPrivate(devices api.DevicesMap) bool {
 	return count == 1
 }
 
+// nicProfilePrivate is the *default-Profile* admission gate. An explicitly
+// open egress baseline would make every direct Incus CLI-created instance
+// network-enabled before BoxWeave checks its own per-Box internet policy.
+// An absent egress setting is Incus 7.6's documented implicit reject.
+// Instance-owned NICs use nicPrivate instead, and may explicitly allow
+// egress only after a reviewed box_create(internet=true) or box_update.
+func nicProfilePrivate(devices api.DevicesMap) bool {
+	if !nicPrivate(devices) {
+		return false
+	}
+	for _, d := range devices {
+		if d["type"] != "nic" {
+			continue
+		}
+		egress := d["security.acls.default.egress.action"]
+		return egress == "" || egress == "reject"
+	}
+	return false
+}
+
 // CheckBootstrap is intentionally stricter than native existence: a running
 // unisolated bridge NIC is unacceptable even in an exclusive Incus Project.
 // ownedPrivateNICEgress shadows exactly one verified private NIC without
@@ -165,7 +185,7 @@ func (r Reader) CheckBootstrap(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if !nicPrivate(p.Devices) {
+	if !nicProfilePrivate(p.Devices) {
 		return ErrUnsafeNetwork
 	}
 	return nil

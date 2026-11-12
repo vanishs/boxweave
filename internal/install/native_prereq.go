@@ -88,6 +88,8 @@ func prereqDevices(devices api.DevicesMap) (pool, network, acl string, ok bool) 
 			network, acl = d["network"], d["security.acls"]
 			if strings.Contains(acl, ",") || acl == "" ||
 				d["security.acls.default.ingress.action"] != "reject" ||
+				(d["security.acls.default.egress.action"] != "" &&
+					d["security.acls.default.egress.action"] != "reject") ||
 				d["security.ipv4_filtering"] != "true" ||
 				d["security.ipv6_filtering"] != "true" ||
 				d["security.mac_filtering"] != "true" {
