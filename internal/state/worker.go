@@ -11,6 +11,16 @@ import (
 type NativeEffect func(context.Context) (nativeOperationID string, err error)
 type VerifyEffect func(context.Context) error
 
+// A local validation error is eligible for a terminal pre-dispatch failure
+// only if the implementation proves no Incus mutation request was sent.
+type PreDispatchError struct{ Class string }
+
+func (e PreDispatchError) Error() string { return e.Class }
+
+// An already achieved state is not a native Operation ID. Call verify again
+// before acknowledging it, and never invent a native operation receipt.
+var ErrNoNativeChange = errors.New("native readback proves no change necessary")
+
 type Worker struct {
 	Store  *Store
 	Budget time.Duration
@@ -29,6 +39,20 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 	}
 	nativeID, err := effect(ctx)
 	if err != nil {
+		var pre PreDispatchError
+		if errors.As(err, &pre) {
+			_ = w.Store.FailPreDispatch(context.Background(), operationID, pre.Class)
+			return
+		}
+		if errors.Is(err, ErrNoNativeChange) {
+			if verify(ctx) == nil {
+				_ = w.Store.CompleteWithoutNative(context.Background(), operationID)
+			} else {
+				_ = w.Store.Unknown(context.Background(), operationID,
+					"DISPATCHING", "NOOP_POSTCONDITION_UNVERIFIED")
+			}
+			return
+		}
 		// A native SDK error/timeout cannot prove the request was not dispatched.
 		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS")
 		return
@@ -38,13 +62,26 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = w.Store.NativeAck(context.Background(), operationID, nativeID); err != nil {
+		// The native effect may already have committed. The SQLite ACK
+		// transaction may have rolled back, committed with a lost reply, or
+		// remained inaccessible. Best-effort mark either possible journal
+		// state UNKNOWN; NEVER retry the native effect or release its lock.
+		markErr := w.Store.NativeAckUnknown(context.Background(), operationID, nativeID)
+		if errors.Is(markErr, ErrState) {
+			_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "NATIVE_ACK_DURABILITY_UNVERIFIED")
+		}
 		return
 	}
 	if err = verify(ctx); err != nil {
 		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "POSTCONDITION_UNVERIFIED")
 		return
 	}
-	_ = w.Store.Verified(context.Background(), operationID)
+	if err = w.Store.Verified(context.Background(), operationID); err != nil {
+		// A lost final SQLite COMMIT acknowledgment must not be reported as
+		// success without a durable receipt. If it did commit, this guarded
+		// transition cannot overwrite the terminal SUCCEEDED state.
+		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "FINAL_RECEIPT_DURABILITY_UNVERIFIED")
+	}
 }
 
 func (w Worker) Submit(id string, effect NativeEffect, verify VerifyEffect) error {

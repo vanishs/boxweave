@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,9 +19,9 @@ import (
 )
 
 type recoverArgs struct {
-	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer string
-	Challenge, ConfirmUUID, Reason                                string
-	Approved, Acknowledge                                         bool
+	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer, Stream string
+	Challenge, ConfirmUUID, Reason                                        string
+	Approved, Acknowledge                                                 bool
 }
 
 func recoveryPlan(a recoverArgs) install.Plan {
@@ -40,8 +41,9 @@ func recoverLocal(a recoverArgs) error {
 	if a.DB != filepath.Join(p.StateDir, "ledger.sqlite") || a.Operation == "" || a.Reviewer == "" {
 		return errors.New("exact installed SQLite path, operation and reviewer required")
 	}
-	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" {
-		return errors.New("recovery action must be inspect/challenge/release")
+	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
+		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" {
+		return errors.New("recovery action must be inspect/challenge/release or gc-inspect/gc-challenge/gc-release")
 	}
 	if _, err := install.Status(p); err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
@@ -137,6 +139,9 @@ func performRecovery(a recoverArgs) error {
 	defer store.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	if strings.HasPrefix(a.Action, "gc-") {
+		return performGCRecovery(ctx, store, a)
+	}
 	r, err := store.RecoveryInspect(ctx, a.Operation)
 	if err != nil {
 		return err
@@ -183,4 +188,67 @@ func performRecovery(a recoverArgs) error {
 		}{r.OperationID, "UNKNOWN", true, false})
 	}
 	return errors.New("unsupported recovery mode")
+}
+
+// performGCRecovery is reachable ONLY through the existing root-reviewed
+// Unix peer/credential-drop path. It NEVER dispatches a native DELETE;
+// the outcome of a prior lost ACK remains permanently recorded for review.
+func performGCRecovery(ctx context.Context, store *state.Store, a recoverArgs) error {
+	if a.Stream != "stdout" && a.Stream != "stderr" {
+		return errors.New("exact original stdout/stderr review target required")
+	}
+	r, err := store.ExecGCReviewInspect(ctx, a.Operation, a.Stream)
+	if err != nil {
+		return err
+	}
+	if r.Project != a.Project {
+		return errors.New("recorded native log belongs to another Project")
+	}
+	reader := native.Reader{Socket: a.Socket, Project: a.Project}
+	if _, _, err := reader.GetExactBox(ctx, r.Name, r.BoxUUID); err != nil {
+		return fmt.Errorf("exact native GC UUID not re-observed: %w", err)
+	}
+	// Observe only existence, never disclose one guest byte in diagnostics.
+	_, _, err = reader.ReadRecordedOutput(ctx, r.Path, 0, 1)
+	observed := "NATIVE_PRESENT"
+	if errors.Is(err, native.ErrRecordedOutputUnavailable) {
+		observed = "NATIVE_MISSING"
+	} else if err != nil {
+		return fmt.Errorf("original native log existence uncertain: %w", err)
+	}
+	out := json.NewEncoder(os.Stdout)
+	switch a.Action {
+	case "gc-inspect":
+		return out.Encode(struct {
+			Original          state.ExecGCReview
+			NativeObservation string
+			Warning           string
+		}{r, observed, "The earlier native DELETE outcome may be uncertain; no retry and no invented expiry"})
+	case "gc-challenge":
+		challenge, err := store.IssueExecGCReviewChallenge(ctx, r, a.Reviewer, observed)
+		if err != nil {
+			return err
+		}
+		return out.Encode(struct {
+			Operation        string
+			Stream           string
+			Challenge        string
+			ExpiresInSeconds int
+			Warning          string
+		}{r.OperationID, r.Stream, challenge, 300, "Release lifts only this claim; no native DELETE is retried"})
+	case "gc-release":
+		if err := store.ReleaseExecGCReview(ctx, r, a.Reviewer, a.Challenge,
+			a.ConfirmUUID, a.Reason, observed, a.Acknowledge); err != nil {
+			return err
+		}
+		return out.Encode(struct {
+			Operation      string
+			Stream         string
+			State          string
+			ClaimReleased  bool
+			NativeRetried  bool
+			ExpiryInferred bool
+		}{r.OperationID, r.Stream, "REVIEWED_RELEASED", true, false, false})
+	}
+	return errors.New("invalid native GC review operation")
 }

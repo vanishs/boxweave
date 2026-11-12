@@ -57,7 +57,8 @@ func run() error {
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
 	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
 
-	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release")
+	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release or gc-inspect|gc-challenge|gc-release")
+	recoveryStream := f.String("stream", "", "original stdout|stderr only for locally reviewed Exec log GC")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
 	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")
 	recoveryChallenge := f.String("challenge", "", "single-use time-limited local recovery challenge")
@@ -152,7 +153,7 @@ func run() error {
 	}
 	if command == "recover" {
 		return recoverLocal(recoverArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser,
-			Action: *recoveryAction, Operation: *recoveryOperation, Reviewer: *recoveryReviewer,
+			Action: *recoveryAction, Operation: *recoveryOperation, Reviewer: *recoveryReviewer, Stream: *recoveryStream,
 			Challenge: *recoveryChallenge, ConfirmUUID: *recoveryConfirm, Reason: *recoveryReason,
 			Approved: *approveLocal, Acknowledge: *recoveryAcknowledge})
 	}
@@ -195,9 +196,21 @@ func run() error {
 	defer s.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// Never blindly replay an operation possibly sent to Incus before a restart.
+	// Only the active server may run startup recovery. A concurrent serve
+	// sharing SQLite could otherwise UNKNOWN the first server's live work.
+	// The kernel releases this private flock automatically on SIGKILL.
 	if command == "serve" {
+		locked, err := acquireServeLock(*db)
+		if err != nil {
+			return err
+		}
+		defer locked.Close()
 		if _, err := s.Recover(ctx); err != nil {
+			return err
+		}
+		// A crash between native DELETE and its verification is NEVER
+		// interpreted as safe to reissue. Audit and hold the exact Box.
+		if _, err := s.RecoverExecGC(ctx); err != nil {
 			return err
 		}
 	}

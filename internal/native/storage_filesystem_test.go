@@ -65,3 +65,32 @@ func TestS1PoolNameMayNotEscapeCanonicalPath(t *testing.T) {
 		}
 	}
 }
+
+// The longest effective mount wins. A project-quota mount hidden by a
+// non-quota bind mount is NOT proof that the selected native pool is safe.
+func TestS2QuotaMountSourceMustBeRealEnabledExt4OrXFS(t *testing.T) {
+	path := "/var/lib/incus/storage-pools/bw-eligible"
+	cases := []struct {
+		name string
+		info string
+		want bool
+	}{
+		{"ext4-enabled", "44 1 7:1 / /var/lib/incus/storage-pools/bw-eligible rw,prjquota - ext4 /dev/loop2 rw,prjquota", true},
+		{"xfs-enabled", "44 1 7:1 / /var/lib/incus/storage-pools/bw-eligible rw,pquota - xfs /dev/loop2 rw", true},
+		{"no-project-quota", "44 1 7:1 / /var/lib/incus/storage-pools/bw-eligible rw,relatime - ext4 /dev/loop2 rw", false},
+		{"unsupported-driver", "44 1 7:1 / /var/lib/incus/storage-pools/bw-eligible rw,prjquota - btrfs /dev/loop2 rw,prjquota", false},
+		{"parent-quota-hidden", "43 1 7:1 / /var/lib/incus/storage-pools rw,prjquota - ext4 /dev/loop2 rw,prjquota\n44 43 8:1 / /var/lib/incus/storage-pools/bw-eligible rw - ext4 /dev/loop3 rw", false},
+		{"foreign-mount", "44 1 7:1 / /var/lib/incus/storage-pools/other rw,prjquota - ext4 /dev/loop2 rw,prjquota", false},
+		{"invalid-mountinfo", "garbage", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dirProjectQuotaMountReady(path, tc.info); got != tc.want {
+				t.Fatalf("quota mount proof got %v want %v", got, tc.want)
+			}
+		})
+	}
+	if dirProjectQuotaMountReady("/var/lib/incus/storage-pools/bad name", cases[0].info) {
+		t.Fatal("ambiguous mount-point encoding accepted")
+	}
+}

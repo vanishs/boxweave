@@ -1,0 +1,209 @@
+[
+  {
+    "id": "TC-001",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH",
+      "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES",
+      "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE"
+    ],
+    "limits": "Only pinned current official Go SDK and independently tested legacy v1.6.1; not every future/historical version."
+  },
+  {
+    "id": "TC-002",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED",
+      "S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH",
+      "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT"
+    ],
+    "limits": "User-supplied work/agent labels are correlation only; bearer is the trusted actor."
+  },
+  {
+    "id": "TC-003",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED",
+      "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED",
+      "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY",
+      "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY",
+      "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY"
+    ],
+    "limits": "Operator-approved S2 surrogate: hard SIGKILL around SQLite WAL fsync, ext4 ENOSPC and original native post-state; no hardware power-cut claim."
+  },
+  {
+    "id": "TC-004",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY",
+      "S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED",
+      "S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT",
+      "S2_P1_REAL_STOP_AND_DELETE_NATIVE_202_ACK_LOSS_NO_REPLAY",
+      "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL"
+    ],
+    "limits": "Immutable original and no native replay; other actors cannot inherit original auth via self-declared labels."
+  },
+  {
+    "id": "TC-005",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE",
+      "S2_NATIVE_CONCURRENT_HISTORY_PAGING_STABLE_NEW_ROWS_VISIBLE",
+      "S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK"
+    ],
+    "limits": "Finite 120-row cursor/concurrency test is the accepted bounded S2 search contract."
+  },
+  {
+    "id": "TC-006",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED",
+      "S2_P1_TWO_CONTROLLER_INDEPENDENT_NATIVE_AND_MCP_ISOLATION",
+      "S2_P1_TWO_CONTROLLER_CROSS_TOKEN_AUTH_DENIED",
+      "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL"
+    ],
+    "limits": "Same host two restricted OS users/Projects and distinct bearer identities; broader remote/nested layer is S2.5/S4."
+  },
+  {
+    "id": "TC-007",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID",
+      "S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART",
+      "S2_NATIVE_CRASH_DISPATCHED_ORIGINAL_RECEIPT"
+    ],
+    "limits": "Durable original after session disconnect; not a promise of resuming a dead HTTP connection."
+  },
+  {
+    "id": "TC-008",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED",
+      "S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS",
+      "S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL"
+    ],
+    "limits": "Exact current 13 public Tools, private no-store cache; no future-spec compatibility claim."
+  },
+  {
+    "id": "TC-009",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED",
+      "S2_NATIVE_CANCELLED_LONG_POLL_IS_READ_ONLY",
+      "S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES",
+      "S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE"
+    ],
+    "limits": "Host-process kill/WAL/ext4 surrogate replaces physical outage for S2; physical power recovery untested."
+  },
+  {
+    "id": "TC-010",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_ASYNC_PROGRESS_OPTIONAL_NO_FAKE_EVENTS"
+    ],
+    "limits": "Progress is verified optional NO-OP, not a claimed emitted notification."
+  },
+  {
+    "id": "A-004/005/039/057",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_CREATE_STOPPED_UUID",
+      "S2_NATIVE_BOX_LIST_UUID",
+      "S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY",
+      "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL",
+      "S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP",
+      "S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE"
+    ],
+    "limits": "Native guest-origin Ready positively reported true only after real /dev/incus PATCH on exact owned UUID; Stopped false and restarted unprobed Running null. This proves guest-declared readiness, not arbitrary process health or auto-init success."
+  },
+  {
+    "id": "A-006/061/068/074-076",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK",
+      "S2_NATIVE_DISK_SHRINK_DENIED",
+      "S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS",
+      "S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED",
+      "S2_NATIVE_SIMULATED_WAN_NAMESPACE_ROUTE_VERIFIED_TLS",
+      "S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE",
+      "S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED",
+      "S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST",
+      "S2_NATIVE_SIMULATED_WAN_SERVER_INDEPENDENT_ON_OFF_ON_TWO_HITS"
+    ],
+    "limits": "Separate routed 198.18.0.2 namespace and valid verified TLS on/off/on are a SIMULATED WAN egress proof (2 server hits, none while off); true public guest WAN HTTPS remains UNVERIFIED_ENVIRONMENT_EXCEPTION. IPv4/IPv6 gateway+private peer protection independently proved."
+  },
+  {
+    "id": "A-007/008/058/067/081",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_DELETE_VERIFIED_AND_REPLAY",
+      "S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED",
+      "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE",
+      "S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED"
+    ],
+    "limits": "No-dependent Box Delete proved; forward/peer-dependent Delete and peer IP reuse remain S4."
+  },
+  {
+    "id": "A-009/010/019/020/062-064",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_DUAL_STREAM_16M_OUTPUT_READ_BUDGET",
+      "S2_NATIVE_EXEC_RECONNECT_EXIT_7_STDOUT_STDERR",
+      "S2_P2_REAL_MALFORMED_EXEC_NATIVE_202_UNKNOWN_RESTART_CLEANUP",
+      "S2_P2_STALLED_NATIVE_OUTPUT_CANCEL_NO_NATIVE_CHANGE",
+      "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE"
+    ],
+    "limits": "Detached recorded Exec live cancel unsupported; cancellation of reading does not kill Guest."
+  },
+  {
+    "id": "A-016-018/022/034/066",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES",
+      "S2_P0_GENERAL_UNKNOWN_STAGED_ROOT_CLI_DUAL_CONFIRMATION",
+      "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY",
+      "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY",
+      "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY"
+    ],
+    "limits": "SIGKILL/WAL fsync/ext4 ENOSPC accepted as S2 power fault surrogate, not as identical physical outage."
+  },
+  {
+    "id": "A-021/054-055",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_NATIVE_QUEUED_UNDISPATCHED_CANCEL_NO_NATIVE_EFFECT",
+      "S2_NATIVE_EXEC_UNSUPPORTED_CANCEL_TRUTHFUL",
+      "S2_P0_GENERAL_UNKNOWN_AUDIT_DURABLE",
+      "S2_P0_GENERAL_UNKNOWN_LOCAL_RELEASE_NO_RETRY"
+    ],
+    "limits": "Queued cancellation is supported; late detached native Exec cancellation explicitly unsupported; root-local manual review only."
+  },
+  {
+    "id": "A-060/078/080/082",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_P2_ALTERNATE_POOL_LIVE_EXPANDED_ROOT_MATCHES_UUID_POOL_QUOTA",
+      "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED",
+      "S2_P0_REAL_NATIVE_EFFECT_AFTER_ACTUAL_SQLITE_SYNC_KILL"
+    ],
+    "limits": "Only operator-preselected restricted Project pool; public root_pool selector rejected. No upgrade/migration from disposable v1 schemas."
+  },
+  {
+    "id": "A-043-047",
+    "verdict": "DEFERRED_S4",
+    "required_markers": [
+      "S2_NATIVE_DELETE_VERIFIED_AND_REPLAY"
+    ],
+    "limits": "Network-dependent forward/peer Delete retained in S4. S2 requires no-dependent native Delete only."
+  },
+  {
+    "id": "A-077",
+    "verdict": "PASS_TESTED_S2_SCOPE",
+    "required_markers": [
+      "S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS",
+      "S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT",
+      "S2_NATIVE_VIEWER_CREATE_REFUSED"
+    ],
+    "limits": "Finite negative contract for 13 Tools; unbounded nested model fuzz outside accepted support boundary."
+  }
+]

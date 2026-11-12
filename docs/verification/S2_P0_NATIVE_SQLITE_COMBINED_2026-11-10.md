@@ -1,0 +1,18 @@
+# S2 P0 real accepted native Update + SQLite COMMIT fault — exact evidence
+
+**Accepted source:** `c8c005819ea98118ec2ffea28e1dc633163ce6a5`; test-built binary SHA256 `e296c9d2f4a95e7a9c32dd786210b891f5c28912c38a3541fa9a35cc36456d37`. [Full pinned official SDK + real Incus 7.6 black-box](https://github.com/vanishs/boxweave/actions/runs/42956234672), [quality](https://github.com/vanishs/boxweave/actions/runs/42956241019), [Go/race and S1 compatibility](https://github.com/vanishs/boxweave/actions/runs/42956241032) all SUCCESS.
+
+| Gate | Independent evidence | Status |
+|---|---|---|
+| Combined original fault | The exact owned real native instance began CPU=1. One original ETag Update actually reached Incus, returned HTTP 202 with a scoped native operation ID, then armed a test-only cut of that same controller's SQLite WAL NativeAck `fsync/fdatasync`. Separate **before** and **after** syscall SIGKILL runs | PASS |
+| Effect and durable receipt | Independent native Incus administrator found the exact original UUID and CPU=2. Reopened same SQLite: `PRAGMA integrity_check=ok`; original Operation/Tracking/Box UUID/work/Agent labels survived, state UNKNOWN and no invented success. Native ID either absent/exact before sync, exact accepted ID on after-sync path | PASS |
+| No duplicate / concurrency | Original key returned original receipt after restart, a new key refused by resource lock, eight distinct authenticated MCP clients each read original UNKNOWN four times, restricted proxy witnessed no second native PUT | PASS |
+| Root-local general UNKNOWN | Freshly staged installed candidate on disposable CI inspected a **stopped original DB backup**, re-observed the native UUID, required root/approval/reviewer-bound one-time challenge, refused wrong UUID and replay; original UNKNOWN and durable audit remained with no retry | PASS |
+| Unbound Create | Earlier real native Create accepted with HTTP 202 lost has no original durably bound Box UUID. Installed local inspect/challenge/release all refused to invent adoption; journal and audit stayed unchanged | PASS |
+| Separate faults | Existing WAL standalone before/after process cut, isolated ext4 ENOSPC, quota, GC and native lost ACK tests reran in the same full green CI | PASS |
+
+**Exact CI markers:** `S2_P0_REAL_NATIVE_202_SQLITE_WAL_before_SAFE_RECOVERY`, `S2_P0_REAL_NATIVE_202_SQLITE_WAL_after_SAFE_RECOVERY`, `S2_P0_INDEPENDENT_SQLITE_NATIVE_MCP_RECEIPT_CROSSCHECK`, `S2_P0_GENERAL_UNKNOWN_STAGED_ROOT_CLI_DUAL_CONFIRMATION`, `S2_P0_REAL_LOST_ACK_CREATE_WITHOUT_UUID_LOCAL_RECOVERY_REFUSED`, all `=PASS`, and final `S2_P0_NATIVE_202_COMBINED_WITH_SQLITE_COMMIT_FAULT_BOTH_PHASES=PASS`.
+
+**Limits:** The 202 proxy and WAL cut were never shipped or used on a shared Incus. A GitHub-hosted process SIGKILL at the actual SQLite sync call is **not a true hardware power outage**, storage cache failure, or Incus database-failure proof. The installed root review operated on a stopped private ledger **copy**, not a running production host; claim release is not operation replay. The two older historical UNKNOWN operations, `v1`, shared Incus and production hosts were untouched. [Remaining P1/S2 exit obligations](S2_EXIT_CROSSWALK_2026-11-10.md) stay PARTIAL.
+
+**Repair history:** Earlier CI runs failed because new test-only probe was not gofmt-clean and the one-use proxy/CI supervisor failed to deliver a verified 202-armed exact WAL fault. Those failed runs were **not** a product GC/native bug or evidence of duplicate dispatch. Only exact source `c8c0058` and its independent final green CI are accepted for this combined test.

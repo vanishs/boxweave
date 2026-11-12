@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -20,6 +22,46 @@ import (
 	"github.com/vanishs/boxweave/internal/native"
 	"github.com/vanishs/boxweave/internal/state"
 )
+
+// privateMCPWriter applies the actor-private policy at the actual response
+// commit boundary. The pinned MCP SDK writes "no-cache, no-transform" AFTER
+// our handler sets headers; no-cache alone permits storage in shared caches.
+// Preserve the SDK no-transform intent and keep flushing/ResponseController
+// capabilities, without buffering guest output in the controller.
+type privateMCPWriter struct {
+	http.ResponseWriter
+}
+
+func (w *privateMCPWriter) applyPolicy() {
+	w.Header().Set("Cache-Control", "private, no-store, no-cache, no-transform")
+	// An SSE response may flush many times. Never append duplicate Vary
+	// values on each chunk, and preserve any other SDK-supplied Vary keys.
+	if !strings.Contains(strings.ToLower(strings.Join(w.Header().Values("Vary"), ",")),
+		"authorization") {
+		w.Header().Add("Vary", "Authorization")
+	}
+}
+
+func (w *privateMCPWriter) WriteHeader(status int) {
+	w.applyPolicy()
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *privateMCPWriter) Write(p []byte) (int, error) {
+	w.applyPolicy()
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *privateMCPWriter) Flush() {
+	w.applyPolicy()
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *privateMCPWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
 
 type Service struct {
 	Store        *state.Store
@@ -79,8 +121,35 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 	return &auth.TokenInfo{UserID: t.ID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
 }
 func (s *Service) Handler() http.Handler {
-	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory."},
+	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
+		&mcp.ServerOptions{SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
+			// Every resource and Operation is project/actor-private and
+			// status changes while work is in flight. Never cache publicly.
+			c.CacheScope = "private"
+			c.TTLMs = 0
+		}})
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			start := time.Now()
+			result, err := next(ctx, method, req)
+			actor := "unauthenticated"
+			if extra := req.GetExtra(); extra != nil && extra.TokenInfo != nil {
+				// Redacted immutable credential reference, NOT token, params,
+				// argv, env, guest output, prompt or private native message.
+				h := sha256.Sum256([]byte(extra.TokenInfo.UserID))
+				actor = hex.EncodeToString(h[:4])
+			}
+			outcome := "ok"
+			if err != nil {
+				outcome = "error"
+			}
+			slog.InfoContext(ctx, "mcp_request", "method", method,
+				"actor", actor, "duration_ms", time.Since(start).Milliseconds(),
+				"result", outcome)
+			return result, err
+		}
+	})
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
 				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")
@@ -97,13 +166,19 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
-			return &mcp.CallToolResult{}, result, nil
+			return privateReadReply(ctx, s, info.UserID, result)
 		})
+	s.registerOperationReadTools(server)
+	s.registerBoxTools(server)
+	s.registerOperationOutputCancel(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, PropagateRequestCancellation: false})
 	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)
 	origin := http.NewCrossOriginProtection()
 	return origin.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The SDK may reset Cache-Control after entering the handler, so wrap
+		// the original writer and re-apply the policy at WriteHeader/Write/Flush.
+		w = &privateMCPWriter{ResponseWriter: w}
 		h, _, err := net.SplitHostPort(r.Host)
 		if err != nil || (h != "127.0.0.1" && h != "localhost") {
 			http.Error(w, "invalid Host", http.StatusForbidden)
@@ -141,5 +216,8 @@ func (s *Service) ListenAndServe() error {
 		return errors.New("refusing to run MCP service as root")
 	}
 	server := &http.Server{Addr: s.Listener, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 16}
+	gcCtx, gcCancel := context.WithCancel(context.Background())
+	defer gcCancel()
+	go s.execGCLoop(gcCtx)
 	return server.ListenAndServe()
 }
