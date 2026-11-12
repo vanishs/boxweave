@@ -65,6 +65,12 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-SCOPED-062 — isolate Python bytecode pollution of clean-tree native overlay witness
+
+- **Observed original CI red:** [source `7793c25`, independent native job](https://github.com/vanishs/boxweave/actions/runs/43123534467/job/130869736372) failed after printing test-only overlay service SHA256 and **before** starting its private MCP server. Local `bwracc-1106-v2` reproduction shows the newly introduced Python independent evidence imports create untracked `scripts/__pycache__/s2_p3_scoped_acceptance.cpython-312.pyc` and `s2_p3_evidence_audit.cpython-312.pyc`; the next shell step requires an entirely clean `git status` and therefore aborts. This is **test-harness checkout contamination**, not a native Box/worker product logic failure.
+- **Correction:** require `PYTHONDONTWRITEBYTECODE='1'` across the entire one-use native job (before any P3 negative tests), and emit exact `git status --porcelain` diagnostic if a later unrelated source change dirties the overlay fixture. Never weaken original-native UUID, safe UNKNOWN, auth, quota or output checks.
+- **Continuation:** fresh exact branch run must execute both new P3 negative suites, actual unmodified 13-tool/native suite, deterministic post-bind Create/Delete overlay and final 19-row evidence audit. Prior red job retained, original three UNKNOWN tasks not retried/deleted/unlocked. PR #130 still Draft, no protected v1 merge.
+
 ### LOG-20261111-S2-SCOPED-061 — owner-approved crash surrogate, 19-row evidence and genuine cross-actor same-key check
 
 - **Owner decision:** for S2 use real process SIGKILL before/after SQLite WAL fsync, independently observed native effect/restart/no retry and real ext4 ENOSPC **as an accepted power interruption surrogate**, NEVER label actual physical power cut PASS. Public HTTPS host guest unavailable stays explicit environment exception; Guest Ready `Stopped:false`/`Running:null` is a supported tri-state non-claim; S4 dependent deletion deferred.

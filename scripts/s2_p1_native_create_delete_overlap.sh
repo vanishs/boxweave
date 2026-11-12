@@ -25,7 +25,11 @@ CGO_ENABLED=1 go build -trimpath -overlay="$lab/go-overlay.json" \
   -o "$work/s2-p1-overlap-service" ./cmd/boxweave
 chmod 0755 "$work/s2-p1-overlap-service"
 sha256sum "$work/s2-p1-overlap-service"
-test "$(git status --porcelain | wc -l)" -eq 0
+if [ -n "$(git status --porcelain)" ]; then
+  echo "S2_NATIVE_OVERLAP_TEST_HARNESS_FAIL: checkout was contaminated by untracked test files" >&2
+  git status --porcelain >&2
+  exit 93
+fi
 sudo chown boxweave:incus "$lab"
 db="$lab/ledger.sqlite"
 actor() {
