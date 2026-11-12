@@ -7,8 +7,8 @@ set -eu
 mode="$1"; work="$2"
 case "$work" in /tmp/bw-v1-s2-ghci.*) ;; *) exit 88 ;; esac
 ns="bw-s2-simwan"
-uplink="bw-s2-simwan-host"
-peer="bw-s2-simwan-peer"
+uplink="bws2wanhost"
+peer="bws2wanpeer"
 cert="$work/s2-simwan-cert.pem"
 key="$work/s2-simwan-key.pem"
 log="$work/s2-simwan-hits.log"
