@@ -292,3 +292,36 @@ func TestS2GuestReadyJSONTriStateDoesNotInferFromNativeRunning(t *testing.T) {
 		t.Fatalf("stopped guest must report false: %s", raw)
 	}
 }
+
+func TestS2NativeGuestReadinessOnlyGuestDeclaredAndCurrent(t *testing.T) {
+	tests := []struct {
+		name string
+		status string
+		config map[string]string
+		want *bool
+	}{
+		{name: "guest has not explicitly marked ready", status: "Running"},
+		{name: "user claim does not authenticate readiness", status: "Running",
+			config: map[string]string{"user.guest_ready": "true"}},
+		{name: "stale ready flag while stopped is false", status: "Stopped",
+			config: map[string]string{"volatile.last_state.ready": "true"}, want: boolPtrForS2(false)},
+		{name: "native guest ready flag", status: "Running",
+			config: map[string]string{"volatile.last_state.ready": "true"}, want: boolPtrForS2(true)},
+		{name: "native ready status", status: "Ready", want: boolPtrForS2(true)},
+		{name: "paused is not ready", status: "Frozen",
+			config: map[string]string{"volatile.last_state.ready": "true"}},
+		{name: "stale guest off flag is still unknown", status: "Running",
+			config: map[string]string{"volatile.last_state.ready": "false"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := nativeGuestReadiness(tc.status, tc.config)
+			if (got == nil) != (tc.want == nil) ||
+				(got != nil && *got != *tc.want) {
+				t.Fatalf("guest ready status=%q config=%v got=%v want=%v", tc.status, tc.config, got, tc.want)
+			}
+		})
+	}
+}
+
+func boolPtrForS2(value bool) *bool { return &value }
