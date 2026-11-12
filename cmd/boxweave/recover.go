@@ -42,8 +42,9 @@ func recoverLocal(a recoverArgs) error {
 		return errors.New("exact installed SQLite path, operation and reviewer required")
 	}
 	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
-		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" {
-		return errors.New("recovery action must be inspect/challenge/release or gc-inspect/gc-challenge/gc-release")
+		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" &&
+		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" {
+		return errors.New("recovery action must be inspect/challenge/release, create-inspect/create-challenge/create-bind or gc-*")
 	}
 	if _, err := install.Status(p); err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
@@ -141,6 +142,9 @@ func performRecovery(a recoverArgs) error {
 	defer cancel()
 	if strings.HasPrefix(a.Action, "gc-") {
 		return performGCRecovery(ctx, store, a)
+	}
+	if strings.HasPrefix(a.Action, "create-") {
+		return performUnknownCreateBinding(ctx, store, a)
 	}
 	r, err := store.RecoveryInspect(ctx, a.Operation)
 	if err != nil {

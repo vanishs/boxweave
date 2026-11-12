@@ -62,7 +62,7 @@ func run() error {
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
 	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
 
-	recoveryAction := f.String("action", "inspect", "manual recovery inspect|challenge|release or gc-inspect|gc-challenge|gc-release")
+	recoveryAction := f.String("action", "inspect", "manual recover inspect|challenge|release, create-inspect|create-challenge|create-bind, or gc-*")
 	recoveryStream := f.String("stream", "", "original stdout|stderr only for locally reviewed Exec log GC")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
 	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")

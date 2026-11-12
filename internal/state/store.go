@@ -461,6 +461,22 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
+	// A failed create may have left an exactly registered, still-owned Box.
+	// Do not allow another create to claim its name merely because the
+	// original operation has a terminal FAILED receipt. A new box_delete
+	// for that exact UUID is still allowed after native postread.
+	if a.Action == "box_create" && strings.HasPrefix(a.ResourceKey, "box:") {
+		var owned int
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM owned_boxes
+			WHERE project=? AND name=? AND state='OWNED'`,
+			a.Layer, strings.TrimPrefix(a.ResourceKey, "box:")).Scan(&owned)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if owned != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
 	// An original retained-output deletion currently in progress or requiring
 	// independent review forbids admission of a new effect on the same native
 	// Box/name. This participates in the SAME admission transaction as the

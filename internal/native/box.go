@@ -28,17 +28,22 @@ var (
 
 var safeName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 
+// The original BoxWeave admission ID is persisted with the native Create.
+// It is an identity witness for crash recovery, never a public adoption token.
+const createOperationKey = "user.boxweave.create_operation"
+
 // InstanceAction never accepts raw Incus config, profiles or host paths.
 // The credential and actual restricted project are fixed by Reader, not caller.
 type InstanceAction struct {
-	Name      string
-	UUID      string
-	Start     bool
-	CPU       int
-	MemoryMiB int64
-	DiskGiB   int64
-	Nesting   bool
-	Internet  bool
+	OperationID string
+	Name        string
+	UUID        string
+	Start       bool
+	CPU         int
+	MemoryMiB   int64
+	DiskGiB     int64
+	Nesting     bool
+	Internet    bool
 }
 
 type InstanceChanges struct {
@@ -328,6 +333,12 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	config := api.ConfigMap{
 		"limits.cpu":    strconv.Itoa(a.CPU),
 		"limits.memory": fmt.Sprintf("%dMiB", a.MemoryMiB),
+	}
+	if a.OperationID != "" {
+		if len(a.OperationID) != 32 || strings.Trim(a.OperationID, "0123456789abcdef") != "" {
+			return "", ErrNativeUnsupported
+		}
+		config[createOperationKey] = a.OperationID
 	}
 	if a.Nesting {
 		config["security.nesting"] = "true"
@@ -793,6 +804,20 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 // successful native operation ID. An isolated GET by name is NOT authority
 // to adopt a foreign or originally UNKNOWN instance.
 func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, error) {
+	return r.observeCreated(ctx, name, "")
+}
+
+// ObserveCreatedByOperation requires the exact original durable BoxWeave Create
+// identity in native config. Matching a name or a native UUID alone never
+// authorizes adoption of a possibly foreign instance.
+func (r Reader) ObserveCreatedByOperation(ctx context.Context, name, operationID string) (BoxState, error) {
+	if operationID == "" {
+		return BoxState{}, ErrNotOwned
+	}
+	return r.observeCreated(ctx, name, operationID)
+}
+
+func (r Reader) observeCreated(ctx context.Context, name, operationID string) (BoxState, error) {
 	var out BoxState
 	if !safeName.MatchString(name) {
 		return out, ErrNotOwned
@@ -804,6 +829,9 @@ func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, erro
 	inst, _, err := c.GetInstance(name)
 	if err != nil {
 		return out, err
+	}
+	if operationID != "" && inst.Config[createOperationKey] != operationID {
+		return out, ErrNotOwned
 	}
 	uuid := inst.Config["volatile.uuid"]
 	if uuid == "" || inst.Project != "" && inst.Project != r.Project {

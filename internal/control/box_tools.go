@@ -309,16 +309,35 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			var nativeID string
 			effect := func(ctx context.Context) (string, error) {
 				id, e := s.Native.Create(ctx, native.InstanceAction{
-					Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
+					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
 					Start: start, Nesting: in.Nesting, Internet: internet})
 				nativeID = id
 				return id, preflightNative(e)
 			}
 			verify := func(ctx context.Context) error {
-				if err := nativeDone(ctx, s.Native, nativeID); err != nil {
+				op, err := s.Native.ObserveUntilFinal(ctx, nativeID)
+				if err != nil {
 					return err
 				}
-				observed, err := s.Native.ObserveCreated(ctx, in.Name)
+				if op.StatusCode != api.Success {
+					// Only a terminal native failure and repeated absence can
+					// release an empty-name create claim.
+					if err := s.Native.ConfirmDeleteAbsence(ctx, in.Name); err == nil {
+						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
+					}
+					// Incus can leave a stopped instance when create+start
+					// fails. Bind it to the original admission via the
+					// native config marker, not merely the reused name.
+					residue, err := s.Native.ObserveCreatedByOperation(ctx, in.Name, r.ID)
+					if err != nil || residue.NativeState != "Stopped" || residue.Internet != internet {
+						return native.ErrUnverified
+					}
+					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, residue.UUID); err != nil {
+						return err
+					}
+					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
+				}
+				observed, err := s.Native.ObserveCreatedByOperation(ctx, in.Name, r.ID)
 				if err != nil {
 					return err
 				}

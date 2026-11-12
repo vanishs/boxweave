@@ -11,6 +11,13 @@ import (
 type NativeEffect func(context.Context) (nativeOperationID string, err error)
 type VerifyEffect func(context.Context) error
 
+// VerifiedEffectFailure is returned only after a native operation has a
+// terminal FAILED result and independent readback proves the relevant
+// resource is absent. Ambiguous or residual outcomes must stay UNKNOWN.
+type VerifiedEffectFailure struct{ Class string }
+
+func (e VerifiedEffectFailure) Error() string { return e.Class }
+
 // A local validation error is eligible for a terminal pre-dispatch failure
 // only if the implementation proves no Incus mutation request was sent.
 type PreDispatchError struct{ Class string }
@@ -73,6 +80,12 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = verify(ctx); err != nil {
+		var proved VerifiedEffectFailure
+		if errors.As(err, &proved) && proved.Class != "" {
+			if w.Store.VerifiedFailed(context.Background(), operationID, proved.Class) == nil {
+				return
+			}
+		}
 		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "POSTCONDITION_UNVERIFIED")
 		return
 	}
