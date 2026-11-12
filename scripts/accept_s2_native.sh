@@ -219,6 +219,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_s
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-proxy" ./scripts/s2_p0_native_sqlite_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-probe" ./scripts/s2_p0_native_sqlite_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-unknown-create-bind-probe" ./scripts/s2_unknown_create_binding_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-proxy" ./scripts/s2_p1_stop_delete_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
@@ -232,7 +233,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-probe" ./scripts/s2
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-altpool-probe" ./scripts/s2_p2_alternate_pool_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-native-overlap-probe" ./scripts/s2_p1_native_create_delete_overlap_probe.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-unknown-create-bind-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -880,6 +881,43 @@ if [ "$attempt" -ge 120 ]; then
   exit 96
 fi
 test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+# Genuine native Create accepted once, its ACK lost, and the original
+# controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
+# SQLite copy; original remains immutable and receives no retry/delete.
+ack_original_id="$(python3 - "$ack_checkpoint" <<'PY_SCRIPT'
+import json,sys
+op=json.load(open(sys.argv[1]))["original_id"]
+assert len(op)==32
+print(op)
+PY_SCRIPT
+)"
+test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")" = "$ack_original_id"
+echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
+ack_copy="$work/ledger/unknown-create-bind-copy"
+sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
+sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
+import sqlite3,sys
+src,dst=sys.argv[1:]
+with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
+    assert original.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
+    with sqlite3.connect(dst) as copy:
+        original.backup(copy)
+PY_SCRIPT
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/s2-unknown-create-bind-probe" "$ack_checkpoint" \
+  "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
+# This original database remains truly unbound UNKNOWN; the test binding
+# happened ONLY on a disposable standalone copy.
+test "$(sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
+import sqlite3,sys
+db,op=sys.argv[1:]
+with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as c:
+    print(c.execute("SELECT state||':'||box_uuid FROM operations WHERE id=?",(op,)).fetchone()[0])
+PY_SCRIPT
+)" = "UNKNOWN:"
+echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_VERIFIED_BIND_COPY=PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"

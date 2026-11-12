@@ -92,6 +92,23 @@ product/runtime and is not repaired by this v1 patch.
   `boxweave-test-ser2` source worktree. Independent Actions and verified
   native post-fix acceptance remain required.
 
+## Added exact-ACK-loss native recovery acceptance probe (pending CI)
+
+The independent one-use GitHub Actions acceptance now also verifies that
+the **real lost-HTTP-ACK** native instance carries the original immutable
+`user.boxweave.create_operation` marker. After Incus has no in-flight
+Operations, it makes an SQLite online backup of the still-unbound UNKNOWN
+journal into a separate `0700` service-owned fixture and uses a restricted
+native SDK reader to verify the exact Project, original marker and UUID.
+Wrong marker is explicitly denied. A one-use review challenge binds only
+the **copied** original record; the original remains UNKNOWN and unbound,
+the original key never redispatches, different-key Create remains blocked,
+and the copied UNKNOWN is not relabeled as success. The existing CI
+administrator then safely cleans the one-use native fixture only under
+the original S2 acceptance contract. This new I+N+SQLite test is not a
+protected root-local installed CLI acceptance, nor a success until Actions
+reports the exact check's PASS.
+
 **Remaining gate:** obtain a safety-approved disposable real Incus test for
 the bounded-postread source and prove positive/negative official SDK/SQLite/
 native result plus independent verifier, then run same-head Actions. Until

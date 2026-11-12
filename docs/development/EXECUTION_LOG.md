@@ -713,3 +713,12 @@ Historical UNKNOWN receipts and all previous Boxes remain unchanged.
 Do not call current fix native-accepted. Separate detailed
 `docs/verification/UNKNOWN_CREATE_REPAIR_2026-11-12.md` includes native
 UUIDs, code/binary SHA-256, failure evidence and remaining authorization.
+
+Additional one-use CI fixture: appended direct native marker and copied
+SQLite UNKNOWN bind verification to the existing real Incus ACK-loss
+sequence (new `scripts/s2_unknown_create_binding_probe.go`). It rejects
+wrong original marker, forged snapshot, replayed challenge and new-key
+Create after binding; source SQLite is not mutated, only its isolated
+backup. This extra CI has not yet reported a native result at the time
+of this log entry. Never treat the earlier failed on-Box start probes as
+successful.
