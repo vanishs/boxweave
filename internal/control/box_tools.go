@@ -341,8 +341,21 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
+				if observed.Internet != internet {
+					return native.ErrUnverified
+				}
+				if start && observed.NativeState == "Stopped" {
+					// Incus can report a successful Create operation while
+					// the requested start failed or the guest immediately
+					// stopped. Preserve the proven native UUID for explicit
+					// owner cleanup; never claim Guest Running or retry start.
+					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+						return err
+					}
+					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
+				}
 				if (start && observed.NativeState != "Running") ||
-					(!start && observed.NativeState != "Stopped") || observed.Internet != internet {
+					(!start && observed.NativeState != "Stopped") {
 					return native.ErrUnverified
 				}
 				// Original durable operation already has the exact native ID.
