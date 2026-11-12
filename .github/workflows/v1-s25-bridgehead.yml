@@ -1,0 +1,50 @@
+name: S2.5 independent disposable nested MCP LAB (non-release)
+
+on:
+  push:
+    branches:
+      - feat/v1-s25-native-readiness-20261111
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s25-bridgehead-lab:
+    name: s25-nested-mcp-dual-agent-independent-verifier
+    if: github.repository == 'vanishs/boxweave'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate isolated LAB scripts and independent verifier
+        run: |
+          sh -n scripts/s25_bridgehead_lab.sh
+          sh -n scripts/s25_inner_setup.sh
+          python3 -m py_compile scripts/s25_independent_verifier.py
+          go build -o "$RUNNER_TEMP/s25-agent-build-check" ./scripts/s25_lab_agent.go
+      - name: Exact-source native L0 -> MCP L1 -> MCP L2, two Agents and independent verification
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/s25-evidence"
+          sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET' "$RUNNER_TEMP/s25-evidence/console.log"
+      - name: Retain exact test metadata and independently observed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s25-nested-mcp-lab-evidence
+          path: \${{ runner.temp }}/s25-evidence/
+          retention-days: 7
+          if-no-files-found: warn

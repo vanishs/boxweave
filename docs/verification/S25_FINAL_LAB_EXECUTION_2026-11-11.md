@@ -1,0 +1,19 @@
+# S2.5 final native MCP LAB execution — restart-safe journal
+
+## Scope and gate
+
+- PR #133, starting source c7c7157763554b2c6f5a3b901575f48442a31d46, upstream Incus 7.6, Go MCP SDK pinned to go.mod.
+- Owner authorized tests across managed Boxes and requests one continuous development/acceptance pass; use isolation and preserve unrelated Incus/UNKNOWN receipts.
+- Goal: L0 v1 MCP creates nested L1; L1 independently installs native Incus + same pinned v1 and uses its own SDK MCP to create/Exec/stop/delete L2. Two independently authenticated clients, dropped/reconnected original durable receipt and original-key no-replay, independent Incus/SQLite/ACL verification.
+- Existing LAB boxweave-test-cli retains a native-only test L1. Its installed v1 is source 8af4e08, not the latest source; prior evidence MUST NOT be promoted to exact latest digest.
+- Previously blocked manual credential operations in Box tool were NOT retried or bypassed. Use a standard standalone one-use, repository-owned GitHub Actions LAB fixture with short-lived private test credentials instead. No secrets in git, logs, command line or artifacts.
+- No new quota stress testing. Official Incus dir support + truthful `DIR_QUOTA_UNVERIFIED`; storage exhaustion monitoring is distinct from a hard quota claim.
+- S2.5 acceptance is all-or-nothing: BH-001–016 and TC-011–014 require true I+N+V; cannot assert LAB_PASS from a successful partial script. Physical BH-017 requires separate exact-host go-ahead.
+
+## Execution checkpoints
+
+- 00: Recovered remote c7c7157, all four original Actions SUCCESS, PR #133 Draft. Confirmed existing MCP `box_create` already has `nesting:true`, operations durable, Official SDK tests cover 13 tools and token-isolated work_ref. Plan one-use native S25 integration with separate agent executable and independently authored native verifier; original UNKNOWN a2fdf885b87a0b66fb3a17f913316c55 remains untouched.
+- 01: Authored scripts/s25_lab_agent.go (separate real MCP SDK processes with A/B credentials, durable original operation checkpoint, second Agent recovery and same-key no-replay, two-Agent concurrent exec, L0 and L1 MCP create/Exec/stop/delete); compiled successfully in existing dev Box.
+- 02: Authored scripts/s25_inner_setup.sh (only BoxWeave guest Exec; SHA256-verifies same candidate v1 and SDK client bytes; signed Incus 7.6; isolated L1 Incus restricted Project/private ACL; two inner Agent identities); shell syntax PASS. No inner credentials leave guest.
+- 03: Authored scripts/s25_independent_verifier.py as a separate process that uses read-only native Incus and SQLite, never Agent tokens, checking native UUID/identity/ACL, L1->L2, exact same candidate binary and cleanup. Python syntax PASS.
+- 04: Authored scripts/s25_bridgehead_lab.sh and .github/workflows/v1-s25-bridgehead.yml: one-use GH Ubuntu 24.04 native host, signed apt, independently prepared Project+image, installed exact v1, private gateway-only SHA-bound binary staging, standalone Agent processes and verifier, 7-day redacted evidence artifact, 55m per-run hard cap. No new quota stress. Local syntax and Go build PASS. **This is implementation/checkpoint only; new Actions proof not yet observed, LAB_PASS=NO.**
