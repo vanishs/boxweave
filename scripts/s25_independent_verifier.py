@@ -11,6 +11,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 def require(condition, reason):
@@ -133,10 +134,34 @@ def inspect_l2():
     gw4=inner("incus","network","get","incusbr-"+uid,"ipv4.address").split("/")[0]
     gw6=inner("incus","network","get","incusbr-"+uid,"ipv6.address").split("/")[0]
     require(gw4 and gw6, "inner native bridge address unavailable")
-    inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
-          "--","ping","-4","-c","1","-W","2",gw4)
-    inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
-          "--","ping","-6","-c","1","-W","2",gw6)
+    # Native Incus Running does not imply Ubuntu has finished DHCPv4
+    # or IPv6 RA/route convergence after an actual Guest restart.
+    # Witness the positive packets with an explicit bounded deadline.
+    # Never silently downgrade an absent IPv6 route to a PASS.
+    for family, gateway in (("-4", gw4), ("-6", gw6)):
+        deadline=time.monotonic()+70
+        last_error=""
+        while True:
+            try:
+                inner("incus","exec","bw-s25-mcp-l2","--project",innerproj,
+                      "--","ping",family,"-c","1","-W","2",gateway)
+                break
+            except (RuntimeError, subprocess.TimeoutExpired) as exc:
+                last_error=str(exc)[:300]
+                if time.monotonic()>=deadline:
+                    # Safe, non-mutating guest network facts for the red
+                    # artifact, without confusing L1 bridge with L2 route.
+                    try:
+                        routes=inner("incus","exec","bw-s25-mcp-l2",
+                                     "--project",innerproj,
+                                     "--","ip",family,"route","show")
+                    except Exception as route_exc:
+                        routes=str(route_exc)[:200]
+                    raise RuntimeError("S25_V_NATIVE_GATEWAY_UNREADY "+
+                                       family+" "+gateway+"; route="+routes[:400]+
+                                       "; last="+last_error)
+                time.sleep(2)
+        print("S25_V_L2_NATIVE_GATEWAY_"+("IPV4" if family=="-4" else "IPV6")+"=PASS")
     print("S25_V_MCP_L2_NATIVE_IPV4_IPV6_GATEWAY_EGRESS=PASS")
     # This gateway witness does NOT prove direct upstream WAN on a GitHub
     # runner. The native WAN field remains explicitly BLOCKED separately.

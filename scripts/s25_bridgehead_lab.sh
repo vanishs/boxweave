@@ -212,6 +212,10 @@ export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
 "$work/staging/s25-lab-agent" rotated-viewer
 "$work/staging/s25-lab-agent" bootstrap
 python3 scripts/s25_independent_verifier.py l2
+# This marker is emitted only once independent native L2 UUID, CPU and
+# original Update/Stop/Start receipts were all verified, not from
+# truncated Guest stdout inside the outer L1 bootstrap Exec.
+echo S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
 "$work/staging/s25-lab-agent" guest-git
