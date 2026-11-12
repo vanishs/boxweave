@@ -108,7 +108,7 @@ test -n "$gateway"
 port=18465
 python3 -m http.server "$port" --bind "$gateway" --directory "$work/staging" > "$work/private/stage-http.log" 2>&1 &
 stage_pid=$!
-trap 'kill "$stage_pid" 2>/dev/null || :; wait "$stage_pid" 2>/dev/null || :' EXIT
+trap 'if [ -f "$work/private/outer-checkpoint.json" ]; then cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json" || :; fi; kill "$stage_pid" 2>/dev/null || :; wait "$stage_pid" 2>/dev/null || :' EXIT
 i=0
 while [ "$i" -lt 30 ]; do
  if curl -fsSI --connect-timeout 1 --max-time 2 "http://$gateway:$port/boxweave" >/dev/null 2>&1;then break;fi

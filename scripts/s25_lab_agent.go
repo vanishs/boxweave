@@ -246,6 +246,13 @@ func execGuest(ctx context.Context, s *mcp.ClientSession, uuid, key, script, age
 		"work_ref": "lab/s25/nested", "agent_ref": agent}
 	rec := request(ctx, s, "box_exec", args)
 	original := opid(rec)
+	// Persist immediately after admission and before any network wait. If
+	// the Agent crashes or HTTP disconnects, this is the only safe original
+	// identifier to read. Never infer nonexistence from a lost reply.
+	m := readCheckpoint()
+	m["last_guest_exec_op"] = original
+	saveCheckpoint(m)
+	fmt.Println("S25_GUEST_EXEC_ORIGINAL_OPERATION_ID=" + original)
 	final := wait(ctx, s, original)
 	out := request(ctx, s, "operation_output_get", map[string]any{"operation_id": original, "stream": "stdout", "limit": 4096})
 	buf, err := base64.StdEncoding.DecodeString(str(out, "content_base64"))
@@ -254,6 +261,39 @@ func execGuest(ctx context.Context, s *mcp.ClientSession, uuid, key, script, age
 	}
 	exit, ok := out["exit_code"].(float64)
 	must(ok, "guest Exec returned no verified exit code")
+	if int(exit) != 0 {
+		// Diagnostic read only; never resubmit the possible Guest effect.
+		// Restrict public CI logs to bounded non-secret error lines.
+		stderr := ""
+		if detail, e := s.CallTool(ctx, &mcp.CallToolParams{Name: "operation_output_get",
+			Arguments: map[string]any{"operation_id": original, "stream": "stderr", "limit": 4096}}); e == nil && detail != nil && !detail.IsError {
+			enc := str(reply(detail), "content_base64")
+			b, _ := base64.StdEncoding.DecodeString(enc)
+			stderr = string(b)
+		}
+		fmt.Fprintf(os.Stderr, "S25_GUEST_EXEC_NONZERO_EXIT=%d original=%s\n", int(exit), original)
+		clean := func(v string) string {
+			lines := strings.Split(v, "\n")
+			if len(lines) > 16 {
+				lines = lines[len(lines)-16:]
+			}
+			for i, line := range lines {
+				if len(line) > 240 {
+					line = line[:240] + "[TRUNCATED]"
+				}
+				low := strings.ToLower(line)
+				if strings.Contains(low, "token=") || strings.Contains(low, "authorization:") ||
+					strings.Contains(low, "bearer ") || strings.Contains(low, ".secret") {
+					lines[i] = "[REDACTED]"
+				} else {
+					lines[i] = line
+				}
+			}
+			return strings.Join(lines, " | ")
+		}
+		fmt.Fprintln(os.Stderr, "S25_GUEST_EXEC_STDOUT_TAIL="+clean(string(buf)))
+		fmt.Fprintln(os.Stderr, "S25_GUEST_EXEC_STDERR_TAIL="+clean(stderr))
+	}
 	return final, string(buf), int(exit)
 }
 func bootstrap(ctx context.Context) {
@@ -274,6 +314,7 @@ func bootstrap(ctx context.Context) {
 	final, out, exit := execGuest(ctx, s, m["uuid"], "s25-outer-l1-guest-bootstrap-once", cmd, "agent-outer-alpha", 900000)
 	must(exit == 0, "L1 guest-side Incus/v1 bootstrap failed (review original Exec output, do not duplicate)")
 	must(strings.Contains(out, "S25_INNER_READY=PASS"), "L1 installer success sentinel missing")
+	m = readCheckpoint()
 	m["bootstrap_op"] = str(final, "operation_id")
 	saveCheckpoint(m)
 	fmt.Println("S25_L1_GUEST_EXEC_NESTED_INCUS_V1_INSTALL=PASS")
