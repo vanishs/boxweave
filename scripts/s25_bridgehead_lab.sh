@@ -230,6 +230,20 @@ export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
 "$work/staging/s25-lab-agent" rotated-viewer
 "$work/staging/s25-lab-agent" bootstrap
 python3 scripts/s25_independent_verifier.py wan6inner
+# Evidence is captured *before* any original SDK cleanup. These outputs are
+# public test CA/packet metadata, exact native NIC and original IDs only.
+# No Token, private key, SQLite DB or unbounded Guest output is exported.
+sudo cat "$work/private/simwan6/server.log" > "$proof/simwan6-l0-upstream.log"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25simwan6/server.log > "$proof/simwan6-l1-upstream.log"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-inner-checkpoint.json > "$proof/simwan6-l1-originals.json"
+sudo ip -s link show s25s6host > "$proof/simwan6-l0-veth-packets.txt"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- ip -s link show s25s6host > "$proof/simwan6-l1-veth-packets.txt"
+sudo incus config show bw-s25-mcp-l1 --project "$project" --expanded > "$proof/simwan6-l0-native-nic.yaml"
+inner_uid="$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- id -u boxweave)"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- incus config show bw-s25-mcp-l2 --project "user-$inner_uid" --expanded > "$proof/simwan6-l1-native-nic.yaml"
+grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l0-upstream.log"
+grep -q 'SIM_WAN6_REMOTE=' "$proof/simwan6-l1-upstream.log"
+echo S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS
 python3 scripts/s25_independent_verifier.py l2
 # This marker is emitted only once independent native L2 UUID, CPU and
 # original Update/Stop/Start receipts were all verified, not from

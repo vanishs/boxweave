@@ -57,6 +57,7 @@ jobs:
           grep -qx 'S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_V_SIMWAN6_INNER_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_V_SIMWAN6_INNER_ORIGINAL_MCP_PEER_DELETED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
+          grep -qx 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/s25-evidence/console.log"
           grep -qx 'S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET' "$RUNNER_TEMP/s25-evidence/console.log"
       - name: Retain exact test metadata and independently observed results
