@@ -1,6 +1,6 @@
 # Architecture — narrow single-controller runtime
 
-**Status:** design only; no Go v1 runtime has yet been implemented.
+**Current architecture status (2026-11-11 PT):** S1 and S2 Go runtime/official MCP+Incus SDK/native SQLite have been implemented and the S2 supported scope merged into protected `v1` ([PR #130](https://github.com/vanishs/boxweave/pull/130)). This document describes the **final target** including S3 guest file Tools and S4 network tools not yet implemented. S2.5 dedicated-host LAB has not passed; [source reality audit](../research/S25_PREDEPLOY_REALITY_AUDIT_2026-11-11.md) is the active handoff for minimum first-Box installer and unprivileged L1 quota feasibility. The target is not a release/physical HOST_GO claim.
 
 ```text
 Authenticated localhost Streamable HTTP MCP (operator tunnel optional)
