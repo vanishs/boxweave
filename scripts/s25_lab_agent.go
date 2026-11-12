@@ -308,7 +308,8 @@ func bootstrap(ctx context.Context) {
 	cmd := "set -eu; curl -fsSL --max-time 45 " + stage + "/s25_inner_setup.sh -o /tmp/s25_inner_setup.sh; " +
 		"printf '%s  %s\\n' '" + sha + "' /tmp/s25_inner_setup.sh | sha256sum -c -; " +
 		"sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
-		"' '" + environmental("BW_S25_AGENT_SHA256") + "'"
+		"' '" + environmental("BW_S25_AGENT_SHA256") + "' '" +
+		environmental("BW_S25_PACKAGE_PROXY_URL") + "'"
 	s := connectActor(ctx, "a")
 	defer s.Close()
 	final, out, exit := execGuest(ctx, s, m["uuid"], "s25-outer-l1-guest-bootstrap-once", cmd, "agent-outer-alpha", 900000)
@@ -420,6 +421,44 @@ func doubleAgent(ctx context.Context) {
 	fmt.Println("S25_SAME_WORK_DISTINCT_AGENT_OPERATIONS=PASS")
 	fmt.Println("S25_VIEWER_CANNOT_BORROW_WORK_REF=PASS")
 }
+func afterControllerRestart(ctx context.Context) {
+	must(!isInner(), "restart cross-process proof is L0-only")
+	m := readCheckpoint()
+	must(m["uuid"] != "" && m["create_op"] != "" && m["agent_a_exec"] != "" && m["agent_b_exec"] != "",
+		"original restart checkpoint incomplete")
+	s := connectActor(ctx, "b")
+	defer s.Close()
+	tools(ctx, s)
+	original := child(request(ctx, s, "operation_get", map[string]any{"operation_id": m["create_op"]}), "operation")
+	must(str(original, "state") == "SUCCEEDED" && str(original, "box_uuid") == m["uuid"],
+		"controller restart lost verified original create")
+	for _, op := range []string{m["agent_a_exec"], m["agent_b_exec"], m["peer_delete_op"]} {
+		r := child(request(ctx, s, "operation_get", map[string]any{"operation_id": op}), "operation")
+		must(str(r, "state") == "SUCCEEDED", "original Agent/cleanup receipt lost on service restart")
+	}
+	box := child(request(ctx, s, "box_get", map[string]any{"box_id": m["uuid"]}), "box")
+	must(str(box, "box_id") == m["uuid"] && str(box, "native_state") == "Running",
+		"controller restart did not independently reconcile exact native L1")
+	a := connectActor(ctx, "a")
+	defer a.Close()
+	replay := request(ctx, a, "box_create", firstCreateArgs())
+	must(opid(replay) == m["create_op"] && replay["duplicate"] == true,
+		"after controller restart original create key dispatched again")
+	fmt.Println("S25_CONTROLLER_RESTART_ORIGINAL_MULTI_AGENT_RECEIPTS=PASS")
+	fmt.Println("S25_CONTROLLER_RESTART_NO_NATIVE_CREATE_REPLAY=PASS")
+}
+func rotatedViewer(ctx context.Context) {
+	must(!isInner(), "token rotation assertion is L0-only")
+	viewer := connectActor(ctx, "viewer")
+	defer viewer.Close()
+	tools(ctx, viewer)
+	_ = request(ctx, viewer, "host_status", map[string]any{})
+	must(denied(ctx, viewer, "box_create", map[string]any{
+		"name":            "bw-s25-viewer-denied-rotated",
+		"idempotency_key": "s25-viewer-rotated-denial", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+	}), "new viewer token gained mutation privilege")
+	fmt.Println("S25_ROTATED_VIEWER_SDK_HOST_STATUS_AND_WRITE_DENIAL=PASS")
+}
 func nestedExec(ctx context.Context) {
 	must(isInner(), "L2 probe only inside nested L1")
 	m := readCheckpoint()
@@ -485,6 +524,10 @@ func main() {
 		bootstrap(ctx)
 	case "double-agent":
 		doubleAgent(ctx)
+	case "post-restart":
+		afterControllerRestart(ctx)
+	case "rotated-viewer":
+		rotatedViewer(ctx)
 	case "nested-exec":
 		nestedExec(ctx)
 	case "cleanup":

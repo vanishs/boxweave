@@ -4,7 +4,7 @@
 set -eu
 export DEBIAN_FRONTEND=noninteractive
 umask 077
-stage="$1"; binary_sha="$2"; agent_sha="$3"
+stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"
 test "$(id -u)" = 0
 test ! -e /var/lib/incus
 test ! -e /var/lib/boxweave
@@ -20,26 +20,34 @@ install -m 0755 /tmp/s25-v1 /usr/local/bin/boxweave-s25-candidate
 install -m 0755 /tmp/s25-agent /usr/local/bin/s25-lab-agent
 echo S25_INNER_EXACT_BINARY_TRANSFER=PASS
 
-# A nested guest can reach the private bridge gateway for SHA-bound binary
-# staging while still having no real WAN route. Probe both separately.
-# A globally assigned IPv6 address does not prove upstream IPv6 routing.
+# Direct public WAN is a distinct test; a LAB-only relay cannot turn its
+# failure into a claimed native packet-acceptance PASS.
 echo "S25_INNER_IPV4_DEFAULT_ROUTE=$(ip -4 route show default | head -1)"
 echo "S25_INNER_IPV6_DEFAULT_ROUTE=$(ip -6 route show default | head -1)"
-if ! curl -4 -fsSI --connect-timeout 7 --max-time 18   https://archive.ubuntu.com/ubuntu/dists/noble/InRelease >/dev/null 2>&1; then
- echo S25_INNER_OUTBOUND_HTTPS_IPV4=BLOCKED >&2
- exit 61
+if curl -4 -fsSI --connect-timeout 3 --max-time 7 https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then
+ echo S25_INNER_DIRECT_HTTPS=PASS
+else
+ echo S25_INNER_DIRECT_HTTPS=BLOCKED
 fi
-echo S25_INNER_OUTBOUND_HTTPS_IPV4=PASS
-if ! curl -4 -fsSI --connect-timeout 7 --max-time 18   https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then
- echo S25_INNER_SIGNED_PACKAGE_HTTPS=BLOCKED >&2
- exit 62
+case "$package_proxy" in
+ http://10.*:18466|http://172.*:18466|http://192.168.*:18466) ;;
+ *) echo S25_INNER_UNAPPROVED_PACKAGE_PROXY >&2; exit 60;;
+esac
+export https_proxy="$package_proxy" HTTPS_PROXY="$package_proxy"
+export http_proxy="$package_proxy" HTTP_PROXY="$package_proxy"
+export no_proxy=localhost,127.0.0.1 NO_PROXY=localhost,127.0.0.1
+gateway="$(printf '%s' "$stage" | sed -E 's#^http://([^:/]+):[0-9]+$#\1#')"
+export no_proxy="$no_proxy,$gateway" NO_PROXY="$NO_PROXY,$gateway"
+if ! curl -4 -fsSI --connect-timeout 5 --max-time 20 https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then
+ echo S25_INNER_SCOPED_PACKAGE_HTTPS=BLOCKED >&2; exit 62
 fi
-echo S25_INNER_SIGNED_PACKAGE_HTTPS=PASS
-# Do not disable IPv6 or weaken its anti-spoof rules. IPv4-only apt
-# transport avoids an unreachable v6 default route hiding working v4.
+echo S25_INNER_SCOPED_PACKAGE_HTTPS=PASS
 printf 'Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-s25-ipv4
-if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
- sed -i -e 's#http://archive.ubuntu.com/ubuntu/#https://archive.ubuntu.com/ubuntu/#g'         -e 's#http://security.ubuntu.com/ubuntu/#https://security.ubuntu.com/ubuntu/#g'         /etc/apt/sources.list.d/ubuntu.sources
+printf 'Acquire::https::Proxy "%s";\n' "$package_proxy" > /etc/apt/apt.conf.d/98-s25-relay
+if [ -f /etc/apt/sources.list.d/ubuntu.sources ];then
+ sed -i -e 's#http://archive.ubuntu.com/ubuntu/#https://archive.ubuntu.com/ubuntu/#g' \
+  -e 's#http://security.ubuntu.com/ubuntu/#https://security.ubuntu.com/ubuntu/#g' \
+  /etc/apt/sources.list.d/ubuntu.sources
 fi
 apt-get update -qq
 apt-get install -y --no-install-recommends ca-certificates curl gpg >/dev/null

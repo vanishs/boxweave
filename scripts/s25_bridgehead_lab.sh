@@ -106,9 +106,13 @@ echo S25_LAB_LOOPBACK_MCP_UNAUTH_DENIAL=PASS
 gateway="$(sudo incus network get "$net" ipv4.address | cut -d/ -f1)"
 test -n "$gateway"
 port=18465
+proxy_port=18466
 python3 -m http.server "$port" --bind "$gateway" --directory "$work/staging" > "$work/private/stage-http.log" 2>&1 &
 stage_pid=$!
-trap 'if [ -f "$work/private/outer-checkpoint.json" ]; then cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json" || :; fi; kill "$stage_pid" 2>/dev/null || :; wait "$stage_pid" 2>/dev/null || :' EXIT
+# LAB-only bridge relay allows only explicitly listed public HTTPS hosts.
+python3 scripts/s25_package_proxy.py "$gateway" "$proxy_port" > "$work/private/proxy.log" 2>&1 &
+proxy_pid=$!
+trap 'if [ -f "$work/private/outer-checkpoint.json" ]; then cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json" || :; fi; kill "$stage_pid" "$proxy_pid" 2>/dev/null || :; wait "$stage_pid" "$proxy_pid" 2>/dev/null || :' EXIT
 i=0
 while [ "$i" -lt 30 ]; do
  if curl -fsSI --connect-timeout 1 --max-time 2 "http://$gateway:$port/boxweave" >/dev/null 2>&1;then break;fi
@@ -116,6 +120,16 @@ while [ "$i" -lt 30 ]; do
 done
 test "$i" -lt 30
 echo S25_LAB_PRIVATE_BRIDGE_SHA_BOUND_ARTIFACTS_READY=PASS
+i=0
+while [ "$i" -lt 15 ]; do
+ if curl -4 -fsSI --proxy "http://$gateway:$proxy_port" --connect-timeout 2    --max-time 8 https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then break; fi
+ i=$((i+1));sleep 1
+done
+test "$i" -lt 15
+if curl -fsS -I --proxy "http://$gateway:$proxy_port" --noproxy ''   --max-time 4 https://127.0.0.1/ >/dev/null 2>&1; then
+ echo S25_LAB_FAIL_PACKAGE_PROXY_ALLOWED_LOOPBACK >&2;exit 87
+fi
+echo S25_LAB_SCOPED_PACKAGE_PROXY_HTTPS_AND_DENIAL=PASS
 
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_PROJECT="$project"
@@ -125,6 +139,7 @@ export BW_S25_ADMIN2_FILE="$work/private/admin2.secret"
 export BW_S25_VIEWER_FILE="$work/private/viewer.secret"
 export BW_S25_CHECKPOINT="$work/private/outer-checkpoint.json"
 export BW_S25_STAGE_URL="http://$gateway:$port"
+export BW_S25_PACKAGE_PROXY_URL="http://$gateway:$proxy_port"
 export BW_S25_SETUP_SHA256="$setup_sha"
 export BW_S25_AGENT_SHA256="$agent_sha"
 export BW_S25_BINARY_SHA256="$binary_sha"
@@ -135,6 +150,35 @@ cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" double-agent
 python3 scripts/s25_independent_verifier.py agents
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
+# Installer/runtime durability requires *same SQLite* surviving actual
+# systemd service restart, independently recovered by separate SDK process.
+sudo systemctl restart boxweave.service
+sudo systemctl is-active --quiet boxweave.service
+"$work/staging/s25-lab-agent" post-restart
+python3 scripts/s25_independent_verifier.py agents
+echo S25_ONE_USE_CONTROLLER_RESTART_NATIVE_SQLITE_RECONCILED=PASS
+# Token revocation is a direct dedicated-user local CLI action; the old
+# HTTP bearer is tested by a separate process but never logged/exported.
+viewer_id="$(sed -n 's/^id=\([0-9a-f]*\) .*/\1/p' "$work/private/viewer.secret")"
+test "$viewer_id" != ""
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-revoke -id "$viewer_id" >/dev/null
+python3 - "$work/private/viewer.secret" <<'S25_REVOKED_HTTP'
+import sys,urllib.request,urllib.error
+token=next(x[6:].strip() for x in open(sys.argv[1]) if x.startswith("token="))
+req=urllib.request.Request("http://127.0.0.1:18650/mcp",data=b"{}",
+  headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"},method="POST")
+try:
+  res=urllib.request.urlopen(req,timeout=8)
+except urllib.error.HTTPError as exc:
+  assert exc.code==401,exc.code
+else:
+  raise AssertionError("revoked bearer unexpectedly returned HTTP "+str(res.status))
+print("S25_REVOKED_VIEWER_TOKEN_HTTP_DENIED=PASS")
+S25_REVOKED_HTTP
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-create -role viewer > "$work/private/viewer.rotated"
+chmod 0600 "$work/private/viewer.rotated"
+export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
+"$work/staging/s25-lab-agent" rotated-viewer
 "$work/staging/s25-lab-agent" bootstrap
 python3 scripts/s25_independent_verifier.py l2
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
