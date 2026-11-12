@@ -22,6 +22,7 @@ type Status struct {
 	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
 	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
 	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
+	Warnings              []string        `json:"warnings,omitempty"`
 	NICConfigured         bool            `json:"default_nic_configured"`
 	ImageReady            bool            `json:"approved_ubuntu_image_ready"`
 	APIExtensions         map[string]bool `json:"required_extensions"`
@@ -149,14 +150,15 @@ func (r Reader) Read(ctx context.Context) Status {
 			return s
 		}
 		s.StorageSpaceChecked = true
-		// Incus 7.6 dir driver silently skips size enforcement without
-		// filesystem project-quota support. A separately mounted ext4 pool
-		// alone is not enough to bound native Exec recording.
-		if !localDirPoolQuotaReady(selectedPool) {
-			s.ErrorClass = "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED"
-			return s
+		// All usable Incus dir backings are supported. A filesystem name
+		// cannot establish whether the native daemon enforces size quotas.
+		// Incus 7.6 may log a skipped-quota warning without returning it
+		// through the SDK operation. Report conservative capability evidence.
+		s.StorageQuotaVerified = localDirPoolQuotaReady(selectedPool)
+		if !s.StorageQuotaVerified {
+			s.Warnings = append(s.Warnings,
+				"DIR_QUOTA_UNVERIFIED: Incus may skip per-Box disk size limits on this backing filesystem; recorded Exec output may also grow without that bound. Inspect Incus daemon warnings and monitor free space.")
 		}
-		s.StorageQuotaVerified = true
 	} else {
 		// Do not claim other storage drivers' *whole-instance* Exec sibling
 		// quotas before a separately accepted native driver contract.
@@ -202,8 +204,7 @@ func (r Reader) Strict(ctx context.Context) error {
 		if v.ErrorClass == "DEFAULT_NIC_NOT_CONFIGURED" {
 			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrUnsafeNetwork)
 		}
-		if v.ErrorClass == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED" ||
-			v.ErrorClass == "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED" {
+		if v.ErrorClass == "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED" {
 			// The requirement is checked before ANY new native request,
 			// so a scoped worker may safely fail this admission without UNKNOWN.
 			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrNativeUnsupported)

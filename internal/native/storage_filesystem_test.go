@@ -94,3 +94,13 @@ func TestS2QuotaMountSourceMustBeRealEnabledExt4OrXFS(t *testing.T) {
 		t.Fatal("ambiguous mount-point encoding accepted")
 	}
 }
+
+func TestS25DirQuotaEvidenceIsNotGeneralFilesystemSupport(t *testing.T) {
+	path := "/var/lib/incus/storage-pools/default"
+	for _, fs := range []string{"bcachefs", "ext4", "tmpfs"} {
+		info := "44 1 7:1 / / rw,relatime - " + fs + " /dev/test rw,relatime"
+		if dirProjectQuotaMountReady(path, info) {
+			t.Fatalf("quota wrongly verified for %s", fs)
+		}
+	}
+}

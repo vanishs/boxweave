@@ -74,7 +74,7 @@ func TestPrereqACLExclusivity(t *testing.T) {
 func TestPrereqDigestBindsNativeIdentity(t *testing.T) {
 	r := NativePrereqReport{HostSHA256: "host-a", Project: "user-1001", Pool: "pool",
 		Network: "bridge", ACL: "acl", ImageFingerprint: "image",
-		Checks: []NativePrereqCheck{{ID: "quota_backed_pool", OK: true, Detail: "free 10G"}}}
+		Checks: []NativePrereqCheck{{ID: "dir_pool_backing", OK: true, Detail: "free 10G"}}}
 	hash := prereqDigest(r)
 	r.Checks[0].Detail = "free 9G"
 	if prereqDigest(r) != hash {
@@ -88,6 +88,11 @@ func TestPrereqDigestBindsNativeIdentity(t *testing.T) {
 	r.Checks[0].OK = false
 	if prereqDigest(r) == hash {
 		t.Fatal("new failed prerequisite must require reapproval")
+	}
+	r.Checks[0].OK = true
+	r.QuotaMountPrecondition = true
+	if prereqDigest(r) == hash {
+		t.Fatal("changed quota evidence must require reapproval")
 	}
 }
 

@@ -18,13 +18,19 @@ fi
 fstype="$(findmnt -n -o FSTYPE --target "$path")"
 opts="$(findmnt -n -o OPTIONS --target "$path")"
 printf 'S25_L1_STORAGE_FILESYSTEM=%s\n' "$fstype"
+quota_evidence=UNVERIFIED
 case "$fstype" in
-  ext4|xfs) ;;
-  *) echo "S25_L1_NATIVE_DIR_QUOTA=NESTED_STORAGE_BLOCKED"; exit 83 ;;
+  ext4|xfs)
+    case ",$opts," in
+      *,prjquota,*|*,pquota,*) quota_evidence=PRECONDITION_PRESENT ;;
+    esac
+    ;;
 esac
-case ",$opts," in
-  *,prjquota,*|*,pquota,*) echo "S25_L1_PROJECT_QUOTA_MOUNT=PRECONDITION_PRESENT" ;;
-  *) echo "S25_L1_NATIVE_DIR_QUOTA=NESTED_STORAGE_BLOCKED"; exit 84 ;;
-esac
-# A mount flag is not an actual native instance-root/Exec-spool EDQUOT test.
-echo "S25_L1_NATIVE_DIR_QUOTA=REQUIRES_REAL_EDQUOT_AND_L2_PROOF"
+if [ "$quota_evidence" = PRECONDITION_PRESENT ]; then
+  echo "S25_L1_PROJECT_QUOTA_MOUNT=PRECONDITION_PRESENT"
+  echo "S25_L1_NATIVE_DIR_QUOTA=REQUIRES_REAL_EDQUOT_AND_L2_PROOF"
+else
+  # Incus may log a skipped size limit; inner dir still remains usable.
+  echo "S25_L1_PROJECT_QUOTA_MOUNT=UNVERIFIED"
+  echo "S25_L1_NATIVE_DIR_QUOTA=UNVERIFIED_CHECK_INCUS_LOGS_AND_TEST_LIMITS"
+fi

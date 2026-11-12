@@ -262,21 +262,19 @@ sudo mount -t ext4 -o nodev,nosuid "$noquota_loop" "$work/noquota-mounted"
 sudo mkdir -m 0755 "$work/noquota-mounted/native-pool"
 sudo incus storage create bw-s2-noquota-pool dir source="$work/noquota-mounted/native-pool"
 sudo incus profile device set default root pool=bw-s2-noquota-pool --project "$project"
-if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
-  -incus-socket "$socket" -project "$project" > "$work/noquota-doctor.json"; then
-  echo "S2_NATIVE_FAIL: separately mounted no-quota dir pool reported ready" >&2
-  exit 107
-fi
-python3 - "$work/noquota-doctor.json" <<'PY'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
+  -incus-socket "$socket" -project "$project" > "$work/noquota-doctor.json"
+python3 - "$work/noquota-doctor.json" <<'PYTEST'
 import json,sys
 with open(sys.argv[1]) as f:
     obj=json.load(f)
 native=obj["native"]
-assert obj["ready"] is False and native["ready"] is False, native
-assert native["error_class"] == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED", native
+assert obj["ready"] is True and native["ready"] is True, native
+assert native["selected_storage_quota_verified"] is False, native
 assert native["selected_storage_separate_mount"] is True, native
-print("S2_NATIVE_DIR_SEPARATE_MOUNT_WITHOUT_PROJECT_QUOTA_FAILS_CLOSED=PASS")
-PY
+assert any("DIR_QUOTA_UNVERIFIED" in x for x in native["warnings"]), native
+print("S2_NATIVE_DIR_NO_QUOTA_READY_WITH_EXPLICIT_WARNING=PASS")
+PYTEST
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
 sudo incus storage delete bw-s2-noquota-pool
 sudo umount "$work/noquota-mounted"

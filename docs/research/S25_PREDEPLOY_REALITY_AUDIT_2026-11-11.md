@@ -50,3 +50,7 @@
 - **No shared Incus, production host or original UNKNOWN touch** is authorized by this planning audit. Dedicated physical deployment always needs new, exact host-scoped approval.
 
 **Linked execution documents:** [S2.5 card](../development/phases/025_BRIDGEHEAD.md), [BH matrix](../verification/BRIDGEHEAD_ACCEPTANCE.md), [phase plan](../process/IMPLEMENTATION_PLAN.md), [execution protocol](../development/PHASE_EXECUTION_PROTOCOL.md).
+
+## 2026-11-11 owner update: directory backing versus quota evidence
+
+The initial P0 quota requirement was intentionally conservative but incorrectly treated an ext4/XFS positive precondition as the only possible usable dir backing. The [owner decision](../decisions/DIR_STORAGE_BACKING_POLICY_2026-11-11.md) supersedes that admission gate: any usable Incus dir backing is supported, and lack of proved native quota is reported as **DIR_QUOTA_UNVERIFIED**, not incorrectly labeled as an unusable storage driver. The Incus warning is daemon-local and might not be forwarded with the SDK response; v1 surfaces its own conservative status warning. Underlying host-disk exhaustion remains possible without quota; an EDQUOT claim still requires installed-native proof. Do not rewrite the historical S2 observations; update their interpretation.

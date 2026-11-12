@@ -28,17 +28,19 @@ type NativePrereqCheck struct {
 	Detail string `json:"detail"`
 }
 type NativePrereqReport struct {
-	Project               string              `json:"project"`
-	HostSHA256            string              `json:"host_sha256"`
-	Pool                  string              `json:"selected_pool,omitempty"`
-	Network               string              `json:"selected_network,omitempty"`
-	ACL                   string              `json:"selected_acl,omitempty"`
-	ImageFingerprint      string              `json:"approved_image_fingerprint,omitempty"`
-	NativeStateSHA256     string              `json:"native_state_sha256"`
-	Checks                []NativePrereqCheck `json:"checks"`
-	ConfigReady           bool                `json:"config_ready"`
-	ReviewSHA256          string              `json:"review_sha256"`
-	PacketWitnessRequired bool                `json:"packet_witness_required"`
+	Project                string              `json:"project"`
+	HostSHA256             string              `json:"host_sha256"`
+	Pool                   string              `json:"selected_pool,omitempty"`
+	Network                string              `json:"selected_network,omitempty"`
+	ACL                    string              `json:"selected_acl,omitempty"`
+	ImageFingerprint       string              `json:"approved_image_fingerprint,omitempty"`
+	NativeStateSHA256      string              `json:"native_state_sha256"`
+	Checks                 []NativePrereqCheck `json:"checks"`
+	ConfigReady            bool                `json:"config_ready"`
+	ReviewSHA256           string              `json:"review_sha256"`
+	PacketWitnessRequired  bool                `json:"packet_witness_required"`
+	QuotaMountPrecondition bool                `json:"selected_storage_quota_mount_precondition"`
+	Warnings               []string            `json:"warnings,omitempty"`
 }
 
 var safePrereqName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$`)
@@ -104,13 +106,15 @@ func prereqDigest(r NativePrereqReport) string {
 	type stable struct {
 		Schema                                          int
 		Host, Project, Pool, Network, ACL, Image, State string
+		QuotaMountPrecondition                          bool
 		Checks                                          []struct {
 			ID string
 			OK bool
 		}
 	}
-	v := stable{Schema: 1, Host: r.HostSHA256, Project: r.Project, Pool: r.Pool,
-		Network: r.Network, ACL: r.ACL, Image: r.ImageFingerprint, State: r.NativeStateSHA256}
+	v := stable{Schema: 2, Host: r.HostSHA256, Project: r.Project, Pool: r.Pool,
+		Network: r.Network, ACL: r.ACL, Image: r.ImageFingerprint, State: r.NativeStateSHA256,
+		QuotaMountPrecondition: r.QuotaMountPrecondition}
 	for _, c := range r.Checks {
 		v.Checks = append(v.Checks, struct {
 			ID string
@@ -215,10 +219,16 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 		}
 		if e == nil && pool != nil && pool.Status == "Created" && pool.Driver == "dir" {
 			free, separate, quota, e := native.InspectNativeDirPool(poolName)
-			poolOK = e == nil && separate && quota && free >= 64<<20
+			poolOK = e == nil && separate && free >= 64<<20
+			r.QuotaMountPrecondition = quota
+			if poolOK && !quota {
+				r.Warnings = append(r.Warnings,
+					"DIR_QUOTA_UNVERIFIED: Incus may skip requested volume size limits; inspect daemon logs and separately verify actual instance/Exec spool bounds.")
+			}
 		}
 	}
-	prereqRecord(&r, "quota_backed_pool", poolOK, "real separate storage as required and ext4/XFS project quotas (packet/EDQUOT proof still pending)")
+	prereqRecord(&r, "dir_pool_backing", poolOK,
+		"available dedicated Incus dir storage backing (quota evidence is separate, never silently assumed)")
 	networkOK := false
 	aclOK := false
 	if devicesOK {
