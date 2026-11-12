@@ -376,7 +376,7 @@ echo "S2_P1_SECOND_REAL_PROJECT_SAME_NAME_NATIVE_INSTANCE_DENIED_TO_NONROOT=PASS
 # Physical public WAN routing may not be available to a hosted Guest.
 # A separately routed namespace+veth+TLS server gives an explicit, stricter
 # SIMULATED-WAN ON/OFF/ON proof, but never counts as public Internet.
-sh scripts/s2_p1_simulated_wan_lab.sh setup "$work"
+sh scripts/s2_p1_simulated_wan_lab.sh setup "$work" "$project"
 simulated_wan_ca_b64="$(base64 -w0 "$work/s2-simwan-cert.pem")"
 test -n "$simulated_wan_ca_b64"
 
@@ -533,8 +533,8 @@ cat "$work/native-probe.log"
 grep -Fqx S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST=PASS "$work/native-probe.log"
 grep -Fqx S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP=PASS "$work/native-probe.log"
 grep -Fqx S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE=PASS "$work/native-probe.log"
-sh scripts/s2_p1_simulated_wan_lab.sh verify "$work"
-sh scripts/s2_p1_simulated_wan_lab.sh cleanup "$work"
+sh scripts/s2_p1_simulated_wan_lab.sh verify "$work" "$project"
+sh scripts/s2_p1_simulated_wan_lab.sh cleanup "$work" "$project"
 # The receiving middleware logs only a hashed actor and coarse method/outcome.
 # A deliberately injected hostile _meta test string must never appear in logs.
 if grep -Fq "S2_P1_META_REDACTION_SENTINEL_110" "$work/service.redacted.log"; then
