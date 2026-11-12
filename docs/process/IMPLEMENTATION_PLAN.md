@@ -4,6 +4,8 @@
 
 **Owner architecture correction:** v1's S2.5 physical development host is **standalone/dedicated** and will **not** coexist with legacy `main`. No special second-instance installer, service renaming, alternate fixed paths or old-main migration is required. Use the [pinned-code/upstream S2.5 audit](../research/S25_PREDEPLOY_REALITY_AUDIT_2026-11-11.md) to prioritize real installer prerequisite and nested storage/quotas gaps. **No backwards DB/API compatibility is promised for disposable pre-release candidates; preserve original native Operations/UNKNOWN before any explicit reset.** Historical S1/S2 checkpoints remain in the append-only [execution log](../development/EXECUTION_LOG.md).
 
+**Owner-approved 2026-11-12 staged IPv6 verification:** S2.5 uses exact-candidate I+N+V **routed simulated IPv6 WAN** with real packets and full security negatives; unproxied real public IPv4 HTTPS remains mandatory. Genuine **public IPv6** is late S4 rehearsal and S5 mandatory pre-release reacceptance, not falsely counted during early HOST_GO. [Decision](../decisions/IPV6_PUBLIC_WAN_PHASED_ACCEPTANCE_2026-11-12.md).
+
 **2026-11-12 owner-directed HOST_GO handoff:** [three independently invoked rounds, exact user triggers and acceptance](../development/HOST_GO_THREE_STAGE_RUNBOOK.md) · [live scoreboard](../verification/HOST_GO_STAGE_STATUS.md) · [latest exact-head lab evidence](../verification/S25_EXACT_HEAD_FINAL_LAB_2026-11-12.md). On a `完成HOST_GO 第N阶段` command, follow that named round and STOP after reporting, without auto-executing N+1. The older 'next task LAB only' description below is the historical initial-stage entry, not the newest trigger contract. Physical host still requires fresh exact-host authorization.
 
 ## Next command and how to start

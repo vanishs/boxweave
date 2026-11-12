@@ -2,6 +2,8 @@
 
 This is the **small mutable checkpoint** for [the user-triggered three-round runbook](../development/HOST_GO_THREE_STAGE_RUNBOOK.md). Detailed factual incidents append to [EXECUTION_LOG](../development/EXECUTION_LOG.md) and the per-ID [BH matrix](BRIDGEHEAD_ACCEPTANCE.md); never overwrite past failures. Only the currently invoked round can change to IN_PROGRESS, and evidence after the round must be committed to PR #133 before reporting it. A future Agent must read current GitHub and native state rather than trusting a stale checkpoint.
 
+**Owner-approved IPv6 timing contract change (2026-11-12):** Real public IPv6 WAN is deferred to S4 rehearsal / mandatory S5 actual reacceptance; public IPv4 remains real for S2.5. An isolated routed simulated IPv6 HTTPS WAN with the exact installed MCP I + genuine native packet N + independent V, positive/off/on/off and all v4/v6/MAC spoof and peer/foreign negatives is still mandatory. Current Round 1 remains **BLOCKED** on incomplete simulated-v6 I+N+V and other Agent/Verifier gaps; the historical public-v6 failures are preserved. `PUBLIC_IPV6_DEFERRED_TO_S5` is not a public-v6 PASS. This docs-only approval does not start any round. [Contract](../decisions/IPV6_PUBLIC_WAN_PHASED_ACCEPTANCE_2026-11-12.md).
+
 ## Planning snapshot (2026-11-12, documentation only)
 
 - Existing **tested source**: `7a01000a12114eba0fe4937af0e955bd6e46ed87` with expanded nested MCP LAB 5/5 at that revision. Latest **PR #133 documentation checkpoint**: `31d91584f07ff19135e96f086cd348bd4075f45d`, five same-head Actions SUCCESS, Draft against `v1`. On current head the candidate v1 binary digest was `ee64e247e6054ec62d3e93db4c2a25c51f369816d9b80a9faab07dde2658d3e4`. Reconfirm exact current head and artifacts on invocation; these are historical baselines, not authorization.
@@ -15,7 +17,7 @@ This is the **small mutable checkpoint** for [the user-triggered three-round run
 
 | Trigger | Status | Cases / evidence | Exact code and native binary | Remaining blockers | User told? |
 |---|---|---|---|---|---|
-| `完成HOST_GO 第一阶段` | **BLOCKED (resumed)** | Two-box bit-identical build; current v1 L1 install/8-of-8 prerequisite/HTTP denials; native IPv4 WAN + v4/v6 peer/foreign/spoof PASS; formal I+N+V missing | tested `e878286` / SHA-256 `68a1f2b8e9b6…1c31c31` | Two gateway UNKNOWN intact; public IPv6 WAN unavailable; official SDK authorized operation/tool-safety block; independent host V missing | YES |
+| `完成HOST_GO 第一阶段` | **BLOCKED (resumed)** | Two-box bit-identical build; current v1 L1 install/8-of-8 prerequisite/HTTP denials; native IPv4 WAN + v4/v6 peer/foreign/spoof PASS; formal I+N+V missing | tested `e878286` / SHA-256 `68a1f2b8e9b6…1c31c31` | Two gateway UNKNOWN intact; simulated IPv6 routed WAN same-version I+N+V missing; official SDK authorized operation/tool-safety block; independent host V missing; real public IPv6 deferred to S5 | YES |
 | `完成HOST_GO 第二阶段` | **NOT_STARTED** | BH-004/006/007/008/012/013/014/015/016, TC-011–014: to verify via fault + real Agent | unset | baseline fault/UNKNOWN/fallback, TC-013 actual Agent | NO |
 | `完成HOST_GO 第三阶段` | **NOT_STARTED** | BH-017 exact physical host + all mandatory prior cases, actual Agent, full final CI | unset | exact physical host authority not granted; Round 1/2 gates | NO |
 
