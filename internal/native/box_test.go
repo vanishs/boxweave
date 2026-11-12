@@ -295,10 +295,10 @@ func TestS2GuestReadyJSONTriStateDoesNotInferFromNativeRunning(t *testing.T) {
 
 func TestS2NativeGuestReadinessOnlyGuestDeclaredAndCurrent(t *testing.T) {
 	tests := []struct {
-		name string
+		name   string
 		status string
 		config map[string]string
-		want *bool
+		want   *bool
 	}{
 		{name: "guest has not explicitly marked ready", status: "Running"},
 		{name: "user claim does not authenticate readiness", status: "Running",
