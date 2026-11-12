@@ -24,6 +24,10 @@
 
 This developer Box already contains unrelated native state; it was used for **read-only discovery and Go development**, not as a disposable installation. The existing Box, Incus guests, ACLs, bridges and the three unrelated original UNKNOWN operations were not modified or deleted.
 
+## First final CI feedback and source correction
+
+The first exact-head disposable [native S2.5 job](https://github.com/vanishs/boxweave/actions/runs/43147286231) on source `6a640ae` reached the one-use installed Incus 7.6 fixture. **Seven of eight** native prerequisite checks were positive (actual extensions, restricted Project/nesting, root/NIC, quota-backed pool, managed bridge, exclusive ACL used_by, approved image), while the service identity check returned BLOCKED, so the native job correctly **failed** rather than claiming acceptance. The S2 acceptance fixture explicitly cleared inherited `INCUS_CONF`/`INCUS_CONFIG_DIR`/`XDG_CONFIG_HOME` and supplied `HOME=/home/boxweave`, but the reused host-local root operator helper ran `runuser` without reproducing this bounded client environment. This candidate corrects the invocation and adds an argument-level regression test. The correction is **pending fresh exact-head native verification** at this documentary checkpoint; do not relabel the first red run as a PASS.
+
 ## Remaining mandatory S2.5 work
 
 1. On a **separate approved disposable native LAB**, establish actual storage backing and native network before any create. Obtain an explicitly reviewed operator-owned plan for Project/Profile/ACL/image/pool; either implement guarded local apply+rollback or retain independently audited operator provisioning with exact native ownership evidence. A simple S2 CI fixture is not itself an installer.

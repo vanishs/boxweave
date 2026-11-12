@@ -155,8 +155,16 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 		return r
 	}
 	u, err := user.Lookup("boxweave")
-	actor := err == nil && project == "user-"+u.Uid && nativeServiceActorReady() == nil
-	prereqRecord(&r, "restricted_service_identity", actor, "dedicated incus-only OS identity and exclusive Project")
+	actor := false
+	actorDetail := "dedicated incus-only OS identity and exclusive Project"
+	if err == nil && project == "user-"+u.Uid {
+		if checkErr := nativeServiceActorReady(); checkErr == nil {
+			actor = true
+		} else {
+			actorDetail = "restricted actor verification refused: " + checkErr.Error()
+		}
+	}
+	prereqRecord(&r, "restricted_service_identity", actor, actorDetail)
 	c, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
 	if err != nil {
 		prereqRecord(&r, "native_daemon", false, "root-local Incus API unavailable")

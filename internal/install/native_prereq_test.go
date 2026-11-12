@@ -90,3 +90,17 @@ func TestPrereqDigestBindsNativeIdentity(t *testing.T) {
 		t.Fatal("new failed prerequisite must require reapproval")
 	}
 }
+
+func TestConfinedProjectInvocationIgnoresOperatorIncusConfig(t *testing.T) {
+	args := confinedProjectListArgs("/home/boxweave")
+	want := []string{"-u", "boxweave", "--", "env", "-u", "INCUS_CONF", "-u", "INCUS_CONFIG_DIR", "-u", "XDG_CONFIG_HOME",
+		"HOME=/home/boxweave", "XDG_CONFIG_HOME=/home/boxweave/.config", "incus", "project", "list", "--format", "csv"}
+	if len(args) != len(want) {
+		t.Fatalf("unexpected restricted native invocation %v", args)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Errorf("arg[%d]=%q want %q", i, args[i], want[i])
+		}
+	}
+}
