@@ -110,9 +110,11 @@
       "S2_NATIVE_CREATE_STOPPED_UUID",
       "S2_NATIVE_BOX_LIST_UUID",
       "S2_NATIVE_RUNNING_NOT_CONFUSED_WITH_GUEST_READY",
-      "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL"
+      "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL",
+      "S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP",
+      "S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE"
     ],
-    "limits": "Stopped guest_ready=false; unprobed Running guest_ready=null. A true Guest Ready API is not in supported S2 contract."
+    "limits": "Native guest-origin Ready positively reported true only after real /dev/incus PATCH on exact owned UUID; Stopped false and restarted unprobed Running null. This proves guest-declared readiness, not arbitrary process health or auto-init success."
   },
   {
     "id": "A-006/061/068/074-076",
@@ -121,9 +123,14 @@
       "S2_NATIVE_CPU_MEMORY_UPDATE_PRESERVES_DISK",
       "S2_NATIVE_DISK_SHRINK_DENIED",
       "S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS",
-      "S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED"
+      "S2_NATIVE_STALE_ETAG_ORIGINAL_UNKNOWN_AND_LOCKED",
+      "S2_NATIVE_SIMULATED_WAN_NAMESPACE_ROUTE_VERIFIED_TLS",
+      "S2_P1_SIMULATED_WAN_HTTPS_POSITIVE_TLS_BEFORE",
+      "S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED",
+      "S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST",
+      "S2_NATIVE_SIMULATED_WAN_SERVER_INDEPENDENT_ON_OFF_ON_TWO_HITS"
     ],
-    "limits": "Real public WAN HTTPS online baseline remains UNVERIFIED; tested dual-stack gateway egress toggle + peer denial, with explicit environment exception."
+    "limits": "Separate routed 198.18.0.2 namespace and valid verified TLS on/off/on are a SIMULATED WAN egress proof (2 server hits, none while off); true public guest WAN HTTPS remains UNVERIFIED_ENVIRONMENT_EXCEPTION. IPv4/IPv6 gateway+private peer protection independently proved."
   },
   {
     "id": "A-007/008/058/067/081",

@@ -65,6 +65,13 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-P1-READY-WAN-063 — guest origin Ready and isolated routed HTTPS, conditional v1 merger
+
+- **Owner instruction:** real acceptance of Guest Ready and WAN policy using an isolated simulated public-like routed HTTPS destination; if actual P1 and exact source full CI pass, proceed to **formal S2 signoff and protected v1 merge**. Do not claim actual public WAN or physical power cycle. The three historical UNKNOWN originals are explicitly out of scope and immutable.
+- **Design:** expose genuine native Incus guest-requested Ready `volatile.last_state.ready=true` as public true; preserve unknown Running/null, stopped/false and SDK Running power-state semantics. From official MCP/guest exec (not privileged host mutation), PATCH guest-local `/dev/incus/sock` Ready, verify exact UUID public true; stop then restart requires fresh Ready (no stale true).
+- **Simulated WAN:** one-use VM-only namespace/veth with routed `198.18.0.2` standalone HTTPS server; guest trusts only that lab CA, checks exact host/SAN and literal 200 response. ON→OFF→ON using original MCP `box_update` keys with independent 2-hit fsynced server log and no request in OFF. Prior separate real public HTTP baseline stays UNVERIFIED.
+- **Proof status:** initial fastlab Go native unit/probe compile and shell/Python syntax PASS; exact CI pending. New separate P3 independent evidence markers required; no premature merge. [P3 scope](../verification/S2_SCOPED_EXIT_AND_FAULT_SURROGATE_2026-11-11.md).
+
 ### LOG-20261111-S2-SCOPED-062 — isolate Python bytecode pollution of clean-tree native overlay witness
 
 - **Observed original CI red:** [source `7793c25`, independent native job](https://github.com/vanishs/boxweave/actions/runs/43123534467/job/130869736372) failed after printing test-only overlay service SHA256 and **before** starting its private MCP server. Local `bwracc-1106-v2` reproduction shows the newly introduced Python independent evidence imports create untracked `scripts/__pycache__/s2_p3_scoped_acceptance.cpython-312.pyc` and `s2_p3_evidence_audit.cpython-312.pyc`; the next shell step requires an entirely clean `git status` and therefore aborts. This is **test-harness checkout contamination**, not a native Box/worker product logic failure.
