@@ -530,6 +530,11 @@ if ! wait "$probe_pid"; then
   exit 92
 fi
 cat "$work/native-probe.log"
+grep -Fqx S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST=PASS "$work/native-probe.log"
+grep -Fqx S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP=PASS "$work/native-probe.log"
+grep -Fqx S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE=PASS "$work/native-probe.log"
+sh scripts/s2_p1_simulated_wan_lab.sh verify "$work"
+sh scripts/s2_p1_simulated_wan_lab.sh cleanup "$work"
 # The receiving middleware logs only a hashed actor and coarse method/outcome.
 # A deliberately injected hostile _meta test string must never appear in logs.
 if grep -Fq "S2_P1_META_REDACTION_SENTINEL_110" "$work/service.redacted.log"; then
