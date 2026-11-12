@@ -4,6 +4,8 @@
 
 This is a scoped candidate gate against Draft PR #130, **not** S5 release, S2.5 full host pilot, S4 network-dependent Delete or all original A-case scopes. It does not authorize production/shared Incus, force unlocking any historical UNKNOWN, or merging `v1`.
 
+**Additional real actor isolation requirement:** Two different authenticated admin tokens intentionally reuse the SAME untrusted idempotency key on the same owned Box, and must produce distinct immutable original Operations, while exact same-token retry returns each actor's own receipt and original native stdout. This `S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL=PASS` marker is now mandatory for TC-004 and TC-006, not merely inferred from different-key tests. The source-only probe is accepted only after actual independent native CI.
+
 ## Automated evidence acceptance
 
 - `scripts/s2_p3_scoped_acceptance.json` maps all original **TC-001–010 (10) and S2 grouped A-case rows (9)** to specific named native PASS evidence, with a written residual limit for **each**. No row may pass without a real source-exact marker.

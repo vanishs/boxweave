@@ -65,6 +65,14 @@ New entries go **newest first after this template**, or append by monotonically 
 
 ## Recorded entries
 
+### LOG-20261111-S2-SCOPED-061 — owner-approved crash surrogate, 19-row evidence and genuine cross-actor same-key check
+
+- **Owner decision:** for S2 use real process SIGKILL before/after SQLite WAL fsync, independently observed native effect/restart/no retry and real ext4 ENOSPC **as an accepted power interruption surrogate**, NEVER label actual physical power cut PASS. Public HTTPS host guest unavailable stays explicit environment exception; Guest Ready `Stopped:false`/`Running:null` is a supported tri-state non-claim; S4 dependent deletion deferred.
+- **Prior exact broad native accepted:** `5ceb863708d4884753471f1add4119f7362af999`, five GitHub checks green, [original real Incus 7.6 + official MCP](https://github.com/vanishs/boxweave/actions/runs/43119896973/job/130857390187) with real 12-way UUID-bound VERIFYING Create/Delete, immutable native original, no residual.
+- **New independent scoped exit:** [19-row report policy](../../scripts/s2_p3_scoped_acceptance.json), [read-only verifier](../../scripts/s2_p3_scoped_acceptance.py), [10 negative tests](../../scripts/test_s2_p3_scoped_acceptance.py), [scope decision](../verification/S2_SCOPED_EXIT_AND_FAULT_SURROGATE_2026-11-11.md). Tests first passed in existing fastlab `bwracc-1106-v2`; exact native verifier's CI pending. These accept **18 S2-supported grouped evidence scopes and defer 1 S4 group**, not automatic final v1 release.
+- **TC-004/006 added authentic same-key isolation:** current new native probe now performs two different-token admin original Guest Execs with one intentionally shared key; each actor's same-key retry must return its own immutable native original and stdout. Never claim PASS until fresh CI matches source SHA; test-only Go1.26.9 formatting applied.
+- **Next:** finish exact-source native run and P3 scoped evidence output. If any marker fails, preserve original failed job and fix product or test harness accordingly. Do not merge Draft PR #130; never touch any of three original UNKNOWN tasks.
+
 ### LOG-20261111-S2-CLOSURE-063 — complete actual post-UUID-bind P1 native observed; P3 witness echo fixed
 
 - **Native actual product evidence:** `97e10be2d830ff276d64843f14baf4fd75c7f345`, candidate executable SHA256 `d3b8b27296b040c1df8e86c0cd3786f8c404780afcb918eacba93b1bb8e872b3` reproduced bit-for-bit independently in fastlab. [Single-use Incus/SDK CI](https://github.com/vanishs/boxweave/actions/runs/43118592287/job/130852924733) completed **full original native** plus real Post-RegisterCreatedBox UUID/SQLite VERIFYING pause with 12 different-key/actor MCP Delete denials, then original Verified and legitimate Delete to zero native inventory.

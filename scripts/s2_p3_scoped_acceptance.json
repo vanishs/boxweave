@@ -38,7 +38,8 @@
       "S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY",
       "S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED",
       "S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT",
-      "S2_P1_REAL_STOP_AND_DELETE_NATIVE_202_ACK_LOSS_NO_REPLAY"
+      "S2_P1_REAL_STOP_AND_DELETE_NATIVE_202_ACK_LOSS_NO_REPLAY",
+      "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL"
     ],
     "limits": "Immutable original and no native replay; other actors cannot inherit original auth via self-declared labels."
   },
@@ -58,7 +59,8 @@
     "required_markers": [
       "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED",
       "S2_P1_TWO_CONTROLLER_INDEPENDENT_NATIVE_AND_MCP_ISOLATION",
-      "S2_P1_TWO_CONTROLLER_CROSS_TOKEN_AUTH_DENIED"
+      "S2_P1_TWO_CONTROLLER_CROSS_TOKEN_AUTH_DENIED",
+      "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL"
     ],
     "limits": "Same host two restricted OS users/Projects and distinct bearer identities; broader remote/nested layer is S2.5/S4."
   },
