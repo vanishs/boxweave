@@ -1,5 +1,7 @@
 # S2 scoped exit — operator-selected crash surrogate and 19-group original evidence
 
+**Independent accepted proof (2026-11-11 PT):** real exact-source `f7828104c725480c016613073db591bf95c5bd9a` [full Incus 7.6 native CI](https://github.com/vanishs/boxweave/actions/runs/43131566410/job/130896688166) 5/5 PASS and independent byte-for-byte rebuild. 19-group scoped verifier reports 18 PASS, 1 S4 defer. Both P1 positive Ready and simulated routed TLS WAN on/off/on with server-side 2-hit witness are PASS. This does **not** change the real public guest WAN status (UNVERIFIED) or physical cut (not tested); see [signoff decision and exact exceptions](S2_FINAL_EXIT_SIGNOFF_2026-11-11.md). The pending descriptions below were written before this successful run.
+
 **Decision, 2026-11-11:** For S2 development-phase acceptance, substitute **actual process SIGKILL at SQLite WAL fsync before AND after**, exact original native-effect proof, restart/no replay and actual ext4 ENOSPC for **physical power interruption**. The replacement has specific limits: it does not reproduce a dead disk controller, cut host power, firmware cache or electrical loss. Do **not** write "physical power loss PASS".
 
 This is a scoped candidate gate against Draft PR #130, **not** S5 release, S2.5 full host pilot, S4 network-dependent Delete or all original A-case scopes. It does not authorize production/shared Incus, force unlocking any historical UNKNOWN, or merging `v1`.
