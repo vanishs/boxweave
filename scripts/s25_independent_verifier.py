@@ -77,6 +77,7 @@ def inspect_l1():
     devices = inst.get("expanded_devices", {})
     nic = devices.get("eth0", {})
     require(nic.get("security.acls.default.ingress.action") == "reject" and
+            nic.get("security.acls.default.egress.action") == "allow" and
             nic.get("security.acls") and
             nic.get("security.ipv4_filtering") == "true" and
             nic.get("security.ipv6_filtering") == "true" and

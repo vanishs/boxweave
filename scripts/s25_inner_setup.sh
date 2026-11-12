@@ -20,6 +20,27 @@ install -m 0755 /tmp/s25-v1 /usr/local/bin/boxweave-s25-candidate
 install -m 0755 /tmp/s25-agent /usr/local/bin/s25-lab-agent
 echo S25_INNER_EXACT_BINARY_TRANSFER=PASS
 
+# A nested guest can reach the private bridge gateway for SHA-bound binary
+# staging while still having no real WAN route. Probe both separately.
+# A globally assigned IPv6 address does not prove upstream IPv6 routing.
+echo "S25_INNER_IPV4_DEFAULT_ROUTE=$(ip -4 route show default | head -1)"
+echo "S25_INNER_IPV6_DEFAULT_ROUTE=$(ip -6 route show default | head -1)"
+if ! curl -4 -fsSI --connect-timeout 7 --max-time 18   https://archive.ubuntu.com/ubuntu/dists/noble/InRelease >/dev/null 2>&1; then
+ echo S25_INNER_OUTBOUND_HTTPS_IPV4=BLOCKED >&2
+ exit 61
+fi
+echo S25_INNER_OUTBOUND_HTTPS_IPV4=PASS
+if ! curl -4 -fsSI --connect-timeout 7 --max-time 18   https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then
+ echo S25_INNER_SIGNED_PACKAGE_HTTPS=BLOCKED >&2
+ exit 62
+fi
+echo S25_INNER_SIGNED_PACKAGE_HTTPS=PASS
+# Do not disable IPv6 or weaken its anti-spoof rules. IPv4-only apt
+# transport avoids an unreachable v6 default route hiding working v4.
+printf 'Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-s25-ipv4
+if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+ sed -i -e 's#http://archive.ubuntu.com/ubuntu/#https://archive.ubuntu.com/ubuntu/#g'         -e 's#http://security.ubuntu.com/ubuntu/#https://security.ubuntu.com/ubuntu/#g'         /etc/apt/sources.list.d/ubuntu.sources
+fi
 apt-get update -qq
 apt-get install -y --no-install-recommends ca-certificates curl gpg >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
