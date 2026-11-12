@@ -1,3 +1,11 @@
+**Latest targeted one-use v1 nested SDK MCP I+N+V:** The L0 MCP ->
+L1 installed v1 MCP -> L2 Create/Exec/Delete, dual authenticated SDK
+Agents, checkpoint recovery, controller restart, token rotation and separate
+native/SQLite Verifier passed at exact source 16cf1b2. This is bounded
+[targeted LAB evidence](S25_TARGETED_NATIVE_MCP_PROOF_2026-11-11.md),
+**not full BH-001–BH-016/TC-011–014 LAB_PASS**. Direct guest WAN and
+intended development Agent path remain unverified.
+
 # BRIDGEHEAD — S2.5 early development-base acceptance matrix
 
 **Status: IMPLEMENTATION IN PROGRESS / NO LAB_PASS OR HOST_GO.** Observed partial results and explicit case-by-case blockers: [2026-11-11 LAB crosswalk](S25_LAB_STATUS_2026-11-11.md). The [S2.5 source/native-negative increment](S25_NATIVE_READINESS_INCREMENT_2026-11-11.md) implements an operator read-only prerequisite gate but proves **none** of BH-001–BH-017 as complete. This is the **additional, mandatory-if-claiming-early-host-ready** v1 native deployment gate after S2, not a replacement for any S1/S2/S3/S4/S5 [A- or SDK-G acceptance case](ACCEPTANCE.md). [Phase card and security rules](../development/phases/025_BRIDGEHEAD.md) are authoritative. **Zero new public MCP tools.** No test in this document has been executed by recording this plan.
