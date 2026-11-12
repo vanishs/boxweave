@@ -38,3 +38,38 @@ The first exact-head disposable [native S2.5 job](https://github.com/vanishs/box
 4. Complete the BH-001–BH-016 and TC-011–TC-014 original-operation continuity and independent L0→L1→L2 Verifier matrix on one exact installed candidate SHA/digest. Only then consider an **explicitly approved exact dedicated physical host** and BH-017. Old `main` is never coinstalled with v1.
 
 **No new public MCP tools.** This increment only adds host-local CLI inspection and safety admission. S3/S4/S5 and S4 deferred dependent Delete remain unchanged.
+
+## S2.5 implementation continuation: reviewed native writes and nested lab (2026-11-11 PT)
+
+The first source increment's read-only native-prereq-plan/verify is supplemented
+by **host-local root-only** native-prepare-plan, native-prepare-apply,
+native-prepare-status, native-prepare-rollback and native-prepare-archive.
+No new public MCP Tools or native admin socket access by the confined runtime
+are introduced. The official Incus SDK plan binds the exact host, owned Project,
+previous Project/Profile state, selected existing dir pool/network/image and a
+**new exclusively named** ACL to an operator-reviewed SHA256. Wrong SHA is
+rejected before effects. The apply path fsyncs a private journal before each
+Incus mutation, refuses an existing in-flight journal and independently checks
+all eight native prerequisite fields. Rollback requires service stop, zero
+owned instances and exact reviewed native before/after fields; archive of a
+verified ROLLED_BACK journal is explicit, never overwrites previous audit
+and permits a fresh reviewed preparation cycle. Foreign/shared resources,
+unrecognized Profiles and unknown native effects are not silently adopted.
+
+The standalone nested development LAB and current exact-source notes are
+recorded append-only in [S25_ONE_SHOT_WORKLOG_2026-11-11.md](S25_ONE_SHOT_WORKLOG_2026-11-11.md).
+The tested source at 8af4e08 bootstrapped exact Ubuntu 24.04 / Incus 7.6,
+applied a reviewed local plan, installed v1 (binary SHA256
+715b2d0059b5fa8b15e340c0b0270e9fe4b6f0e5a15b5fd03234012f057796c9)
+on L0 and L1, and proved an inner native L2 created, executed and deleted.
+The parent L1 and its inner v1 remained intact. Actual native v4/v6 private
+sibling denial, spoofed-source denial, positive gateway routing and loopback
+MCP isolation were also witnessed. **This is not yet L1 MCP-mediated L2**,
+an independently replayed complete BH matrix, or physical HOST_GO.
+
+Per owner decision, **no newly designed quota stress test** is required.
+Use the official Incus dir quota support matrix as capability evidence and
+keep DIR_QUOTA_UNVERIFIED / host-disk-exhaustion warnings when no enforceable
+size limit is established. Do not mislabel this as a guaranteed size cap.
+Exact final native Actions, full Client/Agent, crash UNKNOWN, independent
+Verifier and physical-host approval remain separate acceptance gates.

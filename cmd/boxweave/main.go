@@ -22,7 +22,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -78,7 +78,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -88,7 +88,7 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback",
+		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive",
 		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
@@ -97,7 +97,8 @@ func run() error {
 		defer release()
 	}
 	if command == "native-prepare-plan" || command == "native-prepare-apply" ||
-		command == "native-prepare-status" || command == "native-prepare-rollback" {
+		command == "native-prepare-status" || command == "native-prepare-rollback" ||
+		command == "native-prepare-archive" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		target := install.NativePrepareTarget{Project: *project, Pool: *preparePool, Network: *prepareNetwork, ACL: *prepareACL}
@@ -127,6 +128,14 @@ func run() error {
 				return e
 			}
 			return err
+		case "native-prepare-archive":
+			path, err := install.NativePrepareArchive(ctx, *prepareSHA, *approveLocal)
+			if err != nil {
+				return err
+			}
+			return enc.Encode(struct {
+				Path string `json:"archived_journal_path"`
+			}{path})
 		}
 	}
 	if command == "native-prereq-plan" || command == "native-prereq-verify" {

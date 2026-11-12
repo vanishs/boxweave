@@ -490,3 +490,83 @@ func NativePrepareRollback(ctx context.Context, approvedSHA string, approved boo
 	}
 	return rec, nil
 }
+
+// NativePrepareArchive retains a reviewed, COMPLETED rollback journal before
+// starting a new fresh preparation. It does not remove or adopt any native
+// object. A failed/UNKNOWN in-flight journal can never be archived/rearmed.
+// The caller holds the same host-local maintenance mutex as apply/rollback.
+func NativePrepareArchive(ctx context.Context, expectedSHA string, approved bool) (string, error) {
+	rec, err := NativePrepareStatus()
+	if err != nil {
+		return "", err
+	}
+	if !approved || expectedSHA != rec.Plan.ReviewSHA256 || len(expectedSHA) != 64 ||
+		rec.Status != "ROLLED_BACK" {
+		return "", errors.New("only an exact approved fully rolled-back journal can be archived")
+	}
+	if exec.Command("systemctl", "is-active", "--quiet", "boxweave.service").Run() == nil {
+		return "", errors.New("stop the owned service before archiving native rollback")
+	}
+	if err := nativePrepareReadable(rec.Plan.Target); err != nil {
+		return "", err
+	}
+	host, err := migrationHostDigest()
+	if err != nil || host != rec.Plan.HostSHA256 {
+		return "", errors.New("archived rollback must belong to exact current host")
+	}
+	c, err := prepareClient(ctx)
+	if err != nil {
+		return "", err
+	}
+	own := c.UseProject(rec.Plan.Target.Project)
+	guests, err := own.GetInstanceNames(api.InstanceTypeAny)
+	if err != nil || len(guests) != 0 {
+		return "", errors.New("owned instances present or inventory unknown")
+	}
+	pr, _, err := own.GetProject(rec.Plan.Target.Project)
+	if err != nil || !reflect.DeepEqual(pr.Writable(), rec.BeforeProject) {
+		return "", errors.New("original Project was not fully restored")
+	}
+	pf, _, err := own.GetProfile("default")
+	if err != nil || !reflect.DeepEqual(pf.Writable(), rec.BeforeProfile) {
+		return "", errors.New("original Profile was not fully restored")
+	}
+	names, err := c.GetNetworkACLNames()
+	if err != nil || slices.Contains(names, rec.Plan.Target.ACL) {
+		return "", errors.New("owned ACL still exists or inventory failed")
+	}
+	// An already-archived path is never overwritten; retain the exact prior
+	// plan and its verified inverse as an immutable 0600 root-only artifact.
+	for i := 1; i <= 99; i++ {
+		archive := fmt.Sprintf("%s.closed.%s.%02d", nativePrepareJournalPath, expectedSHA[:16], i)
+		if err = os.Link(nativePrepareJournalPath, archive); errors.Is(err, os.ErrExist) {
+			continue
+		} else if err != nil {
+			return "", err
+		}
+		d, err := os.Open(filepath.Dir(nativePrepareJournalPath))
+		if err != nil {
+			return "", err
+		}
+		if err = d.Sync(); err != nil {
+			_ = d.Close()
+			return "", err
+		}
+		if err = d.Close(); err != nil {
+			return "", err
+		}
+		if err = os.Remove(nativePrepareJournalPath); err != nil {
+			return "", fmt.Errorf("immutable archive retained but journal source could not be released: %w", err)
+		}
+		d, err = os.Open(filepath.Dir(nativePrepareJournalPath))
+		if err != nil {
+			return "", err
+		}
+		defer d.Close()
+		if err = d.Sync(); err != nil {
+			return "", err
+		}
+		return archive, nil
+	}
+	return "", errors.New("native rollback archive numbering exhausted; no journal removed")
+}

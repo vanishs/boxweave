@@ -83,6 +83,9 @@ func TestS25NativePrepareRefusesUnapprovedNonRootAccess(t *testing.T) {
 	if _, err := NativePrepareRollback(t.Context(), strings.Repeat("0", 64), false); err == nil {
 		t.Fatal("nonroot rollback accepted")
 	}
+	if _, err := NativePrepareArchive(t.Context(), strings.Repeat("0", 64), false); err == nil {
+		t.Fatal("nonroot archive accepted")
+	}
 }
 
 func TestS25NativeAutoUserProfileEligibility(t *testing.T) {
