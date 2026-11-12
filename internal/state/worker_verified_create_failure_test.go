@@ -69,6 +69,7 @@ func TestCreateVerifiedTerminalFailureVersusAmbiguousOutcome(t *testing.T) {
 	}{
 		{"confirmed_no_instance", VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}, "FAILED", "NATIVE_CREATE_FAILED_NO_INSTANCE"},
 		{"unknown_residue", errors.New("native failed but a guest remains"), "UNKNOWN", "POSTCONDITION_UNVERIFIED"},
+		{"typed_uncertain", VerificationUncertain{Class: "NATIVE_CREATE_POSTREAD_UNVERIFIED"}, "UNKNOWN", "NATIVE_CREATE_POSTREAD_UNVERIFIED"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()

@@ -252,6 +252,52 @@ func nativeDone(ctx context.Context, r native.Reader, nativeID string) error {
 	return nil
 }
 
+// observeOriginalCreateSettled tolerates Incus post-create status propagation.
+// It is read-only and never retries Create or Start. Foreign identity or
+// unsafe NIC evidence refuses immediately; other transient observations get
+// a bounded read window. A stable stopped guest is returned as a residual
+// only after giving the requested startup a chance to settle.
+func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet bool) (native.BoxState, error) {
+	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	var stopped native.BoxState
+	for {
+		observed, err := s.Native.ObserveCreatedByOperation(ctx, name, originalID)
+		if errors.Is(err, native.ErrNotOwned) || errors.Is(err, native.ErrUnsafeNetwork) {
+			return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED"}
+		}
+		if err == nil {
+			if observed.Internet != internet {
+				return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_EGRESS_UNVERIFIED"}
+			}
+			if (start && observed.NativeState == "Running") ||
+				(!start && observed.NativeState == "Stopped") {
+				return observed, nil
+			}
+			if start && observed.NativeState == "Stopped" {
+				stopped = observed
+			}
+		}
+		timer := time.NewTimer(350 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			if stopped.UUID != "" {
+				// Re-read the exact UUID after settling to reject name reuse.
+				finalCtx, finalCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				final, err := s.Native.ObserveCreatedByOperation(finalCtx, name, originalID)
+				finalCancel()
+				if err == nil && final.UUID == stopped.UUID && final.NativeState == "Stopped" &&
+					final.Internet == internet {
+					return final, nil
+				}
+			}
+			return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_POSTREAD_UNVERIFIED"}
+		case <-timer.C:
+		}
+	}
+}
+
 func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verify state.VerifyEffect) (state.Receipt, error) {
 	if r.Duplicate {
 		return r, nil
@@ -317,50 +363,30 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			verify := func(ctx context.Context) error {
 				op, err := s.Native.ObserveUntilFinal(ctx, nativeID)
 				if err != nil {
-					return err
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_FINAL_OP_UNVERIFIED"}
 				}
 				if op.StatusCode != api.Success {
-					// Only a terminal native failure and repeated absence can
-					// release an empty-name create claim.
 					if err := s.Native.ConfirmDeleteAbsence(ctx, in.Name); err == nil {
 						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
 					}
-					// Incus can leave a stopped instance when create+start
-					// fails. Bind it to the original admission via the
-					// native config marker, not merely the reused name.
-					residue, err := s.Native.ObserveCreatedByOperation(ctx, in.Name, r.ID)
-					if err != nil || residue.NativeState != "Stopped" || residue.Internet != internet {
-						return native.ErrUnverified
-					}
-					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, residue.UUID); err != nil {
-						return err
-					}
-					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
 				}
-				observed, err := s.Native.ObserveCreatedByOperation(ctx, in.Name, r.ID)
+				observed, err := s.observeOriginalCreateSettled(ctx, in.Name, r.ID, start, internet)
 				if err != nil {
 					return err
 				}
-				if observed.Internet != internet {
-					return native.ErrUnverified
+				if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
+				}
+				if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+				}
+				if op.StatusCode != api.Success {
+					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
 				}
 				if start && observed.NativeState == "Stopped" {
-					// Incus can report a successful Create operation while
-					// the requested start failed or the guest immediately
-					// stopped. Preserve the proven native UUID for explicit
-					// owner cleanup; never claim Guest Running or retry start.
-					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
-						return err
-					}
 					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
 				}
-				if (start && observed.NativeState != "Running") ||
-					(!start && observed.NativeState != "Stopped") {
-					return native.ErrUnverified
-				}
-				// Original durable operation already has the exact native ID.
-				// Binding its verified UUID and owned record is a single tx.
-				return s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID)
+				return nil
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err
