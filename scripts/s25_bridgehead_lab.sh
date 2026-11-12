@@ -133,6 +133,7 @@ export BW_S25_BINARY_SHA256="$binary_sha"
 python3 scripts/s25_independent_verifier.py l1
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" double-agent
+python3 scripts/s25_independent_verifier.py agents
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" bootstrap
 python3 scripts/s25_independent_verifier.py l2

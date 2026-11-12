@@ -114,6 +114,25 @@ def inspect_l2():
     inner("python3", "-c", code, data["create_op"], data["uuid"])
     print("S25_V_L1_MCP_CREATED_L2_NATIVE_UUID_SQLITE_BINARY=PASS")
 
+def inspect_agents():
+    inspect_l1()
+    m=as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    require(m.get("peer_uuid") and m.get("peer_create_op") and m.get("peer_delete_op"),
+            "second Agent's independent create/cleanup receipt absent")
+    require(m.get("agent_a_exec") and m.get("agent_b_exec") and
+            m["agent_a_exec"]!=m["agent_b_exec"],
+            "two Agent native operation identities missing/collapsed")
+    host_read("absent",os.environ["BW_S25_PROJECT"],"bw-s25-mcp-peer",m["peer_uuid"])
+    read_ledger(os.environ["BW_S25_OUTER_DB"],m["peer_create_op"],
+                m["peer_uuid"],"agent-s25-beta")
+    read_ledger(os.environ["BW_S25_OUTER_DB"],m["peer_delete_op"],
+                m["peer_uuid"],"agent-s25-beta")
+    read_ledger(os.environ["BW_S25_OUTER_DB"],m["agent_a_exec"],
+                m["uuid"],"agent-s25-alpha")
+    read_ledger(os.environ["BW_S25_OUTER_DB"],m["agent_b_exec"],
+                m["peer_uuid"],"agent-s25-beta")
+    print("S25_V_TWO_AGENT_SEPARATE_NATIVE_ORIGINALS_AND_CLEANUP=PASS")
+
 def nested_cleaned():
     inspect_l1()
     checkpoint = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
@@ -148,6 +167,8 @@ if __name__ == "__main__":
         inspect_l1()
     elif sys.argv[1] == "l2":
         inspect_l2()
+    elif sys.argv[1] == "agents":
+        inspect_agents()
     elif sys.argv[1] == "l2clean":
         nested_cleaned()
     elif sys.argv[1] == "clean":

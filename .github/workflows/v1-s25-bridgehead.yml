@@ -45,6 +45,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: s25-nested-mcp-lab-evidence
-          path: \${{ runner.temp }}/s25-evidence/
+          path: ${{ runner.temp }}/s25-evidence/
           retention-days: 7
           if-no-files-found: warn

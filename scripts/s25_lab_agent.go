@@ -289,6 +289,24 @@ func doubleAgent(ctx context.Context) {
 	viewer := connectActor(ctx, "viewer")
 	defer viewer.Close()
 	work := "lab/s25/two-agents"
+	// Independent agents need separate native resources for the positive
+	// parallel-work proof. Competing Execs against one Box may safely refuse
+	// because the worker enforces one mutable native resource at a time.
+	peer := request(ctx, second, "box_create", map[string]any{
+		"name": "bw-s25-mcp-peer", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"start": true, "internet": true, "nesting": false,
+		"idempotency_key": "s25-dual-agent-peer-create-once",
+		"work_ref":        work, "agent_ref": "agent-s25-beta",
+	})
+	peerOp := opid(peer)
+	m["peer_create_op"] = peerOp
+	saveCheckpoint(m)
+	peerFinal := wait(ctx, second, peerOp)
+	peerUUID := str(peerFinal, "box_uuid")
+	must(peerUUID != "" && peerUUID != m["uuid"], "second Agent did not receive distinct native Box")
+	m["peer_uuid"] = peerUUID
+	saveCheckpoint(m)
+	fmt.Println("S25_SECOND_AGENT_DISTINCT_MCP_BOX=PASS")
 	type output struct {
 		actor, op string
 		err       error
@@ -296,16 +314,16 @@ func doubleAgent(ctx context.Context) {
 	results := make(chan output, 2)
 	var wg sync.WaitGroup
 	for _, a := range []struct {
-		c                *mcp.ClientSession
-		agent, key, text string
+		c                       *mcp.ClientSession
+		agent, key, text, boxID string
 	}{
-		{first, "agent-s25-alpha", "s25-agent-a-independent-exec", "s25-agent-alpha"},
-		{second, "agent-s25-beta", "s25-agent-b-independent-exec", "s25-agent-beta"},
+		{first, "agent-s25-alpha", "s25-agent-a-independent-exec", "s25-agent-alpha", m["uuid"]},
+		{second, "agent-s25-beta", "s25-agent-b-independent-exec", "s25-agent-beta", peerUUID},
 	} {
 		wg.Add(1)
 		go func(a struct {
-			c                *mcp.ClientSession
-			agent, key, text string
+			c                       *mcp.ClientSession
+			agent, key, text, boxID string
 		}) {
 			defer wg.Done()
 			var got output
@@ -316,7 +334,7 @@ func doubleAgent(ctx context.Context) {
 				}
 				results <- got
 			}()
-			rec := request(ctx, a.c, "box_exec", map[string]any{"box_id": m["uuid"],
+			rec := request(ctx, a.c, "box_exec", map[string]any{"box_id": a.boxID,
 				"argv":       []string{"/bin/sh", "-c", "printf " + a.text},
 				"timeout_ms": 60000, "idempotency_key": a.key, "work_ref": work, "agent_ref": a.agent})
 			got.op = opid(rec)
@@ -343,6 +361,20 @@ func doubleAgent(ctx context.Context) {
 	m["agent_a_exec"] = ops["agent-s25-alpha"]
 	m["agent_b_exec"] = ops["agent-s25-beta"]
 	saveCheckpoint(m)
+	// The second Agent explicitly closes its own original temporary Box;
+	// the independently verified L1 remains unchanged throughout.
+	stop := request(ctx, second, "box_stop", map[string]any{"box_id": peerUUID,
+		"idempotency_key": "s25-dual-agent-peer-stop-once", "work_ref": work,
+		"agent_ref": "agent-s25-beta"})
+	_ = wait(ctx, second, opid(stop))
+	del := request(ctx, second, "box_delete", map[string]any{"box_id": peerUUID,
+		"idempotency_key": "s25-dual-agent-peer-delete-once", "work_ref": work,
+		"agent_ref": "agent-s25-beta"})
+	_ = wait(ctx, second, opid(del))
+	m["peer_stop_op"] = opid(stop)
+	m["peer_delete_op"] = opid(del)
+	saveCheckpoint(m)
+	fmt.Println("S25_SECOND_AGENT_EXACT_PEER_CLEANUP=PASS")
 	fmt.Println("S25_TWO_AUTHENTICATED_AGENT_CLIENTS_PARALLEL=PASS")
 	fmt.Println("S25_SAME_WORK_DISTINCT_AGENT_OPERATIONS=PASS")
 	fmt.Println("S25_VIEWER_CANNOT_BORROW_WORK_REF=PASS")
