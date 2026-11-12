@@ -154,6 +154,23 @@ cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 # systemd service restart, independently recovered by separate SDK process.
 sudo systemctl restart boxweave.service
 sudo systemctl is-active --quiet boxweave.service
+# Type=simple systemd ACTIVE alone proves a process was started; the MCP
+# loopback socket may still be unbound. Re-read the actual auth boundary
+# before dispatching any Agent request after this deliberate restart.
+restart_ready=no
+restart_attempt=0
+while [ "$restart_attempt" -lt 40 ]; do
+ sudo systemctl is-active --quiet boxweave.service
+ code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST   http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+ if [ "$code" = 401 ]; then restart_ready=yes; break; fi
+ restart_attempt=$((restart_attempt+1))
+ sleep 1
+done
+if [ "$restart_ready" != yes ]; then
+ echo S25_RESTART_HTTP_AUTH_BOUNDARY_UNREADY=BLOCKED >&2
+ exit 89
+fi
+echo S25_RESTART_AUTHENTIC_HTTP_READY=PASS
 "$work/staging/s25-lab-agent" post-restart
 python3 scripts/s25_independent_verifier.py agents
 echo S25_ONE_USE_CONTROLLER_RESTART_NATIVE_SQLITE_RECONCILED=PASS
