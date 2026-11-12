@@ -683,3 +683,33 @@ Preserve two prior FAIL attempts: [#43255943147](https://github.com/vanishs/boxw
 **2026-11-12 UTC / HOST_GO Round 2 owner-invoked + resumed after tool stop — BLOCKED on actual intended Agent; selected true original-fault I+N+V PASS.** Tested exact source `ec40d20f49af8603c5438da84346f5d30d575174`, Draft PR #133. [Round 2 detailed audit](../verification/HOST_GO_ROUND2_2026-11-12.md). Pre-existing new Round-2 test commits `7b7fc689` (SIGKILL and offline rollback) and `ec40d20` (durable malformed Exec witness) both completed **5/5 exact-source CI**: native S2 full lost ACK/SQLite fsync-cut/isolated ENOSPC/revoke [#43269999281](https://github.com/vanishs/boxweave/actions/runs/43269999281); installed nested L0→L1→L2 SDK A/B+Verifier with real service SIGKILL, exact original UUID, true offline Canary fallback, ledger and native cleanup [#43269999551](https://github.com/vanishs/boxweave/actions/runs/43269999551); source/race and quality 3/3 success. Opened original nested artifact `13968487159`, digest `2b5baa96c8823ad29b269456dec6224564cc1755df5ea85e238a19dcca8f0e6a`, extracted actual original MCP Operation IDs, L0 `0324295cb7df8f2ce7f71a1560edceed` → native `430ebcaa-8055-408f-a136-f3894dffcf8c`, L1 child `e089c07b3b761cfca0554a44510a99e2` → native `a9020dcd-8130-4057-9df2-8521046af665`, original receipts survived root-local rollback. Binary SHA `bdfd8646ec500a6d13ad7784e4365ad639db6dfce8a0317aa4dc8ebd19167e51`.
 
 **Additional bounded isolated Box (Round 2, never physical):** `boxweave-test-ser2` project `user-1004` empty after read-only check; previously created `hgr2-fault-l1` original UUID `0903b47d-5adf-4a5d-aa77-7fa117c0bb1f` found absent, never repeated. Fresh unique `hgr2-r2b-l1` created with direct Incus ACK and original UUID `f626044f-996b-45ab-8666-e676811de7ff`; signed inner Incus 7.6 installed under only this unprivileged L1, separate restricted service actor, Project and reviewed ACL. First APT step reported transient dpkg lock while independent readback showed package correctly installed; no blind re-install. Guest `/tmp` was remounted and a pre-boot binary vanished; a `/root` candidate correctly failed restricted-service readability; repaired only the test-fixture path to persistent actor-readable `/usr/local/share`. **Exact same source**, Box-first build-label binary SHA `1d1ba0f2d8c14d567d93073ddd6fa57fb1de323b911fb886413ec2bd23bea804` (not bit-equal to CI), native 8/8 and Doctor READY. True `boxweave.service` MainPID `4061` killed with SIGKILL only inside owned L1; new MainPID `4114`, auth 401, no unexpected Incus instance. No-backup rollback and wrong-SHA upgrade both fail closed. Actual Canary SHA `1c5aac03e6322ade6de0505ea4dbcf14e8ac170bc4957748e699272fe244366a` installed with backup, MCP stopped, root-local rollback recovered exact original digest and loopback auth. Same original UUID verified before STOP/DELETE and native inventory absent afterward; demo foreign Box unchanged. Zero new destructive disk quota stress; root free bytes/inodes/CPU/memory/I/O PSI read. **Six gateway UNKNOWN original IDs read-only unchanged**, no repeat/adoption. No shared Incus or physical host changed. Real intended development Agent `TC-013` remains **BLOCKED**: the only connected ChatGPT BoxWeave integration is the legacy gateway; no authorized actual v1 client/credential-preserving transport was connected. Official SDK test Agent cannot substitute for actual Agent. Round-1 full P0 remains BLOCKED and Round-3 NOT_STARTED; no merge/release. New docs commit must be independently checked for same-head Actions; docs-only SHA differs from installed binary commit SHA.
+
+### 2026-11-12 — isolated v1 UNKNOWN Create repair, outside HOST_GO stage invocation
+
+Owner requested iterative modify/test/fix with per-iteration reports. Separate
+topic branch `fix/v1-unknown-create-reconciliation-20261112` from Draft PR
+#133; no merge, host deployment or replay. Found unregistered Create recovery
+gap in `state.RecoveryInspect` (requires `owned_boxes` join) and overly broad
+`POSTCONDITION_UNVERIFIED` worker mapping. Added exact immutable Create
+marker in Incus native `user.boxweave.create_operation`, typed terminal
+failure, registered STOPPED native ownership, owned-name protection, bounded
+read-only postread, and root-reviewed non-MCP create-inspect/challenge/bind
+without automatically changing UNKNOWN or releasing any claims. Added
+crash/restart, audit-atomicity, replay and security negatives.
+
+Exact Box-first fails on `f1b3eec` (original `bdc783ea07e589f45cbbf82c14a4cc9f`,
+native `464546a2-28fd-4d1a-8507-c5219df3b88d`, STOPPED
+`fe24e24c-8dfa-46f5-bf40-bca4fc11e57f`) and `bc9cc63`
+(original `c59501b9b5d9a21dbbc68898f3821f7f`,
+native `9a9c986a-bed9-45aa-9eff-5ebc5b9fd99e`, STOPPED
+`89f6b076-6b4a-4b5a-adfb-d5ed7c557655`) both remained
+`POSTCONDITION_UNVERIFIED` despite original native identity marker.
+Actual nonroot native readback proved marker, UUID, private NIC and STOPPED
+after initial operation; original Incus status had expired. Later bounded
+readback version `ca6b3b1` passed `make verify` / race tests but a third
+real Box service creation was explicitly denied by tool safety and NOT
+dispatched. Read-only verified no new target service/SQLite/fixture.
+Historical UNKNOWN receipts and all previous Boxes remain unchanged.
+Do not call current fix native-accepted. Separate detailed
+`docs/verification/UNKNOWN_CREATE_REPAIR_2026-11-12.md` includes native
+UUIDs, code/binary SHA-256, failure evidence and remaining authorization.

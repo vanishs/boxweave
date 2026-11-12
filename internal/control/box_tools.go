@@ -258,11 +258,19 @@ func nativeDone(ctx context.Context, r native.Reader, nativeID string) error {
 // a bounded read window. A stable stopped guest is returned as a residual
 // only after giving the requested startup a chance to settle.
 func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet bool) (native.BoxState, error) {
-	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	return settleOriginalCreate(ctx, 6*time.Second, func(readCtx context.Context) (native.BoxState, error) {
+		return s.Native.ObserveCreatedByOperation(readCtx, name, originalID)
+	}, start, internet)
+}
+
+// The injected read-only observation makes the settle rules testable without
+// inventing native operation replies or issuing additional mutations.
+func settleOriginalCreate(ctx context.Context, budget time.Duration, observe func(context.Context) (native.BoxState, error), start, internet bool) (native.BoxState, error) {
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	var stopped native.BoxState
 	for {
-		observed, err := s.Native.ObserveCreatedByOperation(ctx, name, originalID)
+		observed, err := observe(ctx)
 		if errors.Is(err, native.ErrNotOwned) || errors.Is(err, native.ErrUnsafeNetwork) {
 			return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED"}
 		}
@@ -285,7 +293,7 @@ func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, origin
 			if stopped.UUID != "" {
 				// Re-read the exact UUID after settling to reject name reuse.
 				finalCtx, finalCancel := context.WithTimeout(context.Background(), 2*time.Second)
-				final, err := s.Native.ObserveCreatedByOperation(finalCtx, name, originalID)
+				final, err := observe(finalCtx)
 				finalCancel()
 				if err == nil && final.UUID == stopped.UUID && final.NativeState == "Stopped" &&
 					final.Internet == internet {

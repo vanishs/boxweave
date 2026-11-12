@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 )
@@ -115,5 +116,126 @@ func TestUnknownCreateMalformedIntentFailsClosed(t *testing.T) {
 	}
 	if _, err = store.CreateRecoveryInspect(ctx, r.ID); !errors.Is(err, ErrState) {
 		t.Fatalf("mismatched original native name accepted: %v", err)
+	}
+}
+
+// This is the dangerous cut: Incus Create may have dispatched, but the
+// controller dies before its native Operation ID can be stored. No original
+// native effect is ever run again after SQLite Recover.
+func TestUnknownCreatePostCrashNoNativeAckStillReviewable(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := dir + "/original.sqlite"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, err := store.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := Admission{
+		Layer: "restricted-project", ActorID: token.ID, TokenID: token.ID,
+		Key: "real-crash-before-native-ack-create-1", RequestID: "original-only",
+		Action: "box_create", ResourceKey: "box:lost-ack-box",
+		SafeIntent: []byte(`{"name":"lost-ack-box","start":true}`),
+	}
+	r, err := store.Admit(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Claim(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	count, err := reopened.Recover(ctx)
+	if err != nil || count != 1 {
+		t.Fatalf("lost native ACK did not recover: %d / %v", count, err)
+	}
+	snap, err := reopened.CreateRecoveryInspect(ctx, r.ID)
+	if err != nil || snap.NativeOperationID != "" || snap.Name != "lost-ack-box" {
+		t.Fatalf("crash erased original recovery identity: %+v / %v", snap, err)
+	}
+	ch, err := reopened.IssueCreateBindingChallenge(ctx, snap, "reviewer-1", "native-exact-marker-etag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = reopened.BindUnknownCreatedBox(ctx, snap, "reviewer-1", ch, "original-native-uuid",
+		"native-exact-marker-etag", "reviewed immutable native marker and UUID", true); err != nil {
+		t.Fatal(err)
+	}
+	again, err := reopened.Replay(ctx, input)
+	if err != nil || !again.Duplicate || again.State != "UNKNOWN" || again.NativeOperationID != "" ||
+		again.BoxUUID != "original-native-uuid" {
+		t.Fatalf("fabricated original native receipt after crash: %+v / %v", again, err)
+	}
+	input.Key = "new-key-must-not-bypass-original"
+	if _, err = reopened.Admit(ctx, input); !errors.Is(err, ErrResourceLocked) {
+		t.Fatalf("lost ACK original could be replayed: %v", err)
+	}
+}
+
+func TestUnknownCreateBindingAuditFailureIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	_, token, err := store.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := Admission{
+		Layer: "isolated-project", ActorID: token.ID, TokenID: token.ID,
+		Key: "audit-failure-original-create-001", RequestID: "once",
+		Action: "box_create", ResourceKey: "box:audit-box",
+		SafeIntent: []byte(`{"name":"audit-box"}`),
+	}
+	r, err := store.Admit(ctx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Claim(ctx, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Unknown(ctx, r.ID, "DISPATCHING", "LOST_NATIVE_ACK"); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := store.CreateRecoveryInspect(ctx, r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := store.IssueCreateBindingChallenge(ctx, snap, "operator-a", "native-etag-uuid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.db.Exec(`CREATE TEMP TRIGGER refuse_binding_audit
+        BEFORE INSERT ON recovery_audit WHEN NEW.decision='CREATE_BOUND'
+        BEGIN SELECT RAISE(ABORT, 'injected bind audit failure'); END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = store.BindUnknownCreatedBox(ctx, snap, "operator-a", challenge, "exact-native-uuid",
+		"native-etag-uuid", "independent current native observations", true)
+	if err == nil {
+		t.Fatal("audit failure silently committed a native ownership claim")
+	}
+	if _, err = store.OwnedBox(ctx, "isolated-project", "exact-native-uuid"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("half-committed ownership claim: %v", err)
+	}
+	unchanged, err := store.Replay(ctx, input)
+	if err != nil || unchanged.BoxUUID != "" || unchanged.State != "UNKNOWN" {
+		t.Fatalf("audit failure changed original UNKNOWN: %+v / %v", unchanged, err)
+	}
+	input.Key = "audit-failure-blocked-new-key-002"
+	if _, err = store.Admit(ctx, input); !errors.Is(err, ErrResourceLocked) {
+		t.Fatalf("lost audit allowed duplicate native Create: %v", err)
 	}
 }
