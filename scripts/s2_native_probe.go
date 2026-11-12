@@ -1004,9 +1004,38 @@ func main() {
 			"public WAN did not recover after internet=true")
 		fmt.Println("S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS")
 	}
+	// Incus 7.6 supports guest-originated Ready via /dev/incus, which is
+	// separate from native Running and does not need a VM-only incus-agent.
+	// This is a real command inside the *owned guest* through durable MCP Exec.
+	// Never spoof volatile.last_state.ready from the host or infer Ready from
+	// a successful unrelated host-side GET.
+	markReady := "test -S /dev/incus/sock && curl -f -sS --noproxy '*' " +
+		"--unix-socket /dev/incus/sock -X PATCH -H 'Content-Type: application/json' " +
+		"-d '{\"state\":\"Ready\"}' http://incus/1.0"
+	_, readyExit := guestRead(ctx, admin, peerUUID,
+		"native-s2-guest-ready-explicit-guest-socket-01", markReady)
+	check(readyExit == 0, "actual guest Incus /dev/incus Ready PATCH failed")
+	peerBox = child(call(ctx, admin, "box_get", map[string]any{"box_id": peerUUID}), "box")
+	check(peerBox["guest_ready"] == true && field(peerBox, "native_state") == "Running",
+		"real guest-declared Incus Ready did not produce public positive guest_ready=true")
+	fmt.Println("S2_P1_NATIVE_GUEST_ORIGIN_READY_TRUE_ACTUAL_SOCKET_AND_MCP=PASS")
+
 	peerStop := call(ctx, admin, "box_stop", map[string]any{
 		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-stop-01"})
 	wait(ctx, admin, id(peerStop))
+	peerBox = child(call(ctx, admin, "box_get", map[string]any{"box_id": peerUUID}), "box")
+	check(peerBox["guest_ready"] == false && field(peerBox, "native_state") == "Stopped",
+		"stopped guest retained stale positive Ready")
+	peerRestart := call(ctx, admin, "box_start", map[string]any{
+		"box_id": peerUUID, "idempotency_key": "native-s2-peer-guest-ready-reset-start-01"})
+	wait(ctx, admin, id(peerRestart))
+	peerBox = child(call(ctx, admin, "box_get", map[string]any{"box_id": peerUUID}), "box")
+	check(peerBox["guest_ready"] == nil && field(peerBox, "native_state") == "Running",
+		"restarted native Running Box inherited stale guest Ready without a fresh guest mark")
+	peerStopAgain := call(ctx, admin, "box_stop", map[string]any{
+		"box_id": peerUUID, "idempotency_key": "native-s2-peer-guest-ready-reset-stop-01"})
+	wait(ctx, admin, id(peerStopAgain))
+	fmt.Println("S2_P1_NATIVE_GUEST_READY_RESTART_CLEARS_STALE_TRUE=PASS")
 	peerDelete := call(ctx, admin, "box_delete", map[string]any{
 		"box_id": peerUUID, "idempotency_key": "native-s2-peer-clean-delete-01"})
 	wait(ctx, admin, id(peerDelete))
