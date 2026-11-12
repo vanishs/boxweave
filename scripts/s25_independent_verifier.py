@@ -170,6 +170,140 @@ def inspect_l2():
     print("S25_V_L1_MCP_L2_UPDATE_STOP_START_SAME_NATIVE_UUID=PASS")
     print("S25_V_L1_MCP_CREATED_L2_NATIVE_UUID_SQLITE_BINARY=PASS")
 
+
+def inspect_simwan6(inner_layer=False, cleaned=False):
+    """Read-only V-tier I/N crosswalk for real routed HTTPS, not mock/public WAN.
+
+    The simulator runs in a different Linux network namespace from the owned
+    Incus bridge, and this verifier never has the Agent's MCP tokens.
+    """
+    if inner_layer:
+        data = as_json(inner("cat", "/root/s25-inner-checkpoint.json"))
+        project = inner("sh", "-c", "printf user-; id -u boxweave")
+        name = "bw-s25-mcp-l2"
+        instances = as_json(inner("incus", "list", "--project", project, "--format", "json"))
+        cert_path = "/root/s25simwan6/simwan6.crt"
+        log = inner("cat", "/root/s25simwan6/server.log")
+        namespace = inner("ip", "netns", "list")
+    else:
+        data = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+        project = os.environ["BW_S25_PROJECT"]
+        name = "bw-s25-mcp-l1"
+        instances = as_json(native("list", "--project", project, "--format", "json"))
+        cert_path = os.environ["BW_S25_SIMWAN6_CERT_FILE"]
+        log = Path(os.environ["BW_S25_SIMWAN6_WORKDIR"], "server.log").read_text()
+        namespace = native("ip", "netns", "list") if False else cli("sudo", "ip", "netns", "list")
+    require("s25simwan6" in namespace, "separate routed upstream namespace absent")
+    require("SIM_WAN6_REMOTE=" in log, "upstream HTTPS accepted no packets")
+    require(data.get("wan6_peer_uuid") and data.get("wan6_peer_create_op"),
+            "original SDK-created WAN sibling missing")
+    require(data.get("uuid") and data.get("name") == name, "original primary Box missing")
+    by_name = {x["name"]: x for x in instances}
+    peer_name = "bw-s25-wan6-peer"
+    if cleaned:
+        if inner_layer:
+            require(name not in by_name, "nested original L2 still exists after cleanup")
+        else:
+            require(name in by_name, "outer L1 missing before original cleanup")
+            require(by_name[name].get("config", {}).get("volatile.uuid") == data["uuid"],
+                    "outer L1 changed UUID during simulated-WAN peer cleanup")
+        require(peer_name not in by_name,
+                "MCP-original WAN peer still exists after cleanup")
+        for field in ("wan6_peer_stop_op", "wan6_peer_delete_op"):
+            require(data.get(field), "missing cleanup original operation "+field)
+            if inner_layer:
+                sql_op = ("import sqlite3,sys;"
+                          "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+                          "v=c.execute('SELECT state,box_uuid FROM operations WHERE id=?',(sys.argv[1],)).fetchone();"
+                          "assert v==('SUCCEEDED',sys.argv[2]),v")
+                inner("python3", "-c", sql_op, data[field], data["wan6_peer_uuid"])
+            else:
+                read_ledger(os.environ["BW_S25_OUTER_DB"], data[field],
+                            data["wan6_peer_uuid"], "agent-s25-simwan6")
+        print("S25_V_SIMWAN6_"+("INNER" if inner_layer else "OUTER")+
+              "_ORIGINAL_MCP_PEER_DELETED=PASS")
+        return
+    require(name in by_name, "main Box missing from independent native readback")
+    main = by_name[name]
+    require(main.get("config", {}).get("volatile.uuid") == data["uuid"],
+            "original SDK primary native UUID mismatch")
+    require(peer_name in by_name, "second SDK-created sibling absent")
+    peer = by_name[peer_name]
+    require(peer.get("status") in ("Running", "Ready"), "sibling not Running")
+    require(peer.get("config", {}).get("volatile.uuid") == data["wan6_peer_uuid"],
+            "original WAN sibling native UUID differs")
+    require(main.get("status") in ("Running", "Ready"), "primary not Running")
+    for inst, enabled in ((main, True), (peer, False)):
+        nic = inst.get("expanded_devices", {}).get("eth0", {})
+        require(nic.get("security.acls") and
+                nic.get("security.acls.default.ingress.action") == "reject" and
+                nic.get("security.ipv4_filtering") == "true" and
+                nic.get("security.ipv6_filtering") == "true" and
+                nic.get("security.mac_filtering") == "true",
+                "missing actual per-NIC native IPv4/IPv6/MAC safety boundary")
+        if enabled:
+            require(nic.get("security.acls.default.egress.action") == "allow",
+                    "MCP Internet=on lacked native permission")
+        else:
+            require(nic.get("security.acls.default.egress.action") != "allow",
+                    "MCP Internet=off still permits native egress")
+    cases = [
+        ("wan6_peer_create_op", data["wan6_peer_uuid"]),
+        ("wan6_main_off_op", data["uuid"]),
+        ("wan6_main_on_op", data["uuid"]),
+        ("wan6_peer_on_op", data["wan6_peer_uuid"]),
+        ("wan6_peer_off_op", data["wan6_peer_uuid"]),
+    ]
+    for prefix, uuid in (("main_initial_on", data["uuid"]),
+                         ("main_off", data["uuid"]), ("main_on", data["uuid"]),
+                         ("main_final_on", data["uuid"]),
+                         ("peer_initial_off", data["wan6_peer_uuid"]),
+                         ("peer_on", data["wan6_peer_uuid"]),
+                         ("peer_off", data["wan6_peer_uuid"])):
+        cases.append(("wan6_"+prefix+"_probe_op",uuid))
+    for field, uuid in cases:
+        require(data.get(field), "missing original SDK operation "+field)
+        if inner_layer:
+            sql_op = ("import sqlite3,sys;"
+                      "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+                      "v=c.execute('SELECT state,box_uuid,agent_ref FROM operations WHERE id=?',(sys.argv[1],)).fetchone();"
+                      "assert v==('SUCCEEDED',sys.argv[2],'agent-s25-simwan6'),v")
+            inner("python3", "-c", sql_op, data[field], uuid)
+        else:
+            read_ledger(os.environ["BW_S25_OUTER_DB"], data[field],
+                        uuid, "agent-s25-simwan6")
+    url = "https://[2001:db8:25:2026::2]:18479/witness"
+    def call_guest(guest):
+        args = ["incus", "exec", guest, "--project", project, "--", "curl",
+                "-g", "-6", "--noproxy", "*",
+                "--cacert", "/tmp/s25wan6-ca.crt", "--connect-timeout", "3",
+                "--max-time", "8", "-fsS", url]
+        if inner_layer:
+            args = ["sudo","incus","exec", "bw-s25-mcp-l1","--project",
+                    os.environ["BW_S25_PROJECT"],"--"] + args
+        else:
+            args = ["sudo"] + args
+        return subprocess.run(args, text=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, timeout=22, check=False)
+    pos = call_guest(name)
+    require(pos.returncode == 0 and pos.stdout.strip() ==
+            "S25_SIMULATED_IPV6_WAN_HTTPS_OK",
+            "independent actual guest TLS/witness positive failed: "+pos.stderr[:240])
+    neg = call_guest(peer_name)
+    require(neg.returncode != 0 and
+            "S25_SIMULATED_IPV6_WAN_HTTPS_OK" not in neg.stdout,
+            "unpermitted peer accessed external routed IPv6 WAN")
+    # Positive TLS must terminate in the upstream namespace, not on the
+    # private guest bridge/gateway. Original agent never reads native state.
+    if inner_layer:
+        require("2001:db8:25:2026::2" in inner("ip","-n","s25simwan6","-6","addr","show"),
+                "inner HTTPS responder not in its own routed namespace")
+    else:
+        require("2001:db8:25:2026::2" in cli("sudo","ip","-n","s25simwan6","-6","addr","show"),
+                "outer HTTPS responder not in separately routed namespace")
+    print("S25_V_SIMWAN6_"+("INNER" if inner_layer else "OUTER")+
+          "_SDK_ORIGINALS_NATIVE_NIC_ROUTED_TLS_PEER_DENIAL=PASS")
+
 def inspect_agents():
     inspect_l1()
     m=as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
@@ -255,6 +389,14 @@ if __name__ == "__main__":
         inspect_l1()
     elif sys.argv[1] == "l2":
         inspect_l2()
+    elif sys.argv[1] == "wan6outer":
+        inspect_simwan6(False)
+    elif sys.argv[1] == "wan6outerclean":
+        inspect_simwan6(False, cleaned=True)
+    elif sys.argv[1] == "wan6inner":
+        inspect_simwan6(True)
+    elif sys.argv[1] == "wan6innerclean":
+        inspect_simwan6(True, cleaned=True)
     elif sys.argv[1] == "agents":
         inspect_agents()
     elif sys.argv[1] == "git":

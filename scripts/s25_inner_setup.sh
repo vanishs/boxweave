@@ -4,7 +4,7 @@
 set -eu
 export DEBIAN_FRONTEND=noninteractive
 umask 077
-stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"
+stage="$1"; binary_sha="$2"; agent_sha="$3"; package_proxy="$4"; simwan_sha="$5"
 test "$(id -u)" = 0
 test ! -e /var/lib/incus
 test ! -e /var/lib/boxweave
@@ -18,6 +18,9 @@ curl -fsSL --retry 2 --max-time 90 "$stage/s25-lab-agent" -o /tmp/s25-agent
 echo "$agent_sha  /tmp/s25-agent" | sha256sum -c -
 install -m 0755 /tmp/s25-v1 /usr/local/bin/boxweave-s25-candidate
 install -m 0755 /tmp/s25-agent /usr/local/bin/s25-lab-agent
+curl -fsSL --retry 2 --max-time 60 "$stage/s25_simwan6.py" -o /tmp/s25_simwan6.py
+echo "$simwan_sha  /tmp/s25_simwan6.py" | sha256sum -c -
+install -m 0755 /tmp/s25_simwan6.py /root/s25_simwan6.py
 echo S25_INNER_EXACT_BINARY_TRANSFER=PASS
 
 # Direct public WAN is a distinct test; a LAB-only relay cannot turn its
@@ -58,7 +61,7 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
 fi
 echo S25_INNER_HTTPS_ONLY_APT_SOURCES=PASS
 apt-get update -qq
-apt-get install -y --no-install-recommends ca-certificates curl gpg git >/dev/null
+apt-get install -y --no-install-recommends ca-certificates curl gpg git openssl iproute2 python3 >/dev/null
 curl -fsSL --retry 2 --max-time 40 https://pkgs.zabbly.com/key.asc -o /tmp/s25-zabbly.asc
 fingerprint="$(gpg --show-keys --with-colons /tmp/s25-zabbly.asc | awk -F: '$1=="fpr"{print $10;exit}')"
 test "$fingerprint" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
@@ -160,6 +163,13 @@ curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
  -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' | grep -qx 401
 echo S25_INNER_EXACT_V1_SERVICE_LOOPBACK=PASS
 
+# A separate routed IPv6 HTTPS upstream within this isolated unprivileged L1.
+# Do not use the L0 bridge gateway as a simulated Internet endpoint.
+BW_S25_SIMWAN_LAB=1 python3 /root/s25_simwan6.py start --bridge "$net" --workdir /root/s25simwan6
+export BW_S25_SIMWAN6_CERT_FILE=/root/s25simwan6/simwan6.crt
+export BW_S25_SIMWAN6_URL='https://[2001:db8:25:2026::2]:18479/witness'
+echo S25_INNER_SIMWAN6_TLS_NAMESPACE_READY=PASS
+
 export BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_ADMIN1_FILE=/root/s25-admin1.secret
@@ -169,4 +179,5 @@ export BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json
 /usr/local/bin/s25-lab-agent admit
 /usr/local/bin/s25-lab-agent recover
 /usr/local/bin/s25-lab-agent nested-exec
+/usr/local/bin/s25-lab-agent wan6
 echo S25_INNER_READY=PASS

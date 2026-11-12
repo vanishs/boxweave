@@ -314,12 +314,16 @@ func bootstrap(ctx context.Context) {
 		"printf '%s  %s\\n' '" + sha + "' /tmp/s25_inner_setup.sh | sha256sum -c -; " +
 		"sh /tmp/s25_inner_setup.sh '" + stage + "' '" + environmental("BW_S25_BINARY_SHA256") +
 		"' '" + environmental("BW_S25_AGENT_SHA256") + "' '" +
-		environmental("BW_S25_PACKAGE_PROXY_URL") + "'"
+		environmental("BW_S25_PACKAGE_PROXY_URL") + "' '" +
+		environmental("BW_S25_SIMWAN6_HELPER_SHA") + "'"
 	s := connectActor(ctx, "a")
 	defer s.Close()
 	final, out, exit := execGuest(ctx, s, m["uuid"], "s25-outer-l1-guest-bootstrap-once", cmd, "agent-outer-alpha", 900000)
 	must(exit == 0, "L1 guest-side Incus/v1 bootstrap failed (review original Exec output, do not duplicate)")
 	must(strings.Contains(out, "S25_INNER_READY=PASS"), "L1 installer success sentinel missing")
+	must(strings.Contains(out, "S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS"),
+		"nested independent routed IPv6 HTTPS SDK proof missing")
+	fmt.Println("S25_SIMWAN6_INNER_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS")
 	m = readCheckpoint()
 	m["bootstrap_op"] = str(final, "operation_id")
 	saveCheckpoint(m)
@@ -562,6 +566,7 @@ func cleanInnerViaParent(ctx context.Context) {
 		"BW_S25_ADMIN2_FILE=/root/s25-admin2.secret " +
 		"BW_S25_VIEWER_FILE=/root/s25-viewer.secret " +
 		"BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json " +
+		"/usr/local/bin/s25-lab-agent wan6-clean && " +
 		"/usr/local/bin/s25-lab-agent cleanup"
 	s := connectActor(ctx, "a")
 	defer s.Close()
@@ -659,6 +664,10 @@ func main() {
 		rotatedViewer(ctx)
 	case "nested-exec":
 		nestedExec(ctx)
+	case "wan6":
+		simulatedWan6(ctx)
+	case "wan6-clean":
+		simulatedWan6Clean(ctx)
 	case "cleanup":
 		cleanup(ctx)
 	case "inner-clean":
@@ -668,4 +677,112 @@ func main() {
 	default:
 		panic(errors.New("unknown LAB mode"))
 	}
+}
+
+// simulatedWan6 demonstrates real, separately routed IPv6 HTTPS from the
+// official authenticated SDK against a distinct network-namespace upstream.
+// Never claim public-Internet IPv6 from this documentation-prefix fixture.
+func simulatedWan6(ctx context.Context) {
+	m := readCheckpoint()
+	must(m["uuid"] != "", "original Box not checkpointed")
+	actor := connectActor(ctx, "a")
+	defer actor.Close()
+	pem, err := os.ReadFile(environmental("BW_S25_SIMWAN6_CERT_FILE"))
+	if err != nil {
+		panic(err)
+	}
+	cert := base64.StdEncoding.EncodeToString(pem)
+	dest := environmental("BW_S25_SIMWAN6_URL")
+	must(dest == "https://[2001:db8:25:2026::2]:18479/witness",
+		"unapproved simulated IPv6 WAN endpoint")
+	prefix, layer := "s25-wan6-outer-", "OUTER"
+	if isInner() {
+		prefix, layer = "s25-wan6-inner-", "INNER"
+	}
+	peer := request(ctx, actor, "box_create", map[string]any{
+		"name": "bw-s25-wan6-peer", "cpu": 1, "memory_mib": 512,
+		"disk_gib": 2, "start": true, "nesting": false, "internet": false,
+		"idempotency_key": prefix + "peer-create", "work_ref": "lab/s25/simwan6",
+		"agent_ref": "agent-s25-simwan6",
+	})
+	m["wan6_peer_create_op"] = opid(peer)
+	saveCheckpoint(m)
+	created := wait(ctx, actor, m["wan6_peer_create_op"])
+	m["wan6_peer_uuid"] = str(created, "box_uuid")
+	must(len(m["wan6_peer_uuid"]) >= 32 && m["wan6_peer_uuid"] != m["uuid"],
+		"simulated WAN peer did not have a distinct owned UUID")
+	saveCheckpoint(m)
+	probe := func(uuid, name string, shouldPass bool) {
+		// The only transferred file is this one-use PUBLIC CA certificate.
+		// /tmp is a fresh Guest tmpfs; write it via real authorized box_exec.
+		script := "set -eu; printf '%s' '" + cert +
+			"' | base64 -d >/tmp/s25wan6-ca.crt; " +
+			"for i in $(seq 1 20); do " +
+			"ip -6 route get 2001:db8:25:2026::2 >/dev/null 2>&1 && break; sleep 1; done; " +
+			"curl -g -6 --noproxy '*' --cacert /tmp/s25wan6-ca.crt " +
+			"--connect-timeout 4 --max-time 9 -fsS '" + dest + "'"
+		final, output, exit := execGuest(ctx, actor, uuid,
+			prefix+name+"-https", script, "agent-s25-simwan6", 48000)
+		m["wan6_"+name+"_probe_op"] = opid(final)
+		saveCheckpoint(m)
+		if shouldPass {
+			must(exit == 0 && strings.TrimSpace(output) ==
+				"S25_SIMULATED_IPV6_WAN_HTTPS_OK",
+				"allowed routed IPv6 TLS HTTPS failed "+name)
+		} else {
+			must(exit != 0 && !strings.Contains(output,
+				"S25_SIMULATED_IPV6_WAN_HTTPS_OK"),
+				"unauthorized IPv6 upstream packet succeeded "+name)
+		}
+	}
+	update := func(uuid, key, field string, enable bool) {
+		r := request(ctx, actor, "box_update", map[string]any{
+			"box_id": uuid, "internet": enable,
+			"idempotency_key": prefix + key, "work_ref": "lab/s25/simwan6",
+			"agent_ref": "agent-s25-simwan6",
+		})
+		m["wan6_"+field+"_op"] = opid(r)
+		saveCheckpoint(m)
+		_ = wait(ctx, actor, m["wan6_"+field+"_op"])
+	}
+	// Both layers' first owned Box started internet=true via MCP.
+	probe(m["uuid"], "main_initial_on", true)
+	probe(m["wan6_peer_uuid"], "peer_initial_off", false)
+	update(m["uuid"], "main-off", "main_off", false)
+	probe(m["uuid"], "main_off", false)
+	update(m["uuid"], "main-on", "main_on", true)
+	probe(m["uuid"], "main_on", true)
+	update(m["wan6_peer_uuid"], "peer-on", "peer_on", true)
+	probe(m["wan6_peer_uuid"], "peer_on", true)
+	update(m["wan6_peer_uuid"], "peer-off", "peer_off", false)
+	probe(m["wan6_peer_uuid"], "peer_off", false)
+	probe(m["uuid"], "main_final_on", true)
+	fmt.Printf("S25_SIMWAN6_%s_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS\n", layer)
+}
+
+func simulatedWan6Clean(ctx context.Context) {
+	m := readCheckpoint()
+	must(m["wan6_peer_uuid"] != "" && m["wan6_peer_create_op"] != "",
+		"original WAN peer absent; never adopt an unknown Box")
+	actor := connectActor(ctx, "b")
+	defer actor.Close()
+	prefix, layer := "s25-wan6-outer-", "OUTER"
+	if isInner() {
+		prefix, layer = "s25-wan6-inner-", "INNER"
+	}
+	stop := request(ctx, actor, "box_stop", map[string]any{
+		"box_id": m["wan6_peer_uuid"], "idempotency_key": prefix + "peer-stop",
+		"work_ref": "lab/s25/simwan6", "agent_ref": "agent-s25-simwan6",
+	})
+	m["wan6_peer_stop_op"] = opid(stop)
+	saveCheckpoint(m)
+	_ = wait(ctx, actor, m["wan6_peer_stop_op"])
+	del := request(ctx, actor, "box_delete", map[string]any{
+		"box_id": m["wan6_peer_uuid"], "idempotency_key": prefix + "peer-delete",
+		"work_ref": "lab/s25/simwan6", "agent_ref": "agent-s25-simwan6",
+	})
+	m["wan6_peer_delete_op"] = opid(del)
+	saveCheckpoint(m)
+	_ = wait(ctx, actor, m["wan6_peer_delete_op"])
+	fmt.Printf("S25_SIMWAN6_%s_MCP_PEER_ORIGINAL_CLEANUP=PASS\n", layer)
 }

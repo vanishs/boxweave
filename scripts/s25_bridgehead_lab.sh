@@ -62,12 +62,16 @@ sudo incus network show "$net" >/dev/null
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/staging/s25-lab-agent" ./scripts/s25_lab_agent.go
 cp scripts/s25_inner_setup.sh "$work/staging/s25_inner_setup.sh"
+cp scripts/s25_simwan6.py "$work/staging/s25_simwan6.py"
 chmod 0755 "$work/staging/boxweave" "$work/staging/s25-lab-agent"
 binary_sha="$(sha256sum "$work/staging/boxweave" | awk '{print $1}')"
 agent_sha="$(sha256sum "$work/staging/s25-lab-agent" | awk '{print $1}')"
 setup_sha="$(sha256sum "$work/staging/s25_inner_setup.sh" | awk '{print $1}')"
+simwan_sha="$(sha256sum "$work/staging/s25_simwan6.py" | awk '{print $1}')"
 sudo install -m 0755 "$work/staging/boxweave" /usr/local/bin/boxweave-s25-candidate
+
 printf 'source_commit=%s\ncandidate_binary_sha256=%s\nagent_binary_sha256=%s\ninner_setup_sha256=%s\nincus_apt=%s\n' "$(git rev-parse HEAD)" "$binary_sha" "$agent_sha" "$setup_sha" "$pkg" > "$proof/identity.txt"
+printf 'simwan6_helper_sha256=%s\n' "$simwan_sha" >> "$proof/identity.txt"
 
 sudo /usr/local/bin/boxweave-s25-candidate native-prepare-plan -project "$project" -pool default -network "$net" -acl "$acl" > "$work/private/plan.json"
 sha="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/private/plan.json")"
@@ -124,7 +128,7 @@ stage_pid=$!
 # LAB-only bridge relay allows only explicitly listed public HTTPS hosts.
 python3 scripts/s25_package_proxy.py "$gateway" "$proxy_port" > "$work/private/proxy.log" 2>&1 &
 proxy_pid=$!
-trap 'if [ -f "$work/private/outer-checkpoint.json" ]; then cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json" || :; fi; kill "$stage_pid" "$proxy_pid" 2>/dev/null || :; wait "$stage_pid" "$proxy_pid" 2>/dev/null || :' EXIT
+trap 'if [ -f "$work/private/outer-checkpoint.json" ]; then cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json" || :; fi; if [ -e "$work/private/simwan6/simwan6.json" ]; then sudo env BW_S25_SIMWAN_LAB=1 python3 scripts/s25_simwan6.py stop --workdir "$work/private/simwan6" || :; fi; kill "$stage_pid" "$proxy_pid" 2>/dev/null || :; wait "$stage_pid" "$proxy_pid" 2>/dev/null || :' EXIT
 i=0
 while [ "$i" -lt 30 ]; do
  if curl -fsSI --connect-timeout 1 --max-time 2 "http://$gateway:$port/boxweave" >/dev/null 2>&1;then break;fi
@@ -143,6 +147,12 @@ if curl -fsS -I --proxy "http://$gateway:$proxy_port" --noproxy ''   --max-time 
 fi
 echo S25_LAB_SCOPED_PACKAGE_PROXY_HTTPS_AND_DENIAL=PASS
 
+sudo env BW_S25_SIMWAN_LAB=1 python3 scripts/s25_simwan6.py start --bridge "$net" --workdir "$work/private/simwan6"
+sudo cp "$work/private/simwan6/simwan6.crt" "$work/staging/s25_simwan6.crt"
+sudo chown "$(id -u):$(id -g)" "$work/staging/s25_simwan6.crt"
+chmod 0644 "$work/staging/s25_simwan6.crt"
+echo S25_L0_SIMWAN6_TLS_NAMESPACE_READY=PASS
+
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_PROJECT="$project"
 export BW_S25_OUTER_DB=/var/lib/boxweave/ledger.sqlite
@@ -155,9 +165,17 @@ export BW_S25_PACKAGE_PROXY_URL="http://$gateway:$proxy_port"
 export BW_S25_SETUP_SHA256="$setup_sha"
 export BW_S25_AGENT_SHA256="$agent_sha"
 export BW_S25_BINARY_SHA256="$binary_sha"
+export BW_S25_SIMWAN6_HELPER_SHA="$simwan_sha"
+export BW_S25_SIMWAN6_URL='https://[2001:db8:25:2026::2]:18479/witness'
+export BW_S25_SIMWAN6_CERT_FILE="$work/staging/s25_simwan6.crt"
+export BW_S25_SIMWAN6_WORKDIR="$work/private/simwan6"
 "$work/staging/s25-lab-agent" admit
 "$work/staging/s25-lab-agent" recover
 python3 scripts/s25_independent_verifier.py l1
+"$work/staging/s25-lab-agent" wan6
+python3 scripts/s25_independent_verifier.py wan6outer
+"$work/staging/s25-lab-agent" wan6-clean
+python3 scripts/s25_independent_verifier.py wan6outerclean
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" double-agent
 python3 scripts/s25_independent_verifier.py agents
@@ -211,6 +229,7 @@ chmod 0600 "$work/private/viewer.rotated"
 export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
 "$work/staging/s25-lab-agent" rotated-viewer
 "$work/staging/s25-lab-agent" bootstrap
+python3 scripts/s25_independent_verifier.py wan6inner
 python3 scripts/s25_independent_verifier.py l2
 # This marker is emitted only once independent native L2 UUID, CPU and
 # original Update/Stop/Start receipts were all verified, not from
@@ -222,6 +241,7 @@ echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
 python3 scripts/s25_independent_verifier.py git
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" inner-clean
+python3 scripts/s25_independent_verifier.py wan6innerclean
 python3 scripts/s25_independent_verifier.py l2clean
 "$work/staging/s25-lab-agent" cleanup
 python3 scripts/s25_independent_verifier.py clean
