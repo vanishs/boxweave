@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"reflect"
@@ -398,6 +399,12 @@ func NativePrepareRollback(ctx context.Context, approvedSHA string, approved boo
 	}
 	if rec.Status == "ROLLED_BACK" {
 		return rec, nil
+	}
+	// A running installed controller may dispatch new native work between
+	// the empty-instance read and a profile change. Require an explicit
+	// operator-controlled service stop before modifying prerequisites.
+	if exec.Command("systemctl", "is-active", "--quiet", "boxweave.service").Run() == nil {
+		return rec, errors.New("stop the owned BoxWeave service before native prerequisite rollback")
 	}
 	if err = nativePrepareReadable(rec.Plan.Target); err != nil {
 		return rec, err

@@ -174,8 +174,31 @@ if not data["config_ready"] or not data["packet_witness_required"]:
     raise SystemExit("S25 native operator prerequisite review is BLOCKED")
 PY_S25_PREREQ
   s25_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/s25-native-prereq-plan.json")"
-  sudo "$work/boxweave" native-prereq-verify -project "$project" \
-    -native-prereq-sha256 "$s25_sha" -approve-local > "$work/s25-native-prereq-verified.json"
+  if ! sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > "$work/s25-native-prereq-verified.json"; then
+    python3 - "$work/s25-native-prereq-plan.json" "$work/s25-native-prereq-verified.json" <<'PY_S25_DIAGNOSTIC'
+import json,sys
+before,after=(json.load(open(x,encoding="utf-8")) for x in sys.argv[1:])
+print("S25_NATIVE_PREREQ_PLAN_DIGEST="+before["review_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_DIGEST="+after["review_sha256"])
+print("S25_NATIVE_PREREQ_PLAN_STATE_DIGEST="+before["native_state_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_STATE_DIGEST="+after["native_state_sha256"])
+print("S25_NATIVE_PREREQ_CHANGED_FIELDS="+str(sorted(
+    k for k in set(before)|set(after) if before.get(k)!=after.get(k))))
+PY_S25_DIAGNOSTIC
+    echo "S25_NATIVE_PREREQ_FAIL: refused changed review digest (no native write)" >&2
+    exit 93
+  fi
+  # On the single-use lab, confirm a changed *real* Project config
+  # invalidates the exact reviewed SHA. Always restore after the denial.
+  sudo incus project set "$project" user.s25-approval-drift=invalidated
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: native Project drift accepted" >&2
+    exit 94
+  fi
+  sudo incus project unset "$project" user.s25-approval-drift
+  echo "S25_NATIVE_PREREQ_NATIVE_PROJECT_DRIFT_DENIED=PASS"
   if sudo "$work/boxweave" native-prereq-verify -project "$project" \
     -native-prereq-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local \
     > /dev/null 2>&1; then

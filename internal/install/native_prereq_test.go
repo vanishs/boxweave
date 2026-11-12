@@ -1,6 +1,7 @@
 package install
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/lxc/incus/v7/shared/api"
@@ -107,5 +108,47 @@ func TestConfinedProjectInvocationIgnoresOperatorIncusConfig(t *testing.T) {
 		if args[i] != want[i] {
 			t.Errorf("arg[%d]=%q want %q", i, args[i], want[i])
 		}
+	}
+}
+
+func TestPrereqCanonicalExcludesVolatileUsedByAndImageTimes(t *testing.T) {
+	hash := func(label string, v any) string {
+		b, e := json.Marshal(nativePrereqCanonical(label, v))
+		if e != nil {
+			t.Fatal(e)
+		}
+		return string(b)
+	}
+	p := &api.Project{Name: "user-1001", ProjectPut: api.ProjectPut{
+		Description: "owned", Config: api.ConfigMap{"restricted": "true", "restricted.containers.nesting": "allow"},
+	}, UsedBy: []string{"/1.0/profiles/default?project=user-1001"}}
+	original := hash("project", p)
+	p.UsedBy = append(p.UsedBy, "/1.0/images/volatile?project=user-1001")
+	if hash("project", p) != original {
+		t.Fatal("unrelated Project.used_by changed plan approval")
+	}
+	p.Config["restricted.containers.nesting"] = "block"
+	if hash("project", p) == original {
+		t.Fatal("actual Project security change must invalidate plan")
+	}
+
+	a := &api.NetworkACL{NetworkACLPost: api.NetworkACLPost{Name: "bw-lab"},
+		NetworkACLPut: api.NetworkACLPut{Description: "owned"},
+		UsedBy:        []string{"/1.0/instances/owned?project=user-1001", "/1.0/profiles/default?project=user-1001"}}
+	original = hash("acl", a)
+	a.UsedBy[0], a.UsedBy[1] = a.UsedBy[1], a.UsedBy[0]
+	if hash("acl", a) != original {
+		t.Fatal("different ordering of same ACL usage invalidated plan")
+	}
+	a.UsedBy = append(a.UsedBy, "/1.0/instances/foreign?project=default")
+	if hash("acl", a) == original {
+		t.Fatal("foreign ACL attachment did not invalidate plan")
+	}
+
+	i := &api.Image{Fingerprint: "abc", ImagePut: api.ImagePut{Properties: map[string]string{"os": "Ubuntu", "release": "noble"}}}
+	original = hash("image", i)
+	i.Properties["release"] = "jammy"
+	if hash("image", i) == original {
+		t.Fatal("approved image release changed without invalidating plan")
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/user"
 	"regexp"
+	"slices"
 	"strings"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -126,6 +127,65 @@ func prereqDigest(r NativePrereqReport) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// Do not hash incidental SDK read fields such as image last_used_at,
+// diagnostic daemon environment or Project/profile used_by. They change
+// without an operator changing any configuration. Hash only confinement-
+// relevant values, including exact ACL attachments, image identity and
+// the native daemon identity, then re-read the same fields at approval.
+func nativePrereqCanonical(label string, object any) any {
+	switch v := object.(type) {
+	case *api.Server:
+		return struct {
+			Config     api.ConfigMap
+			Extensions []string
+			Version    string
+			PID        int
+			Host       string
+		}{v.Config, v.APIExtensions, v.Environment.ServerVersion, v.Environment.ServerPid, v.Environment.ServerName}
+	case *api.Project:
+		return struct {
+			Name string
+			Put  api.ProjectPut
+		}{v.Name, v.Writable()}
+	case *api.Profile:
+		return struct {
+			Name string
+			Put  api.ProfilePut
+		}{v.Name, v.Writable()}
+	case *api.StoragePool:
+		return struct {
+			Name, Driver, Status string
+			Put                  api.StoragePoolPut
+		}{v.Name, v.Driver, v.Status, v.Writable()}
+	case *api.Network:
+		return struct {
+			Name, Type, Status string
+			Managed            bool
+			Put                api.NetworkPut
+		}{v.Name, v.Type, v.Status, v.Managed, v.Writable()}
+	case *api.NetworkACL:
+		refs := slices.Clone(v.UsedBy)
+		slices.Sort(refs)
+		return struct {
+			Name   string
+			Put    api.NetworkACLPut
+			UsedBy []string
+		}{v.Name, v.Writable(), refs}
+	case *api.ImageAliasesEntry:
+		return struct {
+			Name, Target string
+		}{v.Name, v.Target}
+	case *api.Image:
+		return struct {
+			Fingerprint, Architecture string
+			Type                      string
+			Properties                map[string]string
+		}{v.Fingerprint, v.Architecture, v.Type, v.Properties}
+	default:
+		return object
+	}
+}
+
 // NativePrerequisites is an explicitly root-local *inspection* using the
 // official Incus SDK. All failures are represented as non-PASS checks.
 func NativePrerequisites(ctx context.Context, project string) (NativePrereqReport, error) {
@@ -141,13 +201,12 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 		return r, err
 	}
 	r.HostSHA256 = host
-	// Hash the native objects and ETags, not just their names: changing a
-	// project's restrictions, NIC ACL rules or network configuration
-	// invalidates the operator's previously reviewed snapshot digest.
+	// Bind the review to the observed security-relevant native configuration;
+	// preserve exact intended object identities, without volatile read state.
 	state := sha256.New()
-	observe := func(label string, object any, etag string) {
-		data, _ := json.Marshal(object)
-		_, _ = fmt.Fprintf(state, "%s:%s:%x\n", label, etag, sha256.Sum256(data))
+	observe := func(label string, object any, _ string) {
+		data, _ := json.Marshal(nativePrereqCanonical(label, object))
+		_, _ = fmt.Fprintf(state, "%s:%x\n", label, sha256.Sum256(data))
 	}
 	finish := func() NativePrereqReport {
 		r.NativeStateSHA256 = hex.EncodeToString(state.Sum(nil))
