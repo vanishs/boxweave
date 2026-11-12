@@ -447,7 +447,7 @@ func quietLongPoll(ctx context.Context) {
 	early := child(request(ctx, b, "operation_get",
 		map[string]any{"operation_id": original, "wait_ms": 150}), "operation")
 	switch str(early, "state") {
-	case "ADMITTED", "PENDING", "RUNNING", "DISPATCHED", "QUEUED":
+	case "ADMITTED", "DISPATCHING", "VERIFYING":
 	default:
 		must(false, "quiet native Exec unexpectedly terminal before 5-second Guest sleep: "+str(early, "state"))
 	}
