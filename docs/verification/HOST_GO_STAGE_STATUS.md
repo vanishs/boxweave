@@ -38,6 +38,12 @@ and is not permission to replay any native UNKNOWN.
 
 **Round 2 remains BLOCKED on TC-013 CODEX_LOGIN_REQUIRED.** Owner selected real Codex CLI 0.167.2; independent nonroot actor bwcodex and private loopback Bearer-env MCP client configured, but actual login status reports Not logged in, so no actual Codex model-driven Tool discovery/read/original-key write or reconnect can be claimed. Scoped native SIGKILL recovery and existing Go SDK two-Agent/rollback CI evidence remain scoped positive, not a substitute for Codex. No physical host, Round 3, historic UNKNOWN, main service or release changed. [Complete original IDs, signed packet/SQLite snapshots and remaining blockers](HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md).
 
+## Codex login completion and real model-driven read attempt (2026-11-12 PT)
+
+**Codex ChatGPT login = PASS.** Dedicated low-privilege bwcodex actor now returns Logged in using ChatGPT. However the BoxWeave v1 Bearer environment variable BW_V1_MCP_BEARER is absent in the actual Codex process. A genuine model-driven read-only Codex exec completed but reported the private boxweave-v1 host_status tool unavailable: **no v1 MCP Tool read occurred**. Direct v1 unauthorized request returned 401, correct fail-closed. Attempted protected Viewer credential handoff was safety-blocked; no credential bypass or native effect occurred. The previously created empty placeholder was cleaned.
+
+**TC-013 and Round 2 remain BLOCKED: V1_MCP_BEARER_NOT_PROVISIONED.** Owner device login requirement is now satisfied, but live model-driven MCP call, original-key mutation and independent recovery are still unverified. Round 1 still has the other individually recorded mandatory case-level blockers. At prior document head d051e98, Actions 5/5 SUCCESS; new documentation commits require new exact-head Actions. Detailed evidence: HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md.
+
 ## Round scoreboard
 
 | Trigger | Status | Cases / evidence | Exact code and native binary | Remaining blockers | User told? |
