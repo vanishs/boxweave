@@ -83,6 +83,7 @@ def acl_private_egress(foreign_v4,foreign_v6):
     assert denied(foreign_v4,reject_v4) and denied(foreign_v6,reject_v6)
     assert denied("10.223.5.2",reject_v4) and denied("fd42:abcd::2",reject_v6)
     assert not denied("1.1.1.1",reject_v4) and not denied("2001:db8:25:2026::2",reject_v6)
+    assert not denied("fe80::1",reject_v6), "IPv6 RA/NDP would be blocked"
     assert len(acl["ingress"])==0
     references=acl["used_by"]
     assert "/1.0/profiles/default?project=user-1001" in references,references

@@ -176,10 +176,14 @@ func TestS25PrivateEgressBlocksRoutedForeignProjects(t *testing.T) {
 	checkDenied(4, "10.223.5.1", false)
 	checkDenied(4, "1.1.1.1", false)
 	for _, addr := range []string{
-		"fd42:3af8:722d:a113::2", "fd42:abcd::1", "fe80::abcd",
+		"fd42:3af8:722d:a113::2", "fd42:abcd::1",
 	} {
 		checkDenied(6, addr, true)
 	}
+	// Real Incus 7.6 requires IPv6 link-local traffic for RA/NDP.
+	// The route to the ULA gateway disappeared when fe80::/10 was blocked
+	// in an isolated native regression, so it must not match this ACL.
+	checkDenied(6, "fe80::abcd", false)
 	checkDenied(6, "fd42:3af8:722d:a113::1", false)
 	checkDenied(6, "2001:db8:25:2026::2", false)
 	got := &api.NetworkACL{NetworkACLPost: acl.NetworkACLPost, NetworkACLPut: acl.NetworkACLPut}

@@ -133,11 +133,14 @@ func nativePrepareProfileEligible(devices api.DevicesMap, t NativePrepareTarget)
 // For internet=false, the NIC's normal egress default reject still applies
 // to that gateway (apart from Incus baseline DHCP/DNS/RA services).
 //
+// IPv6 link-local fe80::/10 MUST remain available: on a real Incus 7.6
+// bridge, blocking it prevents Router Advertisements and breaks IPv6 routing.
+// Link-local addresses cannot be routed to another Project subnet.
 // This blocks private/CGNAT/ULA routing, not administrator-created foreign
 // networks that use global unicast addresses. Such networks remain a
 // host-specific BH-009 physical deployment review requirement.
 const nativeACLBlockedIPv4 = "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
-const nativeACLBlockedIPv6 = "fc00::/7,fe80::/10,::1/128"
+const nativeACLBlockedIPv6 = "fc00::/7,::1/128"
 
 // Return a set of DISJOINT CIDRs matching the blocked destinations except
 // the single reviewed gateway. It is important that no reject CIDR contains
@@ -228,7 +231,7 @@ func nativePrepareACL(t NativePrepareTarget, network *api.Network) (api.NetworkA
 		{Action: "reject", State: "enabled", Destination: blockedV4,
 			Description: "Deny routed private and reserved IPv4 networks except exact bridge gateway"},
 		{Action: "reject", State: "enabled", Destination: blockedV6,
-			Description: "Deny routed ULA and link-local IPv6 networks except exact bridge gateway"},
+			Description: "Deny routed ULA IPv6 except gateway, preserve link-local RA"},
 	}
 	return api.NetworkACLsPost{
 		NetworkACLPost: api.NetworkACLPost{Name: t.ACL},
