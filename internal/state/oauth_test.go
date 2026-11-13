@@ -276,3 +276,201 @@ func TestOAuthCredentialAndTunnelOriginResetInvalidatesPendingAndGrants(t *testi
 		t.Fatalf("stale session survived A-B-A hostname: %v", err)
 	}
 }
+
+// A host-local token-revoke of an OAuth access ID must revoke its refresh
+// family, not just one bearer. Manual credentials are separate.
+func TestOAuthAccessIDRevokeAlsoRevokesRefreshFamily(t *testing.T) {
+	ctx := context.Background()
+	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
+	manual, manualInfo, err := s.IssueToken(ctx, "viewer", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, _, err := s.ApproveOAuth(ctx, pending, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := s.ExchangeOAuth(ctx, client, redirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.VerifyToken(ctx, pair.Access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RevokeToken(ctx, before.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, pair.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("revoked access remains valid: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("refresh resurrected a revoked access family: %v", err)
+	}
+	if _, err := s.VerifyToken(ctx, manual); err != nil {
+		t.Fatalf("manual token revoked by OAuth operation: %v", err)
+	}
+	if err := s.RevokeToken(ctx, manualInfo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, manual); !errors.Is(err, ErrRevoked) {
+		t.Fatal("manual revocation was lost")
+	}
+	if err := s.RevokeToken(ctx, "unknown-token-id"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown credential revocation returned: %v", err)
+	}
+}
+
+// An independent SQLite reopen must retain auth state and the revoked grant.
+// In particular, source-supported tests cannot infer this from an in-memory
+// httptest server that never closes its original database.
+func TestOAuthRestartPersistenceAndLocalRevoke(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dbpath := filepath.Join(dir, "oauth.sqlite")
+	s, err := Open(dbpath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	password := "long-local-approval-for-restart"
+	if err := s.SetupOAuthPassword(ctx, password); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetOAuthOrigin(ctx, testOAuthOrigin); err != nil {
+		t.Fatal(err)
+	}
+	client, err := s.RegisterOAuthClient(ctx, "restart client", []string{testOAuthRedirect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
+	h := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(h[:])
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer", challenge,
+		testOAuthOrigin+"/mcp", "nonce-state-restart-1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, _, err := s.ApproveOAuth(ctx, pending, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := s.ExchangeOAuth(ctx, client, testOAuthRedirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(dbpath)
+	if err != nil {
+		t.Fatalf("SQLite schema rejects own persisted OAuth: %v", err)
+	}
+	defer s.Close()
+	token, err := s.VerifyToken(ctx, pair.Access)
+	if err != nil || token.Role != "viewer" {
+		t.Fatalf("restarted OAuth access invalid: %+v %v", token, err)
+	}
+	next, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatalf("restarted refresh invalid: %v", err)
+	}
+	newToken, err := s.VerifyToken(ctx, next.Access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RevokeToken(ctx, newToken.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(dbpath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.VerifyToken(ctx, next.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("restarted locally revoked access accepted: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, next.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("restarted grant refresh resurrected revoked actor: %v", err)
+	}
+}
+
+func TestOAuthLocalRevokeSQLiteFaultRollsBackAccessAndGrant(t *testing.T) {
+	ctx := context.Background()
+	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
+	code, _, _, err := s.ApproveOAuth(ctx, pending, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := s.ExchangeOAuth(ctx, client, redirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := s.VerifyToken(ctx, pair.Access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("PRAGMA query_only=ON"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RevokeToken(ctx, access.ID); err == nil {
+		t.Fatal("readonly grant revocation unexpectedly committed")
+	}
+	if _, err := s.db.Exec("PRAGMA query_only=OFF"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, pair.Access); err != nil {
+		t.Fatalf("failed revoke transaction nevertheless consumed access: %v", err)
+	}
+	refreshed, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatalf("failed revoke transaction nevertheless consumed grant: %v", err)
+	}
+	if _, err := s.VerifyToken(ctx, refreshed.Access); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOAuthClientRedirectAudienceExpiryNegatives(t *testing.T) {
+	ctx := context.Background()
+	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
+	code, _, _, err := s.ApproveOAuth(ctx, pending, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ client, redirect, resource string }{
+		{"foreign-client", redirect, testOAuthOrigin + "/mcp"},
+		{client, "https://other.example/callback", testOAuthOrigin + "/mcp"},
+		{client, redirect, "https://foreign.trycloudflare.com/mcp"},
+	} {
+		if _, err := s.ExchangeOAuth(ctx, tc.client, tc.redirect, code, verifier, tc.resource); !errors.Is(err, ErrOAuthInvalid) {
+			t.Fatalf("incorrect client/redirect/resource accepted: %+v %v", tc, err)
+		}
+	}
+	pair, err := s.ExchangeOAuth(ctx, client, redirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatalf("rejected originally valid code after invalid attempts: %v", err)
+	}
+	token, err := s.VerifyToken(ctx, pair.Access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE credentials SET expires_at=? WHERE id=?", time.Now().Add(-time.Hour).Unix(), token.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, pair.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("expired OAuth access still valid: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE oauth_refresh SET expires_at=? WHERE digest=?", time.Now().Add(-time.Hour).Unix(), DigestToken(pair.Refresh)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("expired OAuth refresh accepted: %v", err)
+	}
+}

@@ -69,7 +69,7 @@ func (s *Service) oauthRoute(w http.ResponseWriter, r *http.Request, cfg state.O
 			return
 		}
 		oauthJSON(w, 200, map[string]any{
-			"issuer": cfg.Origin, "authorization_endpoint": cfg.Origin + "/authorize",
+			"issuer": cfg.Origin, "authorization_response_iss_parameter_supported": true, "authorization_endpoint": cfg.Origin + "/authorize",
 			"token_endpoint": cfg.Origin + "/token", "registration_endpoint": cfg.Origin + "/register",
 			"response_types_supported":              []string{"code"},
 			"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
@@ -220,6 +220,9 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request, cfg sta
 		q := target.Query()
 		q.Set("code", code)
 		q.Set("state", stateValue)
+		// RFC 9207 issuer identification binds the callback to the
+		// authorization server the client selected during discovery.
+		q.Set("iss", cfg.Origin)
 		target.RawQuery = q.Encode()
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")

@@ -392,16 +392,35 @@ func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
 	}
 	return t, nil
 }
+
+// RevokeToken revokes one manual API token or the entire OAuth grant
+// behind an OAuth access token. Without the grant revocation, a client
+// could silently refresh a locally revoked access token.
 func (s *Store) RevokeToken(ctx context.Context, id string) error {
-	r, err := s.db.ExecContext(ctx, "UPDATE credentials SET revoked=1 WHERE id=?", id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, _ := r.RowsAffected()
+	defer tx.Rollback()
+	r, err := tx.ExecContext(ctx, "UPDATE credentials SET revoked=1 WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if n != 1 {
 		return ErrNotFound
 	}
-	return nil
+	// For a manual token this updates zero rows. For an OAuth access
+	// token all access/refresh credentials in its grant immediately fail
+	// the unchanged verifier and tokenActive checks.
+	if _, err = tx.ExecContext(ctx,
+		"UPDATE oauth_grants SET revoked=1 WHERE id IN (SELECT grant_id FROM oauth_access WHERE token_id=?)", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) tokenActive(ctx context.Context, id string) (bool, error) {
 	var n int

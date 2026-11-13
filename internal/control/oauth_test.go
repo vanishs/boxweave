@@ -129,7 +129,7 @@ func completeOAuth(t *testing.T, ts *httptest.Server, pwd, scope string) oauthFi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Scheme != "https" || u.Host != "chatgpt.com" || u.Query().Get("state") != "state-for-browser-123456789" {
+	if u.Scheme != "https" || u.Host != "chatgpt.com" || u.Query().Get("state") != "state-for-browser-123456789" || u.Query().Get("iss") != oauthPublicOrigin {
 		t.Fatalf("invalid exact callback")
 	}
 	code := u.Query().Get("code")
@@ -180,7 +180,7 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 		}
 	}
 	as := jsonFrom(t, oauthReq(t, ts, "GET", "/.well-known/oauth-authorization-server", "", "", "", oauthPublicHost))
-	if as["issuer"] != oauthPublicOrigin || as["registration_endpoint"] != oauthPublicOrigin+"/register" {
+	if as["issuer"] != oauthPublicOrigin || as["registration_endpoint"] != oauthPublicOrigin+"/register" || as["authorization_response_iss_parameter_supported"] != true {
 		t.Fatalf("AS metadata %+v", as)
 	}
 	for _, tc := range []struct {
@@ -327,5 +327,65 @@ func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) 
 	raw, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 200 || !bytes.Contains(raw, []byte("tools")) {
 		t.Fatalf("omitted optional params rejected HTTP %d", res.StatusCode)
+	}
+}
+
+func TestOAuthPublicHostCannotBeFakedWithForwardedHeadersAndPlainPKCE(t *testing.T) {
+	store, ts, _ := newOAuthServerTest(t)
+	client, err := store.RegisterOAuthClient(context.Background(), "host negative", []string{oauthCallback})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An otherwise validly shaped PKCE challenge with method "plain"
+	// must be rejected by the pinned library's S256-only policy.
+	values := url.Values{
+		"response_type": {"code"}, "client_id": {client},
+		"redirect_uri": {oauthCallback}, "state": {"host-negative-state-12345"},
+		"code_challenge": {strings.Repeat("A", 43)}, "code_challenge_method": {"plain"},
+		"resource": {oauthPublicOrigin + "/mcp"},
+	}
+	r := oauthReq(t, ts, "GET", "/authorize?"+values.Encode(), "", "", "", oauthPublicHost)
+	if r.StatusCode != 400 {
+		t.Fatalf("plain PKCE returned HTTP %d", r.StatusCode)
+	}
+	r.Body.Close()
+	values.Del("code_challenge_method")
+	r = oauthReq(t, ts, "GET", "/authorize?"+values.Encode(), "", "", "", oauthPublicHost)
+	if r.StatusCode != 400 {
+		t.Fatalf("implicit plain PKCE returned HTTP %d", r.StatusCode)
+	}
+	r.Body.Close()
+	req, err := http.NewRequest("GET", ts.URL+"/.well-known/oauth-authorization-server", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = "attacker.invalid"
+	req.Header.Set("X-Forwarded-Host", oauthPublicHost)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	denied, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if denied.StatusCode != http.StatusForbidden {
+		t.Fatalf("spoofed forwarded authority returned HTTP %d", denied.StatusCode)
+	}
+	denied.Body.Close()
+	req2, err := http.NewRequest("GET", ts.URL+"/.well-known/oauth-authorization-server", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req2.Host = oauthPublicHost
+	req2.Header.Set("X-Forwarded-Host", "attacker.invalid")
+	req2.Header.Set("X-Forwarded-Proto", "http")
+	valid, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid.StatusCode != http.StatusOK {
+		t.Fatalf("valid authority returned HTTP %d", valid.StatusCode)
+	}
+	meta := jsonFrom(t, valid)
+	if meta["issuer"] != oauthPublicOrigin {
+		t.Fatalf("proxy header poisoned issuer: %+v", meta)
 	}
 }
