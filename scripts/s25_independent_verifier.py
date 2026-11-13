@@ -458,6 +458,9 @@ def verify_r12_foreign():
     require(data.get("state") == "VERIFIED_SETUP", "foreign fixture not verified")
     assert data["evidence"]["socket_scope"]["no_parent_socket_bind_mount"]
     assert data["evidence"]["socket_scope"]["foreign_project_denied_to_service"]
+    require(data["evidence"]["acl_private_egress"]["private_ipv4_rejected"] and
+            data["evidence"]["acl_private_egress"]["private_ipv6_ula_rejected"],
+            "native parent private/ULA ACL egress not independently verified")
     output = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
                  project, "--", "env", "BW_S25_R12_DISPOSABLE=1", "python3",
                  "/root/s25_r12_foreign_l1.py", "verify")

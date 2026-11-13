@@ -321,11 +321,12 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 			observe("acl", acl, aclTag)
 		}
 		if e == nil && acl != nil {
-			aclOK = aclExclusiveUse(acl.UsedBy, project)
+			aclOK = aclExclusiveUse(acl.UsedBy, project) &&
+				nativeACLPrivateEgressSafe(acl, network)
 		}
 	}
 	prereqRecord(&r, "managed_bridge", networkOK, "native managed bridge is present")
-	prereqRecord(&r, "exclusive_acl_used_by", aclOK, "ACL used only by this Project's default profile/instances; no shared network or foreign owner")
+	prereqRecord(&r, "exclusive_acl_used_by", aclOK, "ACL exclusively owned, ordered private/ULA egress deny rules and exact selected bridge gateway exception")
 	alias, aliasTag, err := scoped.GetImageAlias("boxweave-ubuntu-24.04")
 	if err == nil {
 		observe("image_alias", alias, aliasTag)

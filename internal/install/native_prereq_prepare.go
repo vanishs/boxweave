@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"os/user"
@@ -123,12 +124,90 @@ func nativePrepareProfileEligible(devices api.DevicesMap, t NativePrepareTarget)
 	}
 	return nil
 }
-func nativePrepareACL(t NativePrepareTarget) api.NetworkACLsPost {
+
+// Internet=true must never mean access to OTHER Incus Projects through
+// the host's routed private bridges. A bridge NIC's default egress allow
+// permits such traffic unless its exclusive ACL explicitly rejects it.
+// Every other-rule permit here is scoped to the exact selected bridge
+// gateway, needed for Incus baseline DNS and operator-approved local
+// package/bootstrap relay. Private destinations besides that gateway are
+// never reachable, even when Internet=true.
+//
+// This blocks RFC1918, CGNAT and ULA/local IP targets. It is not a
+// guarantee against administrator-created foreign bridges using public
+// global addresses; BH-009 requires independent physical host review too.
+const nativeACLBlockedIPv4 = "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
+const nativeACLBlockedIPv6 = "fc00::/7,fe80::/10,::1/128"
+
+func nativeACLGateway(config api.ConfigMap, key string, ipv6 bool) (string, error) {
+	raw := strings.TrimSpace(config[key])
+	if raw == "" || raw == "none" {
+		if ipv6 {
+			return "", nil // a bridge without IPv6 still blocks ULA egress
+		}
+		return "", errors.New("missing IPv4 native bridge gateway")
+	}
+	prefix, err := netip.ParsePrefix(raw)
+	if err != nil || !prefix.IsValid() {
+		return "", errors.New("selected native bridge gateway CIDR unparseable")
+	}
+	addr := prefix.Addr()
+	if ipv6 && !addr.Is6() || !ipv6 && !addr.Is4() ||
+		addr.IsUnspecified() || addr.IsLoopback() || addr.IsMulticast() {
+		return "", errors.New("invalid native bridge gateway family or address")
+	}
+	if ipv6 {
+		return addr.String() + "/128", nil
+	}
+	return addr.String() + "/32", nil
+}
+
+func nativePrepareACL(t NativePrepareTarget, network *api.Network) (api.NetworkACLsPost, error) {
+	if network == nil || network.Type != "bridge" || !network.Managed ||
+		network.Status != "Created" {
+		return api.NetworkACLsPost{}, errors.New("selected native network not a live managed bridge")
+	}
+	v4, err := nativeACLGateway(network.Config, "ipv4.address", false)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
+	}
+	v6, err := nativeACLGateway(network.Config, "ipv6.address", true)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
+	}
+	egress := []api.NetworkACLRule{
+		{Action: "allow", State: "enabled", Destination: v4,
+			Description: "Approved selected private bridge gateway only"},
+	}
+	if v6 != "" {
+		egress = append(egress, api.NetworkACLRule{Action: "allow", State: "enabled",
+			Destination: v6, Description: "Approved selected IPv6 bridge gateway only"})
+	}
+	egress = append(egress,
+		api.NetworkACLRule{Action: "reject", State: "enabled",
+			Destination: nativeACLBlockedIPv4,
+			Description: "Deny routed private and reserved IPv4 networks"},
+		api.NetworkACLRule{Action: "reject", State: "enabled",
+			Destination: nativeACLBlockedIPv6,
+			Description: "Deny routed ULA and link-local IPv6 networks"})
 	return api.NetworkACLsPost{
 		NetworkACLPost: api.NetworkACLPost{Name: t.ACL},
 		NetworkACLPut: api.NetworkACLPut{Description: "BoxWeave v1 exclusive to " + t.Project,
-			Ingress: []api.NetworkACLRule{}, Egress: []api.NetworkACLRule{}, Config: api.ConfigMap{}},
+			Ingress: []api.NetworkACLRule{}, Egress: egress, Config: api.ConfigMap{}},
+	}, nil
+}
+
+func nativeACLPrivateEgressSafe(acl *api.NetworkACL, network *api.Network) bool {
+	if acl == nil || network == nil {
+		return false
 	}
+	expected, err := nativePrepareACL(NativePrepareTarget{ACL: acl.Name}, network)
+	if err != nil {
+		return false
+	}
+	// Rule order is significant: gateway exception MUST precede deny.
+	return reflect.DeepEqual(acl.Egress, expected.Egress) &&
+		len(acl.Ingress) == 0
 }
 func nativePrepareStateDigest(objects ...any) string {
 	h := sha256.New()
@@ -244,7 +323,10 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	rec.BeforeProfile = profile.Writable()
 	rec.AfterProject = nativePrepareProject(rec.BeforeProject)
 	rec.AfterProfile = nativePrepareProfile(t, rec.BeforeProfile)
-	rec.ACL = nativePrepareACL(t)
+	rec.ACL, err = nativePrepareACL(t, network)
+	if err != nil {
+		return plan, rec, err
+	}
 	plan.NativeStateSHA256 = nativePrepareStateDigest(
 		project, pETag, profile, prETag, pool, poolETag, network, nETag, alias, aETag, img, imgETag, "ACL_ABSENT",
 	)

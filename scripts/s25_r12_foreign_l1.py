@@ -63,6 +63,27 @@ def ensure_ping(name, project):
     cmd = "command -v ping >/dev/null || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends iputils-ping >/dev/null)"
     run("incus", "exec", name, "--project", project, "--", "sh", "-c", cmd, timeout=180)
 
+def acl_private_egress():
+    acl=json.loads(run("incus","query","/1.0/network-acls/bw-s25-inner-owned").stdout)
+    egress=acl["egress"]
+    assert acl["name"]=="bw-s25-inner-owned" and len(egress)==4, acl
+    own_v4=gateway(OWNED_PROJECT,4)
+    own_v6=gateway(OWNED_PROJECT,6)
+    assert [(r["action"],r["state"]) for r in egress]==[
+        ("allow","enabled"),("allow","enabled"),("reject","enabled"),("reject","enabled")
+    ], egress
+    assert egress[0]["destination"]==own_v4+"/32" and egress[1]["destination"]==own_v6+"/128",egress
+    v4=egress[2]["destination"]
+    v6=egress[3]["destination"]
+    for cidr in ("10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","100.64.0.0/10"):
+        assert cidr in v4,("missing routed private IPv4 reject",cidr)
+    assert "fc00::/7" in v6 and "fe80::/10" in v6
+    assert len(acl["ingress"])==0
+    assert acl["used_by"]==["/1.0/profiles/default?project=user-1001"],acl["used_by"]
+    return {"ACL":"bw-s25-inner-owned","gateway_v4":own_v4,"gateway_v6":own_v6,
+            "private_ipv4_rejected":True,"private_ipv6_ula_rejected":True}
+
+
 def socket_and_scope():
     # The guest's /var/lib/incus Unix socket is the INNER Incus daemon.
     # Neither the parent's unix.socket.user nor the parent's ledger may be bind-mounted.
@@ -102,7 +123,7 @@ def run_packets():
               "owned_ipv4": owned4, "owned_ipv6": owned6, "foreign_ipv4": foreign4, "foreign_ipv6": foreign6,
               "positive_gateway_v4_v6_both_projects": True,
               "bidirectional_cross_project_packet_denied_v4_v6": True,
-              "socket_scope": socket_and_scope()}
+              "socket_scope": socket_and_scope(), "acl_private_egress":acl_private_egress()}
     assert result["owned_uuid"] != result["foreign_uuid"]
     return result
 
