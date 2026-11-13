@@ -83,7 +83,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("v1-prerelease-nested-S2.5-isolated-runner", workflow)
         self.assertIn("needs: [source, linux, native-s2-gate, native-s25-gate, candidate]", workflow)
         s2 = workflow.split("\n  native-s2-gate:\n", 1)[1].split("\n  native-s25-gate:\n", 1)[0]
-        s25 = workflow.split("\n  native-s25-gate:\n", 1)[1].split("\\n  candidate:\n", 1)[0]
+        s25 = workflow.split("\n  native-s25-gate:\n", 1)[1].split("\n  candidate:\n", 1)[0]
         self.assertIn("sh scripts/accept_s2_native.sh", s2)
         self.assertNotIn("sh scripts/s25_bridgehead_lab.sh", s2)
         self.assertIn("sh scripts/s25_bridgehead_lab.sh", s25)
