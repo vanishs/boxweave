@@ -96,6 +96,15 @@ jobs:
           actual = json.loads(subprocess.check_output([sys.argv[3], 'build-info']))
           assert actual == {'version': sys.argv[1], 'commit': sys.argv[2]}, actual
           PY
+          # Execute the actual native CGO/SQLite binary on each architecture.
+          tmp_db="$RUNNER_TEMP/v1-native-cgo-smoke.sqlite"
+          "release-assets/$name" status -db "$tmp_db" -project no-project \
+            -incus-socket /unavailable-incus > "$RUNNER_TEMP/v1-native-cgo-smoke.json"
+          python3 - "$RUNNER_TEMP/v1-native-cgo-smoke.json" <<'PY'
+          import json, sys
+          state = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert state["ready"] is False, "unexpected native host readiness in isolated CI"
+          PY
           go test -count=1 ./...
           sha256sum "release-assets/$name"
       - uses: actions/upload-artifact@v4

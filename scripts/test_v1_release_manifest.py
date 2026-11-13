@@ -34,6 +34,8 @@ class ReleaseTests(unittest.TestCase):
         lines = (self.dir / "SHA256SUMS").read_text().splitlines()
         self.assertEqual(len(lines), 4)
         self.assertEqual(len(m["assets"]), 2)
+        self.assertEqual(m["dependencies"]["go_toolchain"], "1.26.9")
+        self.assertTrue(m["dependencies"]["incus_go_sdk"].startswith("v7."))
 
     def test_wrong_machine_fails(self):
         arm = self.dir / "boxweave-v1.0.0-rc.1-linux-arm64"

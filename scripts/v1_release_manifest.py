@@ -47,6 +47,19 @@ def assemble(directory, tag, source, installer):
         assets[name] = {"sha256": sha256(data), "size": len(data), "goarch": arch}
         files[name] = data
     files["install.sh"] = installer.read_bytes()
+    go_mod = Path("go.mod").read_text(encoding="utf-8")
+    def pinned(expression):
+        match = re.search(expression, go_mod, re.MULTILINE)
+        if match is None:
+            raise ValueError("release source must pin required Go/SDK dependency: " + expression)
+        return match.group(1)
+
+    dependencies = {
+        "go_toolchain": pinned(r"^go ([0-9]+\\.[0-9]+\\.[0-9]+)$"),
+        "mcp_go_sdk": pinned(r"^[ \\t]*github\\.com/modelcontextprotocol/go-sdk (v[0-9.]+)$"),
+        "incus_go_sdk": pinned(r"^[ \\t]*github\\.com/lxc/incus/v7 (v[0-9.]+)$"),
+        "sqlite_cgo": pinned(r"^[ \\t]*github\\.com/mattn/go-sqlite3 (v[0-9.]+)$"),
+    }
     manifest = {
         "format": 1,
         "product": "boxweave-v1",
@@ -55,6 +68,8 @@ def assemble(directory, tag, source, installer):
         "source": source,
         "platform": "linux",
         "cgo_enabled": True,
+        "dependencies": dependencies,
+        "native_incus_runtime": "must be independently checked on the target host",
         "assets": assets,
     }
     manifest_bytes = (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode()
