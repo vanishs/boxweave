@@ -7,7 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"golang.org/x/term"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vanishs/boxweave/internal/control"
@@ -22,7 +24,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -43,7 +45,8 @@ func run() error {
 	listener := f.String("listen", "127.0.0.1:18650", "loopback management HTTP listen address")
 	role := f.String("role", "viewer", "token role")
 	ttl := f.Duration("ttl", 30*24*time.Hour, "token validity")
-	tokenID := f.String("id", "", "exact local credential ID")
+	tokenID := f.String("id", "", "exact local credential or OAuth grant ID")
+	publicOrigin := f.String("public-origin", "", "exact operator-reviewed public HTTPS origin (without /mcp)")
 	serviceUser := f.String("service-user", "boxweave", "dedicated nonroot incus-only service account")
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
@@ -78,7 +81,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -275,6 +278,53 @@ func run() error {
 		// interpreted as safe to reissue. Audit and hold the exact Box.
 		if _, err := s.RecoverExecGC(ctx); err != nil {
 			return err
+		}
+	}
+	// OAuth configuration is host-local only. A browser request may never
+	// alter the approval secret, public issuer, grants or server identity.
+	if strings.HasPrefix(command, "oauth-") {
+		if os.Geteuid() == 0 {
+			return errors.New("OAuth management must run under the dedicated local service account")
+		}
+		switch command {
+		case "oauth-setup":
+			fmt.Fprint(os.Stderr, "New OAuth approval password (min 16 characters): ")
+			first, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Fprintln(os.Stderr)
+			if err != nil {
+				return errors.New("OAuth setup requires a local interactive TTY")
+			}
+			fmt.Fprint(os.Stderr, "Repeat OAuth approval password: ")
+			second, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Fprintln(os.Stderr)
+			if err != nil || string(first) != string(second) {
+				return errors.New("approval password confirmation failed")
+			}
+			return s.SetupOAuthPassword(ctx, string(first))
+		case "oauth-set-origin":
+			if *publicOrigin == "" {
+				return errors.New("-public-origin required")
+			}
+			return s.SetOAuthOrigin(ctx, *publicOrigin)
+		case "oauth-disable":
+			return s.SetOAuthOrigin(ctx, "")
+		case "oauth-status":
+			v, err := s.OAuthConfig(ctx)
+			if err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(v)
+		case "oauth-list-grants":
+			grants, err := s.ListOAuthGrants(ctx)
+			if err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(grants)
+		case "oauth-revoke-grant":
+			if *tokenID == "" {
+				return errors.New("exact grant -id required")
+			}
+			return s.RevokeOAuthGrant(ctx, *tokenID)
 		}
 	}
 	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener}
