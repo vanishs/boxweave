@@ -1,5 +1,7 @@
 # HOST_GO: three user-triggered execution rounds (S2.5 BRIDGEHEAD)
 
+**2026-11-13 approved pre-Round-3 OAuth work (PLANNED, not yet implemented):** the owner selected **Go-native embedded OAuth** within the existing v1 HTTP MCP service as the simplest ChatGPT connection. Keep `/mcp` as one resource; use official SDK authentication plus a small reviewed OAuth AS library, `admin/viewer` roles, operator-launched Quick Tunnel and exact `public_origin` configuration. Implement and pass [OA-001–010](S25_EMBEDDED_OAUTH_IMPLEMENTATION.md) **before** using the new OAuth path for the Round 3 live ChatGPT gate. The message "开始 OAuth 开发" executes this bounded development task, **not** formal Round 3. No public exposure, physical-host installation or new MCP Tool is authorized by this note.
+
 **2026-11-13 owner-selected preparatory topology update:** The owner
 subsequently chose to **reuse existing main-managed Box `boxweave-test-cli`**
 because new top-level creates returned UNKNOWN. Within that explicitly
@@ -53,8 +55,8 @@ nesting-capable main-managed Box and, when reusing, one new isolated inner
 Guest for pinned v1/Tunnel readiness **without executing or signing
 Round 3**. Inventory first; do not retry prior UNKNOWN
 creation receipts. No public unauthenticated MCP, fake OAuth password or
-exposure of Bearer credentials. If stable tunnel / OAuth-compatible provider
-or ChatGPT write-capable connection is absent, record `AGENT_PATH_BLOCKED`,
+exposure of Bearer credentials. If an approved functional HTTPS tunnel, verified embedded OAuth
+or a ChatGPT write-capable connection is absent, record `AGENT_PATH_BLOCKED`,
 stop exposure, give the owner the single next action, and do not award
 `HOST_GO`.
 
@@ -90,7 +92,7 @@ The following three owner messages are the only automatic execution triggers. Ma
 
 - **Never** use the four historical UNKNOWN tasks (`7e1cbf043d1fd4ea3d9ec0093a04371e`, `f811afeeb778c422fe99b9881baa40f2`, `192a6601c54078f8eaf1437a6a3dc13b`, `a2fdf885b87a0b66fb3a17f913316c55`) as retry/delete/adoption targets. Read-only, exact-original status inspection if safe does not clear UNKNOWN.
 - A general authorization to create/test managed **Boxes** does **not** authorize an unnamed, dedicated **physical** host, OS global Incus change, host daemon restart/upgrade, existing workload removal or public network exposure. Round 3 requires *fresh explicit authorization of the exact host and allowed effects*. Legacy `main` and v1 never co-install on that host.
-- Keep v1's existing one-service/loopback MCP and Project isolation, exact UUID/incarnation, shared-default-Profile ingress reject and implicit/explicit default egress reject; allow Internet **only on reviewed individual owned NICs**; maintain IPv4+IPv6 source/MAC filtering, sibling/foreign denies and least privilege. No anonymous/OAuth shortcut, admin socket sharing, host shell Tool or second product architecture.
+- Keep v1's existing one-service/loopback MCP and Project isolation, exact UUID/incarnation, shared-default-Profile ingress reject and implicit/explicit default egress reject; allow Internet **only on reviewed individual owned NICs**; maintain IPv4+IPv6 source/MAC filtering, sibling/foreign denies and least privilege. No anonymous/unauthenticated OAuth bypass, admin socket sharing, host shell Tool or second product architecture.
 - User waived **new S2.5 disk quota pressure tests**, not truthful disclosure. A usable `dir` driver on non-ext4/XFS with absent quota proof reports `DIR_QUOTA_UNVERIFIED` and host-root disk-exhaustion risk. Do not claim hard quota. Test host space/inodes/PSI and monitor thresholds without destructive exhaustion.
 - Complete S2.5 development-host readiness **only**; S3/S4/S5 features, full 20/20 release gate, public launch and stable user-data compatibility are not silently included.
 - Retain current authoritative BH-001–BH-017 and TC-011–014 semantics. Reuse **already accepted S1/S2 evidence** only where source/contract/fault surface remains unchanged and a per-case exact-version crosswalk shows why it is valid. A P2 redundant permutation may be recorded as `DEFERRED/NON-BLOCKING` with explicit owner agreement **if the gate contract is formally amended**, never marked PASS. Do not unilaterally reduce a mandatory safety/physical/Agent gate. Distinguish `TARGETED_LAB_PASS`, `LAB_PASS` and `HOST_GO` in every report.
@@ -133,18 +135,20 @@ preparatory Box/Tunnel provisioning request is not the formal test trigger.
    and verify effective native readiness; don't assume `enable_nesting` worked.
 2. **Pinned v1 and inside-only Incus:** use a reviewed precise PR #133
    source SHA and binary SHA-256, install confined v1+Incus inside this
-   **new Box only**. Record actual daemon version, native prerequisites,
+   **separately isolated new or inner Guest only**. Record actual daemon version, native prerequisites,
    Project/Profile/ACL/pool and auth. No shared parent daemon/global Scriptlet
    changes, no old `main` co-install, no silent privilege escalation.
    A potentially incompatible isolation, quota or native authorization
    failure is an explicit `BLOCKED`, not reason to relax controls.
 3. **Safe remote Agent path:** keep v1 MCP loopback-only in that Box; publish
-   HTTPS **only** through an intentionally authorized Cloudflare Tunnel or
-   equivalent origin-authenticated transport. Require valid v1 admin/viewer
-   credentials behind the tunnel. A random Tunnel URL or an OAuth "password"
-   is **not** an OAuth 2.1 authorization server. If ChatGPT requires OAuth,
-   use a separately reviewed compliant provider with resource metadata,
-   authorization-code PKCE and correct audience/scopes. Never put secrets in
+   HTTPS **only** through an intentionally authorized Cloudflare Quick/named
+   Tunnel or equivalent reviewed proxy. Require valid v1 admin/viewer
+   credentials behind the tunnel. A random Tunnel URL or password alone
+   is **not** OAuth. Use the approved in-process v1 Go OAuth service only
+   after OA-001–008 protocol/security acceptance: resource metadata,
+   authorization-code PKCE, resource-bound tokens, correct roles/scopes,
+   browser callback and client discovery. The Quick Tunnel is test-only,
+   cannot carry SSE, and its JSON MCP route needs real ChatGPT proof. Never put secrets in
    GitHub commits, PR comments, URLs or chat. Prove public 401 and
    authorized Tool discovery independently **before** asking the owner
    to connect. Record ChatGPT plan/feature limitations as
