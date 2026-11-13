@@ -2,22 +2,9 @@ name: v1 Linux amd64 and arm64 candidate artifacts (controlled prerelease)
 
 on:
   push:
-    branches: [v1, "feat/v1-*"]
+    branches: [v1, "feat/v1-*", "release/v1.*-rc.*"]
   pull_request:
     branches: [v1]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Exact v1.X.Y-rc.N for a development-only prerelease"
-        type: string
-        required: false
-        default: ""
-      publish_prerelease:
-        description: "Publish immutable RC assets only after quality and native checks"
-        type: boolean
-        required: true
-        default: false
-
 permissions:
   contents: read
 
@@ -73,7 +60,6 @@ jobs:
         shell: bash
         env:
           GOARCH_EXPECTED: ${{ matrix.goarch }}
-          EVENT_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           test "$(go env GOARCH)" = "$GOARCH_EXPECTED"
@@ -81,6 +67,10 @@ jobs:
           base_version=$(cat VERSION)
           test "$base_version" = 1.0.0 || [[ "$base_version" =~ ^1\.[0-9]+\.[0-9]+$ ]]
           version="$base_version-rc.1"
+          EVENT_TAG=""
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            EVENT_TAG="${GITHUB_REF#refs/heads/release/}"
+          fi
           if [[ -n "$EVENT_TAG" ]]; then
             [[ "$EVENT_TAG" =~ ^v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
             test "${EVENT_TAG#v}" = "$base_version"-rc."${EVENT_TAG##*.}"
@@ -121,9 +111,11 @@ jobs:
 
   native-gate:
     name: v1-prerelease-native-and-nested-verifier
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_prerelease == true
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    permissions:
+      contents: read
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -135,6 +127,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Refuse publishing a release branch not equal to protected v1 HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
       - name: Real S2 native regression
         shell: bash
         run: |
@@ -170,7 +169,10 @@ jobs:
           EVENT_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          tag="$EVENT_TAG"
+          tag=""
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            tag="${GITHUB_REF#refs/heads/release/}"
+          fi
           if [[ -z "$tag" ]]; then tag="v$(cat VERSION)-rc.1"; fi
           # A branch CI artifact is always a candidate, not a published release.
           # When publishing, exact tag must have been stamped in both binaries.
@@ -199,14 +201,14 @@ jobs:
         with:
           name: v1-release-candidate-manifest
           path: release-assets
-      - name: Exact ref, tag and asset-set protection; publish prerelease only
+      - name: Exact v1 HEAD, release branch, tag and immutable asset-set protection; publish prerelease only
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_TAG: ${{ inputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF" == refs/heads/v1 ]]
+          INPUT_TAG="${GITHUB_REF#refs/heads/release/}"
+          [[ "$GITHUB_REF" == "refs/heads/release/$INPUT_TAG" ]]
           [[ "$INPUT_TAG" =~ ^v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
           python3 - "$INPUT_TAG" "$GITHUB_SHA" <<'PY'
