@@ -1,9 +1,17 @@
 # S2.5 embedded OAuth — scoped implementation and Box acceptance (2026-11-13)
 
-**Code-bearing source:** `f2af899125eda7e6acd0b28a2b36e65eea2ac73d` (PR #133, Draft).
-**Exact installed binary:** `1.0.25-hostgo-oauth-f2af899`; SHA-256 `8371560029213919d5d4885afb003f9101515150d5913bcc5735bbda7f20fa06`.
+**Latest code-bearing source:** `a8dd90c7bd0c88150e96fba954b3468887c963af` (PR #133, Draft). Prior accepted intermediate `f2af899` remains historical evidence.
+**Current exact installed binary:** `1.0.25-hostgo-oauth-a8dd90`; SHA-256 `9307011adf0587d07ce8c81ed2d293c8be11715e7dea41ead690d03d27e00a73`.
 **Verdict:** LOCAL_OAUTH_LAB_PASS (bounded), `OA-008/009=BLOCKED_LIVE_CLIENT`, `HOST_GO=PENDING_LIVE_AGENT`, physical `HOST_POSTFLIGHT=NOT_AUTHORIZED`. No release or merge.
 
+## Latest RFC 9700 refresh replay-hardening (supersedes intermediate results)
+
+- Audited public-client refresh-token rotation against [RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html). The initial `f2af899` rotated tokens but deleted spent refresh-token digests, so it could **not detect reuse and revoke the successor**; this was a substantive OAuth 2.1 gap, not a cosmetic change.
+- Exact `a8dd90c7bd0c88150e96fba954b3468887c963af` fixes this within existing SQLite schema v2: consumed refresh digests persist as `expires_at=0` grant-linked tombstones. A subsequent matching-client/resource replay commits **revocation of the entire active grant**, including its current Access/Refresh credentials; invalid foreign-client/resource attempts cannot revoke another grant. Issuance and replay revocation both use single durable transactions. No plaintext token or additional database migration was needed.
+- New repeatable tests PASS: 12 simultaneous identical refreshes produce exactly one issuance followed by **automatic successor revocation** after reuse; old refresh replay after SQLite close/reopen invalidates the successor; deliberate read-only SQLite failure rolls back the replay revocation, then a valid replay revokes it; normal refresh without replay, invalid client/resource and manual API tokens remain covered. This conservative behavior may require reauthorization if a client mistakenly refreshes concurrently, as required by token-replay detection.
+- Independently fetched **exact `a8dd90` from GitHub** into a clean worktree on `boxweave-test-ser2`, rebuilt with Go 1.26.9/CGO1, full `make verify` (format, vet, modules and five Go race packages) PASS. [Code-head required quality run](https://github.com/vanishs/boxweave/actions/runs/43410574621) and [code-head S1 source run](https://github.com/vanishs/boxweave/actions/runs/43410574556) both **SUCCESS**.
+- Inside only the same disposable `hg-v1-oauth-1113` Guest, inspected and **formally committed** the previously settled `f2af899` installer backup, then installed new exact `a8dd90` using `upgrade` after binary SHA256 review. `boxweave.service` active, installed commit/digest matched, restricted native Project empty, test-only OAuth public origin disabled, historical test grants inactive, no `cloudflared` process, and new exact-prior `f2af899` rollback snapshot retained. The new replay semantics have source-level tests; installed live ChatGPT refresh/replay remains **not tested**.
+- Previous f2af metadata, login simulation, original native-only smoke and HTTPS/tester limitations below remain scope-specific history, **not** proof of public remote authentication for `a8dd90`.
 ## Implementation verified
 
 - One canonical `/mcp` using official MCP Go SDK `v1.8.0` Streamable HTTP (stateless JSON). No second MCP service, REST management, new MCP Tool, or permanent public listener.
@@ -35,11 +43,11 @@
 | OA-002 | LOCAL + INSTALLED PASS | Two RFC9728 paths, 401 challenge, RFC8414/9207 issuer, hostile Host/forwarded headers denied |
 | OA-003 | LOCAL PASS | Bounded DCR, exact redirect, code replay, S256-only PKCE, client/audience failure cases |
 | OA-004 | BROWSER-SIMULATED PASS | Consent/CSP/Referrer/Origin/replay; **real ChatGPT browser not tested** |
-| OA-005 | LOCAL PASS | SQLite atomic exchange/refresh, 12-way concurrency, DB failure, reopen, expiry, grant revocation |
+| OA-005 | LOCAL PASS | SQLite atomic exchange/refresh, replay-family revocation, concurrent fault detection, DB failure/reopen/expiry |
 | OA-006 | LOCAL PASS / NATIVE COMPOSITE PENDING | OAuth role mapping/viewer denial and unchanged native ownership checks; authenticated MCP write -> actual Incus not executed |
 | OA-007 | LOCAL PASS | Local origin change/password reset revokes OAuth only; invalid config refused, installed disable postflight |
 | OA-008 | BLOCKED | External Quick Tunnel HTTPS plus actual ChatGPT authorization/reconnect/refresh not tested; owner connection needed |
 | OA-009 | BLOCKED | No authenticated remote Agent original-key MCP mutation + independent native I+N+V; native-only smoke is distinct |
-| OA-010 | CODE-HEAD PASS; REPORT-HEAD RECHECK | `f2af899` independent build, race and both Actions SUCCESS; documentation-only follow-up must have its own required gate |
+| OA-010 | CODE-HEAD PASS; REPORT-HEAD RECHECK | `a8dd90` independent build, race and both code-head Actions SUCCESS; documentation-only follow-up must have its own required gate |
 
 **Resumption:** do not re-run old gateway Creates or replay any UNKNOWN. Keep PR Draft. For real live acceptance, operator must deliberately enable a temporary Cloudflare Quick Tunnel inside a controlled Guest, locally configure that actual random HTTPS origin, privately set fresh approval credentials, connect the actual ChatGPT OAuth client and explicitly approve any mutating Agent test. Until then only bounded local OAuth acceptance can be signed.
