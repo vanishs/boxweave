@@ -496,7 +496,7 @@ func (s *Store) RefreshOAuth(ctx context.Context, old, client, resource string) 
 	var revoked int
 	err = tx.QueryRowContext(ctx, "SELECT r.grant_id,r.expires_at,g.client_id,g.role,g.resource,g.epoch,g.revoked,c.epoch FROM oauth_refresh r JOIN oauth_grants g ON g.id=r.grant_id CROSS JOIN oauth_config c WHERE r.digest=?",
 		DigestToken(old)).Scan(&grant, &expires, &rowClient, &role, &rowResource, &epoch, &revoked, &current)
-	if err != nil || revoked != 0 || epoch != current || expires <= time.Now().Unix() || rowClient != client || rowResource != resource {
+	if err != nil || revoked != 0 || epoch != current || rowClient != client || rowResource != resource {
 		return OAuthPair{}, ErrOAuthInvalid
 	}
 	var origin string
@@ -506,7 +506,24 @@ func (s *Store) RefreshOAuth(ctx context.Context, old, client, resource string) 
 	if resource != origin+"/mcp" {
 		return OAuthPair{}, ErrOAuthInvalid
 	}
-	r, err := tx.ExecContext(ctx, "DELETE FROM oauth_refresh WHERE digest=?", DigestToken(old))
+	// A consumed token remains as a digest-only tombstone (expires_at=0)
+	// linked to the original grant. RFC 9700 / OAuth 2.1 require public
+	// clients' rotating refresh tokens to DETECT reuse and invalidate the
+	// current successor, not merely return invalid_grant for the old token.
+	// Only the matching client and resource can reach this branch.
+	if expires == 0 {
+		if _, err := tx.ExecContext(ctx, "UPDATE oauth_grants SET revoked=1 WHERE id=?", grant); err != nil {
+			return OAuthPair{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return OAuthPair{}, err
+		}
+		return OAuthPair{}, ErrOAuthInvalid
+	}
+	if expires <= time.Now().Unix() {
+		return OAuthPair{}, ErrOAuthInvalid
+	}
+	r, err := tx.ExecContext(ctx, "UPDATE oauth_refresh SET expires_at=0 WHERE digest=? AND expires_at>?", DigestToken(old), time.Now().Unix())
 	if err != nil {
 		return OAuthPair{}, err
 	}

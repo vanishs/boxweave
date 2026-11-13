@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -98,11 +99,17 @@ func TestOAuthAtomicPKCERefreshAndOriginRevocation(t *testing.T) {
 	if err = s.RequireActiveTokenID(ctx, verified.ID); !errors.Is(err, ErrRevoked) {
 		t.Fatalf("rotated old access dispatch accepted: %v", err)
 	}
+	if _, err = s.VerifyToken(ctx, next.Access); err != nil {
+		t.Fatalf("rotated access invalid before replay: %v", err)
+	}
 	if _, err = s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
 		t.Fatalf("old refresh replay: %v", err)
 	}
-	if _, err = s.VerifyToken(ctx, next.Access); err != nil {
-		t.Fatalf("rotated access invalid: %v", err)
+	if _, err = s.VerifyToken(ctx, next.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("refresh replay did not invalidate current access/grant: %v", err)
+	}
+	if _, err = s.RefreshOAuth(ctx, next.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("refresh replay did not invalidate active refresh: %v", err)
 	}
 	if err = s.SetOAuthOrigin(ctx, "https://changed.trycloudflare.com"); err != nil {
 		t.Fatal(err)
@@ -129,29 +136,43 @@ func TestOAuthConcurrentRefreshSingleSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
-	results := make(chan error, 12)
+	type attempt struct {
+		pair OAuthPair
+		err  error
+	}
+	results := make(chan attempt, 12)
 	for i := 0; i < 12; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, e := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp")
-			results <- e
+			next, e := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp")
+			results <- attempt{pair: next, err: e}
 		}()
 	}
 	wg.Wait()
 	close(results)
 	var ok, invalid int
-	for e := range results {
-		if e == nil {
+	var successor OAuthPair
+	for a := range results {
+		if a.err == nil {
 			ok++
-		} else if errors.Is(e, ErrOAuthInvalid) {
+			successor = a.pair
+		} else if errors.Is(a.err, ErrOAuthInvalid) {
 			invalid++
 		} else {
-			t.Fatalf("unexpected concurrent error: %v", e)
+			t.Fatalf("unexpected concurrent error: %v", a.err)
 		}
 	}
 	if ok != 1 || invalid != 11 {
 		t.Fatalf("refresh concurrency: success=%d invalid=%d", ok, invalid)
+	}
+	// The single issued successor cannot remain usable after any of
+	// the eleven duplicate requests proves refresh-token replay.
+	if _, err := s.VerifyToken(ctx, successor.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("concurrent refresh replay left a valid access token: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, successor.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("concurrent refresh replay left a valid refresh family: %v", err)
 	}
 }
 func TestOAuthFailedSQLiteTransactionDoesNotConsumeCodeOrRefresh(t *testing.T) {
@@ -472,5 +493,116 @@ func TestOAuthClientRedirectAudienceExpiryNegatives(t *testing.T) {
 	}
 	if _, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
 		t.Fatalf("expired OAuth refresh accepted: %v", err)
+	}
+}
+
+// Refresh-token replay across a process restart must revoke the successor,
+// while an unknown token digest must not revoke someone else's grant.
+func TestOAuthReplayedRefreshAfterRestartRevokesActiveGrant(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "ledger.sqlite")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pwd := "private-approval-test-password-123"
+	if err := s.SetupOAuthPassword(ctx, pwd); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetOAuthOrigin(ctx, testOAuthOrigin); err != nil {
+		t.Fatal(err)
+	}
+	client, err := s.RegisterOAuthClient(ctx, "replay client", []string{testOAuthRedirect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
+	hash := sha256.Sum256([]byte(verifier))
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer", base64.RawURLEncoding.EncodeToString(hash[:]), testOAuthOrigin+"/mcp", "replay-state-12345678")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, _, err := s.ApproveOAuth(ctx, pending, pwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := s.ExchangeOAuth(ctx, client, testOAuthRedirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	successor, err := s.RefreshOAuth(ctx, original.Refresh, client, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, successor.Access); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.RefreshOAuth(ctx, original.Refresh, "other-client", testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("foreign client: %v", err)
+	}
+	if _, err := s.VerifyToken(ctx, successor.Access); err != nil {
+		t.Fatalf("foreign replay revoked unrelated grant: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, original.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("old refresh replay not denied: %v", err)
+	}
+	if _, err := s.VerifyToken(ctx, successor.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("replayed refresh did not revoke current access: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, successor.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("replayed refresh did not revoke current refresh: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, "bwr1_"+strings.Repeat("0", 64), client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("unknown token accepted: %v", err)
+	}
+}
+
+// A replay-triggered family revocation is itself a durable SQLite write.
+// A storage fault must not create a half-revoked grant or lose the original
+// original active successor; a later replay with a writable store must revoke.
+func TestOAuthReplayRevocationSQLiteFaultIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
+	code, _, _, err := s.ApproveOAuth(ctx, pending, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := s.ExchangeOAuth(ctx, client, redirect, code, verifier, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.RefreshOAuth(ctx, first.Refresh, client, testOAuthOrigin+"/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("PRAGMA query_only=ON"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RefreshOAuth(ctx, first.Refresh, client, testOAuthOrigin+"/mcp"); err == nil {
+		t.Fatal("replay grant revocation unexpectedly succeeded on read-only SQLite")
+	}
+	if _, err := s.db.Exec("PRAGMA query_only=OFF"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.VerifyToken(ctx, next.Access); err != nil {
+		t.Fatalf("failed replay revocation changed active access: %v", err)
+	}
+	if _, err := s.RefreshOAuth(ctx, first.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
+		t.Fatalf("replay no longer recognizable after fault: %v", err)
+	}
+	if _, err := s.VerifyToken(ctx, next.Access); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("durable replay revocation failed: %v", err)
 	}
 }
