@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -836,6 +837,46 @@ func main() {
 // simulatedWan6 demonstrates real, separately routed IPv6 HTTPS from the
 // official authenticated SDK against a distinct network-namespace upstream.
 // Never claim public-Internet IPv6 from this documentation-prefix fixture.
+// Actual public IPv4 through installed MCP->guest Exec, not host curl,
+// scoped bridge staging, LAB package proxy or routed IPv6 simulated WAN.
+// No automatic retry of an ambiguous original native Exec. The signed
+// HTTPS target is an upstream public package-signing key (no secrets).
+func publicIPv4(ctx context.Context, s *mcp.ClientSession, m map[string]string,
+	uuid, prefix, name string, shouldPass bool) {
+	script := "set -eu; " +
+		"for i in $(seq 1 15); do ip -4 route get 1.1.1.1 >/dev/null 2>&1 && break; sleep 1; done; " +
+		"remote=$(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY " +
+		"-u http_proxy -u https_proxy -u all_proxy " +
+		"curl -4 --noproxy '*' --proto '=https' --tlsv1.2 " +
+		"--max-redirs 2 --connect-timeout 5 --max-time 18 -fsSL " +
+		"-o /tmp/s25-direct-public4-key.asc " +
+		"-w '%{remote_ip}' 'https://pkgs.zabbly.com/key.asc'); " +
+		"test -s /tmp/s25-direct-public4-key.asc; " +
+		"test \"$(wc -c </tmp/s25-direct-public4-key.asc)\" -gt 200; " +
+		"printf 'S25_REAL_PUBLIC_IPV4_REMOTE=%s\\n' \"$remote\""
+	final, out, exit := execGuest(ctx, s, uuid, prefix+"public4-"+name, script,
+		"agent-s25-public4", 75000)
+	m["public4_"+name+"_op"] = str(final, "operation_id")
+	saveCheckpoint(m)
+	if !shouldPass {
+		must(exit != 0 && !strings.Contains(out, "S25_REAL_PUBLIC_IPV4_REMOTE="),
+			"Internet-disabled Guest reached direct real public IPv4 HTTPS "+name)
+		return
+	}
+	must(exit == 0 && strings.HasPrefix(strings.TrimSpace(out), "S25_REAL_PUBLIC_IPV4_REMOTE="),
+		"Internet-enabled Guest could not reach real unproxied IPv4 TLS "+name)
+	ipstr := strings.TrimPrefix(strings.TrimSpace(out), "S25_REAL_PUBLIC_IPV4_REMOTE=")
+	addr, err := netip.ParseAddr(ipstr)
+	must(err == nil && addr.Is4() && addr.IsGlobalUnicast() && !addr.IsPrivate() &&
+		!netip.MustParsePrefix("100.64.0.0/10").Contains(addr) &&
+		!netip.MustParsePrefix("198.18.0.0/15").Contains(addr) &&
+		!netip.MustParsePrefix("192.0.2.0/24").Contains(addr) &&
+		!netip.MustParsePrefix("198.51.100.0/24").Contains(addr) &&
+		!netip.MustParsePrefix("203.0.113.0/24").Contains(addr),
+		"supposed public IPv4 responder is private/CGNAT/test or invalid")
+	m["public4_"+name+"_remote"] = addr.String()
+	saveCheckpoint(m)
+}
 func simulatedWan6(ctx context.Context) {
 	m := readCheckpoint()
 	must(m["uuid"] != "", "original Box not checkpointed")
@@ -901,16 +942,23 @@ func simulatedWan6(ctx context.Context) {
 	}
 	// Both layers' first owned Box started internet=true via MCP.
 	probe(m["uuid"], "main_initial_on", true)
+	publicIPv4(ctx, actor, m, m["uuid"], prefix, "main_initial_on", true)
+	publicIPv4(ctx, actor, m, m["wan6_peer_uuid"], prefix, "peer_initial_off", false)
 	probe(m["wan6_peer_uuid"], "peer_initial_off", false)
 	update(m["uuid"], "main-off", "main_off", false)
 	probe(m["uuid"], "main_off", false)
+	publicIPv4(ctx, actor, m, m["uuid"], prefix, "main_off", false)
 	update(m["uuid"], "main-on", "main_on", true)
 	probe(m["uuid"], "main_on", true)
+	publicIPv4(ctx, actor, m, m["uuid"], prefix, "main_on", true)
 	update(m["wan6_peer_uuid"], "peer-on", "peer_on", true)
 	probe(m["wan6_peer_uuid"], "peer_on", true)
+	publicIPv4(ctx, actor, m, m["wan6_peer_uuid"], prefix, "peer_on", true)
 	update(m["wan6_peer_uuid"], "peer-off", "peer_off", false)
 	probe(m["wan6_peer_uuid"], "peer_off", false)
+	publicIPv4(ctx, actor, m, m["wan6_peer_uuid"], prefix, "peer_off", false)
 	probe(m["uuid"], "main_final_on", true)
+	fmt.Printf("S25_DIRECT_PUBLIC_IPV4_%s_MCP_STRICT_TLS_PER_NIC_AND_REAL_REMOTE=PASS\n", layer)
 	fmt.Printf("S25_SIMWAN6_%s_MCP_IPV6_TLS_PER_NIC_ON_OFF_ON=PASS\n", layer)
 }
 

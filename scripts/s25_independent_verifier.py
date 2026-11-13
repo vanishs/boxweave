@@ -272,6 +272,61 @@ def inspect_simwan6(inner_layer=False, cleaned=False):
         else:
             read_ledger(os.environ["BW_S25_OUTER_DB"], data[field],
                         uuid, "agent-s25-simwan6")
+    # Exact same approved installed v1/Incus native UUID and original
+    # SDK Exec attribution across real public IPv4, not a relay/simulated v6.
+    import ipaddress
+    for phase, uuid, positive in (
+        ("main_initial_on",data["uuid"],True),
+        ("peer_initial_off",data["wan6_peer_uuid"],False),
+        ("main_off",data["uuid"],False),
+        ("main_on",data["uuid"],True),
+        ("peer_on",data["wan6_peer_uuid"],True),
+        ("peer_off",data["wan6_peer_uuid"],False),
+    ):
+        field="public4_"+phase+"_op"
+        require(data.get(field),"real public IPv4 original operation absent "+field)
+        if inner_layer:
+            sql_op=("import sqlite3,sys;"
+                    "c=sqlite3.connect('file:/var/lib/boxweave/ledger.sqlite?mode=ro',uri=True);"
+                    "v=c.execute('SELECT state,box_uuid,agent_ref FROM operations WHERE id=?',(sys.argv[1],)).fetchone();"
+                    "assert v==('SUCCEEDED',sys.argv[2],'agent-s25-public4'),v")
+            inner("python3","-c",sql_op,data[field],uuid)
+        else:
+            read_ledger(os.environ["BW_S25_OUTER_DB"],data[field],uuid,"agent-s25-public4")
+        if positive:
+            remote=ipaddress.ip_address(data.get("public4_"+phase+"_remote","0.0.0.0"))
+            require(isinstance(remote,ipaddress.IPv4Address) and remote.is_global and
+                    remote not in ipaddress.ip_network("100.64.0.0/10") and
+                    remote not in ipaddress.ip_network("198.18.0.0/15"),
+                    "real IPv4 public TLS responder was not globally routed")
+    # After the original MCP on/off sequence, the primary is online and
+    # the sibling is offline. V independently issues separate native
+    # guest HTTPS; no original SDK bearer or MCP mutation is available here.
+    def public4_native(guest):
+        args=["incus","exec",guest,"--project",project,"--","sh","-c",
+              "env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY "
+              "-u http_proxy -u https_proxy -u all_proxy "
+              "curl -4 --noproxy '*' --proto '=https' --tlsv1.2 "
+              "--max-redirs 2 --connect-timeout 5 --max-time 16 -fsSL "
+              "-o /tmp/s25-direct-public4-verify.asc "
+              "-w '%{remote_ip}' 'https://pkgs.zabbly.com/key.asc'"]
+        if inner_layer:
+            args=["sudo","incus","exec","bw-s25-mcp-l1","--project",
+                  os.environ["BW_S25_PROJECT"],"--"]+args
+        else:
+            args=["sudo"]+args
+        return subprocess.run(args,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                              timeout=28,check=False)
+    good=public4_native(name)
+    good_ip=ipaddress.ip_address(good.stdout.strip() if good.returncode==0 else "0.0.0.0")
+    require(good.returncode==0 and isinstance(good_ip,ipaddress.IPv4Address) and
+            good_ip.is_global and good_ip not in ipaddress.ip_network("100.64.0.0/10") and
+            good_ip not in ipaddress.ip_network("198.18.0.0/15"),
+            "independent real public IPv4 HTTPS guest remote invalid or unreachable")
+    bad=public4_native(peer_name)
+    require(bad.returncode!=0,"independent internet=off peer reached real public IPv4")
+    print("S25_V_DIRECT_PUBLIC_IPV4_"+("INNER" if inner_layer else "OUTER")+
+          "_MCP_ORIGINALS_NATIVE_UNPROXIED_TLS_AND_DENIAL=PASS")
     url = "https://[2001:db8:25:2026::2]:18479/witness"
     def call_guest(guest):
         args = ["incus", "exec", guest, "--project", project, "--", "curl",
