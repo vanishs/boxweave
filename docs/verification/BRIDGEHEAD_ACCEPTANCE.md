@@ -1,20 +1,4 @@
-**2026-11-13 OWNER GATE-SEMANTICS UPDATE (supersedes earlier
-physical-host-first HOST_GO wording):** HOST_GO is the **pre-install
-eligibility verdict**, obtained by a new isolated, nesting-enabled
-main-managed Box with the actual new v1 remotely authenticated Agent,
-installed native Incus/SQLite original-operation and independent
-security/packet proof, real public IPv4, simulated routed IPv6 and
-source-exact final Actions. Existing ROUND1_PASS, ROUND2_PASS and
-LAB_PASS remain valid **only** in their bounded signed scope.
-HOST_GO remains PENDING_LIVE_AGENT: no new v1 remote MCP Agent
-test has yet been signed. The original BH-017 real **physical** host
-native/Agent I+N+V and rollback obligation is **retained**, now the
-mandatory `HOST_POSTFLIGHT_PASS` row once a particular dedicated
-physical host is separately authorized and installed. BH-017 is
-NOT_AUTHORIZED; do not mark it PASS from the isolated Box.
-[Updated authoritative stage-3 contract](../development/HOST_GO_THREE_STAGE_RUNBOOK.md).
-No physical/global host modification, PR merge or release is implied.
-Earlier failed and UNKNOWN original evidence is preserved.
+**2026-11-13 owner-approved pre-pilot/postflight correction (current precedence):** The earlier *HOST_GO PASS before first physical installation* rule created a circular gate and is **superseded** by the [dedicated-host pilot/installer/Release contract](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). `ROUND1_PASS`, `ROUND2_PASS` and bounded `LAB_PASS` remain signed; the actual owner-connected ChatGPT `v1` OAuth+MCP+Incus original operations and Git/IPv4 provide `NESTED_PILOT_CORE_PASS`. This permits an **explicitly authorized, reversible, isolated development host pilot only after exact-host preflight**, not all BH/TC PASS. **BH-017, independent V, exact-host native IPv4/IPv6/security and postflight happen after that first installation**. `HOST_GO=PASS` only follows full postflight and all remaining mandatory P0/CI. Previous failures/UNKNOWN reports below are chronological evidence; never relabel their original results.
 
 **LATEST FORMAL 2026-11-13 LAB SIGNOFF: ROUND1_PASS,
 ROUND2_PASS and LAB_PASS (owner-approved bounded equivalent evidence).**

@@ -1,6 +1,6 @@
 # HOST_GO: three user-triggered execution rounds (S2.5 BRIDGEHEAD)
 
-**2026-11-13 approved pre-Round-3 OAuth work (PLANNED, not yet implemented):** the owner selected **Go-native embedded OAuth** within the existing v1 HTTP MCP service as the simplest ChatGPT connection. Keep `/mcp` as one resource; use official SDK authentication plus a small reviewed OAuth AS library, `admin/viewer` roles, operator-launched Quick Tunnel and exact `public_origin` configuration. Implement and pass [OA-001–010](S25_EMBEDDED_OAUTH_IMPLEMENTATION.md) **before** using the new OAuth path for the Round 3 live ChatGPT gate. The message "开始 OAuth 开发" executes this bounded development task, **not** formal Round 3. No public exposure, physical-host installation or new MCP Tool is authorized by this note.
+**2026-11-13 live OAuth checkpoint:** Embedded OAuth is implemented in Go. The owner-connected real ChatGPT `v1` MCP has successfully executed authenticated owned Incus Create/Update/Exec/Stop/Delete, persistent stdout/stderr, guest Git failing-test/fix/pass and real IPv4 off/on/off, with independent native readback. This is a scoped `NESTED_PILOT_CORE_PASS`, **not** the complete BH/TC network/security/independent Verifier or final `HOST_GO`. See [original operations](https://github.com/vanishs/boxweave/pull/133#issuecomment-6851880060) and the [latest pilot contract](V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md).
 
 **2026-11-13 owner-selected preparatory topology update:** The owner
 subsequently chose to **reuse existing main-managed Box `boxweave-test-cli`**
@@ -43,7 +43,7 @@ The following three owner messages are the only automatic execution triggers. Ma
 |---|---|---|
 | `完成HOST_GO 第一阶段` (also accept `完成 HOST_GO 第一阶段`) | Round 1 — ownership/network security | Record acceptance and report results; STOP |
 | `完成HOST_GO 第二阶段` (also `完成 HOST_GO 第二阶段`) | Round 2 — fault recovery/real Agent | Record acceptance and report results; STOP |
-| `完成HOST_GO 第三阶段` (also `完成 HOST_GO 第三阶段`) | Round 3 — isolated live-v1 Agent gateway / final Actions | Record final HOST_GO or NO_GO; STOP |
+| `完成HOST_GO 第三阶段` (also `完成 HOST_GO 第三阶段`) | Round 3 — named dedicated-host read-only preflight, approved reversible installation, independent host postflight, final exact-source Actions | Record HOST_POSTFLIGHT and HOST_GO truthfully; STOP |
 
 **On each invocation:** perform that round end-to-end, not just write another plan. Resume any prior incomplete round from [live checkpoint](../verification/HOST_GO_STAGE_STATUS.md), GitHub PR/commits and original native receipts, rather than resetting state or repeating uncertain writes. A user calling the next ordinal is not permission to mark an earlier blocked security prerequisite PASS. If earlier rounds are incomplete, complete independently safe tasks within the requested round, mark dependent work BLOCKED and report the exact prerequisite; do not advance into another round autonomously. Do not start Round 2/3 at the end of Round 1/2.
 
@@ -88,77 +88,18 @@ The following three owner messages are the only automatic execution triggers. Ma
 - Repeat high-priority two-Agent shared-work/foreign-work/ref spoof, token revoke/rotate/blocked-client negatives, and a complete independent original-operation recovery. Reuse only crosswalked S1/S2 accepted cases; sign off BH/TC rows individually with evidence or recorded non-blocking variance explicitly approved by owner.
 - **Gate:** `ROUND2_PASS` needs P0 fault/recovery/rollback evidence and real intended-Agent integration (or an explicitly documented owner-approved change of which Agent will be the real development client). Otherwise `ROUND2_PARTIAL/BLOCKED`, no HOST_GO. Report source/IDs/cleanup and **STOP**, regardless of spare context/time.
 
-## Round 3 — conditional dedicated-host pilot and HOST_GO decision
+## Round 3 — bounded dedicated physical-host pilot, then HOST_GO verdict
 
-**Formal trigger:** `完成HOST_GO 第三阶段` plus fresh, specific exact-host authorization before any physical mutation. A separately approved
-preparatory Box/Tunnel provisioning request is not the formal test trigger.
+**Trigger:** `完成HOST_GO 第三阶段`, **plus** a fresh user authorization identifying the dedicated host and permitted host-local effects. A previous general authorization for nested Boxes never authorizes modification of an unspecified physical machine. Starting Round 3 without an approved exact host permits read-only documentation/checkpoint work only; mark `HOST_NOT_AUTHORIZED`.
 
-1. **Pre-install acceptance checkpoint:** confirm Round 1+2 signed LAB evidence and its
-   explicit limitations; read-only inventory of the existing `main` provider,
-   prior UNKNOWN receipts and foreign managed Boxes. Use **one newly created Box, or the separately approved existing
-   nesting-enabled Box with a new independently named inner Guest** and
-   bounded resources. Preserve original services, unrelated L1 native
-   instances and all foreign ownership; never reuse an existing DB. Confirm the
-   original durable gateway Create status before proceeding; never retry an
-   UNKNOWN native/gateway Create. Enable nesting only as explicitly requested
-   and verify effective native readiness; don't assume `enable_nesting` worked.
-2. **Pinned v1 and independently owned Incus:** use a reviewed precise PR #133
-   source SHA and binary SHA-256, install confined v1+Incus inside this
-   **separately approved dedicated physical development host** after host-specific read-only preflight (nested Guest remains available for fault fixtures). Record actual daemon version, native prerequisites,
-   Project/Profile/ACL/pool and auth. No shared parent daemon/global Scriptlet
-   changes, no old `main` co-install, no silent privilege escalation.
-   A potentially incompatible isolation, quota or native authorization
-   failure is an explicit `BLOCKED`, not reason to relax controls.
-3. **Safe remote Agent path:** keep v1 MCP loopback-only in that Box; publish
-   HTTPS **only** through an intentionally authorized Cloudflare Quick/named
-   Tunnel or equivalent reviewed proxy. Require valid v1 admin/viewer
-   credentials behind the tunnel. A random Tunnel URL or password alone
-   is **not** OAuth. Use the approved in-process v1 Go OAuth service only
-   after OA-001–008 protocol/security acceptance: resource metadata,
-   authorization-code PKCE, resource-bound tokens, correct roles/scopes,
-   browser callback and client discovery. The Quick Tunnel is test-only,
-   cannot carry SSE, and its JSON MCP route needs real ChatGPT proof. Never put secrets in
-   GitHub commits, PR comments, URLs or chat. Prove public 401 and
-   authorized Tool discovery independently **before** asking the owner
-   to connect. Record ChatGPT plan/feature limitations as
-   `AGENT_PATH_BLOCKED`, not as a fake verified connection.
-4. **Owner connects and triggers:** give the owner only the validated
-   HTTPS MCP URL and exact approved connection instructions; **STOP**
-   until the owner confirms that the *new* v1 MCP is connected, specifies
-   which Agent/client may run the test and explicitly requests Round 3
-   execution. Existing `main` tools are not proof that new v1 is connected.
-5. **Native Agent+security acceptance:** with the owner's new connection,
-   authenticate and inspect real Tool discovery, then execute a small original
-   idempotency-key v1 Guest lifecycle and realistic Agent Git/build/test
-   inside an owned L2 behind an unprivileged nested L1. Capture distinct
-   original BoxWeave/native Operations, actual Incus UUIDs, retained
-   output and reconnect recovery. Prove IPv4 public HTTPS positive/off/on,
-   routed simulated IPv6 HTTPS, parent/foreign socket denial, IPv4/IPv6/MAC
-   spoof and peer/foreign negative cases, Viewer/expired/revoked denied
-   writes, and fail-closed default network. An independent verifier
-   rechecks effective native state and exact owned cleanup. Reuse previous
-   accepted LAB faults rather than injecting destructive parent-host faults.
-   Do not replay UNKNOWN originals.
-6. **Final exact candidate gate:** after these real Box/Agent tests, run
-   all relevant same-head Actions (quality/race, original native S2 and
-   nested independent S2.5) and reconcile source/binary identity.
-   Record failures and fixes with original IDs. `HOST_GO=PASS` only after separately authorized **dedicated-host installed postflight** and when
-   the **new ChatGPT or owner-approved actual intended Agent**'s live remote
-   MCP I + native N + independent V and all required negatives, genuine
-   IPv4, simulated IPv6 and Actions succeed. Otherwise mark
-   `HOST_GO=BLOCKED`; never infer PASS from an SDK simulator or a tunnel URL.
-   Update BH/TC with the added Stage-3 Agent witness and append-only log,
-   commit to PR #133 and report the next owner step. **STOP.**
+1. **Reconcile pre-install evidence without repeating old mutations.** Confirm `ROUND1_PASS`, `ROUND2_PASS`, bounded `LAB_PASS` and the real ChatGPT `NESTED_PILOT_CORE_PASS`. The new owner-connected `v1` endpoint is distinct from legacy `boxweave`. Retain all original BoxWeave/native IDs, old UNKNOWNs and already accepted LAB fault/IPv6 witnesses. Do not call the old Gateway's possibly dispatched UNKNOWN Creates again.
+2. **Exact host preflight (read-only):** record name, machine-ID hash, OS/kernel/CPU/RAM/disk/inodes/pressure, current Incus service/APT and restrictions, Project/profile/storage/network/ACL, existing systemd unit/binary/SQLite, existing native consumers and legacy main presence. Refuse coexistence with old main or adoption of existing unexpected state. Show precise native-prepare plan and SHA before root apply. If existing root/native actions are unsafe or unapproved, `HOST_NO_GO` and stop.
+3. **Separate explicit operator authorization, then reversible first install:** only for the reviewed exact host and exact changes, deploy a SHA256-bound `b8f0a8d` candidate or a verified later code SHA using [the external helper + existing Go local installer](V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). The separate `install.sh --plan` is not a root mutation; `--apply` requires exact host confirmation and previously reviewed native account/Project/ACL. Do not auto provision or upgrade Incus, create an Internet tunnel, replay UNKNOWN or commit an upgrade backup. Inspect Go installer manifest/rollback state before activating. Fail closed if the new binary/DB fails safe native/loopback checks.
+4. **Host-connected Agent I+N+V acceptance:** only after bounded install, connect approved client to newly installed host via operator-configured secured MCP endpoint; prove original-key authentic ChatGPT development lifecycle, guest output/failed Git test/fix/pass, native UUID/project identity at L0→L1→L2, independent verifier and readback. Reconfirm directly on this host genuine external IPv4 HTTPS per-NIC off/on/off, separately routed simulated IPv6 HTTPS (physical public IPv6 deferred to S5 if unavailable), parent/foreign socket denial, IPv4/IPv6/MAC spoof and peer/foreign negatives, explicit Viewer/bad/revoked token denial, exact resource cleanup and no native UNKNOWN replay. Reuse accepted LAB failure-injection evidence if the candidate/contract matches; do not destructively fault the newly dedicated parent host.
+5. **Host fallback and final gates:** demonstrate a real safe stop/rollback or fail-closed fallback with retained original SQLite/native receipts. Distinct independent Verifier signs `HOST_POSTFLIGHT_PASS` for **this** exact host. Reconcile any remaining mandatory BH-001–017/TC-011–014 P0 cases, scope-specific source/binary digests and the exact latest candidate Actions (quality/race, S2 native, S2.5 nested). Publish findings/operation IDs and unresolved risks in the stage status, verification matrix, append-only execution log and Draft PR #133. **Only then** sign `HOST_GO=PASS`; a green source build or successful initial host install alone is never enough.
+6. **Stop:** report the distinct statuses `PILOT_DEPLOY_GO`, `HOST_POSTFLIGHT`, `HOST_GO`, code/binary SHA, remaining risks and exact host cleanup/retained state. Never turn this into production, S5 release, PR merge or automatic follow-on deployment.
 
-**Dedicated physical-host pilot (permitted before final HOST_GO):**
-after accepted nested core evidence and **before** claiming `HOST_GO=PASS`, obtain fresh explicit authorization naming the
-dedicated host and allowed effects. Run read-only capacity/security/native
-preflight, exact-candidate bounded installation and L0/L1/L2/Agent
-postflight, real public IPv4 and independent native verifier, safe
-stop/rollback and original ledger reconciliation. Only then sign
-`HOST_POSTFLIGHT_PASS` for that one host; reconcile remaining required P0/Actions before `HOST_GO=PASS`. If no permission or a P0 fails,
-record `HOST_POSTFLIGHT_NOT_AUTHORIZED/NO_GO` and **do not install or
-continue writes**. No automatic PR merge or S5 release.
+**Gate clarification:** `HOST_GO=PASS` is a **post-pilot** development-host acceptance verdict. It is not a precondition for the **first reversible physical development pilot**. `PILOT_DEPLOY_GO=CONDITIONAL` and the owner's exact-host approval authorize only its limited first installation, while failed P0 or host preflight bars that mutation. Every physical postflight must reaccept the exact installed bytes; a different release binary cannot inherit a prior candidate's result.
 
 ## After-round reporting contract and persistent state
 
