@@ -2,6 +2,37 @@
 
 This is the **small mutable checkpoint** for [the user-triggered three-round runbook](../development/HOST_GO_THREE_STAGE_RUNBOOK.md). Detailed factual incidents append to [EXECUTION_LOG](../development/EXECUTION_LOG.md) and the per-ID [BH matrix](BRIDGEHEAD_ACCEPTANCE.md); never overwrite past failures. Only the currently invoked round can change to IN_PROGRESS, and evidence after the round must be committed to PR #133 before reporting it. A future Agent must read current GitHub and native state rather than trusting a stale checkpoint.
 
+## Current gate semantics — owner's 2026-11-13 explicit correction
+
+**ROUND1_PASS=YES, ROUND2_PASS=YES, LAB_PASS=YES (bounded historical
+scope). HOST_GO=PENDING_LIVE_AGENT; HOST_POSTFLIGHT=NOT_AUTHORIZED.**
+The previous physical-host-first `HOST_GO` definition was circular:
+installing on the real host both required and purportedly granted the
+same gate. Under the updated [Runbook](../development/HOST_GO_THREE_STAGE_RUNBOOK.md),
+`HOST_GO` is **pre-install candidate eligibility** obtained by a new
+separately isolated `main`-managed nesting-capable Box with the **actual
+new v1 remote MCP and intended Agent**, original native Incus/SQLite
+receipts, independent security verifier, real public IPv4, routed
+simulated IPv6, negative cases and final source-exact Actions. The
+physical host's separate post-install result is
+`HOST_POSTFLIGHT_PASS/NO_GO`, never inherited from LAB or HOST_GO.
+
+The owner separately authorized **preparatory provisioning of one new
+nested disposable Box and safe MCP/Tunnel/OAuth readiness** in this
+conversation; that permission **does not sign/trigger full Round 3**,
+authorize the physical host, waive ChatGPT write-capability/real OAuth
+requirements or permit an unauthenticated public service. The Agent
+must be configured by the owner and explicitly confirmed before the
+subsequent live MCP test. A 401-protected endpoint or tunnel by itself
+is not `HOST_GO`.
+
+**BH-017 original physical-host verification is retained**, but is now
+the mandatory `HOST_POSTFLIGHT` acceptance row rather than an early
+`HOST_GO` prerequisite. The live-Agent, native network and independent
+negative-case gate remains fully mandatory for `HOST_GO` in the new
+Runbook Stage 3. All original failed CI evidence, unknown receipts and
+prior narrower signoffs remain unchanged. No PR merge/release approved.
+
 **Owner-approved IPv6 timing contract change (2026-11-12):** Real public IPv6 WAN is deferred to S4 rehearsal / mandatory S5 actual reacceptance; public IPv4 remains real for S2.5. An isolated routed simulated IPv6 HTTPS WAN with the exact installed MCP I + genuine native packet N + independent V, positive/off/on/off and all v4/v6/MAC spoof and peer/foreign negatives is still mandatory. The separately routed **simulated IPv6 WAN I+N+V subcase PASSED** later on 2026-11-12 (original IDs and witnesses in [S25_SIMWAN6_I_N_V](S25_SIMWAN6_I_N_V_2026-11-12.md)); **Round 1 as a whole remains BLOCKED** by other ownership/role/foreign/Agent and full independent BH-009 security gaps; historical public-v6 failures are preserved. `PUBLIC_IPV6_DEFERRED_TO_S5` is not a public-v6 PASS. This docs-only approval does not start any round. [Contract](../decisions/IPV6_PUBLIC_WAN_PHASED_ACCEPTANCE_2026-11-12.md).
 
 ## Formal 2026-11-13 Round 1 + Round 2 isolated LAB acceptance
