@@ -109,8 +109,10 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  native-gate:
-    name: v1-prerelease-native-and-nested-verifier
+  native-s2-gate:
+    name: v1-prerelease-native-S2-isolated-runner
+    # Each job receives a fresh GitHub-hosted VM. S2 installs Incus,
+    # so S2.5's foreign-native-state guard must never run on S2's runner.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -127,9 +129,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Refuse publishing a release branch not equal to protected v1 HEAD
+      - name: Require the exact protected v1 HEAD before touching a disposable VM
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
@@ -138,15 +141,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/native.log"
-          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$RUNNER_TEMP/native.log"
+          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/native-s2-gate.log"
+          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$RUNNER_TEMP/native-s2-gate.log"
+
+  native-s25-gate:
+    name: v1-prerelease-nested-S2.5-isolated-runner
+    # Each job receives a fresh GitHub-hosted VM. S2 installs Incus,
+    # so S2.5's foreign-native-state guard must never run on S2's runner.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Require the exact protected v1 HEAD before touching a disposable VM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
       - name: Real nested independent Agent/Incus verifier
         shell: bash
         run: |
           set -euo pipefail
-          sh scripts/s25_bridgehead_lab.sh | tee "$RUNNER_TEMP/nested.log"
-          grep -Fxq 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/nested.log"
-          grep -Fxq 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/nested.log"
+          sh scripts/s25_bridgehead_lab.sh | tee "$RUNNER_TEMP/native-s25-gate.log"
+          grep -Fxq 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/native-s25-gate.log"
+          grep -Fxq 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/native-s25-gate.log"
 
   candidate:
     name: v1-exact-source-two-arch-manifest
@@ -189,7 +221,7 @@ jobs:
   publish:
     name: v1-immutable-development-RC-release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
-    needs: [source, linux, native-gate, candidate]
+    needs: [source, linux, native-s2-gate, native-s25-gate, candidate]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
