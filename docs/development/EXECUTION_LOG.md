@@ -785,3 +785,29 @@ reported.
   no cleanup record, no Delete journal, native STOPPED and exact
   original FAILED/owned UUID unchanged. No bypass or retry.
   REAL_RESIDUAL_DELETE=TOOL_SAFETY_BLOCKED remains a distinct gate.
+
+
+### 2026-11-12 — owner-authorized combined Round-1/2 final cleanup
+
+- Two successfully owned Round-1 Guests were cleaned by their exact
+  original v1 admin MCP controller and original persistent SQLite.
+  A: Stop original 03df844d906f91aa7e66ee05814b216d SUCCEEDED,
+  Delete 305e9e403b73f6d8e25fb371adb6203b SUCCEEDED.
+  B: Stop a01cc38f55437880275283464cb26c45 SUCCEEDED,
+  Delete 8c4c8cb61e01a08b964b175c8bd9ddf7 SUCCEEDED.
+  Independently inspected Incus names absent and owned_boxes DELETED;
+  pre-existing foreign L1 intact and temporary test MCP stopped.
+- Read verified exact current PR head d613737 5/5 successful Actions;
+  separately inspected artifact 13995825832 at SHA256
+  0586d01f4a5149b46b5ed479f9f643bac82a1f57f7e2e46d7562fc7a096e65b4,
+  current-source binary SHA256
+  ec88dbc81f8c854a848381d9aea1a52a651e758433d7eb3e0eb36d629822254a.
+  Nested simulated IPv6 I+N+V, SDK A/B, SIGKILL, rollback and
+  native cleanup show scoped PASS, but CI itself explicitly retains
+  S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET.
+- Round 1 BLOCKED on full same-binary L0+L1 BH-009/015 packet and
+  independent Verifier matrix. Round 2 BLOCKED on actual intended
+  development Agent TC-013 v1 connection and remaining formal cases.
+  No old UNKNOWN replay/cleanup, no physical host, no v1 merge.
+  Detailed record:
+  docs/verification/HOST_GO_ROUND12_CLEANUP_FOLLOWUP_2026-11-12.md.

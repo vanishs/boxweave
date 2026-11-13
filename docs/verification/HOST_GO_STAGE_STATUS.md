@@ -13,6 +13,25 @@ This is the **small mutable checkpoint** for [the user-triggered three-round run
 - Historical UNKNOWN: `7e1cbf043d1fd4ea3d9ec0093a04371e`, `f811afeeb778c422fe99b9881baa40f2`, `192a6601c54078f8eaf1437a6a3dc13b`, `a2fdf885b87a0b66fb3a17f913316c55` — no write retry, deletion or adoption.
 - `boxweave-test-ser2` is a previously used isolated development Box; `boxweave-test-cli` contains an existing native-only L1 `bw-s25-l1a` in Project `user-1002`. Before using either, read-only inventory + native consent/ownership; never presume current availability or an empty Project.
 
+## Latest owner-requested combined Round-1/2 reacceptance (2026-11-12 UTC)
+
+**TWO_RETAINED_GUESTS_CLEANUP=PASS**: original successful Guest UUIDs
+6b51eb00-fd33-4dfb-8d30-eadd55753a5f and
+aa79c354-4019-405f-ad00-0731d1553bd6 were stopped and deleted via
+new authenticated original v1 MCP intents; both native absent and
+owned_boxes rows DELETED. Old service and foreign bw-s25-l1a unaffected.
+**Round 1 remains BLOCKED** because BH-009/BH-015 exact-current-source
+full L0+L1 anti-spoof/public-v4/independent matrix is not signed.
+**Round 2 remains BLOCKED** because TC-013 actual intended ChatGPT
+development Agent uses legacy Gateway and lacks an approved v1 MCP
+connection, plus remaining individual BH/TC formal crosswalk.
+Same prior PR head d613737 exact Actions 5/5 SUCCESS; SHA-checked
+independent native artifact is bounded evidence, not formal ALL PASS.
+LAB_PASS=NO; HOST_GO=NOT_AUTHORIZED; Round 3 NOT_STARTED.
+[Detailed original Stop/Delete receipts, CI artifact and open gates](HOST_GO_ROUND12_CLEANUP_FOLLOWUP_2026-11-12.md).
+This checkpoint adds evidence, does not erase prior failed attempts,
+and is not permission to replay any native UNKNOWN.
+
 ## Round scoreboard
 
 | Trigger | Status | Cases / evidence | Exact code and native binary | Remaining blockers | User told? |

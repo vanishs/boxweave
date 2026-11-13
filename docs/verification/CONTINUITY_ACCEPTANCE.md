@@ -1,3 +1,13 @@
+**2026-11-12 combined HOST_GO Round-1/2 review:** both previous
+owned successful Guest cleanups passed with durable Stop/Delete,
+native absence and SQLite DELETED. Current-source Actions 5/5 and
+scoped SDK A/B native recovery + independent CI Verifier passed,
+but **TC-013 actual intended development Agent remains
+AGENT_PATH_BLOCKED**: ChatGPT's connected legacy gateway is not
+a v1 MCP connection. Do not convert SDK surrogate clients into
+actual-Agent evidence, and do not declare Round 2 PASS.
+[Exact native/SQLite IDs and open formal gates](HOST_GO_ROUND12_CLEANUP_FOLLOWUP_2026-11-12.md).
+
 **2026-11-12 Round-1-only exact-source continuation (TC context, not Round-2 reacceptance):** exact `58626acb` official Go SDK multiple roles and native UUID-bound operations were exercised in isolated Boxes, including authenticated 13-tool discovery, Viewer mutation denial, foreign original L1 UUID rejection, expired and revoked credential 401, independent original Create/Update readback and no Create re-dispatch. These facts strengthen **TC-011 identity/authorization subcases only**; no full two-development-Agent workflow, disconnect correlation, full UNKNOWN recovery or TC-011–014 independent signoff was completed in this Round-1 invocation. Two new native Create UNKNOWNs from a nesting-disabled Box and a safety-blocked owned-test cleanup were retained. [Full original receipts](HOST_GO_ROUND1_58626_REACCEPT_2026-11-12.md). TC-013 actual chosen Agent remains **BLOCKED**; ROUND1 and ROUND2 each remain BLOCKED, no HOST_GO.
 
 # TC — Operation Attribution & Continuity additional real acceptance matrix
