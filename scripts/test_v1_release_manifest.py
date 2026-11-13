@@ -74,6 +74,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotEqual(denied.returncode, 0)
         self.assertIn("exact current --confirm-host-sha256", denied.stderr)
 
+    def test_rc_flag_not_required_and_removed(self):
+        script = (ROOT / "install.sh").read_text()
+        self.assertNotIn("allow-prerelease", script)
+
     def test_embedded_installer_python_compiles(self):
         content = (ROOT / "install.sh").read_text()
         self.assertIn("PY_BOXWEAVE_INSTALL", content)

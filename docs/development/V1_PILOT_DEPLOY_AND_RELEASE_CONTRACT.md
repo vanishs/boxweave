@@ -70,10 +70,10 @@ For a **published development prerelease only** (after one is actually published
 
 ```sh
 sh install.sh --plan --project user-1001 \
-  --version v1.0.0-rc.1 --allow-prerelease
+  --version v1.0.0-rc.1
 ```
 
-A future signed-off stable `v1.X.Y` can be selected using `--version v1.X.Y`. Once the reviewed v1-only pointer is updated to that published stable tag, omitting `--version` selects it; **not** the repository-wide main/v1 latest GitHub Release.
+Explicit RC naming selects the prerelease directly; no additional `--allow-prerelease` switch is required. The v1-only **default** pointer remains stable-only and will never select an RC. A future signed-off stable `v1.X.Y` can be selected using `--version v1.X.Y`. Once the reviewed v1-only pointer is updated to that published stable tag, omitting `--version` selects it; **not** the repository-wide main/v1 latest GitHub Release.
 
 Release workflow intentionally separates three actions: ordinary PR/push runs build+manifest artifacts only; explicitly dispatched `publish_prerelease=true` on `v1` with `release_tag=v1.X.Y-rc.N` additionally requires installed native/nested tests and can create an immutable **development prerelease**; a **stable S5-qualified Release publication job is not yet implemented** and requires S5 acceptance/independent V. The current Script/Go installer owns staged artifacts and rollback, never automatically enables Cloudflare or starts a real physical pilot.
 

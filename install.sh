@@ -104,11 +104,9 @@ def download_checked_asset(release, name, tag, size_limit):
     return data
 
 
-def select_release(tag, arch, allow_prerelease):
+def select_release(tag, arch):
     tag = checked_tag(tag)
     rc = "-rc." in tag
-    if rc and not allow_prerelease:
-        raise InstallError("prerelease install requires explicit --allow-prerelease")
     release = get_json(API + "/releases/tags/" + tag)
     if release.get("tag_name") != tag or release.get("draft") or bool(release.get("prerelease")) != rc:
         raise InstallError("expected published release kind/tag not found")
@@ -146,7 +144,6 @@ def select_release(tag, arch, allow_prerelease):
 def main():
     parser = argparse.ArgumentParser(description="BoxWeave v1 verified external install coordinator")
     parser.add_argument("--version", help="exact immutable v1.X.Y or v1.X.Y-rc.N Release")
-    parser.add_argument("--allow-prerelease", action="store_true")
     parser.add_argument("--local-binary", help="approved absolute path to pre-release candidate")
     parser.add_argument("--sha256", help="required 64-hex SHA256 for local candidate")
     mode = parser.add_mutually_exclusive_group()
@@ -192,7 +189,7 @@ def main():
             if "-rc." in tag:
                 raise InstallError("stable v1 pointer may not select a prerelease")
         checked_tag(tag)
-        binary, version, source, sha = select_release(tag, arch, args.allow_prerelease)
+        binary, version, source, sha = select_release(tag, arch)
 
     if not args.service_user or not PROJECT_RE.fullmatch(args.service_user):
         raise InstallError("invalid service identity")
