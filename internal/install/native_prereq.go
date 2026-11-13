@@ -302,21 +302,19 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 	networkOK := false
 	aclOK := false
 	if devicesOK {
-		// Incus can expose a bridge or ACL from the default network
-		// project to a confined instance Project. Query both scopes as
-		// root-local inspector; this never widens the runtime credential.
-		network, networkTag, e := scoped.GetNetwork(netName)
-		if e != nil {
-			network, networkTag, e = c.GetNetwork(netName)
-		}
+		// NativePrerequisites is ROOT-LOCAL ONLY. An Incus restricted
+		// Project GET can succeed but mask the host-owned bridge Config
+		// (including ipv4.address and ipv6.address) to an empty map.
+		// Never use a masked successful response as the security oracle:
+		// inspect the full default-network-project bridge and exclusive
+		// ACL directly with the root-local Incus API. This does NOT
+		// expand the installed MCP/service Actor's native permissions.
+		network, networkTag, e := c.GetNetwork(netName)
 		if e == nil {
 			observe("network", network, networkTag)
 		}
 		networkOK = e == nil && network != nil && network.Type == "bridge" && network.Managed && network.Status == "Created"
-		acl, aclTag, e := scoped.GetNetworkACL(aclName)
-		if e != nil {
-			acl, aclTag, e = c.GetNetworkACL(aclName)
-		}
+		acl, aclTag, e := c.GetNetworkACL(aclName)
 		if e == nil {
 			observe("acl", acl, aclTag)
 		}
