@@ -1,5 +1,21 @@
 # HOST_GO: three user-triggered execution rounds (S2.5 BRIDGEHEAD)
 
+**2026-11-13 owner-selected preparatory topology update:** The owner
+subsequently chose to **reuse existing main-managed Box `boxweave-test-cli`**
+because new top-level creates returned UNKNOWN. Within that explicitly
+approved *existing* nesting-enabled Box, keep original services and L1
+unchanged and instead prepare a **new, independently named inner disposable
+Guest `hg-v1-cft-1113`** for pinned candidate v1, nested native Incus,
+Cloudflare Tunnel preparation and eventual actual-agent remote MCP.
+This bounded reuse is **allowed for preparatory LAB only**. It is not
+a physical-host installation or a substitute for dedicated-host proof;
+the previous "new main-managed Box only" instruction is superseded
+for this preparation. New candidate Guest may never share the old
+service's SQLite, binary, service or native Project. Existing history
+and original gateway UNKNOWN receipts remain untouched. The complete
+observed results and blockers are in
+[HOST_GO_STAGE_STATUS](../verification/HOST_GO_STAGE_STATUS.md).
+
 **Owner-approved gate clarification, 2026-11-13 UTC:** `HOST_GO` now means
 **eligible for a separately authorized installation on a dedicated physical
 development host**, not "already installed and accepted on that host".
@@ -31,10 +47,11 @@ without rewriting signed, still-true LAB evidence. Public IPv6 Internet
 remains mandatory at S5; simulated routed IPv6 I+N+V and genuine public
 IPv4 remain mandatory at this gate.
 
-**Preparatory permission (owner's separate 2026-11-13 request):** it is
-permitted to provision *one new, individually named isolated nested Box*
-under the existing `main` manager for v1/tunnel readiness **without
-executing or signing Round 3**. Inventory first; do not retry prior UNKNOWN
+**Preparatory permission (owner's 2026-11-13 requests):** it is
+permitted to use one owner-approved *new or existing, individually identified*
+nesting-capable main-managed Box and, when reusing, one new isolated inner
+Guest for pinned v1/Tunnel readiness **without executing or signing
+Round 3**. Inventory first; do not retry prior UNKNOWN
 creation receipts. No public unauthenticated MCP, fake OAuth password or
 exposure of Bearer credentials. If stable tunnel / OAuth-compatible provider
 or ChatGPT write-capable connection is absent, record `AGENT_PATH_BLOCKED`,
@@ -107,9 +124,10 @@ preparatory Box/Tunnel provisioning request is not the formal test trigger.
 
 1. **Isolated test admission:** confirm Round 1+2 signed LAB evidence and its
    explicit limitations; read-only inventory of the existing `main` provider,
-   prior UNKNOWN receipts and foreign managed Boxes. Create **one new**
-   nesting-enabled disposable main-managed Box with its own distinct logical
-   name/tenant, bounded resources and no foreign resource changes. Confirm the
+   prior UNKNOWN receipts and foreign managed Boxes. Use **one newly created Box, or the separately approved existing
+   nesting-enabled Box with a new independently named inner Guest** and
+   bounded resources. Preserve original services, unrelated L1 native
+   instances and all foreign ownership; never reuse an existing DB. Confirm the
    original durable gateway Create status before proceeding; never retry an
    UNKNOWN native/gateway Create. Enable nesting only as explicitly requested
    and verify effective native readiness; don't assume `enable_nesting` worked.
