@@ -26,6 +26,30 @@ must be configured by the owner and explicitly confirmed before the
 subsequent live MCP test. A 401-protected endpoint or tunnel by itself
 is not `HOST_GO`.
 
+**New isolated-box preparation attempt, 2026-11-13 07:28Z: BLOCKED,
+not a successful create, not Round-3 acceptance.** Existing main
+managed backend `dev` was healthy for read inventory, Incus 7.5.1,
+daemon 0.128.0; main host had 4 physical CPUs and 28 committed,
+so only one 2-CPU/4-GB/35-GB nested isolated Box was requested.
+New logical name `bw-v1-agentgate-1113`, original stable
+request_key `85d13929b727a493e8aa6a0a5995c7c1`, task_id
+`c90bcadde227381550e4528cb5b45e83`, initial
+`REST_GATE_PENDING` followed by **`UPSTREAM_CREATE_OUTCOME_UNKNOWN`**.
+Read-only `get_container` yielded `NOT_FOUND`, `debug_container`
+reported `containerState=missing`; original durable
+`boxweave_create_status` remains UNKNOWN. Gateway diagnostics
+showed `UPSTREAM_JSONRPC_ERROR`, not a verified no-dispatch.
+A separate REST task read refused `TRUST_OR_WORKLOAD_KEY_GATE`.
+**Do not repeat, delete, adopt or use the original unknown create,
+or infer safety from a missing read-back.** No new Box/installed v1,
+Tunnel, OAuth provider, authenticated public MCP or actual Agent
+connection is verified; no public URL or password exists. Existing
+owned/foreign workloads untouched. Next: independently reconcile
+original gateway/native intent under authorized provider diagnostic
+authority or obtain an explicitly approved independent clean Box
+path; only after safe resolution perform isolated v1 and authentication
+setup. `HOST_GO=PENDING_LIVE_AGENT`, formal Round 3 not invoked.
+
 **BH-017 original physical-host verification is retained**, but is now
 the mandatory `HOST_POSTFLIGHT` acceptance row rather than an early
 `HOST_GO` prerequisite. The live-Agent, native network and independent
