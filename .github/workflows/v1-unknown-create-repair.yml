@@ -1,0 +1,37 @@
+name: v1 UNKNOWN Create recovery - disposable native regression
+
+on:
+  push:
+    branches:
+      - fix/v1-unknown-create-reconciliation-20261112
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-unknown-recovery:
+    if: github.repository == 'vanishs/boxweave'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Exact-source quality and UNKNOWN create crash/review tests
+        run: |
+          make verify
+          go test -race -count=1 ./internal/state ./internal/control -run 'TestUnknownCreate|TestCreatePostread|TestCreateVerified|TestCreateNativeFailure'
+      - name: Real one-use Incus 7.6 MCP and native regression
+        shell: bash
+        run: |
+          set -o pipefail
+          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/unknown-create-native.log"
+          grep -Fqx 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$RUNNER_TEMP/unknown-create-native.log"

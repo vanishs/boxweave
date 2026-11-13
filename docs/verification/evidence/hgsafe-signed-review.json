@@ -1,0 +1,32 @@
+{
+  "candidate_binary_sha256": "021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85",
+  "candidate_source": "0cf474fbd212c92702591ec85f75e7bea58547ee",
+  "formal_all_BH_TC_signoff": false,
+  "independent_verifier_box": "boxweave-test-ser2",
+  "l0_foreign_box_bidir_pass": true,
+  "layers": {
+    "l0": {
+      "identical_binary_sha256": "021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85",
+      "native_post_deleted": true,
+      "original_ops_after": 16,
+      "original_ops_before": 12,
+      "owned_guest_count": 2,
+      "sibling_bidir_v4_v6_rejected": true,
+      "spoof_v4_v6_mac_rejected": true
+    },
+    "l1": {
+      "identical_binary_sha256": "021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85",
+      "native_post_deleted": true,
+      "original_ops_after": 16,
+      "original_ops_before": 12,
+      "owned_guest_count": 2,
+      "sibling_bidir_v4_v6_rejected": true,
+      "spoof_v4_v6_mac_rejected": true
+    }
+  },
+  "post_snapshot_sha256": "41b2a4e36652d0ca50b2806b72679985b9d9ff9b711c972a005dfe762d654695",
+  "pre_snapshot_sha256": "ed20a8f7ea842034001806ade58095fe0a655681da8a3d9f112b0ec91060ef7a",
+  "scope": "same-binary installed SDK+native+separate-Box verifier, L0/L1 spoof and sibling; L0 foreign Box",
+  "source_test_execution_box": "boxweave-test-cli",
+  "status": "SCOPED_INDEPENDENT_V_PASS"
+}

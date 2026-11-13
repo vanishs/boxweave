@@ -28,17 +28,22 @@ var (
 
 var safeName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 
+// The original BoxWeave admission ID is persisted with the native Create.
+// It is an identity witness for crash recovery, never a public adoption token.
+const createOperationKey = "user.boxweave.create_operation"
+
 // InstanceAction never accepts raw Incus config, profiles or host paths.
 // The credential and actual restricted project are fixed by Reader, not caller.
 type InstanceAction struct {
-	Name      string
-	UUID      string
-	Start     bool
-	CPU       int
-	MemoryMiB int64
-	DiskGiB   int64
-	Nesting   bool
-	Internet  bool
+	OperationID string
+	Name        string
+	UUID        string
+	Start       bool
+	CPU         int
+	MemoryMiB   int64
+	DiskGiB     int64
+	Nesting     bool
+	Internet    bool
 }
 
 type InstanceChanges struct {
@@ -113,6 +118,26 @@ func nicPrivate(devices api.DevicesMap) bool {
 	return count == 1
 }
 
+// nicProfilePrivate is the *default-Profile* admission gate. An explicitly
+// open egress baseline would make every direct Incus CLI-created instance
+// network-enabled before BoxWeave checks its own per-Box internet policy.
+// An absent egress setting is Incus 7.6's documented implicit reject.
+// Instance-owned NICs use nicPrivate instead, and may explicitly allow
+// egress only after a reviewed box_create(internet=true) or box_update.
+func nicProfilePrivate(devices api.DevicesMap) bool {
+	if !nicPrivate(devices) {
+		return false
+	}
+	for _, d := range devices {
+		if d["type"] != "nic" {
+			continue
+		}
+		egress := d["security.acls.default.egress.action"]
+		return egress == "" || egress == "reject"
+	}
+	return false
+}
+
 // CheckBootstrap is intentionally stricter than native existence: a running
 // unisolated bridge NIC is unacceptable even in an exclusive Incus Project.
 // ownedPrivateNICEgress shadows exactly one verified private NIC without
@@ -165,7 +190,7 @@ func (r Reader) CheckBootstrap(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if !nicPrivate(p.Devices) {
+	if !nicProfilePrivate(p.Devices) {
 		return ErrUnsafeNetwork
 	}
 	return nil
@@ -309,6 +334,12 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 		"limits.cpu":    strconv.Itoa(a.CPU),
 		"limits.memory": fmt.Sprintf("%dMiB", a.MemoryMiB),
 	}
+	if a.OperationID != "" {
+		if len(a.OperationID) != 32 || strings.Trim(a.OperationID, "0123456789abcdef") != "" {
+			return "", ErrNativeUnsupported
+		}
+		config[createOperationKey] = a.OperationID
+	}
 	if a.Nesting {
 		config["security.nesting"] = "true"
 	}
@@ -362,6 +393,52 @@ func (r Reader) NativeOperation(ctx context.Context, id string) (*api.Operation,
 	}
 	op, _, err := c.GetOperation(id)
 	return op, err
+}
+
+// OriginalOperationInactive verifies a vanished native Operation ID is no
+// longer visible as an active, project-confined effect. It never infers that
+// the original native Operation succeeded; callers must also verify the
+// exact original marker/UUID, every native config postcondition and guest
+// state. This observation is read-only and deliberately double-checked.
+func (r Reader) OriginalOperationInactive(ctx context.Context, id string) error {
+	if id == "" || len(id) > 128 {
+		return ErrUnverified
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		c, err := r.confined(ctx)
+		if err != nil {
+			return err
+		}
+		ops, err := c.GetOperations()
+		if err != nil {
+			return err
+		}
+		if nativeOriginalStillActive(id, ops) {
+			return ErrUnverified
+		}
+		if attempt == 0 {
+			timer := time.NewTimer(350 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return nil
+}
+
+func nativeOriginalStillActive(id string, ops []api.Operation) bool {
+	for _, op := range ops {
+		if op.ID == id && !op.StatusCode.IsFinal() {
+			return true
+		}
+	}
+	return false
 }
 
 // ObserveUntilFinal only polls native GET, never WaitContext (which can send
@@ -773,6 +850,20 @@ func (r Reader) ReadRecordedOutput(ctx context.Context, path string, offset, len
 // successful native operation ID. An isolated GET by name is NOT authority
 // to adopt a foreign or originally UNKNOWN instance.
 func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, error) {
+	return r.observeCreated(ctx, name, "")
+}
+
+// ObserveCreatedByOperation requires the exact original durable BoxWeave Create
+// identity in native config. Matching a name or a native UUID alone never
+// authorizes adoption of a possibly foreign instance.
+func (r Reader) ObserveCreatedByOperation(ctx context.Context, name, operationID string) (BoxState, error) {
+	if operationID == "" {
+		return BoxState{}, ErrNotOwned
+	}
+	return r.observeCreated(ctx, name, operationID)
+}
+
+func (r Reader) observeCreated(ctx context.Context, name, operationID string) (BoxState, error) {
 	var out BoxState
 	if !safeName.MatchString(name) {
 		return out, ErrNotOwned
@@ -784,6 +875,9 @@ func (r Reader) ObserveCreated(ctx context.Context, name string) (BoxState, erro
 	inst, _, err := c.GetInstance(name)
 	if err != nil {
 		return out, err
+	}
+	if operationID != "" && inst.Config[createOperationKey] != operationID {
+		return out, ErrNotOwned
 	}
 	uuid := inst.Config["volatile.uuid"]
 	if uuid == "" || inst.Project != "" && inst.Project != r.Project {

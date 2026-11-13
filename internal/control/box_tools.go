@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -252,6 +253,92 @@ func nativeDone(ctx context.Context, r native.Reader, nativeID string) error {
 	return nil
 }
 
+// observeOriginalCreateSettled tolerates Incus post-create status propagation.
+// It is read-only and never retries Create or Start. Foreign identity or
+// unsafe NIC evidence refuses immediately; other transient observations get
+// a bounded read window. A stable stopped guest is returned as a residual
+// only after giving the requested startup a chance to settle.
+// A postread must prove the requested native shape as well as the user
+// marker and effective ACL. A native operation that left a same-name but
+// differently sized/resourced guest is NOT considered a complete Create.
+func exactCreateNativeShape(g native.BoxState, in createBoxInput) bool {
+	return g.CPU == strconv.Itoa(in.CPU) &&
+		g.Memory == fmt.Sprintf("%dMiB", in.MemoryMiB) &&
+		g.RootDiskSize == fmt.Sprintf("%dGiB", in.DiskGiB) &&
+		g.Nesting == in.Nesting
+}
+
+func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet, nativeFailed bool) (native.BoxState, error) {
+	return settleOriginalCreateWithNativeFailure(ctx, 6*time.Second, func(readCtx context.Context) (native.BoxState, error) {
+		return s.Native.ObserveCreatedByOperation(readCtx, name, originalID)
+	}, start, internet, nativeFailed)
+}
+
+// The injected read-only observation makes the settle rules testable without
+// inventing native operation replies or issuing additional mutations.
+func settleOriginalCreate(ctx context.Context, budget time.Duration, observe func(context.Context) (native.BoxState, error), start, internet bool) (native.BoxState, error) {
+	return settleOriginalCreateWithNativeFailure(ctx, budget, observe, start, internet, false)
+}
+
+// A terminal FAILED Incus Create operation must never be reconciled from an
+// instantaneous Running observation: Incus can transiently report Running
+// before a failed LXC start settles back to Stopped. Require two consistent
+// STOPPED readbacks with the same native UUID, or leave the original UNKNOWN.
+func settleOriginalCreateWithNativeFailure(ctx context.Context, budget time.Duration, observe func(context.Context) (native.BoxState, error), start, internet, nativeFailed bool) (native.BoxState, error) {
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	var stopped native.BoxState
+	for {
+		observed, err := observe(ctx)
+		if errors.Is(err, native.ErrNotOwned) || errors.Is(err, native.ErrUnsafeNetwork) {
+			return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED"}
+		}
+		if err == nil {
+			if observed.Internet != internet {
+				return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_EGRESS_UNVERIFIED"}
+			}
+			if nativeFailed {
+				if observed.NativeState == "Stopped" && observed.UUID != "" {
+					if stopped.UUID != "" && stopped.UUID != observed.UUID {
+						return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_IDENTITY_OR_NIC_UNVERIFIED"}
+					}
+					if stopped.UUID == observed.UUID && stopped.UUID != "" {
+						return observed, nil
+					}
+					stopped = observed
+				} else {
+					stopped = native.BoxState{}
+				}
+			} else {
+				if (start && observed.NativeState == "Running") ||
+					(!start && observed.NativeState == "Stopped") {
+					return observed, nil
+				}
+				if start && observed.NativeState == "Stopped" {
+					stopped = observed
+				}
+			}
+		}
+		timer := time.NewTimer(350 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			if stopped.UUID != "" {
+				// Re-read the exact UUID after settling to reject name reuse.
+				finalCtx, finalCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				final, err := observe(finalCtx)
+				finalCancel()
+				if err == nil && final.UUID == stopped.UUID && final.NativeState == "Stopped" &&
+					final.Internet == internet {
+					return final, nil
+				}
+			}
+			return native.BoxState{}, state.VerificationUncertain{Class: "NATIVE_CREATE_POSTREAD_UNVERIFIED"}
+		case <-timer.C:
+		}
+	}
+}
+
 func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verify state.VerifyEffect) (state.Receipt, error) {
 	if r.Duplicate {
 		return r, nil
@@ -309,26 +396,56 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			var nativeID string
 			effect := func(ctx context.Context) (string, error) {
 				id, e := s.Native.Create(ctx, native.InstanceAction{
-					Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
+					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
 					Start: start, Nesting: in.Nesting, Internet: internet})
 				nativeID = id
 				return id, preflightNative(e)
 			}
 			verify := func(ctx context.Context) error {
-				if err := nativeDone(ctx, s.Native, nativeID); err != nil {
-					return err
+				op, err := s.Native.ObserveUntilFinal(ctx, nativeID)
+				originalNativeOutcomeMissing := false
+				if api.StatusErrorCheck(err, http.StatusNotFound) {
+					// Incus may discard a short Create Operation immediately
+					// after finalization. Native 404 alone NEVER proves
+					// success/failure: independently query the native active
+					// Operation set twice, then verify exact postconditions.
+					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_ACTIVE_OR_UNVERIFIED"}
+					}
+					originalNativeOutcomeMissing = true
+				} else if err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_FINAL_OP_UNVERIFIED"}
 				}
-				observed, err := s.Native.ObserveCreated(ctx, in.Name)
+				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
+					if err := s.Native.ConfirmDeleteAbsence(ctx, in.Name); err == nil {
+						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_NO_INSTANCE"}
+					}
+				}
+				observed, err := s.observeOriginalCreateSettled(ctx, in.Name, r.ID, start, internet,
+					!originalNativeOutcomeMissing && op.StatusCode != api.Success)
 				if err != nil {
 					return err
 				}
-				if (start && observed.NativeState != "Running") ||
-					(!start && observed.NativeState != "Stopped") || observed.Internet != internet {
-					return native.ErrUnverified
+				if !exactCreateNativeShape(observed, in) {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_RESOURCE_SHAPE_UNVERIFIED"}
 				}
-				// Original durable operation already has the exact native ID.
-				// Binding its verified UUID and owned record is a single tx.
-				return s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID)
+				if originalNativeOutcomeMissing {
+					if err := s.Native.OriginalOperationInactive(ctx, nativeID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_EXPIRED_OP_REAPPEARED"}
+					}
+				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
+				}
+				if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+				}
+				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
+					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
+				}
+				if start && observed.NativeState == "Stopped" {
+					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
+				}
+				return nil
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err

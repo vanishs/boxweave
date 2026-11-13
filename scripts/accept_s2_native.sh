@@ -171,6 +171,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-sqlite-fsync-probe" ./scripts/s2_s
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-proxy" ./scripts/s2_p0_native_sqlite_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p0-native-sqlite-probe" ./scripts/s2_p0_native_sqlite_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-probe" ./scripts/s2_ack_loss_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-unknown-create-bind-probe" ./scripts/s2_unknown_create_binding_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-ack-loss-proxy" ./scripts/s2_ack_loss_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-proxy" ./scripts/s2_p1_stop_delete_proxy.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-stop-delete-probe" ./scripts/s2_p1_stop_delete_probe.go
@@ -184,7 +185,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-malformed-exec-probe" ./scripts/s2
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-altpool-probe" ./scripts/s2_p2_alternate_pool_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/s2_p1_operation_list_boundary_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-native-overlap-probe" ./scripts/s2_p1_native_create_delete_overlap_probe.go
-chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
+chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-unknown-create-bind-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
 sha256sum "$work/boxweave"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
@@ -237,21 +238,19 @@ sudo mount -t ext4 -o nodev,nosuid "$noquota_loop" "$work/noquota-mounted"
 sudo mkdir -m 0755 "$work/noquota-mounted/native-pool"
 sudo incus storage create bw-s2-noquota-pool dir source="$work/noquota-mounted/native-pool"
 sudo incus profile device set default root pool=bw-s2-noquota-pool --project "$project"
-if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
-  -incus-socket "$socket" -project "$project" > "$work/noquota-doctor.json"; then
-  echo "S2_NATIVE_FAIL: separately mounted no-quota dir pool reported ready" >&2
-  exit 107
-fi
-python3 - "$work/noquota-doctor.json" <<'PY'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$db" \
+  -incus-socket "$socket" -project "$project" > "$work/noquota-doctor.json"
+python3 - "$work/noquota-doctor.json" <<'PYTEST'
 import json,sys
 with open(sys.argv[1]) as f:
     obj=json.load(f)
 native=obj["native"]
-assert obj["ready"] is False and native["ready"] is False, native
-assert native["error_class"] == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED", native
+assert obj["ready"] is True and native["ready"] is True, native
+assert native["selected_storage_quota_verified"] is False, native
 assert native["selected_storage_separate_mount"] is True, native
-print("S2_NATIVE_DIR_SEPARATE_MOUNT_WITHOUT_PROJECT_QUOTA_FAILS_CLOSED=PASS")
-PY
+assert any("DIR_QUOTA_UNVERIFIED" in x for x in native["warnings"]), native
+print("S2_NATIVE_DIR_NO_QUOTA_READY_WITH_EXPLICIT_WARNING=PASS")
+PYTEST
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
 sudo incus storage delete bw-s2-noquota-pool
 sudo umount "$work/noquota-mounted"
@@ -834,6 +833,47 @@ if [ "$attempt" -ge 120 ]; then
   exit 96
 fi
 test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+# Genuine native Create accepted once, its ACK lost, and the original
+# controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
+# SQLite copy; original remains immutable and receives no retry/delete.
+ack_original_id="$(python3 - "$ack_checkpoint" <<'PY_SCRIPT'
+import json,sys
+op=json.load(open(sys.argv[1]))["original_id"]
+assert len(op)==32
+print(op)
+PY_SCRIPT
+)"
+test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")" = "$ack_original_id"
+echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
+ack_copy="$work/ledger/unknown-create-bind-copy"
+sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
+# The original checkpoint belongs to the runner and is deliberately 0600.
+# Give the restricted probe ONLY a new exact byte-copy owned by its UID.
+sudo install -m 0600 -o boxweave -g incus "$ack_checkpoint" "$ack_copy/ack-original.json"
+sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
+import sqlite3,sys
+src,dst=sys.argv[1:]
+with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
+    assert original.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
+    with sqlite3.connect(dst) as copy:
+        original.backup(copy)
+PY_SCRIPT
+sudo chmod 0600 "$ack_copy/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
+  "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
+# This original database remains truly unbound UNKNOWN; the test binding
+# happened ONLY on a disposable standalone copy.
+test "$(sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
+import sqlite3,sys
+db,op=sys.argv[1:]
+with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as c:
+    print(c.execute("SELECT state||':'||box_uuid FROM operations WHERE id=?",(op,)).fetchone()[0])
+PY_SCRIPT
+)" = "UNKNOWN:"
+echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_VERIFIED_BIND_COPY=PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
@@ -1541,3 +1581,155 @@ sh scripts/s2_p1_bound_create_receipt_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p2_malformed_exec_fault.sh "$work" "$project" "$socket"
 sh scripts/s2_p2_alternate_pool.sh "$work" "$project" "$socket"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
+# S2's historical isolated RFC2544 198.18.0.2 simulated WAN is
+# intentionally run against its ORIGINAL legacy S2 native fixture. The
+# S2.5 policy explicitly denies RFC2544 private-style external targets
+# and is separately accepted through the exact-source nested installed
+# v1 MCP + real IPv4/public and routed simulated IPv6 TLS packet gate.
+# No native Guest can be left running while changing these ACL rules.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo S25_S2_LEGACY_SIMWAN_SEPARATE_FROM_HARDENED_ACL=PASS
+# S2.5's *separate* native prerequisite review rejects an empty ACL:
+# Internet=true otherwise permits routed access to OTHER native Projects.
+# This is a disposable, empty single-use project. Do not backport these
+# global-fixture commands into shared/physical-host native acceptance.
+if [ "$(printenv S25_NATIVE_PREREQ_PROBE 2>/dev/null || true)" = true ]; then
+  owned_net="incusbr-$(id -u boxweave)"
+  v4="$(sudo incus network get "$owned_net" ipv4.address | cut -d/ -f1)"
+  v6="$(sudo incus network get "$owned_net" ipv6.address | cut -d/ -f1)"
+  test -n "$v4"
+  # Incus rules are prioritized reject BEFORE allow, regardless of list
+  # order. Carve exactly one native gateway /32 and /128 from rejected
+  # private ranges; an "allow gateway" overlapping a reject is ineffective.
+  python3 - "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_GATEWAY_CARVE_OUT'
+import ipaddress,sys
+blocked4="0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
+blocked6="fc00::/7,::1/128"
+def carve(source, gateway):
+    out=[]
+    target=ipaddress.ip_address(gateway) if gateway not in ("","none") else None
+    for raw in source.split(","):
+        net=ipaddress.ip_network(raw)
+        if target is None or target not in net:
+            out.append(net)
+        else:
+            out.extend(net.address_exclude(ipaddress.ip_network(str(target)+("/32" if target.version==4 else "/128"))))
+    for n in out:
+        assert target not in n if target is not None else True
+    return ",".join(str(x) for x in out)
+open(sys.argv[1],"w").write(carve(blocked4,sys.argv[2])+"\n"+carve(blocked6,sys.argv[3])+"\n")
+S25_GATEWAY_CARVE_OUT
+  denied_v4="$(sed -n '1p' "$work/s25-native-private-cidrs.txt")"
+  denied_v6="$(sed -n '2p' "$work/s25-native-private-cidrs.txt")"
+  test -n "$denied_v4" && test -n "$denied_v6"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v4" \
+    --description "Deny routed private and reserved IPv4 networks except exact bridge gateway"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v6" \
+    --description "Deny routed ULA IPv6 except gateway, preserve link-local RA"
+  # Native readback of the persisted disjoint private rules.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-egress-acl.json"
+  python3 - "$work/s25-native-egress-acl.json" "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_NATIVE_ACL_V'
+import ipaddress,json,sys
+a=json.load(open(sys.argv[1]))
+rules=a["egress"]
+approved=open(sys.argv[2]).read().splitlines()
+assert len(rules)==2,rules
+assert [x["action"] for x in rules]==["reject","reject"],rules
+assert [x["state"] for x in rules]==["enabled","enabled"],rules
+assert [x["destination"] for x in rules]==approved,rules
+for i,gw in enumerate(sys.argv[3:]):
+    if gw in ("","none"):
+        continue
+    address=ipaddress.ip_address(gw)
+    assert all(address not in ipaddress.ip_network(prefix) for prefix in approved[i].split(","))
+S25_NATIVE_ACL_V
+  echo S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY=PASS
+fi
+# S2.5 exact hardened-ACL native preflight on the now-EMPTY one-use
+# Project. This readback does not count as a live Guest packet witness:
+# the separately installed exact-source S2.5 L0/L1/L2 LAB must verify it.
+# The older S2 RFC2544 benchmark WAN simulator runs BEFORE hardening, so
+# its positive control is not mislabeled as S2.5 private-route evidence.
+if [ "${S25_NATIVE_PREREQ_PROBE:-}" = true ]; then
+  # Independent native-authority evidence for a failed prerequisite:
+  # JSON-only, no tokens, no SQLite, no secret files. This does not
+  # substitute for or bypass the subsequent product preflight.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-final-acl.json"
+  sudo incus query "/1.0/networks/$owned_net" > "$work/s25-native-final-network.json"
+  python3 - "$work/s25-native-final-acl.json" "$work/s25-native-final-network.json" \
+    "$work/s25-native-private-cidrs.txt" "$project" <<'S25_FINAL_ROOT_NATIVE_CROSSCHECK'
+import hashlib,ipaddress,json,sys,urllib.parse
+acl,net=(json.load(open(x)) for x in sys.argv[1:3])
+cidrs=open(sys.argv[3]).read().splitlines()
+owned=sys.argv[4]
+refs=acl.get("used_by",[])
+def reference_allowed(ref):
+    u=urllib.parse.urlparse(ref)
+    return (u.path.startswith("/1.0/profiles/") or u.path.startswith("/1.0/instances/")) and \
+        urllib.parse.parse_qs(u.query)=={"project":[owned]} and not u.fragment
+ref_ok=bool(refs) and any(r==f"/1.0/profiles/default?project={owned}" for r in refs) and all(reference_allowed(r) for r in refs)
+egress=acl.get("egress",[])
+cidr_equal=len(egress)==2 and [r.get("destination") for r in egress]==cidrs
+expected_descriptions=["Deny routed private and reserved IPv4 networks except exact bridge gateway",
+                       "Deny routed ULA IPv6 except gateway, preserve link-local RA"]
+rule_shapes= len(egress)==2 and all(
+    r.get("action")=="reject" and r.get("state")=="enabled" and
+    r.get("description")==expected_descriptions[i] and
+    all(r.get(k,"")=="" for k in ("source","protocol","source_port","destination_port","icmp_type","icmp_code"))
+    for i,r in enumerate(egress))
+print("S25_NATIVE_FINAL_NATIVE_ACL_REFS="+json.dumps(refs))
+print("S25_NATIVE_FINAL_NATIVE_ACL_EXCLUSIVE="+str(ref_ok))
+print("S25_NATIVE_FINAL_NATIVE_ACL_CIDRS_MATCH_PYTHON="+str(cidr_equal))
+print("S25_NATIVE_FINAL_NATIVE_ACL_RULE_SHAPES="+str(rule_shapes))
+print("S25_NATIVE_FINAL_ROOT_BRIDGE_ADDRESSES="+json.dumps({
+    "ipv4.address":net.get("config",{}).get("ipv4.address"),
+    "ipv6.address":net.get("config",{}).get("ipv6.address")}))
+print("S25_NATIVE_FINAL_ACL_RULE_CIDR_SHA256="+json.dumps(
+    [hashlib.sha256(r.get("destination","").encode()).hexdigest() for r in egress]))
+S25_FINAL_ROOT_NATIVE_CROSSCHECK
+  sudo "$work/boxweave" native-prereq-plan -project "$project" > "$work/s25-native-prereq-plan.json"
+  python3 - "$work/s25-native-prereq-plan.json" <<'PY_S25_PREREQ'
+import json,sys
+data=json.load(open(sys.argv[1],encoding="utf-8"))
+for check in data["checks"]:
+    print("S25_NATIVE_PREREQ_%s=%s" % (check["id"].upper(), "PASS" if check["ok"] else "BLOCKED"))
+if not data["config_ready"] or not data["packet_witness_required"]:
+    raise SystemExit("S25 native operator prerequisite review is BLOCKED")
+PY_S25_PREREQ
+  s25_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/s25-native-prereq-plan.json")"
+  if ! sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > "$work/s25-native-prereq-verified.json"; then
+    python3 - "$work/s25-native-prereq-plan.json" "$work/s25-native-prereq-verified.json" <<'PY_S25_DIAGNOSTIC'
+import json,sys
+before,after=(json.load(open(x,encoding="utf-8")) for x in sys.argv[1:])
+print("S25_NATIVE_PREREQ_PLAN_DIGEST="+before["review_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_DIGEST="+after["review_sha256"])
+print("S25_NATIVE_PREREQ_PLAN_STATE_DIGEST="+before["native_state_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_STATE_DIGEST="+after["native_state_sha256"])
+print("S25_NATIVE_PREREQ_CHANGED_FIELDS="+str(sorted(
+    k for k in set(before)|set(after) if before.get(k)!=after.get(k))))
+PY_S25_DIAGNOSTIC
+    echo "S25_NATIVE_PREREQ_FAIL: refused changed review digest (no native write)" >&2
+    exit 93
+  fi
+  # On the single-use lab, confirm a changed *real* Project config
+  # invalidates the exact reviewed SHA. Always restore after the denial.
+  sudo incus project set "$project" user.s25-approval-drift=invalidated
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: native Project drift accepted" >&2
+    exit 94
+  fi
+  sudo incus project unset "$project" user.s25-approval-drift
+  echo "S25_NATIVE_PREREQ_NATIVE_PROJECT_DRIFT_DENIED=PASS"
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local \
+    > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: wrong plan digest accepted" >&2
+    exit 92
+  fi
+  echo "S25_NATIVE_PREREQ_CONFIG_AND_DIGEST=PASS"
+  echo "S25_NATIVE_PREREQ_PACKET_WITNESS=REQUIRED_SEPARATE"
+fi

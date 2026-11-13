@@ -22,7 +22,9 @@ type Status struct {
 	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
 	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
 	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
+	Warnings              []string        `json:"warnings,omitempty"`
 	NICConfigured         bool            `json:"default_nic_configured"`
+	ImageReady            bool            `json:"approved_ubuntu_image_ready"`
 	APIExtensions         map[string]bool `json:"required_extensions"`
 	ErrorClass            string          `json:"error_class,omitempty"`
 }
@@ -111,6 +113,10 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "PROFILE_UNAVAILABLE"
 		return s
 	}
+	if !SafePerUserProfileConfig(profile.Config, current.Uid, incusGroup.Gid) {
+		s.ErrorClass = "UNSAFE_DEFAULT_PROFILE_CONFIG"
+		return s
+	}
 	var selectedPool string
 	for _, d := range profile.Devices {
 		if d["type"] == "disk" && d["path"] == "/" && d["pool"] != "" {
@@ -148,14 +154,19 @@ func (r Reader) Read(ctx context.Context) Status {
 			return s
 		}
 		s.StorageSpaceChecked = true
-		// Incus 7.6 dir driver silently skips size enforcement without
-		// filesystem project-quota support. A separately mounted ext4 pool
-		// alone is not enough to bound native Exec recording.
-		if !localDirPoolQuotaReady(selectedPool) {
-			s.ErrorClass = "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED"
-			return s
+		if !separate {
+			s.Warnings = append(s.Warnings,
+				"DIR_POOL_HOST_ROOT_SHARED: native dir storage shares the host root filesystem; monitor host-wide capacity.")
 		}
-		s.StorageQuotaVerified = true
+		// All usable Incus dir backings are supported. A filesystem name
+		// cannot establish whether the native daemon enforces size quotas.
+		// Incus 7.6 may log a skipped-quota warning without returning it
+		// through the SDK operation. Report conservative capability evidence.
+		s.StorageQuotaVerified = localDirPoolQuotaReady(selectedPool)
+		if !s.StorageQuotaVerified {
+			s.Warnings = append(s.Warnings,
+				"DIR_QUOTA_UNVERIFIED: Incus may skip per-Box disk size limits on this backing filesystem; recorded Exec output may also grow without that bound. Inspect Incus daemon warnings and monitor free space.")
+		}
 	} else {
 		// Do not claim other storage drivers' *whole-instance* Exec sibling
 		// quotas before a separately accepted native driver contract.
@@ -166,11 +177,25 @@ func (r Reader) Read(ctx context.Context) Status {
 	// Share the exact admission guard with doctor/host_status so a
 	// misconfigured NIC is rejected before any mutation, not only at
 	// the later Create/Start call. This is not packet-level acceptance.
-	s.NICConfigured = nicPrivate(profile.Devices)
+	s.NICConfigured = nicProfilePrivate(profile.Devices)
 	if !s.NICConfigured {
 		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s
 	}
+	// Readiness must cover the same immutable local image requirement as
+	// Create. A profile and ACL alone cannot produce the first owned Box.
+	// Never pull or trust a remote alias from the controller preflight.
+	alias, _, err := scoped.GetImageAlias("boxweave-ubuntu-24.04")
+	if err != nil || alias == nil || alias.Target == "" {
+		s.ErrorClass = "APPROVED_IMAGE_ALIAS_UNAVAILABLE"
+		return s
+	}
+	image, _, err := scoped.GetImage(alias.Target)
+	if err != nil || image == nil || !approvedUbuntu2404(image.Properties) {
+		s.ErrorClass = "APPROVED_IMAGE_UNVERIFIED"
+		return s
+	}
+	s.ImageReady = true
 	for _, required := range requiredExtensions {
 		if !s.APIExtensions[required] {
 			s.ErrorClass = "REQUIRED_EXTENSION_MISSING"
@@ -187,8 +212,7 @@ func (r Reader) Strict(ctx context.Context) error {
 		if v.ErrorClass == "DEFAULT_NIC_NOT_CONFIGURED" {
 			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrUnsafeNetwork)
 		}
-		if v.ErrorClass == "SELECTED_STORAGE_PROJECT_QUOTA_UNVERIFIED" ||
-			v.ErrorClass == "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED" {
+		if v.ErrorClass == "SELECTED_STORAGE_QUOTA_DRIVER_UNVERIFIED" {
 			// The requirement is checked before ANY new native request,
 			// so a scoped worker may safely fail this admission without UNKNOWN.
 			return fmt.Errorf("native preflight: %s: %w", v.ErrorClass, ErrNativeUnsupported)

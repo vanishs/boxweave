@@ -29,7 +29,10 @@ original = source.read_bytes()
 before = original.decode("utf-8")
 needle = "\tif err = w.Store.Verified(context.Background(), operationID); err != nil {"
 assert before.count(needle) == 1, "post-verify receipt site must be exactly one"
-imports = '\t"errors"\n\t"time"'
+# The candidate's VerificationUncertain classification now uses strings,
+# so the authorized test overlay must preserve that existing import.
+# Keep this exact-match anchor: any unrelated worker layout still fails closed.
+imports = '\t"errors"\n\t"strings"\n\t"time"'
 assert before.count(imports) == 1, "worker import layout changed; fail closed"
 extra = '''\t"errors"
 \t"os"

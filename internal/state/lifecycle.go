@@ -105,7 +105,8 @@ func (s *Store) VerifiedFailed(ctx context.Context, id, errClass string) error {
 		return ErrInvalid
 	}
 	// This terminal failure must be backed by an actual native final state
-	// and verified absence of ambiguous residual effects.
+	// and verified accounting of every relevant residual effect. A retained
+	// exact owned Box remains protected by its OWNED registration.
 	return s.transition(ctx, id, "VERIFYING", "FAILED", "", errClass)
 }
 

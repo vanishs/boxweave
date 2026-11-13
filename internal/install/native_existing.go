@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -83,6 +84,16 @@ func nativeConfiguredProfile() error {
 
 // Verify an exact, project-confined non-root identity before treating an
 // installed daemon as usable by BoxWeave. It cannot see foreign native users.
+func confinedProjectListArgs(home string) []string {
+	return []string{"-u", "boxweave", "--", "env",
+		"-u", "INCUS_CONF", "-u", "INCUS_CONFIG_DIR", "-u", "XDG_CONFIG_HOME",
+		"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
+		"incus", "project", "list", "--format", "csv"}
+}
+
+// nativeServiceActorReady verifies the service account's exact confined
+// Project using its own environment even when a host root or CI operator
+// invokes the preflight with a different HOME/XDG_CONFIG_HOME.
 func nativeServiceActorReady() error {
 	u, err := user.Lookup("boxweave")
 	if err != nil {
@@ -104,7 +115,14 @@ func nativeServiceActorReady() error {
 		return errors.New("boxweave must have exactly the incus group")
 	}
 	own := "user-" + u.Uid
-	out, err = exec.Command("runuser", "-u", "boxweave", "--", "incus", "project", "list", "--format", "csv").CombinedOutput()
+	// Incus's per-user restricted project selection relies on the user's
+	// HOME/XDG settings. runuser alone can inherit an operator/CI runner
+	// environment: the same actor then appears to have no confined Project.
+	// Use the accepted S2 native environment, not inherited root/runner values.
+	if u.HomeDir != "/home/boxweave" {
+		return errors.New("unexpected boxweave home directory")
+	}
+	out, err = exec.Command("runuser", confinedProjectListArgs(u.HomeDir)...).CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) == "" ||
 		strings.Contains(strings.TrimSpace(string(out)), "\n") ||
 		!strings.HasPrefix(strings.TrimSpace(string(out)), own+" ") {

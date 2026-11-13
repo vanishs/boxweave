@@ -68,6 +68,14 @@ until sudo timeout 8 incus exec "$name" --project "$project" -- /bin/true >/dev/
 done
 test "$attempt" -lt 45
 echo "S2_P2_GUEST_REAL_EXEC_READY_POSITIVE_CONTROL=PASS"
+# A successful early /bin/true does not imply cloud-init/systemd has
+# finished all private /tmp setup. The durable *effect* witness therefore
+# lives in this one-use Guest's persistent /root, never its transient /tmp.
+# First prove that separate native exec sessions see the same root data.
+sudo incus exec "$name" --project "$project" -- /bin/sh -c  'printf "root-fs-check-110v\n" > /root/bw-s2-p2-root-mount-precheck-110v'
+test "$(sudo incus exec "$name" --project "$project" --  cat /root/bw-s2-p2-root-mount-precheck-110v)" = root-fs-check-110v
+sudo incus exec "$name" --project "$project" --  rm /root/bw-s2-p2-root-mount-precheck-110v
+echo "S2_P2_GUEST_ROOT_WITNESS_STABLE_ACROSS_SEPARATE_EXEC=PASS"
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
 wait "$service_pid" 2>/dev/null || :
 service_pid=""
@@ -108,7 +116,7 @@ test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$u
 # The actual native Guest command appended one line. An unobserved second
 # dispatch would leave two lines even if the MCP receipt appeared harmless.
 count="$(sudo incus exec "$name" --project "$project" -- /bin/sh -c \
- 'wc -l < /tmp/bw-s2-malformed-exec-once-110v')"
+ 'wc -l < /root/bw-s2-malformed-exec-once-110v')"
 test "$(printf '%s' "$count" | tr -d '[:space:]')" = 1
 echo "S2_P2_REAL_GUEST_MUTATION_EXACTLY_ONCE_AFTER_MALFORMED_RESPONSE=PASS"
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :

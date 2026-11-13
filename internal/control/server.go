@@ -172,29 +172,53 @@ func (s *Service) Handler() http.Handler {
 	s.registerBoxTools(server)
 	s.registerOperationOutputCancel(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
-		&mcp.StreamableHTTPOptions{Stateless: true, PropagateRequestCancellation: false})
-	secured := auth.RequireBearerToken(s.TokenVerifier, nil)(sdk)
-	origin := http.NewCrossOriginProtection()
-	return origin.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The SDK may reset Cache-Control after entering the handler, so wrap
-		// the original writer and re-apply the policy at WriteHeader/Write/Flush.
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w = &privateMCPWriter{ResponseWriter: w}
-		h, _, err := net.SplitHostPort(r.Host)
-		if err != nil || (h != "127.0.0.1" && h != "localhost") {
+		cfg := state.OAuthSettings{}
+		if s.Store != nil {
+			var err error
+			cfg, err = s.Store.OAuthConfig(r.Context())
+			if err != nil {
+				http.Error(w, "authorization state unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		// The caller controls neither issuer nor resource identity. Only an
+		// exact host configured by a host-local actor can traverse the public
+		// route; arbitrary forwarded-proxy headers are deliberately ignored.
+		h, _, splitErr := net.SplitHostPort(r.Host)
+		local := splitErr == nil && (h == "127.0.0.1" || h == "localhost")
+		public := cfg.Enabled && r.Host == strings.TrimPrefix(cfg.Origin, "https://")
+		if !local && !public {
 			http.Error(w, "invalid Host", http.StatusForbidden)
 			return
 		}
-		if r.Header.Get("Origin") != "" {
-			// An operator-managed TLS proxy is a separately tested deployment.
-			http.Error(w, "origin not permitted", http.StatusForbidden)
+		if orig := r.Header.Get("Origin"); orig != "" && (orig == "null" || !cfg.Enabled || orig != cfg.Origin) {
+			http.Error(w, "invalid Origin", http.StatusForbidden)
 			return
 		}
 		if r.URL.Path != "/mcp" {
-			http.NotFound(w, r)
+			s.oauthRoute(w, r, cfg)
 			return
 		}
-		secured.ServeHTTP(w, r)
-	}))
+		// Fail closed even for an unconfigured test/local handler; an empty
+		// store must never reach typed tools or silently allow anonymous MCP.
+		if s.Store == nil {
+			http.Error(w, "no bearer token", http.StatusUnauthorized)
+			return
+		}
+		var opts *auth.RequireBearerTokenOptions
+		if cfg.Enabled {
+			opts = &auth.RequireBearerTokenOptions{ResourceMetadataURL: oauthMetadataURL(cfg.Origin)}
+		}
+		// The official SDK performs a second localhost Host safety check.
+		// After *independently* checking exact public authority and origin,
+		// give the SDK its private upstream Host, not any Forwarded header.
+		upstream := r.Clone(r.Context())
+		upstream.Host = s.Listener
+		auth.RequireBearerToken(s.TokenVerifier, opts)(sdk).ServeHTTP(w, upstream)
+	})
 }
 func contains(xs []string, x string) bool {
 	for _, s := range xs {

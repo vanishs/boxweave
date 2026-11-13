@@ -56,6 +56,33 @@ func TestS2NetworkMustBeVerifiedBeforeFirstStart(t *testing.T) {
 	}
 }
 
+func TestS25DefaultProfileMustNotOpenEveryRawNativeGuest(t *testing.T) {
+	safe := api.DevicesMap{"eth0": {
+		"type": "nic", "network": "owned-bridge", "security.acls": "owned-acl",
+		"security.acls.default.ingress.action": "reject",
+		"security.ipv4_filtering":              "true", "security.ipv6_filtering": "true",
+		"security.mac_filtering": "true",
+	}}
+	if !nicProfilePrivate(safe) {
+		t.Fatal("implicit Incus reject not accepted")
+	}
+	safe["eth0"]["security.acls.default.egress.action"] = "reject"
+	if !nicProfilePrivate(safe) {
+		t.Fatal("explicit egress reject not accepted")
+	}
+	safe["eth0"]["security.acls.default.egress.action"] = "allow"
+	if nicProfilePrivate(safe) {
+		t.Fatal("open default Profile egress bypassed first-Box guard")
+	}
+	if !nicPrivate(safe) {
+		t.Fatal("instance-owned internet allow was incorrectly disabled")
+	}
+	safe["eth0"]["security.acls.default.egress.action"] = "ignore"
+	if nicProfilePrivate(safe) {
+		t.Fatal("unrecognized egress action accepted")
+	}
+}
+
 func TestS2ExecOutputIsNotGuestExitZeroByDefault(t *testing.T) {
 	success := &api.Operation{StatusCode: api.Success, Metadata: map[string]any{
 		"return": float64(7),

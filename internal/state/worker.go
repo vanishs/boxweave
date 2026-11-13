@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -10,6 +11,19 @@ import (
 // public generic command runner or automatic replay after an ambiguous failure.
 type NativeEffect func(context.Context) (nativeOperationID string, err error)
 type VerifyEffect func(context.Context) error
+
+// VerifiedEffectFailure is returned only after a native operation has a
+// terminal FAILED result and independent readback proves the relevant
+// resource is absent. Ambiguous or residual outcomes must stay UNKNOWN.
+type VerifiedEffectFailure struct{ Class string }
+
+func (e VerifiedEffectFailure) Error() string { return e.Class }
+
+// VerificationUncertain carries a bounded internal diagnostic class only.
+// It is not native evidence and NEVER permits releasing an UNKNOWN claim.
+type VerificationUncertain struct{ Class string }
+
+func (e VerificationUncertain) Error() string { return e.Class }
 
 // A local validation error is eligible for a terminal pre-dispatch failure
 // only if the implementation proves no Incus mutation request was sent.
@@ -73,7 +87,20 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = verify(ctx); err != nil {
-		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", "POSTCONDITION_UNVERIFIED")
+		var proved VerifiedEffectFailure
+		if errors.As(err, &proved) && proved.Class != "" {
+			if w.Store.VerifiedFailed(context.Background(), operationID, proved.Class) == nil {
+				return
+			}
+		}
+		reason := "POSTCONDITION_UNVERIFIED"
+		var uncertain VerificationUncertain
+		if errors.As(err, &uncertain) && len(uncertain.Class) <= 100 &&
+			strings.HasPrefix(uncertain.Class, "NATIVE_CREATE_") &&
+			!strings.ContainsAny(uncertain.Class, "\x00\n\r") {
+			reason = uncertain.Class
+		}
+		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", reason)
 		return
 	}
 	if err = w.Store.Verified(context.Background(), operationID); err != nil {

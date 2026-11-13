@@ -70,9 +70,10 @@ func inspectDirPoolFilesystem(poolName, path, rootPath string) (uint64, bool, er
 // dirProjectQuotaMountReady is a conservative, read-only Linux mount
 // precondition. Incus 7.6 silently skips dir volume size quotas if project
 // quotas are unsupported; a valid size string alone is not quota evidence.
-// Accept only a dedicated ext4/XFS mount whose effective mount options
-// explicitly enable project quotas. This is necessary but not sufficient:
-// the installed native CI also checks real per-instance EDQUOT, including
+// Recognize only the previously tested ext4/XFS positive mount precondition.
+// Its absence does NOT imply that Incus dir storage is unusable or that an
+// unfamiliar filesystem cannot enforce quotas. This is not sufficient:
+// the previously installed native CI checks real per-instance EDQUOT, including
 // the sibling Exec output spool. No mount/provision/repair occurs here.
 func dirProjectQuotaMountReady(selectedPath string, mountinfo string) bool {
 	if selectedPath == "" || !filepath.IsAbs(selectedPath) || strings.ContainsAny(selectedPath, " \t\r\n") {
@@ -122,4 +123,16 @@ func localDirPoolQuotaReady(poolName string) bool {
 		return false
 	}
 	return dirProjectQuotaMountReady(filepath.Join("/var/lib/incus/storage-pools", poolName), string(info))
+}
+
+// InspectNativeDirPool is used only by the host-local installer review. It
+// exposes the same nonmutating pool backing/quota prerequisites as host_status;
+// it never mounts, configures or takes ownership of another native pool.
+func InspectNativeDirPool(poolName string) (free uint64, separate bool, quota bool, err error) {
+	free, separate, err = localDirPoolSpace(poolName)
+	if err != nil {
+		return free, separate, false, err
+	}
+	quota = localDirPoolQuotaReady(poolName)
+	return free, separate, quota, nil
 }

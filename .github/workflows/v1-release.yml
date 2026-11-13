@@ -1,0 +1,237 @@
+name: v1 Linux amd64 and arm64 candidate artifacts (controlled prerelease)
+
+on:
+  push:
+    branches: [v1, "feat/v1-*", "release/v1.*-rc.*"]
+  pull_request:
+    branches: [v1]
+permissions:
+  contents: read
+
+concurrency:
+  group: v1-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source:
+    name: v1-source-quality-release-tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Source validation and external distribution negative tests
+        run: |
+          make verify
+          sh -n install.sh
+          python3 -m unittest -v scripts/test_v1_release_manifest.py
+      - name: Do not treat a source VERSION as a published release
+        run: |
+          test -f VERSION
+          test -f V1_PUBLISHED_RELEASE
+          test "$(cat V1_PUBLISHED_RELEASE)" = UNPUBLISHED || grep -Eq '^v1\.[0-9]+\.[0-9]+$' V1_PUBLISHED_RELEASE
+
+  linux:
+    name: v1-linux-${{ matrix.goarch }}-cgobuild
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-24.04
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify native target, source version, CGO and build exact candidate
+        shell: bash
+        env:
+          GOARCH_EXPECTED: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          test "$(go env GOARCH)" = "$GOARCH_EXPECTED"
+          test "$(go env CGO_ENABLED)" = 1
+          base_version=$(cat VERSION)
+          test "$base_version" = 1.0.0 || [[ "$base_version" =~ ^1\.[0-9]+\.[0-9]+$ ]]
+          version="$base_version-rc.1"
+          EVENT_TAG=""
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            EVENT_TAG="${GITHUB_REF#refs/heads/release/}"
+          fi
+          if [[ -n "$EVENT_TAG" ]]; then
+            [[ "$EVENT_TAG" =~ ^v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+            test "${EVENT_TAG#v}" = "$base_version"-rc."${EVENT_TAG##*.}"
+            version="${EVENT_TAG#v}"
+          fi
+          mkdir -p release-assets
+          name="boxweave-v$version-linux-$GOARCH_EXPECTED"
+          CGO_ENABLED=1 go build -trimpath -buildvcs=false \
+            -ldflags "-X main.version=$version -X main.commit=$GITHUB_SHA -buildid=" \
+            -o "release-assets/$name" ./cmd/boxweave
+          python3 - "$version" "$GITHUB_SHA" "release-assets/$name" <<'PY'
+          import json, subprocess, sys
+          actual = json.loads(subprocess.check_output([sys.argv[3], 'build-info']))
+          assert actual == {'version': sys.argv[1], 'commit': sys.argv[2]}, actual
+          PY
+          # Execute the actual native CGO/SQLite binary on each architecture.
+          # SQLite deliberately requires a private (0700), real parent.
+          # The runner-provided $RUNNER_TEMP may not meet that security policy.
+          db_parent="$(mktemp -d "$RUNNER_TEMP/v1-cgo-sqlite.XXXXXXXX")"
+          chmod 0700 "$db_parent"
+          trap 'rm -rf -- "$db_parent"' EXIT
+          tmp_db="$db_parent/ledger.sqlite"
+          "release-assets/$name" status -db "$tmp_db" -project no-project \
+            -incus-socket /unavailable-incus > "$db_parent/status.json"
+          python3 - "$db_parent/status.json" <<'PY'
+          import json, sys
+          state = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert state["ready"] is False, "unexpected native host readiness in isolated CI"
+          PY
+          go test -count=1 ./...
+          sha256sum "release-assets/$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1-linux-${{ matrix.goarch }}-candidate
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+
+  native-gate:
+    name: v1-prerelease-native-and-nested-verifier
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Refuse publishing a release branch not equal to protected v1 HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" =~ ^refs/heads/release/v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
+      - name: Real S2 native regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/native.log"
+          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$RUNNER_TEMP/native.log"
+      - name: Real nested independent Agent/Incus verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/s25_bridgehead_lab.sh | tee "$RUNNER_TEMP/nested.log"
+          grep -Fxq 'S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS' "$RUNNER_TEMP/nested.log"
+          grep -Fxq 'S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS' "$RUNNER_TEMP/nested.log"
+
+  candidate:
+    name: v1-exact-source-two-arch-manifest
+    needs: [source, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: v1-linux-*-candidate
+          path: release-assets
+          merge-multiple: true
+      - name: Make and self-verify exact candidate manifest
+        shell: bash
+        env:
+          EVENT_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          tag=""
+          if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
+            tag="${GITHUB_REF#refs/heads/release/}"
+          fi
+          if [[ -z "$tag" ]]; then tag="v$(cat VERSION)-rc.1"; fi
+          # A branch CI artifact is always a candidate, not a published release.
+          # When publishing, exact tag must have been stamped in both binaries.
+          python3 scripts/v1_release_manifest.py --directory release-assets \
+            --tag "$tag" --source "$GITHUB_SHA" --installer install.sh
+          (cd release-assets && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1-release-candidate-manifest
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: v1-immutable-development-RC-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
+    needs: [source, linux, native-gate, candidate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: v1-release-candidate-manifest
+          path: release-assets
+      - name: Exact v1 HEAD, release branch, tag and immutable asset-set protection; publish prerelease only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_TAG="${GITHUB_REF#refs/heads/release/}"
+          [[ "$GITHUB_REF" == "refs/heads/release/$INPUT_TAG" ]]
+          [[ "$INPUT_TAG" =~ ^v1\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/v1" --jq .object.sha)" = "$GITHUB_SHA"
+          python3 - "$INPUT_TAG" "$GITHUB_SHA" <<'PY'
+          import json, pathlib, sys
+          m = json.loads(pathlib.Path('release-assets/release.json').read_text())
+          assert m['tag'] == sys.argv[1] and m['source'] == sys.argv[2]
+          PY
+          (cd release-assets && sha256sum -c SHA256SUMS)
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$INPUT_TAG" >/dev/null 2>&1; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$INPUT_TAG" --jq .object.sha)" = "$GITHUB_SHA"
+            if gh release view "$INPUT_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Refuse replacing existing immutable RC Release" >&2
+              exit 1
+            fi
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$INPUT_TAG" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          gh release create "$INPUT_TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "BoxWeave $INPUT_TAG development prerelease" \
+            --notes "Immutable v1 development candidate. Not S5 release qualified or HOST_GO. Separate explicit host approval, native preflight and exact binary digest are required; V1_PUBLISHED_RELEASE is unchanged."
+          mkdir -p release-readback
+          gh release download "$INPUT_TAG" --repo "$GITHUB_REPOSITORY" --dir release-readback
+          cmp release-assets/SHA256SUMS release-readback/SHA256SUMS
+          (cd release-readback && sha256sum -c SHA256SUMS)
+          echo "RC published with exact checked artifacts; stable pointer untouched"

@@ -1,0 +1,41 @@
+name: S2.5 disposable native prerequisite and S2 regression (non-release)
+
+on:
+  push:
+    branches:
+      - feat/v1-s25-native-readiness-20261111
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s25-native-rehearsal:
+    name: s25-native-rehearsal
+    if: github.repository == 'vanishs/boxweave'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      S25_NATIVE_PREREQ_PROBE: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check S2 plus S2.5 native script syntax
+        run: sh -n scripts/accept_s2_native.sh
+      - name: One-use native S2 regression and S2.5 operator prerequisite readback
+        shell: bash
+        run: |
+          set -o pipefail
+          sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S25_NATIVE_PREREQ_CONFIG_AND_DIGEST=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S2_P1_TWO_CONTROLLER_NATIVE_ACLS_EXCLUSIVE_INDEPENDENT_ROOT_READBACK=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S25_S2_LEGACY_SIMWAN_SEPARATE_FROM_HARDENED_ACL=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S25_NATIVE_PREREQ_PACKET_WITNESS=REQUIRED_SEPARATE' "$RUNNER_TEMP/s25-native-rehearsal.log"

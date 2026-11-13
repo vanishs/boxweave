@@ -1,5 +1,7 @@
 # v1 permanent scope and exclusions
 
+**2026-11-13 owner-approved exception to old exclusions:** small embedded OAuth for the existing `/mcp` resource is in scope as S2.5 Agent-connectivity work, not yet implemented. Keep `admin/viewer` and the same protected Tool handlers. OAuth is **not** permission for a Web console, general RBAC, Cloudflare management or second server. [Exact development plan](../development/S25_EMBEDDED_OAUTH_IMPLEMENTATION.md).
+
 **Status:** This is the intentionally small product boundary, not merely a P0/P1 rollout order. Supersedes superseded older broad design assumptions; see [boundary decision](../decisions/PRODUCT_BOUNDARY.md).
 
 ## Required core
@@ -19,7 +21,7 @@
 
 - Dedicated Caddy instance, Caddy API, BoxWeave-managed website hostnames/routes, TLS/certificate management, domain proxy, custom port-forwarding service.
 - General Incus ACL/CIDR/IP/protocol/port editor, free-form firewall controls, multi-resource network controller, whole-host service configuration.
-- Multi-user tenants, per-Box Token delegation, role hierarchy, OAuth browser authorization and billing/meters.
+- Multi-user tenants, per-Box Token delegation, role hierarchy, general identity-provider integrations and billing/meters.
 - Native snapshots and backup platform, bulk file upload, text-patch engine, guest file search, persistent background process supervision, automatic idle sleep/HTTP wake.
 - Virtual machine management, multi-host orchestration, arbitrary privileged Incus/host operations and automatic adoption of foreign containers.
 - Automatic parent/child coordination, unsafe partial/UNKNOWN replay or unverified host-namespace privilege.

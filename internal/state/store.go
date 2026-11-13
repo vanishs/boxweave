@@ -19,9 +19,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
-// Fresh-install S2 baseline: there is no retained deployed v1 database yet.
+// Pre-release schema v2: fresh pilots only; historical v1 SQLite is refused.
+// The OAuth slice must be independently staged with a clean pilot database.
 // Both tables and indexes are exact-fingerprinted; old S1 test DBs are refused,
 // never silently migrated, adopted or deleted. Once deployed, schema changes
 // will require reviewed migration and rollback.
@@ -36,6 +37,14 @@ var schemaDDL = []string{
 	"CREATE TABLE exec_outputs (operation_id TEXT PRIMARY KEY REFERENCES operations(id), stdout_path TEXT NOT NULL DEFAULT '', stderr_path TEXT NOT NULL DEFAULT '', exit_code INTEGER, truncation INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)",
 	"CREATE TABLE exec_output_gc (operation_id TEXT NOT NULL REFERENCES operations(id), stream TEXT NOT NULL CHECK(stream IN ('stdout','stderr')), project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, name TEXT NOT NULL, native_operation_id TEXT NOT NULL, path TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('DELETE_SENT','EXPIRED','REVIEW_REQUIRED','REVIEWED_RELEASED')), claimed_at INTEGER NOT NULL, decided_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation_id,stream))",
 	"CREATE TABLE exec_output_gc_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, stream TEXT NOT NULL, at INTEGER NOT NULL, event TEXT NOT NULL CHECK(event IN ('BEFORE_DELETE','EXPIRED','REVIEW_REQUIRED','RECOVERED_UNCERTAIN','CHALLENGE_ISSUED','REVIEWED_RELEASED')), reviewer TEXT NOT NULL DEFAULT '', evidence_digest TEXT NOT NULL DEFAULT '', FOREIGN KEY(operation_id,stream) REFERENCES exec_output_gc(operation_id,stream))",
+	"CREATE TABLE oauth_config (id INTEGER PRIMARY KEY CHECK(id=1), public_origin TEXT NOT NULL DEFAULT '', password_hash TEXT NOT NULL DEFAULT '', epoch INTEGER NOT NULL DEFAULT 1)",
+	"CREATE TABLE oauth_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, redirects TEXT NOT NULL, created_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_pending (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, scope TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_codes (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_grants (id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, epoch INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_access (token_id TEXT PRIMARY KEY REFERENCES credentials(id), grant_id TEXT NOT NULL REFERENCES oauth_grants(id))",
+	"CREATE TABLE oauth_refresh (digest TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES oauth_grants(id), expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_attempts (at INTEGER NOT NULL, kind TEXT NOT NULL)",
 }
 
 var schemaIndexes = []string{
@@ -47,6 +56,11 @@ var schemaIndexes = []string{
 	"CREATE INDEX operations_resource_claim ON operations(layer,resource_key,state)",
 	"CREATE UNIQUE INDEX owned_active_name ON owned_boxes(project,name) WHERE state='OWNED'",
 	"CREATE INDEX exec_output_gc_box_status ON exec_output_gc(project,box_uuid,state)",
+	"CREATE INDEX oauth_pending_expiry ON oauth_pending(expires_at)",
+	"CREATE INDEX oauth_codes_expiry ON oauth_codes(expires_at)",
+	"CREATE INDEX oauth_access_grant ON oauth_access(grant_id)",
+	"CREATE INDEX oauth_refresh_grant ON oauth_refresh(grant_id)",
+	"CREATE INDEX oauth_attempts_kind_time ON oauth_attempts(kind,at)",
 }
 
 var (
@@ -317,13 +331,16 @@ func (s *Store) init(fresh bool) error {
 		return err
 	}
 	schema := append(append([]string{}, schemaDDL...), schemaIndexes...)
-	schema = append(schema, "INSERT INTO schema_version(version) VALUES (1)")
+	schema = append(schema, "INSERT INTO schema_version(version) VALUES (2)")
 	for _, q := range schema {
 		if _, err := tx.Exec(q); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.Exec("INSERT INTO cursor_secrets(id,secret) VALUES (1,?)", key); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT INTO oauth_config(id,public_origin,password_hash,epoch) VALUES(1,'','',1)"); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -355,6 +372,9 @@ func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) 
 	return raw, t, nil
 }
 func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
+	if strings.HasPrefix(raw, "bwo1_") {
+		return s.VerifyOAuthAccess(ctx, raw)
+	}
 	if !strings.HasPrefix(raw, "bw1_") || len(raw) != 68 {
 		return Token{}, ErrRevoked
 	}
@@ -372,20 +392,39 @@ func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
 	}
 	return t, nil
 }
+
+// RevokeToken revokes one manual API token or the entire OAuth grant
+// behind an OAuth access token. Without the grant revocation, a client
+// could silently refresh a locally revoked access token.
 func (s *Store) RevokeToken(ctx context.Context, id string) error {
-	r, err := s.db.ExecContext(ctx, "UPDATE credentials SET revoked=1 WHERE id=?", id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, _ := r.RowsAffected()
+	defer tx.Rollback()
+	r, err := tx.ExecContext(ctx, "UPDATE credentials SET revoked=1 WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if n != 1 {
 		return ErrNotFound
 	}
-	return nil
+	// For a manual token this updates zero rows. For an OAuth access
+	// token all access/refresh credentials in its grant immediately fail
+	// the unchanged verifier and tokenActive checks.
+	if _, err = tx.ExecContext(ctx,
+		"UPDATE oauth_grants SET revoked=1 WHERE id IN (SELECT grant_id FROM oauth_access WHERE token_id=?)", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) tokenActive(ctx context.Context, id string) (bool, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", id, time.Now().Unix()).Scan(&n)
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials c WHERE c.id=? AND c.revoked=0 AND c.expires_at>? AND (NOT EXISTS(SELECT 1 FROM oauth_access a WHERE a.token_id=c.id) OR EXISTS(SELECT 1 FROM oauth_access a JOIN oauth_grants g ON g.id=a.grant_id JOIN oauth_config o ON o.id=1 WHERE a.token_id=c.id AND g.revoked=0 AND g.epoch=o.epoch AND g.resource=o.public_origin||'/mcp'))", id, time.Now().Unix()).Scan(&n)
 	return n == 1, err
 }
 
@@ -458,6 +497,22 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, err
 		}
 		if busy != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
+	// A failed create may have left an exactly registered, still-owned Box.
+	// Do not allow another create to claim its name merely because the
+	// original operation has a terminal FAILED receipt. A new box_delete
+	// for that exact UUID is still allowed after native postread.
+	if a.Action == "box_create" && strings.HasPrefix(a.ResourceKey, "box:") {
+		var owned int
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM owned_boxes
+			WHERE project=? AND name=? AND state='OWNED'`,
+			a.Layer, strings.TrimPrefix(a.ResourceKey, "box:")).Scan(&owned)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if owned != 0 {
 			return Receipt{}, ErrResourceLocked
 		}
 	}

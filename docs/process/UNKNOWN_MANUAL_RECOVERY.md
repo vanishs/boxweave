@@ -1,6 +1,27 @@
 # UNKNOWN manual recovery — approved minimal local-operator procedure
 
-**Status:** owner-approved v1 design, **not implemented**. This is a host-local CLI/SQLite operation, **not** a new MCP tool, remote admin endpoint, replay daemon, or generalized lease management platform.
+**Status:** existing host-local challenge/release is implemented for registered owned UUIDs. The new unbound-Create **identity-binding** extension is implemented only in the separate pre-release UNKNOWN-repair test branch and is **not yet installed/native accepted**; do not use it to claim real HOST_GO approval. This is a host-local CLI/SQLite operation, **not** a new MCP tool, remote admin endpoint, replay daemon, or generalized lease management platform.
+
+## New: Create UNKNOWN before UUID registration (candidate, requires native acceptance)
+
+Native Incus may expire a completed Operation record very quickly.
+An automatic terminal Create verification is allowed only for a durable
+**original native Operation ID** after the typed native 404, two
+Project-confined active-Operation listings showing the original is not
+active, exact immutable Create marker/UUID/ACL/resource-shape readback,
+bounded Guest-state stabilization, and a second final active-operation
+check. Native 404 alone never triggers cleanup, a fabricated result or
+a second Create; unknown observations stay `UNKNOWN`.
+
+A Create whose Incus Operation ACK was lost may leave a real Box while the original SQLite record has an empty UUID. New v1 Creates carry their unique durable BoxWeave Operation ID in the native instance config key `user.boxweave.create_operation`, without exposing any raw Incus config to the MCP caller. This marker is an additional evidence witness, not proof of native final success by itself.
+
+Under the **existing protected local root/credential-drop recover flow**, `recover -action=create-inspect` validates the original `box_create` safe intent, Project and resource name, then reads the exact native marker/UUID/ACL. `create-challenge` issues a short-lived, one-use challenge bound to the original immutable receipt and exact native observation. `create-bind` additionally requires the literal native UUID, reviewer, explanatory reason, explicit native-uncertainty acknowledgement, and a fresh unchanged readback. The native UUID/owned record, original UNKNOWN event and audit are written in **one SQLite transaction**. If audit fails, none of the binding survives.
+
+Binding alone does **not** change the original `UNKNOWN`, invent a missing Incus Operation ID, release the name/UUID claim, retry any effect, create another Box, or delete the residual. After binding, the pre-existing `recover inspect/challenge/release` procedure can review the exact owned UUID and, only with its own new explicit challenge/confirmation, release its **coordination claim** for a new separately authorized operation.
+
+If the original native marker is missing/mismatched, the project or UUID differs, network safety fails, or the Box is absent, binding is refused. Earlier legacy or pre-marker UNKNOWNs have no automatic adoption fallback. A native Create that **has a durable final Incus Operation ID** and is fully verified at execution time may instead terminate as `FAILED` with a registered STOPPED owned Box, or `FAILED` with verified native absence. Neither outcome asserts Guest Running; errors/partial ownership without adequate proof remain UNKNOWN.
+
+The local CLI remains restricted to the exact installed state path `/var/lib/boxweave/ledger.sqlite`, a separately reviewed root invocation and the existing service UID downgrade, Project confinement and maintenance lock. The candidate adds **no public MCP tools, remote recovery endpoint, background reconciliation or automatic retry**.
 
 ## Plain-language contract
 

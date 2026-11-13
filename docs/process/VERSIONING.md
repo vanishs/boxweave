@@ -1,5 +1,7 @@
 # v1 versioning and publication
 
+**2026-11-13 distribution update:** See [v1 dedicated-host pilot + installer + Release contract](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). A checked, owner-authorized, reversible pre-release **physical development-host pilot** may occur before final HOST_GO/physical postflight, with no stable release or pointer promotion. The protected v1 branch's separate `V1_PUBLISHED_RELEASE` pointer is `UNPUBLISHED` until a reviewed stable release exists; do not infer it from `VERSION` or the mixed main/v1 GitHub latest Release endpoint.
+
 **Version:** `1.0.0`, recorded in the root [VERSION](../../VERSION) file.
 
 ## Owner-defined scheme
@@ -25,7 +27,7 @@ Use `1.X.Y` where:
 
 ## Early BRIDGEHEAD candidate deployment is **not** publication
 
-After the fully accepted S2 artifact, the [S2.5 BRIDGEHEAD gate](../development/phases/025_BRIDGEHEAD.md) may install **exact checksum-bound, non-released development candidate bytes** first in a disposable native host and, with new exact-host operator consent and successful [BH-001–BH-017](../verification/BRIDGEHEAD_ACCEPTANCE.md), as a **dedicated, reversible, disposable development-only** physical-host installation. This is neither a stable release, GitHub tag, production migration nor installer-pointer promotion. The dedicated real host must prove original resource ownership and independent fallback, with **no legacy `main` running on it**. L0 and nested Boxes still share their own Incus/Cowsql/storage failure domain. S4 and S5 must still pass **unchanged original** native and immutable publication gates; the later exact release binary may differ and must be reaccepted as required. This approved planning change grants **no present deployment authority**.
+After the fully accepted S2 artifact, the [S2.5 BRIDGEHEAD gate](../development/phases/025_BRIDGEHEAD.md) may install **exact checksum-bound, non-released development candidate bytes** first in a disposable native host and, with new exact-host operator consent plus accepted `PILOT_DEPLOY_GO` preflight, as a **dedicated, reversible, disposable development-only** physical-host installation **before** final BH-017/host postflight; [BH-001–BH-017](../verification/BRIDGEHEAD_ACCEPTANCE.md) and the required independent V remain mandatory for the later full HOST_GO verdict. This is neither a stable release, GitHub tag, production migration nor installer-pointer promotion. The dedicated real host must prove original resource ownership and independent fallback, with **no legacy `main` running on it**. L0 and nested Boxes still share their own Incus/Cowsql/storage failure domain. S4 and S5 must still pass **unchanged original** native and immutable publication gates; the later exact release binary may differ and must be reaccepted as required. This approved planning change grants **no present deployment authority**.
 
 ## Later releases
 
