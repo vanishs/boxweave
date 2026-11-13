@@ -1,6 +1,16 @@
 # HOST_GO: three user-triggered execution rounds (S2.5 BRIDGEHEAD)
 
-**Status updated 2026-11-13 UTC: the owner's three targeted Round-1/2 network, fault/recovery and two-Agent LAB P0 gap groups are now PASS with bounded substitutes; prior genuine model-driven Codex Agent evidence is also retained. Overall formal all-BH/TC LAB_PASS and Round1/Round2 stage promotions remain pending per-ID crosswalk; Round 3 NOT_STARTED and no physical HOST_GO.** This is the executable handoff for the next Agent. It does not grant physical-host authority or relax any BH/TC gate. It is an execution protocol subordinate to [BRIDGEHEAD_ACCEPTANCE](../verification/BRIDGEHEAD_ACCEPTANCE.md), [S2.5 card](phases/025_BRIDGEHEAD.md) and [phase protocol](PHASE_EXECUTION_PROTOCOL.md). The owner wants safe real development-host usability, **not merely merging the PR**. Keep S3/S4/S5 separate.
+**Status updated 2026-11-13 UTC: ROUND1_PASS, ROUND2_PASS,
+LAB_PASS signed under the owner's bounded alternative-simulation and
+previous Codex TC-013 evidence-reuse decisions.**
+[Per-case 20-row I/N/V formal crosswalk](../verification/HOST_GO_R12_FORMAL_LAB_CROSSWALK_2026-11-13.md).
+This is not a claim of current GitHub Guest direct public IPv4
+I+N+V; its test-only attempt failed and a separate latest-Go-ACL
+native unproxied public-v4 ON/OFF/ON+V was accepted for LAB. Dedicated
+host exact installed MCP+real Agent public IPv4 and independent V
+are mandatory BH-017. Round 3 is READY_FOR_EXACT_HOST_APPROVAL,
+HOST_GO not authorized; no physical-host discovery/change, v1
+merge or release is implied.**
 
 ## Copy-ready next-Agent entry prompt
 

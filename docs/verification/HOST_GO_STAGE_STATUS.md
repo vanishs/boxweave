@@ -4,6 +4,52 @@ This is the **small mutable checkpoint** for [the user-triggered three-round run
 
 **Owner-approved IPv6 timing contract change (2026-11-12):** Real public IPv6 WAN is deferred to S4 rehearsal / mandatory S5 actual reacceptance; public IPv4 remains real for S2.5. An isolated routed simulated IPv6 HTTPS WAN with the exact installed MCP I + genuine native packet N + independent V, positive/off/on/off and all v4/v6/MAC spoof and peer/foreign negatives is still mandatory. The separately routed **simulated IPv6 WAN I+N+V subcase PASSED** later on 2026-11-12 (original IDs and witnesses in [S25_SIMWAN6_I_N_V](S25_SIMWAN6_I_N_V_2026-11-12.md)); **Round 1 as a whole remains BLOCKED** by other ownership/role/foreign/Agent and full independent BH-009 security gaps; historical public-v6 failures are preserved. `PUBLIC_IPV6_DEFERRED_TO_S5` is not a public-v6 PASS. This docs-only approval does not start any round. [Contract](../decisions/IPV6_PUBLIC_WAN_PHASED_ACCEPTANCE_2026-11-12.md).
 
+## Formal 2026-11-13 Round 1 + Round 2 isolated LAB acceptance
+
+**ROUND1_PASS = YES; ROUND2_PASS = YES; LAB_PASS = YES in the
+owner-approved bounded LAB equivalent scope. ROUND3 =
+READY_FOR_EXACT_HOST_APPROVAL; HOST_GO = NOT_AUTHORIZED.** This
+supersedes older status rows only as of this later independent review.
+It does not erase historical failed runs or UNKNOWN receipts.
+
+- Every BH-001 through BH-016 and TC-011 through TC-014 has an
+  evidence-class I/N/V/T and version/owner-reuse entry in
+  [the formal 20-row crosswalk](HOST_GO_R12_FORMAL_LAB_CROSSWALK_2026-11-13.md).
+  Explicit exception 1: latest GitHub ephemeral Guest direct public
+  IPv4 on test-only d671d0c FAILED by 5-second timeout, not PASS.
+  The owner accepted as LAB equivalent the source-Go-exact private ACL
+  with genuine direct Guest HTTPS public IPv4 ON/OFF/ON and independent
+  native V on an isolated second Box, combined with the earlier
+  Codex/native MCP and same-current-policy installed SDK packet proof.
+  The failed original ID 87e8ecf655fb82172c409ca030ce627f
+  was never retried. Actual installed MCP I+N+V real public IPv4 on
+  the exact approved physical-host binary is a **BH-017 hard gate**,
+  never an inherited LAB claim.
+- Explicit exception 2: BH-015 composites separate original native
+  S2 and installed nested L0/L1 binaries from the same source, each
+  independently pinned by its own real executable SHA; never falsely
+  one cross-workflow byte-identical SHA. Stage-3 candidate must
+  independently prove a single pinned binary for its own host.
+- Owner instructed retention of previously proven model-driven Codex
+  CLI TC-013 PASS rather than repeating login/write every update.
+  The true physical-host Agent workflow is still BH-017.
+- Latest unmodified accepted runtime/source 07084fd: five full
+  Actions SUCCESS, including native Incus and independent nested
+  MCP/Verifier; repair source 457c6dc was 5/5 too. The d671d0c
+  direct Guest public IPv4 TEST-ONLY attempt was reverted after
+  diagnosing the runner limitation; failed original evidence is
+  preserved. No product/ACL security weakening.
+- Genuine public IPv6 deferred to S5; routed simulated IPv6 HTTPS
+  accepted, and native dir hard quota remains DIR_QUOTA_UNVERIFIED
+  if not independently enforced. Existing shared Incus/unknown
+  protected; exact new disposable native public4 test Project,
+  network, image, ACL, Guest UUID and tokens cleaned; original
+  demo-1-container and bw-s25-l1a remained running.
+- **Stage 3 entry only:** exact physical host not identified, no
+  new host privilege or native mutation approved. Do not invoke
+  installer or physical-host discovery until the owner's fresh
+  explicit exact host identity/effects/risk envelope.
+
 ## Latest owner-requested Round-1/2 three-P0-gate remediation — 2026-11-13 UTC
 
 **Three named LAB gap groups are now LAB-SCOPED PASS, with owner-approved
@@ -146,9 +192,9 @@ fault integration gaps. Round 3 NOT_STARTED. Exact evidence:
 
 | Trigger | Status | Cases / evidence | Exact code and native binary | Remaining blockers | User told? |
 |---|---|---|---|---|---|
-| `完成HOST_GO 第一阶段` | **BLOCKED (0cf exact-binary L0+L1 network I+N+separate V PASS; full BH crosswalk still open)** | Two signed current-source L0 native Create/Update, strict public IPv4 TLS, v4/v6 peer/source+MAC packet negatives, role/foreign/token denial; separate same-host V; previous simulated IPv6 scoped PASS | source `58626acb` / same SHA-256 `640cdd28…a1fb34f` across 3 Boxes | L1 foreign-Project packet/parent socket and complete exact-bin BH-009/BH-015 install/fault signature; old native UNKNOWN and 6 gateway UNKNOWN preserved; owned cleanup PASS | YES |
-| 完成HOST_GO 第二阶段 | **BLOCKED (TC-013 actual Codex I+N+V PASS; required in-flight failure/recovery and multi-Agent cases remain)** | Real Codex Viewer host_status; on-request Auto-review original Create/Start/Stop/Delete SUCCEEDED; post-terminal candidate SIGKILL, exact same-ledger service recovery, actual Codex reconnect; separate Box snapshot V; foreign L1 intact, zero UNKNOWN; Admin revoked | tested source 0cf474f; installed SHA256 021127cf...e85; original IDs and V hashes in Codex Round-2 report | In-flight SIGKILL watcher NOT_EXERCISED; lost ACK/original UNKNOWN handling, second-Agent pending-work recovery, full per-ID BH/TC verifier still open; prior Round 1 BLOCKED | YES |
-| `完成HOST_GO 第三阶段` | **NOT_STARTED** | BH-017 exact physical host + all mandatory prior cases, actual Agent, full final CI | unset | exact physical host authority not granted; Round 1/2 gates | NO |
+| 完成HOST_GO 第一阶段 | **PASS (owner-approved bounded LAB equivalent)** | BH-001/002/003/005/009/010/011/015 and TC-011; full per-case 20-row exact-version crosswalk, actual native packet+socket V, installed SDK, historical Codex | accepted source 07084fd; native original pinned SHA per LAB; second Box current-source native ACL exact CIDR | GH Guest direct public-v4 test-only d671d0c timed out; accepted separate exact-ACL native public-v4 ON/OFF/ON I/N/V composition; mandatory repeat on approved physical BH-017 | YES |
+| 完成HOST_GO 第二阶段 | **PASS (owner-approved bounded LAB evidence)** | BH-004/006/007/008/012/013/014/015/016 and TC-011/012/013/014; original native ACK/UNKNOWN/rollback, lost MCP reply, actual Codex historical, two distinct SDK Agents, independent original V | accepted source 07084fd, separate native/nested per-run exact binary SHA; 5/5 original Actions PASS | No repeated Codex login required by owner; actual host Agent, host capacity and exact single binary pinned required in BH-017 | YES |
+| 完成HOST_GO 第三阶段 | **READY_FOR_EXACT_HOST_APPROVAL (HOST_NOT_AUTHORIZED)** | All LAB BH-001–016 / TC-011–014 closed with documented owner-approved equivalent boundaries | actual physical source/binary/host identity unset | Need owner's fresh exact standalone host/OS/Project/pool/ACL/port/rollback authorization; until then no host discovery or installation | YES |
 
 ## Mandatory round-end entry (overwrite the active row only; preserve prior checkpoint elsewhere)
 

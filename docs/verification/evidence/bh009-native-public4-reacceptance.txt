@@ -1,0 +1,12 @@
+2026-11-13 UTC: DISPOSABLE-NATIVE, not a same-head model-driven MCP test.
+Test host: boxweave-test-ser2-container (independent L0, Incus 7.6).
+Temporary project: bw-r12-public4; bridge: bw-r12p4br; exclusive ACL: bw-r12-public4-acl.
+Native Guest: bw-r12-public4-a, original UUID 6f51f039-6156-49b4-aeb4-b3f79c081974.
+Product-current source ACL: Go nativePrepareACL and actual Incus JSON both had IPv4 destination digest d9bba25746c1923e107b93a5fd453b50fc074246d2e364c870758dc4fce2e228 and IPv6 digest cd16a2e4a8c121ef887c9cf64b6a80f4b28ad95954a11e816481ea2bcce221dd.
+Actual Guest direct public IPv4, no proxy: HTTPS verified remote 45.45.148.12 HTTP 200 from https://pkgs.zabbly.com/key.asc; curl -4 --noproxy '*' --proto '=https' --tlsv1.2.
+Guest NIC original internet=true, actual root-local override to internet=false then fresh HTTPS attempt failed (curl exit 28 timeout after 4s); native egress reject ensured no public response.
+Restored exact original NIC internet=true; fresh direct public IPv4 HTTPS returned HTTP 200, remote 45.45.148.12. A separate read-only root-local Verifier re-read native Incus ACL, Guest actual UUID/expanded NIC, private deny/sole gateway carveouts and independently repeated fresh real public IPv4 TLS HTTP 200.
+Temporary Guest stopped/deleted by exact original UUID. Its exclusive Project image, profile bindings, ACL, network and Project removed. Independent postdelete inventory: default, user-1002, user-1004 Projects; unchanged demo-1-container RUNNING.
+Separate same-head GitHub runner attempt at test-only commit d671d0c, nested job 43379314014: installed MCP Guest real public IPv4 HTTPS TIMEOUT on port 443 after 5002 ms, original Exec 87e8ecf655fb82172c409ca030ce627f. No retry/reissue of the uncertain original; this is a failed integrated direct-path test, NOT a success.
+Previously accepted actual model-driven Codex I+N+V and isolated exact-private-ACL installed SDK I+N+V are retained as separate proven paths, NOT misrepresented as a latest-head single original direct-public IPv4 MCP transaction.
+Owner-approved equivalent: real independent native 7.6 Guest direct public IPv4 off/on with exact current Go ACL + latest installed MCP-native simulated-routed IPv6/foreign Project security positives + earlier real MCP public IPv4; final authorized physical-host Stage3 must repeat actual current pinned candidate installed MCP direct IPv4 public TLS I+N+V. No real public IPv6 claimed. No hard dir quota claimed.

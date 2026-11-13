@@ -1,3 +1,17 @@
+**FORMAL 2026-11-13 ISOLATED S2.5 LAB SIGNOFF:
+TC-011 PASS, TC-012 PASS, TC-013 PASS (owner-approved real Codex
+historical evidence reuse), TC-014 PASS.** Two actual authenticated
+official SDK actors recovered one immutable original after MCP reply
+loss, native ACK faults and token revocation, with foreign work/actor
+denials, original SQLite/native UUID and independent V. Earlier
+model-driven Codex CLI authenticated read, four original-key mutations
+and independent Box witness are retained as TC-013; no repeated
+per-commit login is required. Physical host actual Agent on pinned
+candidate is still BH-017. See
+[complete case matrix](HOST_GO_R12_FORMAL_LAB_CROSSWALK_2026-11-13.md).
+These later PASS statuses supersede historical PARTIAL/BLOCKED paragraphs
+below for the bounded isolated LAB only, not production HOST_GO.
+
 **2026-11-12 actual intended development-Agent TC-013 PASS:** Real
 nonroot Codex CLI v0.167.2 performed authenticated v1 MCP Tool discovery,
 Viewer host_status read and four distinct original-key Admin

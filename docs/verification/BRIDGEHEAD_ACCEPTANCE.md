@@ -1,3 +1,23 @@
+**LATEST FORMAL 2026-11-13 LAB SIGNOFF: ROUND1_PASS,
+ROUND2_PASS and LAB_PASS (owner-approved bounded equivalent evidence).**
+BH-001 through BH-016 are now signed for the isolated, disposable
+LAB scope only, with each original ID/Installed+Native+Verifier
+source crosswalked in the
+[20-row formal audit](HOST_GO_R12_FORMAL_LAB_CROSSWALK_2026-11-13.md).
+The new native private-ACL real public IPv4 HTTPS ON/OFF/ON and
+independent V in a separate Box is explicitly an accepted substitute
+for the failed current GitHub runner direct-MCP public-v4 attempt:
+this is **not** a claim of one latest-version installed MCP direct
+public-v4 original Operation. BH-009 exact installed Agent public IPv4
+I+N+V must pass on the owner-approved real host before HOST_GO.
+BH-015 uses transparently different per-workflow independently pinned
+binaries, not an invented universal same-byte digest.
+The previous actual Codex TC-013 is reused by owner instruction;
+host-specific intended Agent verification remains mandatory.
+**BH-017=NOT_AUTHORIZED, physical HOST_GO=NO, Round3 awaiting exact
+host approval, no v1 merge or release.** Earlier blocked reports and
+test failures below remain chronological evidence, not current results.
+
 **LATEST 2026-11-13 UTC owner-requested three-P0-gate reacceptance:
 targeted network/fault/two-Agent gaps LAB-SCOPED PASS; formal full
 BH/TC LAB_PASS remains not signed.** Same tested code-bearing source
