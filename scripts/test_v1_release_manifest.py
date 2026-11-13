@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Offline negative checks for the v1-only Release manifest and installer."""
 import importlib.util
+import hashlib
+import subprocess
 from pathlib import Path
 import struct
 import tempfile
@@ -42,6 +44,33 @@ class ReleaseTests(unittest.TestCase):
     def test_reject_main_or_invalid_tag(self):
         with self.assertRaisesRegex(ValueError, "invalid v1"):
             module.assemble(self.dir, "v0.50.5", "b" * 40, self.installer)
+
+    def test_external_installer_plan_and_wrong_digest(self):
+        path = self.dir / "boxweave-v1.0.0-rc.1-linux-amd64"
+        valid_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        base = ["sh", str(ROOT / "install.sh"), "--local-binary", str(path),
+                "--project", "user-1001", "--sha256"]
+        good = subprocess.run(base + [valid_sha, "--plan"], text=True, capture_output=True)
+        self.assertEqual(good.returncode, 0, good.stderr)
+        self.assertIn("PLAN_ONLY: no host changes", good.stdout)
+        bad = subprocess.run(base + ["0" * 64, "--plan"], text=True, capture_output=True)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("SHA256 mismatch", bad.stderr)
+
+    def test_external_installer_rejects_legacy_tag_and_unapproved_apply(self):
+        bad_tag = subprocess.run(["sh", str(ROOT / "install.sh"), "--version", "v0.50.5",
+                                  "--plan"], text=True, capture_output=True)
+        self.assertNotEqual(bad_tag.returncode, 0)
+        self.assertIn("expected v1", bad_tag.stderr)
+        path = self.dir / "boxweave-v1.0.0-rc.1-linux-amd64"
+        valid_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        denied = subprocess.run([
+            "sh", str(ROOT / "install.sh"), "--local-binary", str(path),
+            "--sha256", valid_sha, "--project", "user-1001",
+            "--apply", "--confirm-host-sha256", "0" * 64,
+        ], text=True, capture_output=True)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn("exact current --confirm-host-sha256", denied.stderr)
 
     def test_embedded_installer_python_compiles(self):
         content = (ROOT / "install.sh").read_text()
