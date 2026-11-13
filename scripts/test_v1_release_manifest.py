@@ -79,7 +79,18 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('"release/v1.*-rc.*"', workflow)
         self.assertIn("refs/heads/release/v1.", workflow)
         self.assertNotIn("workflow_dispatch", workflow)
-        self.assertIn("v1-prerelease-native-and-nested-verifier", workflow)
+        self.assertIn("v1-prerelease-native-S2-isolated-runner", workflow)
+        self.assertIn("v1-prerelease-nested-S2.5-isolated-runner", workflow)
+        self.assertIn("needs: [source, linux, native-s2-gate, native-s25-gate, candidate]", workflow)
+        s2 = workflow.split("\n  native-s2-gate:\n", 1)[1].split("\n  native-s25-gate:\n", 1)[0]
+        s25 = workflow.split("\n  native-s25-gate:\n", 1)[1].split("\\n  candidate:\n", 1)[0]
+        self.assertIn("sh scripts/accept_s2_native.sh", s2)
+        self.assertNotIn("sh scripts/s25_bridgehead_lab.sh", s2)
+        self.assertIn("sh scripts/s25_bridgehead_lab.sh", s25)
+        self.assertNotIn("sh scripts/accept_s2_native.sh", s25)
+        self.assertIn("S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS", s25)
+        self.assertIn("runs-on: ubuntu-24.04", s2)
+        self.assertIn("runs-on: ubuntu-24.04", s25)
 
     def test_rc_flag_not_required_and_removed(self):
         script = (ROOT / "install.sh").read_text()
