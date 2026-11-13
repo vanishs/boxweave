@@ -1,3 +1,16 @@
+## 2026-11-13 — embedded OAuth implementation and independent local Box lab
+
+**This is a pre-Round-3 OAuth implementation checkpoint, not a HOST_GO stage signoff.** Exact code-bearing commit `f2af899125eda7e6acd0b28a2b36e65eea2ac73d`; [full OA-001–010 evidence and limits](S25_EMBEDDED_OAUTH_ACCEPTANCE_2026-11-13.md).
+
+- One canonical `/mcp`, embedded Go OAuth with RFC 9728/8414/8707/9207, DCR/PKCE S256, Argon2id consent, SQLite v2 atomic code/refresh, revocable OAuth grants and unchanged existing actor/Project authorization. No new public MCP tools, second HTTP process or Flask/main compatibility layer.
+- **Independent exact-source lab:** existing nesting-enabled `boxweave-test-ser2` created only the new inner Guest `hg-v1-oauth-1113` (UUID `3cc315ad-7e02-4249-a784-6b36570d08e5`); signed Incus 7.6 / restricted project `user-1001` / new isolated ACL and native prerequisites 8/8 PASS. Native-only disposable L2 actual `print(42)` and exact-UUID cleanup PASS; NOT an OAuth MCP Agent native mutation.
+- **Actual installed candidate:** version `1.0.25-hostgo-oauth-f2af899`, verified SHA-256 `8371560029213919d5d4885afb003f9101515150d5913bcc5735bbda7f20fa06`; installed via formal `upgrade` after properly committing the prior verified installer rollback backup. Current service healthy, loopback HTTP MCP 401, both RFC9728 metadata, RFC9207 flag and seven HTTP security negatives PASS. The new installer rollback backup remains intentionally retained.
+- Source-level official MCP Go SDK authenticated DCR/PKCE/browser simulation + `initialize`, `tools/list` (13), `host_status`, viewer refusal, JSON/no-SSE; atomic/restart/SQLite failure and revocation negatives PASS. Source exact-head independent `make verify` Go race and [quality](https://github.com/vanishs/boxweave/actions/runs/43408420432) + [S1](https://github.com/vanishs/boxweave/actions/runs/43408420414) Actions both SUCCESS.
+- The **installed earlier candidate** performed local browser-like DCR, PKCE, authorization callback and token issuance; an initial manually constructed HTTP MCP `initialize` had incorrect Accept headers (test-harness defect). A subsequent secret-bearing test invocation was blocked before execution; NO installed authenticated Agent MCP original-key mutation/I+N+V is asserted. Real ChatGPT connection through a public Cloudflare Quick Tunnel remains owner-dependent and was NOT performed.
+- **Final safe postflight:** fictitious test public origin disabled; no `cloudflared` process or public tunnel, Guest native `user-1001` inventory empty, source Guest and service still running; original older services/L1 and all historic gateway UNKNOWN receipts untouched.
+
+**Gates:** `OA-001–007=SCOPED_LOCAL_LAB` (see distinctions per ID in report), `OA-008=BLOCKED_REAL_CHATGPT`, `OA-009=BLOCKED_REMOTE_AGENT_NATIVE_I+N+V`, `OA-010=PASS_CODE_HEAD` (documentation-head Actions recheck separately). `ROUND1_PASS`, `ROUND2_PASS`, bounded `LAB_PASS` unchanged; **`HOST_GO=PENDING_LIVE_AGENT`, `HOST_POSTFLIGHT=NOT_AUTHORIZED`, PR #133 Draft, no merge or release**.
+
 ## 2026-11-13 08:20 UTC — reused existing nested Box; pinned v1 installed, Cloudflare credentials PENDING (not HOST_GO)
 
 **Authorized topology switch:** Owner chose to reuse the *existing*
