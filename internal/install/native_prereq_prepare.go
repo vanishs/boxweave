@@ -125,41 +125,81 @@ func nativePrepareProfileEligible(devices api.DevicesMap, t NativePrepareTarget)
 	return nil
 }
 
-// Internet=true must never mean access to OTHER Incus Projects through
-// the host's routed private bridges. A bridge NIC's default egress allow
-// permits such traffic unless its exclusive ACL explicitly rejects it.
-// Every other-rule permit here is scoped to the exact selected bridge
-// gateway, needed for Incus baseline DNS and operator-approved local
-// package/bootstrap relay. Private destinations besides that gateway are
-// never reachable, even when Internet=true.
+// Internet=true must not permit traffic to OTHER native Projects through
+// host-routed private networks. On Incus 7.6 reject rules take precedence
+// over allow rules regardless of their listed order (not first-match).
+// We therefore carve exactly the selected bridge gateway ADDRESS from the
+// otherwise-denied private CIDRs, without admitting adjacent bridge guests.
+// For internet=false, the NIC's normal egress default reject still applies
+// to that gateway (apart from Incus baseline DHCP/DNS/RA services).
 //
-// This blocks RFC1918, CGNAT and ULA/local IP targets. It is not a
-// guarantee against administrator-created foreign bridges using public
-// global addresses; BH-009 requires independent physical host review too.
+// This blocks private/CGNAT/ULA routing, not administrator-created foreign
+// networks that use global unicast addresses. Such networks remain a
+// host-specific BH-009 physical deployment review requirement.
 const nativeACLBlockedIPv4 = "0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
 const nativeACLBlockedIPv6 = "fc00::/7,fe80::/10,::1/128"
 
-func nativeACLGateway(config api.ConfigMap, key string, ipv6 bool) (string, error) {
+// Return a set of DISJOINT CIDRs matching the blocked destinations except
+// the single reviewed gateway. It is important that no reject CIDR contains
+// the allowed gateway: Incus prioritizes reject over allow.
+func nativeACLWithoutGateway(ranges string, gateway netip.Addr) (string, error) {
+	var out []string
+	for _, raw := range strings.Split(ranges, ",") {
+		p, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return "", fmt.Errorf("invalid private ACL CIDR %q: %w", raw, err)
+		}
+		p = p.Masked()
+		if !gateway.IsValid() || !p.Contains(gateway) {
+			out = append(out, p.String())
+			continue
+		}
+		for p.Bits() < p.Addr().BitLen() {
+			n := p.Bits()
+			left := netip.PrefixFrom(p.Addr(), n+1).Masked()
+			var other netip.Addr
+			if p.Addr().Is4() {
+				a := p.Addr().As4()
+				a[n/8] ^= byte(1 << uint(7-n%8))
+				other = netip.AddrFrom4(a)
+			} else {
+				a := p.Addr().As16()
+				a[n/8] ^= byte(1 << uint(7-n%8))
+				other = netip.AddrFrom16(a)
+			}
+			right := netip.PrefixFrom(other, n+1).Masked()
+			if left.Contains(gateway) {
+				out = append(out, right.String())
+				p = left
+			} else {
+				out = append(out, left.String())
+				p = right
+			}
+		}
+		// The final /32 or /128, containing ONLY the trusted gateway,
+		// is deliberately omitted. All other private targets are denied.
+	}
+	return strings.Join(out, ","), nil
+}
+
+func nativeACLGateway(config api.ConfigMap, key string, ipv6 bool) (netip.Addr, error) {
 	raw := strings.TrimSpace(config[key])
 	if raw == "" || raw == "none" {
 		if ipv6 {
-			return "", nil // a bridge without IPv6 still blocks ULA egress
+			return netip.Addr{}, nil // no v6 gateway, still block ULA/LL
 		}
-		return "", errors.New("missing IPv4 native bridge gateway")
+		return netip.Addr{}, errors.New("missing IPv4 native bridge gateway")
 	}
 	prefix, err := netip.ParsePrefix(raw)
 	if err != nil || !prefix.IsValid() {
-		return "", errors.New("selected native bridge gateway CIDR unparseable")
+		return netip.Addr{}, errors.New("selected native bridge gateway CIDR unparseable")
 	}
 	addr := prefix.Addr()
 	if ipv6 && !addr.Is6() || !ipv6 && !addr.Is4() ||
 		addr.IsUnspecified() || addr.IsLoopback() || addr.IsMulticast() {
-		return "", errors.New("invalid native bridge gateway family or address")
+		return netip.Addr{}, errors.New("invalid native bridge gateway family or address")
 	}
-	if ipv6 {
-		return addr.String() + "/128", nil
-	}
-	return addr.String() + "/32", nil
+	return addr, nil
 }
 
 func nativePrepareACL(t NativePrepareTarget, network *api.Network) (api.NetworkACLsPost, error) {
@@ -175,21 +215,21 @@ func nativePrepareACL(t NativePrepareTarget, network *api.Network) (api.NetworkA
 	if err != nil {
 		return api.NetworkACLsPost{}, err
 	}
+	blockedV4, err := nativeACLWithoutGateway(nativeACLBlockedIPv4, v4)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
+	}
+	blockedV6, err := nativeACLWithoutGateway(nativeACLBlockedIPv6, v6)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
+	}
+	// No explicit allows: the per-NIC Internet switch remains authoritative.
 	egress := []api.NetworkACLRule{
-		{Action: "allow", State: "enabled", Destination: v4,
-			Description: "Approved selected private bridge gateway only"},
+		{Action: "reject", State: "enabled", Destination: blockedV4,
+			Description: "Deny routed private and reserved IPv4 networks except exact bridge gateway"},
+		{Action: "reject", State: "enabled", Destination: blockedV6,
+			Description: "Deny routed ULA and link-local IPv6 networks except exact bridge gateway"},
 	}
-	if v6 != "" {
-		egress = append(egress, api.NetworkACLRule{Action: "allow", State: "enabled",
-			Destination: v6, Description: "Approved selected IPv6 bridge gateway only"})
-	}
-	egress = append(egress,
-		api.NetworkACLRule{Action: "reject", State: "enabled",
-			Destination: nativeACLBlockedIPv4,
-			Description: "Deny routed private and reserved IPv4 networks"},
-		api.NetworkACLRule{Action: "reject", State: "enabled",
-			Destination: nativeACLBlockedIPv6,
-			Description: "Deny routed ULA and link-local IPv6 networks"})
 	return api.NetworkACLsPost{
 		NetworkACLPost: api.NetworkACLPost{Name: t.ACL},
 		NetworkACLPut: api.NetworkACLPut{Description: "BoxWeave v1 exclusive to " + t.Project,
@@ -205,7 +245,8 @@ func nativeACLPrivateEgressSafe(acl *api.NetworkACL, network *api.Network) bool 
 	if err != nil {
 		return false
 	}
-	// Rule order is significant: gateway exception MUST precede deny.
+	// The exact gateway carve-out, destination CIDR set and deny-only rules
+	// must be unchanged; simply checking ACL name or used_by is not enough.
 	return reflect.DeepEqual(acl.Egress, expected.Egress) &&
 		len(acl.Ingress) == 0
 }

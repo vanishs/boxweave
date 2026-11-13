@@ -63,23 +63,32 @@ def ensure_ping(name, project):
     cmd = "command -v ping >/dev/null || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends iputils-ping >/dev/null)"
     run("incus", "exec", name, "--project", project, "--", "sh", "-c", cmd, timeout=180)
 
-def acl_private_egress():
+def acl_private_egress(foreign_v4,foreign_v6):
     acl=json.loads(run("incus","query","/1.0/network-acls/bw-s25-inner-owned").stdout)
     egress=acl["egress"]
-    assert acl["name"]=="bw-s25-inner-owned" and len(egress)==4, acl
+    assert acl["name"]=="bw-s25-inner-owned" and len(egress)==2,acl
+    assert [(r["action"],r["state"]) for r in egress]==[
+        ("reject","enabled"),("reject","enabled")
+    ], egress
     own_v4=gateway(OWNED_PROJECT,4)
     own_v6=gateway(OWNED_PROJECT,6)
-    assert [(r["action"],r["state"]) for r in egress]==[
-        ("allow","enabled"),("allow","enabled"),("reject","enabled"),("reject","enabled")
-    ], egress
-    assert egress[0]["destination"]==own_v4+"/32" and egress[1]["destination"]==own_v6+"/128",egress
-    v4=egress[2]["destination"]
-    v6=egress[3]["destination"]
-    for cidr in ("10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","100.64.0.0/10"):
-        assert cidr in v4,("missing routed private IPv4 reject",cidr)
-    assert "fc00::/7" in v6 and "fe80::/10" in v6
+    reject_v4=[ipaddress.ip_network(p) for p in egress[0]["destination"].split(",")]
+    reject_v6=[ipaddress.ip_network(p) for p in egress[1]["destination"].split(",")]
+    def denied(address,ranges):
+        addr=ipaddress.ip_address(address)
+        matches=[p for p in ranges if addr in p]
+        assert len(matches)<=1,("overlapping ACL CIDRs",address,matches)
+        return bool(matches)
+    assert not denied(own_v4,reject_v4) and not denied(own_v6,reject_v6)
+    assert denied(foreign_v4,reject_v4) and denied(foreign_v6,reject_v6)
+    assert denied("10.223.5.2",reject_v4) and denied("fd42:abcd::2",reject_v6)
+    assert not denied("1.1.1.1",reject_v4) and not denied("2001:db8:25:2026::2",reject_v6)
     assert len(acl["ingress"])==0
-    assert acl["used_by"]==["/1.0/profiles/default?project=user-1001"],acl["used_by"]
+    references=acl["used_by"]
+    assert "/1.0/profiles/default?project=user-1001" in references,references
+    assert all(ref=="/1.0/profiles/default?project=user-1001" or
+               (ref.startswith("/1.0/instances/") and ref.endswith("?project=user-1001"))
+               for ref in references),references
     return {"ACL":"bw-s25-inner-owned","gateway_v4":own_v4,"gateway_v6":own_v6,
             "private_ipv4_rejected":True,"private_ipv6_ula_rejected":True}
 
@@ -123,7 +132,7 @@ def run_packets():
               "owned_ipv4": owned4, "owned_ipv6": owned6, "foreign_ipv4": foreign4, "foreign_ipv6": foreign6,
               "positive_gateway_v4_v6_both_projects": True,
               "bidirectional_cross_project_packet_denied_v4_v6": True,
-              "socket_scope": socket_and_scope(), "acl_private_egress":acl_private_egress()}
+              "socket_scope": socket_and_scope(), "acl_private_egress":acl_private_egress(foreign4,foreign6)}
     assert result["owned_uuid"] != result["foreign_uuid"]
     return result
 

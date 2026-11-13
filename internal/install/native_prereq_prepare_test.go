@@ -1,6 +1,7 @@
 package install
 
 import (
+	"net/netip"
 	"os"
 	"reflect"
 	"strings"
@@ -123,9 +124,9 @@ func TestS25NativeAutoUserProfileEligibility(t *testing.T) {
 	}
 }
 
-// TestS25PrivateEgressBlocksRoutedForeignProjects ensures that an
-// internet-enabled NIC cannot transit host-routed default/foreign Projects
-// using the absence of explicit ACL egress rules.
+// TestS25PrivateEgressBlocksRoutedForeignProjects locks the actual Incus
+// reject-over-allow rule precedence. CIDRs MUST be disjoint from the single
+// selected bridge gateway; an overlapping allow rule is ineffective.
 func TestS25PrivateEgressBlocksRoutedForeignProjects(t *testing.T) {
 	target := NativePrepareTarget{Project: "user-1001", ACL: "bw-s25-inner-owned"}
 	network := &api.Network{
@@ -139,48 +140,70 @@ func TestS25PrivateEgressBlocksRoutedForeignProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(acl.Egress) != 4 || acl.Egress[0].Action != "allow" ||
-		acl.Egress[0].Destination != "10.223.5.1/32" ||
-		acl.Egress[1].Action != "allow" ||
-		acl.Egress[1].Destination != "fd42:3af8:722d:a113::1/128" ||
-		acl.Egress[2].Action != "reject" ||
-		acl.Egress[3].Action != "reject" {
-		t.Fatalf("gateway-first private destination deny policy is missing: %+v", acl.Egress)
+	if len(acl.Egress) != 2 || acl.Egress[0].Action != "reject" ||
+		acl.Egress[1].Action != "reject" ||
+		acl.Egress[0].State != "enabled" || acl.Egress[1].State != "enabled" {
+		t.Fatalf("deny-only private egress ACL missing: %+v", acl.Egress)
 	}
-	for _, prefix := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"} {
-		if !strings.Contains(acl.Egress[2].Destination, prefix) {
-			t.Errorf("missing IPv4 routed private destination rejection %s", prefix)
+	checkDenied := func(family int, addr string, want bool) {
+		t.Helper()
+		rule := acl.Egress[0]
+		if family == 6 {
+			rule = acl.Egress[1]
+		}
+		ip := netip.MustParseAddr(addr)
+		found := false
+		for _, cidr := range strings.Split(rule.Destination, ",") {
+			if netip.MustParsePrefix(cidr).Contains(ip) {
+				if found {
+					t.Fatalf("overlapping rule CIDRs for %s", addr)
+				}
+				found = true
+			}
+		}
+		if found != want {
+			t.Errorf("ACL denied %s: got=%v want=%v", addr, found, want)
 		}
 	}
-	if !strings.Contains(acl.Egress[3].Destination, "fc00::/7") {
-		t.Fatal("missing IPv6 ULA routed foreign Project rejection")
+	// Exactly one gateway IP is excluded. Sibling guests in the same
+	// subnet and foreign host-routed projects are still blocked.
+	for _, addr := range []string{
+		"10.223.5.2", "10.179.98.182", "192.168.50.4",
+		"172.20.0.2", "100.64.4.2", "169.254.6.3",
+	} {
+		checkDenied(4, addr, true)
 	}
-	got := &api.NetworkACL{
-		NetworkACLPost: acl.NetworkACLPost,
-		NetworkACLPut:  acl.NetworkACLPut,
+	checkDenied(4, "10.223.5.1", false)
+	checkDenied(4, "1.1.1.1", false)
+	for _, addr := range []string{
+		"fd42:3af8:722d:a113::2", "fd42:abcd::1", "fe80::abcd",
+	} {
+		checkDenied(6, addr, true)
 	}
+	checkDenied(6, "fd42:3af8:722d:a113::1", false)
+	checkDenied(6, "2001:db8:25:2026::2", false)
+	got := &api.NetworkACL{NetworkACLPost: acl.NetworkACLPost, NetworkACLPut: acl.NetworkACLPut}
 	if !nativeACLPrivateEgressSafe(got, network) {
 		t.Fatal("exact native ACL policy not accepted")
 	}
-	// A configured empty ACL was the original P0 vulnerability.
 	got.Egress = nil
 	if nativeACLPrivateEgressSafe(got, network) {
 		t.Fatal("empty foreign-project-permissive ACL unexpectedly accepted")
 	}
 	got.Egress = append([]api.NetworkACLRule(nil), acl.Egress...)
-	got.Egress[0].Destination = "10.223.5.0/24"
+	got.Egress[0].Destination = "10.0.0.0/8"
 	if nativeACLPrivateEgressSafe(got, network) {
-		t.Fatal("widened local gateway exception incorrectly accepted")
+		t.Fatal("ACL that blocks own gateway not refused")
 	}
 	got.Egress = append([]api.NetworkACLRule(nil), acl.Egress...)
-	got.Egress[2].Action = "allow"
+	got.Egress[0].Action = "allow"
 	if nativeACLPrivateEgressSafe(got, network) {
 		t.Fatal("private destination explicit allow incorrectly accepted")
 	}
 	got.Egress = append([]api.NetworkACLRule(nil), acl.Egress...)
-	got.Egress[0], got.Egress[2] = got.Egress[2], got.Egress[0]
+	got.Egress[0], got.Egress[1] = got.Egress[1], got.Egress[0]
 	if nativeACLPrivateEgressSafe(got, network) {
-		t.Fatal("unreviewed rule reordering incorrectly accepted")
+		t.Fatal("unreviewed ACL rule mutation incorrectly accepted")
 	}
 }
 
@@ -194,7 +217,7 @@ func TestS25PrivateEgressRefusesUnreviewedBridgeGateway(t *testing.T) {
 	network.Config["ipv4.address"] = "10.4.1.1/24"
 	network.Config["ipv6.address"] = "none"
 	got, err := nativePrepareACL(target, network)
-	if err != nil || len(got.Egress) != 3 {
+	if err != nil || len(got.Egress) != 2 {
 		t.Fatalf("IPv6-disabled bridge must still deny ULA destinations: %+v, %v", got.Egress, err)
 	}
 	network.Config["ipv6.address"] = "not-a-prefix"

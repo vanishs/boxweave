@@ -121,6 +121,64 @@ sudo incus profile show default --project "$project"
 echo "S2_NATIVE_NETWORKS"
 sudo incus network list
 sudo incus network acl create bw-s2-native-acl
+# S2.5's pre-first-Box security review now rejects the old empty ACL:
+# Internet=true otherwise permits routed access to OTHER native Projects.
+# This is a disposable, empty single-use project. Do not backport these
+# global-fixture commands into shared/physical-host native acceptance.
+if [ "$(printenv S25_NATIVE_PREREQ_PROBE 2>/dev/null || true)" = true ]; then
+  owned_net="incusbr-$(id -u boxweave)"
+  v4="$(sudo incus network get "$owned_net" ipv4.address | cut -d/ -f1)"
+  v6="$(sudo incus network get "$owned_net" ipv6.address | cut -d/ -f1)"
+  test -n "$v4"
+  # Incus rules are prioritized reject BEFORE allow, regardless of list
+  # order. Carve exactly one native gateway /32 and /128 from rejected
+  # private ranges; an "allow gateway" overlapping a reject is ineffective.
+  python3 - "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_GATEWAY_CARVE_OUT'
+import ipaddress,sys
+blocked4="0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
+blocked6="fc00::/7,fe80::/10,::1/128"
+def carve(source, gateway):
+    out=[]
+    target=ipaddress.ip_address(gateway) if gateway not in ("","none") else None
+    for raw in source.split(","):
+        net=ipaddress.ip_network(raw)
+        if target is None or target not in net:
+            out.append(net)
+        else:
+            out.extend(net.address_exclude(ipaddress.ip_network(str(target)+("/32" if target.version==4 else "/128"))))
+    for n in out:
+        assert target not in n if target is not None else True
+    return ",".join(str(x) for x in out)
+open(sys.argv[1],"w").write(carve(blocked4,sys.argv[2])+"\n"+carve(blocked6,sys.argv[3])+"\n")
+S25_GATEWAY_CARVE_OUT
+  denied_v4="$(sed -n '1p' "$work/s25-native-private-cidrs.txt")"
+  denied_v6="$(sed -n '2p' "$work/s25-native-private-cidrs.txt")"
+  test -n "$denied_v4" && test -n "$denied_v6"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v4" \
+    --description "Deny routed private and reserved IPv4 networks except exact bridge gateway"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v6" \
+    --description "Deny routed ULA and link-local IPv6 networks except exact bridge gateway"
+  # Native readback of the persisted disjoint private rules.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-egress-acl.json"
+  python3 - "$work/s25-native-egress-acl.json" "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_NATIVE_ACL_V'
+import ipaddress,json,sys
+a=json.load(open(sys.argv[1]))
+rules=a["egress"]
+approved=open(sys.argv[2]).read().splitlines()
+assert len(rules)==2,rules
+assert [x["action"] for x in rules]==["reject","reject"],rules
+assert [x["state"] for x in rules]==["enabled","enabled"],rules
+assert [x["destination"] for x in rules]==approved,rules
+for i,gw in enumerate(sys.argv[3:]):
+    if gw in ("","none"):
+        continue
+    address=ipaddress.ip_address(gw)
+    assert all(address not in ipaddress.ip_network(prefix) for prefix in approved[i].split(","))
+S25_NATIVE_ACL_V
+  echo S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY=PASS
+fi
 sudo incus profile device set default eth0 --project "$project" \
   security.acls=bw-s2-native-acl \
   security.acls.default.ingress.action=reject \
