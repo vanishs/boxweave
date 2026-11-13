@@ -419,6 +419,71 @@ def verify_round2_offline_rollback():
     cli("sudo", "python3", "-c", integrity, os.environ["BW_S25_OUTER_DB"])
     print("S25_V_R2_ORIGINAL_OPS_EXACT_BINARY_SQLITE_NATIVE_ROLLBACK=PASS")
 
+def verify_r12_lost_reply():
+    m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    require(m.get("r12_lost_reply_exec_op") and m.get("uuid"), "lost ACK original key/UUID missing")
+    require(m.get("r12_lost_key") == "s25-r12-lost-mcp-reply-exec", "wrong lost response original key")
+    require(m.get("r12_lost_work") == "lab/s25/r12-lost-reply", "wrong original work ref")
+    read_ledger(os.environ["BW_S25_OUTER_DB"], m["r12_lost_reply_exec_op"],
+                m["uuid"], "agent-s25-acklost")
+    # The independently read original UUID must still exist unchanged after
+    # the old Agent's response was lost and original token revoked.
+    host_read("present", os.environ["BW_S25_PROJECT"], m["name"], m["uuid"])
+    verify = (
+        "import sqlite3,sys;"
+        "c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True);"
+        "v=list(c.execute('SELECT id,state,agent_ref,work_ref FROM operations "
+        "WHERE resource_key=? AND action=? AND work_ref=?',"
+        "(sys.argv[2], 'box_exec', sys.argv[3])));"
+        "assert v==[(sys.argv[4],'SUCCEEDED','agent-s25-acklost',sys.argv[3])],v"
+    )
+    cli("sudo","python3","-c",verify,os.environ["BW_S25_OUTER_DB"],
+        "box:"+m["name"],m["r12_lost_work"],m["r12_lost_reply_exec_op"])
+    print("S25_V_R12_LOST_ACK_EXACT_ONE_NATIVE_EXEC_ORIGINAL=PASS")
+
+
+def verify_r12_foreign():
+    """Independent outer Verifier repeats actual packet tests inside the nested native daemon."""
+    m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
+    require(m.get("uuid"), "outer nested L1 exact original missing")
+    project = os.environ["BW_S25_PROJECT"]
+    # Outer witness: exact parent vs inner Incus socket inode must differ.
+    outer_id = cli("sudo", "stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    inner_id = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                   project, "--", "stat", "-c", "%d:%i", "/var/lib/incus/unix.socket.user")
+    require(outer_id.strip() != inner_id.strip(),
+            "nested Incus socket unexpectedly same inode as parent")
+    data = as_json(cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                       project, "--", "cat", "/root/s25-r12-foreign-state.json"))
+    require(data.get("state") == "VERIFIED_SETUP", "foreign fixture not verified")
+    assert data["evidence"]["socket_scope"]["no_parent_socket_bind_mount"]
+    assert data["evidence"]["socket_scope"]["foreign_project_denied_to_service"]
+    output = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                 project, "--", "env", "BW_S25_R12_DISPOSABLE=1", "python3",
+                 "/root/s25_r12_foreign_l1.py", "verify")
+    require("S25_V_R12_L1_FOREIGN_PROJECT_PACKET_AND_PARENT_SOCKET=PASS" in output,
+            "independent foreign IPv4/IPv6 packet re-test did not PASS")
+    print("S25_V_R12_L1_FOREIGN_PROJECT_PACKET_AND_PARENT_SOCKET=PASS")
+
+
+def verify_r12_foreign_clean():
+    """Post-cleanup readback from a separate outer actor, not from cleanup command."""
+    project = os.environ["BW_S25_PROJECT"]
+    data = as_json(cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                       project, "--", "cat", "/root/s25-r12-foreign-state.json"))
+    require(data.get("state") == "CLEANED", "foreign fixture cleanup not committed")
+    names = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                project, "--", "incus", "list", "--project", "default",
+                "-f", "csv", "-c", "n")
+    require(not names.strip(), "foreign native Guest leaked")
+    owned_id = cli("sudo", "incus", "exec", "bw-s25-mcp-l1", "--project",
+                   project, "--", "incus", "config", "get", "bw-s25-mcp-l2",
+                   "volatile.uuid", "--project", "user-1001")
+    require(owned_id.strip() == data["evidence"]["owned_uuid"],
+            "foreign fixture cleanup changed original nested UUID")
+    print("S25_V_R12_L1_FOREIGN_NATIVE_UUID_CLEANUP=PASS")
+
+
 def cleaned():
     m = as_json(Path(os.environ["BW_S25_CHECKPOINT"]).read_text())
     require(m.get("delete_op") and m.get("uuid"),
@@ -455,6 +520,12 @@ if __name__ == "__main__":
         nested_cleaned()
     elif sys.argv[1] == "round2-postrollback":
         verify_round2_offline_rollback()
+    elif sys.argv[1] == "r12-lost-reply":
+        verify_r12_lost_reply()
+    elif sys.argv[1] == "r12-foreign":
+        verify_r12_foreign()
+    elif sys.argv[1] == "r12-foreign-clean":
+        verify_r12_foreign_clean()
     elif sys.argv[1] == "clean":
         cleaned()
     else:

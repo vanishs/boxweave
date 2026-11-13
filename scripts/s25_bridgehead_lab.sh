@@ -94,7 +94,7 @@ import json,sys
 s=json.load(open(sys.argv[1]))
 assert s["ready"] and s["native"]["ready"],s
 S25_DOCTOR_ASSERT
-for spec in "admin1:admin" "admin2:admin" "viewer:viewer"; do
+for spec in "admin1:admin" "admin2:admin" "admin3:admin" "viewer:viewer"; do
  name="$(printf '%s\n' "$spec" | cut -d: -f1)"
  role="$(printf '%s\n' "$spec" | cut -d: -f2)"
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create -role "$role" > "$work/private/$name.secret"
@@ -158,6 +158,7 @@ export BW_S25_PROJECT="$project"
 export BW_S25_OUTER_DB=/var/lib/boxweave/ledger.sqlite
 export BW_S25_ADMIN1_FILE="$work/private/admin1.secret"
 export BW_S25_ADMIN2_FILE="$work/private/admin2.secret"
+export BW_S25_ADMIN3_FILE="$work/private/admin3.secret"
 export BW_S25_VIEWER_FILE="$work/private/viewer.secret"
 export BW_S25_CHECKPOINT="$work/private/outer-checkpoint.json"
 export BW_S25_STAGE_URL="http://$gateway:$port"
@@ -179,6 +180,32 @@ python3 scripts/s25_independent_verifier.py wan6outerclean
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 "$work/staging/s25-lab-agent" double-agent
 python3 scripts/s25_independent_verifier.py agents
+# One-shot *real* lost MCP HTTP ACK after native Exec dispatch:
+# distinct Admin3 Agent has its response deliberately withheld only
+# AFTER actual candidate HTTP response; Admin2 independently recovers
+# the single original via persisted work/agent refs and native/SQLite V.
+"$work/staging/s25-lab-agent" r12-lost-reply-admit
+"$work/staging/s25-lab-agent" r12-lost-reply-recover
+python3 scripts/s25_independent_verifier.py r12-lost-reply
+admin3_id="$(sed -n 's/^id=\([0-9a-f]*\) .*/\1/p' "$work/private/admin3.secret")"
+test -n "$admin3_id"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-revoke -id "$admin3_id" >/dev/null
+python3 - "$work/private/admin3.secret" <<'S25_R12_REVOKED_ADMIN'
+import urllib.error,urllib.request,sys
+credential=next(x[6:].strip() for x in open(sys.argv[1]) if x.startswith("token="))
+req=urllib.request.Request("http://127.0.0.1:18650/mcp",data=b"{}",
+ headers={"Authorization":"Bearer "+credential,"Content-Type":"application/json"},method="POST")
+try:
+ urllib.request.urlopen(req,timeout=8)
+except urllib.error.HTTPError as e:
+ assert e.code==401,e.code
+else:
+ raise AssertionError("revoked Admin still had MCP HTTP authority")
+print("S25_R12_REVOKED_ORIGINAL_AGENT_HTTP_401=PASS")
+S25_R12_REVOKED_ADMIN
+"$work/staging/s25-lab-agent" r12-lost-reply-post-revoke
+python3 scripts/s25_independent_verifier.py r12-lost-reply
+echo S25_R12_REAL_LOST_MCP_ACK_TWO_AGENT_ROTATE_NO_REPLAY=PASS
 "$work/staging/s25-lab-agent" quiet-long-poll
 python3 scripts/s25_independent_verifier.py quiet
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
@@ -275,6 +302,23 @@ python3 scripts/s25_independent_verifier.py l2
 echo S25_L1_MCP_L2_UPDATE_STOP_START_SAME_UUID=PASS
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"
 echo S25_TWO_LAYER_V1_MCP_CREATE_EXEC=PASS
+# Additional P0 BH-009/BH-011/BH-015: cross-Project raw IPv4/IPv6
+# packets and parent native Unix-socket isolation. This test uses ONLY
+# a freshly created foreign guest in the disposable INNER L1 daemon.
+# Native setup is a separate operator/Verifier actor, not v1 client.
+foreign_probe_sha="$(sha256sum scripts/s25_r12_foreign_l1.py | awk '{print $1}')"
+sudo incus file push scripts/s25_r12_foreign_l1.py bw-s25-mcp-l1/root/s25_r12_foreign_l1.py --project "$project"
+test "$(sudo incus exec bw-s25-mcp-l1 --project "$project" -- sha256sum /root/s25_r12_foreign_l1.py | awk '{print $1}')" = "$foreign_probe_sha"
+printf 'foreign_probe_sha256=%s\n' "$foreign_probe_sha" >> "$proof/identity.txt"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py setup > "$proof/r12-foreign-inner-setup.txt"
+grep -qx 'S25_R12_L1_FOREIGN_PROJECT_V4_V6_POSITIVE_AND_BIDIRECTIONAL_PACKET_DENIAL=PASS' "$proof/r12-foreign-inner-setup.txt"
+grep -qx 'S25_R12_L1_PARENT_SOCKET_AND_FOREIGN_PROJECT_AUTH_ISOLATION=PASS' "$proof/r12-foreign-inner-setup.txt"
+python3 scripts/s25_independent_verifier.py r12-foreign
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-before-cleanup.json"
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- env BW_S25_R12_DISPOSABLE=1 python3 /root/s25_r12_foreign_l1.py cleanup
+python3 scripts/s25_independent_verifier.py r12-foreign-clean
+sudo incus exec bw-s25-mcp-l1 --project "$project" -- cat /root/s25-r12-foreign-state.json > "$proof/r12-foreign-after-cleanup.json"
+echo S25_R12_L1_FOREIGN_PACKET_AND_SOCKET_INDEPENDENT_V=PASS
 "$work/staging/s25-lab-agent" guest-git
 python3 scripts/s25_independent_verifier.py git
 cp "$work/private/outer-checkpoint.json" "$proof/outer-checkpoint.json"

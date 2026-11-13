@@ -6,16 +6,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -51,6 +54,53 @@ func tokenFile(path string) string {
 		}
 	}
 	panic("token fixture has no issued credential")
+}
+
+// afterAckDropTransport is a deterministic client-side MCP lost-reply fault.
+// It forwards the real mutation to installed v1, fully reads its HTTP reply
+// and deliberately refuses to deliver it back to the original Agent.
+// It is one-shot; no silent HTTP retries or alternative native dispatch.
+type afterAckDropTransport struct {
+	inner   http.RoundTripper
+	dropped atomic.Bool
+}
+
+func (a *afterAckDropTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	target := false
+	if r.Body != nil {
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewReader(payload))
+		target = bytes.Contains(payload, []byte("tools/call")) &&
+			bytes.Contains(payload, []byte("box_exec")) &&
+			bytes.Contains(payload, []byte("s25-r12-lost-mcp-reply-exec"))
+	}
+	response, err := a.inner.RoundTrip(r)
+	if err != nil || !target || !a.dropped.CompareAndSwap(false, true) {
+		return response, err
+	}
+	if response == nil {
+		return nil, errors.New("missing actual controller ACK")
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	return nil, errors.New("S25_R12_INJECTED_MCP_REPLY_LOST_AFTER_ACTUAL_CONTROLLER_HTTP_RESPONSE")
+}
+func lostReplySession(ctx context.Context) (*mcp.ClientSession, *afterAckDropTransport) {
+	cut := &afterAckDropTransport{inner: authorizedHTTP{tokenFile(environmental("BW_S25_ADMIN3_FILE"))}}
+	c := mcp.NewClient(&mcp.Implementation{Name: "s25-lost-reply-agent-A", Version: "1"}, nil)
+	sess, err := c.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:             environmental("BW_S25_URL"),
+		HTTPClient:           &http.Client{Transport: cut},
+		DisableStandaloneSSE: true, MaxRetries: -1,
+	}, nil)
+	if err != nil {
+		panic(fmt.Errorf("lostReplySession handshake: %w", err))
+	}
+	return sess, cut
 }
 func session(ctx context.Context, file string) *mcp.ClientSession {
 	c := mcp.NewClient(&mcp.Implementation{Name: "boxweave-s25-separated-agent", Version: "1"}, nil)
@@ -329,6 +379,63 @@ func bootstrap(ctx context.Context) {
 	saveCheckpoint(m)
 	fmt.Println("S25_L1_GUEST_EXEC_NESTED_INCUS_V1_INSTALL=PASS")
 }
+
+// Original Agent A loses the delivered HTTP ACK after native mutation was
+// admitted; original (name,key,work) are fsynced before its only request.
+// Independent Agent B discovers the exact original through operation_list,
+// reads persisted Exec result and never re-dispatches the uncertain command.
+func lostReplyAdmit(ctx context.Context) {
+	must(!isInner(), "lost MCP ACK is L0-only")
+	m := readCheckpoint()
+	work := "lab/s25/r12-lost-reply"
+	assertKey := "s25-r12-lost-mcp-reply-exec"
+	m["r12_lost_work"] = work
+	m["r12_lost_key"] = assertKey
+	saveCheckpoint(m)
+	a, cut := lostReplySession(ctx)
+	defer a.Close()
+	_, err := a.CallTool(ctx, &mcp.CallToolParams{Name: "box_exec", Arguments: map[string]any{
+		"box_id": m["uuid"], "argv": []string{"/bin/sh", "-c", "sleep 2; printf S25_R12_ORIGINAL_EXEC_ONCE"},
+		"timeout_ms": 20000, "idempotency_key": assertKey,
+		"work_ref": work, "agent_ref": "agent-s25-acklost",
+	}})
+	must(cut.dropped.Load(), "actual v1 HTTP ACK was not dropped after response")
+	must(err != nil, "lost reply was unexpectedly delivered to original Agent")
+	fmt.Println("S25_R12_REAL_MCP_REPLY_LOST_AFTER_DISPATCH_NO_RETRY=PASS")
+}
+func lostReplyRecover(ctx context.Context, afterRevocation bool) {
+	must(!isInner(), "lost MCP ACK recovery is L0-only")
+	m := readCheckpoint()
+	b := connectActor(ctx, "b")
+	defer b.Close()
+	page := child(request(ctx, b, "operation_list", map[string]any{
+		"work_ref": m["r12_lost_work"], "agent_ref": "agent-s25-acklost",
+		"action": "box_exec", "limit": 10,
+	}), "page")
+	entries, _ := page["operations"].([]any)
+	must(len(entries) == 1, "lost HTTP ACK caused more than one original Exec")
+	original, ok := entries[0].(map[string]any)
+	must(ok, "operation_list original malformed")
+	id := str(original, "operation_id")
+	must(len(id) == 32, "lost reply original operation ID missing")
+	final := wait(ctx, b, id)
+	must(str(final, "box_uuid") == m["uuid"], "lost ACK changed native resource identity")
+	must(str(final, "agent_ref") == "agent-s25-acklost", "original Agent attribution altered")
+	output := request(ctx, b, "operation_output_get", map[string]any{
+		"operation_id": id, "stream": "stdout", "limit": 4096,
+	})
+	buf, e := base64.StdEncoding.DecodeString(str(output, "content_base64"))
+	must(e == nil && strings.Contains(string(buf), "S25_R12_ORIGINAL_EXEC_ONCE"),
+		"lost MCP ACK original native stdout absent/mismatched")
+	if !afterRevocation {
+		m["r12_lost_reply_exec_op"] = id
+		saveCheckpoint(m)
+		fmt.Println("S25_R12_INDEPENDENT_AGENT_RECOVERED_MCP_LOST_REPLY_ORIGINAL=PASS")
+	} else {
+		must(m["r12_lost_reply_exec_op"] == id, "rotated Agent observed different original")
+		fmt.Println("S25_R12_POST_REVOKE_SECOND_AGENT_ORIGINAL_RECEIPT_INTACT=PASS")
+	}
+}
 func doubleAgent(ctx context.Context) {
 	must(!isInner(), "two-client test requires L0")
 	m := readCheckpoint()
@@ -358,6 +465,15 @@ func doubleAgent(ctx context.Context) {
 	m["peer_uuid"] = peerUUID
 	saveCheckpoint(m)
 	fmt.Println("S25_SECOND_AGENT_DISTINCT_MCP_BOX=PASS")
+	// Same-work second Admin cannot create another Box at the same
+	// resource name with a fresh key: prevents conflicting native effects.
+	must(denied(ctx, first, "box_create", map[string]any{
+		"name": "bw-s25-mcp-peer", "cpu": 2, "memory_mib": 512, "disk_gib": 2,
+		"start": true, "internet": true, "nesting": false,
+		"idempotency_key": "s25-r12-hostile-conflicting-create-once",
+		"work_ref":        work, "agent_ref": "agent-s25-alpha",
+	}), "same-work conflicting native resource Create admitted")
+	fmt.Println("S25_R12_TWO_AGENT_RESOURCE_CONFLICT_DENIED=PASS")
 	type output struct {
 		actor, op string
 		err       error
@@ -686,6 +802,12 @@ func main() {
 		bootstrap(ctx)
 	case "double-agent":
 		doubleAgent(ctx)
+	case "r12-lost-reply-admit":
+		lostReplyAdmit(ctx)
+	case "r12-lost-reply-recover":
+		lostReplyRecover(ctx, false)
+	case "r12-lost-reply-post-revoke":
+		lostReplyRecover(ctx, true)
 	case "quiet-long-poll":
 		quietLongPoll(ctx)
 	case "post-restart":
