@@ -41,7 +41,45 @@ External `install.sh` provides:
 - **Stable** `v1.X.Y` release still requires S5 formal installed native/nested acceptance, independent verifier, source/artifact identity and all release criteria. Only a separately reviewed owner-approved PR may promote `V1_PUBLISHED_RELEASE` to that existing published stable tag; publishing does not change it.
 - Every release has one pair of ELF assets `boxweave-v1.X.Y-linux-amd64` and `boxweave-v1.X.Y-linux-arm64`, `release.json`, `SHA256SUMS` and an installer helper; the provenance/limitations are stated clearly. GitHub Release asset hashes are not an independent trust anchor by themselves: always bind to the official repository/tag/source and review the operator's SHA when needed.
 
-## 5. Entry points, ownership and exclusions
+## 5. Operator commands — explicit local pilot or immutable Release
+
+The distribution files are now implemented on Draft PR #133: [external `install.sh`](../../install.sh), [v1-only pointer](../../V1_PUBLISHED_RELEASE), [GitHub Actions amd64/arm64 + source-bound RC workflow](../../.github/workflows/v1-release.yml), [manifest assembler](../../scripts/v1_release_manifest.py) and [negative tests](../../scripts/test_v1_release_manifest.py). The current source `VERSION=1.0.0` is **not** a published v1 Release; `V1_PUBLISHED_RELEASE=UNPUBLISHED` makes default selection fail closed.
+
+Before first install, provision and review signed Incus, `boxweave` service user restricted to the `incus` group, exact `user-1001`-like Project/default Profile/ACL/image/pool with the existing v1 `native-prepare-plan/apply`. Confirm that the target host is dedicated and has no old main service. Do not treat this helper as an Incus/bootstrap installer.
+
+Read-only exact local candidate plan on the approved host:
+
+```sh
+sh install.sh --plan --project user-1001 \
+  --local-binary /absolute/path/to/reviewed/boxweave \
+  --sha256 <reviewed-64-hex-binary-digest>
+```
+
+After separately identifying and approving that machine's printed `host_machine_id_sha256`, run as root **only on that host** (not in this documentation task):
+
+```sh
+sudo sh install.sh --apply --project user-1001 \
+  --local-binary /absolute/path/to/reviewed/boxweave \
+  --sha256 <reviewed-64-hex-binary-digest> \
+  --confirm-host-sha256 <exact-sha256-from-plan>
+```
+
+The verified helper calls Go `install-stage` then Go `install-activate` for a fresh, previously reviewed host. To update an **existing verified** installation, add `--upgrade`; the Go backup must have been independently reviewed/committed and no incompatible SQLite schema is silently adopted. An interrupted stage may require the original Go `install-status` and explicit operator recovery; the helper does **not** delete state or auto-retry an UNKNOWN.
+
+For a **published development prerelease only** (after one is actually published), choose exact tag:
+
+```sh
+sh install.sh --plan --project user-1001 \
+  --version v1.0.0-rc.1 --allow-prerelease
+```
+
+A future signed-off stable `v1.X.Y` can be selected using `--version v1.X.Y`. Once the reviewed v1-only pointer is updated to that published stable tag, omitting `--version` selects it; **not** the repository-wide main/v1 latest GitHub Release.
+
+Release workflow intentionally separates three actions: ordinary PR/push runs build+manifest artifacts only; explicitly dispatched `publish_prerelease=true` on `v1` with `release_tag=v1.X.Y-rc.N` additionally requires installed native/nested tests and can create an immutable **development prerelease**; a **stable S5-qualified Release publication job is not yet implemented** and requires S5 acceptance/independent V. The current Script/Go installer owns staged artifacts and rollback, never automatically enables Cloudflare or starts a real physical pilot.
+
+**2026-11-13 proof:** On isolated `boxweave-test-ser2`, the external script's `sh -n`, embedded Python compile and 4 manifest/negative tests passed; read-only `--plan --local-binary` accepted the exact previously installed `b8f0a8d` binary SHA256 `4b83e06ae5d58f221ba4f63bf17413cfd2e5f23ab44b182aeb447365305935a4` and rejected a wrong digest. No `--apply` was invoked. [Same-source Actions run 43423024906](https://github.com/vanishs/boxweave/actions/runs/43423024906): Go native CGO `amd64` / `arm64`, source tests and candidate manifest all SUCCESS; publishing and real native prerelease tests correctly SKIPPED on a normal PR push. Required quality/S1 source at that commit also SUCCESS. This is distribution-build QA, **not** real host installation, native S5 release or final HOST_GO.
+
+## 6. Entry points, ownership and exclusions
 
 `docs/development/HOST_GO_THREE_STAGE_RUNBOOK.md` Round 3 is now **the bounded exact-host pilot + formal postflight**, *not* an additional prerequisite before any host can be installed. A request to fix docs/build distribution tooling is not an authorization to run Round 3 or install on a specific machine. The `PILOT_DEPLOY_GO` policy is a permitted **conditional path**, not an assertion that the unnamed target is already safe. Historical evidence remains immutable and failures do not disappear.
 
