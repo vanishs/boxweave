@@ -188,7 +188,7 @@ jobs:
 
   publish:
     name: v1-immutable-development-RC-release
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_prerelease == true
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v1.')
     needs: [source, linux, native-gate, candidate]
     runs-on: ubuntu-24.04
     permissions:

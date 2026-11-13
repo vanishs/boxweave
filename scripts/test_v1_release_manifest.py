@@ -74,6 +74,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotEqual(denied.returncode, 0)
         self.assertIn("exact current --confirm-host-sha256", denied.stderr)
 
+    def test_rc_publishing_requires_explicit_one_shot_branch(self):
+        workflow = (ROOT / ".github/workflows/v1-release.yml").read_text()
+        self.assertIn('"release/v1.*-rc.*"', workflow)
+        self.assertIn("refs/heads/release/v1.", workflow)
+        self.assertNotIn("workflow_dispatch", workflow)
+        self.assertIn("v1-prerelease-native-and-nested-verifier", workflow)
+
     def test_rc_flag_not_required_and_removed(self):
         script = (ROOT / "install.sh").read_text()
         self.assertNotIn("allow-prerelease", script)
