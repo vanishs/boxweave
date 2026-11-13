@@ -300,7 +300,11 @@ func run() error {
 			if err != nil || string(first) != string(second) {
 				return errors.New("approval password confirmation failed")
 			}
-			return s.SetupOAuthPassword(ctx, string(first))
+			// The CLI's ordinary 10-second DB context starts BEFORE the
+			// interactive password prompts. A human can legitimately take
+			// longer to type and confirm; only start the write deadline
+			// after both prompts are complete.
+			return setupOAuthPasswordAfterPrompt(s, string(first))
 		case "oauth-set-origin":
 			if *publicOrigin == "" {
 				return errors.New("-public-origin required")
@@ -369,4 +373,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "boxweave:", err)
 		os.Exit(1)
 	}
+}
+
+// setupOAuthPasswordAfterPrompt must never inherit the general CLI context
+// that was created before a human started typing their approval password.
+// The deadline applies only to Argon2id hashing and the SQLite transaction.
+func setupOAuthPasswordAfterPrompt(s *state.Store, password string) error {
+	writeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.SetupOAuthPassword(writeCtx, password)
 }
