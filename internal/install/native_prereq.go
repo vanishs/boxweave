@@ -219,6 +219,11 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 		r.ReviewSHA256 = prereqDigest(r)
 		return r
 	}
+	if preflightErr := nativeAppArmorHostPreflight(); preflightErr != nil {
+		prereqRecord(&r, "apparmor_nested_host", false, preflightErr.Error())
+	} else {
+		prereqRecord(&r, "apparmor_nested_host", true, "read-only AppArmor namespace gate; real Incus dnsmasq, archive and container startup still require live tests")
+	}
 	u, err := user.Lookup("boxweave")
 	actor := false
 	actorDetail := "dedicated incus-only OS identity and exclusive Project"

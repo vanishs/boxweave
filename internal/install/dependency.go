@@ -56,6 +56,9 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 	if err := ubuntuNativeBaseline(); err != nil {
 		return p, err
 	}
+	if err := nativeAppArmorHostPreflight(); err != nil {
+		return p, err
+	}
 	if !ubuntuIncusVersion.MatchString(packageVersion) {
 		return p, errors.New("exact pinned Incus Ubuntu package version required")
 	}

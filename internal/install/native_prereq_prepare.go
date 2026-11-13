@@ -67,6 +67,9 @@ func nativePrepareReadable(t NativePrepareTarget) error {
 		strings.HasPrefix(t.ACL, "incus") || !strings.HasPrefix(t.ACL, "bw-") {
 		return errors.New("exact owned Project, safe pool/network and bw-prefixed exclusive ACL required")
 	}
+	if err := nativeAppArmorHostPreflight(); err != nil {
+		return fmt.Errorf("native preparation requires a host able to manage Incus AppArmor profiles: %w", err)
+	}
 	if err := nativeServiceActorReady(); err != nil {
 		return fmt.Errorf("dedicated confined identity not ready: %w", err)
 	}

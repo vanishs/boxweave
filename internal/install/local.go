@@ -281,6 +281,9 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return Manifest{}, e
 	}
+	if err = nativeAppArmorHostPreflight(); err != nil {
+		return Manifest{}, fmt.Errorf("native Incus host policy preflight before staging: %w", err)
+	}
 	if err = os.MkdirAll(p.StateDir, 0700); err != nil {
 		return Manifest{}, err
 	}
