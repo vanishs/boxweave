@@ -97,10 +97,15 @@ jobs:
           assert actual == {'version': sys.argv[1], 'commit': sys.argv[2]}, actual
           PY
           # Execute the actual native CGO/SQLite binary on each architecture.
-          tmp_db="$RUNNER_TEMP/v1-native-cgo-smoke.sqlite"
+          # SQLite deliberately requires a private (0700), real parent.
+          # The runner-provided $RUNNER_TEMP may not meet that security policy.
+          db_parent="$(mktemp -d "$RUNNER_TEMP/v1-cgo-sqlite.XXXXXXXX")"
+          chmod 0700 "$db_parent"
+          trap 'rm -rf -- "$db_parent"' EXIT
+          tmp_db="$db_parent/ledger.sqlite"
           "release-assets/$name" status -db "$tmp_db" -project no-project \
-            -incus-socket /unavailable-incus > "$RUNNER_TEMP/v1-native-cgo-smoke.json"
-          python3 - "$RUNNER_TEMP/v1-native-cgo-smoke.json" <<'PY'
+            -incus-socket /unavailable-incus > "$db_parent/status.json"
+          python3 - "$db_parent/status.json" <<'PY'
           import json, sys
           state = json.load(open(sys.argv[1], encoding="utf-8"))
           assert state["ready"] is False, "unexpected native host readiness in isolated CI"
