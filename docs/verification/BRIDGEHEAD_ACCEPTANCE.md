@@ -1,3 +1,21 @@
+**2026-11-13 OWNER GATE-SEMANTICS UPDATE (supersedes earlier
+physical-host-first HOST_GO wording):** HOST_GO is the **pre-install
+eligibility verdict**, obtained by a new isolated, nesting-enabled
+main-managed Box with the actual new v1 remotely authenticated Agent,
+installed native Incus/SQLite original-operation and independent
+security/packet proof, real public IPv4, simulated routed IPv6 and
+source-exact final Actions. Existing ROUND1_PASS, ROUND2_PASS and
+LAB_PASS remain valid **only** in their bounded signed scope.
+HOST_GO remains PENDING_LIVE_AGENT: no new v1 remote MCP Agent
+test has yet been signed. The original BH-017 real **physical** host
+native/Agent I+N+V and rollback obligation is **retained**, now the
+mandatory `HOST_POSTFLIGHT_PASS` row once a particular dedicated
+physical host is separately authorized and installed. BH-017 is
+NOT_AUTHORIZED; do not mark it PASS from the isolated Box.
+[Updated authoritative stage-3 contract](../development/HOST_GO_THREE_STAGE_RUNBOOK.md).
+No physical/global host modification, PR merge or release is implied.
+Earlier failed and UNKNOWN original evidence is preserved.
+
 **LATEST FORMAL 2026-11-13 LAB SIGNOFF: ROUND1_PASS,
 ROUND2_PASS and LAB_PASS (owner-approved bounded equivalent evidence).**
 BH-001 through BH-016 are now signed for the isolated, disposable
