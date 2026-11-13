@@ -1,5 +1,7 @@
 # Permanent v1 product boundary — keep BoxWeave small
 
+**2026-11-13 owner-approved narrow scope change:** embedded OAuth browser authorization is now **included**, solely as an optional credential-acquisition front-end for the existing single Go HTTP MCP controller and its unchanged `admin`/`viewer` roles. This reverses the former *OAuth browser login* exclusion below; it does **not** authorize a Web console, general identity provider, extra MCP Tools, public listener, managed Cloudflare, Caddy or separate daemon. [S2.5 implementation and acceptance contract](../development/S25_EMBEDDED_OAUTH_IMPLEMENTATION.md). Code remains to be developed and tested.
+
 **Owner review (confirmed option A):** Retain native Incus TCP/UDP forwarding and a minimal private peer-connection toggle, permanently drop Caddy and generic ACL editing. **Taking over an existing Incus installation means reusing and managing the daemon/version only; it does not mean importing any existing containers.** Never automatically adopt or change unrelated existing instances/projects. Other previously proposed simplifications are accepted. These changes **supersede** older P0/P1 plans rather than reschedule removed features.
 
 ## The product is
@@ -22,7 +24,7 @@ The management MCP is authenticated loopback HTTP. External access (including Cl
 - **Diagnostics:** remove independent `diagnostic_get` MCP API and separate diagnostics product/model. `operation_get` returns a small, redacted phase/error/evidence summary for admitted operations, including Tracking ID. Pre-admission failures carry Tracking ID in the MCP response; detailed tracing is in protected local logs/CLI doctor. Do not build a tracing platform.
 - **Dependencies:** keep version-aware explicit local installation/upgrade, including **reusing and, with scoped authorization, maintaining/upgrading an existing Incus daemon**. Record actual versions before/after and required capabilities. Never silently alter foreign Incus instances/projects, shared daemon consumers or foreign services. A disruptive shared upgrade requires its own local impact approval. **Caddy is not a dependency**.
 - **Images:** Ubuntu LTS is the initial officially verified guest and host baseline; **additional Linux guest distributions can be certified incrementally** after native tests, with no promise of universal image compatibility.
-- **Exclusions, not P1 commitments:** native snapshots, guest file search/bulk transfer, resident guest Agent, generic background process supervisor, automatic sleep/wake, OAuth browser login, Caddy site publishing/HTTPS, generalized ACL/RBAC, multi-tenant administration, backup platform, Web/REST control planes and whole-host tooling. Re-entry requires a new owner-approved product decision, not a scheduled phase.
+- **Exclusions, not P1 commitments:** native snapshots, guest file search/bulk transfer, resident guest Agent, generic background process supervisor, automatic sleep/wake, external identity platforms, Caddy site publishing/HTTPS, generalized ACL/RBAC, multi-tenant administration, backup platform, Web/REST control planes and whole-host tooling. Re-entry requires a new owner-approved product decision, not a scheduled phase.
 
 ## Native Incus environmental boundary, owner-confirmed 2026-11-08
 
