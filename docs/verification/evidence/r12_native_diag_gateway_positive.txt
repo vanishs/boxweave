@@ -1,0 +1,17 @@
+fd42:2468:1357:4242::/64 dev eth0 proto ra metric 100 mtu 1500 hoplimit 64 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+default via fe80::1266:6aff:fec2:fa48 dev eth0 proto ra metric 100 expires 1693sec mtu 1500 hoplimit 64 pref medium
+PING fd42:2468:1357:4242::1 (fd42:2468:1357:4242::1) 56 data bytes
+64 bytes from fd42:2468:1357:4242::1: icmp_seq=1 ttl=64 time=0.064 ms
+64 bytes from fd42:2468:1357:4242::1: icmp_seq=2 ttl=64 time=0.146 ms
+
+--- fd42:2468:1357:4242::1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1018ms
+rtt min/avg/max/mdev = 0.064/0.105/0.146/0.041 ms
+PING 10.234.67.1 (10.234.67.1) 56(84) bytes of data.
+64 bytes from 10.234.67.1: icmp_seq=1 ttl=64 time=0.146 ms
+64 bytes from 10.234.67.1: icmp_seq=2 ttl=64 time=0.121 ms
+
+--- 10.234.67.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1019ms
+rtt min/avg/max/mdev = 0.121/0.133/0.146/0.012 ms

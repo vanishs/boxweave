@@ -1,3 +1,29 @@
+**LATEST 2026-11-13 UTC owner-requested three-P0-gate reacceptance:
+targeted network/fault/two-Agent gaps LAB-SCOPED PASS; formal full
+BH/TC LAB_PASS remains not signed.** Same tested code-bearing source
+457c6dc on Draft PR #133 completed 5/5 Actions SUCCESS: real native S2+
+exclusive ACL #43372809632, nested installed MCP/Incus 7.6 independent V
+#43372809750, S1 and both quality gates #43372818101/#43372818066/
+#43372809733. Real L1 foreign-Project IPv4/IPv6 packet negatives and
+independent native UUID/parent-socket checks closed the explicit
+BH-009/BH-015 **network submatrix**; real native/controlled equivalent
+SIGKILL, lost Incus ACK/MCP reply, original UNKNOWN/no-retry,
+SQLite WAL/ENOSPC and local rollback closed the explicit BH-007/008/012/
+015/016 **fault submatrix**; two separately authenticated SDK actors,
+same original work ref, exactly one Exec on lost reply, token revocation
+and independent recovery closed the explicit TC-011/012/014
+**two-Agent submatrix**. Previous actual model-driven Codex CLI
+0cf474f evidence remains TC-013's separate crosswalk, not an
+exact-457c model-driven action. Foreign route P0 at 79804ff, broken
+fe80 IPv6 RA intermediate and old native fixture dual-controller ACL
+shared use are retained as failures and repaired in the same audit.
+Public IPv4 real HTTPS, isolated routed simulated IPv6 HTTPS (NOT public
+IPv6), selected fault proxies and DIR_QUOTA_UNVERIFIED limitations are
+explicit. **These named submatrices do not automatically promote other
+formal BH/TC case rows to PASS, nor grant BH-017/physical HOST_GO or
+Round 3.** [Chronology, original native identities, independent ZIP SHA
+and full five run links](HOST_GO_R12_P0_NETWORK_AND_FAULT_REACCEPT_2026-11-12.md).
+
 **2026-11-12 exact-candidate Codex HOST_GO Round-2 update:**
 The owner-approved genuine Codex CLI client successfully discovered
 authenticated v1 MCP Tools and completed four original-key native

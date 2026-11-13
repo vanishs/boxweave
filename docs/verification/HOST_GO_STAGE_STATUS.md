@@ -4,6 +4,65 @@ This is the **small mutable checkpoint** for [the user-triggered three-round run
 
 **Owner-approved IPv6 timing contract change (2026-11-12):** Real public IPv6 WAN is deferred to S4 rehearsal / mandatory S5 actual reacceptance; public IPv4 remains real for S2.5. An isolated routed simulated IPv6 HTTPS WAN with the exact installed MCP I + genuine native packet N + independent V, positive/off/on/off and all v4/v6/MAC spoof and peer/foreign negatives is still mandatory. The separately routed **simulated IPv6 WAN I+N+V subcase PASSED** later on 2026-11-12 (original IDs and witnesses in [S25_SIMWAN6_I_N_V](S25_SIMWAN6_I_N_V_2026-11-12.md)); **Round 1 as a whole remains BLOCKED** by other ownership/role/foreign/Agent and full independent BH-009 security gaps; historical public-v6 failures are preserved. `PUBLIC_IPV6_DEFERRED_TO_S5` is not a public-v6 PASS. This docs-only approval does not start any round. [Contract](../decisions/IPV6_PUBLIC_WAN_PHASED_ACCEPTANCE_2026-11-12.md).
 
+## Latest owner-requested Round-1/2 three-P0-gate remediation — 2026-11-13 UTC
+
+**Three named LAB gap groups are now LAB-SCOPED PASS, with owner-approved
+controlled fault / routed IPv6 HTTPS substitutes accurately labeled.
+Formal overall ROUND1_PASS, ROUND2_PASS, all-BH/TC LAB_PASS, physical
+HOST_GO and Round 3 are NOT declared by these targeted results.**
+This is a later evidence checkpoint, not a deletion of any earlier
+failure/UNKNOWN record.
+
+- Source-tested PR #133 code-bearing revision
+  457c6dcf8f95feba64ce4d8ae936cbcf12297b92;
+  same-source Actions **5/5 SUCCESS**: S1 #43372818101;
+  quality #43372818066 / #43372809733; real native S2+
+  hardened-preflight #43372809632; L0/L1/L2 nested MCP, real foreign
+  v4/v6 packets and independent verifier #43372809750.
+  Exact nested candidate binary SHA256
+  f8d6487b607b5fc234ffd7664bae04e7dffb8d63ae93676b29136341e76feca2;
+  signed Incus 7.6; original evidence ZIP artifact #14012879072,
+  independently read SHA256
+  5a5cf57506176183b2e8a41da53cbcedc8305eb38e771c631537e3121862c2c3.
+- **BH-009/BH-015 network submatrix = LAB-SCOPED PASS**:
+  initial internet=true routed IPv4 foreign Project penetration at
+  79804ff was a real P0 defect; fixed via exact dedicated ACL
+  private IPv4/ULA egress reject with one-gateway carveouts, retaining
+  fe80::/10 RA/NDP. Same-binary native L1 bidirectional cross-Project
+  IPv4/IPv6 packet denies and positive gateways, native socket separation,
+  actor/Viewer/anti-spoof and independent original native UUID cleanup
+  PASS; public IPv4 HTTPS is genuine, IPv6 WAN is **separately routed
+  simulated HTTPS**, not public IPv6. Parent Incus/SQLite never exposed.
+- **BH-007/008/012/015/016 fault and rollback submatrix =
+  LAB-SCOPED PASS**: real original native ACK losses, SIGKILL, SQLite
+  WAL/ENOSPC, recorded UNKNOWN no-replay, independent native/SQLite
+  reconciliation and exact offline rollback. Controlled fault proxies
+  are bounded simulation of the failure boundary, not physical power loss.
+- **TC-011/012/014 two-Agent submatrix = LAB-SCOPED PASS**:
+  distinct authenticated official SDK Agents, one installed native
+  Exec after original lost MCP HTTP reply, new Agent recovering one
+  immutable original, revoked credential 401, no replay, independent V.
+  Prior actual model-driven Codex CLI original-key v1 lifecycle and
+  reconnect at 0cf474f remains distinct TC-013 evidence and was **not
+  rerun against the new disposable CI binary**.
+- The final blocker was correctly strict native ACL exclusivity: S2
+  two-controller old test reused the same ACL for user-1002 and
+  user-1003 Profiles; diagnostic run #43372141160 showed two used_by
+  references despite exact correct private CIDRs. Fixture at 457c6dc
+  gives second controller a distinct ACL. Native final used_by now
+  only the original user-1002 Profile and preflight SHA/drift negative
+  checks PASS. Unrelated existing demo-1-container and historical L1
+  remain intact; no shared Incus, physical host or historic UNKNOWN
+  mutation. Fresh exact-host authority is still required for Round 3.
+- [Full chronological failed and passing evidence, IDs, hashes, limits,
+  independent cleanup and exact Actions](HOST_GO_R12_P0_NETWORK_AND_FAULT_REACCEPT_2026-11-12.md).
+
+**Remaining formal boundary:** do not convert this targeted three-group
+PASS into overall Round1/Round2 or LAB_PASS without individually closing
+and recording all other outstanding BH-001–016 and TC cases in the
+authoritative matrix. BH-017 actual dedicated host remains
+NOT_AUTHORIZED. No automatic Round-3 invocation, v1 merge or release.
+
 ## Planning snapshot (2026-11-12, documentation only)
 
 - Existing **tested source**: `7a01000a12114eba0fe4937af0e955bd6e46ed87` with expanded nested MCP LAB 5/5 at that revision. Latest **PR #133 documentation checkpoint**: `31d91584f07ff19135e96f086cd348bd4075f45d`, five same-head Actions SUCCESS, Draft against `v1`. On current head the candidate v1 binary digest was `ee64e247e6054ec62d3e93db4c2a25c51f369816d9b80a9faab07dde2658d3e4`. Reconfirm exact current head and artifacts on invocation; these are historical baselines, not authorization.
