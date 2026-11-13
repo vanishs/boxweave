@@ -1653,6 +1653,42 @@ fi
 # The older S2 RFC2544 benchmark WAN simulator runs BEFORE hardening, so
 # its positive control is not mislabeled as S2.5 private-route evidence.
 if [ "${S25_NATIVE_PREREQ_PROBE:-}" = true ]; then
+  # Independent native-authority evidence for a failed prerequisite:
+  # JSON-only, no tokens, no SQLite, no secret files. This does not
+  # substitute for or bypass the subsequent product preflight.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-final-acl.json"
+  sudo incus query "/1.0/networks/$owned_net" > "$work/s25-native-final-network.json"
+  python3 - "$work/s25-native-final-acl.json" "$work/s25-native-final-network.json" \
+    "$work/s25-native-private-cidrs.txt" "$project" <<'S25_FINAL_ROOT_NATIVE_CROSSCHECK'
+import hashlib,ipaddress,json,sys,urllib.parse
+acl,net=(json.load(open(x)) for x in sys.argv[1:3])
+cidrs=open(sys.argv[3]).read().splitlines()
+owned=sys.argv[4]
+refs=acl.get("used_by",[])
+def reference_allowed(ref):
+    u=urllib.parse.urlparse(ref)
+    return (u.path.startswith("/1.0/profiles/") or u.path.startswith("/1.0/instances/")) and \
+        urllib.parse.parse_qs(u.query)=={"project":[owned]} and not u.fragment
+ref_ok=bool(refs) and any(r==f"/1.0/profiles/default?project={owned}" for r in refs) and all(reference_allowed(r) for r in refs)
+egress=acl.get("egress",[])
+cidr_equal=len(egress)==2 and [r.get("destination") for r in egress]==cidrs
+expected_descriptions=["Deny routed private and reserved IPv4 networks except exact bridge gateway",
+                       "Deny routed ULA IPv6 except gateway, preserve link-local RA"]
+rule_shapes= len(egress)==2 and all(
+    r.get("action")=="reject" and r.get("state")=="enabled" and
+    r.get("description")==expected_descriptions[i] and
+    all(r.get(k,"")=="" for k in ("source","protocol","source_port","destination_port","icmp_type","icmp_code"))
+    for i,r in enumerate(egress))
+print("S25_NATIVE_FINAL_NATIVE_ACL_REFS="+json.dumps(refs))
+print("S25_NATIVE_FINAL_NATIVE_ACL_EXCLUSIVE="+str(ref_ok))
+print("S25_NATIVE_FINAL_NATIVE_ACL_CIDRS_MATCH_PYTHON="+str(cidr_equal))
+print("S25_NATIVE_FINAL_NATIVE_ACL_RULE_SHAPES="+str(rule_shapes))
+print("S25_NATIVE_FINAL_ROOT_BRIDGE_ADDRESSES="+json.dumps({
+    "ipv4.address":net.get("config",{}).get("ipv4.address"),
+    "ipv6.address":net.get("config",{}).get("ipv6.address")}))
+print("S25_NATIVE_FINAL_ACL_RULE_CIDR_SHA256="+json.dumps(
+    [hashlib.sha256(r.get("destination","").encode()).hexdigest() for r in egress]))
+S25_FINAL_ROOT_NATIVE_CROSSCHECK
   sudo "$work/boxweave" native-prereq-plan -project "$project" > "$work/s25-native-prereq-plan.json"
   python3 - "$work/s25-native-prereq-plan.json" <<'PY_S25_PREREQ'
 import json,sys
