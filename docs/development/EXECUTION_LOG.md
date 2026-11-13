@@ -811,3 +811,9 @@ reported.
   No old UNKNOWN replay/cleanup, no physical host, no v1 merge.
   Detailed record:
   docs/verification/HOST_GO_ROUND12_CLEANUP_FOLLOWUP_2026-11-12.md.
+
+
+### 2026-11-12 PT — approved Codex CLI first Agent / fresh isolated L0+L1 exact-bin security reacceptance
+
+- PR #133 source 0cf474f. Real L0/L1 installed SHA256 021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85. Extra four original new successful Create UUIDs, real TLS IPv4 per-NIC off/on/off and source IPv4/IPv6/MAC spoof and sibling/foreign packet negatives. 4/4 valid controls per layer, distinct receiver confirmation, Viewer/token denies. Each layer has 12 original predelete, 16 postdelete SUCCEEDED Operations; 4 owned UUIDs stopped/deleted and independent native/SQLite V confirmed DELETED, original prior foreign L1 remained Running; zero new native UNKNOWN. Cross-Box independent Verifier pre/post hashes ed20a8f7ea842034001806ade58095fe0a655681da8a3d9f112b0ec91060ef7a / 41b2a4e36652d0ca50b2806b72679985b9d9ff9b711c972a005dfe762d654695. Scoped security submatrix PASS; overall Round1 BLOCKED pending remaining full BH-009/015 signoff.
+- Owner selected real Codex CLI. Installed official 0.167.2, separate nonroot bwcodex with private MCP Bearer env at loopback; cannot access host token/native socket. Actual login Not logged in, so actual Codex-driven Tool operation untested, TC-013 and Round2 BLOCKED. Scoped real SIGKILL exact-ledger controller restart PASS; previous same-source GH Actions 5/5 SUCCESS, post-documentation Actions recheck required. No Round3/physical host, legacy UNKNOWN write, force merge or release. Record: docs/verification/HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md.

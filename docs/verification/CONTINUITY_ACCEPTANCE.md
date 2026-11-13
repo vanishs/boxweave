@@ -1,3 +1,5 @@
+**2026-11-12 intended Agent owner decision and actual login status:** Owner approved Codex CLI 0.167.2 as the first real development Agent. Its isolated nonroot client has a private Bearer-env v1 MCP configuration and cannot read host Admin bearer or Incus socket; however the real Codex CLI login status was **Not logged in**. This means no actual Codex model-driven Tool read, mutation, reconnect or TC-013 PASS. Actual SDK two-client recovery and same-source native SIGKILL/rollback remain valid scoped proof, but not substitutes. **TC-013 / Round 2 = BLOCKED: CODEX_LOGIN_REQUIRED**. [Exact separate-Box V and handoff](HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md).
+
 **2026-11-12 combined HOST_GO Round-1/2 review:** both previous
 owned successful Guest cleanups passed with durable Stop/Delete,
 native absence and SQLite DELETED. Current-source Actions 5/5 and
