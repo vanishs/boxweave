@@ -18,47 +18,16 @@ and original gateway UNKNOWN receipts remain untouched. The complete
 observed results and blockers are in
 [HOST_GO_STAGE_STATUS](../verification/HOST_GO_STAGE_STATUS.md).
 
-**Owner-approved gate clarification, 2026-11-13 UTC:** `HOST_GO` now means
-**eligible for a separately authorized installation on a dedicated physical
-development host**, not "already installed and accepted on that host".
-`LAB_PASS` remains signed with its originally documented bounded evidence;
-`HOST_GO` is **not yet signed**. Round 3 will first use a newly isolated,
-nesting-enabled **main-managed Box** running a pinned v1 and native Incus,
-reachable via an authenticated remote MCP transport. The owner will configure
-and explicitly authorize the new ChatGPT Agent connection before any Agent
-write tests. Cloudflare Tunnel reachability alone is not OAuth, authorization,
-or proof of working MCP. The separate host-specific post-install check is
-`HOST_POSTFLIGHT_PASS` and is never inherited from a nested Box.
+**2026-11-13 owner correction — break the deployment/verification cycle:** A **reversible, disposable, separately authorized physical development-host pilot** may begin after bounded nested core success and exact-host read-only preflight **without first claiming HOST_GO PASS**. `PILOT_DEPLOY_GO=CONDITIONAL` is not a claim of all mandatory BH/TC evidence. Actual host-dependent cases become post-install acceptance. `HOST_POSTFLIGHT_PASS` is the exact-host signoff, and `HOST_GO=PASS` requires it plus all remaining required P0, independent Verifier and Actions. No production/release, no same-host main coexistence or anonymous public exposure. Full decision: [pilot + release contract](V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md).
 
-## Authoritative meaning of the gates (supersedes old host-first wording)
-
-| Gate | Real-world meaning | What it permits |
-|---|---|---|
-| `ROUND1_PASS` / `ROUND2_PASS` / `LAB_PASS` | Historical bounded isolated acceptance with explicitly preserved limitations and UNKNOWN receipts | Begin isolated live-v1 Agent rehearsal only |
-| `HOST_GO=PASS` | Same pinned v1 source/binary in an isolated nesting-enabled Box: actual authorized development Agent → authenticated remote MCP → original durable Operations → genuine nested Incus L1/L2, real public IPv4 HTTPS, native security/negative checks, independent verifier and final Actions all pass | **Request** approval to install this exact candidate on a named dedicated physical development host |
-| `HOST_GO=BLOCKED` or `PENDING` | Any mandatory isolated live-Agent/network/security/original-operation/Verifier/CI proof missing | Do not treat the candidate as ready for physical installation |
-| `HOST_POSTFLIGHT_PASS` | **After a separate exact-host approval and bounded pilot installation**: actual physical host inventory, privileges, pool/ACL/network, Agent+MCP+Incus poststate, fallback/rollback, retained data and independent verifier pass | Begin normal development use **on that specific host only** |
-
-The physical host's exact identity, OS, native Incus configuration,
-host-owned permissions, backup/rollback and any modifications require **fresh
-specific user authorization**, even after `HOST_GO=PASS`. `HOST_GO` does not
-permit automatic physical install, global daemon ACL change, PR merge, S5
-release or production use. Physical-host evidence cannot be fabricated
-from the nested Box; new real-host failures yield `HOST_POSTFLIGHT_NO_GO`
-without rewriting signed, still-true LAB evidence. Public IPv6 Internet
-remains mandatory at S5; simulated routed IPv6 I+N+V and genuine public
-IPv4 remain mandatory at this gate.
-
-**Preparatory permission (owner's 2026-11-13 requests):** it is
-permitted to use one owner-approved *new or existing, individually identified*
-nesting-capable main-managed Box and, when reusing, one new isolated inner
-Guest for pinned v1/Tunnel readiness **without executing or signing
-Round 3**. Inventory first; do not retry prior UNKNOWN
-creation receipts. No public unauthenticated MCP, fake OAuth password or
-exposure of Bearer credentials. If an approved functional HTTPS tunnel, verified embedded OAuth
-or a ChatGPT write-capable connection is absent, record `AGENT_PATH_BLOCKED`,
-stop exposure, give the owner the single next action, and do not award
-`HOST_GO`.
+| Gate | Evidence | Permitted next action |
+| --- | --- | --- |
+| `ROUND1_PASS` / `ROUND2_PASS` / `LAB_PASS` | Previously signed bounded LAB; preserve original exceptions | Real ChatGPT nested pilot |
+| `NESTED_PILOT_CORE_PASS` | Real OAuth authenticated v1 MCP → actual Incus/Git/IPv4, original IDs + native readback | Seek **exact host** pilot authority; no automatic install |
+| `PILOT_DEPLOY_GO=CONDITIONAL` | Owner approves identified dedicated host, permitted changes, rollback, known gaps and safe preflight | Reversible development-only host install |
+| `HOST_POSTFLIGHT_PASS` | Same installed host/binary + native/Agent/security/fallback/independent V | Evaluate full HOST_GO |
+| `HOST_GO=PASS` | Physical postflight plus all remaining mandatory P0/CI evidence | Dedicated host normal development use, not S5 release |
+| `HOST_NO_GO` | Host unsafe, missing authority, failed mandatory P0, unverified original UNKNOWN or incompatible state | Fail closed / stop / preserve records |
 
 ## Copy-ready next-Agent entry prompt
 
@@ -91,7 +60,7 @@ The following three owner messages are the only automatic execution triggers. Ma
 ### Non-negotiable safe boundaries
 
 - **Never** use the four historical UNKNOWN tasks (`7e1cbf043d1fd4ea3d9ec0093a04371e`, `f811afeeb778c422fe99b9881baa40f2`, `192a6601c54078f8eaf1437a6a3dc13b`, `a2fdf885b87a0b66fb3a17f913316c55`) as retry/delete/adoption targets. Read-only, exact-original status inspection if safe does not clear UNKNOWN.
-- A general authorization to create/test managed **Boxes** does **not** authorize an unnamed, dedicated **physical** host, OS global Incus change, host daemon restart/upgrade, existing workload removal or public network exposure. Round 3 requires *fresh explicit authorization of the exact host and allowed effects*. Legacy `main` and v1 never co-install on that host.
+- A general authorization to create/test managed **Boxes** does **not** authorize an unnamed, dedicated **physical** host, OS global Incus change, host daemon restart/upgrade, existing workload removal or public network exposure. The dedicated host pilot requires *fresh explicit authorization of the exact host and allowed effects*. Legacy `main` and v1 never co-install on that host.
 - Keep v1's existing one-service/loopback MCP and Project isolation, exact UUID/incarnation, shared-default-Profile ingress reject and implicit/explicit default egress reject; allow Internet **only on reviewed individual owned NICs**; maintain IPv4+IPv6 source/MAC filtering, sibling/foreign denies and least privilege. No anonymous/unauthenticated OAuth bypass, admin socket sharing, host shell Tool or second product architecture.
 - User waived **new S2.5 disk quota pressure tests**, not truthful disclosure. A usable `dir` driver on non-ext4/XFS with absent quota proof reports `DIR_QUOTA_UNVERIFIED` and host-root disk-exhaustion risk. Do not claim hard quota. Test host space/inodes/PSI and monitor thresholds without destructive exhaustion.
 - Complete S2.5 development-host readiness **only**; S3/S4/S5 features, full 20/20 release gate, public launch and stable user-data compatibility are not silently included.
@@ -119,12 +88,12 @@ The following three owner messages are the only automatic execution triggers. Ma
 - Repeat high-priority two-Agent shared-work/foreign-work/ref spoof, token revoke/rotate/blocked-client negatives, and a complete independent original-operation recovery. Reuse only crosswalked S1/S2 accepted cases; sign off BH/TC rows individually with evidence or recorded non-blocking variance explicitly approved by owner.
 - **Gate:** `ROUND2_PASS` needs P0 fault/recovery/rollback evidence and real intended-Agent integration (or an explicitly documented owner-approved change of which Agent will be the real development client). Otherwise `ROUND2_PARTIAL/BLOCKED`, no HOST_GO. Report source/IDs/cleanup and **STOP**, regardless of spare context/time.
 
-## Round 3 — live v1 MCP in one isolated nested Box, then HOST_GO decision
+## Round 3 — conditional dedicated-host pilot and HOST_GO decision
 
-**Formal trigger:** `完成HOST_GO 第三阶段`. A separately approved
+**Formal trigger:** `完成HOST_GO 第三阶段` plus fresh, specific exact-host authorization before any physical mutation. A separately approved
 preparatory Box/Tunnel provisioning request is not the formal test trigger.
 
-1. **Isolated test admission:** confirm Round 1+2 signed LAB evidence and its
+1. **Pre-install acceptance checkpoint:** confirm Round 1+2 signed LAB evidence and its
    explicit limitations; read-only inventory of the existing `main` provider,
    prior UNKNOWN receipts and foreign managed Boxes. Use **one newly created Box, or the separately approved existing
    nesting-enabled Box with a new independently named inner Guest** and
@@ -133,9 +102,9 @@ preparatory Box/Tunnel provisioning request is not the formal test trigger.
    original durable gateway Create status before proceeding; never retry an
    UNKNOWN native/gateway Create. Enable nesting only as explicitly requested
    and verify effective native readiness; don't assume `enable_nesting` worked.
-2. **Pinned v1 and inside-only Incus:** use a reviewed precise PR #133
+2. **Pinned v1 and independently owned Incus:** use a reviewed precise PR #133
    source SHA and binary SHA-256, install confined v1+Incus inside this
-   **separately isolated new or inner Guest only**. Record actual daemon version, native prerequisites,
+   **separately approved dedicated physical development host** after host-specific read-only preflight (nested Guest remains available for fault fixtures). Record actual daemon version, native prerequisites,
    Project/Profile/ACL/pool and auth. No shared parent daemon/global Scriptlet
    changes, no old `main` co-install, no silent privilege escalation.
    A potentially incompatible isolation, quota or native authorization
@@ -173,7 +142,7 @@ preparatory Box/Tunnel provisioning request is not the formal test trigger.
 6. **Final exact candidate gate:** after these real Box/Agent tests, run
    all relevant same-head Actions (quality/race, original native S2 and
    nested independent S2.5) and reconcile source/binary identity.
-   Record failures and fixes with original IDs. `HOST_GO=PASS` only when
+   Record failures and fixes with original IDs. `HOST_GO=PASS` only after separately authorized **dedicated-host installed postflight** and when
    the **new ChatGPT or owner-approved actual intended Agent**'s live remote
    MCP I + native N + independent V and all required negatives, genuine
    IPv4, simulated IPv6 and Actions succeed. Otherwise mark
@@ -181,13 +150,13 @@ preparatory Box/Tunnel provisioning request is not the formal test trigger.
    Update BH/TC with the added Stage-3 Agent witness and append-only log,
    commit to PR #133 and report the next owner step. **STOP.**
 
-**Separate later physical-host pilot (not a prerequisite for HOST_GO):**
-after `HOST_GO=PASS`, obtain fresh explicit authorization naming the
+**Dedicated physical-host pilot (permitted before final HOST_GO):**
+after accepted nested core evidence and **before** claiming `HOST_GO=PASS`, obtain fresh explicit authorization naming the
 dedicated host and allowed effects. Run read-only capacity/security/native
 preflight, exact-candidate bounded installation and L0/L1/L2/Agent
 postflight, real public IPv4 and independent native verifier, safe
 stop/rollback and original ledger reconciliation. Only then sign
-`HOST_POSTFLIGHT_PASS` for that one host. If no permission or a P0 fails,
+`HOST_POSTFLIGHT_PASS` for that one host; reconcile remaining required P0/Actions before `HOST_GO=PASS`. If no permission or a P0 fails,
 record `HOST_POSTFLIGHT_NOT_AUTHORIZED/NO_GO` and **do not install or
 continue writes**. No automatic PR merge or S5 release.
 

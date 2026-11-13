@@ -1,6 +1,8 @@
 # BoxWeave v1 — a small Agent-first Incus Box controller
 
-> **Current v1 development baseline (2026-11-11): S1 + S2 accepted, [PR #130](https://github.com/vanishs/boxweave/pull/130) MERGED at `f1a47c9`**. S2 passed its 18 supported groups on native Incus/official MCP; a forward/peer-dependent Delete case remains S4, actual public-WAN positive remains unverified and the scoped power-fault surrogate is not a real power cut. **S2.5 LAB ready to start, not yet tested. No dedicated physical-host installation, HOST_GO or formal v1 release is authorized.** The first `1.0.0` in VERSION is a source baseline, not a release. [S2 scoped signoff](docs/verification/S2_FINAL_EXIT_SIGNOFF_2026-11-11.md).
+**Current deployment/distribution policy:** [conditional dedicated-host pilot before final HOST_GO, exact host approval, separate external installer and v1-only Release pointer](docs/development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). The running product is a single Go executable; signed Incus/native preparation remains separate and explicit. PR #133 still Draft; not a formal Release.
+
+> **Current v1 development baseline (2026-11-11): S1 + S2 accepted, [PR #130](https://github.com/vanishs/boxweave/pull/130) MERGED at `f1a47c9`**. S2 passed its 18 supported groups on native Incus/official MCP; a forward/peer-dependent Delete case remains S4, actual public-WAN positive remains unverified and the scoped power-fault surrogate is not a real power cut. **S2.5 bounded LAB and real ChatGPT OAuth nested-core tests have now passed; dedicated physical-host pilot is conditionally eligible only with fresh exact-host approval. Final HOST_GO and S5 release are NOT signed.** The first `1.0.0` in VERSION is a source baseline, not a release. [S2 scoped signoff](docs/verification/S2_FINAL_EXIT_SIGNOFF_2026-11-11.md).
 
 BoxWeave uses Go, the official MCP Go SDK and official Incus Go SDK. Its only public management protocol is **authenticated, loopback-only HTTP Streamable MCP** (optional operator-managed HTTPS/Tunnel). A local CLI handles install/upgrade, host status, token bootstrap and recovery.
 
@@ -22,7 +24,7 @@ BoxWeave uses Go, the official MCP Go SDK and official Incus Go SDK. Its only pu
 
 ## Important: Incus-wide authorization change
 
-**This v1 design is not installed yet.** The selected native `box_peer_set` backend uses one **preprovisioned shared ACL** across BoxWeave-owned NICs (directional Box A → Box B, **all ports**, with IPv4/IPv6 rules), a dedicated restricted TLS identity, native Incus **Authorization Scriptlet** and Go SDK **ETag** checks. It avoids runtime ACL creation, custom firewall code, OpenFGA and an extra privileged helper.
+**This v1 candidate has been installed in disposable isolated/nested LAB environments, not on a dedicated physical development host.** The selected native `box_peer_set` backend uses one **preprovisioned shared ACL** across BoxWeave-owned NICs (directional Box A → Box B, **all ports**, with IPv4/IPv6 rules), a dedicated restricted TLS identity, native Incus **Authorization Scriptlet** and Go SDK **ETag** checks. It avoids runtime ACL creation, custom firewall code, OpenFGA and an extra privileged helper.
 
 **Host-wide security/compatibility warning:** enabling `authorization.client.tls-restricted=scriptlet` changes the authorization path for **every restricted-TLS Incus client on this daemon**, not just BoxWeave. Automatic certificate Project restrictions are replaced by the Scriptlet's policy. A faulty policy could **deny existing applications or grant them excessive access**. The operator has approved this trade-off for the v1 product direction; it is **not** permission to silently overwrite an existing host policy.
 
