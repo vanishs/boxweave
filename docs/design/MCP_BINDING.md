@@ -1,5 +1,7 @@
 # Local-only HTTP MCP and operator-controlled external access
 
+**2026-11-13 accepted S2.5 OAuth design amendment (not yet coded):** keep one canonical `https://<public-origin>/mcp` resource for both direct Bearer and OAuth-issued Bearer access. OAuth discovery/authorization/token routes live in the *same* Go HTTP server, reuse the MCP SDK middleware and unchanged `admin`/`viewer` authorization. The operator alone provides a temporary Quick Tunnel and exact local `public_origin` setting; no new external listener or extra MCP route. **No `/mcp/oauth` route.** [Implementation contract](../development/S25_EMBEDDED_OAUTH_IMPLEMENTATION.md).
+
 **Approved default:** BoxWeave's Streamable HTTP MCP listener binds **`127.0.0.1`** by default. It is not published on `0.0.0.0`, a container bridge address, the public interface, or a public service port by the installer.
 
 ## Separate control and application traffic
@@ -41,7 +43,7 @@ The tagged MCP Go SDK v1.8.0 [official protocol guide](https://github.com/modelc
 
 ## Observed legacy client path and protocol failure class
 
-[Legacy host/MCP incident](../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md): the `main` OAuth UI reported successful authorization, and test-token `/mcp` catalog requests returned HTTP 200, but ChatGPT Tool refresh failed while captured requests included **`POST /` → 405**. After checking the complete client endpoint ending in `/mcp`, the owner reported recovery and a connected MCP read returned real Boxes. A root-path 405 and an optional OIDC metadata 404 must be interpreted per request path; authorization/metadata alone is not Tool readiness. OAuth was a `main` feature and stays **out of v1 scope**.
+[Legacy host/MCP incident](../research/LEGACY_MAIN_INCUS_MCP_INCIDENT_2026-11-10.md): the `main` OAuth UI reported successful authorization, and test-token `/mcp` catalog requests returned HTTP 200, but ChatGPT Tool refresh failed while captured requests included **`POST /` → 405**. After checking the complete client endpoint ending in `/mcp`, the owner reported recovery and a connected MCP read returned real Boxes. A root-path 405 and an optional OIDC metadata 404 must be interpreted per request path; authorization/metadata alone is not Tool readiness. The **old main OAuth implementation remains excluded as code**; the owner's new [S2.5 Go-native embedded OAuth authorization plan](../development/S25_EMBEDDED_OAUTH_IMPLEMENTATION.md) supersedes the former exclusion, preserving `https://<host>/mcp` and these regression obligations.
 
 For v1's operator-managed external proxy/Tunnel, verify the **full** public `https://<host>/mcp` path, method, Host/Origin and SDK-native initialize/negotiation, authenticated Tool discovery and a harmless Tool read. The legacy main version allowlist was separately fixed in v0.50.5 but was **not** the observed recovery. Rely on the official MCP Go SDK; test supported legacy revisions and malformed input without duplicating an MCP parser. Use operator-local redacted method/path/status diagnostics only, never credentials or request bodies.
 
