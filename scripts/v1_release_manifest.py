@@ -55,10 +55,10 @@ def assemble(directory, tag, source, installer):
         return match.group(1)
 
     dependencies = {
-        "go_toolchain": pinned(r"^go ([0-9]+\\.[0-9]+\\.[0-9]+)$"),
-        "mcp_go_sdk": pinned(r"^[ \\t]*github\\.com/modelcontextprotocol/go-sdk (v[0-9.]+)$"),
-        "incus_go_sdk": pinned(r"^[ \\t]*github\\.com/lxc/incus/v7 (v[0-9.]+)$"),
-        "sqlite_cgo": pinned(r"^[ \\t]*github\\.com/mattn/go-sqlite3 (v[0-9.]+)$"),
+        "go_toolchain": pinned(r"^go ([0-9]+\.[0-9]+\.[0-9]+)$"),
+        "mcp_go_sdk": pinned(r"^[ \t]*github\.com/modelcontextprotocol/go-sdk (v[0-9.]+)$"),
+        "incus_go_sdk": pinned(r"^[ \t]*github\.com/lxc/incus/v7 (v[0-9.]+)$"),
+        "sqlite_cgo": pinned(r"^[ \t]*github\.com/mattn/go-sqlite3 (v[0-9.]+)$"),
     }
     manifest = {
         "format": 1,
