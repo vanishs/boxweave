@@ -1,3 +1,117 @@
+## 2026-11-13 08:20 UTC — reused existing nested Box; pinned v1 installed, Cloudflare credentials PENDING (not HOST_GO)
+
+**Authorized topology switch:** Owner chose to reuse the *existing*
+main-managed `boxweave-test-cli` Box after two uniquely named
+top-level gateway Creates independently remained UNKNOWN. Read-only
+`boxweave_nesting.inspect` showed `security.nesting=true` on
+`boxweave-test-cli`. Both its old installed `boxweave`
+SHA256 `715b2d0059b5fa8b15e340c0b0270e9fe4b6f0e5a15b5fd03234012f057796c9`
+and the existing L1 `bw-s25-l1a` UUID
+`21767890-6d46-4867-889d-0069c1e4ac0d` remain unchanged,
+RUNNING and active. Old `user-1002` Incus Project/SQLite/service
+were **not** reused.
+
+**Isolated new inner-Guest host:** On **inner Incus 7.6 of
+`boxweave-test-cli` only**, created and started one new
+default-project nonprivileged Ubuntu 24.04 Guest
+`hg-v1-cft-1113`, original native UUID
+`c45c08e3-cb41-4354-8bf7-f1eb5651408d`,
+`security.nesting=true`, 2 CPU / 2GiB memory. It is NOT a new
+main-managed top-level Box or physical host; no new top-level gateway
+create was attempted. Initially DNS was absent during first boot,
+then DHCP + public HTTPS outbound were independently seen operational.
+Fresh inside-only apt Incus package
+`1:7.6-ubuntu24.04-202611072126`, running daemon Incus 7.6,
+fresh `dir` pool, uid 1001 dedicated nonroot `boxweave`
+restricted Incus `user-1001` Project with independently confirmed
+foreign-default Project denial. Pinned Ubuntu 24.04 image aliased
+inside `user-1001`.
+
+**Exact pinned candidate identity:** Detached *clean* checkout of
+Draft PR #133 `df2ba2a6125378044b4d6afb5389cb23ed2c36c0`,
+Go 1.26.9/CGO1, binary stamped
+`1.0.25-hostgo-isolated-pilot` with that exact source commit,
+SHA256 `59dc559bb771e8dca0e16ee4d899d6162eecc735e4cc2e89cd00d0234ac6a511`.
+Independently verified after native file push, after installed v1
+stage and after service activation. On same exact source, local
+`make verify` passed format, YAML duplicate checks,
+`go mod tidy -diff`, vet, module verify, all 5 Go race packages.
+No source changes to the candidate checkout.
+
+**Actual v1 native and installed positive:** v1 native-prepare-plan
+review SHA
+`c8012a44dc31c0771ee9015ce45610fb1e58706cb39a3fbd066234d044962b98`
+was approved/applied **inside new disposable Guest only**
+for `user-1001`, pool `default`,
+bridge `incusbr-1001`, new exclusive
+`bw-hostgo-1113-acl`, rejecting private IPv4 and ULA IPv6,
+enforcing anti-spoof/NIC ownership. `native-prereq-plan` and
+exact SHA `native-prereq-verify` both 8/8 PASS, with **explicit
+`DIR_POOL_HOST_ROOT_SHARED` / `DIR_QUOTA_UNVERIFIED`** warning.
+First install-stage refused when source binary was not readable
+from root-only directory; no install manifest/binary/unit was
+present at that refusal. Moved identical byte-pinned binary to
+root-owned, service-readable `/usr/local/libexec` and
+repeated the *proven pre-dispatch* stage. Formal
+`install-stage`, nonroot `doctor ready=true` /
+`native.ready=true`, `install-activate`, active
+`boxweave.service` and loopback-only
+`http://127.0.0.1:18650/mcp` unauthenticated HTTP 401 PASS.
+No alternate public listener or 2nd service on that Guest.
+
+**Actual independent L2 native-only smoke, with cleanup:** Restricted
+`boxweave` actor in `user-1001` created
+`hg-v1-native-l2-smoke` native UUID
+`c6abe197-c51c-4872-a5e4-8f0c814f7492`,
+started it, executed `hello-from-hostgo-l2` and Python
+`print(42)` exit 0, independently observed native RUNNING,
+then STOPPED/DELETED by identical UUID and verified empty
+`user-1001` instance inventory. A shell pipeline returned exit
+141 due to `head` SIGPIPE **after successful native Start**;
+subsequent read-only native state verified RUNNING and safe
+Exec; Start was NOT redispatched. **This is native-only smoke,
+not a v1 MCP Agent/Operation I+N+V PASS.**
+
+**Cloudflare preparation, not public enablement:** Verified
+Cloudflare-signed APT package `cloudflared 2026.11.0`
+inside this Guest. Prepared nonroot
+`cloudflared-hostgo.service` with
+`--token-file /etc/cloudflared/hostgo.token` and root-owned
+config directory; verified systemd syntax. The unit remains
+**disabled/inactive** and its tunnel token file does NOT exist.
+No Cloudflare account/domain/tunnel ID, public hostname,
+route, OAuth Portal or ChatGPT connector has been supplied or
+verified. Automated generation of a local admin test token
+was blocked by execution permission guard; verified
+`/root/hostgo-admin.secret` absent. Do not invent a token or
+claim authenticated MCP positive. A Cloudflare **MCP Portal**
+can act as OAuth client-facing layer while storing v1
+Bearer auth upstream (official Cloudflare documentation), but
+it still needs the operator's approved domain, Access policy,
+named Tunnel identity and manually protected upstream token.
+No one should paste secrets into chat or GitHub.
+
+**Current truth:** LAB signed evidence remains unchanged.
+`PREP_NATIVE_READY=PASS`,
+`PREP_CLOUDFLARED_INSTALLED=PASS`,
+`TUNNEL_PUBLIC_READY=NO`,
+`AUTHENTICATED_REMOTE_MCP=NOT_TESTED`,
+`INTENDED_AGENT_PATH=BLOCKED`,
+`HOST_GO=PENDING_LIVE_AGENT`,
+`HOST_POSTFLIGHT=NOT_AUTHORIZED`.
+Formal Round 3 not invoked and no final same-head Actions
+for Stage 3 claimed. Existing historical gateway UNKNOWN
+task IDs `c90bcadde227381550e4528cb5b45e83`
+and `428b9e4ff08eee5de9d04bbd0f75a275`
+remain original UNKNOWN, never retried/deleted/adopted.
+Next operator action: provide the Cloudflare-controlled
+hostname / configure a named Tunnel and MCP Portal **without
+sharing credentials here**, then securely provision the
+Cloudflare token and separately issue the native v1 admin
+token from a local trusted terminal. Only after public
+auth and owner ChatGPT connection are verified may live
+MCP Agent tests begin.
+
 # HOST_GO three-round live checkpoint — do not infer PASS from this file
 
 This is the **small mutable checkpoint** for [the user-triggered three-round runbook](../development/HOST_GO_THREE_STAGE_RUNBOOK.md). Detailed factual incidents append to [EXECUTION_LOG](../development/EXECUTION_LOG.md) and the per-ID [BH matrix](BRIDGEHEAD_ACCEPTANCE.md); never overwrite past failures. Only the currently invoked round can change to IN_PROGRESS, and evidence after the round must be committed to PR #133 before reporting it. A future Agent must read current GitHub and native state rather than trusting a stale checkpoint.
