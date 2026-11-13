@@ -1,0 +1,20 @@
+{
+  "foreign_unchanged_uuid": "21767890-6d46-4867-889d-0069c1e4ac0d",
+  "independent_limit": "Verifier analyzed exported read-only snapshots, not an authenticated direct independent Incus socket session; this does NOT prove full in-flight crash/ACK recovery or complete BH gate signoff.",
+  "native_after_only_foreign": true,
+  "original_operation_states_all_succeeded": true,
+  "overall_round2_pass": false,
+  "post_sha256": "e64023b9f825b67877cd18afe0ce6986500d56fb67c4d38badc8a19be0c4f2a1",
+  "pre_sha256": "d46e0d60d10381d92758a7df4f610d0ce033a56b4f3011fab3dd6b5fb2a8c548",
+  "result": "PASS_SCOPED_SNAPSHOT_CROSSCHECK",
+  "scope": "Four original Codex MCP Create/Start/Stop/Delete and exact native before/after, no UNKNOWN, foreign UUID unchanged",
+  "unknown_count_before_and_after": 0,
+  "verified_original_operation_ids": [
+    "efaff82fec24ec6543ea29d50a2c2305",
+    "bbffaae107fa5767d4c6bedfd8099b53",
+    "3b23f63bedfc3715cc2d4c1bded3f2e7",
+    "25479b7bb0eef4beccced8992a08f2ef"
+  ],
+  "verified_owned_uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+  "verifier_box": "boxweave-test-ser2-container"
+}

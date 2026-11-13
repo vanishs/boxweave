@@ -1,0 +1,176 @@
+{
+  "candidate_binary_sha256": "021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85",
+  "candidate_service_active": "active",
+  "credentials_included": false,
+  "native_project_inventory": [
+    {
+      "name": "bw-s25-l1a",
+      "state": "RUNNING",
+      "uuid": "21767890-6d46-4867-889d-0069c1e4ac0d"
+    }
+  ],
+  "native_untrusted_project_default_read": false,
+  "original_db_counts": [
+    {
+      "n": 42,
+      "state": "SUCCEEDED"
+    }
+  ],
+  "original_test_events": {
+    "25479b7bb0eef4beccced8992a08f2ef": [
+      {
+        "safe_detail": "",
+        "seq": 170,
+        "state": "ADMITTED"
+      },
+      {
+        "safe_detail": "",
+        "seq": 171,
+        "state": "DISPATCHING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 172,
+        "state": "VERIFYING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 173,
+        "state": "SUCCEEDED"
+      }
+    ],
+    "3b23f63bedfc3715cc2d4c1bded3f2e7": [
+      {
+        "safe_detail": "",
+        "seq": 166,
+        "state": "ADMITTED"
+      },
+      {
+        "safe_detail": "",
+        "seq": 167,
+        "state": "DISPATCHING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 168,
+        "state": "VERIFYING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 169,
+        "state": "SUCCEEDED"
+      }
+    ],
+    "bbffaae107fa5767d4c6bedfd8099b53": [
+      {
+        "safe_detail": "",
+        "seq": 162,
+        "state": "ADMITTED"
+      },
+      {
+        "safe_detail": "",
+        "seq": 163,
+        "state": "DISPATCHING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 164,
+        "state": "VERIFYING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 165,
+        "state": "SUCCEEDED"
+      }
+    ],
+    "efaff82fec24ec6543ea29d50a2c2305": [
+      {
+        "safe_detail": "",
+        "seq": 157,
+        "state": "ADMITTED"
+      },
+      {
+        "safe_detail": "",
+        "seq": 158,
+        "state": "DISPATCHING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 159,
+        "state": "VERIFYING"
+      },
+      {
+        "safe_detail": "NATIVE_UUID_CONFIRMED",
+        "seq": 160,
+        "state": "VERIFYING"
+      },
+      {
+        "safe_detail": "",
+        "seq": 161,
+        "state": "SUCCEEDED"
+      }
+    ]
+  },
+  "original_test_operations": [
+    {
+      "action": "box_create",
+      "agent_ref": "codex-cli-01672",
+      "box_uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "error_class": "",
+      "id": "efaff82fec24ec6543ea29d50a2c2305",
+      "incarnation": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "native_operation_id": "4e0394a5-ed34-4359-a389-49920cd1d4d4",
+      "resource_key": "box:hgcdx-r2-a",
+      "state": "SUCCEEDED",
+      "work_ref": "hostgo-round2-20261112"
+    },
+    {
+      "action": "box_start",
+      "agent_ref": "codex-cli-01672",
+      "box_uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "error_class": "",
+      "id": "bbffaae107fa5767d4c6bedfd8099b53",
+      "incarnation": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "native_operation_id": "d2bd04c6-b09f-4405-aa32-3387e9c9cace",
+      "resource_key": "box:hgcdx-r2-a",
+      "state": "SUCCEEDED",
+      "work_ref": "hostgo-round2-fault-20261112"
+    },
+    {
+      "action": "box_stop",
+      "agent_ref": "codex-cli-01672",
+      "box_uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "error_class": "",
+      "id": "3b23f63bedfc3715cc2d4c1bded3f2e7",
+      "incarnation": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "native_operation_id": "43a34bb4-f8e9-4fec-b76a-b90ba25ff855",
+      "resource_key": "box:hgcdx-r2-a",
+      "state": "SUCCEEDED",
+      "work_ref": "hostgo-round2-clean-20261112"
+    },
+    {
+      "action": "box_delete",
+      "agent_ref": "codex-cli-01672",
+      "box_uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "error_class": "",
+      "id": "25479b7bb0eef4beccced8992a08f2ef",
+      "incarnation": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "native_operation_id": "f7838d63-30f6-40bc-936e-78d9ca6d4cc6",
+      "resource_key": "box:hgcdx-r2-a",
+      "state": "SUCCEEDED",
+      "work_ref": "hostgo-round2-clean-20261112"
+    }
+  ],
+  "owned_test_boxes": [
+    {
+      "incarnation": "589a900e-3fb2-4a22-b02c-7de6fff5521f",
+      "name": "hgcdx-r2-a",
+      "project": "user-1002",
+      "state": "DELETED",
+      "uuid": "589a900e-3fb2-4a22-b02c-7de6fff5521f"
+    }
+  ],
+  "primary_service_active": "active",
+  "recorded_utc": "2026-11-13T02:37:25.457348+00:00",
+  "snapshot_kind": "hostgo-r2-after-cleanup"
+}

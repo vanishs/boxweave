@@ -1,3 +1,20 @@
+**2026-11-12 exact-candidate Codex HOST_GO Round-2 update:**
+The owner-approved genuine Codex CLI client successfully discovered
+authenticated v1 MCP Tools and completed four original-key native
+Create/Start/Stop/Delete lifecycle operations; same-UUID Incus and
+SQLite all SUCCEEDED, independently crosschecked in another isolated
+Box. Temporary Admin revoked; owned test Guest deleted and foreign
+L1 preserved, zero UNKNOWN. A guarded in-flight crash watcher did not
+trigger; the separately passed candidate-only SIGKILL/restart was
+performed **only after all original operations were terminal**,
+with same binary+DB+Project and actual Codex original receipt re-read.
+**TC-013 PASS, BH-007/008/012/015/016 still PARTIAL/BLOCKED** as
+the specific original in-flight/lost-ACK fault and full integrated
+security/installation verifier cases remain to be signed individually.
+Earlier exact native BH-009/BH-015 Round-1 gaps are unchanged.
+[Full real Codex I+N+snapshot-V evidence](HOST_GO_CODEX_REAL_AGENT_R2_2026-11-12.md).
+No physical host, Round 3 or historic UNKNOWN operation changed.
+
 **2026-11-12 Codex-owner-authorized same-binary dual-layer native reacceptance:** At source 0cf474f and identical installed L0/L1 binary SHA256 021127cf...85, official MCP I, native Incus packet N, separate-Box V verified 2 owned Guests per layer, direct public IPv4 strict TLS OFF/ON/OFF, IPv4/IPv6 source and MAC spoof denies with gateway positives, bidirectional sibling v4/v6 denies with positive controls, L0 preexisting foreign Box v4/v6 denials, Viewer/expired/revoked/Host/Origin negatives, and exact 16 original SUCCEEDED Operations per layer through Stop/Delete, owned DELETED and zero new UNKNOWN. Separate earlier same-executable simulated IPv6 WAN HTTPS I+N+V remains accepted as simulated only. **BH-009/BH-015 complete formal gate remains PARTIAL/BLOCKED** pending full L1 foreign-Project/parent-socket and combined exact-binary installation/fault verifier matrix. Do not promote the entire Round 1 from a scoped PASS. [Read exact original IDs and independent snapshots](HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md). No physical host or old UNKNOWN touched.
 
 **2026-11-12 owner-requested Round-1/2 follow-up:** Original Round-1

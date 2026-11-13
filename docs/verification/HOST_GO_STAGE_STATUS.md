@@ -57,12 +57,38 @@ The previous uncredentialed Codex failure is retained, not erased.
 Previous exact documentation HEAD 920d719 Actions 5/5 SUCCESS.
 Report: HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md.
 
+## Latest live Codex Round-2 lifecycle and separate-Box snapshot V (2026-11-12 PT)
+
+**TC-013 = PASS** at the actual-Agent discovery/auth/read gate; real
+Codex CLI also used on-request + Auto-review to create, start, stop and
+delete one brand-new disposable native Guest with four distinct original
+idempotency keys, four original BoxWeave and four native Incus Operation
+IDs, original UUID and durable work/Agent references. All four original
+operations settled SUCCEEDED, and the exact native Guest was removed,
+original foreign bw-s25-l1a remained RUNNING, zero UNKNOWN. The locally
+approved temporary Admin credential was revoked and deleted.
+
+A guarded in-flight SIGKILL watcher saw only DISPATCHING and **did not
+inject**; no in-flight crash PASS. Separately, the candidate-only
+SIGKILL **after terminal** and same-binary/SQLite/Project restart
+succeeded, and a new actual Codex model-driven session re-read two exact
+original receipts and Box state through v1 MCP without replay. An
+independent separate-Box verifier crosschecked source native/SQLite
+pre/post snapshots and signed its scope as PASS_SCOPED_SNAPSHOT_CROSSCHECK,
+not as independent direct Incus socket V or in-flight recovery PASS.
+
+**Round 2 remains BLOCKED** pending TC-011/012/014 and BH fault/recovery
+in-flight/lost-ACK original-case signoff. **Round 1 remains BLOCKED**
+on its separate L1 foreign-Project/native parent socket and installation
+fault integration gaps. Round 3 NOT_STARTED. Exact evidence:
+[Real Codex Round-2 report](HOST_GO_CODEX_REAL_AGENT_R2_2026-11-12.md).
+
 ## Round scoreboard
 
 | Trigger | Status | Cases / evidence | Exact code and native binary | Remaining blockers | User told? |
 |---|---|---|---|---|---|
 | `完成HOST_GO 第一阶段` | **BLOCKED (0cf exact-binary L0+L1 network I+N+separate V PASS; full BH crosswalk still open)** | Two signed current-source L0 native Create/Update, strict public IPv4 TLS, v4/v6 peer/source+MAC packet negatives, role/foreign/token denial; separate same-host V; previous simulated IPv6 scoped PASS | source `58626acb` / same SHA-256 `640cdd28…a1fb34f` across 3 Boxes | L1 foreign-Project packet/parent socket and complete exact-bin BH-009/BH-015 install/fault signature; old native UNKNOWN and 6 gateway UNKNOWN preserved; owned cleanup PASS | YES |
-| `完成HOST_GO 第二阶段` | **BLOCKED (Codex CLI installed, no login; scoped native fault/rollback I+N+V PASS)** | Isolated exact-source L1 nonroot install/8-of-8, SIGKILL PID change/auth recovery, offline canary/rollback, original six UNKNOWN read-only; original SDK A/B, native lost ACK + SQLite WAL before/after + independent rollback V passed CI | tested `ec40d20` / disposable CI `bdfd8646…67e51`; Box-first alternate build `1d1ba0f2…a804` (same source, not identical binary) | **TC-013 CODEX_LOGIN_REQUIRED** (real Codex CLI configured but not authenticated); remaining per-ID BH/TC fault signoff and Round 1 BLOCKED | YES |
+| 完成HOST_GO 第二阶段 | **BLOCKED (TC-013 actual Codex I+N+V PASS; required in-flight failure/recovery and multi-Agent cases remain)** | Real Codex Viewer host_status; on-request Auto-review original Create/Start/Stop/Delete SUCCEEDED; post-terminal candidate SIGKILL, exact same-ledger service recovery, actual Codex reconnect; separate Box snapshot V; foreign L1 intact, zero UNKNOWN; Admin revoked | tested source 0cf474f; installed SHA256 021127cf...e85; original IDs and V hashes in Codex Round-2 report | In-flight SIGKILL watcher NOT_EXERCISED; lost ACK/original UNKNOWN handling, second-Agent pending-work recovery, full per-ID BH/TC verifier still open; prior Round 1 BLOCKED | YES |
 | `完成HOST_GO 第三阶段` | **NOT_STARTED** | BH-017 exact physical host + all mandatory prior cases, actual Agent, full final CI | unset | exact physical host authority not granted; Round 1/2 gates | NO |
 
 ## Mandatory round-end entry (overwrite the active row only; preserve prior checkpoint elsewhere)

@@ -836,3 +836,13 @@ Owner signed into Codex CLI. Isolated bwcodex now reports Logged in using ChatGP
 - TC-013 true Agent read subcase PASS; overall TC-013 and Round2
   BLOCKED until new original-key write, recovery and independent V.
   Prior 920d719 Actions 5/5 success.
+
+
+### 2026-11-12 PT — owner one-time approval; real Codex Round-2 native operation lifecycle and cleanup
+
+- Verified test source 0cf474f; exact candidate SHA256 021127cf723bfbe96c3668965b1e60dcc82856e5e3d41e09e84982568b5c1e85, single isolated Project user-1002, original candidate SQLite, original boxweave.service untouched.
+- Owner issued dedicated nonroot bwcodex temporary Admin for 2h locally, without sharing token. Codex first mutation under NEVER was refused by Codex approval; native/SQLite no effect. Retained correct on-request + Auto-review approval mode with read-only filesystem sandbox, no bypass or original-key retry.
+- Actual Codex v1 Box lifecycle: original Create efaff82fec24ec6543ea29d50a2c2305, Start bbffaae107fa5767d4c6bedfd8099b53, Stop 3b23f63bedfc3715cc2d4c1bded3f2e7, Delete 25479b7bb0eef4beccced8992a08f2ef. Original native UUID 589a900e-3fb2-4a22-b02c-7de6fff5521f; all original SQLite SUCCEEDED, original native IDs persisted, native Guest exactly deleted, foreign L1 unchanged, no new UNKNOWN. Admin token subsequently revoked and removed.
+- In-flight crash watcher observed DISPATCHING but did not kill: NOT_EXERCISED, no false PASS. Distinct candidate-only SIGKILL after 40 terminal original operations, exact binary+SQLite+Project restart, 401 unauth, new actual Codex session operation_get original Create/Start and box_get original UUID all PASS without replay.
+- Separate independent Box crosschecked exported original SQLite/native before and after cleanup snapshots, original four IDs, event chain, work/Agent attribution and foreign intact, verdict PASS_SCOPED_SNAPSHOT_CROSSCHECK, **not** a separate native socket or in-flight lost ACK V. TC-013 formal real Agent discovery/read PASS, remaining TC/BH case signoff and Rounds 1/2 BLOCKED; no Round 3/physical host.
+- Evidence: docs/verification/HOST_GO_CODEX_REAL_AGENT_R2_2026-11-12.md and docs/verification/evidence/hgr2-{precleanup,postcleanup,independent-review}.json; verifier hgr2_verify.py.

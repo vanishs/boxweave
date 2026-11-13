@@ -1,3 +1,22 @@
+**2026-11-12 actual intended development-Agent TC-013 PASS:** Real
+nonroot Codex CLI v0.167.2 performed authenticated v1 MCP Tool discovery,
+Viewer host_status read and four distinct original-key Admin
+Create/Start/Stop/Delete mutations on one newly owned isolated Incus
+Guest. Native Incus/SQLite independently confirmed original ID, UUID,
+all SUCCEEDED and exact Guest deleted; separate isolated Box verifier
+crosschecked immutable pre/post evidence. The original scoped Admin
+token was revoked and removed. The first NEVER-policy mutation rejection
+and earlier uncredentialed Tool-path failure remain preserved as
+negative chronology, now superseded for TC-013. Post-terminal scoped
+SIGKILL + exact-server restart and new real Codex session re-read the
+same two original operations without replay. **TC-013 PASS** as its
+listed actual-Agent discovery/auth/read requirement; **TC-011/012/014
+remain PARTIAL/BLOCKED** because actual second Agent with pending work,
+in-flight crash/lost ACK and full per-ID fault/recovery I+N+V were
+not demonstrated. See
+[real Codex round 2 report](HOST_GO_CODEX_REAL_AGENT_R2_2026-11-12.md).
+Both HOST_GO Rounds 1 and 2 remain BLOCKED; no LAB_PASS/HOST_GO.
+
 **2026-11-12 real Codex Agent Viewer read PARTIAL SIGNOFF:** Owner
 locally provisioned short-lived Viewer credential to dedicated bwcodex.
 Real Codex CLI model actually called boxweave-v1/host_status
