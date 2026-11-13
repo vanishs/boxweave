@@ -35,6 +35,7 @@ jobs:
           set -o pipefail
           sh scripts/accept_s2_native.sh | tee "$RUNNER_TEMP/s25-native-rehearsal.log"
           grep -qx 'S25_NATIVE_PREREQ_CONFIG_AND_DIGEST=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
+          grep -qx 'S2_P1_TWO_CONTROLLER_NATIVE_ACLS_EXCLUSIVE_INDEPENDENT_ROOT_READBACK=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
           grep -qx 'S25_S2_LEGACY_SIMWAN_SEPARATE_FROM_HARDENED_ACL=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
           grep -qx 'S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY=PASS' "$RUNNER_TEMP/s25-native-rehearsal.log"
           grep -qx 'S25_NATIVE_PREREQ_PACKET_WITNESS=REQUIRED_SEPARATE' "$RUNNER_TEMP/s25-native-rehearsal.log"

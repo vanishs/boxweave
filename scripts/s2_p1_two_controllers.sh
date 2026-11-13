@@ -46,17 +46,50 @@ if actor_b incus project show "$project" > /dev/null 2>&1; then
 fi
 echo "S2_P1_TWO_RESTRICTED_OS_USERS_DENY_FOREIGN_INCUS_PROJECT=PASS"
 
-# The second Project gets its own effective profile, bound to the same already
-# authorized one-use dedicated quota pool and private-deny test ACL. Do not
-# edit daemon-global/default Project networking or widen any privilege.
+# The second Project gets its own effective profile and its OWN distinct
+# native ACL (not the first controller's!). Reusing bw-s2-native-acl here
+# previously made the later S2.5 exclusive-use safety review correctly FAIL
+# even after all Guests were deleted. Both native ACL names belong only to
+# this one-use GitHub-hosted Incus daemon; neither shared/host Project is
+# modified. The original S2 Test-Only network semantics are unchanged.
+peer_acl=bw-s2-dualctrl-peer-acl
+if sudo incus network acl show "$peer_acl" > /dev/null 2>&1; then
+  echo "S2_P1_DUAL_FAIL: pre-existing peer ACL (refuse adoption)" >&2
+  exit 92
+fi
+sudo incus network acl create "$peer_acl"
 sudo incus project set "$peer_project" restricted.containers.nesting=allow
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$peer_project"
 sudo incus profile device set default eth0 --project "$peer_project" \
-  security.acls=bw-s2-native-acl \
+  security.acls="$peer_acl" \
   security.acls.default.ingress.action=reject \
   security.ipv4_filtering=true \
   security.ipv6_filtering=true \
   security.mac_filtering=true
+
+# Root-local independent readback of the exact two ACL ownership sets.
+# The former shared-ACL regression is a FAIL, not a waiver.
+sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/dualctrl-first-acl.json"
+sudo incus query "/1.0/network-acls/$peer_acl" > "$work/dualctrl-peer-acl.json"
+python3 - "$work/dualctrl-first-acl.json" "$work/dualctrl-peer-acl.json" \
+  "$project" "$peer_project" <<'S2_DUAL_ACL_READBACK'
+import json,sys,urllib.parse
+owner,peer=(json.load(open(f)) for f in sys.argv[1:3])
+first_project,second_project=sys.argv[3:]
+assert owner["name"]=="bw-s2-native-acl"
+assert peer["name"]=="bw-s2-dualctrl-peer-acl"
+assert first_project!=second_project
+for acl,project in ((owner,first_project),(peer,second_project)):
+    refs=acl["used_by"]
+    assert refs and f"/1.0/profiles/default?project={project}" in refs,(acl["name"],refs)
+    for ref in refs:
+        u=urllib.parse.urlparse(ref)
+        assert u.path.startswith(("/1.0/profiles/","/1.0/instances/")),(acl["name"],ref)
+        assert urllib.parse.parse_qs(u.query)=={"project":[project]},(acl["name"],ref)
+        assert not u.netloc and not u.fragment,(acl["name"],ref)
+assert not (set(owner["used_by"]) & set(peer["used_by"]))
+print("S2_P1_TWO_CONTROLLER_NATIVE_ACLS_EXCLUSIVE_INDEPENDENT_ROOT_READBACK=PASS")
+S2_DUAL_ACL_READBACK
 sudo incus image copy images:ubuntu/24.04 local: --target-project "$peer_project" \
   --alias boxweave-ubuntu-24.04
 sudo incus image info boxweave-ubuntu-24.04 --project "$peer_project" > /dev/null
