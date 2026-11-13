@@ -822,3 +822,17 @@ reported.
 ### 2026-11-12 PT — actual Codex login verified, v1 MCP access remains denied
 
 Owner signed into Codex CLI. Isolated bwcodex now reports Logged in using ChatGPT, but configured Streamable HTTP v1 Bearer environment variable BW_V1_MCP_BEARER was absent. Real read-only model-driven Codex exec reported v1 host_status not callable and did not invoke it. Unauthorized MCP HTTP 401 as expected. Protected Viewer token attempted under root failed product identity guard; further credential handoff was safety-blocked. No workaround used; zero-byte placeholder cleaned; no native mutation/UNKNOWN replay. Round2 TC-013 remains BLOCKED pending local approved short-lived v1 token and real model-driven Tool read/write plus separate V. At report commit d051e98 Actions 5/5 SUCCESS; this new docs-only commit must be checked independently.
+
+
+### 2026-11-12 PT — real Codex Viewer host_status with independent MCP service witness
+
+- Short-lived local Viewer credential enabled actual model-driven
+  Codex CLI to make one v1 host_status call (mcp_ready=true, ready=true).
+  This is no longer a static MCP config/list-only test.
+- Independent v1 candidate systemd journal: initialize + tools/list
+  same actor 4979e4e0 at 2026-11-13T10:02:59+08:00, actual tools/call
+  10:03:08+08:00 duration 144ms result=ok. Old primary and candidate
+  active, original foreign L1 unchanged, no new native Guest.
+- TC-013 true Agent read subcase PASS; overall TC-013 and Round2
+  BLOCKED until new original-key write, recovery and independent V.
+  Prior 920d719 Actions 5/5 success.

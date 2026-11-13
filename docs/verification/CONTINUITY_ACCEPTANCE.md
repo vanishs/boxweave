@@ -1,3 +1,13 @@
+**2026-11-12 real Codex Agent Viewer read PARTIAL SIGNOFF:** Owner
+locally provisioned short-lived Viewer credential to dedicated bwcodex.
+Real Codex CLI model actually called boxweave-v1/host_status
+(mcp_ready=true, ready=true). Independent candidate systemd journal
+shows authenticated initialize/tools/list and tools/call, actor
+4979e4e0, 144ms, result=ok. Native unchanged; previous uncredentialed
+Codex failure preserved. TC-013 read subcase PASS; full TC-013 BLOCKED
+pending original-key write, failure recovery and independent V.
+Details: HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md.
+
 **2026-11-12 actual Codex authentication follow-up:** The dedicated isolated CLI user is now Logged in using ChatGPT. But BoxWeave v1 MCP Bearer environment variable BW_V1_MCP_BEARER remains absent. A real model-driven, read-only Codex CLI run found host_status unavailable in the callable tool set; no Tool call or Box write happened. Direct unauthenticated MCP remained 401. Token provisioning safety-blocked; no alternate bypass. TC-013 is BLOCKED, not PASS. Details: HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md.
 
 **2026-11-12 intended Agent owner decision and actual login status:** Owner approved Codex CLI 0.167.2 as the first real development Agent. Its isolated nonroot client has a private Bearer-env v1 MCP configuration and cannot read host Admin bearer or Incus socket; however the real Codex CLI login status was **Not logged in**. This means no actual Codex model-driven Tool read, mutation, reconnect or TC-013 PASS. Actual SDK two-client recovery and same-source native SIGKILL/rollback remain valid scoped proof, but not substitutes. **TC-013 / Round 2 = BLOCKED: CODEX_LOGIN_REQUIRED**. [Exact separate-Box V and handoff](HOST_GO_R12_CODEX_R1_NATIVE_REACCEPT_2026-11-12.md).
