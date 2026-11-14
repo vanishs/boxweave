@@ -95,6 +95,47 @@ if [ "$status" -eq 0 ]; then
   incus info bh019-l2-native-child
   if incus exec bh019-l2-native-child -- /bin/true; then
     echo "BH019_L2_START=PASS case=$case_name"
+    # Evidence only: distinguish an actual L2 Guest profile label, UserNS
+    # and AppArmor policy namespace from mere 'security.nesting=true' or
+    # a successful native container start. This is read-only and cannot
+    # grant inner policy-admin authority or make an unconfined parent safe.
+    daemon_pid="$(systemctl show -p MainPID --value incus.service)"
+    if [ -n "$daemon_pid" ] && [ "$daemon_pid" != 0 ]; then
+      printf 'BH019_INNER_DAEMON_AA_LABEL='
+      cat "/proc/$daemon_pid/attr/current" || echo UNAVAILABLE
+      printf 'BH019_INNER_DAEMON_USERNS='
+      readlink "/proc/$daemon_pid/ns/user" || echo UNAVAILABLE
+    fi
+    if incus exec bh019-l2-native-child -- /bin/sh -c '
+      printf "BH019_L2_PID1_AA_LABEL="
+      cat /proc/1/attr/current || echo UNAVAILABLE
+      printf "BH019_L2_EXEC_AA_LABEL="
+      cat /proc/self/attr/current || echo UNAVAILABLE
+      printf "BH019_L2_USERNS="
+      readlink /proc/self/ns/user || echo UNAVAILABLE
+      printf "BH019_L2_USERNS_MAP="
+      tr "\\n" ";" </proc/self/uid_map; echo
+      printf "BH019_L2_CAPEFF="
+      sed -n "s/^CapEff:[[:space:]]*//p" /proc/self/status
+      if [ -r /sys/kernel/security/apparmor/.ns_name ]; then
+        printf "BH019_L2_POLICY_NS="
+        cat /sys/kernel/security/apparmor/.ns_name
+      else
+        echo "BH019_L2_POLICY_NS=UNAVAILABLE"
+      fi
+      if [ -r /sys/kernel/security/apparmor/.ns_stacked ]; then
+        printf "BH019_L2_POLICY_STACKED="
+        cat /sys/kernel/security/apparmor/.ns_stacked
+      else
+        echo "BH019_L2_POLICY_STACKED=UNAVAILABLE"
+      fi
+    '; then
+      echo "BH019_L2_READONLY_AA_USERNS_WITNESS=RECORDED case=$case_name"
+    else
+      echo "BH019_L2_READONLY_AA_USERNS_WITNESS=UNVERIFIED case=$case_name"
+    fi
+    echo "BH019_LAYERED_APPARMOR_INDEPENDENT_POLICY=UNVERIFIED case=$case_name"
+    echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=UNVERIFIED case=$case_name"
   else
     echo "BH019_L2_START=BLOCKED_EXEC case=$case_name"
   fi
