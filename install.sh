@@ -212,7 +212,7 @@ def main():
     print("service_user=" + args.service_user)
     print("operation=" + ("upgrade" if args.upgrade else "fresh install"))
     print("changes=only existing v1 Go installer-owned binary/unit/SQLite; never Incus setup or tunnel")
-    print("known_risk=dir project quotas may be unenforced; physical host requires independent preflight")
+    print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
     if not args.apply:
         print("PLAN_ONLY: no host changes (pass --apply, --project, --confirm-host-sha256 after approval)")
         return

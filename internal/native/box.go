@@ -42,6 +42,7 @@ type InstanceAction struct {
 	CPU         int
 	MemoryMiB   int64
 	DiskGiB     int64
+	Image       string
 	Nesting     bool
 	Internet    bool
 }
@@ -285,18 +286,10 @@ func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) err
 	return nil
 }
 
-// Create uses only a preinstalled approved Ubuntu LTS image fingerprint. No
-// remote image alias or arbitrary server is resolved from an MCP request.
-// Incus simplestreams images label Ubuntu 24.04 using its release codename
-// "noble". An operator-managed local alias and immutable fingerprint still
-// select the actual image; do not infer trust from display description alone.
-func approvedUbuntu2404(properties map[string]string) bool {
-	return strings.EqualFold(properties["os"], "Ubuntu") &&
-		(properties["release"] == "noble" || properties["release"] == "24.04")
-}
-
+// Image selection follows Incus local aliases or its official simplestreams
+// catalog; the user never supplies a remote URL or arbitrary native config.
 func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
-	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) {
+	if !safeName.MatchString(a.Name) || !validSize(a.CPU, a.MemoryMiB, a.DiskGiB) || !ValidImageChoice(a.Image) {
 		return "", ErrNativeUnsupported
 	}
 	if err := r.Strict(ctx); err != nil {
@@ -316,14 +309,11 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if a.Nesting && project.Config["restricted.containers.nesting"] != "allow" {
 		return "", ErrNativeUnsupported
 	}
-	// Local operator provisioned image aliases are the sole allowed source.
-	alias, _, err := c.GetImageAlias("boxweave-ubuntu-24.04")
-	if err != nil || alias.Target == "" {
-		return "", ErrNativeUnsupported
-	}
-	image, _, err := c.GetImage(alias.Target)
-	if err != nil || image == nil || !approvedUbuntu2404(image.Properties) {
-		return "", ErrNativeUnsupported
+	// An empty image means: reuse an operator-managed local default if
+	// present; otherwise use the official Incus image catalog at Create time.
+	source, err := resolveInstanceImage(c, a.Image)
+	if err != nil {
+		return "", err
 	}
 	if _, _, err := c.GetInstance(a.Name); err == nil {
 		return "", ErrNotOwned
@@ -369,7 +359,7 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	// No magic host mount, arbitrary device or profile edit.
 	op, err := c.CreateInstance(api.InstancesPost{
 		Name: a.Name, Type: api.InstanceTypeContainer, Start: a.Start,
-		Source: api.InstanceSource{Type: "image", Fingerprint: alias.Target},
+		Source: source,
 		InstancePut: api.InstancePut{Profiles: []string{"default"}, Config: config,
 			Devices: devices},
 	})

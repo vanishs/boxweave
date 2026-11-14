@@ -37,6 +37,7 @@ type createBoxInput struct {
 	CPU            int    `json:"cpu,omitempty"`
 	MemoryMiB      int64  `json:"memory_mib,omitempty"`
 	DiskGiB        int64  `json:"disk_gib,omitempty"`
+	Image          string `json:"image,omitempty"`
 	Start          *bool  `json:"start,omitempty"`
 	Nesting        bool   `json:"nesting,omitempty"`
 	Internet       *bool  `json:"internet,omitempty"`
@@ -353,10 +354,10 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 
 func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_create",
-		Description: "Admit one owned Ubuntu LTS Box creation using the installed restricted Incus Project and its preverified private NIC; asynchronous durable receipt.",
+		Description: "Admit one owned container using a local Incus image alias or an images: catalog alias (default: local boxweave-default/legacy Ubuntu alias, then official Ubuntu); asynchronous durable receipt.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if !validBoxName.MatchString(in.Name) {
+			if !validBoxName.MatchString(in.Name) || !native.ValidImageChoice(in.Image) {
 				return nil, state.Receipt{}, state.ErrInvalid
 			}
 			if in.CPU == 0 {
@@ -386,10 +387,11 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 					CPU       int    `json:"cpu"`
 					MemoryMiB int64  `json:"memory_mib"`
 					DiskGiB   int64  `json:"disk_gib"`
+					Image     string `json:"image,omitempty"`
 					Start     bool   `json:"start"`
 					Nesting   bool   `json:"nesting"`
 					Internet  bool   `json:"internet"`
-				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, start, in.Nesting, internet})
+				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, in.Image, start, in.Nesting, internet})
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
@@ -397,7 +399,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			effect := func(ctx context.Context) (string, error) {
 				id, e := s.Native.Create(ctx, native.InstanceAction{
 					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-					Start: start, Nesting: in.Nesting, Internet: internet})
+					Image: in.Image, Start: start, Nesting: in.Nesting, Internet: internet})
 				nativeID = id
 				return id, preflightNative(e)
 			}

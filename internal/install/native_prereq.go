@@ -317,23 +317,10 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 	}
 	prereqRecord(&r, "managed_bridge", networkOK, "native managed bridge is present")
 	prereqRecord(&r, "exclusive_acl_used_by", aclOK, "ACL exclusively owned, ordered private/ULA egress deny rules and exact selected bridge gateway exception")
-	alias, aliasTag, err := scoped.GetImageAlias("boxweave-ubuntu-24.04")
-	if err == nil {
-		observe("image_alias", alias, aliasTag)
-	}
-	imageOK := false
-	if err == nil && alias != nil && alias.Target != "" {
-		img, imageTag, e := scoped.GetImage(alias.Target)
-		if e == nil {
-			observe("image", img, imageTag)
-		}
-		if e == nil && img != nil && strings.EqualFold(img.Properties["os"], "Ubuntu") &&
-			(img.Properties["release"] == "noble" || img.Properties["release"] == "24.04") {
-			r.ImageFingerprint = alias.Target
-			imageOK = true
-		}
-	}
-	prereqRecord(&r, "approved_image", imageOK, "existing local, approved Ubuntu 24.04 image; no remote alias pull")
+	// Guest image readiness is not a prerequisite for native Project/ACL
+	// preparation. Explicit Box Create resolves its image at admission time.
+	prereqRecord(&r, "image_source_policy", true,
+		"operator-managed local alias or on-demand official images: catalog default; no Guest image installation prerequisite")
 	return finish(), nil
 }
 
