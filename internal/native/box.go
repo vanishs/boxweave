@@ -715,9 +715,15 @@ func execPath(raw any) string {
 	return u.Path
 }
 
+// ExecEvidenceFromFinal reads the *terminal* native Incus Exec receipt.
+// Incus 7.6 lxcCmd.Wait turns any Guest exit 126 or 127 into a native
+// Failure with "Command not executable"/"Command not found", even when
+// the Guest process actually ran and changed files. Those two *exact*
+// final signatures prove an Exec is finished, NOT that Guest execution
+// never started or that retrying the command is safe.
 func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence, error) {
 	var out ExecEvidence
-	if op == nil || op.StatusCode != api.Success {
+	if op == nil || (op.StatusCode != api.Success && op.StatusCode != api.Failure) {
 		return out, ErrUnverified
 	}
 	exit, ok := op.Metadata["return"]
@@ -737,16 +743,41 @@ func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence, error) {
 	default:
 		return out, ErrUnverified
 	}
+	// A generic native Failure is NOT a verified terminal Guest exit.
+	// Only the two known, source-verified Incus 7.6 LXC status mappings
+	// may be represented as a finished but unsuccessful command.
+	if op.StatusCode == api.Failure &&
+		!(*out.Exit == 126 && op.Err == "Command not executable" ||
+			*out.Exit == 127 && op.Err == "Command not found") {
+		return ExecEvidence{}, ErrUnverified
+	}
 	paths, ok := op.Metadata["output"].(map[string]any)
 	if !ok {
-		return out, ErrUnverified
+		return ExecEvidence{}, ErrUnverified
 	}
 	out.StdoutPath = execPath(paths["1"])
 	out.StderrPath = execPath(paths["2"])
 	if out.StdoutPath == "" && out.StderrPath == "" {
-		return out, ErrUnverified
+		return ExecEvidence{}, ErrUnverified
 	}
 	return out, nil
+}
+
+// ExecEvidenceMatchesOriginal keeps a native Exec receipt bound to its exact
+// admitted guest and original native Operation, including output filenames.
+// This cannot be established from a generic 1.0/instances/ path prefix.
+func ExecEvidenceMatchesOriginal(ev ExecEvidence, name, nativeID string) bool {
+	if ev.Exit == nil || !safeName.MatchString(name) || nativeID == "" ||
+		len(nativeID) > 128 || strings.ContainsAny(nativeID, "/\\?%#") {
+		return false
+	}
+	prefix := "/1.0/instances/" + url.PathEscape(name) +
+		"/logs/exec-output/exec_" + nativeID
+	if ev.StdoutPath == "" && ev.StderrPath == "" {
+		return false
+	}
+	return (ev.StdoutPath == "" || ev.StdoutPath == prefix+".stdout") &&
+		(ev.StderrPath == "" || ev.StderrPath == prefix+".stderr")
 }
 
 // MaxRecordedOutputBytes is a per-stream public read budget, not an assertion
