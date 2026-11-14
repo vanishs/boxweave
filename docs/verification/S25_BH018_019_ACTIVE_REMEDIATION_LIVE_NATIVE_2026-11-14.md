@@ -1,0 +1,56 @@
+# S2.5 — BH-018 remediation + BH-019 same-policy layer A/B (2026-11-14)
+
+**Status:** BH-018 **PARTIAL (native classifier and state-path proven, full installed MCP/ACK-loss/restart not yet proven)**; BH-019 **BLOCKED (same-policy kernel policy-admin delegation denied at next depth)**. PR #146 stays Draft, unmerged. This does not alter original historic UNKNOWN operations, existing locked C, physical-host AppArmor mode, or user privileges. The operator explicitly paused any SELinux investigation.
+
+## Operator physical-host observation
+
+- `luka@dev$ incus version` earlier: client 7.6, server unreachable.
+- `luka@dev$ sudo incus version` confirmed **client 7.6, server 7.6**. Physical Incus daemon *is* reachable via sudo; ordinary-user inaccessibility should not be misdiagnosed as daemon downtime. Earlier physical `.ns_stacked=no`, `domain/stack=yes`, 545 loaded AppArmor profiles, including genuine project-confined nested policies. No host daemon restart or access widening.
+
+## BH-018: code and live native receipt controls
+
+Changed on `fix/v1-s25-bh018-bh019-20261114`:
+
+- `internal/native/box.go`: `ExecEvidenceFromFinal` accepts **only** `api.Success` or native `api.Failure` paired with the **exact known Incus 7.6 LXC mapping**: `return=126 + Err="Command not executable"`, `return=127 + Err="Command not found"`, both requiring numeric exit and safe recorded output metadata. Reject other Failure/errors/nonfinal/malformed/missing output. A completed native Exec is *not* proof Guest executable started or absence of side effects. `ExecEvidenceMatchesOriginal` rejects mismatched Guest name, native Operation ID or output stream filename.
+- `internal/control/box_tools.go`: `box_exec` verification binds `final.ID == nativeID` and checks exact `/1.0/instances/<owned guest>/logs/exec-output/exec_<original native ID>.(stdout|stderr)` before persisting exit/paths and transitioning to verified `SUCCEEDED` (BoxWeave operation completion, **not** `command_success=true`). No automatic redispatch under any circumstances.
+- `internal/native/bh018_127_native_outcome_test.go`: special return 126/127 positive cases and mismatched/forged failure and path negatives. `internal/state/worker_bh018_special_terminal_test.go`: actual Worker + SQLite `NativeAck`/terminal exit/path persistence, original-key dedupe with **no extra effect call**, and fresh-key same-box admission after proven final. Earlier `worker_bh018_exec_boundary_test.go` still explicitly keeps **missing final, lost ACK, unverifiable 126/127** UNKNOWN and locked.
+
+**Isolated native test environment:** L0 RC3-owned disposable Box D `s25-bh019-bpf-ab-d-1114` UUID **`0d0ffd60-2fd6-4734-b40c-6eabdb561033`**, inner Incus 7.6, controlled own child `s25-bpf-ab-default`. Fetched *exact* GitHub source tarball for candidate commit `650de0f14b748bfc51ac48e3d12d4c1c7587bbb7`; source archive sha256 `c2615e07b3e7ae8f5ba20e3c7e6fc47474d6700482a29254a07e6b289f6466bd`. Fetched official Go 1.26.9 linux-amd64 (66,935,201 bytes) and independently validated the Go official release-list SHA-256 `42d158b4d8f7b61ac0a830567c940a86098fb7aac52e467a5ebec03ef5cc2f8d` before unpack. gcc installed **inside D only**, not on physical host.
+
+- Source-specific BH018 native+control tests: **PASS**, original BW `4cc1c0380b9bbb18e343ec3ff65b3f1d`, outer native `b8330c3c-eb41-473a-adce-20cb75f2827b`; `go test -count=1 -v ./internal/native ./internal/control -run TestBH018`, exit0.
+- **Real Incus 7.6 SDK + shipping classifier, no mocked native Operation:** original BW `e9d2e87664fe7baa908fad5e49e81e30`, outer native `dd314256-2e05-4cbe-9632-b9046a3cc914`, wrapper exit0. A temporary explicit test-only Go probe connected to D's own `/var/lib/incus/unix.socket`, issued **one new request per case**, polled the *exact* inner native terminal, called the actual shipping `native.ExecEvidenceFromFinal` + `ExecEvidenceMatchesOriginal`, and independently read Guest files for side effects:
+
+| Case | Original inner Incus Operation | Observed native status | Native return | Guest effect |
+|---|---|---|---:|---|
+| Existing shell, write file, exit126 | `6c79e794-1622-4fd2-a472-eb9c3c58001f` | `Failure / Command not executable` | 126 | `BH018_EFFECT_126` independently read back |
+| Existing shell, write file, exit127 | `5f1cff0b-dc4e-47d9-8823-cf05994521d9` | `Failure / Command not found` | 127 | `BH018_EFFECT_127` independently read back |
+| Nonexistent binary | `10edd7d3-aab7-4bc0-b844-e689b8fe2b5a` | `Failure / Command not found` | 127 | Not asserted |
+| Existing `/bin/false` | `d51b5fdf-8b14-4a7c-808f-91592b03196d` | `Success` | 1 | No marker expected |
+
+All **4/4 PASS** for exact native-ID/path and expected numeric Guest exit, and `command_success=false`. **These prove the shipping classifier against real native Incus, not yet the installed remote BoxWeave MCP service.**
+
+- Pulled later exact source commit `db0dfc783688cba32b464fd3ed5268d06f61ac16` as a separate source snapshot (tarball sha256 `1a38dcf1c914bad778f1b03ce1d5af42c9053b89d371876a1d3ec62bc3c27516`), compiled/executed `go test -count=1 -v ./internal/native ./internal/state ./internal/control -run TestBH018`. **PASS**, BW `a53dfd4146cb81bacc9d43ca1943e303`, outer native `6e731f1b-c2cf-418f-ad43-5f44c54155d7`. The two new Worker/SQLite 126 and 127 tests each passed; all existing UNKNOWN-lock negatives passed.
+- CI at prior head `650de0...`: exact-head three workflows **SUCCESS** (required quality, S1 source, controlled artifact). Any subsequent head requires independent *same-head* CI review.
+
+**Not proven:** a newly installed **full BoxWeave MCP server** receiving `box_exec` 126/127 and returning finished receipts with persisted output, native final visibility on induced worker SIGKILL/ACK loss, and full later recovery. Even with the fix, the upstream original native Operation still disappears ~5s after terminal; proven unverified gaps should stay UNKNOWN and locked. No retroactive release of historical UNKNOWN.
+
+## BH-019: strong, paired same-profile policy-admin test
+
+Baseline D root: genuine Incus 7.6, Linux `7.0.0-43-generic`, AppArmor userspace 4.0.1; `/proc/self/attr/current=unconfined`, policy `.ns_name=incus-user-1001_s25-bh019-bpf-ab-d-1114_<var-lib-incus>`, `.ns_stacked=yes`, effective `CAP_MAC_ADMIN` bit33 present. Read-only BW `6bc7fe25cbccdcd693b72b021ce20ba4`/native `5d9e82f5-3ccd-4f7c-9e57-5dba4d6d3c49` also verified its already-running shallow A/B child profiles both enforced, same inherited policy namespace as parent, effective CAP_MAC_ADMIN and `/sys/kernel/security/apparmor/.replace` appearing **0666 owned nobody:nogroup**, not evidence of actual kernel policy-admin permission. `apparmor_restrict_unprivileged_userns=1` observed, **not changed**.
+
+Created a **new own diagnostic child** `s25-bh019-aa-policy-only` (`security.nesting=true`, CPU1/512MiB, Ubuntu 24.04) in D's native default project. Init BW `da5a4aa1d9744279117ac8ca4d920893`/outer native `c6e6a964-1ffe-4941-ba59-0cb50cef5fb6`: STOPPED; original native Start **`844abe12-76ae-46f7-bf41-98998557052f`**: **Success/200**, outer BW `68b7bdf478a0f7f842a6ddb81e684f86`/outer native `3480b224-29f7-4c1b-b83f-70269a625909`. Child RUNNING and uses enforced `incus-s25-bh019-aa-policy-only_</var/lib/incus>`, **same D policy namespace**, `.ns_stacked=yes`, **same effective CAP_MAC_ADMIN**.
+
+To avoid installing any package that changes AppArmor services, copied the already installed exact AppArmor parser **4.0.1** from D to this **new disposable child only**, BW `89ed030e5fc0ea50bed597a6b53e6192`/native `afc37bf2-ff5b-47aa-8887-5ddef31193e4`. Created **one harmless, non-path-attached and otherwise-unused test profile** `s25-bh019-unused-profile-322`, sha256 **`f83171143579e2efa0a9eb4789ad9b1cf2082b5fe80eaa1589efd258f56a11f4`**, copied into parent and child and independently validated equal hash, BW `c75f78cdae369885f73f47ffcf5f75a5`/native `d3bbc5d1-e746-4eb6-8c8a-bfa7aa0f3802`.
+
+- **Child parser syntax-only `-Q -K`: PASS**, BW **`b99892a395d3c6567bef31ed91b6a02e`**, outer native `34ce9e4f-2f49-4c7f-bb4c-ab0be27d9a7a`, Guest exit0. No kernel modification.
+- **Child kernel load `-a -K`: FAIL (exit243)**, exact stderr `Unable to add "s25-bh019-unused-profile-322". Access denied. You need policy admin privileges to manage profiles.` BW **`afa8a1f8e9b4e539f8942c7307ab4d75`**, outer native `0c1d22f7-b2c5-42ad-a4e3-2723cd1e986c`, wrapper exit0 **because it recorded the negative subcommand exit**. No profile installed. Thus rejection is *not limited to replacement of an existing profile*: a new, harmless, syntactically valid **add** also fails.
+- **Parent D same file + parser `-a -K`: SUCCESS (exit0)**. Immediately **`-R -K` SUCCESS**, proving cleanup and no attached profile. BW **`3f93b3a3f688072f11f1cea127cb9116`**, outer native `a0ddb54f-be25-4db3-b28c-61f2c822aba8`. Parent had the same Linux kernel and effective capability bit, and the exact same file (sha256 above).
+
+**Strong conclusion:** `security.nesting=true`, matching parser binaries, identical AppArmor profile syntax, effective `CAP_MAC_ADMIN`, and apparent writable AppArmor control file **do not constitute delegation of kernel policy-admin authority at the next layer**. Native enforced AppArmor label remains in force. Failed child loads vs successful parent loads are real kernel authorization boundary observations, not a parser/Incus client version error. Source-pinned Incus 7.6 `AppArmorAdmin` detection is overly optimistic for this hierarchy (it checks effective cap and stacked flag, not actual authorization). **Exact kernel denial site / audit mediation rule is still unproven**, and a secure fix also requires an Incus/LXC strategy for per-layer independent profiles.
+
+**Security and realistic N-layer constraints:** upstream AppArmor in 2026 added/considered policy namespace resource quotas and a hard nesting-depth cap (`MAX_NS_DEPTH=32` in a 2026 stable patch), so `N` must eventually be bounded and independently tested; do **not** claim unlimited nesting, or assume these patches are present on this running kernel. No global disable, no privileged child, no `raw.lxc=unconfined`, no admin socket to Agent, no indiscriminate BPF intercept, no SELinux experiment.
+
+## Next independent acceptance
+
+1. **BH-018**: installed remote MCP server acceptance on newly isolated restricted-user Incus project; `box_exec` case 126/127, output_get, replay and fresh-key on same Box, while injecting crash/ACK-loss and verifying UNKNOWN stays locked. Same-head CI all green, independent I+N+V before signoff.
+2. **BH-019**: if operator agrees, collect **read-only physical host kernel AppArmor audit** for the exact test period to distinguish kernel LSM policy/namespace denial from userns-mediated restriction. Then evaluate upstream AppArmor/Incus code in a host-local isolated test; require independently enforced per-level profiles, a bounded native nesting depth, negative cross-tenant network/user/project tests and genuine deep BPF witness before any BH-019 PASS.
