@@ -1,5 +1,7 @@
 # Full nested runtime compatibility — P0
 
+**2026-11-13 PT / 2026-11-14 UTC physical RC.3 update:** Real L0→L1 (independent, matching RC.3)→L2 **direct authenticated L1 MCP Create/Exec is PASS**; the L1 restricted Incus native Launch also passed. L0 `box_exec` running L1 guest Python **could** call L1's local MCP `box_list` (HTTP 200), but attempting to embed L1 `box_create` in the outer Exec tool arguments triggered an **OpenAI pre-dispatch safety block**, before the L0 Exec or L1 HTTP request. A proposed second-level ChatGPT approval explanation remains **unverified**; L1 Bearer-role authentication, outer ChatGPT approval and restricted Incus identity are distinct. The older RC.1 L2 AppArmor `apparmor_parser` failure is **not** retested in this RC.3 run, and L2→L3 is **NOT TESTED**. Keep layer-local ownership and no special nested orchestration. Detailed [original Operation/native/SQLite evidence and boundary analysis](../verification/RC3_NESTED_L0_L1_L2_AND_MCP_BOUNDARY_2026-11-13.md).
+
 **Goal:** An ordinary Box can run a complete, independent BoxWeave installation with the same features as an installation on a physical host, as long as Incus and the Linux environment support them. This is **runtime compatibility**, not a feature for orchestrating nested BoxWeave controllers.
 
 The principal motivations are:
