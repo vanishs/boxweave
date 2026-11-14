@@ -324,22 +324,11 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	if err != nil {
 		return plan, rec, err
 	}
-	if pool.Driver != "dir" || pool.Status != "Created" {
-		return plan, rec, errors.New("selected dir pool not created")
+	if !native.StoragePoolReady(pool) {
+		return plan, rec, errors.New("selected Incus storage pool is not created")
 	}
-	free, separate, quota, err := native.InspectNativeDirPool(t.Pool)
-	if err != nil || free < 64<<20 {
-		return plan, rec, errors.New("selected dir pool backing unavailable")
-	}
-	if !separate && t.Pool != "default" {
-		return plan, rec, errors.New("custom pool backing not independently identified")
-	}
-	if !separate {
-		plan.Warnings = append(plan.Warnings, "DIR_POOL_HOST_ROOT_SHARED: separate capacity isolation is not established")
-	}
-	if !quota {
-		plan.Warnings = append(plan.Warnings, "DIR_QUOTA_UNVERIFIED: official Incus dir quota precondition not observed; no hard size guarantee")
-	}
+	plan.Warnings = append(plan.Warnings,
+		"STORAGE_QUOTA_UNVERIFIED: Incus owns storage pool backing, capacity and quota enforcement; inspect these independently before physical deployment")
 	network, nETag, err := c.GetNetwork(t.Network)
 	if err != nil {
 		return plan, rec, err
@@ -377,7 +366,7 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	plan.Actions = []string{
 		"Create exact new dedicated ACL " + t.ACL + " (never edit shared network)",
 		"Set nesting permission only on empty restricted Project " + t.Project,
-		"Set root dir pool and private reject/anti-spoof NIC only in owned empty default profile",
+		"Set selected Incus root pool and private reject/anti-spoof NIC only in owned empty default profile",
 		"Independently read back same owned Project, profile, image, pool, ACL",
 	}
 	plan.ReviewSHA256 = nativePrepareDigest(plan)

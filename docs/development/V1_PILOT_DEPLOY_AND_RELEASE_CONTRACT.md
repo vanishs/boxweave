@@ -1,5 +1,7 @@
 # v1 — nested pilot, dedicated-host pilot, installer and Release contract (2026-11-13)
 
+**RC.2 correction:** [Storage driver-neutral contract](../decisions/V1_STORAGE_DRIVER_NEUTRAL_RC2_2026-11-13.md) supersedes `dir`-only native readiness and preparation assumptions in historical pilot instructions. `dir` is not required; an operator-managed, `Created` Incus pool of any supported driver is accepted, without claiming disk quotas. This does not weaken Project/ACL/ownership controls or waive exact-host postflight.
+
 **Owner decision / scope:** resolve the chicken-and-egg gate. Do not require evidence obtainable only **after** a dedicated physical-host installation as a precondition for attempting a **reversible, owner-authorized development-only host pilot**. This corrects the prior "HOST_GO PASS before any physical install" circular gate; it does **not** waive P0 safety prerequisites, install on an unnamed host, merge PR #133, publish a supported v1 release, or allow coexistence with legacy main on that host.
 
 ## 1. Gates (distinct, no retroactive PASS)

@@ -77,9 +77,9 @@ func TestPrereqACLExclusivity(t *testing.T) {
 func TestPrereqDigestBindsNativeIdentity(t *testing.T) {
 	r := NativePrereqReport{HostSHA256: "host-a", Project: "user-1001", Pool: "pool",
 		Network: "bridge", ACL: "acl", ImageFingerprint: "image",
-		Checks: []NativePrereqCheck{{ID: "dir_pool_backing", OK: true, Detail: "free 10G"}}}
+		Checks: []NativePrereqCheck{{ID: "selected_storage_pool_ready", OK: true, Detail: "pool Created"}}}
 	hash := prereqDigest(r)
-	r.Checks[0].Detail = "free 9G"
+	r.Checks[0].Detail = "pool available"
 	if prereqDigest(r) != hash {
 		t.Fatal("volatile human-readable details changed review digest")
 	}

@@ -283,22 +283,14 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 		if e == nil {
 			observe("pool", pool, poolTag)
 		}
-		if e == nil && pool != nil && pool.Status == "Created" && pool.Driver == "dir" {
-			free, separate, quota, e := native.InspectNativeDirPool(poolName)
-			poolOK = e == nil && (separate || poolName == "default") && free >= 64<<20
-			r.QuotaMountPrecondition = quota
-			if poolOK && !separate {
-				r.Warnings = append(r.Warnings,
-					"DIR_POOL_HOST_ROOT_SHARED: pool is not on an independent mount; account for shared filesystem exhaustion.")
-			}
-			if poolOK && !quota {
-				r.Warnings = append(r.Warnings,
-					"DIR_QUOTA_UNVERIFIED: Incus may skip requested volume size limits; inspect daemon logs and separately verify actual instance/Exec spool bounds.")
-			}
+		poolOK = e == nil && native.StoragePoolReady(pool)
+		if poolOK {
+			r.Warnings = append(r.Warnings,
+				"STORAGE_QUOTA_UNVERIFIED: capacity and native size/Exec spool quota enforcement are the Incus operator's responsibility.")
 		}
 	}
-	prereqRecord(&r, "dir_pool_backing", poolOK,
-		"available dedicated Incus dir storage backing (quota evidence is separate, never silently assumed)")
+	prereqRecord(&r, "selected_storage_pool_ready", poolOK,
+		"selected operator-managed Incus storage pool exists and has Created status; storage driver and quotas are not admission gates")
 	networkOK := false
 	aclOK := false
 	if devicesOK {
