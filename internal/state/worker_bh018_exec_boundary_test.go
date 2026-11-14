@@ -83,7 +83,7 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 				got.NativeOperationID != tc.nativeID || effectCalls != 1 {
 				t.Fatalf("receipt or dispatch classification changed: %+v effects=%d err=%v", got, effectCalls, err)
 			}
-			if (verifyCalls != 0) != (!tc.wantVerify) {
+			if (verifyCalls == 1) != tc.wantVerify {
 				t.Fatalf("unexpected postread execution: %d", verifyCalls)
 			}
 			replay, err := store.Replay(ctx, input)
