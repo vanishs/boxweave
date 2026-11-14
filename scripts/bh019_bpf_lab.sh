@@ -14,6 +14,19 @@ case "${BH019_PROXY_URL:-}" in
 esac
 test -f scripts/bh019_inner_setup.sh
 mkdir -p "$BH019_REPORT_DIR"
+# Compare only a NON-ATTACHED kernel BPF_PROG_LOAD on the same one-use
+# CI kernel at GH host root, unprivileged L1 and unprivileged L2.
+command -v cc >/dev/null
+cc -O2 -Wall -Wextra -Werror -std=gnu11 \
+  -o "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe" \
+  scripts/bh019_cgroup_device_bpf_probe.c
+chmod 0755 "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe"
+host_result="$("$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe")"
+case "$host_result" in
+  BH019_CGROUP_DEVICE_BPF_PROG_LOAD=GRANTED_NO_ATTACH|BH019_CGROUP_DEVICE_BPF_PROG_LOAD=DENIED\ errno=*) ;;
+  *) echo "BH019_BPF_HOST_PROBE_UNCLASSIFIED=BLOCKED" >&2; exit 89 ;;
+esac
+printf "BH019_CGROUP_DEVICE_BPF_HOST_RESULT=%s\n" "$host_result"
 # This script runs only on a new disposable, empty GH-hosted Incus VM.
 # Reuse the EXACT image already cached by the first parent creation instead
 # of asking the nested daemon to fetch a remote moving images: alias.
@@ -69,6 +82,13 @@ for case_name in control bpf-parent; do
     continue
   fi
   echo "BH019_PARENT_START=PASS case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
+  incus file push "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe" "$name/root/bh019-ci-bpf-probe"
+  parent_bpf="$(incus exec "$name" -- /root/bh019-ci-bpf-probe)"
+  case "$parent_bpf" in
+    BH019_CGROUP_DEVICE_BPF_PROG_LOAD=GRANTED_NO_ATTACH|BH019_CGROUP_DEVICE_BPF_PROG_LOAD=DENIED\ errno=*) ;;
+    *) echo "BH019_BPF_PARENT_PROBE_UNCLASSIFIED=BLOCKED case=$case_name" >&2; exit 90 ;;
+  esac
+  printf "BH019_CGROUP_DEVICE_BPF_PARENT_RESULT=%s case=%s\n" "$parent_bpf" "$case_name"
   test -s "$image_metadata"
   incus file push "$image_metadata" "$name/root/bh019-l2-image-metadata"
   if [ -n "$image_rootfs" ]; then

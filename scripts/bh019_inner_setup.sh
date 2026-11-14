@@ -274,7 +274,19 @@ EOF
       exit 91
     fi
     echo "BH019_LAYERED_APPARMOR_INDEPENDENT_POLICY=UNVERIFIED case=$case_name"
-    echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=UNVERIFIED case=$case_name"
+    # Actual BPF_PROG_LOAD syscall in L2; NEVER attach the tiny allow program.
+    # Parent/host controls are captured separately in the same CI kernel.
+    incus file push /root/bh019-ci-bpf-probe bh019-l2-native-child/root/bh019-ci-bpf-probe
+    if ! l2_bpf="$(incus exec bh019-l2-native-child -- /root/bh019-ci-bpf-probe)"; then
+      echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=BLOCKED_PROBE_EXEC case=$case_name"
+      exit 92
+    fi
+    case "$l2_bpf" in
+      BH019_CGROUP_DEVICE_BPF_PROG_LOAD=GRANTED_NO_ATTACH|BH019_CGROUP_DEVICE_BPF_PROG_LOAD=DENIED\ errno=*) ;;
+      *) echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=BLOCKED_PROBE_OUTPUT case=$case_name"; exit 93 ;;
+    esac
+    printf "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=%s case=%s\n" "$l2_bpf" "$case_name"
+    echo "BH019_CGROUP_DEVICE_BPF_ATTACH_AND_DEVICE_ISOLATION=NOT_TESTED case=$case_name"
   else
     echo "BH019_L2_START=BLOCKED_EXEC case=$case_name"
   fi
