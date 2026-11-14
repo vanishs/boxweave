@@ -2,7 +2,7 @@
 
 Research date: 2026-11-13 PT. Source: [FootprintAI/Containarium](https://github.com/FootprintAI/Containarium), public `main` at `55b244c0e7a65cecf8bd8f6dd4b19a74dbdec606` when inspected. Read current source files, the project's explicit native results and selected relevant commit diffs; **not** a line-by-line audit, executed native test, reproduction of its claimed successful cloud environment, or proof that upstream head and any published binary are identical.
 
-This is a **narrow addendum** to the existing [Containarium implementation/history audit](CONTAINARIUM_MAIN_HISTORY_2026-11-07.md), which already covered general SDK, lifecycle, egress, file and operation incidents. It focuses on the specific 2026-11-13 BoxWeave v1 RC physical-host failure documented separately in [real v1rc MCP/AppArmor evidence on Draft PR #136](https://github.com/vanishs/boxweave/blob/fix/v1-apparmor-nested-host-preflight-20261113/docs/verification/V1_RC_PHYSICAL_HOST_NESTED_APPARMOR_2026-11-13.md).
+This is a **narrow addendum** to the existing [Containarium implementation/history audit](CONTAINARIUM_MAIN_HISTORY_2026-11-07.md), which already covered general SDK, lifecycle, egress, file and operation incidents. It focuses on the specific 2026-11-13 BoxWeave v1 RC physical-host failure documented separately in [preserved real v1rc MCP/AppArmor evidence](../verification/V1_RC_PHYSICAL_HOST_NESTED_APPARMOR_2026-11-13.md).
 
 ## Executive finding
 
@@ -50,5 +50,5 @@ For a newly reinstalled physical host, a useful bounded experiment is to record 
 ## Disposition
 
 - This is research and experiment design **only**. No native/installed Containarium binary was run by this review; no BoxWeave product code or host config change is proposed here.
-- Preserve the existing v1 product boundary (single native official Incus Go SDK path, 20 public MCP tools, nonroot restricted Project, original Operation/UNKNOWN). PR #136's static hard-refusal heuristic remains separately unapproved for merge; the owner has raised a valid objection to hard-failing based only on heuristics.
+- Preserve the existing v1 product boundary (single native official Incus Go SDK path, 20 public MCP tools, nonroot restricted Project, original Operation/UNKNOWN). PR #136's static hard-refusal heuristic was **not accepted for merge**. Its knowledge and native receipts are kept here in [AppArmor source research](APPARMOR_MULTI_LEVEL_BOUNDARY_2026-11-13.md) and [experimental preflight results](../verification/APPARMOR_NATIVE_HOST_PREFLIGHT_2026-11-13.md); the owner declined hard-failing based only on heuristics.
 - Whether safe AppArmor policy-namespace delegation beyond L2 is possible on the specific kernel/Incus pair remains an upstream technical question. No safe general-purpose full-L3 configuration was established by these Containarium materials.
