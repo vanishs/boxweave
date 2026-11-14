@@ -41,6 +41,12 @@ func init() {
 		activeMarkerCommand = "sleep 25; echo once >> /tmp/bw-s2-bh018-final-cut-marker"
 		activeCreateKey = "s2-bh018-real-service-final-cut-create"
 		activeSavedKey = "s2-bh018-real-service-final-cut-output"
+	} else if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		activeCrashName = "bw-s2-bh018-after-cut"
+		activeCrashKey = "s2-bh018-real-service-after-cut-original"
+		activeMarkerCommand = "sleep 25; echo once >> /tmp/bw-s2-bh018-after-cut-marker"
+		activeCreateKey = "s2-bh018-real-service-after-cut-create"
+		activeSavedKey = "s2-bh018-real-service-after-cut-output"
 	}
 }
 
@@ -281,7 +287,8 @@ func main() {
 		}
 		fmt.Println("S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS")
 		observed := operation(ctx, s, original.OperationID)
-		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" {
+		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" ||
+			os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
 			verifyBH018FinalCut(ctx, s, original, observed)
 			return
 		}
