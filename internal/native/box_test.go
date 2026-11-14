@@ -132,21 +132,14 @@ func TestS2RecordedOutputDoHTTPUsesExactSDKURLAndRestrictedProject(t *testing.T)
 	}
 }
 
-func TestS2ApprovedUbuntuLTSImageMetadata(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		fields map[string]string
-		ok     bool
-	}{
-		{"native simplestreams codename", map[string]string{"os": "Ubuntu", "release": "noble"}, true},
-		{"numeric release", map[string]string{"os": "Ubuntu", "release": "24.04"}, true},
-		{"different OS", map[string]string{"os": "Debian", "release": "noble"}, false},
-		{"older LTS", map[string]string{"os": "Ubuntu", "release": "jammy"}, false},
-		{"missing metadata", nil, false},
-	} {
-		if got := approvedUbuntu2404(tc.fields); got != tc.ok {
-			t.Fatalf("%s approved=%v want=%v", tc.name, got, tc.ok)
+func TestRC3IncusLocalAndCatalogImagesNotUbuntuLocked(t *testing.T) {
+	for _, alias := range []string{"images:ubuntu/24.04", "images:debian/13", "images:alpine/3.21", "local:approved-debian"} {
+		if !ValidImageChoice(alias) {
+			t.Fatalf("valid Incus image alias unexpectedly restricted: %s", alias)
 		}
+	}
+	if ValidImageChoice("https://untrusted.example/image") {
+		t.Fatal("caller-specified remote URL accepted")
 	}
 }
 
