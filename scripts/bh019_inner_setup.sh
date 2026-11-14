@@ -4,6 +4,14 @@
 set -eu
 case_name="${1:-}"
 case "$case_name" in control|bpf-parent) ;; *) exit 81 ;; esac
+proxy="${2:-}"
+case "$proxy" in
+  http://10.*:18466|http://172.*:18466|http://192.168.*:18466) ;;
+  *) echo BH019_UNAPPROVED_PROXY >&2; exit 82 ;;
+esac
+export http_proxy="$proxy" HTTP_PROXY="$proxy"
+export https_proxy="$proxy" HTTPS_PROXY="$proxy"
+export no_proxy=localhost,127.0.0.1 NO_PROXY=localhost,127.0.0.1
 test "$(id -u)" -eq 0
 . /etc/os-release
 test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
@@ -14,6 +22,17 @@ cat /proc/self/uid_map
 cat /proc/self/gid_map
 if [ -e /sys/kernel/security/apparmor/.ns_name ]; then cat /sys/kernel/security/apparmor/.ns_name; fi
 if [ -e /sys/kernel/security/apparmor/.ns_stacked ]; then cat /sys/kernel/security/apparmor/.ns_stacked; fi
+for sources in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+  [ ! -f "$sources" ] && continue
+  sed -i -e 's#http://archive.ubuntu.com#https://archive.ubuntu.com#g' \
+    -e 's#http://security.ubuntu.com#https://security.ubuntu.com#g' "$sources"
+done
+if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+  echo BH019_PLAINTEXT_APT_SOURCE_REFUSED >&2
+  exit 83
+fi
+curl -fsSI --connect-timeout 6 --max-time 25 https://pkgs.zabbly.com/key.asc >/dev/null
+echo "BH019_SCOPED_SIGNED_PACKAGE_PROXY=PASS case=$case_name"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
 curl -fsSL --max-time 45 https://pkgs.zabbly.com/key.asc -o /tmp/bh019-zabbly.asc
@@ -37,6 +56,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus
 systemctl start incus.service
 systemctl is-active --quiet incus.service
 incus admin init --auto --storage-backend=dir
+incus config set core.proxy_https="$proxy"
+test "$(incus config get core.proxy_https)" = "$proxy"
 incus version
 echo "BH019_NESTED_SIGNED_INCUS_76=PASS case=$case_name"
 set +e
