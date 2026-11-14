@@ -222,3 +222,29 @@ func TestBH018WorkerRejectsForgedAtomicExecCompletionSignal(t *testing.T) {
 		t.Fatalf("forged completion sentinel incorrectly unlocked original: %+v %v", got, err)
 	}
 }
+
+// Verified terminal path/exit must be readable after COMMIT. Reject a
+// forged native exit that cannot round-trip through the public int32 reader.
+func TestBH018AtomicFinalizationRejectsOutOfRangeExitBeforeWrite(t *testing.T) {
+	ctx := context.Background()
+	for _, v := range []int64{int64(1) << 40, -(int64(1) << 40)} {
+		value := int(v)
+		if int64(value) != v {
+			continue // 32-bit architecture: no representable invalid int.
+		}
+		s := newStore(t)
+		_, box, opID, prefix := bh018AtomicFixture(t, s)
+		if err := s.FinalizeVerifiedExec(ctx, opID, box,
+			"a3da911d-89e8-40b3-8b9f-cc9f08f08180", prefix+".stdout", "", value);
+			!errors.Is(err, ErrInvalid) {
+			t.Fatalf("out-of-range terminal exit %d accepted: %v", v, err)
+		}
+		got, err := s.Get(ctx, opID)
+		if err != nil || got.State != "VERIFYING" {
+			t.Fatalf("out-of-range exit altered source claim: %+v %v", got, err)
+		}
+		if _, err := s.ExecOutput(ctx, opID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("invalid exit produced output receipt: %v", err)
+		}
+	}
+}

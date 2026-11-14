@@ -738,6 +738,11 @@ func ExecEvidenceFromFinal(op *api.Operation) (ExecEvidence, error) {
 		e := int(v)
 		out.Exit = &e
 	case int:
+		// Native JSON usually decodes to float64, but typed SDK/test metadata
+		// may arrive as int. Keep the same 32-bit storage/read boundary.
+		if int64(v) < -2147483648 || int64(v) > 2147483647 {
+			return out, ErrUnverified
+		}
 		e := v
 		out.Exit = &e
 	default:

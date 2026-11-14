@@ -127,3 +127,24 @@ func TestBH018SuccessfulNativeExecMayHaveNonzeroGuestExit(t *testing.T) {
 		t.Fatalf("verified native success with guest /bin/false exit lost: %+v %v", ev, err)
 	}
 }
+
+// All typed native terminal metadata representations must share the
+// same persisted exit-code bounds. An int outside int32 would otherwise
+// appear SUCCEEDED yet be unreadable through operation_output_get.
+func TestBH018NativeTypedIntExitOutsideRecordedRangeRejected(t *testing.T) {
+	const nativeID = "bdf9c7b6-384d-4ac0-a30c-fd78308a5b90"
+	prefix := "/1.0/instances/owned-guest/logs/exec-output/exec_" + nativeID
+	for _, v := range []int64{int64(1) << 40, -(int64(1) << 40)} {
+		value := int(v)
+		if int64(value) != v {
+			continue // A 32-bit int cannot represent this injected value.
+		}
+		op := &api.Operation{ID: nativeID, StatusCode: api.Success,
+			Metadata: map[string]any{"return": value,
+				"output": map[string]any{"1": prefix + ".stdout"}}}
+		ev, err := ExecEvidenceFromFinal(op)
+		if !errors.Is(err, ErrUnverified) || ev.Exit != nil {
+			t.Fatalf("oversized typed native exit admitted: exit=%d ev=%+v err=%v", v, ev, err)
+		}
+	}
+}

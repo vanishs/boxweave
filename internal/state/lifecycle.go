@@ -167,7 +167,8 @@ func (s *Store) FinalizeVerifiedExec(ctx context.Context, operationID string, bo
 		box.Name == "" || box.Incarnation == "" || box.State != "OWNED" ||
 		len(box.Name) > 63 || strings.ContainsAny(box.Name, "/\\?%#\x00\r\n") ||
 		len(nativeID) != 36 || (stdoutPath == "" && stderrPath == "") ||
-		len(stdoutPath) > 512 || len(stderrPath) > 512 {
+		len(stdoutPath) > 512 || len(stderrPath) > 512 ||
+		int64(exit) < -2147483648 || int64(exit) > 2147483647 {
 		return ErrInvalid
 	}
 	for i, c := range nativeID {
