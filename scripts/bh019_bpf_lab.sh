@@ -8,6 +8,10 @@ test "$(id -u)" -eq 0
 . /etc/os-release
 test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
 test -n "${BH019_REPORT_DIR:-}"
+case "${BH019_PROXY_URL:-}" in
+  http://10.*:18466|http://172.*:18466|http://192.168.*:18466) ;;
+  *) echo BH019_UNAPPROVED_PROXY >&2; exit 83 ;;
+esac
 test -f scripts/bh019_inner_setup.sh
 mkdir -p "$BH019_REPORT_DIR"
 for case_name in control bpf-parent; do
@@ -33,7 +37,7 @@ for case_name in control bpf-parent; do
   fi
   echo "BH019_PARENT_START=PASS case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
   incus file push scripts/bh019_inner_setup.sh "$name/tmp/bh019_inner_setup.sh"
-  if incus exec "$name" -- /bin/sh /tmp/bh019_inner_setup.sh "$case_name" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
+  if incus exec "$name" -- /bin/sh /tmp/bh019_inner_setup.sh "$case_name" "$BH019_PROXY_URL" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
     cat "$BH019_REPORT_DIR/${case_name}-inner.log"
   else
     cat "$BH019_REPORT_DIR/${case_name}-inner.log"
@@ -46,6 +50,10 @@ for case_name in control bpf-parent; do
 done
 test -s "$BH019_REPORT_DIR/control-result.txt"
 test -s "$BH019_REPORT_DIR/bpf-parent-result.txt"
+if grep -q 'BH019_L2_START=BLOCKED_SETUP' "$BH019_REPORT_DIR/control-result.txt" "$BH019_REPORT_DIR/bpf-parent-result.txt"; then
+  echo BH019_BPF_A_B=NOT_EVALUATED_SETUP_BLOCKED >&2
+  exit 84
+fi
 echo BH019_BPF_CONTROL_AND_PARENT_INTERCEPT_EVIDENCE_RECORDED=PASS
 # This means both experiments yielded evidence. It is deliberately NOT a
 # claim that either L2 worked or that weaker policy is safe for BoxWeave.
