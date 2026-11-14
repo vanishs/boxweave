@@ -249,11 +249,24 @@ EOF
           rc=$?
           echo "BH019_L2_POLICY_LOAD=DENIED_OR_FAILED rc=$rc"
           cat /tmp/bh019-l2-policy-load.log
+          # A successful syntax check does not identify the kernel denial.
+          # Keep this native matrix green only if the policy was actually
+          # loaded/removed OR the exact policy-admin denial was reproduced.
+          # An unrelated parser/runtime failure must never masquerade as
+          # accepted negative evidence.
+          if [ "$rc" -eq 243 ] && grep -Fq 'You need policy admin privileges' /tmp/bh019-l2-policy-load.log; then
+            echo "BH019_L2_POLICY_ADMIN_DENIAL=CONFIRMED"
+          else
+            echo "BH019_L2_POLICY_ADMIN_DENIAL=UNCLASSIFIED rc=$rc"
+            exit 90
+          fi
         fi
         rm -f "$file"
       ' -- "$policy_ns" "$l2_parser"
     else
       echo "BH019_L2_POLICY_LOAD=NOT_TESTED_PARSER_RUNTIME_MISSING case=$case_name"
+      # A missing parser is a test fixture failure, not proof of denial.
+      exit 91
     fi
     echo "BH019_LAYERED_APPARMOR_INDEPENDENT_POLICY=UNVERIFIED case=$case_name"
     echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=UNVERIFIED case=$case_name"
