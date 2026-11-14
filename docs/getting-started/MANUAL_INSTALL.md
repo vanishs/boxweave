@@ -6,7 +6,7 @@ This is a **human-reviewed, fresh-install** guide, not a one-shot provisioning s
 
 ## A. Check the dedicated host — Required, read-only
 
-- Initially tested on Ubuntu LTS Linux; signed-release assets target Linux **amd64/arm64**. Incus **7.5+ with the required native extensions** is needed; Incus **7.6** was tested on a real host. Prefer an existing compatible daemon; don't silently upgrade one with other users.
+- Initially tested on Ubuntu LTS Linux; published Release assets target Linux **amd64/arm64**. Incus **7.5+ with the required native extensions** is needed; Incus **7.6** was tested on a real host. Prefer an existing compatible daemon; don't silently upgrade one with other users.
 - Inspect Incus state and the storage driver **before** changing anything. BoxWeave accepts any native supported **Incus storage driver** with a ready pool (`btrfs`, `zfs`, `lvm`, `dir`, etc.). It does **not** enforce or certify filesystem quotas or remaining disk/Exec spool capacity.
 - Do not co-install with legacy BoxWeave `main`, reuse an unknown `/var/lib/boxweave`, or adopt unrelated Incus instances.
 
