@@ -1,6 +1,8 @@
-# AppArmor native-host preflight: isolated acceptance (2026-11-13 PT)
+# AppArmor native-host preflight: archived experimental acceptance (2026-11-13 PT)
 
-Candidate branch: fix/v1-apparmor-nested-host-preflight-20261113, based on protected v1 source a5e7b0e9d0dd8c3243d3edeb8c335594b29f1e07.
+**Status: archived evidence, NOT an adopted v1 acceptance gate.** These results prove that the **unmerged PR #136 experimental diagnostic implementation** recognized the observed examples; they do not prove that its static refusals are safe or generally necessary. The owner explicitly deferred the hard-reject change. This record was preserved in documentation-only PR #137; none of these preflight changes were merged into `v1` or released as `v1.0.0-rc.1`.
+
+Original candidate branch: `fix/v1-apparmor-nested-host-preflight-20261113`, based on protected v1 source `a5e7b0e9d0dd8c3243d3edeb8c335594b29f1e07`.
 Candidate executable: SHA256 a12aa78ceeab24f148c7a31937ab8cb271dadff5376c99c8bbd826a9ac2358e3, built in isolated bw-aa-stack-test-1113 using verified Go 1.26.9 with CGO_ENABLED=1. This developer binary has no Release build-info stamp and is NOT an installable release.
 
 ## Code and source checks
@@ -23,4 +25,4 @@ Candidate executable: SHA256 a12aa78ceeab24f148c7a31937ab8cb271dadff5376c99c8bbd
 - All native negative tests were read-only; no new native initialization was replayed. Earlier failed partial Incus state and all original UNKNOWN tasks remain untouched.
 - No runtime MCP tool, Box Create behavior, raw LXC config, Incus Project mapping or global/physical host policy changed.
 - Positive preflight is diagnostic only; further L2 multi-level AppArmor delegation remains UNSUPPORTED/UNVERIFIED for this topology.
-- A real same-head GitHub quality check and a separate independent verifier still must run before merge/release. HOST_GO, physical deployment and RC install remain independent, unapproved claims.
+- The experimental code is **not planned for merge or release** under the current decision, regardless of its source-check results. It received no complete native host/L3 safety acceptance. HOST_GO, physical deployment and RC install remain independent claims.
