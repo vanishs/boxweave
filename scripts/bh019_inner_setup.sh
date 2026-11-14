@@ -134,6 +134,54 @@ if [ "$status" -eq 0 ]; then
     else
       echo "BH019_L2_READONLY_AA_USERNS_WITNESS=UNVERIFIED case=$case_name"
     fi
+    # Controlled policy-admin experiment only in the owned ephemeral GH
+    # parent AppArmor namespace. The synthetic profile has NO attachment
+    # and is never applied to a running command or system service.
+    # This tests native policy load/remove rights, NOT L2's independent
+    # namespace, confinement negative, or physical-host repair.
+    kernel_release="$(uname -r)"
+    echo "BH019_PARENT_KERNEL_RELEASE=$kernel_release case=$case_name"
+    policy_ns="$(cat /sys/kernel/security/apparmor/.ns_name 2>/dev/null || :)"
+    policy_stacked="$(cat /sys/kernel/security/apparmor/.ns_stacked 2>/dev/null || :)"
+    case "$policy_ns" in
+      incus-bh019-control-1114_*|incus-bh019-bpf-parent-1114_*) ;;
+      *) echo "BH019_PARENT_POLICY_NS_SCOPE=BLOCKED case=$case_name"; exit 87 ;;
+    esac
+    if [ "$policy_stacked" != yes ]; then
+      echo "BH019_PARENT_POLICY_NOT_STACKED=BLOCKED case=$case_name"
+      exit 87
+    fi
+    policy_path="/root/bh019-ci-inert-$case_name.profile"
+    test ! -e "$policy_path"
+    umask 077
+    cat >"$policy_path" <<EOF
+profile s25-bh019-ci-inert-$case_name {
+  deny /tmp/bh019-ci-unused-marker r,
+}
+EOF
+    if ! command -v apparmor_parser >/dev/null 2>&1; then
+      echo "BH019_PARENT_POLICY_ADMIN=NOT_TESTED_PARSER_MISSING case=$case_name"
+    elif apparmor_parser -Q -K "$policy_path" >/tmp/bh019-policy-syntax.log 2>&1; then
+      echo "BH019_PARENT_POLICY_PARSE=PASS case=$case_name"
+      if timeout 15s apparmor_parser -a -K "$policy_path" >/tmp/bh019-policy-load.log 2>&1; then
+        echo "BH019_PARENT_POLICY_LOAD=PASS case=$case_name"
+        if timeout 15s apparmor_parser -R -K "$policy_path" >/tmp/bh019-policy-remove.log 2>&1; then
+          echo "BH019_PARENT_POLICY_REMOVE=PASS case=$case_name"
+        else
+          echo "BH019_PARENT_POLICY_REMOVE=BLOCKED case=$case_name"
+          cat /tmp/bh019-policy-remove.log
+          exit 88
+        fi
+      else
+        rc=$?
+        echo "BH019_PARENT_POLICY_LOAD=DENIED_OR_FAILED case=$case_name rc=$rc"
+        cat /tmp/bh019-policy-load.log
+      fi
+    else
+      echo "BH019_PARENT_POLICY_PARSE=BLOCKED case=$case_name"
+      cat /tmp/bh019-policy-syntax.log
+    fi
+    rm -f "$policy_path"
     echo "BH019_LAYERED_APPARMOR_INDEPENDENT_POLICY=UNVERIFIED case=$case_name"
     echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=UNVERIFIED case=$case_name"
   else
