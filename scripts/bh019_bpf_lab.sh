@@ -30,13 +30,15 @@ for case_name in control bpf-parent; do
     image_fingerprint="$(incus config get "$name" volatile.base_image)"
     test -n "$image_fingerprint"
     incus image info "$image_fingerprint" >/dev/null
-    incus image export "$image_fingerprint" "$image_dir/bh019-source"
+    # Explicitly export INTO the existing owned directory; passing a non-directory
+    # prefix can produce extensionless paths and break our format classifier.
+    incus image export "$image_fingerprint" "$image_dir"
     for image_file in "$image_dir"/*; do
       test -s "$image_file"
       case "${image_file##*/}" in
         *rootfs*|*.squashfs) test -z "$image_rootfs"; image_rootfs="$image_file" ;;
         *.tar|*.tar.*) test -z "$image_metadata"; image_metadata="$image_file" ;;
-        *) echo "BH019_IMAGE_EXPORT_UNKNOWN_FORMAT=BLOCKED" >&2; exit 85 ;;
+        *) printf "BH019_IMAGE_EXPORT_UNKNOWN_FORMAT=BLOCKED basename=%s\n" "${image_file##*/}" >&2; exit 85 ;;
       esac
     done
     test -s "$image_metadata"
