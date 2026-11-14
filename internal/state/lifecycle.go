@@ -156,6 +156,78 @@ type NativeReadSnapshot struct {
 	Truncated   bool   `json:"truncated"`
 }
 
+// FinalizeVerifiedExec durably commits the original Exec terminal receipt,
+// recorded output paths and the SUCCEEDED operation event as ONE transaction.
+// The worker must use this only after verifying the exact original native
+// terminal outcome, never based on command text, output-file existence alone,
+// an expired operation ID, or a guessed absence of guest side effects.
+func (s *Store) FinalizeVerifiedExec(ctx context.Context, operationID string, box OwnedBox,
+	nativeID, stdoutPath, stderrPath string, exit int) error {
+	if operationID == "" || box.UUID == "" || box.Project == "" ||
+		box.Name == "" || box.Incarnation == "" || box.State != "OWNED" ||
+		len(box.Name) > 63 || strings.ContainsAny(box.Name, "/\\?%#\x00\r\n") ||
+		len(nativeID) != 36 || (stdoutPath == "" && stderrPath == "") ||
+		len(stdoutPath) > 512 || len(stderrPath) > 512 {
+		return ErrInvalid
+	}
+	for i, c := range nativeID {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return ErrInvalid
+			}
+		} else if c < '0' || c > '9' && c < 'a' || c > 'f' {
+			return ErrInvalid
+		}
+	}
+	prefix := "/1.0/instances/" + box.Name + "/logs/exec-output/exec_" + nativeID
+	if stdoutPath != "" && stdoutPath != prefix+".stdout" ||
+		stderrPath != "" && stderrPath != prefix+".stderr" {
+		return ErrInvalid
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// A terminal ACK for a foreign operation or prior incarnation cannot
+	// release this resource claim, even if the output filename looks valid.
+	now := time.Now().UnixNano()
+	res, err := tx.ExecContext(ctx, `UPDATE operations
+		SET state='SUCCEEDED',error_class='',updated_at=?
+		WHERE id=? AND action='box_exec' AND state='VERIFYING'
+		AND layer=? AND box_uuid=? AND incarnation=? AND resource_key=?
+		AND native_operation_id=?
+		AND EXISTS (SELECT 1 FROM owned_boxes
+			WHERE uuid=? AND project=? AND name=? AND incarnation=? AND state='OWNED')`,
+		now, operationID, box.Project, box.UUID, box.Incarnation,
+		"box:"+box.Name, nativeID,
+		box.UUID, box.Project, box.Name, box.Incarnation)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrState
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO exec_outputs
+		(operation_id,stdout_path,stderr_path,exit_code,observed_at)
+		VALUES (?,?,?,?,?)`,
+		operationID, stdoutPath, stderrPath, exit, now); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events
+		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
+		operationID, now, "SUCCEEDED", "VERIFIED_NATIVE_EXEC_TERMINAL"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) SaveExecOutput(ctx context.Context, opID, stdoutPath, stderrPath string, exit *int) error {
 	if opID == "" || (stdoutPath == "" && stderrPath == "") ||
 		len(stdoutPath) > 512 || len(stderrPath) > 512 ||
