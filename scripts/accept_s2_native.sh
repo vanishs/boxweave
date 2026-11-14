@@ -816,12 +816,51 @@ until [ "$attempt" -ge 40 ]; do
   attempt=$((attempt+1))
   sleep 1
 done
-test "$attempt" -lt 40
-BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-service-cut-restarted.redacted.log"; then
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  else
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 94
+fi
+echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
   BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
-  "$work/s2-crash-probe" resume > "$work/bh018-service-cut-resume.redacted.log" 2>&1
+  "$work/s2-crash-probe" resume ) >"$work/bh018-service-cut-resume.redacted.log" 2>&1; then
+  grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-cut-resume.redacted.log" | tail -n 15 || :
+  echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
+  exit 95
+fi
 grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-cut-resume.redacted.log"
-grep -Fqx 'S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED=PASS' "$work/bh018-service-cut-resume.redacted.log"
+grep -E '^BH018_INSTALLED_WAL_KILL_ATOMIC_(SUCCEEDED|UNKNOWN)_' "$work/bh018-service-cut-resume.redacted.log"
+# An independent sqlite3 read-only oracle must see exactly one of two
+# transactions: all three terminal rows committed OR none (UNKNOWN + lock).
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_ATOMIC_ORACLE'
+import json,sqlite3,sys
+db,checkpoint=sys.argv[1:]
+with open(checkpoint) as f: original=json.load(f)
+oid,native=original["operation_id"],original["native_operation_id"]
+with sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3) as conn:
+    op=conn.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outs=conn.execute("SELECT stdout_path,stderr_path,exit_code FROM exec_outputs WHERE operation_id=?",(oid,)).fetchall()
+    audit=conn.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert op and op[1]==native, (op,native)
+if op[0]=="SUCCEEDED":
+    assert len(outs)==1 and outs[0][2]==0 and audit==1,(outs,audit)
+    prefix="/1.0/instances/bw-s2-bh018-final-cut/logs/exec-output/exec_"+native
+    assert any(outs[0][:2])
+    assert outs[0][0] in ("",prefix+".stdout") and outs[0][1] in ("",prefix+".stderr"),outs
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_ALL_TERMINAL_ROWS_ATOMIC=PASS")
+elif op[0]=="UNKNOWN":
+    assert not outs and audit==0,(outs,audit)
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_NO_PARTIAL_TERMINAL_ROWS=PASS")
+else:
+    raise SystemExit("BH018 WAL SIGKILL recovered invalid/split state: "+op[0])
+print("BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS")
+PY_BH018_ATOMIC_ORACLE
+
 attempt=0
 count=""
 until [ "$attempt" -ge 45 ]; do
