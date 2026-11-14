@@ -70,9 +70,9 @@ for case_name in control bpf-parent; do
   fi
   echo "BH019_PARENT_START=PASS case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
   test -s "$image_metadata"
-  incus file push "$image_metadata" "$name/tmp/bh019-l2-image-metadata"
+  incus file push "$image_metadata" "$name/root/bh019-l2-image-metadata"
   if [ -n "$image_rootfs" ]; then
-    incus file push "$image_rootfs" "$name/tmp/bh019-l2-image-rootfs"
+    incus file push "$image_rootfs" "$name/root/bh019-l2-image-rootfs"
   fi
   echo "BH019_IMAGE_TRANSFERRED_FROM_OUTER_CACHE=PASS case=$case_name" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
   incus file push scripts/bh019_inner_setup.sh "$name/tmp/bh019_inner_setup.sh"
