@@ -1,0 +1,92 @@
+name: S2.5 BH-018 isolated native Exec evidence (non-release)
+
+on:
+  push:
+    branches:
+      - fix/v1-s25-bh018-bh019-20261114
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bh018-original-native-exec:
+    name: bh018-native-original-exec-matrix
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/fix/v1-s25-bh018-bh019-20261114'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      BH018_GUEST_NAME: bh018-native-startup-1114
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Guard isolated fresh CI host and probe source formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          grep -qx 'ID=ubuntu' /etc/os-release
+          grep -Eq '^VERSION_ID="?24[.]04"?$' /etc/os-release
+          test ! -e /var/lib/incus
+          test -z "$(gofmt -l scripts/bh018_native_exec_probe.go)"
+          test "$GITHUB_REF" = refs/heads/fix/v1-s25-bh018-bh019-20261114
+          go build -o "$RUNNER_TEMP/bh018-native-exec-probe" ./scripts/bh018_native_exec_probe.go
+      - name: Install exact signed Incus 7.6 only on disposable CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
+          curl -fsSL --max-time 40 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/zabbly-key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/zabbly-key.asc" | awk -F: '$1=="fpr"{print $10;exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -d -m 0755 /etc/apt/keyrings
+          sudo install -m 0644 "$RUNNER_TEMP/zabbly-key.asc" /etc/apt/keyrings/bh018-zabbly.asc
+          sudo tee /etc/apt/sources.list.d/bh018-zabbly.sources >/dev/null <<'SIGNED'
+          Enabled: yes
+          Types: deb
+          URIs: https://pkgs.zabbly.com/incus/stable
+          Suites: noble
+          Components: main
+          Architectures: amd64
+          Signed-By: /etc/apt/keyrings/bh018-zabbly.asc
+          SIGNED
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo systemctl is-active --quiet incus.service
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo incus admin init --auto --storage-backend=dir
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo incus version
+          echo "BH018_PINNED_SIGNED_INCUS_76=PASS"
+      - name: Real native Guest and 3x7 original Incus SDK operation matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo incus launch images:ubuntu/24.04 "$BH018_GUEST_NAME" -c limits.cpu=1 -c limits.memory=768MiB
+          sudo incus info "$BH018_GUEST_NAME"
+          sudo incus exec "$BH018_GUEST_NAME" -- /bin/sh -c 'test -x /bin/true && test -x /bin/false && test -x /usr/bin/timeout && test ! -e /usr/bin/bh018-definitely-missing-executable && test ! -e /bh018-definitely-missing-cwd && test ! -x /etc/hostname'
+          echo "BH018_EXACT_GUEST_COMMAND_PRECONDITIONS=PASS"
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,BH018_GUEST_NAME "$RUNNER_TEMP/bh018-native-exec-probe" | tee "$RUNNER_TEMP/bh018-native-exec.jsonl"
+          grep -qx 'BH018_NATIVE_ORIGINAL_21_CASES=PASS' "$RUNNER_TEMP/bh018-native-exec.jsonl"
+          echo "BH018_DIRECT_SDK_ORIGINALS_WITH_GUEST_FAILURE_BOUNDARY=PASS"
+      - name: Preserve per-operation native JSON witnesses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bh018-original-incus-76-exec-results
+          path: ${{ runner.temp }}/bh018-native-exec.jsonl
+          if-no-files-found: warn
+          retention-days: 14

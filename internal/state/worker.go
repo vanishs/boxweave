@@ -53,6 +53,15 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 	}
 	nativeID, err := effect(ctx)
 	if err != nil {
+		// A native Operation ID contradicts even a typed pre-dispatch claim:
+		// the request may have reached Incus. Preserve the original receipt,
+		// leave the resource claim locked and never send a second effect.
+		if nativeID != "" {
+			if recordErr := w.Store.NativeEffectErrorUnknown(context.Background(), operationID, nativeID); recordErr != nil {
+				_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_RECEIPT_RECORDING_UNVERIFIED")
+			}
+			return
+		}
 		var pre PreDispatchError
 		if errors.As(err, &pre) {
 			_ = w.Store.FailPreDispatch(context.Background(), operationID, pre.Class)
