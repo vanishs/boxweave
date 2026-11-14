@@ -166,33 +166,37 @@ func TestBH018AtomicFinalizationRejectsForeignOrMalformedProvenance(t *testing.T
 	s, box, intent, _ := bh018InjectedAtomicFixture(t)
 	id := bh018InjectedAdmitVerifying(t, s, intent)
 	out, errOut := bh018InjectedPaths(box)
-	tests := []struct{
-		name string
-		box OwnedBox
-		id string
+	tests := []struct {
+		name   string
+		box    OwnedBox
+		id     string
 		stdout string
 		stderr string
 	}{
-		{"wrong-project", OwnedBox{UUID:box.UUID, Project:"foreign-project", Name:box.Name, Incarnation:box.Incarnation, State:"OWNED"},bh018InjectedNativeID,out,errOut},
-		{"wrong-incarnation",OwnedBox{UUID:box.UUID, Project:box.Project, Name:box.Name, Incarnation:"foreign-incarnation", State:"OWNED"},bh018InjectedNativeID,out,errOut},
-		{"wrong-name",OwnedBox{UUID:box.UUID, Project:box.Project, Name:"another-box", Incarnation:box.Incarnation, State:"OWNED"},bh018InjectedNativeID,out,errOut},
-		{"wrong-native-id",box,"00000000-0000-0000-0000-000000000000",out,errOut},
-		{"foreign-output",box,bh018InjectedNativeID,"/1.0/instances/foreign/logs/exec-output/exec_"+bh018InjectedNativeID+".stdout",errOut},
-		{"swapped-stream",box,bh018InjectedNativeID,errOut,out},
-		{"missing-both-paths",box,bh018InjectedNativeID,"",""},
-		{"malformed-native-id",box,"../../escape",out,errOut},
+		{"wrong-project", OwnedBox{UUID: box.UUID, Project: "foreign-project", Name: box.Name, Incarnation: box.Incarnation, State: "OWNED"}, bh018InjectedNativeID, out, errOut},
+		{"wrong-incarnation", OwnedBox{UUID: box.UUID, Project: box.Project, Name: box.Name, Incarnation: "foreign-incarnation", State: "OWNED"}, bh018InjectedNativeID, out, errOut},
+		{"wrong-name", OwnedBox{UUID: box.UUID, Project: box.Project, Name: "another-box", Incarnation: box.Incarnation, State: "OWNED"}, bh018InjectedNativeID, out, errOut},
+		{"wrong-native-id", box, "00000000-0000-0000-0000-000000000000", out, errOut},
+		{"foreign-output", box, bh018InjectedNativeID, "/1.0/instances/foreign/logs/exec-output/exec_" + bh018InjectedNativeID + ".stdout", errOut},
+		{"swapped-stream", box, bh018InjectedNativeID, errOut, out},
+		{"missing-both-paths", box, bh018InjectedNativeID, "", ""},
+		{"malformed-native-id", box, "../../escape", out, errOut},
 	}
-	for _,tc := range tests {
-		t.Run(tc.name,func(t *testing.T){
-			if err:=s.FinalizeVerifiedExec(ctx,id,tc.box,tc.id,tc.stdout,tc.stderr,127);err==nil{
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := s.FinalizeVerifiedExec(ctx, id, tc.box, tc.id, tc.stdout, tc.stderr, 127); err == nil {
 				t.Fatal("unverified or foreign terminal was finalized")
 			}
-			r,err:=s.Get(ctx,id)
-			if err!=nil || r.State!="VERIFYING" {t.Fatalf("foreign original mutated: %+v %v",r,err)}
-			if _,err:=s.ExecOutput(ctx,id);!errors.Is(err,ErrNotFound){t.Fatalf("foreign output stored: %v",err)}
+			r, err := s.Get(ctx, id)
+			if err != nil || r.State != "VERIFYING" {
+				t.Fatalf("foreign original mutated: %+v %v", r, err)
+			}
+			if _, err := s.ExecOutput(ctx, id); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("foreign output stored: %v", err)
+			}
 		})
 	}
-	if err:=s.FinalizeVerifiedExec(ctx,id,box,bh018InjectedNativeID,out,errOut,127);err!=nil{
-		t.Fatalf("legitimate verified final rejected after negative controls: %v",err)
+	if err := s.FinalizeVerifiedExec(ctx, id, box, bh018InjectedNativeID, out, errOut, 127); err != nil {
+		t.Fatalf("legitimate verified final rejected after negative controls: %v", err)
 	}
 }
