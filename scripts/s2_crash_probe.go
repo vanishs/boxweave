@@ -155,6 +155,9 @@ func verifyBH018FinalCut(ctx context.Context, s *mcp.ClientSession, original ori
 		"original native ID altered after real WAL COMMIT process SIGKILL")
 	in := args()
 	in["box_id"] = original.BoxUUID
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		fmt.Printf("BH018_INSTALLED_POSTSYNC_IDEMPOTENCY_REPLAY_ATTEMPT=READ_ORIGINAL_ONLY\n")
+	}
 	replayed := call(ctx, s, "box_exec", in)
 	must(str(replayed, "operation_id") == original.OperationID && replayed["duplicate"] == true,
 		"original Exec reissued after terminal commit interruption")
@@ -287,6 +290,10 @@ func main() {
 		}
 		fmt.Println("S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS")
 		observed := operation(ctx, s, original.OperationID)
+		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+			fmt.Printf("BH018_INSTALLED_POSTSYNC_MCP_REOPEN_STATE=%s ORIGINAL_NATIVE_ID_MATCH=%t\n",
+				str(observed, "state"), str(observed, "native_operation_id") == original.NativeOperationID)
+		}
 		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" ||
 			os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
 			verifyBH018FinalCut(ctx, s, original, observed)

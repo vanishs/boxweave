@@ -964,10 +964,37 @@ if [ "$attempt" -ge 40 ]; then
   exit 94
 fi
 echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+# Read-only independent database oracle BEFORE the MCP verifier, so a
+# failed original replay can be classified without touching the claim.
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_POSTSYNC_DIAG'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True,timeout=3) as c:
+    oid=original["operation_id"]
+    row=c.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outputs=c.execute("SELECT COUNT(*) FROM exec_outputs WHERE operation_id=?",(oid,)).fetchone()[0]
+    audits=c.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert row is not None
+print("BH018_INSTALLED_POSTSYNC_SQLITE_REOPEN_STATE="+row[0])
+print("BH018_INSTALLED_POSTSYNC_SQLITE_NATIVE_MATCH="+str(row[1]==original["native_operation_id"]))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_OUTPUT_ROWS="+str(outputs))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_TERMINAL_AUDIT_ROWS="+str(audits))
+PY_BH018_POSTSYNC_DIAG
 if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut-after BW_S2_CRASH_STATE_FILE="$cut_state" \
   BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
   "$work/s2-crash-probe" resume ) >"$work/bh018-service-after-cut-resume.redacted.log" 2>&1; then
   grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log" | tail -n 15 || :
+  if grep -Fq 'tool box_exec returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=BOX_EXEC_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OPERATION_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_output_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OUTPUT_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=ORIGINAL_ASSERTION" >&2
+  else
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=UNCLASSIFIED" >&2
+  fi
   echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
   exit 95
 fi
