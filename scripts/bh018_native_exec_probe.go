@@ -148,7 +148,7 @@ func main() {
 		{name: "shell-missing-exit127", argv: []string{"/bin/sh", "-c", "exec /usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
 		{name: "timeout-wrapped-missing-exit127", argv: []string{"/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "--", "8.000s", "/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
 		{name: "started-script-side-effect-then-127", argv: []string{"/tmp/bh018-side-effect127.sh"}, expectStatus: "failure", expectReturn: pint(127)},
-		{name: "started-script-side-effect-then-126", argv: []string{"/tmp/bh018-side-effect126.sh"}, expectStatus: "failure", expectReturn: pint(126)},
+		{name: "started-script-side-effect-intends-126-observed-127", argv: []string{"/tmp/bh018-side-effect126.sh"}, expectStatus: "failure", expectReturn: pint(127)},
 	}
 	failures := 0
 	for round := 1; round <= 3; round++ {
