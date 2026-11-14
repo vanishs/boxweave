@@ -31,10 +31,11 @@ if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list
   echo BH019_PLAINTEXT_APT_SOURCE_REFUSED >&2
   exit 83
 fi
+printf 'Acquire::https::Proxy "%s";\n' "$proxy" > /etc/apt/apt.conf.d/98-bh019-relay
+apt-get -o Acquire::Retries=0 update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
 curl -fsSI --connect-timeout 6 --max-time 25 https://pkgs.zabbly.com/key.asc >/dev/null
 echo "BH019_SCOPED_SIGNED_PACKAGE_PROXY=PASS case=$case_name"
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
 curl -fsSL --max-time 45 https://pkgs.zabbly.com/key.asc -o /tmp/bh019-zabbly.asc
 fpr="$(gpg --show-keys --with-colons /tmp/bh019-zabbly.asc | awk -F: '$1=="fpr" {print $10; exit}')"
 test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
