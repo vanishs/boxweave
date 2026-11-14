@@ -235,8 +235,7 @@ func TestBH018AtomicFinalizationRejectsOutOfRangeExitBeforeWrite(t *testing.T) {
 		s := newStore(t)
 		_, box, opID, prefix := bh018AtomicFixture(t, s)
 		if err := s.FinalizeVerifiedExec(ctx, opID, box,
-			"a3da911d-89e8-40b3-8b9f-cc9f08f08180", prefix+".stdout", "", value);
-			!errors.Is(err, ErrInvalid) {
+			"a3da911d-89e8-40b3-8b9f-cc9f08f08180", prefix+".stdout", "", value); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("out-of-range terminal exit %d accepted: %v", v, err)
 		}
 		got, err := s.Get(ctx, opID)
