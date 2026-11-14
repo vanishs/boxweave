@@ -751,9 +751,17 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
+				// The original Incus terminal result and its recorded log
+				// paths must belong to this exact admitted guest/Operation.
+				if final == nil || final.ID != nativeID {
+					return native.ErrUnverified
+				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
 					return err
+				}
+				if !native.ExecEvidenceMatchesOriginal(out, box.Name, nativeID) {
+					return native.ErrUnverified
 				}
 				if err := s.Store.SaveExecOutput(ctx, r.ID, out.StdoutPath, out.StderrPath, out.Exit); err != nil {
 					return err
