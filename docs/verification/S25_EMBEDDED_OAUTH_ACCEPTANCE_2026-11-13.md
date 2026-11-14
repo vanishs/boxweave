@@ -1,5 +1,8 @@
 # S2.5 embedded OAuth — scoped implementation and Box acceptance (2026-11-13)
 
+**Later RC.3 live-client scope update (2026-11-13):** A genuine physical-host ChatGPT custom MCP client completed OAuth and `host_status`, `box_list`, `operation_list` authenticated **reads**. See [separate evidence](RC3_PHYSICAL_HOST_PILOT_2026-11-13.md). That later read proof resolves only the external-client connection portion of the historical OA-008 blocker; OA-009 remote **native writes** / full host postflight remain unverified. The original lab candidate/hash/status below remain historical, not the current released binary.
+
+
 **Latest code-bearing source:** `a8dd90c7bd0c88150e96fba954b3468887c963af` (PR #133, Draft). Prior accepted intermediate `f2af899` remains historical evidence.
 **Current exact installed binary:** `1.0.25-hostgo-oauth-a8dd90`; SHA-256 `9307011adf0587d07ce8c81ed2d293c8be11715e7dea41ead690d03d27e00a73`.
 **Verdict:** LOCAL_OAUTH_LAB_PASS (bounded), `OA-008/009=BLOCKED_LIVE_CLIENT`, `HOST_GO=PENDING_LIVE_AGENT`, physical `HOST_POSTFLIGHT=NOT_AUTHORIZED`. No release or merge.

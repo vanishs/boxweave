@@ -4,6 +4,8 @@
 
 **Version:** `1.0.0`, recorded in the root [VERSION](../../VERSION) file.
 
+**RC.3 publication addendum (2026-11-13):** [v1.0.0-rc.3](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3) **is** now a published immutable prerelease with dual-arch release assets and green release CI. It does **not** set the stable pointer (`UNPUBLISHED`) or complete S5. The [manual installation guide](../getting-started/MANUAL_INSTALL.md) always pins an explicit prerelease tag and separates install from Box creation. Older planning language below reflects its historical pre-RC publication time.
+
 ## Owner-defined scheme
 
 Use `1.X.Y` where:

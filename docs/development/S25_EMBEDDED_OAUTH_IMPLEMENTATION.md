@@ -1,5 +1,8 @@
 # S2.5 — Embedded OAuth for ChatGPT HTTP MCP (implementation contract)
 
+**2026-11-13 subsequent RC.3 pilot addendum:** Embedded OAuth is shipped in [RC.3](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3). The current [physical-host record](../verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md) includes real ChatGPT OAuth authorization and three authenticated **read** MCP calls. The historical OA-008/009 lab-blocked entries below remain dated lab facts, but no physical **native write** or final HOST_GO is inferred. Generalized operator steps are in the [manual guide](../getting-started/MANUAL_INSTALL.md).
+
+
 **Status: GO IMPLEMENTATION + BOUNDED ISOLATED BOX LAB PASS (2026-11-13); OA-008/009 BLOCKED on real ChatGPT and remote Agent I+N+V.**
 **Owner decision:** preserve one canonical `https://<public-origin>/mcp` for
 all MCP requests, support OAuth in the existing Go controller, and retain
