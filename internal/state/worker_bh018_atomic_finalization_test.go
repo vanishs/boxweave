@@ -156,7 +156,7 @@ func TestBH018AtomicFinalizationSurvivesStoreCloseReopen(t *testing.T) {
 func TestBH018AtomicFinalizationRejectsForeignIdentityWithoutAnyRow(t *testing.T) {
 	const nativeID = "a3da911d-89e8-40b3-8b9f-cc9f08f08180"
 	for _, tc := range []struct {
-		name string
+		name  string
 		alter func(*OwnedBox, *string, *string, *string)
 	}{
 		{"foreign-project", func(b *OwnedBox, id, out, stderr *string) { b.Project = "other-project" }},
@@ -165,7 +165,9 @@ func TestBH018AtomicFinalizationRejectsForeignIdentityWithoutAnyRow(t *testing.T
 		{"foreign-box-name", func(b *OwnedBox, id, out, stderr *string) { b.Name = "foreign" }},
 		{"tombstoned-claim", func(b *OwnedBox, id, out, stderr *string) { b.State = "DELETED" }},
 		{"wrong-native-op", func(b *OwnedBox, id, out, stderr *string) { *id = "00000000-0000-0000-0000-000000000000" }},
-		{"foreign-stdout-path", func(b *OwnedBox, id, out, stderr *string) { *out = "/1.0/instances/foreign/logs/exec-output/exec_" + *id + ".stdout" }},
+		{"foreign-stdout-path", func(b *OwnedBox, id, out, stderr *string) {
+			*out = "/1.0/instances/foreign/logs/exec-output/exec_" + *id + ".stdout"
+		}},
 		{"mismatched-stderr-stream", func(b *OwnedBox, id, out, stderr *string) { *stderr = *out }},
 		{"missing-output", func(b *OwnedBox, id, out, stderr *string) { *out, *stderr = "", "" }},
 	} {
@@ -201,16 +203,20 @@ func TestBH018WorkerRejectsForgedAtomicExecCompletionSignal(t *testing.T) {
 	}
 	// Create a separate admitted original because only ADMITTED may Claim.
 	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	b := Admission{Layer: "separate", ActorID: token.ID, TokenID: token.ID,
 		Key: "bh018-forged-committed-control", RequestID: "original",
 		Action: "box_exec", ResourceKey: "box:independent", BoxUUID: "second",
 		Incarnation: "second", SafeIntent: []byte(`{"fixture":1}`)}
 	original, err := s.Admit(ctx, b)
-	if err != nil { t.Fatal(err) }
-	Worker{Store:s, Budget:time.Second}.Execute(original.ID,
-		func(context.Context)(string,error){ return "a3da911d-89e8-40b3-8b9f-cc9f08f08180",nil },
-		func(context.Context)error{return ErrVerifiedExecCommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	Worker{Store: s, Budget: time.Second}.Execute(original.ID,
+		func(context.Context) (string, error) { return "a3da911d-89e8-40b3-8b9f-cc9f08f08180", nil },
+		func(context.Context) error { return ErrVerifiedExecCommitted })
 	got, err := s.Get(ctx, original.ID)
 	if err != nil || got.State != "UNKNOWN" {
 		t.Fatalf("forged completion sentinel incorrectly unlocked original: %+v %v", got, err)
