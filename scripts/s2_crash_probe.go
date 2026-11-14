@@ -27,11 +27,11 @@ const (
 // Variant selection is confined to an explicitly named one-use runner
 // fixture. No variant changes production command replay or UNKNOWN recovery.
 var (
-	activeCrashName    = crashName
-	activeCrashKey     = crashKey
+	activeCrashName     = crashName
+	activeCrashKey      = crashKey
 	activeMarkerCommand = markerCommand
-	activeCreateKey    = "s2-crash-new-owned-box-001"
-	activeSavedKey     = "s2-crash-output-before-restart-01"
+	activeCreateKey     = "s2-crash-new-owned-box-001"
+	activeSavedKey      = "s2-crash-output-before-restart-01"
 )
 
 func init() {
