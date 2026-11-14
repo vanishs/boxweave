@@ -621,9 +621,15 @@ if [ "$attempt" -ge 40 ]; then
   exit 93
 fi
 echo "BH018_INSTALLED_NORMAL_RESTART_HTTP_401=PASS"
-BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+if ! ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
-  "$work/s2-bh018-atomic-mcp-probe" resume > "$work/bh018-atomic-resume.log" 2>&1
+  "$work/s2-bh018-atomic-mcp-probe" resume ) > "$work/bh018-atomic-resume.log" 2>&1; then
+  # The dedicated verifier emits a bounded BH018_MCP_FAIL explanation;
+  # never emit raw service logs, secret material, or SQLite content.
+  grep 'BH018_MCP_FAIL' "$work/bh018-atomic-resume.log" | head -n 5 || :
+  echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
+  exit 96
+fi
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh018-atomic-resume.log"
