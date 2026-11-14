@@ -21,31 +21,31 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 		wantVerify bool
 	}{
 		{
-			name: "proved-local-predispatch-startup-refusal",
+			name:      "proved-local-predispatch-startup-refusal",
 			effectErr: PreDispatchError{Class: "EXEC_STARTUP_PRE_DISPATCH_REFUSED"},
 			wantState: "FAILED", wantClass: "EXEC_STARTUP_PRE_DISPATCH_REFUSED",
 		},
 		{
-			name: "mislabelled-predispatch-with-native-receipt",
-			nativeID: "incus-original-exec-001",
+			name:      "mislabelled-predispatch-with-native-receipt",
+			nativeID:  "incus-original-exec-001",
 			effectErr: PreDispatchError{Class: "EXEC_STARTUP_PRE_DISPATCH_REFUSED"},
 			wantState: "UNKNOWN", wantClass: "NATIVE_RECEIPT_WITH_EFFECT_ERROR",
 		},
 		{
-			name: "native-error-after-returned-receipt",
-			nativeID: "incus-original-exec-002",
+			name:      "native-error-after-returned-receipt",
+			nativeID:  "incus-original-exec-002",
 			effectErr: errors.New("native reported an error after accepting the request"),
 			wantState: "UNKNOWN", wantClass: "NATIVE_RECEIPT_WITH_EFFECT_ERROR",
 		},
 		{
-			name: "process-start-outcome-unverified-after-dispatch",
-			nativeID: "incus-original-exec-003",
+			name:      "process-start-outcome-unverified-after-dispatch",
+			nativeID:  "incus-original-exec-003",
 			verifyErr: errors.New("final Incus operation cannot prove guest startup"),
 			wantState: "UNKNOWN", wantClass: "POSTCONDITION_UNVERIFIED",
 			wantVerify: true,
 		},
 		{
-			name: "missing-native-ack-is-ambiguous",
+			name:      "missing-native-ack-is-ambiguous",
 			effectErr: errors.New("transport timeout may have followed native dispatch"),
 			wantState: "UNKNOWN", wantClass: "NATIVE_OUTCOME_AMBIGUOUS",
 		},
