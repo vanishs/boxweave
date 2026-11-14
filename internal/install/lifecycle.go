@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // The production paths are fixed by safe(Plan). All actions are explicit,
@@ -38,11 +40,34 @@ func runLocal(name string, args ...string) error {
 	}
 	return nil
 }
+
+// A service can be installed before any root disk, private NIC or Guest
+// image exists. Never call the full Box-create doctor from installation.
 func doctorAsService(p Plan, binary string) error {
-	if err := runLocal("runuser", "-u", p.User, "--", binary, "doctor",
-		"-db", filepath.Join(p.StateDir, "ledger.sqlite"),
-		"-project", p.Project, "-incus-socket", p.Socket); err != nil {
-		return fmt.Errorf("restricted identity and SQLite native preflight: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "runuser", "-u", p.User, "--", "env",
+		"-u", "INCUS_CONF", "-u", "INCUS_CONFIG_DIR", "-u", "XDG_CONFIG_HOME",
+		"HOME=/home/boxweave", "XDG_CONFIG_HOME=/home/boxweave/.config",
+		binary, "status", "-db", filepath.Join(p.StateDir, "ledger.sqlite"),
+		"-project", p.Project, "-incus-socket", p.Socket)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("restricted service preflight unavailable: %w", err)
+	}
+	var status struct {
+		MCPReady bool `json:"mcp_ready"`
+		Native   struct {
+			ServiceReady bool   `json:"service_ready"`
+			ErrorClass   string `json:"error_class"`
+		} `json:"native"`
+	}
+	if err := json.Unmarshal(out, &status); err != nil {
+		return fmt.Errorf("service preflight returned invalid status: %w", err)
+	}
+	if !status.MCPReady || !status.Native.ServiceReady {
+		return fmt.Errorf("service preflight blocked: MCP schema ready=%t; Incus runtime ready=%t (%s)",
+			status.MCPReady, status.Native.ServiceReady, status.Native.ErrorClass)
 	}
 	return nil
 }

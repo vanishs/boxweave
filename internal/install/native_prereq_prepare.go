@@ -343,15 +343,6 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	if slices.Contains(aclNames, t.ACL) {
 		return plan, rec, errors.New("ACL name already exists: refuse adoption")
 	}
-	alias, aETag, err := own.GetImageAlias("boxweave-ubuntu-24.04")
-	if err != nil || alias.Target == "" {
-		return plan, rec, errors.New("approved local Ubuntu image alias must be operator-prepared")
-	}
-	img, imgETag, err := own.GetImage(alias.Target)
-	if err != nil || !strings.EqualFold(img.Properties["os"], "Ubuntu") ||
-		(img.Properties["release"] != "noble" && img.Properties["release"] != "24.04") {
-		return plan, rec, errors.New("approved local Ubuntu 24.04 image not present")
-	}
 	rec.BeforeProject = project.Writable()
 	rec.BeforeProfile = profile.Writable()
 	rec.AfterProject = nativePrepareProject(rec.BeforeProject)
@@ -361,13 +352,13 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 		return plan, rec, err
 	}
 	plan.NativeStateSHA256 = nativePrepareStateDigest(
-		project, pETag, profile, prETag, pool, poolETag, network, nETag, alias, aETag, img, imgETag, "ACL_ABSENT",
+		project, pETag, profile, prETag, pool, poolETag, network, nETag, "ACL_ABSENT",
 	)
 	plan.Actions = []string{
 		"Create exact new dedicated ACL " + t.ACL + " (never edit shared network)",
 		"Set nesting permission only on empty restricted Project " + t.Project,
 		"Set selected Incus root pool and private reject/anti-spoof NIC only in owned empty default profile",
-		"Independently read back same owned Project, profile, image, pool, ACL",
+		"Independently read back same owned Project, profile, pool, ACL; image is resolved on Box Create",
 	}
 	plan.ReviewSHA256 = nativePrepareDigest(plan)
 	rec.Plan = plan

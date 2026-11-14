@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/user"
 	"slices"
+	"strconv"
+	"strings"
 
 	incus "github.com/lxc/incus/v7/client"
 	"github.com/lxc/incus/v7/shared/api"
@@ -15,6 +17,7 @@ import (
 
 type Status struct {
 	Ready                 bool            `json:"ready"`
+	ServiceReady          bool            `json:"service_ready"`
 	Version               string          `json:"incus_version,omitempty"`
 	Project               string          `json:"project"`
 	ProfileReady          bool            `json:"default_profile_ready"`
@@ -25,7 +28,7 @@ type Status struct {
 	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
 	Warnings              []string        `json:"warnings,omitempty"`
 	NICConfigured         bool            `json:"default_nic_configured"`
-	ImageReady            bool            `json:"approved_ubuntu_image_ready"`
+	ImageReady            bool            `json:"default_image_local_ready"`
 	APIExtensions         map[string]bool `json:"required_extensions"`
 	ErrorClass            string          `json:"error_class,omitempty"`
 }
@@ -43,6 +46,18 @@ var requiredExtensions = []string{"projects", "projects_restrictions", "containe
 // BoxWeave guesses about drivers, mounts or quota implementations.
 func StoragePoolReady(pool *api.StoragePool) bool {
 	return pool != nil && pool.Status == "Created"
+}
+
+// CompatibleIncusVersion expresses the certified native API baseline. Newer
+// versions must also satisfy the actual API extension checks below.
+func CompatibleIncusVersion(version string) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	major, err1 := strconv.Atoi(parts[0])
+	minor, err2 := strconv.Atoi(parts[1])
+	return err1 == nil && err2 == nil && (major > 7 || (major == 7 && minor >= 5))
 }
 
 func (r Reader) Read(ctx context.Context) Status {
@@ -112,9 +127,20 @@ func (r Reader) Read(ctx context.Context) Status {
 		return s
 	}
 	s.Version = server.Environment.ServerVersion
+	if !CompatibleIncusVersion(s.Version) {
+		s.ErrorClass = "INCUS_VERSION_UNSUPPORTED"
+		return s
+	}
 	for _, ext := range requiredExtensions {
 		s.APIExtensions[ext] = slices.Contains(server.APIExtensions, ext)
+		if !s.APIExtensions[ext] {
+			s.ErrorClass = "REQUIRED_EXTENSION_MISSING"
+			return s
+		}
 	}
+	// Service is installable even when no Box has been prepared. All
+	// subsequent Project/Profile/NIC readiness gates still protect native writes.
+	s.ServiceReady = true
 	profile, _, err := scoped.GetProfile("default")
 	if err != nil {
 		s.ErrorClass = "PROFILE_UNAVAILABLE"
@@ -156,25 +182,18 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "DEFAULT_NIC_NOT_CONFIGURED"
 		return s
 	}
-	// Readiness must cover the same immutable local image requirement as
-	// Create. A profile and ACL alone cannot produce the first owned Box.
-	// Never pull or trust a remote alias from the controller preflight.
-	alias, _, err := scoped.GetImageAlias("boxweave-ubuntu-24.04")
-	if err != nil || alias == nil || alias.Target == "" {
-		s.ErrorClass = "APPROVED_IMAGE_ALIAS_UNAVAILABLE"
+	// Image availability is a *create-time* concern, never a daemon or
+	// service-installation precondition. Incus can pull the recommended
+	// default on the first explicitly admitted Box Create.
+	source, sourceErr := resolveInstanceImage(scoped, "")
+	if sourceErr != nil {
+		s.ErrorClass = "DEFAULT_IMAGE_SOURCE_UNAVAILABLE"
 		return s
 	}
-	image, _, err := scoped.GetImage(alias.Target)
-	if err != nil || image == nil || !approvedUbuntu2404(image.Properties) {
-		s.ErrorClass = "APPROVED_IMAGE_UNVERIFIED"
-		return s
-	}
-	s.ImageReady = true
-	for _, required := range requiredExtensions {
-		if !s.APIExtensions[required] {
-			s.ErrorClass = "REQUIRED_EXTENSION_MISSING"
-			return s
-		}
+	s.ImageReady = source.Server == ""
+	if !s.ImageReady {
+		s.Warnings = append(s.Warnings,
+			"DEFAULT_IMAGE_ON_DEMAND: Incus will obtain the recommended Ubuntu image on first Box Create unless a local default alias is configured.")
 	}
 	s.Ready = true
 	return s
