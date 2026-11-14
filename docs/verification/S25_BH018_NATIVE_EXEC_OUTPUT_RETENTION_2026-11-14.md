@@ -1,0 +1,29 @@
+# S2.5 BH-018 — native Exec output survives short Operation retention (2026-11-14)
+
+**Status:** Native observation **PASS in the scoped disposable test**; BH-018 overall remains **PARTIAL**. No change to the historical UNKNOWN receipts or lock policy. This is not yet implemented in the BoxWeave worker/store nor independently tested with the official Go SDK. Source and related controls: [real native A/B Exec results](S25_BH018_BH019_NATIVE_AB_EXEC_2026-11-14.md), [upstream Incus Go SDK review](../research/S25_INCUS_UPSTREAM_NESTING_EXEC_2026-11-14.md).
+
+## Exact owned environment and identifiers
+
+- L0 RC3 external MCP and its fresh authorized disposable container C: Box `s25-bh01819-native-c-1114`, UUID `43b0852c-8747-44dc-9d49-253bd04b82fe`. Signed Incus 7.6 running inside C. Native owned child under C: `s25-bh018-exec-own`, real Incus status Running, created and started separately before these probes.
+- The **first** post-expiration read of *another* previous native missing-binary test, outer BW **`8bbd26e58113ab36a2150ce6f36f985a`**, outer native **`010ef542-779d-415a-b272-a37d6f84002e`**, independently requested previously recorded original paths under `/1.0/instances/s25-bh018-exec-own/logs/exec-output/exec_b0f1e649-1d2f-459f-aeb9-15a5174f0c3c.stdout` / `.stderr`, both returned success (empty content); **the native Operation GET itself returned 404**. This distinguishes output-file availability from Operation retention; empty streams do not prove guest process start or lack thereof.
+- **Decisive fresh output trial**, original **outer BoxWeave** Operation `029bfef43b19144448c128089e3a7f08`, original **outer Incus** Operation `3eb24c5e-5058-4561-96b3-a343d7d0eedf`, original **inner Incus** Operation `0026e7bc-75cf-4ebe-bb92-d31c9842ce5e`, 2026-11-14 ~17:03 UTC. Outer BW command exited 0; the native inner Exec intentionally exited 127. Every output was saved with its own original idempotency key `s25-bh018-retention-posteffect-a-20261114-v1` and read back through `operation_output_get`.
+
+## Exact experiment
+
+The inner native `POST /1.0/instances/s25-bh018-exec-own/exec` used `RecordOutput=true,WaitForWS=false` and executable argv equivalent to `/bin/sh -c 'printf BH018_OUTPUT_EFFECT_STDOUT_V1; printf BH018_OUTPUT_EFFECT_STDERR_V1 >&2; exit 127'`. It performed only controlled stdout/stderr writes (no persistent files, outside effects or host mutation). From the actual original POST response, the harness extracted the native ID, immediately called the native read-only `GET /1.0/operations/{id}/wait?timeout=4`, **and stored the returned metadata paths**; it did not invent paths later.
+
+The native terminal response was **`status=Failure`, `err=Command not found`, `metadata.return=127`** despite the actual shell having run and output to both streams. Native metadata provided the two original stream paths:
+
+- `/1.0/instances/s25-bh018-exec-own/logs/exec-output/exec_0026e7bc-75cf-4ebe-bb92-d31c9842ce5e.stdout`
+- `/1.0/instances/s25-bh018-exec-own/logs/exec-output/exec_0026e7bc-75cf-4ebe-bb92-d31c9842ce5e.stderr`
+
+After a deliberate **7-second delay**, a read-only original `GET /1.0/operations/0026e7bc-75cf-4ebe-bb92-d31c9842ce5e` returned **404 Operation not found** as predicted by the Incus five-second post-final retention implementation. Yet **original recorded stream URLs still worked** through native authenticated GET: stdout contained `BH018_OUTPUT_EFFECT_STDOUT_V1`, stderr contained `BH018_OUTPUT_EFFECT_STDERR_V1`, byte-for-byte. All outer BW receipts were SUCCEEDED with actual command exit 0; the inner native operation was unequivocally **Failure**, so no conflation of these statuses is allowed.
+
+## Engineering implication and limits
+
+- **Strong positive:** There is a real, short-lived collection window for exact native terminal metadata; saved authenticated output-path references can remain useful **after** the native Operation record is retired. A BoxWeave worker can consider durably storing the original native *terminal status, error text/class, return value, bounded verified recorded stdout/stderr paths, and evidence origin* before attempting an unsafe reclassification. The original native ID must remain the immutable key; original stream paths must come from actual native metadata, never guessed from a guest-supplied filename or URL.
+- **Safety:** `Failure/Command not found/127` is **not proof of no guest effects**: this experiment directly proves that one can observe real output from a process with that exact terminal tuple. Neither a missing native Operation nor presence of `return=127` allows releasing a BoxWeave resource lock or replaying an original UNKNOWN. Preserve `UNKNOWN` while improving user-facing diagnostics and post-failure output reads.
+- **Unknown boundaries:** No guarantee about recorded-log retention duration, daemon restart, instance deletion, quotas, auth revocation or external tampering follows from this one 7-second witness. A positive long-retention / restart test would need its own explicit owner authorization and exact reversible scope; native source may have separate log retention. Existing Product's per-stream 16 MiB bounded reads and original ownership validation remain mandatory.
+- **Next code-stage acceptance:** independent official Incus Go SDK `GetOperationWait` immediate non-canceling read where supported; source/SQLite records final evidence atomically with native original ID; prove behavior for (a) Success return0, (b) Success return1, (c) Failure return126/127 plus actual side effects, (d) lost native response / native 404, (e) arbitrary native GET failure. Verify output survives ordinary reconnect/renewed authorization within the same owned Guest, while never bypassing protected UNKNOWN.
+
+**BH-018 remains PARTIAL until a narrow code implementation, real installed tests and independent reviewer verification.**
