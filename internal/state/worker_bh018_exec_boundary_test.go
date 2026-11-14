@@ -45,6 +45,22 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 			wantVerify: true,
 		},
 		{
+			name:       "native-error-127-after-guest-side-effect-stays-locked",
+			nativeID:   "incus-original-exec-effect-127",
+			verifyErr:  errors.New("native Failure: Command not found, return 127; guest effects may already exist"),
+			wantState:  "UNKNOWN",
+			wantClass:  "POSTCONDITION_UNVERIFIED",
+			wantVerify: true,
+		},
+		{
+			name:       "native-error-126-after-guest-side-effect-stays-locked",
+			nativeID:   "incus-original-exec-effect-126",
+			verifyErr:  errors.New("native Failure: Command not executable, return 126; guest effects may already exist"),
+			wantState:  "UNKNOWN",
+			wantClass:  "POSTCONDITION_UNVERIFIED",
+			wantVerify: true,
+		},
+		{
 			name:      "missing-native-ack-is-ambiguous",
 			effectErr: errors.New("transport timeout may have followed native dispatch"),
 			wantState: "UNKNOWN", wantClass: "NATIVE_OUTCOME_AMBIGUOUS",
