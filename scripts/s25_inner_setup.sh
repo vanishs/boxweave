@@ -133,7 +133,8 @@ python3 - <<'S25_INNER_NATIVE_ASSERT'
 import json
 s=json.load(open("/root/s25-prereq.json"))
 assert s["config_ready"] and len(s["checks"])==8 and all(x["ok"] for x in s["checks"]),s
-assert any("DIR_QUOTA_UNVERIFIED" in x for x in s.get("warnings",[])),s
+assert any(x["id"] == "selected_storage_pool_ready" and x["ok"] for x in s["checks"]),s
+assert any("STORAGE_QUOTA_UNVERIFIED" in x for x in s.get("warnings",[])),s
 S25_INNER_NATIVE_ASSERT
 echo S25_INNER_APPROVED_NATIVE_PREP_8_OF_8=PASS
 

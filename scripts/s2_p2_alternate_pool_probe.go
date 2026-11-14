@@ -81,9 +81,11 @@ func main() {
 	status, e := call(ctx, s, "host_status", map[string]any{})
 	assert(e == nil, "alternate pool host status inaccessible")
 	native := child(status, "native")
+	// Only Incus/native evidence (checked separately by this test) can prove
+	// quota enforcement. The MCP readiness result is deliberately neutral.
 	assert(native != nil && native["selected_storage_pool_ready"] == true &&
-		native["selected_storage_quota_verified"] == true,
-		"alternate selected pool did not pass strict native quota preflight")
+		native["selected_storage_quota_verified"] == false,
+		"alternate selected pool must be ready without claiming verified quotas")
 	initial, e := call(ctx, s, "box_list", map[string]any{})
 	list, _ := initial["boxes"].([]any)
 	assert(e == nil && len(list) == 0, "nonempty test Project before alternate pool")
