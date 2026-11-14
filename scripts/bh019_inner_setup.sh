@@ -61,8 +61,29 @@ incus config set core.proxy_https="$proxy"
 test "$(incus config get core.proxy_https)" = "$proxy"
 incus version
 echo "BH019_NESTED_SIGNED_INCUS_76=PASS case=$case_name"
+# Copy only the exact already-cached parent image from the disposable
+# runner. No inner image-server request: a transient upstream 503 cannot
+# masquerade as an AppArmor or cgroup-device denial.
+test -s /tmp/bh019-l2-image-metadata
+if [ -s /tmp/bh019-l2-image-rootfs ]; then
+  incus image import /tmp/bh019-l2-image-metadata /tmp/bh019-l2-image-rootfs \
+    --alias bh019-l2-cached-image > /tmp/bh019-image-import.out 2>&1 || {
+      cat /tmp/bh019-image-import.out
+      echo "BH019_L2_IMAGE_IMPORT=BLOCKED case=$case_name"
+      exit 85
+    }
+else
+  incus image import /tmp/bh019-l2-image-metadata \
+    --alias bh019-l2-cached-image > /tmp/bh019-image-import.out 2>&1 || {
+      cat /tmp/bh019-image-import.out
+      echo "BH019_L2_IMAGE_IMPORT=BLOCKED case=$case_name"
+      exit 85
+    }
+fi
+incus image info bh019-l2-cached-image >/dev/null
+echo "BH019_L2_IMAGE_LOCAL_IMPORT=PASS case=$case_name"
 set +e
-incus launch images:ubuntu/24.04 bh019-l2-native-child > /tmp/bh019-child-start.out 2>&1
+incus launch bh019-l2-cached-image bh019-l2-native-child > /tmp/bh019-child-start.out 2>&1
 status=$?
 set -e
 cat /tmp/bh019-child-start.out
