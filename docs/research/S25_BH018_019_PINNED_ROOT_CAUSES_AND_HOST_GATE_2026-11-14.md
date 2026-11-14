@@ -46,3 +46,19 @@ L1 RC4 owned disposable B `bh01819-1114-disposable-b`, UUID **`58cc09fe-a61a-478
 **Most decisive, direct PID-scoped probe:** original BW **`758ece516ddfefb66716e7a1e79e6940`**, native Incus **`a23b03c7-c965-4cf3-9623-f00edfb4d9d2`**, SUCCEEDED, exit0, read-only inspected actual `incus.service` MainPID **19891**: `Name=incusd`, `Uid=0`, `Gid=0`, `CapEff=000001ffffffffff`, `CapBnd=000001ffffffffff`, actual daemon profile `incus-user-1001_bh01819-1114-disposable-b_<var/lib/incus> (enforce)`, daemon and observer **same** `user:[4026532912]` namespace; service `Environment=` (empty), verifying the previous AppArmor diagnostic bypass remains **reverted**. The observed effective bit33 + stacked state satisfy **both explicit positive checks** in pinned Incus `sys/apparmor.go:haveMacAdmin` / `initAppArmor`, even though policy loads are denied. This upgrades the false-positive hypothesis from indirect to **same-daemon capability + same-daemon enforced label + same-period actual AppArmor 243** evidence. It does not prove whether the kernel check fails due solely to nested user-ns hierarchy versus denied policy namespace delegation; upstream/host-level kernel diagnostics remain necessary.
 
 No user socket/admin socket change, no security profile override, no container restart, no historical UNKNOWN rerun. **BH-019 still BLOCKED**.
+
+## Upstream `main` comparison on 2026-11-14 (rules still present)
+
+Independent GitHub pinned source fetch for `lxc/incus` `main` (as observed this day) confirms upgrading from installed 7.6 **does not by itself remove these specific code paths**:
+
+| File | `main` Git blob | Comparison with `v7.6.0` |
+|---|---|---|
+| `internal/server/sys/apparmor.go` | `7394db0704b78934f570e070a8c5268177a337aa` | **Exact same blob** as v7.6; effective CAP_MAC_ADMIN + `.ns_stacked` is still treated as policy-admin predicate; daemon confinement independently recorded |
+| `internal/server/apparmor/apparmor.go` | `99c67421c64fcd67449980dfb4077fc796991962` | **Exact same blob**; `loadProfile` skips only when no `AppArmorAdmin`; `createNamespace` skips if already stacked |
+| `internal/server/instance/drivers/driver_lxc.go` | `1e7e4c529c8fc1ef0add5dac825feedf361f1557` | File changed elsewhere; **both** the inherited label when already confined/no admin and the `AppArmorStacking && !AppArmorStacked` conditional still exist |
+| `internal/server/instance/drivers/driver_lxc_cmd.go` | `c71e0158caf9d32de2bff99ece62a2d30d646113` | **Exact same blob**; special exit codes 126/127 still converted to native errors |
+| `internal/server/operations/operations.go` | `36832c8065d1a8bb245687902ddf790e0e41ca6c` | File changed elsewhere; `time.After(time.Second * 5)` cleanup remains |
+
+This is a **source comparison**, not a substitute for full same-version integration tests, and does not assert the absence of all possible kernel/Incus fixes elsewhere. It specifically rules out **assuming that a simple Incus package upgrade inherently fixes the two known code paths**.
+
+**Final recommendation:** Next major effort should be a **host-local, security-reviewed AppArmor kernel/Incus delegation experiment or an upstream maintainer discussion**, while separately hardening BoxWeave's durable original native-final capture and typed failure receipt semantics. No privilege broadening in the public MCP runtime until it can be proven safe.
