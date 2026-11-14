@@ -91,6 +91,8 @@ The [2026-11-07 Incus/MCP SDK review](../research/OFFICIAL_SDK_FIT_2026-11-07.md
 
 These are **SDK contract alignment** checks, not defects attributed to the official upstreams. No v1 real-environment acceptance has been run by this document change.
 
+| O-036 | **S2.5 P0 — NESTED_EXEC_LAUNCH_AND_APPARMOR_BLOCKED** | L1 RC4 reproduction: minimal Ubuntu 24.04 lacked gpg, a concrete Exec bootstrap hazard; an earlier gpg pipeline remains UNKNOWN without receipt, so the cause/dispatch of that historical operation is unresolved. Incus 7.6 per-user Project/bridge setup in a fresh nested L1 was denied by outer AppArmor (apparmor_parser exit 243); BoxWeave apply was not attempted. Add BH-018/BH-019 to distinguish pre-dispatch launch errors from uncertain effects and verify secure nested Incus under enforced policy. Never replay old UNKNOWN, disable AppArmor, or substitute privileged Incus socket. [Incident and handoff](S25_EXEC_UNKNOWN_APPARMOR_2026-11-14.md) / [acceptance](BRIDGEHEAD_ACCEPTANCE.md). |
+
 ## Full native SDK coverage and newly discovered checks
 
 See [20/20 tool-to-SDK mapping](../research/SDK_TOOLS_NATIVE_MAPPING_2026-11-07.md). Verify SDK HTTP `auth.RequireBearerToken` expiration/revocation, localhost Host guard, default 4 MiB request cap, explicit Origin proxy compatibility, `api.StatusErrorMatch` semantics and Incus `ExecInstance` RecordOutput timing. Incus `GetInstancePortForwardConn` and `CreateNetworkPeer` are **not** implementations for the BoxWeave host forward / Box peer tools. These are validation tasks only, **not** live test PASS.
