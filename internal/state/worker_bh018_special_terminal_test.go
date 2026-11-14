@@ -34,6 +34,15 @@ func TestBH018ExactTerminalSpecialExitPersistsAndReleasesClaimWithoutReplay(t *t
 			}
 			const id = "a3da911d-89e8-40b3-8b9f-cc9f08f08180"
 			const guest = "bh018-owned"
+			owned := OwnedBox{UUID: "bh018-uuid", Project: "test-project",
+				Name: guest, Incarnation: "bh018-uuid", State: "OWNED"}
+			if _, err := store.db.ExecContext(ctx, `INSERT INTO owned_boxes
+				(uuid,project,name,incarnation,state,created_at)
+				VALUES (?,?,?,?,'OWNED',?)`,
+				owned.UUID, owned.Project, owned.Name, owned.Incarnation,
+				time.Now().UnixNano()); err != nil {
+				t.Fatal(err)
+			}
 			intent := Admission{Layer: "test-project", ActorID: token.ID, TokenID: token.ID,
 				Key: "original-exec-special-exit-001", RequestID: "original",
 				Action: "box_exec", ResourceKey: "box:" + guest,
@@ -63,7 +72,14 @@ func TestBH018ExactTerminalSpecialExitPersistsAndReleasesClaimWithoutReplay(t *t
 					if !native.ExecEvidenceMatchesOriginal(ev, guest, id) {
 						return native.ErrUnverified
 					}
-					return store.SaveExecOutput(ctx, original.ID, ev.StdoutPath, ev.StderrPath, ev.Exit)
+					if ev.Exit == nil {
+						return native.ErrUnverified
+					}
+					if err := store.FinalizeVerifiedExec(ctx, original.ID, owned,
+						id, ev.StdoutPath, ev.StderrPath, *ev.Exit); err != nil {
+						return err
+					}
+					return ErrVerifiedExecCommitted
 				})
 			stored, err := store.Get(ctx, original.ID)
 			if err != nil || stored.State != "SUCCEEDED" || stored.NativeOperationID != id || effectCalls != 1 {
