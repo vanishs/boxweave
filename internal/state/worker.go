@@ -35,6 +35,12 @@ func (e PreDispatchError) Error() string { return e.Class }
 // before acknowledging it, and never invent a native operation receipt.
 var ErrNoNativeChange = errors.New("native readback proves no change necessary")
 
+// ErrVerifiedExecCommitted is an internal verifier control result returned
+// ONLY after FinalizeVerifiedExec has committed the original verified native
+// Exec exit/output and SUCCEEDED event in one SQLite transaction. Worker
+// checks the same original ID/state/native ID before treating it as finished.
+var ErrVerifiedExecCommitted = errors.New("original native Exec terminal committed atomically")
+
 type Worker struct {
 	Store  *Store
 	Budget time.Duration
@@ -96,6 +102,20 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = verify(ctx); err != nil {
+		if errors.Is(err, ErrVerifiedExecCommitted) {
+			// This is not an error from the native command: the Exec
+			// verifier already completed ONE durable SQLite transaction.
+			// Never write a second SUCCEEDED event. A forged/uncertain
+			// control result cannot unlock a Box on its own.
+			rec, readErr := w.Store.Get(context.Background(), operationID)
+			if readErr == nil && rec.Action == "box_exec" &&
+				rec.State == "SUCCEEDED" && rec.NativeOperationID == nativeID {
+				return
+			}
+			_ = w.Store.Unknown(context.Background(), operationID,
+				"VERIFYING", "ATOMIC_EXEC_TERMINAL_UNVERIFIED")
+			return
+		}
 		var proved VerifiedEffectFailure
 		if errors.As(err, &proved) && proved.Class != "" {
 			if w.Store.VerifiedFailed(context.Background(), operationID, proved.Class) == nil {
