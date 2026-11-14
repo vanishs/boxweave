@@ -1,9 +1,8 @@
 package install
 
 import (
-	"encoding/json"
 	"context"
-	"time"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // The production paths are fixed by safe(Plan). All actions are explicit,
