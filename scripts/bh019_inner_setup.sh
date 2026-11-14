@@ -183,12 +183,33 @@ EOF
     fi
     rm -f "$policy_path"
 
-    # Next-depth *negative* authority control: probe the actual L2 UserNS,
-    # which differs from the L1 daemon UserNS but reports the SAME inherited
-    # policy namespace. No unrestricted host admin socket or policy changes.
-    # Only try to load an inert, unattached profile if the L2 Guest already
-    # has a parser and its observed AA namespace is this exact owned parent.
+    # Next-depth *negative* authority control: actual L2 UserNS differs
+    # from the parent daemon but inherits its visible AppArmor policy NS.
+    # Ubuntu minimal L2 images often omit the parser. To avoid installing
+    # a policy daemon or opening network access to L2, copy ONLY the pinned
+    # parser executable from this exact one-use, signed-Incus L1 OS, then
+    # require --version to execute before any kernel policy-management call.
+    # Never copy an admin socket, change confinement, or target host policy.
+    l2_parser=""
     if incus exec bh019-l2-native-child -- /bin/sh -c 'command -v apparmor_parser >/dev/null 2>&1'; then
+      l2_parser="/usr/sbin/apparmor_parser"
+      echo "BH019_L2_PARSER=GUEST_PREINSTALLED case=$case_name"
+    else
+      parser_binary="$(command -v apparmor_parser || :)"
+      if [ -n "$parser_binary" ] && [ -f "$parser_binary" ]; then
+        sha256sum "$parser_binary"
+        incus file push "$parser_binary" "bh019-l2-native-child/root/bh019-ci-apparmor_parser"
+        incus exec bh019-l2-native-child -- /bin/chmod 0755 /root/bh019-ci-apparmor_parser
+        if incus exec bh019-l2-native-child -- /root/bh019-ci-apparmor_parser --version >/tmp/bh019-l2-parser-version.log 2>&1; then
+          l2_parser="/root/bh019-ci-apparmor_parser"
+          echo "BH019_L2_PARSER=SCOPED_BINARY_RUNS case=$case_name"
+        else
+          echo "BH019_L2_PARSER=NOT_TESTED_RUNTIME_DEPENDENCY case=$case_name"
+          cat /tmp/bh019-l2-parser-version.log
+        fi
+      fi
+    fi
+    if [ -n "$l2_parser" ]; then
       l2_policy="/root/bh019-ci-l2-inert-$case_name.profile"
       test ! -e "$l2_policy"
       cat >"$l2_policy" <<EOF
@@ -201,6 +222,7 @@ EOF
       incus exec bh019-l2-native-child -- /bin/sh -c '
         set -eu
         expected="$1"
+        parser="$2"
         actual="$(cat /sys/kernel/security/apparmor/.ns_name)"
         if [ "$actual" != "$expected" ]; then
           echo "BH019_L2_POLICY_NS_SCOPE=BLOCKED"
@@ -208,15 +230,15 @@ EOF
         fi
         test "$(cat /sys/kernel/security/apparmor/.ns_stacked)" = yes
         file=/root/bh019-ci-l2-inert.profile
-        if ! apparmor_parser -Q -K "$file" >/tmp/bh019-l2-policy-syntax.log 2>&1; then
+        if ! "$parser" -Q -K "$file" >/tmp/bh019-l2-policy-syntax.log 2>&1; then
           echo "BH019_L2_POLICY_PARSE=BLOCKED"
           cat /tmp/bh019-l2-policy-syntax.log
           exit 88
         fi
         echo "BH019_L2_POLICY_PARSE=PASS"
-        if timeout 15s apparmor_parser -a -K "$file" >/tmp/bh019-l2-policy-load.log 2>&1; then
+        if timeout 15s "$parser" -a -K "$file" >/tmp/bh019-l2-policy-load.log 2>&1; then
           echo "BH019_L2_POLICY_LOAD=PASS"
-          if timeout 15s apparmor_parser -R -K "$file" >/tmp/bh019-l2-policy-remove.log 2>&1; then
+          if timeout 15s "$parser" -R -K "$file" >/tmp/bh019-l2-policy-remove.log 2>&1; then
             echo "BH019_L2_POLICY_REMOVE=PASS"
           else
             echo "BH019_L2_POLICY_REMOVE=BLOCKED"
@@ -229,9 +251,9 @@ EOF
           cat /tmp/bh019-l2-policy-load.log
         fi
         rm -f "$file"
-      ' -- "$policy_ns"
+      ' -- "$policy_ns" "$l2_parser"
     else
-      echo "BH019_L2_POLICY_LOAD=NOT_TESTED_PARSER_MISSING case=$case_name"
+      echo "BH019_L2_POLICY_LOAD=NOT_TESTED_PARSER_RUNTIME_MISSING case=$case_name"
     fi
     echo "BH019_LAYERED_APPARMOR_INDEPENDENT_POLICY=UNVERIFIED case=$case_name"
     echo "BH019_CGROUP_DEVICE_BPF_INNER_LOAD=UNVERIFIED case=$case_name"
