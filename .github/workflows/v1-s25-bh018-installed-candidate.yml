@@ -60,6 +60,14 @@ jobs:
           fi
           grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS' "$logfile"
           grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS' "$logfile"
+          # Signing this exact-source installed job additionally requires the
+          # *real daemon* SQLite WAL terminal SIGKILL, read-only all-or-none
+          # SQLite oracle and independent Guest one-effect witness. An
+          # earlier 126/127 green cannot substitute for these hard gates.
+          grep -Fxq 'BH018_INSTALLED_SERVICE_KILLED_DURING_REAL_EXEC_SQLITE_WAL_COMMIT=PASS' "$logfile"
+          grep -Fxq 'BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS' "$logfile"
+          grep -Fxq 'BH018_INSTALLED_SERVICE_PRECOMMIT_SIGKILL_GUEST_EFFECT_ONCE=PASS' "$logfile"
+          grep -Fxq 'BH018_INSTALLED_SERVICE_WAL_COMMIT_SIGKILL_UNKNOWN_LOCK_AND_TEARDOWN=PASS' "$logfile"
           grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$logfile"
           grep -E '^(BH018_|S2_NATIVE_)' "$logfile" | tail -n 100
           echo BH018_CANDIDATE_REAL_INSTALLED_HTTP_MCP_MATRIX=PASS
