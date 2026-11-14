@@ -1,5 +1,27 @@
 # S2.5 — BH-018 remediation + BH-019 same-policy layer A/B (2026-11-14)
 
+## 2026-11-14 — fully controlled parent-versus-L2 AppArmor policy-admin negative A/B reproduced
+
+**Pinned evidence:** commit `825ffbf5c2671d5b55e0a858c91cbd903b6852c3`, [one-use GitHub runner action #43647084972](https://github.com/vanishs/boxweave/actions/runs/43647084972), job **SUCCESS** (a negative policy load is *expected diagnostic*, not a pass of BH-019), original [artifact #14134139245](https://github.com/vanishs/boxweave/actions/runs/43647084972/artifacts/14134139245) ZIP SHA256 `79b9e0fdd0bc3e30332cb07faec55f517fa156a62addea69c7c366ec769e65b0`. Outer real Incus7.6 native Exec 27-case matrix also passed, artifact #14134588252 SHA256 `d1877ad0f64d8150d7d911d2e17f9d433fa279c5afe9cd1d4aece1f045cbc7e9`. This is **native CI** evidence, not installed HTTP MCP or independently verified physical-host AppArmor fix.
+
+**Scope:** a fresh Ubuntu 24.04 GitHub-hosted VM; Linux `7.0.0-1017-azure` (contrast user's physical `7.0.0-43-generic`), signed Incus7.6 in two separate unprivileged `security.nesting=true` L1 parents. Only second parent had `security.syscalls.intercept.bpf=true` and `.devices=true`. Signed nested Incus7.6 and the **same fingerprint-pinned Ubuntu image** started L2 `bh019-l2-native-child` RUNNING with real successful `/bin/true`. L2 PID1 and Exec both show `incus-bh019-l2-native-child_</var/lib/incus> (enforce)`; L2 and parent have **different UserNS identities**, but L2 `.ns_name` is the exact parent's AppArmor policy namespace and `.ns_stacked=yes`.
+
+| Independent control | L1 no BPF interception | L1 BPF devices interception |
+| --- | --- | --- |
+| L1 test-only unattached AppArmor profile `-Q -K` parse | PASS | PASS |
+| L1 actual policy `-a -K` load / `-R -K` unload | PASS / PASS | PASS / PASS |
+| L2 exact test-only parser runs, `-Q -K` parse | PASS / PASS | PASS / PASS |
+| L2 actual test-only policy `-a -K` | **DENIED exit243** | **DENIED exit243** |
+| L2 parser diagnostic | `Access denied. You need policy admin privileges to manage profiles` | same |
+| L2 independent policy namespace + deeper admin | **NOT PROVEN / BLOCKED** | **NOT PROVEN / BLOCKED** |
+| Deep cgroup-device BPF program loading | NOT TESTED | NOT TESTED |
+
+To remove a test-preparation ambiguity, the L2 minimal images lacking `apparmor_parser` received **only** the executable from their respective controlled L1 OS (parent executable SHA256 `85e67b4ebc2559cc84c7d256d14890b8a7521e0278aedd544e13a3204a387d05`) via Incus file push. The copied parser's `--version` and L2 `-Q -K` syntax checks succeeded, establishing real executable capability rather than a missing package; neither AppArmor service nor package was installed inside L2. Each load attempt was bounded to 15 s, used a unique inert profile unattached to any service, and first checked the exact inherited one-use `incus-bh019-..._<var-lib-incus>` policy namespace, `ns_stacked=yes`. Both L1 parent attempts load+unload succeeded; both L2 failed **on kernel policy administration** with `rc=243`, not parser syntax. No automatic retries; no policy-admin socket; no global `unconfined`; no host LSM edit.
+
+**Interpretation:** This is a clean *native same-policy-file parent-positive / deeper-child-negative* on an additional 7.0 kernel flavor, now with real L2 lifecycle and BPF A/B. It strongly supports UserNS depth versus inherited policy namespace mismatch (in combination with pinned Linux permission source and the user's independent physical audit `not policy admin/-13`). This **does not** prove the particular Linux branch/distro delta causes the difference: the distinct parent/child UserNS levels already explain divergent outcomes on the SAME CI kernel. Controlled L2 was enforced but **did not possess a new independent child AA policy namespace**, and BPF interception did not cure permission management. Child cgroup-device BPF kernel load, cross-tenant isolation, and secure N-level delegation remain separate hard gates.
+
+**Verdicts:** `BH019_L2_NATIVE_START_AND_ENFORCED_PROFILE=PASS (THIS CI KERNEL ONLY)`; `BH019_PARENT_POLICY_LOAD_AND_REMOVE=PASS`; `BH019_DEEPER_POLICY_LOAD_DENIED_REPRODUCED=PASS (negative evidence)`; **`BH-019 BLOCKED` overall**. `BH-018 PARTIAL` pending installed service exact COMMIT SIGKILL/lost native ACK/independent V, even though installed HTTP MCP 126/127 and isolated true SQLite SIGKILL tests already passed. No PR merge or physical-host security changes.
+
 ## 2026-11-14 — paired real L2 native launch + BPF AB, separate from AppArmor policy security signoff
 
 Exact native Action [#43645655251](https://github.com/vanishs/boxweave/actions/runs/43645655251) at source SHA `d96cb392fbce002442261d32444e04f86d8e2874`: **overall SUCCESS** in disposable Github-hosted Ubuntu24.04 + official signed Incus7.6, after fixing the test-only cached-image metadata staging under private guest `/root` (not `/tmp`). This same job also passed `BH018_NATIVE_ORIGINAL_27_CASES=PASS`, including witnessed real 126/127 side effects. No existing host/UNKNOWN operated on.
