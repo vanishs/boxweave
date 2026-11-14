@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-const bh018AtomicNativeID = "ac4fdc24-1111-4222-8333-6fdf6b6ee141"
+const bh018InjectedNativeID = "ac4fdc24-1111-4222-8333-6fdf6b6ee141"
 
-func bh018AtomicFixture(t *testing.T) (*Store, OwnedBox, Admission, string) {
+func bh018InjectedAtomicFixture(t *testing.T) (*Store, OwnedBox, Admission, string) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -44,7 +44,7 @@ func bh018AtomicFixture(t *testing.T) (*Store, OwnedBox, Admission, string) {
 	return s, box, intent, db
 }
 
-func bh018AdmitVerifying(t *testing.T, s *Store, in Admission) string {
+func bh018InjectedAdmitVerifying(t *testing.T, s *Store, in Admission) string {
 	t.Helper()
 	ctx := context.Background()
 	r, err := s.Admit(ctx, in)
@@ -54,14 +54,14 @@ func bh018AdmitVerifying(t *testing.T, s *Store, in Admission) string {
 	if err := s.Claim(ctx, r.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.NativeAck(ctx, r.ID, bh018AtomicNativeID); err != nil {
+	if err := s.NativeAck(ctx, r.ID, bh018InjectedNativeID); err != nil {
 		t.Fatal(err)
 	}
 	return r.ID
 }
 
-func bh018Paths(box OwnedBox) (string, string) {
-	p := "/1.0/instances/" + box.Name + "/logs/exec-output/exec_" + bh018AtomicNativeID
+func bh018InjectedPaths(box OwnedBox) (string, string) {
+	p := "/1.0/instances/" + box.Name + "/logs/exec-output/exec_" + bh018InjectedNativeID
 	return p + ".stdout", p + ".stderr"
 }
 
@@ -71,9 +71,9 @@ func bh018Paths(box OwnedBox) (string, string) {
 // injected SQLite failure, not a simulated native Incus response.
 func TestBH018AtomicFinalizationRollsBackEverythingOnEventInsertFailure(t *testing.T) {
 	ctx := context.Background()
-	s, box, intent, _ := bh018AtomicFixture(t)
-	id := bh018AdmitVerifying(t, s, intent)
-	out, errOut := bh018Paths(box)
+	s, box, intent, _ := bh018InjectedAtomicFixture(t)
+	id := bh018InjectedAdmitVerifying(t, s, intent)
+	out, errOut := bh018InjectedPaths(box)
 	_, err := s.db.ExecContext(ctx, `CREATE TRIGGER bh018_abort_verified_event
 		BEFORE INSERT ON operation_events
 		WHEN NEW.state='SUCCEEDED' AND NEW.safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'
@@ -81,11 +81,11 @@ func TestBH018AtomicFinalizationRollsBackEverythingOnEventInsertFailure(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.FinalizeVerifiedExec(ctx, id, box, bh018AtomicNativeID, out, errOut, 127); err == nil {
+	if err := s.FinalizeVerifiedExec(ctx, id, box, bh018InjectedNativeID, out, errOut, 127); err == nil {
 		t.Fatal("injected terminal event write failure was ignored")
 	}
 	r, err := s.Get(ctx, id)
-	if err != nil || r.State != "VERIFYING" || r.NativeOperationID != bh018AtomicNativeID {
+	if err != nil || r.State != "VERIFYING" || r.NativeOperationID != bh018InjectedNativeID {
 		t.Fatalf("partially committed original terminal: %+v %v", r, err)
 	}
 	if _, err = s.ExecOutput(ctx, id); !errors.Is(err, ErrNotFound) {
@@ -112,10 +112,10 @@ func TestBH018AtomicFinalizationRollsBackEverythingOnEventInsertFailure(t *testi
 
 func TestBH018AtomicFinalizationSurvivesDatabaseReopenAndRecovery(t *testing.T) {
 	ctx := context.Background()
-	s, box, intent, db := bh018AtomicFixture(t)
-	id := bh018AdmitVerifying(t, s, intent)
-	out, errOut := bh018Paths(box)
-	if err := s.FinalizeVerifiedExec(ctx, id, box, bh018AtomicNativeID, out, errOut, 126); err != nil {
+	s, box, intent, db := bh018InjectedAtomicFixture(t)
+	id := bh018InjectedAdmitVerifying(t, s, intent)
+	out, errOut := bh018InjectedPaths(box)
+	if err := s.FinalizeVerifiedExec(ctx, id, box, bh018InjectedNativeID, out, errOut, 126); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -130,7 +130,7 @@ func TestBH018AtomicFinalizationSurvivesDatabaseReopenAndRecovery(t *testing.T) 
 		t.Fatalf("durable atomic success marked UNKNOWN on restart: n=%d err=%v", n, err)
 	}
 	r, err := reopened.Get(ctx, id)
-	if err != nil || r.State != "SUCCEEDED" || r.NativeOperationID != bh018AtomicNativeID {
+	if err != nil || r.State != "SUCCEEDED" || r.NativeOperationID != bh018InjectedNativeID {
 		t.Fatalf("original finished Exec lost after reopened SQLite: %+v %v", r, err)
 	}
 	ev, err := reopened.ExecOutput(ctx, id)
@@ -144,7 +144,7 @@ func TestBH018AtomicFinalizationSurvivesDatabaseReopenAndRecovery(t *testing.T) 
 		id).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("original final event not exactly once: %d %v", count, err)
 	}
-	if err := reopened.FinalizeVerifiedExec(ctx, id, box, bh018AtomicNativeID, out, errOut, 126); !errors.Is(err, ErrState) {
+	if err := reopened.FinalizeVerifiedExec(ctx, id, box, bh018InjectedNativeID, out, errOut, 126); !errors.Is(err, ErrState) {
 		t.Fatalf("duplicate finalization succeeded: %v", err)
 	}
 	if err := reopened.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_events
@@ -163,9 +163,9 @@ func TestBH018AtomicFinalizationSurvivesDatabaseReopenAndRecovery(t *testing.T) 
 
 func TestBH018AtomicFinalizationRejectsForeignOrMalformedProvenance(t *testing.T) {
 	ctx := context.Background()
-	s, box, intent, _ := bh018AtomicFixture(t)
-	id := bh018AdmitVerifying(t, s, intent)
-	out, errOut := bh018Paths(box)
+	s, box, intent, _ := bh018InjectedAtomicFixture(t)
+	id := bh018InjectedAdmitVerifying(t, s, intent)
+	out, errOut := bh018InjectedPaths(box)
 	tests := []struct{
 		name string
 		box OwnedBox
@@ -173,13 +173,13 @@ func TestBH018AtomicFinalizationRejectsForeignOrMalformedProvenance(t *testing.T
 		stdout string
 		stderr string
 	}{
-		{"wrong-project", OwnedBox{UUID:box.UUID, Project:"foreign-project", Name:box.Name, Incarnation:box.Incarnation, State:"OWNED"},bh018AtomicNativeID,out,errOut},
-		{"wrong-incarnation",OwnedBox{UUID:box.UUID, Project:box.Project, Name:box.Name, Incarnation:"foreign-incarnation", State:"OWNED"},bh018AtomicNativeID,out,errOut},
-		{"wrong-name",OwnedBox{UUID:box.UUID, Project:box.Project, Name:"another-box", Incarnation:box.Incarnation, State:"OWNED"},bh018AtomicNativeID,out,errOut},
+		{"wrong-project", OwnedBox{UUID:box.UUID, Project:"foreign-project", Name:box.Name, Incarnation:box.Incarnation, State:"OWNED"},bh018InjectedNativeID,out,errOut},
+		{"wrong-incarnation",OwnedBox{UUID:box.UUID, Project:box.Project, Name:box.Name, Incarnation:"foreign-incarnation", State:"OWNED"},bh018InjectedNativeID,out,errOut},
+		{"wrong-name",OwnedBox{UUID:box.UUID, Project:box.Project, Name:"another-box", Incarnation:box.Incarnation, State:"OWNED"},bh018InjectedNativeID,out,errOut},
 		{"wrong-native-id",box,"00000000-0000-0000-0000-000000000000",out,errOut},
-		{"foreign-output",box,bh018AtomicNativeID,"/1.0/instances/foreign/logs/exec-output/exec_"+bh018AtomicNativeID+".stdout",errOut},
-		{"swapped-stream",box,bh018AtomicNativeID,errOut,out},
-		{"missing-both-paths",box,bh018AtomicNativeID,"",""},
+		{"foreign-output",box,bh018InjectedNativeID,"/1.0/instances/foreign/logs/exec-output/exec_"+bh018InjectedNativeID+".stdout",errOut},
+		{"swapped-stream",box,bh018InjectedNativeID,errOut,out},
+		{"missing-both-paths",box,bh018InjectedNativeID,"",""},
 		{"malformed-native-id",box,"../../escape",out,errOut},
 	}
 	for _,tc := range tests {
@@ -192,7 +192,7 @@ func TestBH018AtomicFinalizationRejectsForeignOrMalformedProvenance(t *testing.T
 			if _,err:=s.ExecOutput(ctx,id);!errors.Is(err,ErrNotFound){t.Fatalf("foreign output stored: %v",err)}
 		})
 	}
-	if err:=s.FinalizeVerifiedExec(ctx,id,box,bh018AtomicNativeID,out,errOut,127);err!=nil{
+	if err:=s.FinalizeVerifiedExec(ctx,id,box,bh018InjectedNativeID,out,errOut,127);err!=nil{
 		t.Fatalf("legitimate verified final rejected after negative controls: %v",err)
 	}
 }
