@@ -75,8 +75,14 @@ for case_name in control bpf-parent; do
     incus file push "$image_rootfs" "$name/root/bh019-l2-image-rootfs"
   fi
   echo "BH019_IMAGE_TRANSFERRED_FROM_OUTER_CACHE=PASS case=$case_name" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
-  incus file push scripts/bh019_inner_setup.sh "$name/tmp/bh019_inner_setup.sh"
-  if incus exec "$name" -- /bin/sh /tmp/bh019_inner_setup.sh "$case_name" "$BH019_PROXY_URL" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
+  # The guest may clear /tmp during boot. Stage in its private root-owned
+  # directory, then independently check the exact script before executing it.
+  incus file push scripts/bh019_inner_setup.sh "$name/root/bh019_inner_setup.sh"
+  if ! incus exec "$name" -- /bin/test -s /root/bh019_inner_setup.sh; then
+    echo "BH019_INNER_SETUP_SCRIPT_STAGING=BLOCKED case=$case_name" >&2
+    exit 85
+  fi
+  if incus exec "$name" -- /bin/sh /root/bh019_inner_setup.sh "$case_name" "$BH019_PROXY_URL" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
     cat "$BH019_REPORT_DIR/${case_name}-inner.log"
   else
     cat "$BH019_REPORT_DIR/${case_name}-inner.log"

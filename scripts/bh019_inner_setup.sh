@@ -225,6 +225,11 @@ EOF
         parser="$2"
         actual="$(cat /sys/kernel/security/apparmor/.ns_name)"
         if [ "$actual" != "$expected" ]; then
+          # Keep the strict scope gate and show the actual native namespace
+          # identities for diagnosing this independent L2 mismatch, never
+          # silently treating an unexpected view as delegated policy admin.
+          printf "BH019_L2_POLICY_NS_EXPECTED=%s\\n" "$expected"
+          printf "BH019_L2_POLICY_NS_ACTUAL=%s\\n" "$actual"
           echo "BH019_L2_POLICY_NS_SCOPE=BLOCKED"
           exit 87
         fi
