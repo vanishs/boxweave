@@ -1,45 +1,60 @@
-# BoxWeave v1 — a small Agent-first Incus Box controller
+# BoxWeave
 
-**RC.2 storage policy:** BoxWeave uses an operator-provisioned Incus pool of any native driver (`dir`, `btrfs`, `zfs`, `lvm`, etc.); an available pool is necessary, but host filesystem layout and disk quota enforcement are not BoxWeave admission policy. Quota/Exec spool guarantees are **not** implied by successful readiness. See [storage driver-neutral decision](docs/decisions/V1_STORAGE_DRIVER_NEUTRAL_RC2_2026-11-13.md).
+**Give agents a Box. Keep control.**
 
-**RC.3 install/create split:** Service installation verifies the confined nonroot actor and supported Incus API, without requiring an image, private NIC, or configured root pool. An operator-approved native preparation step establishes owned Project/ACL configuration before Box creation. `box_create.image` may name an owned local image alias or `images:<catalog alias>`; omitted image prefers an owned local default, then the official Incus Ubuntu catalog. No remote host URL or privileged MCP setup API is accepted. See [RC.3 decision](docs/decisions/V1_RC3_INCUS_NATIVE_INSTALL_AND_IMAGE_POLICY_2026-11-13.md).
+BoxWeave is a **small, self-hosted MCP controller for Incus Linux containers**. It lets AI coding agents create and use isolated development environments without exposing the host's Incus administrator socket or a general host shell.
 
-**Current deployment/distribution policy:** [conditional dedicated-host pilot before final HOST_GO, exact host approval, separate external installer and v1-only Release pointer](docs/development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). The running product is a single Go executable; signed Incus/native preparation remains separate and explicit. PR #133 still Draft; not a formal Release.
+**Human → Agent → BoxWeave → Incus → Box**: a human owns the machine and approves credentials and setup; an Agent calls authenticated MCP tools; BoxWeave enforces exact-Box ownership and records asynchronous operations in SQLite; Incus runs the actual containers. The Agent normally lives **outside** its Box. Guest commands are sent through native Incus APIs, not an always-on guest Agent.
 
-> **Current v1 development baseline (2026-11-11): S1 + S2 accepted, [PR #130](https://github.com/vanishs/boxweave/pull/130) MERGED at `f1a47c9`**. S2 passed its 18 supported groups on native Incus/official MCP; a forward/peer-dependent Delete case remains S4, actual public-WAN positive remains unverified and the scoped power-fault surrogate is not a real power cut. **S2.5 bounded LAB and real ChatGPT OAuth nested-core tests have now passed; dedicated physical-host pilot is conditionally eligible only with fresh exact-host approval. Final HOST_GO and S5 release are NOT signed.** The first `1.0.0` in VERSION is a source baseline, not a release. [S2 scoped signoff](docs/verification/S2_FINAL_EXIT_SIGNOFF_2026-11-11.md).
+Built for developers and lab operators using their **own Linux machines** who want recoverable Agent workflows, explicit infrastructure boundaries and the option to test code inside disposable Boxes. It is **not** a VM/cloud orchestrator, host management shell, web console or general networking platform.
 
-BoxWeave uses Go, the official MCP Go SDK and official Incus Go SDK. Its only public management protocol is **authenticated, loopback-only HTTP Streamable MCP** (optional operator-managed HTTPS/Tunnel). A local CLI handles install/upgrade, host status, token bootstrap and recovery.
+## Get started
 
-**Repository standards:** [CONTRIBUTING](CONTRIBUTING.md) · [quality and PR merge gates](docs/process/QUALITY_GATES.md) · `make hooks` and `make verify` · CI job `quality-gate`. **Active GitHub Ruleset #26842628** enforces `quality-gate` on `v1`, proven by blocked non-Draft failing [PR #118](https://github.com/vanishs/boxweave/pull/118); preserve independent phase acceptance and protected PR merging for all later changes.
+- **[Manual installation (RC.3)](docs/getting-started/MANUAL_INSTALL.md)** — prerequisites, compatible Incus, reviewed host install, native Box preparation, local health checks and optional OAuth/ChatGPT access.
+- **[Glossary](docs/GLOSSARY.md)** — what Box, Project, Profile, ACL, MCP, OAuth, Operation, UNKNOWN and readiness really mean.
+- **[Documentation index](docs/INDEX.md)** — deeper product, design, development, acceptance and research references.
 
-**Developing v1 (5 feature stages + S2.5 gate):** [Start with the implementation plan](docs/process/IMPLEMENTATION_PLAN.md). Each phase has its own [small execution card](docs/development/phases/README.md); [common phase rules](docs/development/PHASE_EXECUTION_PROTOCOL.md) require implement→test→accept→fix/retest and [a persistent action/decision log](docs/development/EXECUTION_LOG.md) retains exact resume points and unresolved original IDs. **S2 is merged; next execute S2.5 on a disposable LAB before any separately approved dedicated physical development host.** Do not ask an Agent to load all research/verification docs upfront. Stages S1–S4 collectively implement the fixed 20 tools; S5 independently verifies the exact installed candidate and gates release. Docs can change during any stage with logged cross-links; blocked subcases do not stall safe unrelated work or authorize unsafe publication.
+The current published prerelease is **[v1.0.0-rc.3](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3)**. It has immutable source-bound Linux amd64/arm64 artifacts, but **is not a stable production release**. The stable-release pointer is still `UNPUBLISHED`; choose an explicit prerelease tag. The legacy `main` branch is a separate v0.x line, not a supported co-install or state adoption path.
 
-**Only core features:**
-- Manage exact **BoxWeave-owned Linux containers** via Incus UUID: create/start/get/list, typed safe resize/update, stop/delete; run async guest-root Exec with bounded original output and cancellation evidence.
-- Minimal agentless guest files: list/read and one safe `box_file_apply(create|replace|delete)`. Complex code editing and Git run **inside the Box** through guest Exec, not a custom file patch engine.
-- Track and recover every mutation using caller-provided reusable idempotency keys, server Tracking ID and durable async Operation ID; retain UNKNOWN rather than replaying ambiguous work.
-- Native Incus **TCP/UDP port forwarding** from an explicitly authorized host port to an owned Box. Private Box-to-Box traffic denied by default; simple directional box_peer_set allows/revokes a peer pair for integration testing. **Selected design:** one installer-precreated, BoxWeave-owned Bridge NIC ACL shared by its managed Boxes; only exact-object ACL updates via the official Incus SDK + native Scriptlet authorization. No generic ACL editor.
-- Full independently installed **nested BoxWeave** runtime when Incus/kernel permits; every layer manages only its directly owned Boxes.
-- Version-aware local installation/upgrade, **including reuse and authorized version maintenance of existing Incus**. Do not silently import preexisting foreign containers or disrupt shared consumers. Never reboot the host automatically.
-- Admin/viewer revocable tokens only; one physical/nested host per controller; Ubuntu LTS officially supported first, expand Linux guest images by real validation.
+## Understand the architecture
 
-**SDK P0 research status (not shipped functionality):** [Last executed Incus/MCP Go SDK P0 verification](docs/verification/P0_SDK_LAST_GATE_RESULTS_2026-11-08.md) passed official MCP Streamable HTTP and native Incus async Exec/recorded output, limited live Exec termination, SFTP exclusive create and IPv4 NIC anti-spoof in the nested lab. **Native Incus file APIs cannot atomically conditionally replace/delete a file based on its earlier hash**: `box_file_apply(replace|delete)` must report `UNSUPPORTED` if safe point-of-use guarantees are unavailable, not discard another writer's changes. Nested Cowsql instability is recorded as an environment issue: **BoxWeave v1 will not implement Incus database patches or a Cowsql repair service**. This does **not** mean the 20-tool v1 controller has passed acceptance.
+```text
+ Human / operator
+   | owns host, Incus setup, credentials and public exposure
+   v
+ Agent (ChatGPT / coding agent / any supported MCP client)
+   | authenticated typed Streamable HTTP MCP (local or operator HTTPS)
+   v
+ BoxWeave — one Go executable + local maintenance CLI
+   | role/ownership policy + SQLite durable operation receipts
+   | official Incus Go SDK
+   v
+ Incus daemon — operator-managed
+   | confined per-user Project + reviewed Profile/pool/private NIC/ACL
+   +--- Box A (owned Linux container: code, tests, processes)
+   +--- Box B (owned Linux container: independent workspace)
+```
 
+**Product relationship:** the human authorizes the Agent, not arbitrary host administration; the Agent asks BoxWeave to work only within registered Boxes; BoxWeave delegates storage, lifecycle and packet enforcement to Incus. Guest-root Exec is **not** host-root. An outer Box may host an independent nested controller where native Incus/kernel constraints allow; each layer has its **own** ownership boundary.
 
-## Important: Incus-wide authorization change
+**Code layout:** `cmd/boxweave` is the CLI/server entry point; `internal/control` provides authenticated MCP/tool policy; `internal/state` owns the SQLite journal and OAuth credentials; `internal/native` adapts the official Incus SDK; `internal/install` handles host-local install/preflight/recovery; `install.sh` and `.github/workflows` support distribution and tests rather than running another privileged server.
 
-**This v1 candidate has been installed in disposable isolated/nested LAB environments, not on a dedicated physical development host.** The selected native `box_peer_set` backend uses one **preprovisioned shared ACL** across BoxWeave-owned NICs (directional Box A → Box B, **all ports**, with IPv4/IPv6 rules), a dedicated restricted TLS identity, native Incus **Authorization Scriptlet** and Go SDK **ETag** checks. It avoids runtime ACL creation, custom firewall code, OpenFGA and an extra privileged helper.
+**Operational model:** a mutation includes a client idempotency key and returns an original Tracking/Operation ID. After a timeout, ask for the **same original Operation** and its bounded output; never blindly replay an ambiguous `UNKNOWN`. Direct Bearer and optional embedded OAuth share the canonical `/mcp` endpoint, loopback-only by default; tunnels remain operator-managed.
 
-**Host-wide security/compatibility warning:** enabling `authorization.client.tls-restricted=scriptlet` changes the authorization path for **every restricted-TLS Incus client on this daemon**, not just BoxWeave. Automatic certificate Project restrictions are replaced by the Scriptlet's policy. A faulty policy could **deny existing applications or grant them excessive access**. The operator has approved this trade-off for the v1 product direction; it is **not** permission to silently overwrite an existing host policy.
+See [architecture](docs/design/ARCHITECTURE.md), [Agent development loop](docs/product/DEVELOPMENT_LOOP.md), [operations](docs/design/OPERATIONS.md) and [security](docs/design/SECURITY.md).
 
-The future **host-local installer** must clearly display this effect; inspect existing Scriptlet/client routing and restricted certificates; save the original configuration, policy and rollback instructions; preserve per-certificate Project restrictions for other clients; and perform permission-positive **and** privilege-denial checks before/after switching the route. If existing behavior cannot be safely preserved, installation of the peer capability must stop rather than widen permissions. BoxWeave's MCP runtime must never obtain unrestricted Incus administrator authority, arbitrary ACL-create rights or control over foreign resources.
+## Features and boundaries
 
-**Real nested Incus 7.6 evidence:** [three-Box shared-ACL + Scriptlet + TLS-client compatibility test](docs/verification/SINGLE_SHARED_ACL_SCRIPTLET_ACCEPTANCE_2026-11-08.md). A→B IPv4/IPv6 and TCP passed; B→A/C→B were denied; revoke restored denial; native loopback TCP/UDP proxy still worked; a simulated existing restricted TLS client's tested permission matrix was unchanged. **This is not an installed v1 controller/real shared-host compatibility guarantee**. Incus under nested container creation also experienced repeat Cowsql database unavailability; root cause remains open.
+**Implemented in RC.3:** authenticated read/status tools, owned Box lifecycle, typed update, guest Exec, durable queryable operations and output, local maintenance and optional embedded OAuth. The [full v1 design](docs/product/SCOPE.md) includes minimal guest file work, native TCP/UDP forwarding, directional private peer controls and independent nesting; **a design goal is not an assertion that every planned tool has shipped**. Refer to the [tool catalog](docs/design/MCP_TOOLS.md) and [acceptance](docs/verification/ACCEPTANCE.md) for staged availability.
 
-**Not BoxWeave responsibilities:** Caddy, website/domain/HTTPS management, a general firewall/ACL/RBAC platform, tenant billing, snapshots/backup, automatic idle sleep/wake, background process supervisor, OAuth login, bulk file transfer or built-in patch engine, VM/cluster management, or cross-layer controller orchestration. These are **excluded**, not P1 promises.
+BoxWeave does **not** manage arbitrary Incus/foreign containers, DNS, website certificates, Caddy, general ACL/firewall rules, snapshots/backups, whole-host commands, tenants/billing or cross-host orchestration.
 
-The developer/acceptance workflow remains comprehensive and black-box-first. The [fault-driven Hello World -> failed delete -> nested candidate -> release scenario](docs/verification/FAILURE_DRIVEN_RELEASE_SCENARIOS.md) is the required cross-tool smoke/regression gate; it verifies actual LAN reachability, partial-delete evidence, safe nested localhost MCP testing and exact candidate bytes **before** CI auto-publication. Harnesses live in repository/CI/disposable Boxes, not the standard runtime.
+## Current evidence — do not confuse readiness with acceptance
 
-Start with [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md), [scope](docs/product/SCOPE.md), [20 MCP tools](docs/design/MCP_TOOLS.md), [Agent development loop](docs/product/DEVELOPMENT_LOOP.md), [networking](docs/design/NETWORK.md), [dependency lifecycle](docs/process/DEPENDENCY_LIFECYCLE.md), [security](docs/design/SECURITY.md) and [Agent rules](AGENTS.md).
+RC.3 release CI passed exact-source quality, native/nested tests and dual-architecture publishing. A dated **physical-host pilot** reported a verified RC.3 systemd installation on Incus 7.6 and an existing Btrfs pool, 8/8 native prerequisite checks, `doctor ready=true`, and real **ChatGPT → HTTPS Tunnel → OAuth → MCP** `host_status`, `box_list` and `operation_list` reads. [See exact evidence and limits](docs/verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md).
 
-Version scheme: `1.X.Y` (X feature increment, Y patch); genuine verified, new-version source builds on `v1` are published through CI automatically, never automatically deployed to running hosts. `main` remains the independent v0.x line.
+**Not yet signed on that host:** first on-demand Guest image/Box Create, real remote native writes, actual IPv4/IPv6 packet-isolation tests, native Btrfs quotas/Exec spool bounds, fault/rollback and independent host verifier. This is **not** formal `HOST_GO` or S5 PASS.
+
+## Develop and contribute
+
+[Contributing](CONTRIBUTING.md) · [quality gates](docs/process/QUALITY_GATES.md) · [implementation phases](docs/process/IMPLEMENTATION_PLAN.md) · [product boundary](docs/decisions/PRODUCT_BOUNDARY.md) · [decisions](docs/decisions/DECISIONS.md) · [development checkpoint](docs/development/EXECUTION_LOG.md).

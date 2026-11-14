@@ -1,6 +1,6 @@
 # Documentation index
 
-The **v1 base** has S1 PASS and scoped S2 formally accepted and merged through [PR #130](https://github.com/vanishs/boxweave/pull/130) to protected `v1` at `f1a47c9`; neither is a public release. **Next: S2.5 independent LAB first; dedicated physical HOST_GO requires separate exact-host consent and proof.** Legacy `main` and v1 will never coexist on one host. [S2.5 source/upstream audit](research/S25_PREDEPLOY_REALITY_AUDIT_2026-11-11.md) documents the pre-first-Box installer gaps and unverified L1 project quotas.
+**RC.3 operator onboarding (2026-11-13, current):** [Manual install](getting-started/MANUAL_INSTALL.md) · [Glossary](GLOSSARY.md) · [product README](../README.md) · [scoped physical-host pilot evidence](verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md). Immutable RC.3 prerelease is published; physical-host service/native readiness and real ChatGPT OAuth **read-only MCP calls** succeeded. First Box Create, physical packet and Btrfs quota tests, fault/rollback and independent Verifier remain open. **HOST_GO and S5 are NOT signed.** Earlier S1/S2/LAB paragraphs below are historical and must not be read as today's prerelease inventory.
 
 **Start development without loading the whole repository:** [five feature phases + S2.5 BRIDGEHEAD checkpoint entry](process/IMPLEMENTATION_PLAN.md) → [phase execution and context protocol](development/PHASE_EXECUTION_PROTOCOL.md) → [current checkpoint / append-only operations + decision log](development/EXECUTION_LOG.md#current-checkpoint) → **only the current** [S1–S5 card or S2.5 BRIDGEHEAD gate](development/phases/README.md). Phase cards reference the **smallest relevant sections** of the detailed documents below. Do not treat upstream SDK probes as installed v1 acceptance.
 
@@ -20,7 +20,7 @@ The **v1 base** has S1 PASS and scoped S2 formally accepted and merged through [
 
 | Question | Authoritative document |
 |---|---|
-| What is BoxWeave? | [Product](product/PRODUCT.md) |
+| What is BoxWeave? | [Product](product/PRODUCT.md) · [README](../README.md) · [Glossary](GLOSSARY.md) |
 | Which permanent boundaries override superseded v1 plans? | [Permanent product boundary](decisions/PRODUCT_BOUNDARY.md) |
 | What supports multiple Agents, attributed native operations and safe restart? | [Agent Operation Continuity contract](design/AGENT_OPERATION_CONTINUITY.md) · [TC-001–TC-020 acceptance](verification/CONTINUITY_ACCEPTANCE.md) |
 | How is an Agent's broader goal/Git state checkpointed without new BoxWeave Tools? | [Lightweight client-owned Task Checkpoint](development/TASK_CHECKPOINT_CONTRACT.md) |
@@ -29,6 +29,7 @@ The **v1 base** has S1 PASS and scoped S2 formally accepted and merged through [
 | What is in/out? | [Scope](product/SCOPE.md) |
 | What must work? | [Requirements](product/REQUIREMENTS.md) |
 | What is the architecture? | [Architecture](design/ARCHITECTURE.md) |
+| How do I manually install and connect RC.3? | [Manual installation with optional OAuth](getting-started/MANUAL_INSTALL.md) · [physical pilot truth](verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md) |
 | Which runtime and SDKs are required? | [Go technology stack](design/TECH_STACK.md) |
 | Which MCP tools are planned? | [MCP catalog](design/MCP_TOOLS.md) |
 | What are the detailed file, Exec, wait and cancel contracts? | [MCP tool contracts](design/MCP_TOOL_CONTRACTS.md) |
