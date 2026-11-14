@@ -1,7 +1,7 @@
 package native
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -49,7 +49,7 @@ func localImageSource(c incus.InstanceServer, name string) (api.InstanceSource, 
 		return api.InstanceSource{}, false, nil
 	}
 	if err != nil {
-		return api.InstanceSource{}, false, err
+		return api.InstanceSource{}, false, fmt.Errorf("read local image alias: %v: %w", err, ErrNativeUnsupported)
 	}
 	if alias == nil || alias.Target == "" {
 		return api.InstanceSource{}, false, ErrNativeUnsupported
@@ -75,7 +75,7 @@ func resolveInstanceImage(c incus.InstanceServer, choice string) (api.InstanceSo
 			return api.InstanceSource{}, err
 		}
 		if !found {
-			return api.InstanceSource{}, errors.New("selected local image alias not found in the confined Incus Project")
+			return api.InstanceSource{}, fmt.Errorf("selected local image alias not found in the confined Incus Project: %w", ErrNativeUnsupported)
 		}
 		return source, nil
 	}
