@@ -3,7 +3,10 @@ package native
 import "testing"
 
 func TestRC3IncusVersionBaseline(t *testing.T) {
-	for _, tc := range []struct{ version string; accept bool }{
+	for _, tc := range []struct {
+		version string
+		accept  bool
+	}{
 		{"7.6", true}, {"7.5.1", true}, {"7.7", true}, {"8.0", true},
 		{"7.4", false}, {"6.0", false}, {"invalid", false}, {"", false},
 	} {
@@ -14,7 +17,10 @@ func TestRC3IncusVersionBaseline(t *testing.T) {
 }
 
 func TestRC3GuestImageSelectionNoArbitraryURLs(t *testing.T) {
-	for _, tc := range []struct{ choice string; valid bool }{
+	for _, tc := range []struct {
+		choice string
+		valid  bool
+	}{
 		{"", true}, {"local:boxweave-default", true}, {"debian-13", true},
 		{"images:ubuntu/24.04", true}, {"images:debian/13", true},
 		{"https://evil.invalid/image", false}, {"foreign:ubuntu", false},
