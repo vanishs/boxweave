@@ -1,6 +1,6 @@
 # v1.0.0-rc.1: owner-operated physical-host nested AppArmor experiment (2026-11-13 PT)
 
-**Status: PARTIAL / L3 BLOCKED.** Real hosted ChatGPT OAuth/MCP and the v1-owned L2 lifecycle work. Incus 7.6 inside L2 starts, but its first `incus admin init` fails while loading a dnsmasq AppArmor policy. No third-level guest was created. This is evidence from a separate, owner-operated physical-host pilot, **not** a formal independent verifier, `HOST_GO=PASS`, or supported v1 release acceptance.
+**Status: PARTIAL / L3 BLOCKED (historical snapshot, before the operator's planned full physical-host reinstall).** Real hosted ChatGPT OAuth/MCP and the v1-owned L2 lifecycle work. Incus 7.6 inside L2 starts, but its first `incus admin init` fails while loading a dnsmasq AppArmor policy. No third-level guest was created. This is evidence from a separate, owner-operated physical-host pilot, **not** a formal independent verifier, `HOST_GO=PASS`, or supported v1 release acceptance.
 
 ## Scope and evidence provenance
 
@@ -8,7 +8,7 @@
 - The actual ChatGPT connector named **`v1rc`** was invoked directly for authenticated read-only `host_status`/`box_list`, a single new v1-owned L2 Create, guest Exec, operation/output retrieval, and read-only post-failure inspection.
 - No old main gateway, historical UNKNOWN operation, other Project, physical-host policy, `raw.lxc`, `security.privileged`, or global AppArmor configuration was changed by the assistant.
 - The experimental Cloudflare Quick Tunnel and OAuth approval password were operator-managed. Do not store the short-lived public hostname, password, access/refresh token, session/callback parameters or OAuth grants here.
-- All observed guest-native effects are scoped to a new v1rc-owned L2. That guest **remains RUNNING** for diagnosis; failed inner Incus initialization was not retried, reset, or cleaned up.
+- All observed guest-native effects were scoped to a new v1rc-owned L2. The guest **was last observed RUNNING on 2026-11-13**; failed inner Incus initialization was not retried, reset, or cleaned up during that experiment. **Do not assume it survives the planned host reinstall or is still running now.**
 
 ## Exact topology and versions
 
@@ -64,9 +64,9 @@ to manage profiles.
 
 ## Next bounded experiment / gates
 
-1. Keep physical L0 unchanged. In a **separate disposable** owner-approved L1, create a controlled Incus **7.5.1** L1/L2 pair and capture actual AppArmor namespace/profile/daemon results, matching L0 defaults and user mappings. Compare with existing `7.5.1 -> 7.6 -> 7.6` result. A 7.5.1/7.6 failure difference is evidence to inspect an upstream change, **not** proof by itself.
+1. On the **newly reinstalled physical L0**, first record the *new actual* Incus client/server versions, kernel, AppArmor policy and defaults; do not assume the previous L0 `7.5.1` conditions persist. In separate disposable L1 environments, compare an accurately pinned matched-version control with the historical `7.5.1 -> 7.6 -> 7.6` result **only after acknowledging any host/kernel changes**. A difference alone is evidence for further analysis, **not** proof of causation.
 2. Investigate whether upstream Incus/LXC/AppArmor can safely delegate a new policy namespace to L2 **without** lifting L0/L1 authority, using isolated/native negative tests. Do not solve by blanket `raw.lxc` unconfined, privileged LXC, global AppArmor disable or direct physical-host security-policy changes.
-3. Re-evaluate [Draft PR #136](https://github.com/vanishs/boxweave/pull/136): its proposed **hard-fail** read-only AppArmor preflight is a heuristic, not an actual Incus readiness proof. Owner discussion favors non-blocking diagnostics and relying on real native failure semantics unless a necessary hard gate can be rigorously proven. **No code change or final approval of that revised policy is asserted here.**
+3. **PR #136's hard-fail preflight is deferred/archived, not adopted.** It is a static heuristic rather than actual Incus readiness proof. Owner discussion favors keeping factual diagnostics and authoritative native failure evidence for future review, rather than merging a mandatory reject based solely on process-profile appearance. Its original [research](../research/APPARMOR_MULTI_LEVEL_BOUNDARY_2026-11-13.md) and [experimental test receipts](APPARMOR_NATIVE_HOST_PREFLIGHT_2026-11-13.md) are preserved without code changes.
 4. Native packet witnesses/quotas, independent verifier, actual L3 lifecycle, safe recovery/cleanup and relevant exact-head Actions remain **PENDING**; no formal S2.5/HOST_GO or third-level Host claim.
 
-**Retained test resource:** `user-1001/v1rc-nest-l2-1113`, UUID `6eba364e-d8a0-4df8-9f81-7098aedf3046`, last observed Running. Do not automatically delete or replay original operations; subsequent work should inspect the same identifiers.
+**Historical test resource:** `user-1001/v1rc-nest-l2-1113`, UUID `6eba364e-d8a0-4df8-9f81-7098aedf3046`, last observed Running on 2026-11-13. A physical-host reinstall may erase it. Do not automatically replay original operations; any follow-up on a fresh installation must discover the new native identities.
