@@ -82,6 +82,21 @@ jobs:
           sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,BH018_GUEST_NAME "$RUNNER_TEMP/bh018-native-exec-probe" | tee "$RUNNER_TEMP/bh018-native-exec.jsonl"
           grep -qx 'BH018_NATIVE_ORIGINAL_21_CASES=PASS' "$RUNNER_TEMP/bh018-native-exec.jsonl"
           echo "BH018_DIRECT_SDK_ORIGINALS_WITH_GUEST_FAILURE_BOUNDARY=PASS"
+      - name: Run two-parent native Incus nesting BPF security A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n scripts/bh019_inner_setup.sh
+          sh -n scripts/bh019_bpf_lab.sh
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT env BH019_REPORT_DIR="$RUNNER_TEMP/bh019-matrix" sh scripts/bh019_bpf_lab.sh
+      - name: Preserve scoped BH-019 parent and child logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bh019-native-parent-bpf-ab
+          path: ${{ runner.temp }}/bh019-matrix/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Preserve per-operation native JSON witnesses
         if: always()
         uses: actions/upload-artifact@v4
