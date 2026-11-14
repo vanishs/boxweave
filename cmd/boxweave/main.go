@@ -47,6 +47,9 @@ func run() error {
 	ttl := f.Duration("ttl", 30*24*time.Hour, "token validity")
 	tokenID := f.String("id", "", "exact local credential or OAuth grant ID")
 	publicOrigin := f.String("public-origin", "", "exact operator-reviewed public HTTPS origin (without /mcp)")
+	generateOAuth := f.Bool("generate", false, "generate random OAuth approval password into a new protected file")
+	outputFile := f.String("output-file", "", "absolute path for new OAuth approval secret (0600, exclusive create)")
+	passwordFile := f.String("password-file", "", "read OAuth approval secret from an existing owner-only protected file")
 	serviceUser := f.String("service-user", "boxweave", "dedicated nonroot incus-only service account")
 	sourceBinary := f.String("source-binary", "", "source executable at approved exact digest")
 	digest := f.String("expect-sha256", "", "locally reviewed binary sha256")
@@ -288,6 +291,9 @@ func run() error {
 		}
 		switch command {
 		case "oauth-setup":
+			if *generateOAuth || *outputFile != "" || *passwordFile != "" {
+				return setupOAuthNoninteractive(s, *generateOAuth, *outputFile, *passwordFile)
+			}
 			fmt.Fprint(os.Stderr, "New OAuth approval password (min 16 characters): ")
 			first, err := term.ReadPassword(int(os.Stdin.Fd()))
 			fmt.Fprintln(os.Stderr)

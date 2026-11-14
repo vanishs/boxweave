@@ -135,7 +135,7 @@ Expected `mcp_ready=true`, `native.service_ready=true`, `native.ready=true`, `re
 
 Skip entirely for local-only MCP clients. BoxWeave serves **one** loopback-only `http://127.0.0.1:18650/mcp` endpoint. Optional in-process OAuth **shares `/mcp`** with direct Bearer auth; a public endpoint requires an **operator-managed** HTTPS tunnel/proxy.
 
-First set the **separate OAuth consent password** via a real non-echoing local TTY (at least 16 chars; never put it in chat, command-line arguments or logs):
+First configure the **separate OAuth consent password** (at least 16 characters). The original non-echoing TTY flow remains supported (no password in arguments, chat, or logs):
 
 ```sh
 sudo runuser -u boxweave -- env \
@@ -143,6 +143,30 @@ sudo runuser -u boxweave -- env \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   /usr/local/bin/boxweave oauth-setup -project "$PROJECT"
 ```
+
+**RC.4 noninteractive per-layer provisioning:** For automated hosts, use exactly one of `oauth-setup --generate --output-file ABSOLUTE_NEW_PATH` or `oauth-setup --password-file ABSOLUTE_EXISTING_PATH`, as the **nonroot service user**. The parent directory must already exist, be owned by `boxweave`, and be mode **0700**; the secret must be a regular, single-link **0600** file owned by that user. Relative paths, world/group-accessible files, symlinks and overwriting existing output files are refused. Generation uses 32 bytes of OS cryptographic randomness, writes one 43-character URL-safe password (plus a newline), synchronizes it to disk and stores only an Argon2id hash in SQLite. The CLI prints **only the secret-file path**, never its contents. There is no new network administration endpoint or cross-layer orchestration.
+
+```sh
+# One-time preparation of the private local secret directory per controller:
+sudo install -d -m 0700 -o boxweave -g "$(id -gn boxweave)" /home/boxweave/.config/boxweave
+
+# The following can run in a noninteractive local provisioning workflow:
+SECRET_FILE=/home/boxweave/.config/boxweave/oauth-approval.secret
+sudo runuser -u boxweave -- env \
+  -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  /usr/local/bin/boxweave oauth-setup -project "$PROJECT" \
+  --generate --output-file "$SECRET_FILE"
+
+# Optional: load an existing protected secret on a fresh controller instead:
+# sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-setup \
+#   -project "$PROJECT" --password-file "$SECRET_FILE"
+
+# Display the password ONLY in your own trusted terminal, not in CI/Agent logs:
+sudo runuser -u boxweave -- cat "$SECRET_FILE"
+```
+
+The **host operator** can see/copy that one-time password from their own terminal for the ChatGPT OAuth approval page; an Agent should report the `$SECRET_FILE` path and the HTTPS URL, **not echo the plaintext password in its tool stdout**. `--generate` refuses to overwrite an existing file; deliberate credential rotation requires a new file path and review of existing OAuth grants. Every nested controller needs its **own independently generated secret**; no parent token or approval password propagates to a child. Setting the password alone does not publish the service or approve a ChatGPT OAuth grant.
 
 Install `cloudflared` from [Cloudflare's verified installation instructions](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). For **temporary testing only**, in a second terminal:
 
