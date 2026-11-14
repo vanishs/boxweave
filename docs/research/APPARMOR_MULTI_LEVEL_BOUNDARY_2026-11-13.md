@@ -1,6 +1,8 @@
-# Incus 7.6 / AppArmor multi-level native Host boundary
+# Incus 7.6 / AppArmor multi-level native Host boundary — archived research
 
 Evidence date: 2026-11-13 (Pacific). Scope: disposable isolated nested Incus 7.6 labs.
+
+> **Historical evidence only.** The read-only AppArmor preflight code discussed below belonged to experimental **Draft PR #136**, was not merged into protected `v1`, and is **not** a requirement or an implemented feature of the released `v1.0.0-rc.1`. The owner decided against proceeding with this heuristic hard-reject change for now. This research is preserved in documentation-only PR #137 so later work can use the native evidence without inheriting the abandoned implementation. Do not mistake preflight results for actual safety certification.
 
 ## Observed topology and outcomes
 
@@ -27,13 +29,13 @@ Upstream references:
 - https://linuxcontainers.org/incus/docs/main/reference/instance_options/
 - https://linuxcontainers.org/incus/docs/main/reference/projects/
 
-## v1 product change and scope
+## Historical PR #136 experimental code (not adopted in v1)
 
-Before native bootstrap and fresh install-stage writes, the root-local binary now performs a read-only AppArmor/user-namespace preflight. It refuses a named AppArmor confined process (NATIVE_APPARMOR_CONFINED), a user-namespaced unconfined process without stacking (NATIVE_APPARMOR_NO_STACKING), or uninspectable nested confinement (NATIVE_APPARMOR_UNVERIFIED). native-prepare-plan and native-prereq-plan also use the check. It does not edit the kernel, AppArmor, parent Incus, raw.lxc, UID mappings, privileged settings, or public MCP tools.
+In **the unmerged PR #136 test binary only**, before native bootstrap and fresh install-stage writes, root-local code performed a read-only AppArmor/user-namespace preflight. It refuses a named AppArmor confined process (NATIVE_APPARMOR_CONFINED), a user-namespaced unconfined process without stacking (NATIVE_APPARMOR_NO_STACKING), or uninspectable nested confinement (NATIVE_APPARMOR_UNVERIFIED). native-prepare-plan and native-prereq-plan also use the check. It does not edit the kernel, AppArmor, parent Incus, raw.lxc, UID mappings, privileged settings, or public MCP tools.
 
 Passing the check is not an Incus nesting certification, because the parent-side profile cannot be fully inferred from the guest. Physical-host validation, actual policy-loaded dnsmasq, root and restricted Incus, native image/instance lifecycle, network isolation and rollback remain separately required.
 
-Decision: preserve the current v1 default nesting behavior and fail early on the two proven unsupported topologies. A true third-level Host requires a separately reviewed upstream Incus/AppArmor security mechanism and independent real safety testing; no safe supported third-level delegation method has been established for this pinned kernel/Incus combination.
+**Superseded proposal, not a current decision:** preserve the current v1 default nesting behavior and fail early on the two witnessed failure patterns. A true third-level Host requires a separately reviewed upstream Incus/AppArmor security mechanism and independent real safety testing; no safe supported third-level delegation method has been established for this pinned kernel/Incus combination.
 
 ## Addendum: direct physical-host v1 RC reproduction (2026-11-13 PT)
 
@@ -46,6 +48,6 @@ Inside the new L1, the process reported `unconfined`, AppArmor namespace level 1
 - The old-main outer Box's unconfined override is **not necessary** for this failure to reproduce; it also occurs under a direct physical-host L1 without a manual AppArmor override. It still does **not** prove that the kernel or Incus universally forbids arbitrarily deep nesting.
 - AppArmor `unconfined` observed *within* an L1 AppArmor namespace does not prove absence of outer policy. The difference between L1 and L2 profile labels is not a BoxWeave setting: the parent Incus/profile selection controls it.
 - **Version compatibility is OPEN.** The actual physical L0 **server** (not just client) is 7.5.1; both nested daemons are 7.6. The upstream 7.5.1/7.6 code resemblance is suggestive, but no controlled `7.5.1 -> 7.5.1` guest comparison was performed. Do not label mismatch either root cause or excluded cause.
-- The previous **hard-reject** preflight decision above is a **Draft PR #136 implementation proposal**, not a validated universal installer requirement. A process-profile heuristic can refuse a potentially functioning host or allow a host whose real initialization fails. In the owner discussion, non-blocking diagnostic reporting plus authoritative actual Incus initialization failures was preferred for further design review; this addendum **does not alter code or claim a final approved policy change**.
+- The previous **hard-reject** preflight proposal above belonged to **unmerged PR #136**, not a validated universal installer requirement. A process-profile heuristic can refuse a potentially functioning host or allow a host whose real initialization fails. In the owner discussion, non-blocking diagnostic reporting plus authoritative actual Incus initialization failures was preferred for further design review; this addendum **does not alter code or claim a final approved policy change**.
 
 Next: compare pinned 7.5.1 versus 7.6 with unchanged physical L0 and separately isolated native guests, then test AppArmor policy-namespace delegation only behind owner-approved, confined security boundaries. No physical L0 daemon upgrade and no AppArmor privilege relaxation is implied.
