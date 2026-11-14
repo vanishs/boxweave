@@ -40,6 +40,7 @@ func runLocal(name string, args ...string) error {
 	}
 	return nil
 }
+
 // A service can be installed before any root disk, private NIC or Guest
 // image exists. Never call the full Box-create doctor from installation.
 func doctorAsService(p Plan, binary string) error {
