@@ -14,10 +14,41 @@ case "${BH019_PROXY_URL:-}" in
 esac
 test -f scripts/bh019_inner_setup.sh
 mkdir -p "$BH019_REPORT_DIR"
+# This script runs only on a new disposable, empty GH-hosted Incus VM.
+# Reuse the EXACT image already cached by the first parent creation instead
+# of asking the nested daemon to fetch a remote moving images: alias.
+# The export is CI-local, never exposed as a service/Artifact.
+image_dir="$(mktemp -d -p /tmp bh019-cached-image.XXXXXXXX)"
+trap 'rm -rf -- "$image_dir"' EXIT
+image_metadata=""
+image_rootfs=""
 for case_name in control bpf-parent; do
   name="bh019-${case_name}-1114"
   test -z "$(incus list --format csv -c n | grep -Fx "$name" || true)"
   incus init images:ubuntu/24.04 "$name" -c security.nesting=true -c limits.cpu=1 -c limits.memory=2048MiB
+  if [ "$case_name" = control ]; then
+    image_fingerprint="$(incus config get "$name" volatile.base_image)"
+    test -n "$image_fingerprint"
+    incus image info "$image_fingerprint" >/dev/null
+    incus image export "$image_fingerprint" "$image_dir/bh019-source"
+    for image_file in "$image_dir"/*; do
+      test -s "$image_file"
+      case "${image_file##*/}" in
+        *rootfs*|*.squashfs) test -z "$image_rootfs"; image_rootfs="$image_file" ;;
+        *.tar|*.tar.*) test -z "$image_metadata"; image_metadata="$image_file" ;;
+        *) echo "BH019_IMAGE_EXPORT_UNKNOWN_FORMAT=BLOCKED" >&2; exit 85 ;;
+      esac
+    done
+    test -s "$image_metadata"
+    if [ -n "$image_rootfs" ]; then test -s "$image_rootfs"; fi
+    # Report fingerprints and hashes, not potentially large image bytes.
+    printf 'outer_cached_image=%s\n' "$image_fingerprint" > "$BH019_REPORT_DIR/image-provenance.txt"
+    sha256sum "$image_metadata" >> "$BH019_REPORT_DIR/image-provenance.txt"
+    if [ -n "$image_rootfs" ]; then
+      sha256sum "$image_rootfs" >> "$BH019_REPORT_DIR/image-provenance.txt"
+    fi
+    echo BH019_OUTER_CACHED_IMAGE_EXPORTED=PASS
+  fi
   if [ "$case_name" = bpf-parent ]; then
     incus config set "$name" security.syscalls.intercept.bpf=true
     incus config set "$name" security.syscalls.intercept.bpf.devices=true
@@ -36,6 +67,12 @@ for case_name in control bpf-parent; do
     continue
   fi
   echo "BH019_PARENT_START=PASS case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
+  test -s "$image_metadata"
+  incus file push "$image_metadata" "$name/tmp/bh019-l2-image-metadata"
+  if [ -n "$image_rootfs" ]; then
+    incus file push "$image_rootfs" "$name/tmp/bh019-l2-image-rootfs"
+  fi
+  echo "BH019_IMAGE_TRANSFERRED_FROM_OUTER_CACHE=PASS case=$case_name" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
   incus file push scripts/bh019_inner_setup.sh "$name/tmp/bh019_inner_setup.sh"
   if incus exec "$name" -- /bin/sh /tmp/bh019_inner_setup.sh "$case_name" "$BH019_PROXY_URL" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
     cat "$BH019_REPORT_DIR/${case_name}-inner.log"
