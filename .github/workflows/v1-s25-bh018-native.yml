@@ -86,9 +86,14 @@ jobs:
           sudo incus exec "$BH018_GUEST_NAME" -- /bin/chmod 0755 /tmp/bh018-side-effect127.sh /tmp/bh018-side-effect126.sh
           sudo incus exec "$BH018_GUEST_NAME" -- /bin/sh -c 'test ! -e /tmp/bh018-effects127 && test ! -e /tmp/bh018-effects126 && test -x /tmp/bh018-side-effect127.sh && test -x /tmp/bh018-side-effect126.sh'
           echo "BH018_SIDE_EFFECT_NEGATIVE_CONTROLS_PREPARED=PASS"
+          set +e
           sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,BH018_GUEST_NAME "$RUNNER_TEMP/bh018-native-exec-probe" | tee "$RUNNER_TEMP/bh018-native-exec.jsonl"
-          grep -qx 'BH018_NATIVE_ORIGINAL_27_CASES=PASS' "$RUNNER_TEMP/bh018-native-exec.jsonl"
+          probe_rc=$?
+          set -e
+          sudo incus exec "$BH018_GUEST_NAME" -- /bin/sh -c 'wc -l /tmp/bh018-effects127 /tmp/bh018-effects126'
           sudo incus exec "$BH018_GUEST_NAME" -- /bin/sh -c 'test "$(wc -l < /tmp/bh018-effects127)" -eq 3 && test "$(wc -l < /tmp/bh018-effects126)" -eq 3'
+          test "$probe_rc" -eq 0
+          grep -qx 'BH018_NATIVE_ORIGINAL_27_CASES=PASS' "$RUNNER_TEMP/bh018-native-exec.jsonl"
           echo "BH018_NATIVE_FAILURE_126_127_WITH_GUEST_SIDE_EFFECTS=PASS"
           echo "BH018_DIRECT_SDK_ORIGINALS_WITH_GUEST_FAILURE_BOUNDARY=PASS"
       - name: Run two-parent native Incus nesting BPF security A/B
