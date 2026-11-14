@@ -222,7 +222,9 @@ import json, sys
 status = json.load(open(sys.argv[1]))
 n = status["native"]
 assert status["ready"] and n["ready"]
-assert n["selected_storage_separate_mount"] and n["selected_storage_space_checked"]
+assert n["selected_storage_pool_ready"]
+assert n["selected_storage_quota_verified"] is False
+assert any("STORAGE_QUOTA_UNVERIFIED" in warning for warning in n["warnings"])
 assert n["default_nic_configured"]
 print("S2_NATIVE_PRECONDITION_EXACT_NONROOT_BLOCK_POOL=PASS")
 PY
@@ -247,8 +249,8 @@ with open(sys.argv[1]) as f:
 native=obj["native"]
 assert obj["ready"] is True and native["ready"] is True, native
 assert native["selected_storage_quota_verified"] is False, native
-assert native["selected_storage_separate_mount"] is True, native
-assert any("DIR_QUOTA_UNVERIFIED" in x for x in native["warnings"]), native
+assert native["selected_storage_pool_ready"] is True, native
+assert any("STORAGE_QUOTA_UNVERIFIED" in x for x in native["warnings"]), native
 print("S2_NATIVE_DIR_NO_QUOTA_READY_WITH_EXPLICIT_WARNING=PASS")
 PYTEST
 sudo incus profile device set default root pool=bw-s2-native-pool --project "$project"
