@@ -574,6 +574,9 @@ BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
+# Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
+echo "BH018_MCP_PROJECT=$project"
+grep '^BH018_MCP_' "$work/bh018-atomic-start.log"
 echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
 
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
@@ -599,6 +602,8 @@ BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh018-atomic-resume.log"
+# Preserve original native IDs and new readback/cleanup IDs in sanitized CI evidence.
+grep '^BH018_MCP_' "$work/bh018-atomic-resume.log"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS"
 

@@ -133,6 +133,7 @@ func start(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	boxID := getString(finalCreate, "box_uuid")
 	require(len(boxID) == 36, "real Box missing original native UUID")
 	require(getString(finalCreate, "native_operation_id") != "", "real Create lacked native operation ID")
+	fmt.Printf("BH018_MCP_CREATE_BOX_UUID=%s BW_ID=%s NATIVE_ID=%s\n", boxID, createID, getString(finalCreate, "native_operation_id"))
 	cp := checkpoint{BoxID: boxID, CreateID: createID, CreatedAt: time.Now().Unix()}
 	for _, exit := range []int{126, 127} {
 		command := argv(exit)
@@ -145,6 +146,7 @@ func start(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		final := poll(ctx, s, id)
 		nativeID := getString(final, "native_operation_id")
 		require(len(nativeID) == 36, "lost original native Incus Exec ID at exit %d", exit)
+		fmt.Printf("BH018_MCP_EXEC_EXIT_%d_BW_ID=%s NATIVE_ID=%s\n", exit, id, nativeID)
 		readOutput(ctx, s, id, "stdout", exit, fmt.Sprintf("OUT_%d", exit))
 		readOutput(ctx, s, id, "stderr", exit, fmt.Sprintf("ERR_%d", exit))
 		cp.Specials = append(cp.Specials, verifiedCase{
@@ -170,6 +172,7 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		final := poll(ctx, s, original.OriginalID)
 		require(getString(final, "native_operation_id") == original.NativeID,
 			"original native Incus Exec ID changed across restart")
+		fmt.Printf("BH018_MCP_REOPEN_EXIT_%d_BW_ID=%s NATIVE_ID=%s\n", original.Exit, original.OriginalID, original.NativeID)
 		readOutput(ctx, s, original.OriginalID, "stdout", original.Exit,
 			fmt.Sprintf("OUT_%d", original.Exit))
 		readOutput(ctx, s, original.OriginalID, "stderr", original.Exit,
@@ -195,7 +198,10 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 			"idempotency_key": fmt.Sprintf("s2-bh018-independent-readback-%d-001", original.Exit),
 		})
 		readID := originalID(check)
-		poll(ctx, s, readID)
+		fresh := poll(ctx, s, readID)
+		freshNativeID := getString(fresh, "native_operation_id")
+		require(len(freshNativeID) == 36, "new readback lacks native identity")
+		fmt.Printf("BH018_MCP_READBACK_EXIT_%d_BW_ID=%s NATIVE_ID=%s\n", original.Exit, readID, freshNativeID)
 		readOutput(ctx, s, readID, "stdout", 0,
 			fmt.Sprintf("BH018_EFFECT_%d\n", original.Exit))
 		fmt.Printf("BH018_NATIVE_REAL_HTTP_MCP_EXIT_%d_DEDUPE_READBACK_AFTER_RESTART=PASS\n",
@@ -204,11 +210,15 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	stop := invoke(ctx, s, "box_stop", map[string]any{
 		"box_id": cp.BoxID, "idempotency_key": "s2-bh018-atomic-native-stop-001",
 	})
-	poll(ctx, s, originalID(stop))
+	stopID := originalID(stop)
+	stopReceipt := poll(ctx, s, stopID)
+	fmt.Printf("BH018_MCP_CLEAN_STOP_BW_ID=%s NATIVE_ID=%s\n", stopID, getString(stopReceipt, "native_operation_id"))
 	del := invoke(ctx, s, "box_delete", map[string]any{
 		"box_id": cp.BoxID, "idempotency_key": "s2-bh018-atomic-native-delete-001",
 	})
-	poll(ctx, s, originalID(del))
+	delID := originalID(del)
+	delReceipt := poll(ctx, s, delID)
+	fmt.Printf("BH018_MCP_CLEAN_DELETE_BW_ID=%s NATIVE_ID=%s\n", delID, getString(delReceipt, "native_operation_id"))
 	list := invoke(ctx, s, "box_list", map[string]any{})
 	rows, ok := list["boxes"].([]any)
 	require(ok && len(rows) == 0, "disposable owned instance not fully deleted")
