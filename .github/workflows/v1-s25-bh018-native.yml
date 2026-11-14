@@ -97,7 +97,26 @@ jobs:
           set -euo pipefail
           sh -n scripts/bh019_inner_setup.sh
           sh -n scripts/bh019_bpf_lab.sh
-          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT env BH019_REPORT_DIR="$RUNNER_TEMP/bh019-matrix" sh scripts/bh019_bpf_lab.sh
+          gateway_cidr="$(sudo incus network get incusbr0 ipv4.address)"
+          gateway="${gateway_cidr%%/*}"
+          case "$gateway" in
+            10.*|172.*|192.168.*) ;;
+            *) echo BH019_NONPRIVATE_BRIDGE_REFUSED >&2; exit 84 ;;
+          esac
+          python3 scripts/s25_package_proxy.py "$gateway" 18466 > "$RUNNER_TEMP/bh019-proxy.log" 2>&1 &
+          proxy_pid=$!
+          trap 'kill "$proxy_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in 1 2 3 4; do
+            if curl --silent --show-error --fail --head -x "http://$gateway:18466" --connect-timeout 3 --max-time 10 https://pkgs.zabbly.com/key.asc >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          echo BH019_ALLOWLISTED_PROXY_READY=PASS
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT env BH019_PROXY_URL="http://$gateway:18466" BH019_REPORT_DIR="$RUNNER_TEMP/bh019-matrix" sh scripts/bh019_bpf_lab.sh
       - name: Preserve scoped BH-019 parent and child logs
         if: always()
         uses: actions/upload-artifact@v4
