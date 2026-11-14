@@ -1,5 +1,9 @@
 //go:build ignore
 
+// This is intentionally a characterization test, not a generic claim that
+// missing return means startup failed: actual Incus 7.6 Failure operations
+// returned metadata.return=127/126. The checks below were corrected after a
+// real 21-case native negative run retained all original UUIDs and errors.
 // BH-018 direct official Incus SDK native-operation probe for an exclusively
 // disposable CI guest. Not a shipped command, an MCP tool, or a recovery path.
 package main
@@ -137,11 +141,11 @@ func main() {
 	tests := []scenario{
 		{name: "true-exit0", argv: []string{"/bin/true"}, expectStatus: "success", expectReturn: pint(0)},
 		{name: "false-exit1", argv: []string{"/bin/false"}, expectStatus: "success", expectReturn: pint(1)},
-		{name: "missing-binary-native", argv: []string{"/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure"},
-		{name: "non-executable-file-native", argv: []string{"/etc/hostname"}, expectStatus: "failure"},
-		{name: "missing-cwd-native", argv: []string{"/bin/true"}, cwd: "/bh018-definitely-missing-cwd", expectStatus: "failure"},
-		{name: "shell-missing-exit127", argv: []string{"/bin/sh", "-c", "exec /usr/bin/bh018-definitely-missing-executable"}, expectStatus: "success", expectReturn: pint(127)},
-		{name: "timeout-wrapped-missing-exit127", argv: []string{"/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "--", "8.000s", "/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "success", expectReturn: pint(127)},
+		{name: "missing-binary-native", argv: []string{"/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
+		{name: "non-executable-file-native", argv: []string{"/etc/hostname"}, expectStatus: "failure", expectReturn: pint(126)},
+		{name: "missing-cwd-native", argv: []string{"/bin/true"}, cwd: "/bh018-definitely-missing-cwd", expectStatus: "success", expectReturn: pint(0)},
+		{name: "shell-missing-exit127", argv: []string{"/bin/sh", "-c", "exec /usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
+		{name: "timeout-wrapped-missing-exit127", argv: []string{"/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "--", "8.000s", "/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
 	}
 	failures := 0
 	for round := 1; round <= 3; round++ {
