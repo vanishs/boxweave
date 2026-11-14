@@ -10,6 +10,15 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
+func oauthPrivateTempDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func oauthAutomationStore(t *testing.T) *state.Store {
 	t.Helper()
 	dbDir := filepath.Join(t.TempDir(), "private")
@@ -26,7 +35,7 @@ func oauthAutomationStore(t *testing.T) *state.Store {
 
 func TestOAuthSetupGenerateAndPasswordFile(t *testing.T) {
 	s := oauthAutomationStore(t)
-	dir := t.TempDir()
+	dir := oauthPrivateTempDir(t)
 	secret := filepath.Join(dir, "oauth-approval")
 	if err := setupOAuthNoninteractive(s, true, secret, ""); err != nil {
 		t.Fatalf("generate: %v", err)
@@ -67,7 +76,7 @@ func TestOAuthSetupGenerateAndPasswordFile(t *testing.T) {
 
 func TestOAuthSetupRejectsUnsafeFiles(t *testing.T) {
 	s := oauthAutomationStore(t)
-	dir := t.TempDir()
+	dir := oauthPrivateTempDir(t)
 	secret := filepath.Join(dir, "approval")
 	const good = "generated-test-password-1234567\n"
 	if err := os.WriteFile(secret, []byte(good), 0644); err != nil {
@@ -117,7 +126,7 @@ func TestOAuthSetupRejectsUnsafeFiles(t *testing.T) {
 
 func TestOAuthSetupRejectsInvalidOptionsAndContents(t *testing.T) {
 	s := oauthAutomationStore(t)
-	dir := t.TempDir()
+	dir := oauthPrivateTempDir(t)
 	secret := filepath.Join(dir, "approval")
 	for _, tc := range []struct {
 		generate bool
@@ -153,7 +162,7 @@ func TestOAuthSetupRejectsInvalidOptionsAndContents(t *testing.T) {
 
 func TestOAuthSetupPersistenceFailureCleansNewFile(t *testing.T) {
 	s := oauthAutomationStore(t)
-	dir := t.TempDir()
+	dir := oauthPrivateTempDir(t)
 	secret := filepath.Join(dir, "new-password")
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
