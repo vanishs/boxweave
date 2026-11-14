@@ -259,7 +259,7 @@ EOF
           # loaded/removed OR the exact policy-admin denial was reproduced.
           # An unrelated parser/runtime failure must never masquerade as
           # accepted negative evidence.
-          if [ "$rc" -eq 243 ] && grep -Fq 'You need policy admin privileges' /tmp/bh019-l2-policy-load.log; then
+          if [ "$rc" -eq 243 ] && grep -Fq "You need policy admin privileges" /tmp/bh019-l2-policy-load.log; then
             echo "BH019_L2_POLICY_ADMIN_DENIAL=CONFIRMED"
           else
             echo "BH019_L2_POLICY_ADMIN_DENIAL=UNCLASSIFIED rc=$rc"
