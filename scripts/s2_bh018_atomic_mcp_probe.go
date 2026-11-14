@@ -110,10 +110,10 @@ func connect(ctx context.Context) *mcp.ClientSession {
 	require(token != "", "missing isolated admin token")
 	c := mcp.NewClient(&mcp.Implementation{Name: "bh018-native-installed-test", Version: "1"}, nil)
 	s, err := c.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: url,
-		HTTPClient: &http.Client{Transport: bearerTransport{token: token}},
+		Endpoint:             url,
+		HTTPClient:           &http.Client{Transport: bearerTransport{token: token}},
 		DisableStandaloneSSE: true,
-		MaxRetries: -1,
+		MaxRetries:           -1,
 	}, nil)
 	require(err == nil, "official MCP client handshake: %v", err)
 	return s
@@ -124,7 +124,7 @@ func start(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	require(os.IsNotExist(err), "test checkpoint already exists; no duplicate create")
 	create := invoke(ctx, s, "box_create", map[string]any{
 		"name": "bw-s2-bh018-atomic-native",
-		"cpu": 1, "memory_mib": 512, "disk_gib": 2,
+		"cpu":  1, "memory_mib": 512, "disk_gib": 2,
 		"start": true, "internet": false,
 		"idempotency_key": "s2-bh018-atomic-native-create-001",
 	})
