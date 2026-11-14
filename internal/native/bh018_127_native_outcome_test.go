@@ -11,24 +11,28 @@ import (
 // absent executable and an *existing shell that wrote a file before exit 127*
 // returned Failure / "Command not found" / metadata.return=127.
 // The latter Guest side effect was independently read back afterward.
-// That native signature cannot prove absence of Guest effects and must not
-// authorize a FAILED-as-predispatch result or safe retry.
-func TestBH018NativeFailureWithReturn127NeverProvesNoGuestEffect(t *testing.T) {
+// A separate real shell that wrote a file before exit 126 returned Failure /
+// "Command not executable" / metadata.return=126; its file also survived.
+// Neither native signature proves absence of Guest effects or authorizes
+// a FAILED-as-predispatch classification or safe retry.
+func TestBH018NativeFailureWithSpecialExitNeverProvesNoGuestEffect(t *testing.T) {
 	path := "/1.0/instances/owned-guest/logs/exec-output/exec_original.stdout"
 	for _, tc := range []struct {
-		name string
-		err  string
+		name     string
+		err      string
+		exitCode int
 	}{
-		{name: "nonexistent-executable", err: "Command not found"},
-		{name: "existing-shell-wrote-file-then-exited-127", err: "Command not found"},
-		{name: "unknown-error-with-code-127", err: "opaque native failure"},
+		{name: "nonexistent-executable", err: "Command not found", exitCode: 127},
+		{name: "existing-shell-wrote-file-then-exited-127", err: "Command not found", exitCode: 127},
+		{name: "existing-shell-wrote-file-then-exited-126", err: "Command not executable", exitCode: 126},
+		{name: "unknown-error-with-code-127", err: "opaque native failure", exitCode: 127},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			op := &api.Operation{
 				StatusCode: api.Failure,
 				Err:        tc.err,
 				Metadata: map[string]any{
-					"return": float64(127),
+					"return": float64(tc.exitCode),
 					"output": map[string]any{"1": path},
 				},
 			}
