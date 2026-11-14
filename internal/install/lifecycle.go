@@ -56,9 +56,9 @@ func doctorAsService(p Plan, binary string) error {
 	}
 	var status struct {
 		MCPReady bool `json:"mcp_ready"`
-		Native struct {
-			ServiceReady bool `json:"service_ready"`
-			ErrorClass string `json:"error_class"`
+		Native   struct {
+			ServiceReady bool   `json:"service_ready"`
+			ErrorClass   string `json:"error_class"`
 		} `json:"native"`
 	}
 	if err := json.Unmarshal(out, &status); err != nil {
