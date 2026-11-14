@@ -76,7 +76,7 @@ def check_file(name: str, data: bytes) -> list[str]:
             ["gofmt", "-d"], input=data, capture_output=True, cwd=ROOT
         )
         if process.returncode or process.stdout:
-            failures.append(f"{name}: gofmt mismatch (run gofmt -w)\\n" + process.stdout.decode("utf-8", errors="replace")[:3000])
+            failures.append(f"{name}: gofmt mismatch (run gofmt -w)")
     return failures
 
 
