@@ -581,6 +581,18 @@ echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
 
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
 wait "$service_pid" 2>/dev/null || :
+# A runuser/sudo wrapper can exit before its child has released the SQLite
+# serve lock; wait for the exact owned nonroot service, not merely the wrapper.
+attempt=0
+while sudo pgrep -u boxweave -f "^$work/boxweave serve" >/dev/null; do
+  if [ "$attempt" -ge 30 ]; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_STILL_ACTIVE=BLOCKED" >&2
+    exit 92
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_EXITED=PASS"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
   -u XDG_CONFIG_HOME HOME=/home/boxweave \
   XDG_CONFIG_HOME=/home/boxweave/.config \
@@ -595,7 +607,20 @@ until [ "$attempt" -ge 40 ]; do
   attempt=$((attempt+1))
   sleep 1
 done
-test "$attempt" -lt 40
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_NORMAL_RESTART_NOT_READY=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  elif grep -Fqi 'address already in use' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=LISTEN_IN_USE" >&2
+  elif grep -Fqi 'permission denied' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=PERMISSION_DENIED" >&2
+  else
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 93
+fi
+echo "BH018_INSTALLED_NORMAL_RESTART_HTTP_401=PASS"
 BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
   "$work/s2-bh018-atomic-mcp-probe" resume > "$work/bh018-atomic-resume.log" 2>&1
