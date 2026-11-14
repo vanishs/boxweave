@@ -2,7 +2,8 @@
 
 // This is intentionally a characterization test, not a generic claim that
 // missing return means startup failed: actual Incus 7.6 Failure operations
-// returned metadata.return=127/126. The checks below were corrected after a
+// returned metadata.return=127/126. These codes and Err strings ALSO arise
+// after a real script has already produced side effects; no blind replay. The checks below were corrected after a
 // real 21-case native negative run retained all original UUIDs and errors.
 // BH-018 direct official Incus SDK native-operation probe for an exclusively
 // disposable CI guest. Not a shipped command, an MCP tool, or a recovery path.
@@ -146,6 +147,8 @@ func main() {
 		{name: "missing-cwd-native", argv: []string{"/bin/true"}, cwd: "/bh018-definitely-missing-cwd", expectStatus: "success", expectReturn: pint(0)},
 		{name: "shell-missing-exit127", argv: []string{"/bin/sh", "-c", "exec /usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
 		{name: "timeout-wrapped-missing-exit127", argv: []string{"/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "--", "8.000s", "/usr/bin/bh018-definitely-missing-executable"}, expectStatus: "failure", expectReturn: pint(127)},
+		{name: "started-script-side-effect-then-127", argv: []string{"/tmp/bh018-side-effect127.sh"}, expectStatus: "failure", expectReturn: pint(127)},
+		{name: "started-script-side-effect-then-126", argv: []string{"/tmp/bh018-side-effect126.sh"}, expectStatus: "failure", expectReturn: pint(126)},
 	}
 	failures := 0
 	for round := 1; round <= 3; round++ {
@@ -160,5 +163,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "BH018_NATIVE_ERRORS=%d; no acceptance claim\n", failures)
 		os.Exit(1)
 	}
-	fmt.Println("BH018_NATIVE_ORIGINAL_21_CASES=PASS")
+	fmt.Println("BH018_NATIVE_ORIGINAL_27_CASES=PASS")
 }
