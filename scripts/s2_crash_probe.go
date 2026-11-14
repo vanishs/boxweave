@@ -24,6 +24,26 @@ const (
 	markerCommand = "sleep 12; echo once >> /tmp/bw-s2-crash-marker"
 )
 
+// Variant selection is confined to an explicitly named one-use runner
+// fixture. No variant changes production command replay or UNKNOWN recovery.
+var (
+	activeCrashName    = crashName
+	activeCrashKey     = crashKey
+	activeMarkerCommand = markerCommand
+	activeCreateKey    = "s2-crash-new-owned-box-001"
+	activeSavedKey     = "s2-crash-output-before-restart-01"
+)
+
+func init() {
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" {
+		activeCrashName = "bw-s2-bh018-final-cut"
+		activeCrashKey = "s2-bh018-real-service-final-cut-original"
+		activeMarkerCommand = "sleep 25; echo once >> /tmp/bw-s2-bh018-final-cut-marker"
+		activeCreateKey = "s2-bh018-real-service-final-cut-create"
+		activeSavedKey = "s2-bh018-real-service-final-cut-output"
+	}
+}
+
 type original struct {
 	BoxUUID             string `json:"box_uuid"`
 	OperationID         string `json:"operation_id"`
@@ -114,8 +134,8 @@ func waitCreate(ctx context.Context, s *mcp.ClientSession, id string) map[string
 func args() map[string]any {
 	return map[string]any{
 		"box_id":          "", // populated after the authorized creation
-		"argv":            []string{"/bin/sh", "-c", markerCommand},
-		"idempotency_key": crashKey,
+		"argv":            []string{"/bin/sh", "-c", activeMarkerCommand},
+		"idempotency_key": activeCrashKey,
 	}
 }
 
@@ -130,8 +150,8 @@ func main() {
 	switch os.Args[1] {
 	case "start":
 		created := call(ctx, s, "box_create", map[string]any{
-			"name": crashName, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": true,
-			"idempotency_key": "s2-crash-new-owned-box-001"})
+			"name": activeCrashName, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": true,
+			"idempotency_key": activeCreateKey})
 		createID := str(created, "operation_id")
 		must(createID != "", "missing durable create receipt")
 		c := waitCreate(ctx, s, createID)
@@ -143,7 +163,7 @@ func main() {
 		saved := call(ctx, s, "box_exec", map[string]any{
 			"box_id": uuid, "argv": []string{"/bin/sh", "-c",
 				"printf saved-out; printf saved-err >&2; exit 7"},
-			"idempotency_key": "s2-crash-output-before-restart-01"})
+			"idempotency_key": activeSavedKey})
 		savedID := str(saved, "operation_id")
 		must(savedID != "", "recorded Exec admission missing")
 		savedDone := waitCreate(ctx, s, savedID)

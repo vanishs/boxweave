@@ -720,6 +720,100 @@ if [ -n "$(sudo incus list --all-projects --format csv -c n)" ]; then
 fi
 echo "S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS"
 
+# BH-018: kill the actual one-use installed BoxWeave daemon when its
+# original Guest Exec terminal SQLite WAL commit begins. Unlike the earlier
+# separate SQLite helper SIGKILL and already-completed-output restart, this
+# uses the same production FinalizeVerifiedExec path as HTTP MCP box_exec.
+# It starts a NEW named fixture: an unrelated UNKNOWN is never reclaimed.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra \
+  -o "$work/s2-bh018-service-cut.so" scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-bh018-service-cut.so"
+cut_state="$work/bh018-service-cut-original.json"
+cut_arm="$work/ledger/bh018-service-cut-arm"
+cut_witness="$work/ledger/bh018-service-cut-witness"
+test ! -e "$cut_state"
+sudo test ! -e "$cut_arm"
+sudo test ! -e "$cut_witness"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_FSYNC_DB_WAL="$db-wal" BW_S2_FSYNC_ARM_FILE="$cut_arm" \
+  BW_S2_FSYNC_WITNESS_FILE="$cut_witness" BW_S2_FSYNC_CUT_MODE=before \
+  LD_PRELOAD="$work/s2-bh018-service-cut.so" \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-start.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" start > "$work/bh018-service-cut-original.redacted.log" 2>&1
+test -s "$cut_state"
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_COMMIT_CUT'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3) as c:
+    row=c.execute('SELECT state,native_operation_id FROM operations WHERE id=?',
+                  (original['operation_id'],)).fetchone()
+assert row == ('VERIFYING', original['native_operation_id']), (row,original)
+print('BH018_INSTALLED_ORIGINAL_NATIVE_ACK_BEFORE_COMMIT_CUT=PASS')
+print('BH018_INSTALLED_CUT_ORIGINAL_BW_ID='+original['operation_id'])
+print('BH018_INSTALLED_CUT_ORIGINAL_NATIVE_ID='+original['native_operation_id'])
+PY_BH018_COMMIT_CUT
+sudo touch "$cut_arm"
+attempt=0
+until [ "$attempt" -ge 45 ]; do
+  if sudo test -s "$cut_witness"; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$cut_witness"
+wait "$service_pid" 2>/dev/null || :
+sudo rm -f -- "$cut_arm"
+echo 'BH018_INSTALLED_SERVICE_KILLED_DURING_REAL_EXEC_SQLITE_WAL_COMMIT=PASS'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-restarted.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" resume > "$work/bh018-service-cut-resume.redacted.log" 2>&1
+grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-cut-resume.redacted.log"
+grep -Fqx 'S2_NATIVE_PROCESS_KILL_UNKNOWN_REPLAY_DENIED=PASS' "$work/bh018-service-cut-resume.redacted.log"
+attempt=0
+count=""
+until [ "$attempt" -ge 45 ]; do
+  count="$(sudo incus exec bw-s2-bh018-final-cut --project "$project" -- \
+    /bin/sh -c 'wc -l < /tmp/bw-s2-bh018-final-cut-marker' 2>/dev/null || :)"
+  if [ "$count" = 1 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$count" = 1
+echo 'BH018_INSTALLED_SERVICE_PRECOMMIT_SIGKILL_GUEST_EFFECT_ONCE=PASS'
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-bh018-final-cut
+sudo incus stop bw-s2-bh018-final-cut --project "$project"
+sudo incus delete bw-s2-bh018-final-cut --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo 'BH018_INSTALLED_SERVICE_WAL_COMMIT_SIGKILL_UNKNOWN_LOCK_AND_TEARDOWN=PASS'
+
 # The installed candidate must refuse arbitrary/foreign SQLite histories
 # BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
 # is intentionally constructed independently from the running journal.
