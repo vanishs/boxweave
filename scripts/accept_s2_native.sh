@@ -161,6 +161,8 @@ echo "S2_NATIVE_OWNED_UBUNTU_ALIAS_VERIFIED=PASS"
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
+chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
@@ -554,6 +556,51 @@ sudo incus delete "$foreign_name" --project "$foreign_project"
 sudo incus project delete "$foreign_project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
+
+# BH-018: an additional native end-to-end acceptance through the *installed*
+# non-root, restricted-Project BoxWeave service and official Go MCP SDK.
+# Real Incus 7.6 exits 126/127 cause native Operation Failure even after
+# successful Guest side effects. Only the exact original native terminal and
+# its bounded output paths allow the atomic SQLite SUCCEEDED receipt.
+# A restart of THIS ONE-USE service/ledger must retain original operation
+# identity and output without native redispatch; fresh commands must work.
+# The original historical UNKNOWN claims on other hosts are never touched.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+bh018_checkpoint="$work/bh018-atomic-original.json"
+test ! -e "$bh018_checkpoint"
+BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
+  "$work/s2-bh018-atomic-mcp-probe" start > "$work/bh018-atomic-start.log" 2>&1
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
+echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
+
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+  -u XDG_CONFIG_HOME HOME=/home/boxweave \
+  XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
+  "$work/s2-bh018-atomic-mcp-probe" resume > "$work/bh018-atomic-resume.log" 2>&1
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh018-atomic-resume.log"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS"
 
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.
