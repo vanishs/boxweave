@@ -173,7 +173,7 @@ jobs:
           This tag is intentionally built from an isolated release-lab branch, not
           from protected v1, because the operator requested nested field testing
           before finishing full recursive UID/GID/AppArmor isolation.
-          
+
           Source tests and native amd64/arm64 CGO binary/SQLite smokes must pass.
           An isolated installed L1 read/create/update/start/exec/stop/delete plus
           fail-closed input tests passed on the parent functional source commit.
