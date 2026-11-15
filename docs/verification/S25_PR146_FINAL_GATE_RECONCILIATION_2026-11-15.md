@@ -49,3 +49,14 @@ No replay, cancellation, unlock, mutation, SIGKILL, teardown or same-resource at
 **Do not change the original acceptance contract to call inheritance a policy namespace, or infer actual native start failure from a 126/127 return, vanished native Operation, or delayed Stopped readback.** If pinned Linux kernel/AppArmor/Incus cannot permit unprivileged safe per-depth policy admin, record a genuine platform blocker and require an explicit product-level design decision or upstream capability; do not silently degrade the requested security contract.
 
 References: `docs/verification/S25_RC6_L0_L5_CROSS_LAYER_MCP_FIELD_MATRIX_2026-11-15.md`, `docs/development/S25_PR146_RC6_L0_L5_HANDOFF_AND_CLOSEOUT_2026-11-15.md`, `docs/research/S25_BH018_019_PINNED_ROOT_CAUSES_AND_HOST_GATE_2026-11-14.md`, and `docs/verification/BRIDGEHEAD_ACCEPTANCE.md`.
+
+## 2026-11-15 isolated native BH-019 security evidence (original-HEAD run)
+
+The successful [native Incus run 43767471059](https://github.com/vanishs/boxweave/actions/runs/43767471059) has **two distinct native A/B parents** on disposable GitHub Ubuntu runners using Linux `7.0.0-1014-aws`, not the physical Ubuntu kernel `7.0.0-43-generic` and not L0–L5. Its log recorded:
+
+- Parent-level AppArmor inert test profile parse/load/remove **PASS**; nested L2 parse **PASS**, but actual load **DENIED**, parser **rc=243**, explicit `You need policy admin privileges to manage profiles` on both cases. This is a native negative witness for the tested runner, not a feature implemented by the product.
+- Nested child PID1 and Exec labels were `(enforce)`, and `.ns_stacked=yes`, but the policy namespace remained that of the surrounding parent; thus there is **no delegated independent L2 Policy Namespace**, despite `CAP_MAC_ADMIN` appearance.
+- Outer host cgroup-device BPF load probe returned `GRANTED_NO_ATTACH`; both nested parents and nested L2 returned `DENIED errno=1`, even in the BPF-parent A/B variant. **Attach/detach and actual protected device denial NOT TESTED**; never mark device-BPF PASS based on only load or an intercept option.
+- Both native L2 child starts succeeded: **functional shallow recursion**. This does not repair the policy-admin and BPF safety blockers.
+
+The isolated independent Verifier workflow `v1-s25-bridgehead.yml` is now also triggered on this PR branch; it runs a distinct fresh disposable native L0→L1→L2 installed-MCP/two-agent/network/recovery plus separate verifier harness. Its `S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET` marker must remain; passing the suite grants only its explicitly scoped test matrix and **never** BH-019 per-depth policy-admin PASS. Workflow status for the *new code+document SHA* must be verified separately.
