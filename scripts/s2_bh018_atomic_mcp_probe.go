@@ -160,15 +160,19 @@ func start(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	fmt.Println("BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS")
 }
 func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
+	fmt.Println("BH018_MCP_RESUME_PHASE=CHECKPOINT_READ")
 	raw, err := os.ReadFile(stateFile)
 	require(err == nil, "checkpoint unavailable: %v", err)
 	var cp checkpoint
 	require(json.Unmarshal(raw, &cp) == nil && len(cp.BoxID) == 36 && len(cp.Specials) == 2,
 		"invalid original-only restart checkpoint")
+	fmt.Println("BH018_MCP_RESUME_PHASE=CREATE_READBACK")
 	require(getString(poll(ctx, s, cp.CreateID), "box_uuid") == cp.BoxID,
 		"reopened project adopted a different native instance")
+	fmt.Println("BH018_MCP_RESUME_PHASE=CREATE_VERIFIED")
 
 	for _, original := range cp.Specials {
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_READBACK\n", original.Exit)
 		final := poll(ctx, s, original.OriginalID)
 		require(getString(final, "native_operation_id") == original.NativeID,
 			"original native Incus Exec ID changed across restart")
@@ -177,9 +181,11 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 			fmt.Sprintf("OUT_%d", original.Exit))
 		readOutput(ctx, s, original.OriginalID, "stderr", original.Exit,
 			fmt.Sprintf("ERR_%d", original.Exit))
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_OUTPUT_VERIFIED\n", original.Exit)
 
 		// Exactly the SAME authorized idempotency key + argv: only a
 		// read-only replay of the original, never a second native POST.
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_REPLAY\n", original.Exit)
 		replay := invoke(ctx, s, "box_exec", map[string]any{
 			"box_id": cp.BoxID, "argv": argv(original.Exit),
 			"idempotency_key": key(original.Exit),
@@ -187,10 +193,12 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		require(originalID(replay) == original.OriginalID && replay["duplicate"] == true &&
 			getString(replay, "native_operation_id") == original.NativeID,
 			"original dedupe after restart lost provenance or reissued Guest effects")
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_REPLAY_VERIFIED\n", original.Exit)
 
 		// A NEW request is allowed only after the verified original
 		// native terminal. Independently read guest file, prove exact
 		// effect count = one, and verify the fresh Exec itself succeeded.
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_READBACK\n", original.Exit)
 		check := invoke(ctx, s, "box_exec", map[string]any{
 			"box_id": cp.BoxID,
 			"argv": []string{"/bin/cat",
@@ -232,8 +240,14 @@ func main() {
 	require(stateFile != "", "checkpoint path not set")
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
+	if os.Args[1] == "resume" {
+		fmt.Println("BH018_MCP_RESUME_PHASE=CONNECT")
+	}
 	s := connect(ctx)
 	defer s.Close()
+	if os.Args[1] == "resume" {
+		fmt.Println("BH018_MCP_RESUME_PHASE=CONNECTED")
+	}
 	if os.Args[1] == "start" {
 		start(ctx, s, stateFile)
 	} else {
