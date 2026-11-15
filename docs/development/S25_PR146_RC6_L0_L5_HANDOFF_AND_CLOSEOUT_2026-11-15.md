@@ -1,0 +1,61 @@
+# PR #146 交接与收尾门禁（2026-11-15，L0～L5 实际 MCP）
+
+**PR：** https://github.com/vanishs/boxweave/pull/146
+**当前开发分支：** `fix/v1-s25-bh018-bh019-20261114`
+**本交接前最新代码+现场文档提交：** `db2a5452fc37b726b7cced876be8db38d54ce927`。提交本交接文档会再次前移 HEAD，以实际 GitHub 返回值为准。
+**受保护目标分支：** `v1`。PR 当前 **Draft / mergeable=false**，应先精确核对分支差异、冲突、审批和 CI，不要假设可直接合并，也不要绕过受保护分支规则。
+**正式发布的测试资产：** `v1.0.0-rc.6` prerelease，commit `370e419c43f06b7488c7330ba61913ffec0e9f78`，amd64 SHA `0932ad434d2a1b113e2254f6ca02a218c2dff473f70d7ed3b2f45e93d0610174`。已发布的 immutable tag **不修改、不重签、不覆盖**；若有代码修改使用可追踪的新候选版本与 SHA。L1 单独仍安装早期候选 `89b0f891` / `85788181…`，其他五层才是正式 RC6 二进制。
+
+## 一、已经做完，不要重新开发/重复证明
+
+1. L0、L1、L2、L3、L4、L5 的独立真实 HTTP MCP 连接全部成功；`host_status` 每层返回 Incus 7.6、`ready=true`、`mcp_ready=true`；各层的本地 `user-1001` Project 不是同一个 daemon。
+2. 已完成 L0、L1 和 L2→L3、L3→L4、L4→L5 实际 BoxWeave/Incus 创建、Guest 安装和 Tunnel 现场测试；L5 本次额外完成一个真实 Box 的 Create→Update→Start→root/nonroot Exec→Guest 非零退出 23 和 stderr→Stop→Delete，全部完成，Box 已清理。L5 测试时暂时打开的低层 Project 权限已恢复为 unset。
+3. L2～L5 现使用 `lxc.apparmor.profile=unchanged` 继承同一个 L2 祖先 `(enforce)` Profile。内层独立 incusd 的 `INCUS_SECURITY_APPARMOR=false` 是针对 **daemon 本身** 的兼容设置；不是把内核或外层 AppArmor 关掉，也**不是**每层独立的 Policy Namespace。
+4. L2～L5 末尾的 UID/GID 映射区间每深一层缩减约 100 万；安全、持久化、原子防冲突的 UID/GID lease allocator **还没有实现/验收**。只通过了 `security.idmap.isolated` 被安全拒绝的负例。不要把自动嵌套映射误报为分配器 PASS。
+5. 相同名字 `user-1001` 的跨层别人的 Box UUID 或 Operation ID 实测 5 次全部 `operation not found`；这仅是所测查询的控制器可见性边界，不是全量威胁模型验收。
+6. L0 两个原始 UNKNOWN：`4a5130ee9025e7ee39c1866d16ad1b39`（当前 L1 Box `cd1ea3d0-a24f-477b-b01c-08fb5acac53e` 上的 box_exec）与 `718b99438cfa8f1349895ade0e8dfa9a`；L2 另有原始 Start UNKNOWN `c6938fe17342ad02567ae11cf5642590`（Stopped `rc6-l3-lab-1115`）。本轮 L0 父层对 L1 的新 Exec 被 `original unresolved resource claim is still locked` 正确阻止，即使 L1 自身 MCP 依然健康。**不重放、不删除、不自动 unlock、不改历史收据**。
+7. `v1.0.0-rc.6` GitHub Actions 构建是**提前供递归现场验证的非正式安全验收 prerelease**，不能倒推完整 S2.5/HOST_GO/BH-019 通过。
+
+**本轮最完整证据：** `docs/verification/S25_RC6_L0_L5_CROSS_LAYER_MCP_FIELD_MATRIX_2026-11-15.md`。前序独立证据：`docs/verification/S25_RC6_L2_L3_INSTALLED_MCP_RECURSION_2026-11-15.md`、`S25_RC6_L3_L4_INSTALLED_MCP_RECURSION_2026-11-15.md`、`S25_RC6_L4_L5_INSTALLED_MCP_RECURSION_2026-11-15.md`。原始 S2.5 Gate：`docs/verification/BRIDGEHEAD_ACCEPTANCE.md`；源代码/内核根因：`docs/research/S25_BH018_019_PINNED_ROOT_CAUSES_AND_HOST_GATE_2026-11-14.md`；原始执行日志：`docs/development/EXECUTION_LOG.md`。
+
+## 二、PR #146 还需要真正完成的工作（按优先级）
+
+### P0. 先恢复 PR 真实状态，独立区分代码与验收文档
+
+- 读取 `v1`、PR #146 HEAD/base、变更文件/流程、最新 Actions 和上述验收材料。PR 已有 **173 个 commits、57 个 files changed、Draft、mergeable=false**（统计为读取时，需以最新为准）。先判断冲突/旧分支差异是否会影响安全语义；只做审查过的版本同步，不得盲目大规模重写已通过的原生实现。
+- 过去读到的已完成 PR SHA `17a380d37fad5f4fcaa0fcb47a40aa39df3de224` 的两项 BH-018 独立 CI 均成功：真实 installed HTTP MCP https://github.com/vanishs/boxweave/actions/runs/43764554419 ，native isolated https://github.com/vanishs/boxweave/actions/runs/43764554491 。**这不是本交接文档提交后的新 HEAD 通过证明**，必须重新读取精确 HEAD 的 Actions 才能引用。
+- 生产和真实宿主的旧 Box/SQLite、Cloudflare、OAuth、历史 UNKNOWN 不作试验场；功能代码与 CI 试验在全新隔离 Lab/Actions 作业上进行。
+
+### P1. BH-018 原生 Exec 终态，按真实安装版收口
+
+- 已有原子 `FinalizeVerifiedExec` SQLite 事务（native ID、Project+Box+incarnation、Guest exit、stdout/stderr 路径、最终状态、恰好一条审计事件在一个事务中），**不要重复实现**。现有 GitHub installed MCP 真实 126/127、丢 ACK、SQLite WAL 切断和 SIGKILL 场景有成功证据，但正式最终验收仍标记 PARTIAL：需要独立 Verifier、当前同一提交真实受保护门禁和日志分类。
+- 独立 Verifier 在自己新建的 7.6 disposable Lab 中，用官方 MCP Go SDK + 真实安装版 HTTP MCP 原始 operation/native 收据验证正常 Exec（0、23、126、127）、幂等重放、不确定中断前/后 COMMIT、SQLite all-or-none、stdout/stderr、单一审计、重连恢复、原生副作用 exactly-once，及新事务准入。强制 SIGKILL 仅对自有 disposable daemon，不动 L0～L5 共享环境。
+- 分别为真正的“已确认原生启动失败”与“原生确认尚不确定”定义证据充足的终态分类，特别是 L2 首次 Start 触发 `POSTCONDITION_UNVERIFIED` 且独立 Incus log 有 AppArmor unconfined denial + BPF EPERM 的现场；**不要只因为事后 Stopped 或已有子层就把旧 UNKNOWN 改为 FAILED 或 SUCCEEDED**。如果缺真实原生 Operation/COMMIT 回读，继续 UNKNOWN 锁定是正确的 fail-closed 行为。必要时加入新 disposable 回归测试，然后与已有成功场景做反向检查。
+
+### P1. BH-019 安全委派真缺口，不能用递归启动成功替代
+
+- 内核与 Incus 研究已发现下一层 `apparmor_parser -a` 可能因为 `not policy admin` / 243 而拒绝；cgroup-device BPF EPERM 是另一个独立信号。启用 `restricted.containers.lowlevel=allow` + `lxc.apparmor.profile=unchanged` 是限定的**功能兼容路径**，不是独立 Policy Namespace / Policy Admin 的安全证明。不要使用 privileged、`unconfined`、关闭宿主 AppArmor、根 daemon socket 映射来“修复”安全目标；SELinux 暂缓。
+- 首先定义/实现或清晰限定真正的 per-depth AppArmor policy-admin、stacking、能力门禁、BPF/cgroup-device，以及在确切 kernel+Incus 组合上父层、子层、兄弟和跨 Project 的正向/负向证据。若物理内核根本不支持安全委派，应**明确 BLOCKED 与 capability gate**，提出上游/内核支持或产品目标缩减的决策材料；未经批准不得把继承模式自动重命名为独立安全隔离 PASS。
+- 实现并真实测试 UID/GID 持久化 lease allocator：从已验证的父 UID/GID map 池中进行原子范围预留、兄弟不重叠、开始/失败/停止/删除/UNKNOWN/崩溃/重启的安全状态机，池耗尽时拒绝；不能仅根据 L2～L5 剩余范围推断无碰撞。
+- 附加网络/磁盘安全证据：不同层、兄弟及跨 Project 的真实 IPv4、IPv6 ULA/link-local/gateway/防伪造包级负例；ACL 生命周期与路由；`dir` / ext4/XFS project quota 实际条件，native disk 和 Exec spool 容量/压力真实测试。测试标签注明真机、隔离 Lab、CI 模拟的证据级别。避免因为性能/安装困难就默认隐式跳过。
+
+### P2. 可复现的跨层自动化验收与合并
+
+- 将上述 `Stage A–E` 跨层矩阵沉淀成**非破坏的先读型运行手册**，在一用即弃测试宿主/CI 自动化部署 L0～L5 正例；需要 Cloudflare/OAuth 的人工配置单独为 gate，工具安全检查拦截即如实记录，不得绕过。保护真实 L0 两个 UNKNOWN、L2 一个 UNKNOWN。
+- 同一个最终代码+验收文档 HEAD 跑完整质量/S1 race/amd64+arm64、真实 Incus7.6、官方安装版 HTTP MCP、专门 BH-018 crash/ACK 和 BH-019 kernel/AppArmor/BPF/ID allocator packet负例；逐个核验 Actions 和独立 Verifier 同 SHA。保留原始日志、对象身份、失败分类、清理证据。
+- 只在全部**事先既定**验收门禁满足，PR 可合并、审查批准后，才从 Draft 转可合并并入 `v1`；不能为通过 Actions 删除测试/放宽条件。若 BH-019 内核安全委派确为不可支持，PR 必须保持 Draft/blocked 或征得用户明确同意重新界定范围并拆分 PR，不能擅自签收。
+- 如果要发布下一个 RC，使用新的不可变 tag、Release 资产、manifest/SHA256，不能改写已发布 RC6。L1 当前二进制与其他层不同，不可视为“同 SHA 六层完整验收”。
+
+## 三、交给下一 Agent 的执行提示词（可直接复制）
+
+> 继续完成 BoxWeave v1 分支 PR #146 的 S2.5 BH-018/BH-019 正式收尾。我已经使用真实接入的六层 MCP 对 L0～L5 做过实测，并把本轮证据写在 docs/verification/S25_RC6_L0_L5_CROSS_LAYER_MCP_FIELD_MATRIX_2026-11-15.md，以及本交接文档。
+>
+> **首先**读取当前 PR #146 的最新 head/base、Draft/mergeable、工作流、完整代码/文档变更和所有既有验证报告。不要以旧 PR body 或聊天概括代替最新原始证据。版本现场：L0 与 L2～L5 为 GitHub 正式 RC6 commit 370e419c；L1 仍为早期手工 RC6 候选 commit 89b0f891。所有六层 MCP 和 Incus7.6 已可用，L5 disposable 创建、更新、启动、root/nonroot Exec、非零退出、停止、删除已成功，测试 Box 和 L5 暂时放开的低层权限已清理。
+>
+> **接着**审查原代码并优先解决真正验收缺口：BH-018 已有原子 SQLite Exec 终态，主要缺当前同 HEAD 的独立安装版 HTTP MCP Verifier、真实故障与丢 ACK 严格复验以及有证据的 UNKNOWN 分类；BH-019 的 L2～L5 目前仅继承同一祖先 AppArmor enforcing Profile，不具备每层独立 policy-admin 正向证据，历史 parser 243 / BPF EPERM 需独立定位，UID/GID 原子持久化分配器、兄弟/跨 Project 隔离、IPv4+IPv6 安全负例和真实磁盘/Exec spool quota 仍未验收。
+>
+> 按“源码与验收矩阵审查→在全新隔离 Lab 实施必要修复→安装版真实 MCP 和 Incus7.6 自动化/故障/安全复验→独立 Verifier→同一最终 SHA 的 Actions→文档更新与 PR 门禁结论”推进；可以一轮改完明确的代码缺口，但每个高风险场景必须在自己的 disposable Box 分步跑，避免一长串安装/故障操作无法定位失败。原始操作收据、native ID、重启/清理状态必须记录。
+>
+> **约束：**不得触碰、重放、取消或强制解锁 L0 的两个历史 UNKNOWN（4a5130ee…、718b9943…）与 L2 的原始 Start UNKNOWN（c6938fe1…），不得对 L0～L5 共享 daemon 做 SIGKILL，不得关闭宿主 AppArmor、使用 privileged/unconfined、映射高权限 Incus socket，不研究 SELinux，不借跨层 MCP 绕过平台安全拦截。L0→L1 父层 Exec 仍因原始 claim locked 被拒绝，但 L1 自身 MCP 正常——要保留并作为恢复隔离的回归证据。
+>
+> **最终**在 PR #146 写回经过证据支持的 BH-018、BH-019 case-by-case PASS/BLOCKED，不把“成功递归 5 层”偷换为“逐层独立安全策略 PASS”。核实 PR 当前 mergeable=false 的原因并安全处理差异；只有所有约定门禁与独立 Verifier 真正通过才解除 Draft、合并 v1，并汇报提交、Actions、原始验收结果。若底层内核不支持 BH-019 所需 policy-admin，给出事实阻断与可行范围决策，不伪称完成或修改 RC6 不可变 Release。
