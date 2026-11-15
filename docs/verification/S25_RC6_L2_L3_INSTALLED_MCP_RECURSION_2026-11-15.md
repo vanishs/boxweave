@@ -1,9 +1,9 @@
 # S2.5 RC6 real L2-to-L3 BoxWeave MCP recursion: positive and negative evidence
 
-**Date:** 2026-11-15 PT  
-**Classification:** L2-controller-to-L3-installed-HTTP-MCP functional smoke PASS; BH-018 UNKNOWN classification needs review; BH-019 independent-per-depth secure isolation **NOT ACCEPTED**.  
-**Source:** immutable prerelease `v1.0.0-rc.6`, Linux amd64 binary SHA256 `0932ad434d2a1b113e2254f6ca02a218c2dff473f70d7ed3b2f45e93d0610174`, build commit `370e419c43f06b7488c7330ba61913ffec0e9f78`. Product code matches PR #146 checkpoint parent `89b0f8910376be65eb94153f41eecd5b81f6e6f6`; the prerelease commit adds only CI workflow changes.  
-**Controller:** installed official RC6 on independently administered L2 `rc6-l2-lab-1115`, accessed via authenticated `BoxWeave_L2_RC6` MCP. L2 native Incus 7.6, Project `user-1001`; `host_status.ready=true`. The L2 parent Guest itself is confined by inherited AppArmor `incus-user-1001_rc6-l2-lab-1115_</var/lib/incus> (enforce)`.  
+**Date:** 2026-11-15 PT
+**Classification:** L2-controller-to-L3-installed-HTTP-MCP functional smoke PASS; BH-018 UNKNOWN classification needs review; BH-019 independent-per-depth secure isolation **NOT ACCEPTED**.
+**Source:** immutable prerelease `v1.0.0-rc.6`, Linux amd64 binary SHA256 `0932ad434d2a1b113e2254f6ca02a218c2dff473f70d7ed3b2f45e93d0610174`, build commit `370e419c43f06b7488c7330ba61913ffec0e9f78`. Product code matches PR #146 checkpoint parent `89b0f8910376be65eb94153f41eecd5b81f6e6f6`; the prerelease commit adds only CI workflow changes.
+**Controller:** installed official RC6 on independently administered L2 `rc6-l2-lab-1115`, accessed via authenticated `BoxWeave_L2_RC6` MCP. L2 native Incus 7.6, Project `user-1001`; `host_status.ready=true`. The L2 parent Guest itself is confined by inherited AppArmor `incus-user-1001_rc6-l2-lab-1115_</var/lib/incus> (enforce)`.
 **Work reference:** `RC6-L2-L3-DEPLOY-20261115`.
 
 ## 1. Fail-closed negative controls and initial failure
