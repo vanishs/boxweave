@@ -386,14 +386,14 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			r, err := s.admitNative(ctx, req, "box_create", in.IdempotencyKey, "", "",
 				"box:"+in.Name, in.WorkRef, in.AgentRef, struct {
-					Name      string `json:"name"`
-					CPU       int    `json:"cpu"`
-					MemoryMiB int64  `json:"memory_mib"`
-					DiskGiB   int64  `json:"disk_gib"`
-					Image     string `json:"image,omitempty"`
-					Start     bool   `json:"start"`
-					Nesting   bool   `json:"nesting"`
-					Internet  bool   `json:"internet"`
+					Name      string                 `json:"name"`
+					CPU       int                    `json:"cpu"`
+					MemoryMiB int64                  `json:"memory_mib"`
+					DiskGiB   int64                  `json:"disk_gib"`
+					Image     string                 `json:"image,omitempty"`
+					Start     bool                   `json:"start"`
+					Nesting   bool                   `json:"nesting"`
+					Internet  bool                   `json:"internet"`
 					Options   native.InstanceOptions `json:"instance_options"`
 				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, in.Image, start, in.Nesting, internet, in.InstanceOptions})
 			if err != nil {
