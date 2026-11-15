@@ -40,7 +40,7 @@ type createBoxInput struct {
 	DiskGiB        int64  `json:"disk_gib,omitempty"`
 	Image          string `json:"image,omitempty"`
 	Start          *bool  `json:"start,omitempty"`
-	Nesting        bool   `json:"nesting,omitempty"`
+	Nesting        bool   `json:"security.nesting,omitempty" jsonschema:"Incus nesting; independent of LXC AppArmor generated-profile nesting. Does not automatically authorize safe recursive Incus."`
 	Internet       *bool  `json:"internet,omitempty"`
 	WorkRef        string `json:"work_ref,omitempty"`
 	AgentRef       string `json:"agent_ref,omitempty"`
@@ -80,7 +80,7 @@ type updateBoxInput struct {
 	CPU            *int   `json:"cpu,omitempty"`
 	MemoryMiB      *int64 `json:"memory_mib,omitempty"`
 	DiskGiB        *int64 `json:"disk_gib,omitempty"`
-	Nesting        *bool  `json:"nesting,omitempty"`
+	Nesting        *bool  `json:"security.nesting,omitempty" jsonschema:"Toggle Incus nesting. Changing it does not grant a recursive AppArmor or UID/GID delegation capability."`
 	Internet       *bool  `json:"internet,omitempty"`
 	WorkRef        string `json:"work_ref,omitempty"`
 	AgentRef       string `json:"agent_ref,omitempty"`
