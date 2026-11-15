@@ -313,6 +313,9 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if a.Nesting && project.Config["restricted.containers.nesting"] != "allow" {
 		return "", ErrNativeUnsupported
 	}
+	if err := a.Options.CheckInheritedAppArmor(); err != nil {
+		return "", err
+	}
 	// An empty image means: reuse an operator-managed local default if
 	// present; otherwise use the official Incus image catalog at Create time.
 	source, err := resolveInstanceImage(c, a.Image)
@@ -550,6 +553,7 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 		}
 		project, _, e := c.GetProject(r.Project)
 		if e != nil { return "", e }
+		if e = changes.Options.CheckInheritedAppArmor(); e != nil { return "", e }
 		if e = changes.Options.Apply(config, project.Config); e != nil { return "", e }
 	}
 	if changes.Internet != nil {
