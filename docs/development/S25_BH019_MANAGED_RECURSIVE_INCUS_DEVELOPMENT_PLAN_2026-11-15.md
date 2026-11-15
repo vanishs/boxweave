@@ -6,6 +6,8 @@
 **Decision:** Begin product code development immediately, but do not change PR readiness or mark BH-019 security accepted.
 
 
+**Active engineering checkpoint:** [initial typed MCP implementation, incomplete P1 security gates](../verification/S25_RC6_IMPLEMENTATION_CHECKPOINT_2026-11-15.md). No RC6 is published or accepted at this point.
+
 ## 0. Owner decision (2026-11-15): complete implementation first, L0 smoke, RC6, then deep reacceptance
 
 **This section supersedes the older per-work-package deploy-and-test rhythm in `4/`6 below.** The work packages remain the engineering scope and release-acceptance requirements, but the owner explicitly selected one *integrated implementation phase* before the first new L0 deployment:
