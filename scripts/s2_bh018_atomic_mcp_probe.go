@@ -206,6 +206,9 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 			"idempotency_key": fmt.Sprintf("s2-bh018-independent-readback-%d-001", original.Exit),
 		})
 		readID := originalID(check)
+		// An admitted fresh readback is new, independent work, never a retry
+		// of an uncertain original. Print only its immutable nonsecret ID.
+		fmt.Printf("BH018_MCP_FRESH_ADMITTED_EXIT_%d_BW_ID=%s\n", original.Exit, readID)
 		fresh := poll(ctx, s, readID)
 		freshNativeID := getString(fresh, "native_operation_id")
 		require(len(freshNativeID) == 36, "new readback lacks native identity")
