@@ -1,5 +1,8 @@
 # PR #146 交接与收尾门禁（2026-11-15，L0～L5 实际 MCP）
 
+**2026-11-15 owner-directed acceleration / current exit contract:** [S2.5 scoped early development base D-01–D-08; S3/S4/S5 reassignment](S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md) **supersedes the old requirement to solve all BH-019 platform features within S2.5**. Existing L0–L5 functional and isolated native/installed/Verifier evidence is accepted only for its tested scope. **Remaining S2.5 work is targeted non-destructive host-specific postflight (source identities including L1 mismatch, owner-approved fallback, resource envelope and existing UNKNOWN unchanged), not another broad L0–L5 lifecycle or new AA kernel workaround.** Current verdict `S25_DEV_BASE_PASS=PENDING_HOST_POSTFLIGHT`; stronger original BH-019 and full release gates stay OPEN.
+
+
 **2026-11-15 同类 PR 集中处理：** 已保留 [PR #145](https://github.com/vanishs/boxweave/pull/145) 的原始 L1 RC4 UNKNOWN/AppArmor 243 事故记录及 O-036 风险索引，并把 [PR #149](https://github.com/vanishs/boxweave/pull/149) 的 RC5 横向源码审计（OAuth refresh X-01、Create/Delete 双事务 X-02/X-03、原生 Operation 收据 X-04/X-05）作为 **PR #146 后续单独验证与开发任务**。详细映射：[S25_PR145_149_CONSOLIDATION_2026-11-15.md](../verification/S25_PR145_149_CONSOLIDATION_2026-11-15.md)。**仅整合历史知识与待办，并未宣称这些问题已解决，也不把 Exec SQLite 原子终态改写成 Create/Delete 的实现。**
 
 ## 2026-11-15 继续开发后的收尾补充（覆盖下面旧的 mergeable=false 描述）
