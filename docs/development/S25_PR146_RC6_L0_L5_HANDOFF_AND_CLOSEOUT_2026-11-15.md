@@ -1,5 +1,7 @@
 # PR #146 交接与收尾门禁（2026-11-15，L0～L5 实际 MCP）
 
+**2026-11-15 同类 PR 集中处理：** 已保留 [PR #145](https://github.com/vanishs/boxweave/pull/145) 的原始 L1 RC4 UNKNOWN/AppArmor 243 事故记录及 O-036 风险索引，并把 [PR #149](https://github.com/vanishs/boxweave/pull/149) 的 RC5 横向源码审计（OAuth refresh X-01、Create/Delete 双事务 X-02/X-03、原生 Operation 收据 X-04/X-05）作为 **PR #146 后续单独验证与开发任务**。详细映射：[S25_PR145_149_CONSOLIDATION_2026-11-15.md](../verification/S25_PR145_149_CONSOLIDATION_2026-11-15.md)。**仅整合历史知识与待办，并未宣称这些问题已解决，也不把 Exec SQLite 原子终态改写成 Create/Delete 的实现。**
+
 ## 2026-11-15 继续开发后的收尾补充（覆盖下面旧的 mergeable=false 描述）
 
 **Git 合并冲突已解决，不等于安全验收通过。** 通过无强推双父提交 `cc03620f5642fc2b15bf138520e9bc65b0fcbf6b` 合并目标 v1 的 BH-018 pilot #147；18 个相关路径中 14 个字节一致，另外两个 Go 文件保留 PR #146 RC6 typed options，工作流保留本 PR 分支守卫，同时保存 RC5 pilot 验收文档。当前 PR #146 为 **Draft、mergeable=true、security gates BLOCKED**；未触及 `v1` 和 immutable RC6 Release/tag。
