@@ -1,3 +1,12 @@
+## 2026-11-15 security and source-identity addendum
+
+Read-only fresh authenticated `host_status` across all six L0–L5 separately connected MCPs again confirmed **6/6 healthy Incus 7.6 endpoints**, not necessarily identical software: L0, L2–L5 report published RC6 binary `0932ad434d2a1b113e2254f6ca02a218c2dff473f70d7ed3b2f45e93d0610174` and commit `370e419c`; L1 reports a different local binary `85788181e606300b441326527d853e04984f00b4cc2c4c7618a33f75845a6509`, commit `89b0f891`. Every layer continues to advertise `STORAGE_QUOTA_UNVERIFIED`; do not claim actual disk or Exec spool quota protection. No destructive fault work or security policy mutation occurred on L0–L5.
+
+Read-only original locked UNKNOWN receipts remain intact: L0 BW `4a5130ee9025e7ee39c1866d16ad1b39` / native `fa2f54f1-bbe1-432d-88cc-52ad572e938c`; L0 BW `718b99438cfa8f1349895ade0e8dfa9a` / native `345841b8-18b9-46f9-a272-54da45d985f6`; L2 BW `c6938fe17342ad02567ae11cf5642590` / native `0f522d84-33b8-4535-bd0e-53fe0b093e26`. All are `POSTCONDITION_UNVERIFIED` with `HOST_LOCAL_REVIEW`; never retry, unlock or infer no side effect.
+
+An independent **fresh disposable GitHub** native L0→L1→L2 MCP, independent Verifier, cross Project negative packet and two-Agent crash/lost ACK [run 43769548904](https://github.com/vanishs/boxweave/actions/runs/43769548904) is **SUCCESS**, but it does not extend the physical L0–L5 strong security proof and reports `S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET`. Under real nested native Incus7.6 [run 43767471059](https://github.com/vanishs/boxweave/actions/runs/43767471059), L2 AppArmor policy-load is **DENIED 243** and nested cgroup-device BPF program-load **DENIED EPERM**. Independent AppArmor namespace delegation and BPF attach/device enforcement remain **BLOCKED**. See [issue #150](https://github.com/vanishs/boxweave/issues/150). PR #146 now `mergeable=true` after the safe #147 branch reconciliation, but remains Draft and not authorized to merge or modify RC6.
+
+
 # S2.5 RC6 L0–L5 authenticated MCP field matrix — 2026-11-15
 
 > **Acceptance distinction:** functional recursive **L0 → L1 → L2 → L3 → L4 → L5 installed MCP path CONFIRMED** with the caveats below. This is NOT per-depth independent AppArmor security acceptance, NOT collision-free UID/GID reservation acceptance, NOT BH-018/019 final signoff, and NOT an authorization to merge PR #146.

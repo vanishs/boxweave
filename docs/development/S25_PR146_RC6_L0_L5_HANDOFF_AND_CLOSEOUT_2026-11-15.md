@@ -1,5 +1,14 @@
 # PR #146 交接与收尾门禁（2026-11-15，L0～L5 实际 MCP）
 
+## 2026-11-15 继续开发后的收尾补充（覆盖下面旧的 mergeable=false 描述）
+
+**Git 合并冲突已解决，不等于安全验收通过。** 通过无强推双父提交 `cc03620f5642fc2b15bf138520e9bc65b0fcbf6b` 合并目标 v1 的 BH-018 pilot #147；18 个相关路径中 14 个字节一致，另外两个 Go 文件保留 PR #146 RC6 typed options，工作流保留本 PR 分支守卫，同时保存 RC5 pilot 验收文档。当前 PR #146 为 **Draft、mergeable=true、security gates BLOCKED**；未触及 `v1` 和 immutable RC6 Release/tag。
+
+已启用本 PR 分支的 GitHub 一次性隔离独立 Verifier 工作流（不借用现有 L0～L5 故障环境）。[v1 independent nested MCP LAB run 43769548904](https://github.com/vanishs/boxweave/actions/runs/43769548904) 在上一候选 SHA `5a2e75a596959fee6ae3eaff7c095e5dfefae0bb` **SUCCESS**，覆盖真实已安装 L0→L1→L2、两 Agent、原生操作收据、进程 SIGKILL/ACK 丢失及 IPv4/IPv6 和外 Project 负例；它明确保留 `S25_ALL_BH_AND_TC_FORMAL_SIGNOFF=NOT_YET`。同 SHA quality/S1/双架构/native BH018 27 case **SUCCESS**，但 [安装版完整 BH018 HTTP MCP #43769548925](https://github.com/vanishs/boxweave/actions/runs/43769548925) 首次 **FAIL** 于重启后的 fresh 126 Exec 回读，不能误签收；已提交原 SHA 的隔离重跑，需确认最终结果。本文更新本身前移源码 HEAD，须重新以最新精确 SHA 验收。
+
+当前必须解决的不是普通六层生命周期：**BH-019 的逐层 AppArmor namespace/policy admin 243、子层 BPF EPERM、持久化双 UID/GID 映射分配、深层兄弟和跨 Project 网络包级负例、真实配额/Exec spool；BH-018 的间歇性 installed-MCP fresh readback 与 OAuth refresh stable-idempotency issue #148 仍需独立复验**。BH-019 分项阻断在 [#150](https://github.com/vanishs/boxweave/issues/150)，精确提交、历史 UNKNOWN 和 Actions 证据在 [S25_PR146_FINAL_GATE_RECONCILIATION_2026-11-15.md](../verification/S25_PR146_FINAL_GATE_RECONCILIATION_2026-11-15.md)。禁止未经验证的 policy/privilege fallback；只能正式 BLOCKED/PARTIAL。
+
+
 **PR：** https://github.com/vanishs/boxweave/pull/146
 **当前开发分支：** `fix/v1-s25-bh018-bh019-20261114`
 **本交接前最新代码+现场文档提交：** `db2a5452fc37b726b7cced876be8db38d54ce927`。提交本交接文档会再次前移 HEAD，以实际 GitHub 返回值为准。
