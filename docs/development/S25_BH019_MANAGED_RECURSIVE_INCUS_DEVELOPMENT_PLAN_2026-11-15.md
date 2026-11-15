@@ -1,8 +1,8 @@
 
 # S2.5 BH-019 — Managed, safe recursive Incus: development and acceptance plan
 
-**Date:** 2026-11-15 PT  
-**PR:** [#146](https://github.com/vanishs/boxweave/pull/146) (Draft; base `v1`)  
+**Date:** 2026-11-15 PT
+**PR:** [#146](https://github.com/vanishs/boxweave/pull/146) (Draft; base `v1`)
 **Decision:** Begin product code development immediately, but do not change PR readiness or mark BH-019 security accepted.
 
 
