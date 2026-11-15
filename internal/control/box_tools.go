@@ -751,14 +751,29 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
+				// The original Incus terminal result and its recorded log
+				// paths must belong to this exact admitted guest/Operation.
+				if final == nil || final.ID != nativeID {
+					return native.ErrUnverified
+				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
 					return err
 				}
-				if err := s.Store.SaveExecOutput(ctx, r.ID, out.StdoutPath, out.StderrPath, out.Exit); err != nil {
+				if !native.ExecEvidenceMatchesOriginal(out, box.Name, nativeID) {
+					return native.ErrUnverified
+				}
+				if out.Exit == nil {
+					return native.ErrUnverified
+				}
+				// The final native Exec receipt, Guest exit, paths and
+				// BoxWeave SUCCEEDED event are ONE SQLite commit. Never
+				// leave a separate output-row / final-state crash gap.
+				if err := s.Store.FinalizeVerifiedExec(ctx, r.ID, box,
+					nativeID, out.StdoutPath, out.StderrPath, *out.Exit); err != nil {
 					return err
 				}
-				return nil
+				return state.ErrVerifiedExecCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err

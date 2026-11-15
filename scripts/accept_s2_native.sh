@@ -161,6 +161,8 @@ echo "S2_NATIVE_OWNED_UBUNTU_ALIAS_VERIFIED=PASS"
 CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
+CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
+chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-native-guest-quota" ./scripts/s2_native_guest_quota_probe.go
@@ -555,6 +557,88 @@ sudo incus project delete "$foreign_project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
 
+# BH-018: an additional native end-to-end acceptance through the *installed*
+# non-root, restricted-Project BoxWeave service and official Go MCP SDK.
+# Real Incus 7.6 exits 126/127 cause native Operation Failure even after
+# successful Guest side effects. Only the exact original native terminal and
+# its bounded output paths allow the atomic SQLite SUCCEEDED receipt.
+# A restart of THIS ONE-USE service/ledger must retain original operation
+# identity and output without native redispatch; fresh commands must work.
+# The original historical UNKNOWN claims on other hosts are never touched.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+bh018_checkpoint="$work/bh018-atomic-original.json"
+test ! -e "$bh018_checkpoint"
+BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
+  "$work/s2-bh018-atomic-mcp-probe" start > "$work/bh018-atomic-start.log" 2>&1
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
+# Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
+echo "BH018_MCP_PROJECT=$project"
+grep '^BH018_MCP_' "$work/bh018-atomic-start.log"
+echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
+
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+# A runuser/sudo wrapper can exit before its child has released the SQLite
+# serve lock; wait for the exact owned nonroot service, not merely the wrapper.
+attempt=0
+while sudo pgrep -u boxweave -f "^$work/boxweave serve" >/dev/null; do
+  if [ "$attempt" -ge 30 ]; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_STILL_ACTIVE=BLOCKED" >&2
+    exit 92
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_EXITED=PASS"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+  -u XDG_CONFIG_HOME HOME=/home/boxweave \
+  XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_NORMAL_RESTART_NOT_READY=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  elif grep -Fqi 'address already in use' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=LISTEN_IN_USE" >&2
+  elif grep -Fqi 'permission denied' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=PERMISSION_DENIED" >&2
+  else
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 93
+fi
+echo "BH018_INSTALLED_NORMAL_RESTART_HTTP_401=PASS"
+if ! ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
+  "$work/s2-bh018-atomic-mcp-probe" resume ) > "$work/bh018-atomic-resume.log" 2>&1; then
+  # A client crash may not emit the typed failure line. Print ONLY
+  # predefined phase markers from the one-use verifier (no tokens/logs).
+  grep '^BH018_MCP_RESUME_PHASE=' "$work/bh018-atomic-resume.log" | tail -n 16 || :
+  grep 'BH018_MCP_FAIL' "$work/bh018-atomic-resume.log" | head -n 5 || :
+  echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
+  exit 96
+fi
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh018-atomic-resume.log"
+# Preserve original native IDs and new readback/cleanup IDs in sanitized CI evidence.
+grep '^BH018_MCP_' "$work/bh018-atomic-resume.log"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS"
+
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.
 # Never restart the native effect; revive ONLY the same SQLite-backed MCP
@@ -667,6 +751,300 @@ if [ -n "$(sudo incus list --all-projects --format csv -c n)" ]; then
   exit 87
 fi
 echo "S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS"
+
+# BH-018: kill the actual one-use installed BoxWeave daemon when its
+# original Guest Exec terminal SQLite WAL commit begins. Unlike the earlier
+# separate SQLite helper SIGKILL and already-completed-output restart, this
+# uses the same production FinalizeVerifiedExec path as HTTP MCP box_exec.
+# It starts a NEW named fixture: an unrelated UNKNOWN is never reclaimed.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra \
+  -o "$work/s2-bh018-service-cut.so" scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-bh018-service-cut.so"
+cut_state="$work/bh018-service-cut-original.json"
+cut_arm="$work/ledger/bh018-service-cut-arm"
+cut_witness="$work/ledger/bh018-service-cut-witness"
+test ! -e "$cut_state"
+sudo test ! -e "$cut_arm"
+sudo test ! -e "$cut_witness"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_FSYNC_DB_WAL="$db-wal" BW_S2_FSYNC_ARM_FILE="$cut_arm" \
+  BW_S2_FSYNC_WITNESS_FILE="$cut_witness" BW_S2_FSYNC_CUT_MODE=before \
+  LD_PRELOAD="$work/s2-bh018-service-cut.so" \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-start.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" start > "$work/bh018-service-cut-original.redacted.log" 2>&1
+test -s "$cut_state"
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_COMMIT_CUT'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3) as c:
+    row=c.execute('SELECT state,native_operation_id FROM operations WHERE id=?',
+                  (original['operation_id'],)).fetchone()
+assert row == ('VERIFYING', original['native_operation_id']), (row,original)
+print('BH018_INSTALLED_ORIGINAL_NATIVE_ACK_BEFORE_COMMIT_CUT=PASS')
+print('BH018_INSTALLED_CUT_ORIGINAL_BW_ID='+original['operation_id'])
+print('BH018_INSTALLED_CUT_ORIGINAL_NATIVE_ID='+original['native_operation_id'])
+PY_BH018_COMMIT_CUT
+sudo touch "$cut_arm"
+attempt=0
+until [ "$attempt" -ge 45 ]; do
+  if sudo test -s "$cut_witness"; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$cut_witness"
+wait "$service_pid" 2>/dev/null || :
+sudo rm -f -- "$cut_arm"
+echo 'BH018_INSTALLED_SERVICE_KILLED_DURING_REAL_EXEC_SQLITE_WAL_COMMIT=PASS'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-restarted.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-service-cut-restarted.redacted.log"; then
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  else
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 94
+fi
+echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" resume ) >"$work/bh018-service-cut-resume.redacted.log" 2>&1; then
+  grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-cut-resume.redacted.log" | tail -n 15 || :
+  echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
+  exit 95
+fi
+grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-cut-resume.redacted.log"
+grep -E '^BH018_INSTALLED_WAL_KILL_ATOMIC_(SUCCEEDED|UNKNOWN)_' "$work/bh018-service-cut-resume.redacted.log"
+# An independent sqlite3 read-only oracle must see exactly one of two
+# transactions: all three terminal rows committed OR none (UNKNOWN + lock).
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_ATOMIC_ORACLE'
+import json,sqlite3,sys
+db,checkpoint=sys.argv[1:]
+with open(checkpoint) as f: original=json.load(f)
+oid,native=original["operation_id"],original["native_operation_id"]
+with sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3) as conn:
+    op=conn.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outs=conn.execute("SELECT stdout_path,stderr_path,exit_code FROM exec_outputs WHERE operation_id=?",(oid,)).fetchall()
+    audit=conn.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert op and op[1]==native, (op,native)
+if op[0]=="SUCCEEDED":
+    assert len(outs)==1 and outs[0][2]==0 and audit==1,(outs,audit)
+    prefix="/1.0/instances/bw-s2-bh018-final-cut/logs/exec-output/exec_"+native
+    assert any(outs[0][:2])
+    assert outs[0][0] in ("",prefix+".stdout") and outs[0][1] in ("",prefix+".stderr"),outs
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_ALL_TERMINAL_ROWS_ATOMIC=PASS")
+elif op[0]=="UNKNOWN":
+    assert not outs and audit==0,(outs,audit)
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_NO_PARTIAL_TERMINAL_ROWS=PASS")
+else:
+    raise SystemExit("BH018 WAL SIGKILL recovered invalid/split state: "+op[0])
+print("BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS")
+PY_BH018_ATOMIC_ORACLE
+
+attempt=0
+count=""
+until [ "$attempt" -ge 45 ]; do
+  count="$(sudo incus exec bw-s2-bh018-final-cut --project "$project" -- \
+    /bin/sh -c 'wc -l < /tmp/bw-s2-bh018-final-cut-marker' 2>/dev/null || :)"
+  if [ "$count" = 1 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$count" = 1
+echo 'BH018_INSTALLED_SERVICE_PRECOMMIT_SIGKILL_GUEST_EFFECT_ONCE=PASS'
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-bh018-final-cut
+sudo incus stop bw-s2-bh018-final-cut --project "$project"
+sudo incus delete bw-s2-bh018-final-cut --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo 'BH018_INSTALLED_SERVICE_WAL_COMMIT_SIGKILL_UNKNOWN_LOCK_AND_TEARDOWN=PASS'
+
+# BH-018 separate post-fsync/ACK-loss original terminal, in a distinct
+# one-use named Box and idempotency scope. No earlier UNKNOWN is touched.
+# The test-only interposer SIGKILLs the installed service AFTER the real
+# WAL sync returns, before the normal commit caller receives its ACK.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra \
+  -o "$work/s2-bh018-service-after-cut.so" scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-bh018-service-after-cut.so"
+cut_state="$work/bh018-service-after-cut-original.json"
+cut_arm="$work/ledger/bh018-service-after-cut-arm"
+cut_witness="$work/ledger/bh018-service-after-cut-witness"
+test ! -e "$cut_state"
+sudo test ! -e "$cut_arm"
+sudo test ! -e "$cut_witness"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_FSYNC_DB_WAL="$db-wal" BW_S2_FSYNC_ARM_FILE="$cut_arm" \
+  BW_S2_FSYNC_WITNESS_FILE="$cut_witness" BW_S2_FSYNC_CUT_MODE=after \
+  LD_PRELOAD="$work/s2-bh018-service-after-cut.so" \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-after-cut-start.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut-after BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" start > "$work/bh018-service-after-cut-original.redacted.log" 2>&1
+test -s "$cut_state"
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_COMMIT_CUT'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3) as c:
+    row=c.execute('SELECT state,native_operation_id FROM operations WHERE id=?',
+                  (original['operation_id'],)).fetchone()
+assert row == ('VERIFYING', original['native_operation_id']), (row,original)
+print('BH018_INSTALLED_ORIGINAL_NATIVE_ACK_BEFORE_POSTSYNC_CUT=PASS')
+print('BH018_INSTALLED_POSTSYNC_CUT_ORIGINAL_BW_ID='+original['operation_id'])
+print('BH018_INSTALLED_POSTSYNC_CUT_ORIGINAL_NATIVE_ID='+original['native_operation_id'])
+PY_BH018_COMMIT_CUT
+sudo touch "$cut_arm"
+attempt=0
+until [ "$attempt" -ge 45 ]; do
+  if sudo test -s "$cut_witness"; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$cut_witness"
+wait "$service_pid" 2>/dev/null || :
+sudo rm -f -- "$cut_arm"
+echo 'BH018_INSTALLED_SERVICE_KILLED_AFTER_REAL_EXEC_SQLITE_WAL_SYNC=PASS'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-after-cut-restarted.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-service-after-cut-restarted.redacted.log"; then
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  else
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 94
+fi
+echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+# Read-only independent database oracle BEFORE the MCP verifier, so a
+# failed original replay can be classified without touching the claim.
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_POSTSYNC_DIAG'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True,timeout=3) as c:
+    oid=original["operation_id"]
+    row=c.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outputs=c.execute("SELECT COUNT(*) FROM exec_outputs WHERE operation_id=?",(oid,)).fetchone()[0]
+    audits=c.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert row is not None
+print("BH018_INSTALLED_POSTSYNC_SQLITE_REOPEN_STATE="+row[0])
+print("BH018_INSTALLED_POSTSYNC_SQLITE_NATIVE_MATCH="+str(row[1]==original["native_operation_id"]))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_OUTPUT_ROWS="+str(outputs))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_TERMINAL_AUDIT_ROWS="+str(audits))
+PY_BH018_POSTSYNC_DIAG
+if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut-after BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" resume ) >"$work/bh018-service-after-cut-resume.redacted.log" 2>&1; then
+  grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log" | tail -n 15 || :
+  if grep -Fq 'tool box_exec returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=BOX_EXEC_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OPERATION_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_output_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OUTPUT_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=ORIGINAL_ASSERTION" >&2
+  else
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=UNCLASSIFIED" >&2
+  fi
+  echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
+  exit 95
+fi
+grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-after-cut-resume.redacted.log"
+grep -E '^BH018_INSTALLED_WAL_KILL_ATOMIC_(SUCCEEDED|UNKNOWN)_' "$work/bh018-service-after-cut-resume.redacted.log"
+grep -Fxq 'BH018_INSTALLED_WAL_KILL_ATOMIC_SUCCEEDED_OUTPUT_AND_NEXT_OPERATION=PASS' "$work/bh018-service-after-cut-resume.redacted.log"
+echo 'BH018_INSTALLED_POSTSYNC_ACK_LOST_FULL_COMMIT_RESTORED=PASS'
+# An independent sqlite3 read-only oracle must see exactly one of two
+# transactions: all three terminal rows committed OR none (UNKNOWN + lock).
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_ATOMIC_ORACLE'
+import json,sqlite3,sys
+db,checkpoint=sys.argv[1:]
+with open(checkpoint) as f: original=json.load(f)
+oid,native=original["operation_id"],original["native_operation_id"]
+with sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3) as conn:
+    op=conn.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outs=conn.execute("SELECT stdout_path,stderr_path,exit_code FROM exec_outputs WHERE operation_id=?",(oid,)).fetchall()
+    audit=conn.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert op and op[1]==native, (op,native)
+if op[0]=="SUCCEEDED":
+    assert len(outs)==1 and outs[0][2]==0 and audit==1,(outs,audit)
+    prefix="/1.0/instances/bw-s2-bh018-after-cut/logs/exec-output/exec_"+native
+    assert any(outs[0][:2])
+    assert outs[0][0] in ("",prefix+".stdout") and outs[0][1] in ("",prefix+".stderr"),outs
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_ALL_TERMINAL_ROWS_ATOMIC=PASS")
+elif op[0]=="UNKNOWN":
+    assert not outs and audit==0,(outs,audit)
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_NO_PARTIAL_TERMINAL_ROWS=PASS")
+else:
+    raise SystemExit("BH018 WAL SIGKILL recovered invalid/split state: "+op[0])
+print("BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS")
+PY_BH018_ATOMIC_ORACLE
+
+attempt=0
+count=""
+until [ "$attempt" -ge 45 ]; do
+  count="$(sudo incus exec bw-s2-bh018-after-cut --project "$project" -- \
+    /bin/sh -c 'wc -l < /tmp/bw-s2-bh018-after-cut-marker' 2>/dev/null || :)"
+  if [ "$count" = 1 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$count" = 1
+echo 'BH018_INSTALLED_SERVICE_POSTSYNC_SIGKILL_GUEST_EFFECT_ONCE=PASS'
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-bh018-after-cut
+sudo incus stop bw-s2-bh018-after-cut --project "$project"
+sudo incus delete bw-s2-bh018-after-cut --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo 'BH018_INSTALLED_SERVICE_AFTER_WAL_FSYNC_ACKLOSS_RECOVERY=PASS'
 
 # The installed candidate must refuse arbitrary/foreign SQLite histories
 # BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
