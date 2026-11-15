@@ -1,5 +1,8 @@
 # BoxWeave v1 — five autonomous feature phases + S2.5 BRIDGEHEAD acceptance checkpoint
 
+**2026-11-15 current state:** S2.5 early dev-only SCOPED_PASS_WITH_DECLARED_LIMITS merged to protected v1 by [PR #146](https://github.com/vanishs/boxweave/pull/146) at e4cab7b6. **S3 IN_PROGRESS** on feat/v1-s3-agent-files-20261115; **S4/S5 NOT_STARTED**, full BH019 and release work still pending. [S3 kickoff](../development/S3_EXECUTION_KICKOFF_2026-11-15.md). Older phase table entries are historical.
+
+
 **2026-11-15 latest scoped result (overrides old S2.5 row status):** `S25_DEV_BASE_PASS=SCOPED_PASS_WITH_DECLARED_LIMITS` for supervised trusted-operator development on the already-installed physical L0/L1, **not** original full-BH `HOST_GO_FULL` or S5 release. Owner's host-local immutable RC6 manifest/binary verification and native 8/8 checks passed; original UNKNOWN, L1 binary divergence, unsupported hard quotas, untested live-host rollback/packet negatives are explicit [warnings in the signed D-01–D-08 report](../verification/S25_PHYSICAL_HOST_DEV_BASE_POSTFLIGHT_2026-11-15.md). Stage S3 may begin now; S4 deep isolation and S5 complete security remain gated. The old `READY_FOR_LAB/NOT TESTED` snapshot below is historical.
 
 

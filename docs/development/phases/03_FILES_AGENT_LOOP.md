@@ -1,5 +1,8 @@
 # S3 — Guest files and the complete Agent edit/build/test loop
 
+**2026-11-15 current state: S3 IN_PROGRESS.** S2.5 scoped early development base accepted/merged via [PR #146](https://github.com/vanishs/boxweave/pull/146), but full BH and production security not signed. [Current ordered execution and S4/S5 carry-forward](../S3_EXECUTION_KICKOFF_2026-11-15.md). The older NOT_STARTED paragraph below is historical.
+
+
 **2026-11-15 S2.5 carry-forward to S3:** Before enabling **unattended Agent mutations**, resolve [#148 OAuth same-grant token refresh vs stable idempotency actor](https://github.com/vanishs/boxweave/issues/148) with cross-grant/revocation/native tests. During S3, pinpoint and if needed repair Create/Delete separate SQLite terminal/resource commits; triage [#151 installed-MCP postrestart readback](https://github.com/vanishs/boxweave/issues/151) and provenance test gaps. This does **not** add public Tools: the S3 File tool count remains three. Full assignment and dev-only risk model: [S2.5 phase-scope decision](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
 
 
