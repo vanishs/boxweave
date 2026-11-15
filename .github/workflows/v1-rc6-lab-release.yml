@@ -1,0 +1,197 @@
+name: BoxWeave v1.0.0-rc.6 pre-acceptance lab prerelease
+
+# Owner-authorized test-first candidate. Never promotes the stable pointer,
+# merges the unfinished BH-019 PR, or claims S2.5/HOST_GO acceptance.
+on:
+  push:
+    branches:
+      - release-lab/v1.0.0-rc.6
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boxweave-rc6-lab
+  cancel-in-progress: false
+
+jobs:
+  source:
+    name: rc6-lab-source-quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify source, release tooling and candidate version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/release-lab/v1.0.0-rc.6"
+          test "$(cat VERSION)" = "1.0.0"
+          test "$(cat V1_PUBLISHED_RELEASE)" = UNPUBLISHED
+          make verify
+          sh -n install.sh
+          python3 -m unittest -v scripts/test_v1_release_manifest.py
+
+  linux-amd64:
+    name: rc6-lab-linux-amd64-cgo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Native amd64 CGO build, self-identity and SQLite smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOARCH)" = amd64
+          test "$(go env CGO_ENABLED)" = 1
+          mkdir -p release-assets
+          CGO_ENABLED=1 go build -trimpath -buildvcs=false \
+            -ldflags "-X main.version=1.0.0-rc.6 -X main.commit=$GITHUB_SHA -buildid=" \
+            -o release-assets/boxweave-v1.0.0-rc.6-linux-amd64 ./cmd/boxweave
+          python3 - <<'PY'
+          import json, os, subprocess
+          p = 'release-assets/boxweave-v1.0.0-rc.6-linux-amd64'
+          data = json.loads(subprocess.check_output([p, 'build-info']))
+          assert data == {'version':'1.0.0-rc.6','commit':os.environ['GITHUB_SHA']}, data
+          PY
+          db_parent="$(mktemp -d "$RUNNER_TEMP/rc6-sqlite.XXXXXXXX")"
+          chmod 0700 "$db_parent"
+          trap 'rm -rf -- "$db_parent"' EXIT
+          release-assets/boxweave-v1.0.0-rc.6-linux-amd64 status \
+            -db "$db_parent/ledger.sqlite" -project no-project \
+            -incus-socket /unavailable-incus > "$db_parent/status.json"
+          python3 - "$db_parent/status.json" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1]))['ready'] is False
+          PY
+          go test -count=1 ./...
+          sha256sum release-assets/boxweave-v1.0.0-rc.6-linux-amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc6-lab-amd64
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+
+  linux-arm64:
+    name: rc6-lab-linux-arm64-cgo
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Native arm64 CGO build, self-identity and SQLite smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOARCH)" = arm64
+          test "$(go env CGO_ENABLED)" = 1
+          mkdir -p release-assets
+          CGO_ENABLED=1 go build -trimpath -buildvcs=false \
+            -ldflags "-X main.version=1.0.0-rc.6 -X main.commit=$GITHUB_SHA -buildid=" \
+            -o release-assets/boxweave-v1.0.0-rc.6-linux-arm64 ./cmd/boxweave
+          python3 - <<'PY'
+          import json, os, subprocess
+          p = 'release-assets/boxweave-v1.0.0-rc.6-linux-arm64'
+          data = json.loads(subprocess.check_output([p, 'build-info']))
+          assert data == {'version':'1.0.0-rc.6','commit':os.environ['GITHUB_SHA']}, data
+          PY
+          db_parent="$(mktemp -d "$RUNNER_TEMP/rc6-sqlite.XXXXXXXX")"
+          chmod 0700 "$db_parent"
+          trap 'rm -rf -- "$db_parent"' EXIT
+          release-assets/boxweave-v1.0.0-rc.6-linux-arm64 status \
+            -db "$db_parent/ledger.sqlite" -project no-project \
+            -incus-socket /unavailable-incus > "$db_parent/status.json"
+          python3 - "$db_parent/status.json" <<'PY'
+          import json, sys
+          assert json.load(open(sys.argv[1]))['ready'] is False
+          PY
+          go test -count=1 ./...
+          sha256sum release-assets/boxweave-v1.0.0-rc.6-linux-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc6-lab-arm64
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: rc6-lab-publish-immutable-prerelease
+    needs: [source, linux-amd64, linux-arm64]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rc6-lab-*
+          path: release-assets
+          merge-multiple: true
+      - name: Bind exact branch, build artifacts, immutable tag and publish LAB ONLY
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=v1.0.0-rc.6
+          test "$GITHUB_REF" = "refs/heads/release-lab/$TAG"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-lab/$TAG" --jq .object.sha)" = "$GITHUB_SHA"
+          test "$(cat VERSION)" = "1.0.0"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Refuse to replace or reuse existing release tag" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refuse to replace existing release" >&2
+            exit 1
+          fi
+          python3 scripts/v1_release_manifest.py --directory release-assets \
+            --tag "$TAG" --source "$GITHUB_SHA" --installer install.sh
+          (cd release-assets && sha256sum -c SHA256SUMS)
+          cat > rc6-release-notes.md <<'NOTES'
+          Experimental BoxWeave v1.0.0-rc.6 **pre-BH019-acceptance LAB candidate**.
+          This tag is intentionally built from an isolated release-lab branch, not
+          from protected v1, because the operator requested nested field testing
+          before finishing full recursive UID/GID/AppArmor isolation.
+          
+          Source tests and native amd64/arm64 CGO binary/SQLite smokes must pass.
+          An isolated installed L1 read/create/update/start/exec/stop/delete plus
+          fail-closed input tests passed on the parent functional source commit.
+          **NOT** S2.5/BH019 secure recursion accepted, HOST_GO, or stable S5.
+          Transactional UID/GID lease allocation remains unimplemented. Explicit
+          idmap options fail closed. No automatic install, no v1 merge, and no
+          V1_PUBLISHED_RELEASE advancement. Use only on an operator-approved
+          development host and retain rollback and original UNKNOWN receipts.
+          NOTES
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA" >/dev/null
+          gh release create "$TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "BoxWeave $TAG pre-acceptance lab candidate" \
+            --notes-file rc6-release-notes.md
+          mkdir release-readback
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release-readback
+          cmp release-assets/SHA256SUMS release-readback/SHA256SUMS
+          (cd release-readback && sha256sum -c SHA256SUMS)
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .prerelease)" = true
+          echo "RC6_LAB_IMMUTABLE_RELEASE_PUBLISHED_AND_VERIFIED=PASS"
