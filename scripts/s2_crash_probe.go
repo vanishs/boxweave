@@ -24,6 +24,32 @@ const (
 	markerCommand = "sleep 12; echo once >> /tmp/bw-s2-crash-marker"
 )
 
+// Variant selection is confined to an explicitly named one-use runner
+// fixture. No variant changes production command replay or UNKNOWN recovery.
+var (
+	activeCrashName     = crashName
+	activeCrashKey      = crashKey
+	activeMarkerCommand = markerCommand
+	activeCreateKey     = "s2-crash-new-owned-box-001"
+	activeSavedKey      = "s2-crash-output-before-restart-01"
+)
+
+func init() {
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" {
+		activeCrashName = "bw-s2-bh018-final-cut"
+		activeCrashKey = "s2-bh018-real-service-final-cut-original"
+		activeMarkerCommand = "sleep 25; echo once >> /tmp/bw-s2-bh018-final-cut-marker"
+		activeCreateKey = "s2-bh018-real-service-final-cut-create"
+		activeSavedKey = "s2-bh018-real-service-final-cut-output"
+	} else if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		activeCrashName = "bw-s2-bh018-after-cut"
+		activeCrashKey = "s2-bh018-real-service-after-cut-original"
+		activeMarkerCommand = "sleep 25; echo once >> /tmp/bw-s2-bh018-after-cut-marker"
+		activeCreateKey = "s2-bh018-real-service-after-cut-create"
+		activeSavedKey = "s2-bh018-real-service-after-cut-output"
+	}
+}
+
 type original struct {
 	BoxUUID             string `json:"box_uuid"`
 	OperationID         string `json:"operation_id"`
@@ -114,8 +140,73 @@ func waitCreate(ctx context.Context, s *mcp.ClientSession, id string) map[string
 func args() map[string]any {
 	return map[string]any{
 		"box_id":          "", // populated after the authorized creation
-		"argv":            []string{"/bin/sh", "-c", markerCommand},
-		"idempotency_key": crashKey,
+		"argv":            []string{"/bin/sh", "-c", activeMarkerCommand},
+		"idempotency_key": activeCrashKey,
+	}
+}
+
+// Process SIGKILL before WAL fsync is NOT power loss. The WAL COMMIT record
+// may already be fully present in the OS page cache and thus recovered as
+// SUCCEEDED, or the transaction may be absent and recover as UNKNOWN.
+// Only two complete atomic outcomes are permitted. Neither retries the
+// original native Guest effect.
+func verifyBH018FinalCut(ctx context.Context, s *mcp.ClientSession, original original, observed map[string]any) {
+	must(str(observed, "native_operation_id") == original.NativeOperationID,
+		"original native ID altered after real WAL COMMIT process SIGKILL")
+	in := args()
+	in["box_id"] = original.BoxUUID
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		fmt.Printf("BH018_INSTALLED_POSTSYNC_IDEMPOTENCY_REPLAY_ATTEMPT=READ_ORIGINAL_ONLY\n")
+	}
+	replayed := call(ctx, s, "box_exec", in)
+	must(str(replayed, "operation_id") == original.OperationID && replayed["duplicate"] == true,
+		"original Exec reissued after terminal commit interruption")
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		fmt.Println("BH018_INSTALLED_POSTSYNC_ORIGINAL_SAME_KEY_READBACK=PASS")
+	}
+	contradiction := args()
+	contradiction["box_id"] = original.BoxUUID
+	contradiction["argv"] = []string{"/bin/true"}
+	bad, err := rawCall(ctx, s, "box_exec", contradiction)
+	must(err != nil || (bad != nil && bad.IsError), "changed original intent admitted")
+	switch str(observed, "state") {
+	case "SUCCEEDED":
+		for _, stream := range []string{"stdout", "stderr"} {
+			out := call(ctx, s, "operation_output_get", map[string]any{
+				"operation_id": original.OperationID, "stream": stream})
+			must(out["exit_code"] == float64(0) && out["command_success"] == true,
+				"committed original Exec missing its atomic output/exit evidence: "+stream)
+		}
+		next := call(ctx, s, "box_exec", map[string]any{
+			"box_id": original.BoxUUID, "argv": []string{"/bin/true"},
+			"idempotency_key": activeCrashKey + "-new-after-verified-only"})
+		freshID := str(next, "operation_id")
+		must(freshID != "" && freshID != original.OperationID && next["duplicate"] != true,
+			"original committed terminal did not release only its own resource lock")
+		fresh := waitCreate(ctx, s, freshID)
+		must(str(fresh, "state") == "SUCCEEDED",
+			"fresh independent command was not admitted after committed original")
+		fmt.Println("BH018_INSTALLED_WAL_KILL_ATOMIC_SUCCEEDED_OUTPUT_AND_NEXT_OPERATION=PASS")
+	case "UNKNOWN":
+		for _, stream := range []string{"stdout", "stderr"} {
+			out, err := rawCall(ctx, s, "operation_output_get", map[string]any{
+				"operation_id": original.OperationID, "stream": stream})
+			must(err != nil || out != nil && out.IsError,
+				"UNKNOWN original disclosed an uncommitted output receipt: "+stream)
+		}
+		must(str(item(observed, "next_action"), "kind") == "HOST_LOCAL_REVIEW",
+			"UNKNOWN lost safe human-review next action")
+		different := args()
+		different["box_id"] = original.BoxUUID
+		different["idempotency_key"] = "bh018-final-cut-new-while-unknown-refuse"
+		bad, err := rawCall(ctx, s, "box_exec", different)
+		must(err != nil || bad != nil && bad.IsError,
+			"UNKNOWN original released resource lock or redispatched native Exec")
+		again := operation(ctx, s, original.OperationID)
+		must(str(again, "state") == "UNKNOWN", "UNKNOWN resource claim was silently cleared")
+		fmt.Println("BH018_INSTALLED_WAL_KILL_ATOMIC_UNKNOWN_NO_OUTPUT_LOCKED=PASS")
+	default:
+		panic("S2_CRASH_ACCEPTANCE_FAILED: unexpected split or in-flight WAL terminal after recovery: " + str(observed, "state"))
 	}
 }
 
@@ -130,8 +221,8 @@ func main() {
 	switch os.Args[1] {
 	case "start":
 		created := call(ctx, s, "box_create", map[string]any{
-			"name": crashName, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": true,
-			"idempotency_key": "s2-crash-new-owned-box-001"})
+			"name": activeCrashName, "cpu": 1, "memory_mib": 512, "disk_gib": 2, "start": true,
+			"idempotency_key": activeCreateKey})
 		createID := str(created, "operation_id")
 		must(createID != "", "missing durable create receipt")
 		c := waitCreate(ctx, s, createID)
@@ -143,7 +234,7 @@ func main() {
 		saved := call(ctx, s, "box_exec", map[string]any{
 			"box_id": uuid, "argv": []string{"/bin/sh", "-c",
 				"printf saved-out; printf saved-err >&2; exit 7"},
-			"idempotency_key": "s2-crash-output-before-restart-01"})
+			"idempotency_key": activeSavedKey})
 		savedID := str(saved, "operation_id")
 		must(savedID != "", "recorded Exec admission missing")
 		savedDone := waitCreate(ctx, s, savedID)
@@ -202,6 +293,15 @@ func main() {
 		}
 		fmt.Println("S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS")
 		observed := operation(ctx, s, original.OperationID)
+		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+			fmt.Printf("BH018_INSTALLED_POSTSYNC_MCP_REOPEN_STATE=%s ORIGINAL_NATIVE_ID_MATCH=%t\n",
+				str(observed, "state"), str(observed, "native_operation_id") == original.NativeOperationID)
+		}
+		if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut" ||
+			os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+			verifyBH018FinalCut(ctx, s, original, observed)
+			return
+		}
 		must(str(observed, "state") == "UNKNOWN" && str(observed, "native_operation_id") == original.NativeOperationID,
 			"restart failed to preserve exact native op ID and lock UNKNOWN")
 		next := item(observed, "next_action")
