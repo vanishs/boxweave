@@ -5,6 +5,81 @@
 **PR:** [#146](https://github.com/vanishs/boxweave/pull/146) (Draft; base `v1`)  
 **Decision:** Begin product code development immediately, but do not change PR readiness or mark BH-019 security accepted.
 
+
+## 0. Owner decision (2026-11-15): complete implementation first, L0 smoke, RC6, then deep reacceptance
+
+**This section supersedes the older per-work-package deploy-and-test rhythm in `4/`6 below.** The work packages remain the engineering scope and release-acceptance requirements, but the owner explicitly selected one *integrated implementation phase* before the first new L0 deployment:
+
+1. **Implementation phase:** review latest PR HEAD and existing tests, then implement **all agreed 14 configuration surfaces (13 new; one existing)** plus the BH-019 safe recursion, ID map, network and nested-boot work in a cohesive development pass. Multiple internal commits, local unit/negative tests, code review and staged compilation are welcome; do not deploy or publish an incomplete feature as a successful RC6.
+2. **L0 isolated deployment and *basic smoke*:** once integrated code compiles and passes unit/static checks, deploy to a **new owned disposable L0 lab Box or dedicated isolated L0 test instance**, without replacing an existing production/shared L0 service. Read fresh inventory and explicit service ownership before any install. Verify real `box_create` with dotted names, ordinary defaults, strict rejection of unauthorized modes, create→start→exec→get→update→stop→delete, owned network baseline, and selected safe recursion+UID/AppArmor readback. A **known P1 isolation escape, missing ownership check, corrupted terminal operation or insecure privilege fallback blocks the release**; fix then rerun smoke.
+3. **Produce RC6 after basic smoke:** use repository's established RC version/tag/artifact conventions, release the **RC6 test candidate**, and record commit SHA, build versions, smoke evidence, untested scenarios and open gaps. RC6 availability **does not imply** BH-019 safe-recursion acceptance, security sign-off, HOST_GO, or `v1` merge.
+4. **Repeated RC6 full acceptance and corrections:** test the *installed* RC6 via L0 BoxWeave, nested real Incus and actual HTTP MCP through L5, progressively adding concurrency, negative network tests, ID collision/exhaustion, restart/SIGKILL/ACK loss/UNKNOWN, snapshots, quotas, guest boot recovery, architecture builds and independent Verifier. Fix code and repeat tests; if fixes change the candidate SHA, build a **new traceable candidate** under existing release policy (do not silently claim old RC6 artifacts match new source). Finish same-SHA Actions after real lab gates; only then consider PR readiness/merge.
+5. **Status reporting after each major stage:** explicit code SHA, deployment target and ownership, all executable checks (PASS/FAIL/BLOCKED/NOT TESTED), original BoxWeave and native Incus receipts, CI links, cleanup/post-inventory, RC6 artifact identity and next gate. Stop and document a genuinely unsafe blocker instead of widening restricted Project authority.
+
+### 0.1 Exact MCP parameter inventory: 9 primary options + 5 nested advanced booleans
+
+**Naming contract:** use the **original dotted names** as JSON Schema property names and MCP tool-call argument keys, not underscore aliases. Verify both Go MCP SDK schema parsing and **installed ChatGPT HTTP MCP** serialization of literal dotted keys. Names that begin `lxc.` refer to LXC settings, **not direct Incus instance configuration keys**: a trusted BoxWeave translation layer must map them into an Incus/LXC-compatible operation without raw user-controlled configuration or weakening a restricted Project. If the restricted Project or SDK makes an option impossible, fail closed with a clear reason; do not pretend that an accepted JSON field was effectively applied.
+
+**Primary group (9 visible, of which `security.nesting` already exists):**
+
+| MCP field (exact native spelling) | Type / accepted request | Meaning / implementation notes | Admission |
+| --- | --- | --- | --- |
+| `lxc.apparmor.profile` | `unset` / `unchanged` / `unconfined` / `generated` (string enum) | `unset` is a BoxWeave **sentinel meaning omit override**, never write literal `unset` into LXC. `unchanged` retains current policy; `generated` requests LXC generation; `unconfined` requests a policy change and may fail under ancestor enforce. | Dangerous `unconfined` requires separate high-trust authorization and must be forbidden as an automatic recursion fallback. Under restricted Projects, verify a server-owned narrow mapping rather than exposing `raw.lxc`. |
+| `security.privileged` | optional boolean | Privileged container; explicitly **not** equivalent to AppArmor unconfined. | High-trust explicit authorization only, subject to `restricted.containers.privilege`; not permitted for safe managed-recursion acceptance. |
+| `security.nesting` | optional boolean **already implemented** | Enable Incus container nesting, distinct from LXC generated-profile nesting support. | Keep existing behavior / compatibility. Do not treat it as automatic recursive-mode opt-in. |
+| `security.idmap.isolated` | optional boolean | Request unique Incus-managed unprivileged ID allocation. | Coordinate with transactionally reserved BW UID/GID range; cannot combine with explicit `security.idmap.base`. |
+| `security.idmap.size` | optional integer | Delegate bounded UID/GID range adequate for actual child and any descendants. | Checked limits, kernel maps, parent owned pool, exhaustion and lifecycle. |
+| `security.idmap.base` | optional integer | Request an explicit host-relative mapping base; not guaranteed isolated by Incus. | Validate parent pool bounds, siblings/foreign occupants, disjointness, overflow; never trust stopped-instance admission alone. |
+| `security.protection.delete` | optional boolean | Prevent accidental deletion. | Ownership stays mandatory; do not silently remove protection for cleanup, require explicit authorized change. |
+| `boot.autostart` | optional boolean | Boot child automatically when its Incus daemon starts. | Verify graceful recovery and resource quota. |
+| `security.guestapi` | optional boolean | Whether Guest API access is enabled. | Preserve existing restricted access model; test availability and no parent socket exposure. |
+
+**Advanced nested group (5 new optional booleans):**
+
+| MCP field (exact native spelling) | Type | Concise Agent-facing help and gate |
+| --- | --- | --- |
+| `lxc.apparmor.allow_nesting` | optional boolean | Adjust *LXC generated-profile* nesting allowances, **not** a replacement for `security.nesting`. Map boolean to LXC 1/0 only via trusted translation; do not infer generated profile can be loaded under deeply confined AppArmor. |
+| `security.syscalls.intercept.mknod` | optional boolean | Intercept specifically supported device-node operations; only when workload requires and Project permits. |
+| `security.syscalls.intercept.setxattr` | optional boolean | Intercept selected extended-attribute requests; opt-in and subject to host/Project capability checks. |
+| `security.syscalls.intercept.bpf` | optional boolean | Enable supported BPF interception; potential new host attack surface, opt-in. |
+| `security.syscalls.intercept.bpf.devices` | optional boolean | Device-cgroup BPF support; effective only with `security.syscalls.intercept.bpf=true` and required host/Project capability. |
+
+**Excluded from this RC6 scope:** `security.syscalls.intercept.mount.fuse` (string-valued mapping, not a boolean), arbitrary `raw.lxc`, `lxc.apparmor.raw`, `lxc.apparmor.allow_incomplete`, arbitrary custom Profile names, unrestricted custom ID maps, general arbitrary daemon-environment variables, or automatic host policy adjustments. Adding these later requires separate security design.
+
+**Optional fields mean three states:** absent = preserve Incus/default/unset semantics, explicit `false` = request false, explicit `true` = request true. Preserve omitted-vs-false in JSON decoding and in `box_update` patch semantics; inspect real Incus live-update support (many map, privileged and interception values require stop/start). Avoid implicit booleans or default conversions. For `lxc.apparmor.profile`, `unset` is distinct from actual empty string and only means no LXC override.
+
+**Combination checks:** `security.privileged=true` is incompatible with the default safe-recursive security contract; explicit fixed `security.idmap.base` must not be combined with `security.idmap.isolated=true`; BPF device interception depends on BPF interception; `lxc.apparmor.allow_nesting` only has the documented generated-profile meaning; `unchanged` is secure *only if the actual parent enforces the right inherited policy*. Validate combinations **before** native create, repeat postcondition verification, and do not infer a valid configuration from a successful stopped `incus init`.
+
+### 0.2 MCP Agent guidance: concise, relevant, not an installer
+
+Use one or two practical sentences for each parameter's description, exposing default/omitted semantics, dependency and risk. Add one short cross-field paragraph to `box_create` / relevant capability or schema metadata, not an excessively long manual:
+
+> `lxc.apparmor.profile`: Container LXC AppArmor choice. `unset` leaves Incus in control; `unchanged` inherits the current enforced profile; `generated` requests a new generated Profile; `unconfined` requires authorization and must not be an automatic workaround. For deep nested Incus, if inner AppArmor policy administration fails, inspect the ancestor `(enforce)` label first. **After installing incusd *inside* the Box via `box_exec`**, the deployment Agent can evaluate setting `INCUS_SECURITY_APPARMOR=false` **only on that inner daemon service**, alongside exact verified `unchanged` on its children. Never disable host AppArmor or bypass project restrictions.
+
+> `security.privileged`: Privileged container; default false, use only with explicit high-trust authorization. Do not use to solve nesting or AppArmor startup errors.
+
+> `lxc.apparmor.allow_nesting`: LXC generated-Profile helper, not equivalent to `security.nesting`; only meaningful where generated AppArmor is actually in use.
+
+> `security.syscalls.intercept.bpf.devices`: Device-cgroup BPF interception. Requires `security.syscalls.intercept.bpf` and host/Project permission; opt-in only.
+
+Other option help: one clear sentence about behavior and any important precondition. Agent should consult the **actual checked runtime capability response**, not assume a recommendation is permission. If beneficial, expose a compact **read-only capability check** using existing MCP patterns; do not create an entire installer/orchestrator.
+
+**No new `incus_security_apparmor` Box parameter.** `INCUS_SECURITY_APPARMOR` is an independent **incusd process environment option**. BoxWeave MCP creates/operates Boxes; Agent installs and configures inner incusd with existing `box_exec`. It is related to, but not synonymous with, a per-container `lxc.apparmor.profile` choice. The documentation must explain both surfaces and avoid suggesting that a container creation request can directly alter a daemon shared by many Boxes.
+
+**Authoritative upstream references:** [LXC AppArmor directives](https://linuxcontainers.org/lxc/manpages/man5/lxc.container.conf.5.html), [Incus instance keys and live updates](https://linuxcontainers.org/incus/docs/main/reference/instance_options/), [Incus ID-map semantics](https://linuxcontainers.org/incus/docs/main/userns-idmap/), [restricted Project privileges/interception/lowlevel](https://linuxcontainers.org/incus/docs/main/reference/projects/), [Incus syscall interception/BPF dependencies](https://linuxcontainers.org/incus/docs/main/syscall-interception/). Implement against pinned Incus 7.6 actual capabilities; reject unsupported differences instead of assuming the docs imply universal availability.
+
+### 0.3 Development/testing division for RC6
+
+| Stage | Required result | What the result **does not** prove |
+| --- | --- | --- |
+| Full integrated code patch | All 14 surfaces wired (13 new, existing nesting retained), typed validation, AppArmor/BH-019 idmap/network/boot fixes, MCP descriptions, local tests, Go quality/race | No native runtime PASS merely because code builds |
+| L0 isolated smoke | Actual installed candidate, parameter round trips and subset lifecycle tests, no observed P1 unsafe fallback | No deep security/recovery/L5 full PASS |
+| RC6 candidate | Tag/artifacts for **exact smoke-tested SHA** under repo conventions; preliminary known-limit notes | No formal S2.5/BH-019 acceptance or `v1` merge |
+| Post-RC6 repeated acceptance | Full installed HTTP MCP and independent nested daemon L0→L5, network and identity negatives, quota/crash/UNKNOWN/recovery, Verifier and same-SHA CI | Only after all applicable gates can PR move toward release |
+
+**Fail-closed RC6 creation condition:** A critical ownership/security regression, actual sibling access where isolation was promised, broad unrestricted low-level admission, privilege escalation via defaults, missing operation persistence or broken rollback cannot be described as “minor smoke issue”. If such a condition exists, fix before publishing RC6. Other explicitly tracked acceptance gaps may remain on a clearly designated *test candidate*, never disguised as production readiness.
+
+
 ## 1. Ground truth, goal and safety boundary
 
 Real isolated native Incus 7.6 experiments have **functionally reached L5**: independent Incus daemons ran in L1–L4 and L4 created, started, and executed in L5. This worked with **nonprivileged containers**, an **ancestor AppArmor Profile remaining `(enforce)`**, real separate User and Mount namespaces, and no host policy changes. The method was to set official `INCUS_SECURITY_APPARMOR=false` on **each inner incusd service only**, configure its child LXC policy transition to the exact `lxc.apparmor.profile = unchanged`, and delegate sufficiently wide non-overlapping UID **and** GID mappings. No `complain`, privileged container or host AppArmor disable was required.
@@ -42,7 +117,7 @@ Read PR #146 **latest HEAD**, compare `v1`, and inspect live tests before coding
 6. **Ownership, lifecycle and receipts:** retain Project/UUID checks, no arbitrary adoption, original native Incus operation ID, idempotency keys, operation UNKNOWN safeguards, immutable Guest outputs, bounded resources, rollback/reconciliation and exact-test-fixture cleanup.
 7. **No premature PASS:** inheritance of a single enforced Profile does not substitute for independent per-layer Profile namespaces, seccomp, cgroups, mount/FS and network safety. BH-019 production/security acceptance remains BLOCKED until full negative gates pass.
 
-## 4. Development work packages — implement in this order
+## 4. Development work packages — complete code as an integrated batch before L0 deployment
 
 ### WP0 — audit and failing tests before change
 
@@ -102,8 +177,8 @@ Run Go format/vet/tests/race, S1/S2/BH-018 and S2.5 security negative suites, re
 
 ## 6. Work rhythm, safety and next-agent continuity
 
-Work in **small auditable steps**: WP0 design/tests → WP1 one live managed create/exec → WP2 allocation with two concurrent children → WP3 enforced network A/B → WP4 service boot → WP5 installed L5. After each step: unit/negative tests, exact disposable native Box tests, original result classification, bottom-up cleanup, latest inventory readback, then commit and document. Keep all changes on the PR branch; do not merge before sign-off. If a prerequisite would require bypassing a restricted Project or removing an enforced ancestor boundary, stop that feature and report the exact failure instead of granting privilege.
+Follow **`0 owner-approved release order**: implement all scoped feature code in one integrated phase (local compile/unit/negative checks and multiple commits allowed), then deploy **once to a new isolated L0 fixture** for basic smoke, then build and identify RC6 test artifacts, then repeatedly run comprehensive installed multi-layer/HTTP MCP/security/fault acceptance. The WP0–WP5 exit criteria remain the **final** gates and are not an instruction to delay initial RC6 until every full L5 fault injection is complete. At every test stage, record original operation/native IDs, classify Guest results independently, clean exactly owned disposable fixtures and re-read inventory. Keep all changes on the PR branch; do not merge before sign-off. If a prerequisite would require bypassing a restricted Project or removing an enforced ancestor boundary, stop that feature and report the exact failure instead of granting privilege.
 
 Never modify host-level AppArmor, shared L0/L1 instances, historical UNKNOWNs, or existing network/security profiles. Scope network and installation changes only to newly owned test fixtures. Prior tests observed 4 historical L0 and 9 L1 Boxes; **read fresh inventory instead of assuming counts have not changed**.
 
-**Next agent:** start by reading this document and the two main L5/comprehensive lab reports; verify latest PR HEAD, then code WP0/WP1 first. Continue through the remaining WPs only with proven security invariants. Report test-by-test PASS/FAIL/BLOCKED and original receipts. No premature release.
+**Next agent:** start by reading **`0 (owner decision and exact 14-field contract)** and the two main L5/comprehensive lab reports; verify latest PR HEAD, then implement the entire agreed patch (WP0–WP4 plus typed MCP surfaces) before the first new L0 install. After integrated code and quality tests, L0 isolation-smoke → publish traceable **RC6 test candidate** if no critical safety failures → repeatedly perform WP5 full L5/HTTP MCP, negative and crash acceptance, fix and retest. Report each step's SHA/receipts/PASS/FAIL/BLOCKED/NOT TESTED; keep Draft until final independent sign-off.
