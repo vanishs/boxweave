@@ -1,5 +1,8 @@
 # S5 — Full installed-system reacceptance, exact candidate and controlled release
 
+**2026-11-15 S2.5 carry-forward to S5:** Early `S25_DEV_BASE_PASS` is a **supervised single-tenant development-use** verdict only. Before first supported v1 release, independently accept the final advertised AppArmor/BPF/ID-map/network/quota security model (or explicitly decide not to advertise unsupported hostile multi-tenant recursive guarantees), completed OAuth refresh/idempotency and Create/Delete recovery, full BH/TC where applicable, 20/20 MCP + CLI and native original-fault/rollback. No evidence relabeling, final-release waiver, or automatic RC6 mutation. [Phased gate contract](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
+
+
 **State: NOT_STARTED (2026-11-08).** **One continuous release-quality campaign**, not “unit tests are green so tag”. Implement/fix/reverify as required in this stage. An unresolved mandatory safety gate blocks **publication**, but the Agent must continue all independent verification, documentation repairs and safe fixes.
 
 **Minimal entry:** [S4 handoff and exact candidate](../EXECUTION_LOG.md#current-checkpoint), [phase execution protocol](../PHASE_EXECUTION_PROTOCOL.md), [full acceptance matrix](../../verification/ACCEPTANCE.md) **only its case IDs/list**, [Agent black-box workflow](../AGENT_WORKFLOW.md), and [version/release policy](../../process/VERSIONING.md). Retrieve the relevant detailed design/evidence only when a named case fails or a changed function requires it.

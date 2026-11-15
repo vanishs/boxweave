@@ -1,0 +1,45 @@
+# S2.5 RC6: real installed recursive L4 → L5 MCP acceptance (2026-11-15)
+
+**Scope:** real authenticated ChatGPT `BoxWeave_L4__RC6` → L4-owned isolated L5 container → independent native Incus 7.6 daemon → official BoxWeave v1.0.0-rc.6 → unsigned-in public Quick Tunnel. **Core recursive installation PASS; authenticated L5 public MCP NOT YET ACCEPTED** because the approval password has not been provisioned on the L5 host. This does **not** constitute BH-019 full AppArmor/UID isolation acceptance or S2.5/HOST_GO signoff.
+
+**Original work_ref:** `RC6-L4-L5-DEPLOY-20261115`.
+**Parent L4:** `rc6-l4-enforced-1115`, UUID `931dcf91-53cd-4e92-b87b-df7d21c8cbc2`, user-1001 restricted Incus project. L4 authenticated remote MCP is ready, version `1.0.0-rc.6`, `incus_version=7.6`, original Box inventory empty.
+**Release identity:** GitHub prerelease v1.0.0-rc.6, binary SHA256 `0932ad434d2a1b113e2254f6ca02a218c2dff473f70d7ed3b2f45e93d0610174`, source build commit `370e419c43f06b7488c7330ba61913ffec0e9f78`.
+
+## Admitted safety checks and scoped low-level permission
+
+- An exact `lxc.apparmor.profile=unchanged` Create with Project lowlevel permission unset returned original `e471b0aeb97cefbfc7ae45cb64c6d8ad` **FAILED/SAFE_NATIVE_PREFLIGHT_DENIED**.
+- Independently interrogated L4 via its **authorized L3-owned** Box Exec `8d212ac9ed735e286a0b5893139ce0a4`: AppArmor kernel `Y`, inherited `incus-user-1001_rc6-l2-lab-1115_</var/lib/incus> (enforce)`; L4 incusd `INCUS_SECURITY_APPARMOR=false`, restricted `user-1001` Project nesting allow, no existing inner instances, and unprivileged UID/GID budget maps.
+- Changed **only L4's own empty restricted Project** `restricted.containers.lowlevel=allow`, after checking these conditions; L3 parent Exec receipt `b0a038cd0f2853c4ce1bfff14885a26f` **SUCCEEDED**. Verified native property and unchanged enforce label. Neither physical host nor ancestor AppArmor/security settings were modified. This widens L4 Incus Project native low-level admission and needs production threat review; BoxWeave MCP restricts individual accepted properties to its typed tool schema.
+- After that setting, other BoxWeave preflights still correctly rejected: `security.privileged=true`, operation `51444dd148f7ec9b7de4c1eaa61c76ab` **FAILED/SAFE_NATIVE_PREFLIGHT_DENIED**; `lxc.apparmor.profile=unconfined`, `8cab53447cfc648d0b068f73eb3b6b04`, same; `security.idmap.isolated=true` with size 4194304, `eeaf7e1c981bbc326b6343747da71c92`, same. No instances were created for these negative requests.
+
+## L5 native Box and security witnesses
+
+- Positive Create original `1f52d22739e7fb374f3e4f25d1e67c15` **SUCCEEDED** for `rc6-l5-enforced-1115`, exact UUID `d5bb5b4f-21ab-4a1c-9460-1da94efc8b6f`, CPU1/1536MiB/12GiB declared root disk, internet=true, `security.nesting=true`, `lxc.apparmor.profile=unchanged`, `boot.autostart=false`, `security.guestapi=false`, `security.protection.delete=false`, unprivileged. Native `box_get` read back exact settings.
+- Start `6bbf4db946e47c4fad3cda81113579ed` **SUCCEEDED**. Exact idempotent Create replay returned original Box UUID, receipt, and `duplicate=true` without creating a sibling.
+- Read-only real Guest Exec `2752265ad6ba559a4a48108434a4e04a` **SUCCEEDED** with guest exit 0; Ubuntu 24.04.5, kernel AppArmor enabled, PID1 and Exec enforcing `incus-user-1001_rc6-l2-lab-1115_</var/lib/incus> (enforce)`, Seccomp 2, IPv4 `10.157.204.2/24`, ULA IPv6 `fd42:6e77:85d9:fad6::/64` and link-local IPv6, external Zabbly signing key HTTPS 200.
+- L5 UID map `0 1000000 1001`, `1001 1001 1`, `1002 1001002 995998998`. GID map `0 1000000 990`, `990 990 1`, `991 1000991 995999009`. L3 and L4 analogues are respectively `997998998` and `996998998` trailing UID range; at L5 the remaining range is `995998998`, consistent with ~1e6 budget consumption per recursive layer. The observed large ranges do **not** constitute a durable collision-free transactional sibling allocator or independent per-layer AppArmor policy namespaces.
+
+## Incremental software install and independent Incus
+
+All steps invoked only on exact owned L5 via authenticated L4 `box_exec`, preserving unique durable operations, never a single giant shell installer:
+
+1. Ubuntu APT HTTPS sources `f6baa5c1f3ca8a3feef3eb2cde3ecf9f`, ordinary `apt-get update` `1c26cd18489e89d320fd1cbb19136f9b`, `gpg` and `dnsmasq-base` normal APT install `a4b3418adc2732c09863e882a80227c1` — **all succeeded**, no privilege-bypass workaround.
+2. Verified official Zabbly key fingerprint `4EFC590696CB15B87C73A3AD82CC8797C838DCFD` `16e897d40ef25cd73677ab9a216bd9a7`; signed apt index `0d6c649b143a841af0410e55f8e8e2f9`; pinned Incus packages `1:7.6-ubuntu24.04-202611072126` installed in `572e936872c0fc6ba6a7852424484f3d`. Both native Incus server/client 7.6.
+3. Scoped `Environment=INCUS_SECURITY_APPARMOR=false` **only to L5's own incus.service**, restarted daemon, verified environment from effective process and that L5 Guest still inherits `(enforce)`: `432f8c5f2265155a92152223ce0866c3`. Independent `incus admin init --auto --storage-backend=dir`, pool `default` and managed `incusbr0` created: `81da4d63e444be88abcfbc68473d863a`.
+4. Created nonadmin `boxweave` UID1001, GID990, membership only `incus`, and auto-provisioned empty restricted `user-1001` Project and private `incusbr-1001` network: `57217babcd2984572001d8476d0ae553`.
+5. Downloaded immutable public GitHub RC6 `install.sh` and SHA256SUMS; checksum passed, independently reviewed `--plan` candidate source SHA and L5-specific machine digest `279e0d1630225ca5373dc5e151380d1b4d9d6a80609042c2c36cd1a6eb0cbc59`: `cda458ed3a9e4f1ac06e741e9641cb27`. `install.sh --apply` success `61678a73bae3c7abccc1963e236ff3ab`, installed binary RC6 with expected exact checksum, `boxweave.service active`, `restart_required=false`.
+6. L5-only `native-prepare-plan` `dea4a1baffb26687e4662e311afe783f`: Project `user-1001`, pool `default`, network `incusbr-1001`, new exclusive ACL `bw-l5-rc6-1115`, review sha `3a66582af913e975114bfb2428ee2557e3f3adaf5c4919d7891e101990f3fb11`. Exact `native-prepare-apply` `02003b26e926deda53e81baaaef3153a` returned **APPLIED**. `native-prereq-plan` `7b5f0aea79f6a159f3f8e108bc6e16c1` **8/8 PASS**, review SHA `d71c4d2c070e6c87fa7fbf7edcf2947fc9a0ca970ab942a4b542d5232ef676f7`. `native-prereq-verify` `a69de927301b8b1168b4d0de6352bb16` PASS. Native `doctor`: `ready=true`, `mcp_ready=true`, Incus 7.6, storage quota not verified and guest default image resolved on demand.
+
+## Cloudflare and OAuth state — incomplete by design
+
+- Verified Cloudflare signing-key fingerprint `CC94B39C77AE7342A68B89628A682D308D4E5E73`, signed Noble apt `cloudflared 2026.11.0` binary `/usr/local/bin/cloudflared`: `1f954d06954c7cbb088ccbf3ebf5161e`, `c7dd0d993a835ac1f8760460302a77f7`, `3d7994c6e4bf81178aaa1d8c51b20db8`.
+- Created a dedicated unprivileged `cf-quick` service `boxweave-l5-quick-tunnel.service`, restart-on-failure, no-new-privileges, systemd active, original `09f3cfc50eb9309efca7dd11293f6c55`. Tunnel URL readback original `0d227f79af174a214392f460c213232b`: current ephemeral trycloudflare.com hostname (deliberately excluded from this repository); degraded regional QUIC health but HTTP/2 fallback succeeds.
+- Set OAuth public Origin only to exact current Quick Tunnel hostname `f04fa2da818298e8c2f7cfba1859b17f`, with `oauth-status Enabled=false`. Following the **previous level's ChatGPT safety block on secret provisioning**, no OAuth approval-password generation or secret exfiltration was attempted using any MCP, including ancestor MCP.
+- Read-only postflight `f48619dcae130ccfcced8310aa87c429`: L5 incus, boxweave, cloudflared all systemd **active**; build/install SHA and schema correct, doctor ready/mcp_ready true; local POST /mcp HTTP **401**, public POST /mcp HTTP **403**, public OAuth metadata **403**, remote body `invalid Host` while OAuth disabled. **Do not misrepresent this as public authenticated MCP PASS.** The operator must provision the OAuth approval password from a trusted local L5 terminal using the official `oauth-setup --generate --output-file` and review 0600 secret permissions; then recheck public URL, enablement, public 401 and metadata 200 before configuring L5 MCP in ChatGPT.
+
+## Final state and release decision
+
+On L4, `operation_list(work_ref=RC6-L4-L5-DEPLOY-20261115, limit=50)` returned **29 operations: 25 SUCCEEDED, 4 expected FAILED/SAFE_NATIVE_PREFLIGHT_DENIED, 0 UNKNOWN**. Exact L4 inventory **one owned L5 Box**, running; no extra preflight instance created. Parent L3's L4 Box is still running, parent L4 `host_status.ready=true`.
+
+**Not yet accepted:** L5 authenticated MCP/OAuth, L5→L6, per-layer AppArmor namespace separation, collision-free UID/GID transactional lease allocation, IPv4+IPv6 sibling packet-level negatives, true Incus storage quotas and spool quota guarantee (`dir` pool), crash/ACK-loss/UNKNOWN fault recovery. Do not merge this experiment's unaccepted security behavior as complete BH-019. Deep functional recursion demonstrates inherited parent enforced profiles, **not** independent descendant policies.

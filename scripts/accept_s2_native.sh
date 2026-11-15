@@ -621,13 +621,35 @@ if [ "$attempt" -ge 40 ]; then
   exit 93
 fi
 echo "BH018_INSTALLED_NORMAL_RESTART_HTTP_401=PASS"
-if ! ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+# Preserve the one-use client exit status instead of losing it through
+# a negated shell condition. Never print raw stderr, Authorization headers,
+# transport errors, Guest output or secrets in a public CI log.
+bh018_resume_rc=0
+( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
-  "$work/s2-bh018-atomic-mcp-probe" resume ) > "$work/bh018-atomic-resume.log" 2>&1; then
-  # A client crash may not emit the typed failure line. Print ONLY
-  # predefined phase markers from the one-use verifier (no tokens/logs).
+  "$work/s2-bh018-atomic-mcp-probe" resume ) > "$work/bh018-atomic-resume.log" 2>&1 || bh018_resume_rc=$?
+if [ "$bh018_resume_rc" -ne 0 ]; then
+  echo "BH018_INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE=$bh018_resume_rc"
+  # Emit only fixed, secret-free phase and original-ID witnesses.
   grep '^BH018_MCP_RESUME_PHASE=' "$work/bh018-atomic-resume.log" | tail -n 16 || :
-  grep 'BH018_MCP_FAIL' "$work/bh018-atomic-resume.log" | head -n 5 || :
+  grep '^BH018_MCP_FRESH_ADMITTED_EXIT_' "$work/bh018-atomic-resume.log" || :
+  if grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OPERATION_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=TERMINAL_POLL_TIMEOUT'
+  elif grep -Fq 'BH018_MCP_FAIL: original ' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_TERMINAL_UNVERIFIED'
+  elif grep -Fq 'BH018_MCP_FAIL:' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=OTHER_VERIFIER_ASSERTION'
+  elif [ "$bh018_resume_rc" -eq 137 ]; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=PROCESS_KILLED_137'
+  elif grep -Eq 'fatal error:|runtime: out of memory' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=GO_RUNTIME_ABORT'
+  else
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=UNTYPED_CLIENT_FAILURE'
+  fi
   echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
   exit 96
 fi

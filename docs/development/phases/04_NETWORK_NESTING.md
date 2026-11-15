@@ -1,5 +1,8 @@
 # S4 — Native forwarding, one shared ACL, safe deletion and nested parity
 
+**2026-11-15 S2.5 carry-forward to S4:** Own the explicit [BH-019 #150](https://github.com/vanishs/boxweave/issues/150) independent AppArmor Policy Namespace/Admin **platform design decision** (nested 243), cgroup-device BPF real attach/deny, durable sibling-safe UID+GID lease allocator, deep IPv4/IPv6 sibling/cross-Project negatives and supported disk/Exec-spool budgets. Preserve fail-closed rejections and do not claim delegated policy from inherited enforcing labels; no host privilege/AA weakening to force a PASS. Integrate with existing 4 S4 peer/forward Tools; final advertised security/trust model is reaccepted in S5. [Phase reallocation and dev-only limit](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
+
+
 **State: NOT_STARTED (2026-11-08).** Execute the entire networking + nesting phase in one continuous focused build/test/fix/acceptance pass. Normal network mechanics were already validated in SDK-only labs: **do not re-investigate their basics before reading prior evidence**. This phase implements them in the **actual v1 controller and installer**, then deliberately tests the missing failure paths.
 
 **Initial context:** [S3 handoff/current state](../EXECUTION_LOG.md#current-checkpoint), [phase protocol](../PHASE_EXECUTION_PROTOCOL.md), [network authoritative design](../../design/NETWORK.md), [S1 installer interface and S2 Box deletion seam](02_BOX_LIFECYCLE_OPERATIONS.md). Don't preload all old ACL source/history.

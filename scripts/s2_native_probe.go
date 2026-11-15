@@ -829,14 +829,14 @@ func main() {
 	fmt.Println("S2_NATIVE_DISK_GROWTH_PRESERVES_CPU=PASS")
 
 	nestingOn := call(ctx, admin, "box_update", map[string]any{
-		"box_id": uuid, "nesting": true,
+		"box_id": uuid, "security.nesting": true,
 		"idempotency_key": "native-s2-opt-in-nesting-on-0001"})
 	wait(ctx, admin, id(nestingOn))
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	check(box["nesting"] == true && field(box, "cpu") == "2",
 		"approved native nesting did not take effect or erased CPU")
 	nestingOff := call(ctx, admin, "box_update", map[string]any{
-		"box_id": uuid, "nesting": false,
+		"box_id": uuid, "security.nesting": false,
 		"idempotency_key": "native-s2-opt-in-nesting-off-001"})
 	wait(ctx, admin, id(nestingOff))
 	box = child(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")

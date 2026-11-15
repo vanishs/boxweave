@@ -32,6 +32,7 @@ type mutationBase struct {
 }
 
 type createBoxInput struct {
+	native.InstanceOptions
 	IdempotencyKey string `json:"idempotency_key"`
 	Name           string `json:"name"`
 	CPU            int    `json:"cpu,omitempty"`
@@ -39,7 +40,7 @@ type createBoxInput struct {
 	DiskGiB        int64  `json:"disk_gib,omitempty"`
 	Image          string `json:"image,omitempty"`
 	Start          *bool  `json:"start,omitempty"`
-	Nesting        bool   `json:"nesting,omitempty"`
+	Nesting        bool   `json:"security.nesting,omitempty" jsonschema:"Incus nesting; independent of LXC AppArmor generated-profile nesting. Does not automatically authorize safe recursive Incus."`
 	Internet       *bool  `json:"internet,omitempty"`
 	WorkRef        string `json:"work_ref,omitempty"`
 	AgentRef       string `json:"agent_ref,omitempty"`
@@ -73,12 +74,13 @@ type operateBoxInput struct {
 }
 
 type updateBoxInput struct {
+	native.InstanceOptions
 	BoxID          string `json:"box_id"`
 	IdempotencyKey string `json:"idempotency_key"`
 	CPU            *int   `json:"cpu,omitempty"`
 	MemoryMiB      *int64 `json:"memory_mib,omitempty"`
 	DiskGiB        *int64 `json:"disk_gib,omitempty"`
-	Nesting        *bool  `json:"nesting,omitempty"`
+	Nesting        *bool  `json:"security.nesting,omitempty" jsonschema:"Toggle Incus nesting. Changing it does not grant a recursive AppArmor or UID/GID delegation capability."`
 	Internet       *bool  `json:"internet,omitempty"`
 	WorkRef        string `json:"work_ref,omitempty"`
 	AgentRef       string `json:"agent_ref,omitempty"`
@@ -266,7 +268,8 @@ func exactCreateNativeShape(g native.BoxState, in createBoxInput) bool {
 	return g.CPU == strconv.Itoa(in.CPU) &&
 		g.Memory == fmt.Sprintf("%dMiB", in.MemoryMiB) &&
 		g.RootDiskSize == fmt.Sprintf("%dGiB", in.DiskGiB) &&
-		g.Nesting == in.Nesting
+		g.Nesting == in.Nesting &&
+		in.InstanceOptions.Matches(g.NativeOptions)
 }
 
 func (s *Service) observeOriginalCreateSettled(ctx context.Context, name, originalID string, start, internet, nativeFailed bool) (native.BoxState, error) {
@@ -354,7 +357,7 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 
 func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_create",
-		Description: "Admit one owned container using a local Incus image alias or an images: catalog alias (default: local boxweave-default/legacy Ubuntu alias, then official Ubuntu); asynchronous durable receipt.",
+		Description: "Admit one owned container with typed dotted Incus/LXC options; omitted booleans preserve defaults. Low-level AppArmor requires an independently reviewed trusted Project adapter. Never disable host AppArmor: after installing inner incusd by box_exec, configure INCUS_SECURITY_APPARMOR on that inner service only, check inherited enforce and UID/GID budgets. Asynchronous durable receipt.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if !validBoxName.MatchString(in.Name) || !native.ValidImageChoice(in.Image) {
@@ -383,15 +386,16 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			r, err := s.admitNative(ctx, req, "box_create", in.IdempotencyKey, "", "",
 				"box:"+in.Name, in.WorkRef, in.AgentRef, struct {
-					Name      string `json:"name"`
-					CPU       int    `json:"cpu"`
-					MemoryMiB int64  `json:"memory_mib"`
-					DiskGiB   int64  `json:"disk_gib"`
-					Image     string `json:"image,omitempty"`
-					Start     bool   `json:"start"`
-					Nesting   bool   `json:"nesting"`
-					Internet  bool   `json:"internet"`
-				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, in.Image, start, in.Nesting, internet})
+					Name      string                 `json:"name"`
+					CPU       int                    `json:"cpu"`
+					MemoryMiB int64                  `json:"memory_mib"`
+					DiskGiB   int64                  `json:"disk_gib"`
+					Image     string                 `json:"image,omitempty"`
+					Start     bool                   `json:"start"`
+					Nesting   bool                   `json:"nesting"`
+					Internet  bool                   `json:"internet"`
+					Options   native.InstanceOptions `json:"instance_options"`
+				}{in.Name, in.CPU, in.MemoryMiB, in.DiskGiB, in.Image, start, in.Nesting, internet, in.InstanceOptions})
 			if err != nil {
 				return nil, state.Receipt{}, err
 			}
@@ -399,7 +403,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			effect := func(ctx context.Context) (string, error) {
 				id, e := s.Native.Create(ctx, native.InstanceAction{
 					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-					Image: in.Image, Start: start, Nesting: in.Nesting, Internet: internet})
+					Image: in.Image, Start: start, Nesting: in.Nesting, Internet: internet,
+					Options: in.InstanceOptions})
 				nativeID = id
 				return id, preflightNative(e)
 			}
@@ -576,18 +581,18 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 	}
 
 	addStrictTool(server, &mcp.Tool{Name: "box_update",
-		Description: "Update exact owned CPU/RAM/root disk-growth/nesting and per-Box Internet egress by presence-aware typed fields.",
+		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, _, err := requireAdmin(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			if in.Internet == nil && in.CPU == nil && in.MemoryMiB == nil &&
-				in.DiskGiB == nil && in.Nesting == nil {
+				in.DiskGiB == nil && in.Nesting == nil && in.InstanceOptions.IsZero() {
 				return nil, state.Receipt{}, native.ErrNativeUnsupported
 			}
 			changes := native.InstanceChanges{CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
-				Nesting: in.Nesting, Internet: in.Internet}
+				Nesting: in.Nesting, Internet: in.Internet, Options: in.InstanceOptions}
 			intent := struct {
 				BoxID   string                 `json:"box_id"`
 				Changes native.InstanceChanges `json:"changes"`
@@ -635,6 +640,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				// Root disk size postread must also be proved, never only
 				// trust the successful UpdateInstance operation.
 				if in.DiskGiB != nil && actual.RootDiskSize != fmt.Sprintf("%dGiB", *in.DiskGiB) {
+					return native.ErrUnverified
+				}
+				if !in.InstanceOptions.Matches(actual.NativeOptions) {
 					return native.ErrUnverified
 				}
 				return nil

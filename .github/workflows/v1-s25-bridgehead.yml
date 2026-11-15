@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - feat/v1-s25-native-readiness-20261111
+      # Independent native MCP/Verifier rerun for Draft PR #146 on an isolated runner.
+      - fix/v1-s25-bh018-bh019-20261114
   workflow_dispatch:
 
 permissions:

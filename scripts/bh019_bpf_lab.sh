@@ -1,0 +1,124 @@
+#!/bin/sh
+# On a verified one-use GitHub Ubuntu runner, test a *single* parent-level
+# BPF devices interception change. Never run on retained Incus or L0/L1 host.
+set -eu
+test "${GITHUB_ACTIONS:-}" = true
+test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+test "$(id -u)" -eq 0
+. /etc/os-release
+test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
+test -n "${BH019_REPORT_DIR:-}"
+case "${BH019_PROXY_URL:-}" in
+  http://10.*:18466|http://172.*:18466|http://192.168.*:18466) ;;
+  *) echo BH019_UNAPPROVED_PROXY >&2; exit 83 ;;
+esac
+test -f scripts/bh019_inner_setup.sh
+mkdir -p "$BH019_REPORT_DIR"
+# Compare only a NON-ATTACHED kernel BPF_PROG_LOAD on the same one-use
+# CI kernel at GH host root, unprivileged L1 and unprivileged L2.
+command -v cc >/dev/null
+cc -O2 -Wall -Wextra -Werror -std=gnu11 \
+  -o "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe" \
+  scripts/bh019_cgroup_device_bpf_probe.c
+chmod 0755 "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe"
+host_result="$("$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe")"
+case "$host_result" in
+  BH019_CGROUP_DEVICE_BPF_PROG_LOAD=GRANTED_NO_ATTACH|BH019_CGROUP_DEVICE_BPF_PROG_LOAD=DENIED\ errno=*) ;;
+  *) echo "BH019_BPF_HOST_PROBE_UNCLASSIFIED=BLOCKED" >&2; exit 89 ;;
+esac
+printf "BH019_CGROUP_DEVICE_BPF_HOST_RESULT=%s\n" "$host_result"
+# This script runs only on a new disposable, empty GH-hosted Incus VM.
+# Reuse the EXACT image already cached by the first parent creation instead
+# of asking the nested daemon to fetch a remote moving images: alias.
+# The export is CI-local, never exposed as a service/Artifact.
+image_dir="$(mktemp -d -p /tmp bh019-cached-image.XXXXXXXX)"
+trap 'rm -rf -- "$image_dir"' EXIT
+image_metadata=""
+image_rootfs=""
+for case_name in control bpf-parent; do
+  name="bh019-${case_name}-1114"
+  test -z "$(incus list --format csv -c n | grep -Fx "$name" || true)"
+  incus init images:ubuntu/24.04 "$name" -c security.nesting=true -c limits.cpu=1 -c limits.memory=2048MiB
+  if [ "$case_name" = control ]; then
+    image_fingerprint="$(incus config get "$name" volatile.base_image)"
+    test -n "$image_fingerprint"
+    incus image info "$image_fingerprint" >/dev/null
+    # Explicitly export INTO the existing owned directory; passing a non-directory
+    # prefix can produce extensionless paths and break our format classifier.
+    incus image export "$image_fingerprint" "$image_dir"
+    for image_file in "$image_dir"/*; do
+      test -s "$image_file"
+      case "${image_file##*/}" in
+        *rootfs*|*.squashfs) test -z "$image_rootfs"; image_rootfs="$image_file" ;;
+        *.tar|*.tar.*) test -z "$image_metadata"; image_metadata="$image_file" ;;
+        *) printf "BH019_IMAGE_EXPORT_UNKNOWN_FORMAT=BLOCKED basename=%s\n" "${image_file##*/}" >&2; exit 85 ;;
+      esac
+    done
+    test -s "$image_metadata"
+    if [ -n "$image_rootfs" ]; then test -s "$image_rootfs"; fi
+    # Report fingerprints and hashes, not potentially large image bytes.
+    printf 'outer_cached_image=%s\n' "$image_fingerprint" > "$BH019_REPORT_DIR/image-provenance.txt"
+    sha256sum "$image_metadata" >> "$BH019_REPORT_DIR/image-provenance.txt"
+    if [ -n "$image_rootfs" ]; then
+      sha256sum "$image_rootfs" >> "$BH019_REPORT_DIR/image-provenance.txt"
+    fi
+    echo BH019_OUTER_CACHED_IMAGE_EXPORTED=PASS
+  fi
+  if [ "$case_name" = bpf-parent ]; then
+    incus config set "$name" security.syscalls.intercept.bpf=true
+    incus config set "$name" security.syscalls.intercept.bpf.devices=true
+    test "$(incus config get "$name" security.syscalls.intercept.bpf)" = true
+    test "$(incus config get "$name" security.syscalls.intercept.bpf.devices)" = true
+  else
+    test "$(incus config get "$name" security.syscalls.intercept.bpf)" != true
+    test "$(incus config get "$name" security.syscalls.intercept.bpf.devices)" != true
+  fi
+  test "$(incus config get "$name" security.privileged)" != true
+  incus config show "$name" --expanded > "$BH019_REPORT_DIR/${case_name}-expanded.yml"
+  if ! incus start "$name" > "$BH019_REPORT_DIR/${case_name}-start.log" 2>&1; then
+    cat "$BH019_REPORT_DIR/${case_name}-start.log"
+    echo "BH019_PARENT_START=BLOCKED case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
+    incus info --show-log "$name" >> "$BH019_REPORT_DIR/${case_name}-start.log" 2>&1 || true
+    continue
+  fi
+  echo "BH019_PARENT_START=PASS case=$case_name" | tee "$BH019_REPORT_DIR/${case_name}-result.txt"
+  incus file push "$BH019_REPORT_DIR/bh019-cgroup-device-bpf-probe" "$name/root/bh019-ci-bpf-probe"
+  parent_bpf="$(incus exec "$name" -- /root/bh019-ci-bpf-probe)"
+  case "$parent_bpf" in
+    BH019_CGROUP_DEVICE_BPF_PROG_LOAD=GRANTED_NO_ATTACH|BH019_CGROUP_DEVICE_BPF_PROG_LOAD=DENIED\ errno=*) ;;
+    *) echo "BH019_BPF_PARENT_PROBE_UNCLASSIFIED=BLOCKED case=$case_name" >&2; exit 90 ;;
+  esac
+  printf "BH019_CGROUP_DEVICE_BPF_PARENT_RESULT=%s case=%s\n" "$parent_bpf" "$case_name"
+  test -s "$image_metadata"
+  incus file push "$image_metadata" "$name/root/bh019-l2-image-metadata"
+  if [ -n "$image_rootfs" ]; then
+    incus file push "$image_rootfs" "$name/root/bh019-l2-image-rootfs"
+  fi
+  echo "BH019_IMAGE_TRANSFERRED_FROM_OUTER_CACHE=PASS case=$case_name" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
+  # The guest may clear /tmp during boot. Stage in its private root-owned
+  # directory, then independently check the exact script before executing it.
+  incus file push scripts/bh019_inner_setup.sh "$name/root/bh019_inner_setup.sh"
+  if ! incus exec "$name" -- /bin/test -s /root/bh019_inner_setup.sh; then
+    echo "BH019_INNER_SETUP_SCRIPT_STAGING=BLOCKED case=$case_name" >&2
+    exit 85
+  fi
+  if incus exec "$name" -- /bin/sh /root/bh019_inner_setup.sh "$case_name" "$BH019_PROXY_URL" > "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1; then
+    cat "$BH019_REPORT_DIR/${case_name}-inner.log"
+  else
+    cat "$BH019_REPORT_DIR/${case_name}-inner.log"
+    echo "BH019_L2_START=BLOCKED_SETUP case=$case_name" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
+    incus exec "$name" -- /usr/bin/journalctl -u incus.service -n 35 --no-pager >> "$BH019_REPORT_DIR/${case_name}-inner.log" 2>&1 || true
+  fi
+  if grep -q "BH019_L2_START=" "$BH019_REPORT_DIR/${case_name}-inner.log"; then
+    grep "BH019_L2_START=" "$BH019_REPORT_DIR/${case_name}-inner.log" | tee -a "$BH019_REPORT_DIR/${case_name}-result.txt"
+  fi
+done
+test -s "$BH019_REPORT_DIR/control-result.txt"
+test -s "$BH019_REPORT_DIR/bpf-parent-result.txt"
+if grep -q 'BH019_L2_START=BLOCKED_SETUP' "$BH019_REPORT_DIR/control-result.txt" "$BH019_REPORT_DIR/bpf-parent-result.txt"; then
+  echo BH019_BPF_A_B=NOT_EVALUATED_SETUP_BLOCKED >&2
+  exit 84
+fi
+echo BH019_BPF_CONTROL_AND_PARENT_INTERCEPT_EVIDENCE_RECORDED=PASS
+# This means both experiments yielded evidence. It is deliberately NOT a
+# claim that either L2 worked or that weaker policy is safe for BoxWeave.

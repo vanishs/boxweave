@@ -45,6 +45,7 @@ type InstanceAction struct {
 	Image       string
 	Nesting     bool
 	Internet    bool
+	Options     InstanceOptions
 }
 
 type InstanceChanges struct {
@@ -53,19 +54,21 @@ type InstanceChanges struct {
 	DiskGiB   *int64
 	Nesting   *bool
 	Internet  *bool
+	Options   InstanceOptions
 }
 
 type BoxState struct {
-	Name         string `json:"name"`
-	UUID         string `json:"box_id"`
-	Project      string `json:"project"`
-	NativeState  string `json:"native_state"`
-	GuestReady   *bool  `json:"guest_ready"`
-	CPU          string `json:"cpu"`
-	Memory       string `json:"memory"`
-	RootDiskSize string `json:"root_disk_size"`
-	Nesting      bool   `json:"nesting"`
-	Internet     bool   `json:"internet"`
+	Name          string            `json:"name"`
+	UUID          string            `json:"box_id"`
+	Project       string            `json:"project"`
+	NativeState   string            `json:"native_state"`
+	GuestReady    *bool             `json:"guest_ready"`
+	CPU           string            `json:"cpu"`
+	Memory        string            `json:"memory"`
+	RootDiskSize  string            `json:"root_disk_size"`
+	Nesting       bool              `json:"nesting"`
+	Internet      bool              `json:"internet"`
+	NativeOptions map[string]string `json:"native_options,omitempty"`
 }
 
 type ExecSpec struct {
@@ -264,6 +267,7 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.CPU = inst.ExpandedConfig["limits.cpu"]
 	out.Memory = inst.ExpandedConfig["limits.memory"]
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
+	out.NativeOptions = observedNativeOptions(inst.ExpandedConfig)
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
 	return out, etag, nil
 }
@@ -309,6 +313,9 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	if a.Nesting && project.Config["restricted.containers.nesting"] != "allow" {
 		return "", ErrNativeUnsupported
 	}
+	if err := a.Options.CheckInheritedAppArmor(); err != nil {
+		return "", err
+	}
 	// An empty image means: reuse an operator-managed local default if
 	// present; otherwise use the official Incus image catalog at Create time.
 	source, err := resolveInstanceImage(c, a.Image)
@@ -332,6 +339,9 @@ func (r Reader) Create(ctx context.Context, a InstanceAction) (string, error) {
 	}
 	if a.Nesting {
 		config["security.nesting"] = "true"
+	}
+	if err := a.Options.Apply(config, project.Config); err != nil {
+		return "", err
 	}
 	root := map[string]string{}
 	p, _, err := c.GetProfile("default")
@@ -536,6 +546,21 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 			}
 		}
 		config["security.nesting"] = strconv.FormatBool(*changes.Nesting)
+	}
+	if !changes.Options.IsZero() {
+		if changes.Options.RequiresStop() && inst.Status != "Stopped" {
+			return "", ErrNativeUnsupported
+		}
+		project, _, e := c.GetProject(r.Project)
+		if e != nil {
+			return "", e
+		}
+		if e = changes.Options.CheckInheritedAppArmor(); e != nil {
+			return "", e
+		}
+		if e = changes.Options.Apply(config, project.Config); e != nil {
+			return "", e
+		}
 	}
 	if changes.Internet != nil {
 		// Modify only this owned instance NIC. The shared ACL/rules and
@@ -914,8 +939,9 @@ func (r Reader) observeCreated(ctx context.Context, name, operationID string) (B
 	}
 	out = BoxState{Project: r.Project, Name: name, UUID: uuid,
 		NativeState: inst.Status, CPU: inst.ExpandedConfig["limits.cpu"],
-		Memory:  inst.ExpandedConfig["limits.memory"],
-		Nesting: inst.ExpandedConfig["security.nesting"] == "true"}
+		Memory:        inst.ExpandedConfig["limits.memory"],
+		Nesting:       inst.ExpandedConfig["security.nesting"] == "true",
+		NativeOptions: observedNativeOptions(inst.ExpandedConfig)}
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
 	return out, nil
 }

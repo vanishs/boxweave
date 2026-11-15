@@ -24,6 +24,13 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 	// 'not: {}' matches no JSON value and is the draft-neutral false schema.
 	// The SDK validates it BEFORE decoding or entering any native handler.
 	schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+	if tool.Name == "box_create" || tool.Name == "box_update" {
+		profile := schema.Properties["lxc.apparmor.profile"]
+		if profile == nil {
+			panic("BH019 AppArmor profile must use exact dotted MCP property")
+		}
+		profile.Enum = []any{"unset", "unchanged", "generated", "unconfined"}
+	}
 	tool.InputSchema = schema
 	mcp.AddTool(server, tool, handler)
 }

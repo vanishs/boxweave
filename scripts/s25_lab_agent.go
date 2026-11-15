@@ -240,11 +240,11 @@ func boxName() string {
 func firstCreateArgs() map[string]any {
 	if isInner() {
 		return map[string]any{"name": boxName(), "cpu": 1, "memory_mib": 512, "disk_gib": 2,
-			"start": true, "nesting": false, "internet": true, "idempotency_key": "s25-inner-l2-once-20261111",
+			"start": true, "security.nesting": false, "internet": true, "idempotency_key": "s25-inner-l2-once-20261111",
 			"work_ref": "lab/s25/nested", "agent_ref": "agent-inner-alpha"}
 	}
 	return map[string]any{"name": boxName(), "cpu": 2, "memory_mib": 2500, "disk_gib": 3,
-		"start": true, "nesting": true, "internet": true, "idempotency_key": "s25-outer-l1-once-20261111",
+		"start": true, "security.nesting": true, "internet": true, "idempotency_key": "s25-outer-l1-once-20261111",
 		"work_ref": "lab/s25/nested", "agent_ref": "agent-outer-alpha"}
 }
 func admit(ctx context.Context) {
@@ -452,7 +452,7 @@ func doubleAgent(ctx context.Context) {
 	// because the worker enforces one mutable native resource at a time.
 	peer := request(ctx, second, "box_create", map[string]any{
 		"name": "bw-s25-mcp-peer", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
-		"start": true, "internet": true, "nesting": false,
+		"start": true, "internet": true, "security.nesting": false,
 		"idempotency_key": "s25-dual-agent-peer-create-once",
 		"work_ref":        work, "agent_ref": "agent-s25-beta",
 	})
@@ -469,7 +469,7 @@ func doubleAgent(ctx context.Context) {
 	// resource name with a fresh key: prevents conflicting native effects.
 	must(denied(ctx, first, "box_create", map[string]any{
 		"name": "bw-s25-mcp-peer", "cpu": 2, "memory_mib": 512, "disk_gib": 2,
-		"start": true, "internet": true, "nesting": false,
+		"start": true, "internet": true, "security.nesting": false,
 		"idempotency_key": "s25-r12-hostile-conflicting-create-once",
 		"work_ref":        work, "agent_ref": "agent-s25-alpha",
 	}), "same-work conflicting native resource Create admitted")
@@ -855,7 +855,7 @@ func simulatedWan6(ctx context.Context) {
 	}
 	peer := request(ctx, actor, "box_create", map[string]any{
 		"name": "bw-s25-wan6-peer", "cpu": 1, "memory_mib": 512,
-		"disk_gib": 2, "start": true, "nesting": false, "internet": false,
+		"disk_gib": 2, "start": true, "security.nesting": false, "internet": false,
 		"idempotency_key": prefix + "peer-create", "work_ref": "lab/s25/simwan6",
 		"agent_ref": "agent-s25-simwan6",
 	})

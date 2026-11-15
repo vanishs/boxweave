@@ -1,5 +1,8 @@
 # S3 — Guest files and the complete Agent edit/build/test loop
 
+**2026-11-15 S2.5 carry-forward to S3:** Before enabling **unattended Agent mutations**, resolve [#148 OAuth same-grant token refresh vs stable idempotency actor](https://github.com/vanishs/boxweave/issues/148) with cross-grant/revocation/native tests. During S3, pinpoint and if needed repair Create/Delete separate SQLite terminal/resource commits; triage [#151 installed-MCP postrestart readback](https://github.com/vanishs/boxweave/issues/151) and provenance test gaps. This does **not** add public Tools: the S3 File tool count remains three. Full assignment and dev-only risk model: [S2.5 phase-scope decision](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
+
+
 **State: NOT_STARTED (2026-11-08).** Run in one end-to-end pass, including research specific to missing contracts, implementation, real guest evidence, negative security tests, fix/retest and durable handoff. Do not stop after adding only the three file handlers.
 
 **Minimal entry:** [Current S2/S2.5 BRIDGEHEAD/S1 artifact and handoff](../EXECUTION_LOG.md#current-checkpoint), [phase protocol](../PHASE_EXECUTION_PROTOCOL.md), [Agent workflow requirement](../../product/DEVELOPMENT_LOOP.md) and [guest management](../../design/GUEST_MANAGEMENT.md). Reuse installed v1 typed MCP, journal, worker and exact Box UUID from S1/S2; no new guest management process.

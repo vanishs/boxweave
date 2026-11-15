@@ -3,7 +3,7 @@ name: S2.5 BH-018 installed HTTP MCP candidate (isolated non-release)
 on:
   push:
     branches:
-      - fix/v1-rc5-bh018-only-20261114
+      - fix/v1-s25-bh018-bh019-20261114
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ concurrency:
 jobs:
   isolated-installed-mcp:
     name: bh018-installed-http-mcp-incus-76
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/fix/v1-rc5-bh018-only-20261114'
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/fix/v1-s25-bh018-bh019-20261114'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
