@@ -161,6 +161,9 @@ func verifyBH018FinalCut(ctx context.Context, s *mcp.ClientSession, original ori
 	replayed := call(ctx, s, "box_exec", in)
 	must(str(replayed, "operation_id") == original.OperationID && replayed["duplicate"] == true,
 		"original Exec reissued after terminal commit interruption")
+	if os.Getenv("BW_S2_CRASH_VARIANT") == "bh018-final-wal-cut-after" {
+		fmt.Println("BH018_INSTALLED_POSTSYNC_ORIGINAL_SAME_KEY_READBACK=PASS")
+	}
 	contradiction := args()
 	contradiction["box_id"] = original.BoxUUID
 	contradiction["argv"] = []string{"/bin/true"}
@@ -176,7 +179,7 @@ func verifyBH018FinalCut(ctx context.Context, s *mcp.ClientSession, original ori
 		}
 		next := call(ctx, s, "box_exec", map[string]any{
 			"box_id": original.BoxUUID, "argv": []string{"/bin/true"},
-			"idempotency_key": "bh018-final-cut-new-after-verified-only-001"})
+			"idempotency_key": activeCrashKey + "-new-after-verified-only"})
 		freshID := str(next, "operation_id")
 		must(freshID != "" && freshID != original.OperationID && next["duplicate"] != true,
 			"original committed terminal did not release only its own resource lock")
