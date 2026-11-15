@@ -1,5 +1,8 @@
 # PR #146 交接与收尾门禁（2026-11-15，L0～L5 实际 MCP）
 
+**2026-11-15 actual L0 owner-run result:** `S25_DEV_BASE_PASS=SCOPED_PASS_WITH_DECLARED_LIMITS` for one supervised trusted operator only. Real physical-host L0 RC6 binary+unit+manifest integrity PASS; Incus 7.6 restricted identity and Project checked; native 8/8 PASS; 4 CPUs/12.52 GiB available RAM/~1.82 TiB reported free. L1 remains a different local binary, L0/L1 retain original UNKNOWNs; no host rollback, physical packet negative or quota enforcement is claimed. Full details [host acceptance](../verification/S25_PHYSICAL_HOST_DEV_BASE_POSTFLIGHT_2026-11-15.md). S3 #148/Create/Delete/#151 and S4 AppArmor/BPF/UID+GID/network/quota proceed; S5 full BH/TC remains pending. Current PR stays Draft until ordinary approval and final Actions; no RC6 rewrite.
+
+
 **2026-11-15 owner-directed acceleration / current exit contract:** [S2.5 scoped early development base D-01–D-08; S3/S4/S5 reassignment](S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md) **supersedes the old requirement to solve all BH-019 platform features within S2.5**. Existing L0–L5 functional and isolated native/installed/Verifier evidence is accepted only for its tested scope. **Remaining S2.5 work is targeted non-destructive host-specific postflight (source identities including L1 mismatch, owner-approved fallback, resource envelope and existing UNKNOWN unchanged), not another broad L0–L5 lifecycle or new AA kernel workaround.** Current verdict `S25_DEV_BASE_PASS=PENDING_HOST_POSTFLIGHT`; stronger original BH-019 and full release gates stay OPEN.
 
 

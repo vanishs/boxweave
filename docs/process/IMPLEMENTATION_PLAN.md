@@ -1,5 +1,8 @@
 # BoxWeave v1 — five autonomous feature phases + S2.5 BRIDGEHEAD acceptance checkpoint
 
+**2026-11-15 latest scoped result (overrides old S2.5 row status):** `S25_DEV_BASE_PASS=SCOPED_PASS_WITH_DECLARED_LIMITS` for supervised trusted-operator development on the already-installed physical L0/L1, **not** original full-BH `HOST_GO_FULL` or S5 release. Owner's host-local immutable RC6 manifest/binary verification and native 8/8 checks passed; original UNKNOWN, L1 binary divergence, unsupported hard quotas, untested live-host rollback/packet negatives are explicit [warnings in the signed D-01–D-08 report](../verification/S25_PHYSICAL_HOST_DEV_BASE_POSTFLIGHT_2026-11-15.md). Stage S3 may begin now; S4 deep isolation and S5 complete security remain gated. The old `READY_FOR_LAB/NOT TESTED` snapshot below is historical.
+
+
 **2026-11-15 S2.5 accelerated stage-scope amendment (supersedes the older S2.5 exit requirements below, not historical evidence):** [Early development-only base exit D-01–D-08 and explicit S3/S4/S5 carry-forward](../development/S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md). Scoped L0–L5 functional MCP evidence and all six exact pre-amendment-HEAD Actions are green. `S25_DEV_BASE_PASS=PENDING_HOST_POSTFLIGHT`; `BH_FULL_ASSURANCE=BLOCKED`, `S5_RELEASE_PASS=NO`. A supervised, trusted single-tenant dev pilot is distinct from a release-ready multi-tenant nested service. The earlier `READY_FOR_LAB / NOT TESTED` row is a historical entry status, not today's verdict.
 
 
