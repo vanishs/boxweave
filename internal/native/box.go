@@ -58,16 +58,16 @@ type InstanceChanges struct {
 }
 
 type BoxState struct {
-	Name         string `json:"name"`
-	UUID         string `json:"box_id"`
-	Project      string `json:"project"`
-	NativeState  string `json:"native_state"`
-	GuestReady   *bool  `json:"guest_ready"`
-	CPU          string `json:"cpu"`
-	Memory       string `json:"memory"`
-	RootDiskSize string `json:"root_disk_size"`
-	Nesting      bool   `json:"nesting"`
-	Internet     bool   `json:"internet"`
+	Name          string            `json:"name"`
+	UUID          string            `json:"box_id"`
+	Project       string            `json:"project"`
+	NativeState   string            `json:"native_state"`
+	GuestReady    *bool             `json:"guest_ready"`
+	CPU           string            `json:"cpu"`
+	Memory        string            `json:"memory"`
+	RootDiskSize  string            `json:"root_disk_size"`
+	Nesting       bool              `json:"nesting"`
+	Internet      bool              `json:"internet"`
 	NativeOptions map[string]string `json:"native_options,omitempty"`
 }
 
@@ -552,9 +552,15 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 			return "", ErrNativeUnsupported
 		}
 		project, _, e := c.GetProject(r.Project)
-		if e != nil { return "", e }
-		if e = changes.Options.CheckInheritedAppArmor(); e != nil { return "", e }
-		if e = changes.Options.Apply(config, project.Config); e != nil { return "", e }
+		if e != nil {
+			return "", e
+		}
+		if e = changes.Options.CheckInheritedAppArmor(); e != nil {
+			return "", e
+		}
+		if e = changes.Options.Apply(config, project.Config); e != nil {
+			return "", e
+		}
 	}
 	if changes.Internet != nil {
 		// Modify only this owned instance NIC. The shared ACL/rules and
@@ -933,8 +939,8 @@ func (r Reader) observeCreated(ctx context.Context, name, operationID string) (B
 	}
 	out = BoxState{Project: r.Project, Name: name, UUID: uuid,
 		NativeState: inst.Status, CPU: inst.ExpandedConfig["limits.cpu"],
-		Memory:  inst.ExpandedConfig["limits.memory"],
-		Nesting: inst.ExpandedConfig["security.nesting"] == "true",
+		Memory:        inst.ExpandedConfig["limits.memory"],
+		Nesting:       inst.ExpandedConfig["security.nesting"] == "true",
 		NativeOptions: observedNativeOptions(inst.ExpandedConfig)}
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
 	return out, nil
