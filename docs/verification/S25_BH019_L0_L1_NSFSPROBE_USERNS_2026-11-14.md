@@ -40,7 +40,7 @@ Two **new disposable, nonprivileged, nesting=true, internet=false** Ubuntu 24.04
 | Exact STOP | `bdf82fc63087793509f85599e1d0b19c` / `e26df404-91ac-487c-8f18-fc2acccaaaa4` | `eaa83b2ba575979f58c2a2a01f6d1707` / `d3b687ae-72a5-4a3b-a239-4425a18fe18d` |
 | Exact DELETE | `f8f7c16809794c32a3bb5aec37a1ad00` / `d5fd06f4-a82c-443a-9caf-b76587370fb9` | `e37923db5500d75631513a251457ba2a` / `104a284a-6452-41c3-9053-232b9399e701` |
 
-All original create, six individual Exec, stop, and delete operations **per fixture** were read back as `SUCCEEDED`, with true original native Incus IDs and original output. Both exact DELETE finalizers **SUCCEEDED**; subsequent separate `box_list` responses showed the original **4** L0 and **9** L1 pre-existing Boxes, with neither newly created name present. No new UNKNOWN. Do not misread the diagnostic inner unshare failure as a failed parent `box_exec` Operation.
+All original create, five individual Exec, stop, and delete operations **per fixture** were read back as `SUCCEEDED`, with true original native Incus IDs and original output. Both exact DELETE finalizers **SUCCEEDED**; subsequent separate `box_list` responses showed the original **4** L0 and **9** L1 pre-existing Boxes, with neither newly created name present. No new UNKNOWN. Do not misread the diagnostic inner unshare failure as a failed parent `box_exec` Operation.
 
 ## Upstream context and next discriminating experiments
 
