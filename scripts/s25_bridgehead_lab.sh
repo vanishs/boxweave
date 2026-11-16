@@ -133,7 +133,58 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
   installed_bin_sha="$(sudo sha256sum /usr/local/bin/boxweave | awk '{print $1}')"
   test "$installed_bin_sha" = "$binary_sha"
   echo "S3_INSTALLED_EXACT_BINARY_SHA256=$installed_bin_sha"
-  "$work/staging/s3-file-installed-agent"
+  if [ "$(printenv S3_FILE_INSTALLED_PHASE3 2>/dev/null || true)" = true ]; then
+    # Same installed candidate & exactly one supervised original Agent.
+    export BW_S3_PHASE3_MODE=stage
+    export BW_S3_PHASE3_CHECKPOINT="$work/private/s3-phase3-original.json"
+    "$work/staging/s3-file-installed-agent"
+    test -s "$BW_S3_PHASE3_CHECKPOINT"
+    # Independent host-side Incus CLI is strictly read-only: check original
+    # UUID and final Git bytes/HEAD, never inject an alternate Guest edit.
+    native_uuid="$(sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project")"
+    test -n "$native_uuid"
+    saved_uuid="$(python3 - "$BW_S3_PHASE3_CHECKPOINT" <<'S3_CP_UUID'
+import json,sys
+x=json.load(open(sys.argv[1]))
+assert x["native_box_name"] == "s3-file-phase2-ci"
+assert len(x["box_uuid"]) == 36
+assert len(x["initial_git_commit"]) == 40
+assert len(x["final_git_commit"]) == 40
+assert x["initial_git_commit"] != x["final_git_commit"]
+print(x["box_uuid"])
+S3_CP_UUID
+)"
+    test "$saved_uuid" = "$native_uuid"
+    sudo incus file pull s3-file-phase2-ci/root/s3-guest-git/calc.py \
+      "$work/staging/s3-phase3-native-calc.py" --project "$project"
+    sudo incus file pull s3-file-phase2-ci/root/s3-guest-git/test_calc.py \
+      "$work/staging/s3-phase3-native-test.py" --project "$project"
+    sudo chown "$(id -u):$(id -g)" "$work/staging/s3-phase3-native-calc.py" "$work/staging/s3-phase3-native-test.py"
+    native_git_head="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git rev-parse HEAD)"
+    native_git_count="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git rev-list --count HEAD)"
+    test "$native_git_count" = 2
+    python3 - "$BW_S3_PHASE3_CHECKPOINT" "$work/staging/s3-phase3-native-calc.py" \
+      "$work/staging/s3-phase3-native-test.py" "$native_git_head" <<'S3_VERIFY_NATIVE'
+import hashlib,json,sys
+cp=json.load(open(sys.argv[1]))
+source=open(sys.argv[2],"rb").read()
+test_source=open(sys.argv[3],"rb").read()
+assert source == b"def double(value):\n    return value * 2\n"
+assert hashlib.sha256(source).hexdigest() == cp["source_sha256"]
+assert b"self.assertEqual(double(2), 4)" in test_source
+assert sys.argv[4] == cp["final_git_commit"] != cp["initial_git_commit"]
+for field in ["setup_op","fail_op","fix_op","pass_op","file_create_op"]:
+ assert len(cp[field]) == 32,field
+print("S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS")
+S3_VERIFY_NATIVE
+    export BW_S3_PHASE3_MODE=cleanup
+    "$work/staging/s3-file-installed-agent"
+    echo S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS
+  else
+    "$work/staging/s3-file-installed-agent"
+  fi
   if sudo incus info s3-file-phase2-ci --project "$project" >/dev/null 2>&1; then
     echo S3_INSTALLED_CLEANUP_NATIVE_BOX_STILL_PRESENT >&2
     exit 91

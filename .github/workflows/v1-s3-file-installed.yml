@@ -1,4 +1,4 @@
-name: S3 installed HTTP MCP File Tools + restricted real Incus (isolated)
+name: S3 installed HTTP MCP File Tools and single-Agent Git native acceptance
 
 on:
   push:
@@ -15,13 +15,14 @@ concurrency:
 
 jobs:
   installed-file-mcp:
-    name: s3-installed-http-mcp-native-file-verifier
+    name: s3-installed-file-tools-and-supervised-git-verifier
     if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115'
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
       RUNNER_ENVIRONMENT: github-hosted
       S3_FILE_INSTALLED_PHASE2: 'true'
+      S3_FILE_INSTALLED_PHASE3: 'true'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
@@ -55,4 +56,6 @@ jobs:
           grep -Fxq 'S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS' "$RUNNER_TEMP/s3-file-installed.log"
           grep -Fxq 'S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS' "$RUNNER_TEMP/s3-file-installed.log"
           grep -Fxq 'S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS' "$RUNNER_TEMP/s3-file-installed.log"
-          echo S3_INSTALLED_FILE_TOOLS_REAL_NATIVE_VERIFIER=PASS
+          grep -Fxq 'S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          echo S3_INSTALLED_FILE_TOOLS_AND_PHASE3_SUPERVISED_GIT_REAL_NATIVE_VERIFIER=PASS
