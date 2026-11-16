@@ -166,7 +166,9 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.g
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
 if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go
-  echo "S4_A_NATIVE_STAGE=OAUTH_NATIVE_PROBE_COMPILED"
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-native-event-tap" ./scripts/s4_raw_native_event_tap.go
+  chmod 0755 "$work/s4-native-event-tap"
+  echo "S4_A_NATIVE_STAGE=OAUTH_AND_INCUS_EVENT_PROBES_COMPILED"
 fi
 chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
@@ -291,7 +293,7 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_
   -incus-socket "$socket" -project "$project" \
   -listen 127.0.0.1:18650 > "$work/service.redacted.log" 2>&1 &
 service_pid=$!
-trap 'kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :' EXIT
+trap 'if [ -n "${s4_event_tap_pid:-}" ]; then sudo touch "$work/ledger/s4-native-events-stop" 2>/dev/null || :; kill "$s4_event_tap_pid" 2>/dev/null || :; wait "$s4_event_tap_pid" 2>/dev/null || :; fi; kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :' EXIT
 attempt=0
 until [ "$attempt" -ge 40 ]; do
   if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
@@ -599,6 +601,35 @@ if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
     exit 94
   fi
   echo "S4_A_RAW_NATIVE_WITNESS_RESTRICTED_EXEC=PASS"
+  # Subscribe through the official Incus Go SDK BEFORE dispatching a fresh
+  # effect. The native daemon can expire completed Operations immediately;
+  # the read-only event stream preserves the original final metadata digest.
+  # Only the one-use restricted service user and its own Project are used.
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    "$work/s4-native-event-tap" -socket "$socket" -project "$project" \
+    -output "$work/ledger/s4-native-events.jsonl" \
+    -ready "$work/ledger/s4-native-events-ready" \
+    -stop "$work/ledger/s4-native-events-stop" \
+    > "$work/s4-native-event-tap.redacted.log" 2>&1 &
+  s4_event_tap_pid=$!
+  attempt=0
+  until sudo test -s "$work/ledger/s4-native-events-ready" || [ "$attempt" -ge 100 ]; do
+    if ! kill -0 "$s4_event_tap_pid" 2>/dev/null; then break; fi
+    attempt=$((attempt+1))
+    sleep 0.1
+  done
+  if ! sudo grep -Fqx 'PROJECT_OPERATION_SUBSCRIBED' "$work/ledger/s4-native-events-ready" 2>/dev/null; then
+    if grep -Fq 'S4_EVENT_TAP_FAIL=PROJECT_OPERATION_SUBSCRIPTION_DENIED' "$work/s4-native-event-tap.redacted.log"; then
+      echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=PROJECT_DENIED"
+    else
+      echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=BLOCKED"
+    fi
+    exit 94
+  fi
+  echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=PASS"
   s4_witness_pids=""
   for case in create exit126 exit127; do
     case "$case" in
@@ -612,6 +643,7 @@ if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
       XDG_CONFIG_HOME=/home/boxweave/.config \
       python3 "$work/s4-raw-operation-witness.py" \
       --db "$db" --key-digest "$digest" --timeout-seconds 120 \
+      --events-jsonl "$work/ledger/s4-native-events.jsonl" \
       > "$work/s4-raw-$case.json" 2> "$work/s4-raw-$case.redacted.err" &
     s4_witness_pids="$s4_witness_pids $!"
   done
@@ -749,6 +781,11 @@ for name, original, native in seen:
     print("S4_A_NATIVE_RAW_TERMINAL_STATUS=" + str(native["status_code"]))
 if seen:
     print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS")
+if any(native.get("evidence_source") == "INCUS_OPERATION_EVENT_WEBSOCKET"
+       for _, _, native in seen):
+    print("S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=PASS")
+else:
+    print("S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=NOT_CAPTURED")
 S4_RAW_ORIGINAL_CHECK
 fi
 # Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
@@ -757,6 +794,15 @@ grep '^BH018_MCP_' "$work/bh018-atomic-start.log"
 if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   S4_A_WORK="$work" S4_A_DB="$db" S4_A_PROJECT="$project" \
     sh scripts/s4_oauth_native_integration.sh
+  # The observer must remain connected through the OAuth refresh/once
+  # effect. Stop only the test-owned stream after independent checks.
+  sudo runuser -u boxweave -- touch "$work/ledger/s4-native-events-stop"
+  if ! wait "$s4_event_tap_pid"; then
+    echo "S4_A_RAW_NATIVE_EVENT_STREAM=DISCONNECTED" >&2
+    exit 94
+  fi
+  s4_event_tap_pid=""
+  echo "S4_A_RAW_NATIVE_EVENT_STREAM=PASS"
 fi
 echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
 

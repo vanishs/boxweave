@@ -21,8 +21,9 @@ key_digest="$(printf %s s4-oauth-native-one-effect-001 | sha256sum | cut -d ' ' 
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
   -u XDG_CONFIG_HOME HOME=/home/boxweave \
   XDG_CONFIG_HOME=/home/boxweave/.config \
-  python3 "$PWD/scripts/s4_raw_operation_witness.py" \
+  python3 "$S4_A_WORK/s4-raw-operation-witness.py" \
   --db "$S4_A_DB" --key-digest "$key_digest" --timeout-seconds 120 \
+  --events-jsonl "$S4_A_WORK/ledger/s4-native-events.jsonl" \
   > "$S4_A_WORK/s4-oauth-native-raw.json" \
   2> "$S4_A_WORK/s4-oauth-native-raw.redacted.err" &
 witness_pid=$!
@@ -59,7 +60,8 @@ native = record.get("native_terminal") or {}
 if (record.get("observation") == "CAPTURED_TERMINAL"
         and record.get("original_id_matches") is True
         and original.get("native_operation_id") == native.get("native_operation_id")
-        and native.get("status_code") in (200, 400, 401)):
+        and native.get("status_code") in (200, 400, 401)
+        and native.get("evidence_source") == "INCUS_OPERATION_EVENT_WEBSOCKET"):
     print("S4_A_OAUTH_RAW_BW_ID=" + original["operation_id"]
           + " NATIVE_ID=" + native["native_operation_id"])
     print("S4_A_OAUTH_INDEPENDENT_RAW_OPERATION_TERMINAL=PASS")
