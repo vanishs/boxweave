@@ -57,10 +57,21 @@ jobs:
           if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
             grep -E '^S4_A_CANDIDATE_BINARY_SHA256=' "$logfile" || :
             grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:|(panic: )?S2_UNKNOWN_CREATE_NATIVE_BIND_FAIL:)' "$logfile" | tail -n 110 || :
+            grep -E '^S2_NATIVE_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 12 || :
+            if grep -q '^panic: S2_ACK_LOSS_ACCEPTANCE_FAILED:' "$logfile"; then
+              echo S4_A_FAILURE_CLASS=ACK_PROXY_PROBE_ASSERTION
+            elif grep -q '^panic: S2_P1_' "$logfile"; then
+              echo S4_A_FAILURE_CLASS=P1_PROBE_ASSERTION
+            fi
             echo S4_A_INSTALLED_REAL_NATIVE_MCP=FAIL_OR_BLOCKED >&2
             exit 1
           fi
           grep -Fxq 'S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS' "$logfile"
+          for case in CREATE EXIT126 EXIT127; do
+            grep -Fxq "S4_A_RAW_NATIVE_CASE_${case}=PASS" "$logfile"
+          done
+          grep -Fxq 'S4_A_RAW_DELETE_TERMINAL_ATOMIC_TOMBSTONE_SINGLE_ORIGINAL=PASS' "$logfile"
+          grep -Fxq 'S4_A_RAW_CREATE_EXEC_FINAL_SQLITE_UUID_EXIT_CORRELATION=PASS' "$logfile"
           grep -Fxq 'S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=PASS' "$logfile"
           grep -Fxq 'S4_A_RAW_NATIVE_EVENT_STREAM=PASS' "$logfile"
           grep -Fxq 'S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS' "$logfile"

@@ -1,7 +1,7 @@
 //go:build ignore
 
-// Test-only SQLite final-receipt failure after an ACTUAL native Incus Create
-// binds its exact UUID. The trigger exists only in a disposable active test
+// Test-only SQLite atomic-finalization failure after an ACTUAL native Create.
+// UUID/claim/terminal must all roll back. The trigger exists only in a test
 // DB; it is never installed by the product or on shared/retained databases.
 package main
 
@@ -9,15 +9,19 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/state"
 )
 
 type bearer struct{ token string }
@@ -48,6 +52,14 @@ func invoke(ctx context.Context, s *mcp.ClientSession, name string, args map[str
 	return out, err
 }
 func stringField(m map[string]any, name string) string { v, _ := m[name].(string); return v }
+
+func refused(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any, expected error) {
+	r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	ensure(err == nil && r != nil && r.IsError, "negative request was not a structured MCP refusal")
+	content, err := json.Marshal(r.Content)
+	ensure(err == nil && strings.Contains(string(content), expected.Error()), "negative request had unexpected refusal class")
+}
+
 func main() {
 	dir := os.Getenv("BW_S2_BOUND_LAB")
 	token := os.Getenv("BW_S2_BOUND_TOKEN")
@@ -64,8 +76,8 @@ func main() {
 	ensure(err == nil, "unable to open exact disposable ledger")
 	defer db.Close()
 	// No schema rewrite or external changes: install a test-only trigger AFTER
-	// service startup so a successful real native Create can ACK and bind UUID
-	// but the last controller-only SUCCEEDED update is deliberately refused.
+	// service startup. Native Create can ACK; the combined UUID ownership +
+	// SUCCEEDED transaction must roll back together when its update is refused.
 	_, err = db.ExecContext(ctx, `CREATE TRIGGER s2_test_last_receipt_block
 		BEFORE UPDATE OF state ON operations
 		WHEN OLD.action='box_create' AND OLD.state='VERIFYING'
@@ -101,50 +113,98 @@ func main() {
 			panic("S2_P1_BOUND_CREATE_FAULT_FAIL: original incorrectly terminal: " + state)
 		}
 	}
-	uuid, nativeID := stringField(pending, "box_uuid"), stringField(pending, "native_operation_id")
-	ensure(stringField(pending, "state") == "UNKNOWN" && len(uuid) == 36 && nativeID != "",
-		"native Create binding and retained original UNKNOWN not durable")
+	nativeID := stringField(pending, "native_operation_id")
+	ensure(stringField(pending, "state") == "UNKNOWN" && stringField(pending, "box_uuid") == "" &&
+		stringField(pending, "incarnation") == "" && nativeID != "",
+		"atomic Create rollback leaked UUID or lost original UNKNOWN/native ID")
+	reader := native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: project}
+	observed, err := reader.ObserveCreatedByOperation(ctx, name, originalID)
+	ensure(err == nil && len(observed.UUID) == 36 && observed.Name == name &&
+		observed.Project == project && observed.NativeState == "Stopped",
+		"independent native original marker/UUID/Project/Stopped state missing")
+	uuid := observed.UUID
 	next, _ := pending["next_action"].(map[string]any)
 	ensure(next != nil && stringField(next, "kind") == "HOST_LOCAL_REVIEW",
 		"failed final receipt improperly advertised automatic retry")
 	var bound, evidence, unexpected int
 	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM owned_boxes
-		WHERE uuid=? AND project=? AND name=? AND state='OWNED'`, uuid, project, name).Scan(&bound)
-	ensure(err == nil && bound == 1, "native UUID not atomically bound to original")
+		WHERE uuid=? OR (project=? AND name=?)`, uuid, project, name).Scan(&bound)
+	ensure(err == nil && bound == 0, "failed atomic Create leaked ownership claim")
 	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_events
-		WHERE operation_id=? AND state='VERIFYING' AND safe_detail='NATIVE_UUID_CONFIRMED'`, originalID).Scan(&evidence)
-	ensure(err == nil && evidence == 1, "original UUID bind audit event missing")
+		WHERE operation_id=? AND (state='SUCCEEDED' OR safe_detail='NATIVE_UUID_CONFIRMED')`, originalID).Scan(&evidence)
+	ensure(err == nil && evidence == 0, "failed atomic Create leaked terminal or split UUID event")
 
 	// Same-key replay is the *original UNKNOWN* and never a second Create.
 	replay, err := invoke(ctx, session, "box_create", args)
 	ensure(err == nil && stringField(replay, "operation_id") == originalID &&
-		stringField(replay, "state") == "UNKNOWN",
+		stringField(replay, "state") == "UNKNOWN" && replay["duplicate"] == true,
 		"same original key redispatched or changed receipt")
 	otherCreate := map[string]any{}
 	for k, v := range args {
 		otherCreate[k] = v
 	}
 	otherCreate["idempotency_key"] = "s2-bound-final-different-create"
-	_, err = invoke(ctx, session, "box_create", otherCreate)
-	ensure(err != nil, "different-key Create bypassed bound original lock")
-	_, err = invoke(ctx, session, "box_delete", map[string]any{
+	refused(ctx, session, "box_create", otherCreate, state.ErrResourceLocked)
+	refused(ctx, session, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-bound-final-different-delete",
-	})
-	ensure(err != nil, "different-key Delete raced past bound UNKNOWN original")
-	box, err := invoke(ctx, session, "box_get", map[string]any{"box_id": uuid})
-	ensure(err == nil, "known UUID became unreadable during refused Delete")
-	observed, _ := box["box"].(map[string]any)
-	ensure(observed != nil && stringField(observed, "box_id") == uuid &&
-		stringField(observed, "native_state") == "Stopped",
-		"foreign, missing or modified native Box after refused Delete")
+	}, state.ErrNotFound)
+	refused(ctx, session, "box_get", map[string]any{"box_id": uuid}, state.ErrNotFound)
+	after, err := reader.ObserveCreatedByOperation(ctx, name, originalID)
+	ensure(err == nil && after.UUID == uuid && after.NativeState == "Stopped",
+		"original native UUID changed after refused Delete")
 	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations WHERE action='box_delete'
 		OR (action='box_create' AND id!=?)`, originalID).Scan(&unexpected)
 	ensure(err == nil && unexpected == 0, "rejected mutation inserted another original")
+
+	// Exercise explicit reviewed identity binding ONLY on a consistent backup.
+	// This is not a product retry, adoption, state resolution or lock release.
+	copyDir := filepath.Join(dir, "atomic-bind-copy")
+	ensure(os.Mkdir(copyDir, 0700) == nil, "isolated identity-review copy directory unavailable")
+	copyDB := filepath.Join(copyDir, "ledger.sqlite")
+	backup := exec.CommandContext(ctx, "python3", "-c", `import os,sqlite3,sys
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True) as src:
+    with sqlite3.connect(sys.argv[2]) as dst:
+        src.backup(dst)
+        dst.execute("DROP TRIGGER s2_test_last_receipt_block")
+os.chmod(sys.argv[2],0o600)`, filepath.Join(dir, "ledger.sqlite"), copyDB)
+	ensure(backup.Run() == nil, "consistent standalone SQLite backup unavailable")
+	copyStore, err := state.Open(copyDB)
+	ensure(err == nil, "isolated identity-review backup refused")
+	defer copyStore.Close()
+	snap, err := copyStore.CreateRecoveryInspect(ctx, originalID)
+	ensure(err == nil && snap.NativeOperationID == nativeID && snap.Project == project && snap.Name == name,
+		"copy lost original unbound UNKNOWN identity")
+	readback, err := reader.ObserveOwnedBox(ctx, name, uuid)
+	ensure(err == nil && readback.State == "PRESENT_UUID_CONFIRMED", "independent native readback unavailable")
+	challenge, err := copyStore.IssueCreateBindingChallenge(ctx, snap, "ci-atomic-create-verifier", readback.Fingerprint)
+	ensure(err == nil, "copy-only review challenge refused")
+	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
+		"forged-observation", "independent original native identity verified", true)
+	ensure(err != nil, "copy-only binding accepted forged observation")
+	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
+		readback.Fingerprint, "independent original native identity verified", true)
+	ensure(err == nil, "copy-only exact identity binding refused")
+	copyOriginal, err := copyStore.Get(ctx, originalID)
+	ensure(err == nil && copyOriginal.State == "UNKNOWN" && copyOriginal.BoxUUID == uuid &&
+		copyOriginal.NativeOperationID == nativeID && copyOriginal.NextAction.Kind == "HOST_LOCAL_REVIEW",
+		"copy-only binding resolved UNKNOWN or lost immutable native identity")
+	err = copyStore.BindUnknownCreatedBox(ctx, snap, "ci-atomic-create-verifier", challenge, uuid,
+		readback.Fingerprint, "replayed binding challenge must be refused", true)
+	ensure(errors.Is(err, state.ErrConflict), "copy-only original binding challenge replay accepted")
+	var originalUUID, originalState string
+	err = db.QueryRowContext(ctx, "SELECT box_uuid,state FROM operations WHERE id=?", originalID).Scan(&originalUUID, &originalState)
+	ensure(err == nil && originalUUID == "" && originalState == "UNKNOWN", "copy-only review changed original journal")
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM owned_boxes").Scan(&bound)
+	ensure(err == nil && bound == 0, "copy-only review changed original ownership")
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM recovery_audit WHERE operation_id=?", originalID).Scan(&evidence)
+	ensure(err == nil && evidence == 0, "copy-only review changed original recovery audit")
 
 	data, err := json.Marshal(map[string]string{"box_id": uuid, "original_id": originalID,
 		"native_id": nativeID, "name": name})
 	ensure(err == nil && os.WriteFile(filepath.Join(dir, "original.json"), data, 0600) == nil,
 		"test-only original native witness not written")
-	fmt.Println("S2_P1_REAL_NATIVE_CREATE_BOUND_UUID_FINAL_RECEIPT_UNKNOWN_NO_REDISPATCH=PASS")
-	fmt.Println("S2_P1_REAL_BOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS")
+	fmt.Printf("S4_A_ATOMIC_ROLLBACK_CREATE_BW_ID=%s NATIVE_ID=%s BOX_UUID=%s PROJECT=%s\n", originalID, nativeID, uuid, project)
+	fmt.Println("S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_UNBOUND_UNKNOWN_NO_REDISPATCH=PASS")
+	fmt.Println("S4_A_REAL_UNBOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS")
+	fmt.Println("S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_BIND_ORIGINAL_UNCHANGED=PASS")
 }

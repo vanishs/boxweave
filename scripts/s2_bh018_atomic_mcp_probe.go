@@ -249,11 +249,28 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	stopID := originalID(stop)
 	stopReceipt := poll(ctx, s, stopID)
 	fmt.Printf("BH018_MCP_CLEAN_STOP_BW_ID=%s NATIVE_ID=%s\n", stopID, getString(stopReceipt, "native_operation_id"))
-	del := invoke(ctx, s, "box_delete", map[string]any{
+	deleteArgs := map[string]any{
 		"box_id": cp.BoxID, "idempotency_key": "s2-bh018-atomic-native-delete-001",
-	})
-	delID := originalID(del)
+	}
+	// Concurrent original-key admission must converge on one durable Delete,
+	// including callers racing with native absence and the atomic tombstone.
+	deletes := make(chan map[string]any, 12)
+	for range 12 {
+		go func() { deletes <- invoke(ctx, s, "box_delete", deleteArgs) }()
+	}
+	delID := ""
+	for range 12 {
+		id := originalID(<-deletes)
+		if delID == "" {
+			delID = id
+		}
+		require(id == delID, "concurrent Delete admitted a second original")
+	}
 	delReceipt := poll(ctx, s, delID)
+	replay := invoke(ctx, s, "box_delete", deleteArgs)
+	require(originalID(replay) == delID && replay["duplicate"] == true,
+		"Delete original lost after native absence/tombstone")
+	fmt.Println("BH018_INSTALLED_CONCURRENT_DELETE_ORIGINAL_AND_TOMBSTONE_REPLAY=PASS")
 	fmt.Printf("BH018_MCP_CLEAN_DELETE_BW_ID=%s NATIVE_ID=%s\n", delID, getString(delReceipt, "native_operation_id"))
 	list := invoke(ctx, s, "box_list", map[string]any{})
 	rows, ok := list["boxes"].([]any)
