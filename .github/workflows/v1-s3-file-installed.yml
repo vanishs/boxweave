@@ -42,6 +42,7 @@ jobs:
           test ! -e /var/lib/incus
           ! id boxweave >/dev/null 2>&1
           sh -n scripts/s25_bridgehead_lab.sh
+          gofmt -d scripts/s3_file_installed_probe.go
           test -z "$(gofmt -l scripts/s3_file_installed_probe.go)"
           go build -o "$RUNNER_TEMP/s3-file-agent-check" ./scripts/s3_file_installed_probe.go
           printf 'S3_INSTALLED_EXACT_COMMIT=%s\n' "$GITHUB_SHA"
