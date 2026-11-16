@@ -22,6 +22,7 @@ test-race:
 	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
 
 verify: lint test-race
+	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
 
 hooks:
 	sh scripts/install-hooks.sh
