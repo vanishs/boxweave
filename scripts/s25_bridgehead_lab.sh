@@ -117,6 +117,29 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST  http://127
 test "$code" = 401
 echo S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS
 
+
+# S3-only isolated installed File Tool acceptance entry. Reuse the existing
+# pristine GitHub runner's signed native preparation, restricted nonroot
+# installed systemd/SQLite MCP, then exit before the old S2.5 deep LAB.
+if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
+  test "$GITHUB_ACTIONS" = true
+  test "$RUNNER_ENVIRONMENT" = github-hosted
+  CGO_ENABLED=1 go build -trimpath -o "$work/staging/s3-file-installed-agent" ./scripts/s3_file_installed_probe.go
+  export BW_S3_MCP_URL=http://127.0.0.1:18650/mcp
+  export BW_S3_ADMIN_TOKEN_FILE="$work/private/admin1.secret"
+  export BW_S3_VIEWER_TOKEN_FILE="$work/private/viewer.secret"
+  export BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm
+  echo "S3_INSTALLED_TEST_SOURCE_SHA=$(git rev-parse HEAD)"
+  "$work/staging/s3-file-installed-agent"
+  if sudo incus info s3-file-phase2-ci --project "$project" >/dev/null 2>&1; then
+    echo S3_INSTALLED_CLEANUP_NATIVE_BOX_STILL_PRESENT >&2
+    exit 91
+  fi
+  echo S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS
+  echo S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS
+  exit 0
+fi
+
 # Read-only binary staging on the disposable private Incus bridge only;
 # credentials and SQLite are in a different 0700 directory.
 gateway="$(sudo incus network get "$net" ipv4.address | cut -d/ -f1)"

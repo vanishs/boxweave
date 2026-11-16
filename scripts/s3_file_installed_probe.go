@@ -12,7 +12,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -284,7 +283,3 @@ func main() {
 	fmt.Println("S3_INSTALLED_MCP_ORIGINAL_BOX_CLEANUP_VERIFIED=PASS")
 	fmt.Println("S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS")
 }
-
-// Keep the imported errors package in the build only if the SDK adapter
-// implements typed errors in a future revision.
-var _ = errors.Is
