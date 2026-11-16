@@ -1,5 +1,8 @@
 # v1 real functional and security acceptance matrix
 
+**2026-11-15 active S3/S4/S5 case ownership:** [rebalanced stage exits](../development/S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md). S3 3 File Tools safety + one native single-Agent smoke; S4 #148 OAuth stable actor, X-02/X-03 Create/Delete failure state, 4 Network Tools and #150 supported isolation; S5 #151 installed MCP restart original-terminal classification, **full TC-015/016**, 20/20 Tool + CLI + original A-/BH-/SDK-G under claimed topology. No already-Failed/UNVERIFIED case is relabeled PASS. The original positive conditional file replace/delete remains a final product decision/UNSUPPORTED limitation, not an S3 success.
+
+
 **Current status (2026-11-11 PT):** S1 is independently accepted; **S2 supported-scope acceptance PASS and PR #130 merged** to protected `v1` at `f1a47c9`. [Formal S2 signoff](S2_FINAL_EXIT_SIGNOFF_2026-11-11.md) accepts 18 grouped cases and explicitly defers the S4 forward/peer-dependent Box Delete group; public WAN remains unverified and hardware power-loss witness was a scoped surrogate. **S2.5 BH-001–017 are NOT TESTED, S3/S4/S5 are not complete and no release is authorized.** This matrix remains the full 20-Tool P0 promise; SDK-only probes and previously scoped S2 acceptance do not waive later native/LAN/nesting/CLI tests.
 
 Evidence: **T** typed/unit simulation; **I** real installed black-box MCP/CLI; **N** real native/nested Incus; **V** independent native post-read/Verifier. Each case requires its own exact candidate evidence; S1's named accepted cases are linked to their own matrix, and other cases remain untested until proven.

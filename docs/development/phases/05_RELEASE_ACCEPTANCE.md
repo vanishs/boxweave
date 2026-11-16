@@ -1,5 +1,8 @@
 # S5 — Full installed-system reacceptance, exact candidate and controlled release
 
+**2026-11-15 revised S5 acceptance gate (supersedes older S3 TC-015/016 and #151 ownership):** [phase reallocation](../S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md). S3 signs **only** three safe File Tools (positive list/read/exclusive create, truthful replace/delete UNSUPPORTED) plus one attended single-Agent Git FAIL→FIX→PASS smoke; S4 completes #148 OAuth stable grant-actor, X-02/X-03 Create/Delete failure atomicity and all four Network Tools with #150 truthful isolation. **S5 must perform #151 original fresh-operation installed HTTP MCP restart/fault/root-cause investigation**, repeated native/SQLite/Exec output proof without re-dispatch, and **full TC-015/016 two-Agent interruption/checkpoint conflict** along with TC-019/020, full 20 Tool/CLI, real network, adversarial verifier and release gates. #151 unresolved after reruns means **S5 RELEASE BLOCKED**, not an acceptable flake for publication. Nothing changes public v1 product scope or source authenticity obligations.
+
+
 **Current Issue triage:** S5 has no standalone Open Issue that is already implemented; its scope is the release acceptance card itself. [#150](https://github.com/vanishs/boxweave/issues/150) is an S4 kernel/security design decision and S5 advertised-feature negative verification. [#121/#123](https://github.com/vanishs/boxweave/issues/121) are **legacy provider/operational UNKNOWN and cleanup**, not waiver of S5 testing or proof they have been cleared. [Reconciled inventory](../GITHUB_ISSUE_TRIAGE_2026-11-15.md).
 
 

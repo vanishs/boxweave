@@ -1,5 +1,8 @@
 # Phase cards — load only the phase you are executing
 
+**Latest owner stage allocation (2026-11-15):** [minimal S3 and explicit S4/S5 carry-forward](../S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md) takes precedence over historical phase-boundary language. Public catalog remains 1+12+0+3+4=20. **No S3/S4/S5 source acceptance is implied by this edit.**
+
+
 **Canonical entry:** [Implementation plan](../../process/IMPLEMENTATION_PLAN.md). **Execution rules:** [Phase execution protocol](../PHASE_EXECUTION_PROTOCOL.md). **Current facts and handoff:** [Execution log](../EXECUTION_LOG.md). The cards are **not separate products or independent feature specifications**; each one defines a bounded, continuous build→test→fix→acceptance work package.
 
 | Order | Phase card | Scope delivered inside this phase | Tool count newly activated |
@@ -7,11 +10,11 @@
 | **S1** | [Foundation, installation, identity, journal](01_FOUNDATION.md) | Go runtime + official MCP HTTP, minimal local installer/reuse, restricted Incus, SQLite, auth, tracking, host_status | **1** |
 | **S2** | [Owned Box lifecycle + durable async Exec](02_BOX_LIFECYCLE_OPERATIONS.md) | 7 Box lifecycle tools, Exec and four operation tools; crash/UNKNOWN/idempotency/readiness | **12** |
 | **S2.5 BRIDGEHEAD** | [Independent early development-base / dedicated-host gate](025_BRIDGEHEAD.md) · [BH-001–BH-017](../../verification/BRIDGEHEAD_ACCEPTANCE.md) | Exact S2 candidate, minimum install Project/Profile/image/ACL/quota prerequisites, unprivileged L1 quota/NAT and L2 child, bounded workload, independent LAB and dedicated-host approval/rollback; no S4 feature claim | **0** |
-| **S3** | [Guest files + complete Agent workflow](03_FILES_AGENT_LOOP.md) | file list/read/apply, SFTP exclusive create, honest unsupported conditional modes, guest Git/Exec fix/retest | **3** |
-| **S4** | [Native network + nesting + delete integration](04_NETWORK_NESTING.md) | three TCP/UDP forward tools, directional box_peer_set, one shared ACL/Scriptlet, two-layer parity and dependency-aware delete | **4** |
-| **S5** | [Adversarial full acceptance, candidate and release](05_RELEASE_ACCEPTANCE.md) | 20/20 installed black-box, CLI leaves, Finder/Fixer/independent Verifier, exact artifact provenance and release gate | **0** |
+| **S3** | [Guest files + one supervised Agent smoke](03_FILES_AGENT_LOOP.md) | 3 safe File Tools (read/list/O_EXCL create, unsupported unsafe modes), a single attended guest Git FAIL→FIX→PASS smoke, reusable evidence IDs | **3** |
+| **S4** | [Native network + nesting + delete integration](04_NETWORK_NESTING.md) | #148 stable OAuth actor and X-02/X-03 native Create/Delete boundaries, 4 network Tools, shared ACL/Scriptlet, owned nesting and dependency-aware Delete | **4** |
+| **S5** | [Adversarial full acceptance, candidate and release](05_RELEASE_ACCEPTANCE.md) | #151 restart/native receipt stabilization, TC-015/16 full two-Agent + TC-019/20, 20/20 installed/CLI, independent Verifier, release provenance | **0** |
 
-**Additional stage-specific operation continuity:** S2 [TC-001–TC-010](../../verification/CONTINUITY_ACCEPTANCE.md) implements [4 MCP + 4 domain abilities](../../design/AGENT_OPERATION_CONTINUITY.md); BRIDGEHEAD TC-011–014, S3 TC-015–016 with [client checkpoint](../TASK_CHECKPOINT_CONTRACT.md), S4 TC-017–018, S5 TC-019–020. This supplements, never replaces, A-/SDK-G/BH native gates. Future MCP Tasks adapter is not activated; no new Tool or task engine.
+**Additional stage-specific operation continuity:** S2 [TC-001–TC-010](../../verification/CONTINUITY_ACCEPTANCE.md) implements [4 MCP + 4 domain abilities](../../design/AGENT_OPERATION_CONTINUITY.md); BRIDGEHEAD TC-011–014, S3 one-Agent smoke only (not TC-015 PASS), S4 TC-017–018, S5 **full TC-015–016** with [client checkpoint](../TASK_CHECKPOINT_CONTRACT.md) and TC-019–020. This supplements, never replaces, A-/SDK-G/BH native gates. Future MCP Tasks adapter is not activated; no new Tool or task engine.
 
 **Five feature phases + one inserted S2.5 acceptance/deployment checkpoint; not six feature releases. 20 public MCP tools exactly: 1 + 12 + 0 + 3 + 4 = 20.** A phase can also test and strengthen earlier tools without creating more public tools. Tool names and contracts remain authoritative in [MCP_TOOLS](../../design/MCP_TOOLS.md).
 

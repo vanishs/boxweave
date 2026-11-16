@@ -1,5 +1,8 @@
 # Lightweight Agent Task Checkpoint — client-owned handoff contract
 
+**2026-11-15 revised timing:** S3 only captures the minimal Guest Git SHA/dirty state and original Operation IDs in a supervised **single-Agent** evidence row. **Full second-Agent recovery and two-writer revision conflict TC-015/016 are mandatory in S5**; do not ship without their release proof. [Current phase contract](S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md).
+
+
 **Purpose:** help any Agent/workflow client resume long-running work that used BoxWeave; this is **not** a BoxWeave database record, MCP Tool, authentication role, private model thought log or new product boundary. [Design owner](../design/AGENT_OPERATION_CONTINUITY.md). Agents in projects other than BoxWeave may implement the same checkpoint format in their own storage.
 
 ## Example format (illustrative, safe placeholder IDs only)
@@ -43,4 +46,4 @@ links:
 
 > Resume the original task from the most recent authorized checkpoint. Verify the repository HEAD and dirty tree and query original BoxWeave operations using the authorized `work_ref` and exact IDs. Never auto-repeat a possible native effect or assume a stale checkpoint proves completion. If an original operation is UNKNOWN or permission is missing, preserve it and continue independent safe work; record any required decision and the next exact read-only probe.
 
-**Tests:** S2.5 TC-011–014 (new Agent + independent operation verification), S3 TC-015–016 (Git/guest edit/failed test fix), S5 TC-019–020 (real client replay and independent verification). This client-owned artifact is **not** a new S2 BoxWeave schema table or a precondition for unrelated clients.
+**Tests:** S2.5 TC-011–014 (new Agent + independent operation verification), S3 limited one-Agent Git/guest edit/failing test fix smoke (not TC-015/016 PASS), S5 **full TC-015–016** two-Agent conflict/recovery plus TC-019–020 (real client replay and independent verification). This client-owned artifact is **not** a new S2 BoxWeave schema table or a precondition for unrelated clients.

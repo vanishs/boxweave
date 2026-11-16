@@ -1,5 +1,8 @@
 # S4 — Native forwarding, one shared ACL, safe deletion and nested parity
 
+**2026-11-15 revised S4 integration gate (supersedes older S3 ownership references):** [current phase decision](../S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md). **S4 starts with #148 OAuth same-grant stable actor/current ephemeral credential fix and cross-grant/revoke/installed native proofs before exposing unattended or four new peer/forward mutations**. Next move X-02/X-03 original Create UUID registration/Delete tombstone/SQLite finalization into this stage's existing dependent-Delete & forward/peer claim transaction work. Keep 4 S4 public Network Tools, old-CI native+rollback, actual packet/ACL/Scriptlet, #150 AppArmor/BPF/UID/GID and supported trust-model safety. S3 already delivers only limited attended File tools + one Agent smoke; **full two-Agent TC-015/016 and intermittent #151 full characterization moved to S5**. Ordinary original receipt/reconnect smoke and refusal of actual observed unsafe effect are *still S4 prerequisites*, not waived. No host privilege changes on shared physical L0 and no new public Tool.
+
+
 **Current Issue ownership:** [#150](https://github.com/vanishs/boxweave/issues/150) is the sole existing Open GitHub Issue allocated to S4 implementation; S5 must independently reaccept whatever security/trust capabilities S4 actually implements. No per-depth AA/BPF/ID-lease claim from functional S2.5. [Complete Issue triage](../GITHUB_ISSUE_TRIAGE_2026-11-15.md).
 
 
