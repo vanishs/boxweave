@@ -83,8 +83,8 @@ func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "s4-oauth-replay", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: server.URL + "/mcp",
-		HTTPClient: &http.Client{Transport: hostOAuthTransport{rawToken: accessB}},
+		Endpoint:             server.URL + "/mcp",
+		HTTPClient:           &http.Client{Transport: hostOAuthTransport{rawToken: accessB}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	if err != nil {
@@ -153,8 +153,8 @@ func TestS4OAuthViewerHistoryAfterRefreshHTTPMCP(t *testing.T) {
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "s4-viewer-history", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: server.URL + "/mcp",
-		HTTPClient: &http.Client{Transport: hostOAuthTransport{rawToken: access}},
+		Endpoint:             server.URL + "/mcp",
+		HTTPClient:           &http.Client{Transport: hostOAuthTransport{rawToken: access}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	if err != nil {
