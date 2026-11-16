@@ -9,12 +9,21 @@ test "$(id -u)" -ne 0
 : "${S4_A_WORK:?}"
 : "${S4_A_DB:?}"
 : "${S4_A_PROJECT:?}"
+echo S4_A_OAUTH_STAGE=RUNNER_SCOPE_VERIFIED
 test -x "$S4_A_WORK/s4-oauth-native-probe"
 test -f "$S4_A_WORK/bh018-atomic-start.log"
-test -f "$S4_A_DB"
+# SQLite is intentionally private (0700 owned by boxweave) and therefore
+# cannot be stat()'d by the CI runner. Check the exact service identity,
+# never chmod/chown the durable journal or broaden the runner's permissions.
+if ! sudo runuser -u boxweave -- test -f "$S4_A_DB"; then
+  echo S4_A_OAUTH_STAGE=RESTRICTED_LEDGER_UNAVAILABLE >&2
+  exit 8
+fi
+echo S4_A_OAUTH_STAGE=RESTRICTED_LEDGER_VISIBLE
 
 box_id="$(sed -n 's/^BH018_MCP_CREATE_BOX_UUID=\([^ ]*\).*/\1/p' "$S4_A_WORK/bh018-atomic-start.log" | head -n 1)"
 test "${#box_id}" -eq 36
+echo S4_A_OAUTH_STAGE=ORIGINAL_BOX_UUID_RESOLVED
 # This digest is not a token or credential; it finds one new original in the
 # disposable SQLite WAL BEFORE the first native mutation is dispatched.
 key_digest="$(printf %s s4-oauth-native-one-effect-001 | sha256sum | cut -d ' ' -f 1)"
@@ -27,6 +36,7 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
   > "$S4_A_WORK/s4-oauth-native-raw.json" \
   2> "$S4_A_WORK/s4-oauth-native-raw.redacted.err" &
 witness_pid=$!
+echo S4_A_OAUTH_STAGE=INDEPENDENT_NATIVE_WITNESS_STARTED
 
 # Credentials and unredacted Go errors are never written to the public log.
 # The probe runs AS the restricted installed service user against the exact
@@ -40,7 +50,21 @@ if ! sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
   -endpoint http://127.0.0.1:18650/mcp \
   > "$S4_A_WORK/s4-oauth-native.redacted.log" 2>&1; then
   echo S4_A_INSTALLED_OAUTH_NATIVE=FAILED_OR_BLOCKED >&2
-  grep -E '^S4_A_' "$S4_A_WORK/s4-oauth-native.redacted.log" | tail -n 15 || :
+  # Only emit fixed, secret-free failure classes, never the raw Go panic,
+  # OAuth credential, response body or remote request URL.
+  if grep -Fq 'S4_A_INSTALLED_OAUTH_SETUP_FAILED' "$S4_A_WORK/s4-oauth-native.redacted.log"; then
+    echo S4_A_OAUTH_FAILURE_CLASS=OWNER_BOOTSTRAP
+  elif grep -Fq 'S4_A_INSTALLED_OAUTH_REFRESH_HTTP_FAILED' "$S4_A_WORK/s4-oauth-native.redacted.log"; then
+    echo S4_A_OAUTH_FAILURE_CLASS=REFRESH_HTTP
+  elif grep -Fq 'S4_A_INSTALLED_OAUTH_OFFICIAL_MCP_CONNECT_FAILED' "$S4_A_WORK/s4-oauth-native.redacted.log"; then
+    echo S4_A_OAUTH_FAILURE_CLASS=OFFICIAL_MCP_CONNECT
+  elif grep -Fq 'S4_A_INSTALLED_OAUTH_NATIVE_ORIGINAL_NOT_SUCCEEDED' "$S4_A_WORK/s4-oauth-native.redacted.log"; then
+    echo S4_A_OAUTH_FAILURE_CLASS=ORIGINAL_NATIVE_EFFECT
+  elif grep -Fq 'S4_A_INSTALLED_OAUTH_REFRESH_REDISPATCHED_ORIGINAL' "$S4_A_WORK/s4-oauth-native.redacted.log"; then
+    echo S4_A_OAUTH_FAILURE_CLASS=REPLAY_REDIRECTED
+  else
+    echo S4_A_OAUTH_FAILURE_CLASS=OTHER_REDACTED_PROBE_FAILURE
+  fi
   exit 7
 fi
 grep -Fxq 'S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS' "$S4_A_WORK/s4-oauth-native.redacted.log"
