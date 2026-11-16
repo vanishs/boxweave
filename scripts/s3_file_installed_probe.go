@@ -400,7 +400,11 @@ func verifyS3GuestGitOriginals(ctx context.Context, admin *mcp.ClientSession) {
 	cp := loadS3GitCheckpoint()
 	box := object(call(ctx, admin, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
 	need(field(box, "box_id") == cp.BoxUUID, "fresh MCP client cannot confirm the original native Box")
-	checks := []struct{ label, id string; wantExit int; stdoutMarker, stderrMarker string }{
+	checks := []struct {
+		label, id                  string
+		wantExit                   int
+		stdoutMarker, stderrMarker string
+	}{
 		{"setup", cp.SetupOp, 0, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, ""},
 		{"deliberate-failure", cp.FailOp, 1, "", "AssertionError: 5 != 4"},
 		{"guest-fix", cp.FixOp, 0, "S3_GIT_REPAIRED_COMMIT=" + cp.FinalGitCommit, ""},
