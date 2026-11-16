@@ -285,7 +285,19 @@ class TestCalc(unittest.TestCase):
 		"DEBIAN_FRONTEND=noninteractive apt-get update -qq && " +
 		"DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git python3; fi; " +
 		"command -v git; command -v python3; mkdir -p " + dir
-	installID, code, _, _ := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
+	installID, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
+	if code != 0 {
+		// CI-owned disposable guest only. Keep a bounded diagnostic from
+		// the original native Exec; never redispatch an uncertain command.
+		if len(stdout) > 700 {
+			stdout = stdout[len(stdout)-700:]
+		}
+		if len(stderr) > 700 {
+			stderr = stderr[len(stderr)-700:]
+		}
+		fmt.Printf("S3_PHASE3_GIT_PREREQUISITE_ORIGINAL_EXIT=%d OP=%s STDOUT=%q STDERR=%q\n",
+			code, installID, stdout, stderr)
+	}
 	need(code == 0, "Guest git/python prerequisite failed, preserve original "+installID)
 	fmt.Println("S3_PHASE3_GUEST_GIT_PYTHON_NATIVE_PREREQUISITES=PASS")
 	var created []string
