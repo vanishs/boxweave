@@ -327,7 +327,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	// argument object for every public tool, not silently ignore an
 	// unsupported native Project or root-pool selection.
 	list, err := admin.ListTools(ctx, nil)
-	check(err == nil && len(list.Tools) == 13, "strict schema discovery unavailable")
+	check(err == nil && len(list.Tools) == 16, "strict schema discovery unavailable")
 	for _, tool := range list.Tools {
 		schema, marshalErr := json.Marshal(tool.InputSchema)
 		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\":false")),
@@ -357,7 +357,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	items, ok := boxList["boxes"].([]any)
 	check(ok && len(items) == 0,
 		"unsupported root_pool attempted a native Create despite schema refusal")
-	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
+	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_SIXTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
 }
 
@@ -415,8 +415,9 @@ func main() {
 		"box_update": true, "box_start": true, "box_stop": true, "box_delete": true,
 		"box_exec": true, "operation_get": true, "operation_list": true,
 		"operation_output_get": true, "operation_cancel": true,
+		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 	}
-	check(len(inv.Tools) == len(expected), "13/13 actual S1+S2 discovery")
+	check(len(inv.Tools) == len(expected), "16/16 actual S1+S2+S3 discovery")
 	for _, t := range inv.Tools {
 		check(expected[t.Name], "unexpected Tool "+t.Name)
 		// A real SDK ListTools over HTTP must advertise safety/caching
@@ -424,7 +425,8 @@ func main() {
 		read := map[string]bool{
 			"host_status": true, "box_list": true, "box_get": true,
 			"operation_get": true, "operation_list": true,
-			"operation_output_get": true,
+			"operation_output_get": true, "box_file_list": true,
+			"box_file_read": true,
 		}[t.Name]
 		check(t.Annotations != nil && t.Annotations.ReadOnlyHint == read &&
 			t.Annotations.IdempotentHint == read &&
@@ -436,7 +438,7 @@ func main() {
 				"read-only MCP Tool advertised destructive action: "+t.Name)
 		}
 	}
-	fmt.Println("S2_NATIVE_MCP_DISCOVERY_13_OF_13=PASS")
+	fmt.Println("S2_NATIVE_MCP_DISCOVERY_16_OF_16=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
 	hostileProtocolMatrix(ctx, admin, view)
 	hostileTypedToolMatrix(ctx, admin)
