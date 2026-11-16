@@ -1493,7 +1493,35 @@ until [ "$attempt" -ge 50 ]; do
 done
 test -n "$ack_uuid"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_NATIVE_UUID_READY"
-test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+# The native daemon may expose volatile.uuid before its asynchronous Create
+# has become consistently visible to a separate inventory connection.
+# Retry READS ONLY: no second Create, no automatic adoption, no UNKNOWN replay.
+# The exact all-Projects singleton remains a non-negotiable safety gate.
+attempt=0
+inventory=""
+inventory_rc=0
+while [ "$attempt" -lt 45 ]; do
+  inventory_rc=0
+  inventory="$(sudo incus list --all-projects --format csv -c n 2>/dev/null)" || inventory_rc=$?
+  if [ "$inventory_rc" -eq 0 ] && [ "$inventory" = bw-s2-ack-native-110d ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  if [ "$inventory_rc" -ne 0 ]; then
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=READ_UNAVAILABLE" >&2
+  elif [ -z "$inventory" ]; then
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=EXPECTED_INSTANCE_NOT_LISTED" >&2
+  else
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=UNEXPECTED_OR_AMBIGUOUS_INSTANCES" >&2
+  fi
+  echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_INVENTORY_BLOCKED" >&2
+  exit 95
+fi
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_NATIVE_INVENTORY_PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
 # Genuine accepted-but-unbound native Create is an explicit negative Delete
 # boundary: even an independently witnessed UUID cannot authorize adoption.
