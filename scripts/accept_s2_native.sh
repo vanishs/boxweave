@@ -323,6 +323,7 @@ echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
 # Prove a *shipped* older official Go SDK (v1.6.1, protocol <=2025-11-25)
 # negotiates against the current v1.8.0 server. Its independent temp module
 # cannot silently use the candidate's newer SDK. No native writes are allowed.
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=LEGACY_OFFICIAL_MCP_SDK_START"
 legacy_client_dir="$work/legacy-sdk-client"
 mkdir -m 0700 "$legacy_client_dir"
 # The tracked probe is build-tagged "ignore"; remove only that tag in
@@ -343,9 +344,9 @@ GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     echo "S2_P1_FAIL: old SDK interoperability probe" >&2
     exit 125
   }
-grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
+grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
 grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS" "$work/legacy-sdk-probe.log"
-echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS"
+echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS"
 echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=LEGACY_OFFICIAL_MCP_SDK_PASS"
 
@@ -647,7 +648,8 @@ for name, original, native in seen:
           + " PROJECT=" + original["project"]
           + " BOX_UUID=" + str(original.get("box_uuid") or "PENDING"))
     print("S4_A_NATIVE_RAW_TERMINAL_STATUS=" + str(native["status_code"]))
-print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS")
+if seen:
+    print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS")
 S4_RAW_ORIGINAL_CHECK
 fi
 # Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
