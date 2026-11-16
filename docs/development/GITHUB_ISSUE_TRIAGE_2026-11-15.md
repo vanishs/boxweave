@@ -1,5 +1,7 @@
 # GitHub Open Issue triage — S2.5 merge → S3/S4/S5 (2026-11-15)
 
+**2026-11-16 live issue status (overrides historical PR/issue counts below):** [S3 PR #152](https://github.com/vanishs/boxweave/pull/152) is **MERGED**, [S3_MINIMAL_PASS](S3_MINIMAL_PASS_2026-11-16.md) signed; [S4 Draft PR #153](https://github.com/vanishs/boxweave/pull/153) is open for **docs-only preparation**. Current open Issues are **#148 S4 early P0 (OAuth grant actor), #150 S4 feasibility/supported nested security → S5 final proof, #151 S5 P1 original new Exec failure attribution**, plus post-v1 legacy #121 and #123. Earlier six/five open counts and “S4 only #150” are dated snapshots, not current. A bounded *test-only* independent native Incus original terminal witness is pulled into S4-A to make S5 #151 reproducible; S5 still owns repeated #151 root cause and release blocker. [Current task split](S4_S5_EXECUTION_REBALANCE_2026-11-16.md).
+
 **2026-11-15 stage rebalancing override:** [final current ownership, exact exits and retained requirements](S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md). The original snapshot below was written when #148/#151 were assigned to S3. Their **current** homes are #148 S4 P0 and #151 S5 P1, while #150 remains S4→S5; legacy #121/#123 remain post-v1.
 
 
