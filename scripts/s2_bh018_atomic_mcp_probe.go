@@ -115,7 +115,7 @@ func readOutput(ctx context.Context, s *mcp.ClientSession, id, stream string, ex
 }
 func argv(tcExit int) []string {
 	return []string{"/bin/sh", "-c", fmt.Sprintf(
-		"printf 'BH018_EFFECT_%d\\n' >> /tmp/bh018-atomic-effect-%d; printf 'OUT_%d'; printf 'ERR_%d' >&2; exit %d",
+		"printf 'BH018_EFFECT_%d\\n' >> /var/tmp/bh018-atomic-effect-%d; printf 'OUT_%d'; printf 'ERR_%d' >&2; exit %d",
 		tcExit, tcExit, tcExit, tcExit, tcExit,
 	)}
 }
@@ -213,13 +213,15 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_REPLAY_VERIFIED\n", original.Exit)
 
 		// A NEW request is allowed only after the verified original
-		// native terminal. Independently read guest file, prove exact
+		// native terminal. The one-use Guest's first boot may clear /tmp;
+		// the test's /var/tmp effect marker is durable across that lifecycle.
+		// Independently read guest file, prove exact
 		// effect count = one, and verify the fresh Exec itself succeeded.
 		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_READBACK\n", original.Exit)
 		check := invoke(ctx, s, "box_exec", map[string]any{
 			"box_id": cp.BoxID,
 			"argv": []string{"/bin/cat",
-				fmt.Sprintf("/tmp/bh018-atomic-effect-%d", original.Exit)},
+				fmt.Sprintf("/var/tmp/bh018-atomic-effect-%d", original.Exit)},
 			"idempotency_key": fmt.Sprintf("s2-bh018-independent-readback-%d-001", original.Exit),
 		})
 		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_CALL_RETURNED\n", original.Exit)

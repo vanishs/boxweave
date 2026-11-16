@@ -942,7 +942,7 @@ S4_BH018_EXPECT_UUID
 )"
     if [ -n "$expected_uuid" ] && [ "$expected_uuid" = "$observed_uuid" ]; then
       for exit_case in 126 127; do
-        if count="$(sudo incus exec bw-s2-bh018-atomic-native --project "$project" -- /bin/sh -c "wc -l < /tmp/bh018-atomic-effect-$exit_case" 2>/dev/null)" &&
+        if count="$(sudo incus exec bw-s2-bh018-atomic-native --project "$project" -- /bin/sh -c "wc -l < /var/tmp/bh018-atomic-effect-$exit_case" 2>/dev/null)" &&
             printf '%s' "$count" | grep -Eq '^[0-9]{1,8}$'; then
           echo "BH018_INSTALLED_NATIVE_GUEST_MARKER_${exit_case}_LINES=$count"
         else
