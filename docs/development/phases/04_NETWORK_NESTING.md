@@ -1,5 +1,8 @@
 # S4 — Native forwarding, one shared ACL, safe deletion and nested parity
 
+**Current Issue ownership:** [#150](https://github.com/vanishs/boxweave/issues/150) is the sole existing Open GitHub Issue allocated to S4 implementation; S5 must independently reaccept whatever security/trust capabilities S4 actually implements. No per-depth AA/BPF/ID-lease claim from functional S2.5. [Complete Issue triage](../GITHUB_ISSUE_TRIAGE_2026-11-15.md).
+
+
 **2026-11-15 S2.5 carry-forward to S4:** Own the explicit [BH-019 #150](https://github.com/vanishs/boxweave/issues/150) independent AppArmor Policy Namespace/Admin **platform design decision** (nested 243), cgroup-device BPF real attach/deny, durable sibling-safe UID+GID lease allocator, deep IPv4/IPv6 sibling/cross-Project negatives and supported disk/Exec-spool budgets. Preserve fail-closed rejections and do not claim delegated policy from inherited enforcing labels; no host privilege/AA weakening to force a PASS. Integrate with existing 4 S4 peer/forward Tools; final advertised security/trust model is reaccepted in S5. [Phase reallocation and dev-only limit](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
 
 

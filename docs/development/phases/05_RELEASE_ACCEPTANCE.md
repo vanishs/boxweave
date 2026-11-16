@@ -1,5 +1,8 @@
 # S5 — Full installed-system reacceptance, exact candidate and controlled release
 
+**Current Issue triage:** S5 has no standalone Open Issue that is already implemented; its scope is the release acceptance card itself. [#150](https://github.com/vanishs/boxweave/issues/150) is an S4 kernel/security design decision and S5 advertised-feature negative verification. [#121/#123](https://github.com/vanishs/boxweave/issues/121) are **legacy provider/operational UNKNOWN and cleanup**, not waiver of S5 testing or proof they have been cleared. [Reconciled inventory](../GITHUB_ISSUE_TRIAGE_2026-11-15.md).
+
+
 **2026-11-15 S2.5 carry-forward to S5:** Early `S25_DEV_BASE_PASS` is a **supervised single-tenant development-use** verdict only. Before first supported v1 release, independently accept the final advertised AppArmor/BPF/ID-map/network/quota security model (or explicitly decide not to advertise unsupported hostile multi-tenant recursive guarantees), completed OAuth refresh/idempotency and Create/Delete recovery, full BH/TC where applicable, 20/20 MCP + CLI and native original-fault/rollback. No evidence relabeling, final-release waiver, or automatic RC6 mutation. [Phased gate contract](../S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).
 
 

@@ -1,5 +1,8 @@
 # S3 execution kickoff — BoxWeave v1 (2026-11-15)
 
+**Issue review checkpoint:** [full Open Issue reconciliation](GITHUB_ISSUE_TRIAGE_2026-11-15.md) after merged #146: #131 closed as implemented S2 GC; **#148 and #151 are active S3 P1**, #150 S4 with S5 verification; legacy #121/#123 deliberately remain open independently after v1 functional merges.
+
+
 **Status:** S3 IN_PROGRESS, S4/S5 NOT_STARTED. Protected v1 base merge [PR #146](https://github.com/vanishs/boxweave/pull/146), exact commit e4cab7b692faf490da5786a8f6975dff79330341.
 
 **Accepted predecessor:** S2.5 SCOPED_PASS_WITH_DECLARED_LIMITS for a supervised, trusted single-developer non-production early development base. Host-local RC6 manifest, native 8/8, and resource headroom were independently observed. Full BH019/AppArmor/BPF/UID/GID/network/disk quota, untrusted sibling security and release are explicitly NOT accepted. [Signed scope](../verification/S25_PHYSICAL_HOST_DEV_BASE_POSTFLIGHT_2026-11-15.md) · [cross-stage ownership](S25_EARLY_DEV_BASE_PHASE_REALLOCATION_2026-11-15.md).

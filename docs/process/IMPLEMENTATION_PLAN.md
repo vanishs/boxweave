@@ -1,5 +1,8 @@
 # BoxWeave v1 — five autonomous feature phases + S2.5 BRIDGEHEAD acceptance checkpoint
 
+**Issue reconciliation (2026-11-15):** [six-issue per-ID classification](../development/GITHUB_ISSUE_TRIAGE_2026-11-15.md): #131 closed with merged S2 native seven-day Exec GC and native lost DELETE ACK evidence; #148/#151 S3, #150 S4 plus S5 final security verification; #121/#123 remain legacy original-provider operational UNKNOWN/cleanup **after v1 functional phases** without blocking unrelated new v1 development.
+
+
 **2026-11-15 current state:** S2.5 early dev-only SCOPED_PASS_WITH_DECLARED_LIMITS merged to protected v1 by [PR #146](https://github.com/vanishs/boxweave/pull/146) at e4cab7b6. **S3 IN_PROGRESS** on feat/v1-s3-agent-files-20261115; **S4/S5 NOT_STARTED**, full BH019 and release work still pending. [S3 kickoff](../development/S3_EXECUTION_KICKOFF_2026-11-15.md). Older phase table entries are historical.
 
 
