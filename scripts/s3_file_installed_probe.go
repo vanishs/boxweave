@@ -443,13 +443,18 @@ func main() {
 	exit, observed := out["exit_code"].(float64)
 	need(observed && exit == 0, "fixture Guest native Exec did not exit 0")
 	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_EXEC_EXIT_ZERO=PASS")
+	// Read the fixed native victim before directory enumeration to separate
+	// native file/path visibility from SFTP readdir transport problems.
+	bytesRead := fileBytes(ctx, admin, uuid, base+"/victim")
+	need(bytes.Equal(bytesRead, []byte("S3_PHASE2_VICTIM_LOCKED")),
+		"native original Guest fixture missing on first MCP file read")
+	fmt.Println("S3_INSTALLED_FIRST_REGULAR_FILE_SFTP_READ_BEFORE_LIST=PASS")
 	listing := call(ctx, admin, "box_file_list", map[string]any{
 		"box_id": uuid, "path": base, "limit": 2,
 	})
 	entries, ok := listing["entries"].([]any)
 	need(ok && len(entries) == 2 && field(listing, "next_cursor") != "",
 		"bounded non-snapshot File listing did not paginate")
-	bytesRead := fileBytes(ctx, admin, uuid, base+"/victim")
 	need(bytes.Equal(bytesRead, []byte("S3_PHASE2_VICTIM_LOCKED")), "native original victim mismatch")
 	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base+"/victim"), bytesRead),
 		"authorized Viewer read did not return original Guest bytes")

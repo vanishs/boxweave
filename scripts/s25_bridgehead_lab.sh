@@ -137,7 +137,27 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
     # Same installed candidate & exactly one supervised original Agent.
     export BW_S3_PHASE3_MODE=stage
     export BW_S3_PHASE3_CHECKPOINT="$work/private/s3-phase3-original.json"
-    "$work/staging/s3-file-installed-agent"
+    if ! "$work/staging/s3-file-installed-agent"; then
+      # Diagnostic only on disposable CI runner: the original Tool error is
+      # preserved. Do NOT redispatch a native mutation or alter the Guest.
+      echo S3_PHASE3_ORIGINAL_MCP_FAILURE_NATIVE_READ_ONLY_DIAGNOSTIC
+      sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project" || :
+      sudo incus exec s3-file-phase2-ci --project "$project" -- /bin/sh -c '
+        if test -d /tmp/s3-file-phase2; then
+          echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_PRESENT
+        else
+          echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_MISSING
+        fi
+        if test -f /tmp/s3-file-phase2/victim; then
+          echo S3_PHASE3_NATIVE_GUEST_VICTIM_PRESENT
+        else
+          echo S3_PHASE3_NATIVE_GUEST_VICTIM_MISSING
+        fi
+      ' || :
+      sudo incus file pull s3-file-phase2-ci/tmp/s3-file-phase2/victim \
+        "$work/staging/s3-phase3-failed-victim-read-only" --project "$project" || :
+      exit 83
+    fi
     test -s "$BW_S3_PHASE3_CHECKPOINT"
     # Independent host-side Incus CLI is strictly read-only: check original
     # UUID and final Git bytes/HEAD, never inject an alternate Guest edit.
