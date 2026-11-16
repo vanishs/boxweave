@@ -117,6 +117,153 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST  http://127
 test "$code" = 401
 echo S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS
 
+
+# S3-only isolated installed File Tool acceptance entry. Reuse the existing
+# pristine GitHub runner's signed native preparation, restricted nonroot
+# installed systemd/SQLite MCP, then exit before the old S2.5 deep LAB.
+if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
+  test "$GITHUB_ACTIONS" = true
+  test "$RUNNER_ENVIRONMENT" = github-hosted
+  CGO_ENABLED=1 go build -trimpath -o "$work/staging/s3-file-installed-agent" ./scripts/s3_file_installed_probe.go
+  export BW_S3_MCP_URL=http://127.0.0.1:18650/mcp
+  export BW_S3_ADMIN_TOKEN_FILE="$work/private/admin1.secret"
+  export BW_S3_VIEWER_TOKEN_FILE="$work/private/viewer.secret"
+  export BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm
+  echo "S3_INSTALLED_TEST_SOURCE_SHA=$(git rev-parse HEAD)"
+  installed_bin_sha="$(sudo sha256sum /usr/local/bin/boxweave | awk '{print $1}')"
+  test "$installed_bin_sha" = "$binary_sha"
+  echo "S3_INSTALLED_EXACT_BINARY_SHA256=$installed_bin_sha"
+  if [ "$(printenv S3_FILE_INSTALLED_PHASE3 2>/dev/null || true)" = true ]; then
+    # Same installed candidate & exactly one supervised original Agent.
+    # Same strict HTTPS-only relay used by the already-accepted S2.5 lab:
+    # the disposable Guest has no direct public WAN package permission.
+    gateway="$(sudo incus network get "$net" ipv4.address | cut -d/ -f1)"
+    case "$gateway" in
+      10.*|172.*|192.168.*) ;;
+      *) echo S3_PACKAGE_RELAY_GATEWAY_NOT_PRIVATE >&2; exit 71;;
+    esac
+    export BW_S3_PACKAGE_PROXY_URL="http://$gateway:18466"
+    python3 scripts/s25_package_proxy.py "$gateway" 18466 \
+      > "$work/private/s3-package-proxy.log" 2>&1 &
+    s3_pkg_relay_pid=$!
+    trap 'kill "$s3_pkg_relay_pid" 2>/dev/null || :; wait "$s3_pkg_relay_pid" 2>/dev/null || :' EXIT
+    s3_relay_ready=no
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      if curl -4 -fsSI --noproxy '' --proxy "$BW_S3_PACKAGE_PROXY_URL" \
+          --connect-timeout 2 --max-time 10 https://pkgs.zabbly.com/key.asc \
+          >/dev/null 2>&1; then
+        s3_relay_ready=yes
+        break
+      fi
+      sleep 1
+    done
+    test "$s3_relay_ready" = yes
+    echo S3_PHASE3_SCOPED_HTTPS_PACKAGE_RELAY=PASS
+    export BW_S3_PHASE3_MODE=stage
+    export BW_S3_PHASE3_CHECKPOINT="$work/private/s3-phase3-original.json"
+    if ! "$work/staging/s3-file-installed-agent"; then
+      # Diagnostic only on disposable CI runner: the original Tool error is
+      # preserved. Do NOT redispatch a native mutation or alter the Guest.
+      echo S3_PHASE3_ORIGINAL_MCP_FAILURE_NATIVE_READ_ONLY_DIAGNOSTIC
+      sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project" || :
+      sudo incus exec s3-file-phase2-ci --project "$project" -- /bin/sh -c '
+        if test -d /root/s3-file-phase2; then
+          echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_PRESENT
+        else
+          echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_MISSING
+        fi
+        if test -f /root/s3-file-phase2/victim; then
+          echo S3_PHASE3_NATIVE_GUEST_VICTIM_PRESENT
+        else
+          echo S3_PHASE3_NATIVE_GUEST_VICTIM_MISSING
+        fi
+      ' || :
+      sudo incus file pull s3-file-phase2-ci/root/s3-file-phase2/victim \
+        "$work/staging/s3-phase3-failed-victim-read-only" --project "$project" || :
+      exit 83
+    fi
+    test -s "$BW_S3_PHASE3_CHECKPOINT"
+    # Restart only the installed service on this disposable GitHub runner.
+    # A separate official MCP client observes the SAME original operation IDs;
+    # it cannot POST a second Git command or reapply a file change.
+    sudo systemctl restart boxweave.service
+    sudo systemctl is-active --quiet boxweave.service
+    s3_restart_ready=no
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+      status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+      if [ "$status" = 401 ]; then
+        s3_restart_ready=yes
+        break
+      fi
+      sleep 1
+    done
+    test "$s3_restart_ready" = yes
+    export BW_S3_PHASE3_MODE=verify
+    "$work/staging/s3-file-installed-agent"
+    echo S3_PHASE3_RESTART_FRESH_MCP_ORIGINAL_OPERATIONS_VERIFIED=PASS
+    # Independent host-side Incus CLI is strictly read-only: check original
+    # UUID and final Git bytes/HEAD, never inject an alternate Guest edit.
+    native_uuid="$(sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project")"
+    test -n "$native_uuid"
+    saved_uuid="$(python3 - "$BW_S3_PHASE3_CHECKPOINT" <<'S3_CP_UUID'
+import json,sys
+x=json.load(open(sys.argv[1]))
+assert x["native_box_name"] == "s3-file-phase2-ci"
+assert len(x["box_uuid"]) == 36
+assert len(x["initial_git_commit"]) == 40
+assert len(x["final_git_commit"]) == 40
+assert x["initial_git_commit"] != x["final_git_commit"]
+assert x["final_git_clean"] is True
+for key in ["native_setup_op","native_fail_op","native_fix_op","native_pass_op"]:
+    assert len(x[key]) == 36
+print(x["box_uuid"])
+S3_CP_UUID
+)"
+    test "$saved_uuid" = "$native_uuid"
+    sudo incus file pull s3-file-phase2-ci/root/s3-guest-git/calc.py \
+      "$work/staging/s3-phase3-native-calc.py" --project "$project"
+    sudo incus file pull s3-file-phase2-ci/root/s3-guest-git/test_calc.py \
+      "$work/staging/s3-phase3-native-test.py" --project "$project"
+    sudo chown "$(id -u):$(id -g)" "$work/staging/s3-phase3-native-calc.py" "$work/staging/s3-phase3-native-test.py"
+    native_git_head="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git rev-parse HEAD)"
+    native_git_count="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git rev-list --count HEAD)"
+    test "$native_git_count" = 2
+    native_git_dirty="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git status --porcelain)"
+    test -z "$native_git_dirty"
+    echo S3_PHASE3_INDEPENDENT_NATIVE_GIT_WORKTREE_CLEAN=PASS
+    python3 - "$BW_S3_PHASE3_CHECKPOINT" "$work/staging/s3-phase3-native-calc.py" \
+      "$work/staging/s3-phase3-native-test.py" "$native_git_head" <<'S3_VERIFY_NATIVE'
+import hashlib,json,sys
+cp=json.load(open(sys.argv[1]))
+source=open(sys.argv[2],"rb").read()
+test_source=open(sys.argv[3],"rb").read()
+assert source == b"def double(value):\n    return value * 2\n"
+assert hashlib.sha256(source).hexdigest() == cp["source_sha256"]
+assert b"self.assertEqual(double(2), 4)" in test_source
+assert sys.argv[4] == cp["final_git_commit"] != cp["initial_git_commit"]
+assert cp["final_git_clean"] is True
+for field in ["setup_op","fail_op","fix_op","pass_op","file_create_op"]:
+ assert len(cp[field]) == 32,field
+print("S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS")
+S3_VERIFY_NATIVE
+    export BW_S3_PHASE3_MODE=cleanup
+    "$work/staging/s3-file-installed-agent"
+    echo S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS
+  else
+    "$work/staging/s3-file-installed-agent"
+  fi
+  if sudo incus info s3-file-phase2-ci --project "$project" >/dev/null 2>&1; then
+    echo S3_INSTALLED_CLEANUP_NATIVE_BOX_STILL_PRESENT >&2
+    exit 91
+  fi
+  echo S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS
+  echo S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS
+  exit 0
+fi
+
 # Read-only binary staging on the disposable private Incus bridge only;
 # credentials and SQLite are in a different 0700 directory.
 gateway="$(sudo incus network get "$net" ipv4.address | cut -d/ -f1)"

@@ -170,6 +170,7 @@ func (s *Service) Handler() http.Handler {
 		})
 	s.registerOperationReadTools(server)
 	s.registerBoxTools(server)
+	s.registerFileTools(server)
 	s.registerOperationOutputCancel(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: false})

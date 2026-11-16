@@ -1,0 +1,61 @@
+name: S3 installed HTTP MCP File Tools and single-Agent Git native acceptance
+
+on:
+  push:
+    branches:
+      - feat/v1-s3-agent-files-20261115
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s3-file-installed-branch
+  cancel-in-progress: false
+
+jobs:
+  installed-file-mcp:
+    name: s3-installed-file-tools-and-supervised-git-verifier
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      S3_FILE_INSTALLED_PHASE2: 'true'
+      S3_FILE_INSTALLED_PHASE3: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify runner and exact source before native installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          sh -n scripts/s25_bridgehead_lab.sh
+          gofmt -d scripts/s3_file_installed_probe.go
+          test -z "$(gofmt -l scripts/s3_file_installed_probe.go)"
+          go build -o "$RUNNER_TEMP/s3-file-agent-check" ./scripts/s3_file_installed_probe.go
+          printf 'S3_INSTALLED_EXACT_COMMIT=%s\n' "$GITHUB_SHA"
+          echo S3_INSTALLED_DISPOSABLE_SOURCE_PRECHECK=PASS
+      - name: Run exact-source restricted nonroot installed MCP in one-use real Incus 7.6
+        shell: bash
+        run: |
+          set -o pipefail
+          sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          echo S3_INSTALLED_FILE_TOOLS_AND_PHASE3_SUPERVISED_GIT_REAL_NATIVE_VERIFIER=PASS
