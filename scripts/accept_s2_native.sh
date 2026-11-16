@@ -674,6 +674,17 @@ if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   for p in $s4_witness_pids; do
     wait "$p" || :
   done
+  for case in create exit126 exit127; do
+    if ! test -s "$work/s4-raw-$case.json"; then
+      if grep -Fq 'sqlite3.OperationalError:' "$work/s4-raw-$case.redacted.err"; then
+        echo "S4_A_RAW_WITNESS_${case}=SQLITE_READ_FAILURE"
+      elif grep -Eq 'PermissionError:|FileNotFoundError:' "$work/s4-raw-$case.redacted.err"; then
+        echo "S4_A_RAW_WITNESS_${case}=FILE_ACCESS_DENIED"
+      else
+        echo "S4_A_RAW_WITNESS_${case}=UNCLASSIFIED_FAILURE"
+      fi
+    fi
+  done
   python3 - "$work" <<'S4_RAW_ORIGINAL_CHECK'
 import json
 import pathlib
@@ -681,8 +692,14 @@ import sys
 root = pathlib.Path(sys.argv[1])
 seen = []
 for name in ("create", "exit126", "exit127"):
-    with (root / ("s4-raw-" + name + ".json")).open() as stream:
-        result = json.load(stream)
+    try:
+        with (root / ("s4-raw-" + name + ".json")).open() as stream:
+            result = json.load(stream)
+    except (OSError, ValueError, TypeError):
+        # A crashed observer is not an observed terminal, and no raw error
+        # log or original Guest output is exposed to the public CI log.
+        print("S4_A_RAW_NATIVE_" + name.upper() + "=WITNESS_UNREADABLE")
+        continue
     original = result.get("original_sqlite") or {}
     terminal = result.get("native_terminal") or {}
     if (result.get("observation") == "CAPTURED_TERMINAL"
@@ -692,7 +709,22 @@ for name in ("create", "exit126", "exit127"):
             and terminal.get("status_code") in (200, 400, 401)):
         seen.append((name, original, terminal))
     else:
-        print("S4_A_RAW_NATIVE_" + name.upper() + "=NOT_CAPTURED")
+        reason = result.get("reason")
+        allowed = {
+            "SQLITE_FRESH_ORIGINAL_NOT_DISCOVERED",
+            "SQLITE_ORIGINAL_NOT_FOUND",
+            "NO_NATIVE_ORIGINAL_RECEIPT",
+            "NATIVE_READ_UNAVAILABLE",
+            "NATIVE_NOT_RETAINED_OR_UNAVAILABLE",
+            "NATIVE_METADATA_MISSING",
+            "NATIVE_ORIGINAL_ID_MISMATCH",
+            "NATIVE_STATUS_UNVERIFIED",
+            "NATIVE_RESPONSE_INVALID",
+            "NATIVE_NOT_TERMINAL",
+            "NATIVE_ID_FORMAT_UNVERIFIED",
+        }
+        reason = reason if reason in allowed else "UNCLASSIFIED"
+        print("S4_A_RAW_NATIVE_" + name.upper() + "=NOT_CAPTURED_" + reason)
 if not seen:
     print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=NOT_CAPTURED")
     # Continue independent OAuth/native tests. Missing retained raw Op is
