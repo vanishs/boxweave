@@ -198,9 +198,9 @@ func main() {
 	entries, ok := listing["entries"].([]any)
 	need(ok && len(entries) == 2 && field(listing, "next_cursor") != "",
 		"bounded non-snapshot File listing did not paginate")
-	bytesRead := fileBytes(ctx, admin, uuid, base + "/victim")
+	bytesRead := fileBytes(ctx, admin, uuid, base+"/victim")
 	need(bytes.Equal(bytesRead, []byte("S3_PHASE2_VICTIM_LOCKED")), "native original victim mismatch")
-	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base + "/victim"), bytesRead),
+	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base+"/victim"), bytesRead),
 		"authorized Viewer read did not return original Guest bytes")
 	fmt.Println("S3_INSTALLED_FILE_LIST_PAGINATION_ADMIN_VIEWER_READ=PASS")
 	for _, bad := range []string{"/proc/self/fd/1", base + "/../victim", base + "/sym"} {
@@ -222,7 +222,7 @@ func main() {
 	operation := originalID(receipt)
 	terminal := await(ctx, admin, operation, "SUCCEEDED")
 	need(field(terminal, "native_operation_id") == "", "fabricated native Operation ID for synchronous SFTP")
-	need(bytes.Equal(fileBytes(ctx, admin, uuid, base + "/created"), data),
+	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/created"), data),
 		"original created bytes don't match native SFTP")
 	replay := call(ctx, admin, "box_file_apply", apply)
 	need(originalID(replay) == operation && replay["duplicate"] == true,
@@ -244,7 +244,7 @@ func main() {
 			"idempotency_key": "s3-native-cas-unsupported-" + mode,
 		}), "unsafe native conditional "+mode+" was accepted")
 	}
-	need(bytes.Equal(fileBytes(ctx, admin, uuid, base + "/victim"), bytesRead),
+	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/victim"), bytesRead),
 		"unsafe file mode modified original Guest bytes")
 	fmt.Println("S3_INSTALLED_VIEWER_AND_UNSUPPORTED_CAS_DENIAL=PASS")
 	for i, path := range []string{base + "/victim", base + "/sym", base + "/hard", base + "/fifo", "/tmp/s3-file-phase2-link/new"} {
@@ -255,7 +255,7 @@ func main() {
 		}
 		r := call(ctx, admin, "box_file_apply", input)
 		await(ctx, admin, originalID(r), "FAILED")
-		need(bytes.Equal(fileBytes(ctx, admin, uuid, base + "/victim"), bytesRead),
+		need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/victim"), bytesRead),
 			"denied SFTP create changed existing original bytes")
 	}
 	fmt.Println("S3_INSTALLED_MCP_SFTP_LINK_FIFO_PREOPEN_DENIAL_NO_UNKNOWN=PASS")
@@ -267,7 +267,7 @@ func main() {
 	}
 	rr := call(ctx, admin, "box_file_apply", safe)
 	await(ctx, admin, originalID(rr), "SUCCEEDED")
-	need(bytes.Equal(fileBytes(ctx, admin, uuid, base + "/post-denial"), []byte("POST_DENIAL_OK")),
+	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/post-denial"), []byte("POST_DENIAL_OK")),
 		"denied Create retained false resource lock")
 	fmt.Println("S3_INSTALLED_MCP_POST_DENIAL_LOCK_RELEASE=PASS")
 	stop := call(ctx, admin, "box_stop", map[string]any{
