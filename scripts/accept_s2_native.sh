@@ -588,6 +588,17 @@ test ! -e "$bh018_checkpoint"
 # restricted service identity's ordinary Incus CLI connection. No replay.
 if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   test -f scripts/s4_raw_operation_witness.py
+  # The CI checkout under /home/runner is not necessarily traversable by
+  # the restricted service UID. Copy the exact tracked, test-only observer
+  # to our own chmod 0711 disposable staging root; never widen checkout,
+  # installed service, Incus socket, or host-global permissions.
+  install -m 0755 scripts/s4_raw_operation_witness.py "$work/s4-raw-operation-witness.py"
+  cmp -s scripts/s4_raw_operation_witness.py "$work/s4-raw-operation-witness.py"
+  if ! sudo runuser -u boxweave -- python3 "$work/s4-raw-operation-witness.py" --help >/dev/null 2>&1; then
+    echo "S4_A_RAW_NATIVE_WITNESS_RESTRICTED_EXEC=BLOCKED"
+    exit 94
+  fi
+  echo "S4_A_RAW_NATIVE_WITNESS_RESTRICTED_EXEC=PASS"
   s4_witness_pids=""
   for case in create exit126 exit127; do
     case "$case" in
@@ -599,7 +610,7 @@ if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
     sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
       -u XDG_CONFIG_HOME HOME=/home/boxweave \
       XDG_CONFIG_HOME=/home/boxweave/.config \
-      python3 "$PWD/scripts/s4_raw_operation_witness.py" \
+      python3 "$work/s4-raw-operation-witness.py" \
       --db "$db" --key-digest "$digest" --timeout-seconds 120 \
       > "$work/s4-raw-$case.json" 2> "$work/s4-raw-$case.redacted.err" &
     s4_witness_pids="$s4_witness_pids $!"
