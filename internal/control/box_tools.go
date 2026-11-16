@@ -443,16 +443,22 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
 				}
-				if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
-				}
-				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
-					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
-				}
-				if start && observed.NativeState == "Stopped" {
+				if (!originalNativeOutcomeMissing && op.StatusCode != api.Success) ||
+					(start && observed.NativeState == "Stopped") {
+					// Keep the exact native UUID claim for failed-start residue.
+					// It is NOT a successful Create and needs explicit cleanup.
+					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+					}
+					if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
+						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
+					}
 					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
 				}
-				return nil
+				if err := s.Store.FinalizeVerifiedCreate(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+				}
+				return state.ErrVerifiedCreateCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err
@@ -693,7 +699,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
 					return err
 				}
-				return s.Store.TombstoneOwnedBox(ctx, box)
+				if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
+				}
+				return state.ErrVerifiedDeleteCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err

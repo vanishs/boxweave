@@ -321,6 +321,106 @@ func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, na
 	return tx.Commit()
 }
 
+// FinalizeVerifiedCreate commits the first successful Create's exact native UUID,
+// durable ownership claim, and original SUCCEEDED event in ONE SQLite transaction.
+// The native verifier has already independently proved the native terminal state
+// and current instance identity. A failed-start residue uses RegisterCreatedBox
+// instead, deliberately retaining a FAILED owned claim for explicit deletion.
+func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {
+	if opID == "" || project == "" || name == "" || uuid == "" ||
+		len(name) > 63 || len(uuid) > 128 {
+		return ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var action, phase, resource, oldUUID, layer, nativeID string
+	if err = tx.QueryRowContext(ctx, `SELECT action,state,resource_key,box_uuid,layer,
+		native_operation_id FROM operations WHERE id=?`, opID).
+		Scan(&action, &phase, &resource, &oldUUID, &layer, &nativeID); err != nil {
+		return err
+	}
+	if action != "box_create" || phase != "VERIFYING" ||
+		layer != project || resource != "box:"+name || oldUUID != "" || nativeID == "" {
+		return ErrState
+	}
+	now := time.Now().UnixNano()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO owned_boxes
+		(uuid,project,name,incarnation,state,created_at)
+		VALUES (?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE operations SET box_uuid=?,incarnation=?,
+		state='SUCCEEDED',error_class='',updated_at=?
+		WHERE id=? AND state='VERIFYING' AND box_uuid=''`,
+		uuid, uuid, now, opID)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return ErrState
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events
+		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
+		opID, now, "SUCCEEDED", "ORIGINAL_CREATE_UUID_ATOMIC"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// FinalizeVerifiedDelete requires independent terminal native Delete and exact
+// absence proof BEFORE invocation. Its tombstone and original receipt must
+// never commit independently; any ambiguous ACK/crash stays UNKNOWN and locked.
+func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box OwnedBox) error {
+	if opID == "" || box.UUID == "" || box.Project == "" || box.Name == "" ||
+		box.Incarnation == "" || box.State != "OWNED" {
+		return ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var action, phase, layer, uuid, incarnation, resource, nativeID string
+	if err = tx.QueryRowContext(ctx, `SELECT action,state,layer,box_uuid,
+		incarnation,resource_key,native_operation_id FROM operations WHERE id=?`,
+		opID).Scan(&action, &phase, &layer, &uuid, &incarnation, &resource, &nativeID); err != nil {
+		return err
+	}
+	if action != "box_delete" || phase != "VERIFYING" || nativeID == "" ||
+		layer != box.Project || uuid != box.UUID ||
+		incarnation != box.Incarnation || resource != "box:"+box.Name {
+		return ErrState
+	}
+	now := time.Now().UnixNano()
+	result, err := tx.ExecContext(ctx, `UPDATE owned_boxes SET state='DELETED',
+		deleted_by_operation_id=?,deleted_at=?
+		WHERE uuid=? AND project=? AND name=? AND incarnation=? AND state='OWNED'`,
+		opID, now, box.UUID, box.Project, box.Name, box.Incarnation)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return ErrState
+	}
+	result, err = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',
+		error_class='',updated_at=? WHERE id=? AND state='VERIFYING'`, now, opID)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return ErrState
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events
+		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
+		opID, now, "SUCCEEDED", "ORIGINAL_DELETE_TOMBSTONE_ATOMIC"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // CompleteWithoutNative requires separate postcondition proof before an
 // already-started or already-stopped Box is marked a successful no-op.
 func (s *Store) CompleteWithoutNative(ctx context.Context, operationID string) error {
