@@ -14,48 +14,48 @@ import (
 )
 
 type fileListInput struct {
-	BoxID string `json:"box_id"`
-	Path string `json:"path"`
-	Cursor string `json:"cursor,omitempty"`
-	Limit int `json:"limit,omitempty"`
+	BoxID   string  `json:"box_id"`
+	Path    string  `json:"path"`
+	Cursor  string  `json:"cursor,omitempty"`
+	Limit   int     `json:"limit,omitempty"`
 }
 
 type fileListResult struct {
-	TrackingID string `json:"tracking_id"`
-	BoxID string `json:"box_id"`
-	Path string `json:"path"`
-	Entries []native.GuestFileEntry `json:"entries"`
-	NextCursor string `json:"next_cursor,omitempty"`
-	ConsistentSnapshot bool `json:"consistent_snapshot"`
+	TrackingID          string                   `json:"tracking_id"`
+	BoxID               string                   `json:"box_id"`
+	Path                string                   `json:"path"`
+	Entries             []native.GuestFileEntry  `json:"entries"`
+	NextCursor          string                   `json:"next_cursor,omitempty"`
+	ConsistentSnapshot  bool                     `json:"consistent_snapshot"`
 }
 
 type fileReadInput struct {
-	BoxID string `json:"box_id"`
-	Path string `json:"path"`
-	Offset int64 `json:"offset,omitempty"`
-	Length int `json:"length,omitempty"`
+	BoxID   string  `json:"box_id"`
+	Path    string  `json:"path"`
+	Offset  int64   `json:"offset,omitempty"`
+	Length  int     `json:"length,omitempty"`
 }
 
 type fileReadResult struct {
-	TrackingID string `json:"tracking_id"`
-	BoxID string `json:"box_id"`
-	Path string `json:"path"`
-	DataBase64 string `json:"data_base64"`
-	Size int64 `json:"size"`
-	Offset int64 `json:"offset"`
-	Ended bool `json:"ended"`
-	WholeFile bool `json:"whole_file"`
-	PageSHA256 string `json:"page_sha256"`
+	TrackingID  string  `json:"tracking_id"`
+	BoxID       string  `json:"box_id"`
+	Path        string  `json:"path"`
+	DataBase64  string  `json:"data_base64"`
+	Size        int64   `json:"size"`
+	Offset      int64   `json:"offset"`
+	Ended       bool    `json:"ended"`
+	WholeFile   bool    `json:"whole_file"`
+	PageSHA256  string  `json:"page_sha256"`
 }
 
 type fileApplyInput struct {
-	BoxID string `json:"box_id"`
-	Path string `json:"path"`
-	Mode string `json:"mode"`
-	ContentBase64 string `json:"content_base64,omitempty"`
-	IdempotencyKey string `json:"idempotency_key"`
-	WorkRef string `json:"work_ref,omitempty"`
-	AgentRef string `json:"agent_ref,omitempty"`
+	BoxID           string  `json:"box_id"`
+	Path            string  `json:"path"`
+	Mode            string  `json:"mode"`
+	ContentBase64   string  `json:"content_base64,omitempty"`
+	IdempotencyKey  string  `json:"idempotency_key"`
+	WorkRef         string  `json:"work_ref,omitempty"`
+	AgentRef        string  `json:"agent_ref,omitempty"`
 }
 
 func (s *Service) registerFileTools(server *mcp.Server) {
