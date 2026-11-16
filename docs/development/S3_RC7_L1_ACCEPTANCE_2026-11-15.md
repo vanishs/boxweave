@@ -1,5 +1,11 @@
 # S3 RC7 — exact prerelease published; L1 upgrade safety hold (2026-11-15 PT)
 
+## 2026-11-16: old L1 RC6 block superseded — real L1 now RC7; S3 scoped signed
+
+**Authoritative superseding state:** the operator manually upgraded the **actual L1** `rc3-l1-nested-1113` (not merely the disposable child) with the official RC7 installer after approving `install-commit` of its earlier RC4→RC6 backup. Actual L1 RC7 MCP returned version `1.0.0-rc.7`, commit `2211e1a6...`, exact published binary SHA `fc405473...`, `ready=true`. After user refreshed the ChatGPT MCP connection, **16/16 actual RC7 tools were discoverable**, including all three S3 File tools. The model drove a real L1 MCP Guest Git red→fix→green run and all native SFTP file-tool smoke/negatives in an owned isolated child, followed by separate independent Guest readbacks and Git commit/hash verification. The original protected L0 UNKNOWN and existing 5 L1 UNKNOWN were not released/replayed. [Authoritative scoped signoff and exact Ops](S3_MINIMAL_PASS_2026-11-16.md). Earlier paragraphs below accurately describe the *previous* state and must not be used as the latest L1 version or S3 status.
+
+**Verdict now:** `S3_MINIMAL_PASS=SIGNED_SCOPED`, pending **final documentation-only HEAD CI then same PR merge**; raw Incus-daemon terminal JSON is **NOT captured** and is optional future evidence, not implied by saved BoxWeave/native UUIDs. RC6 rollback backup deliberately retained.
+
 ## Fresh L1-owned isolated RC7 integration lab (new observations after operator UNKNOWN inspect)
 
 **Precondition and original UNKNOWN:** The operator's approved root-local `recover -action inspect` returned the **same** original L0 `UNKNOWN` `4a5130ee9025e7ee39c1866d16ad1b39`, original native ID `fa2f54f1-bbe1-432d-88cc-52ad572e938c`, exact real L1 native UUID `cd1ea3d0-a24f-477b-b01c-08fb5acac53e`, `PRESENT_UUID_CONFIRMED`, `claim_released=false`. Native Box existence is **not proof of whether that original Exec occurred**. The original Box and lock were NOT altered, no host shell fallback or automatic release was used.
