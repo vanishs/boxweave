@@ -100,3 +100,87 @@ func TestS3FileCreateUncertainEffectLocksNativeBoxAndNeverReplays(t *testing.T) 
 		t.Fatalf("uncertain original was not preserved: %+v %v", replay, err)
 	}
 }
+
+func TestS3FileCreateVerifiedNoEffectDoesNotLockBox(t *testing.T) {
+	ctx := context.Background()
+	s, token, box := s3OwnedFileFixture(t)
+	a := Admission{
+		Layer: box.Project, ActorID: token.ID, TokenID: token.ID,
+		Key: "s3-file-existing-original-0001", RequestID: "s3-first",
+		Action: "box_file_apply", SafeIntent: []byte("{}"),
+		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
+		Incarnation: box.Incarnation,
+	}
+	r, err := s.Admit(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{Store: s, Budget: time.Second}
+	if err := worker.SubmitGuestFileCreate(r.ID, box, func(context.Context) error {
+		return PreDispatchError{Class: "SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS"}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		original, err := s.Get(ctx, r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.State == "FAILED" {
+			if original.ErrorClass != "SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS" {
+				t.Fatalf("unexpected proven no-effect classification: %+v", original)
+			}
+			break
+		}
+		if original.State == "UNKNOWN" || time.Now().After(deadline) {
+			t.Fatalf("proven no-effect must not lock Box as UNKNOWN: %+v", original)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.Key = "s3-file-existing-original-0002"
+	a.RequestID = "s3-new"
+	if _, err := s.Admit(ctx, a); err != nil {
+		t.Fatalf("proven no-effect leaked original Box lock: %v", err)
+	}
+}
+
+func TestS3FileCreateAmbiguousWorkerEffectRemainsLocked(t *testing.T) {
+	ctx := context.Background()
+	s, token, box := s3OwnedFileFixture(t)
+	a := Admission{
+		Layer: box.Project, ActorID: token.ID, TokenID: token.ID,
+		Key: "s3-file-transport-original-0001", RequestID: "s3-first",
+		Action: "box_file_apply", SafeIntent: []byte("{}"),
+		ResourceKey: "box:" + box.Name, BoxUUID: box.UUID,
+		Incarnation: box.Incarnation,
+	}
+	r, err := s.Admit(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (Worker{Store: s, Budget: time.Second}).SubmitGuestFileCreate(r.ID, box, func(context.Context) error {
+		return errors.New("simulated lost SFTP reply")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		original, err := s.Get(ctx, r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.State == "UNKNOWN" {
+			break
+		}
+		if original.State == "FAILED" || original.State == "SUCCEEDED" || time.Now().After(deadline) {
+			t.Fatalf("lost SFTP reply cannot be signed completed: %+v", original)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.Key = "s3-file-transport-original-0002"
+	a.RequestID = "s3-new"
+	if _, err := s.Admit(ctx, a); !errors.Is(err, ErrResourceLocked) {
+		t.Fatalf("ambiguous native original lost its lock: %v", err)
+	}
+}
