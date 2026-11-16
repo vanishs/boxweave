@@ -1,5 +1,8 @@
 # S3 — Minimal safe Guest File Tools and one supervised Agent smoke
 
+**Phase-1 implementation milestone (2026-11-15):** [source+tests checkpoint](../S3_FILE_TOOLS_PHASE1_CODE_CHECKPOINT_2026-11-15.md) in Draft PR #152. All three Tool handlers and SQLite SFTP create receipt code are in the branch, but the **real Incus native File security/race/Agent evidence is still pending** and S3_MINIMAL_PASS is NOT signed. Continue at phase-2 negative native verification/fix, not a second File Tool rewrite.
+
+
 **Current stage:** IN_PROGRESS on existing Draft [PR #152](https://github.com/vanishs/boxweave/pull/152), based on merged S2.5 v1. **Owner-approved phase rebalance:** [S3/S4/S5 dependency and exit matrix](../S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md), which governs this S3 exit. This is not a positive claim that S3 features or security tests have passed.
 
 ## Actual S3 delivery: only three public tools

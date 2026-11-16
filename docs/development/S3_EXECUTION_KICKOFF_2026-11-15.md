@@ -1,5 +1,8 @@
 # S3 minimal execution kickoff — after scoped S2.5 (2026-11-15)
 
+**Phase-1 code checkpoint (2026-11-15):** The 3 typed File Tools, restricted native Incus SFTP list/read/O_EXCL create, synchronous SFTP SQLite finalization (no invented native Op) and basic tests are now committed to Draft PR #152. [Source and exact unresolved native phase-2 obligations](S3_FILE_TOOLS_PHASE1_CODE_CHECKPOINT_2026-11-15.md). Old step 1 below is an archival entry, NOT an instruction to reimplement tools. **Phase-2 actual native File negatives and phase-3 single-Agent loop have NOT passed.**
+
+
 **State:** S3 IN_PROGRESS, not accepted. Existing [PR #152](https://github.com/vanishs/boxweave/pull/152) is the only change vehicle; target protected v1 based on merged S2.5 PR #146 commit e4cab7b692faf490da5786a8f6975dff79330341. No new PR, no host daemon mutation.
 
 **Current authoritative scope:** [S3/S4/S5 minimal work rebalance](S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md) · [S3 phase card](phases/03_FILES_AGENT_LOOP.md). The older initial S3 start-order of #148 → Create/Delete → #151 → three Files → full Agent handoff is superseded. These issues are not closed or waived.
