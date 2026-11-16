@@ -183,6 +183,24 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
       exit 83
     fi
     test -s "$BW_S3_PHASE3_CHECKPOINT"
+    # Restart only the installed service on this disposable GitHub runner.
+    # A separate official MCP client observes the SAME original operation IDs;
+    # it cannot POST a second Git command or reapply a file change.
+    sudo systemctl restart boxweave.service
+    sudo systemctl is-active --quiet boxweave.service
+    s3_restart_ready=no
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+      status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST http://127.0.0.1:18650/mcp -H 'Content-Type: application/json' -d '{}' || :)"
+      if [ "$status" = 401 ]; then
+        s3_restart_ready=yes
+        break
+      fi
+      sleep 1
+    done
+    test "$s3_restart_ready" = yes
+    export BW_S3_PHASE3_MODE=verify
+    "$work/staging/s3-file-installed-agent"
+    echo S3_PHASE3_RESTART_FRESH_MCP_ORIGINAL_OPERATIONS_VERIFIED=PASS
     # Independent host-side Incus CLI is strictly read-only: check original
     # UUID and final Git bytes/HEAD, never inject an alternate Guest edit.
     native_uuid="$(sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project")"

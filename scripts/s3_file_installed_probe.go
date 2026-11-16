@@ -396,6 +396,54 @@ mkdir -p /root/s3-guest-git
 	fmt.Println("S3_PHASE3_GUEST_GIT_FAIL_FIX_PASS_STAGE=PASS")
 }
 
+func verifyS3GuestGitOriginals(ctx context.Context, admin *mcp.ClientSession) {
+	cp := loadS3GitCheckpoint()
+	box := object(call(ctx, admin, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
+	need(field(box, "box_id") == cp.BoxUUID, "fresh MCP client cannot confirm the original native Box")
+	checks := []struct{ label, id string; wantExit int; stdoutMarker, stderrMarker string }{
+		{"setup", cp.SetupOp, 0, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, ""},
+		{"deliberate-failure", cp.FailOp, 1, "", "AssertionError: 5 != 4"},
+		{"guest-fix", cp.FixOp, 0, "S3_GIT_REPAIRED_COMMIT=" + cp.FinalGitCommit, ""},
+		{"passing-test", cp.PassOp, 0, "", "Ran 1 test"},
+	}
+	for _, check := range checks {
+		op := object(call(ctx, admin, "operation_get", map[string]any{"operation_id": check.id}), "operation")
+		need(field(op, "state") == "SUCCEEDED" && field(op, "native_operation_id") != "",
+			"fresh original Exec receipt missing its proven native completion: "+check.label)
+		for _, stream := range []string{"stdout", "stderr"} {
+			out := call(ctx, admin, "operation_output_get", map[string]any{
+				"operation_id": check.id, "stream": stream, "limit": 4096,
+			})
+			exit, known := out["exit_code"].(float64)
+			need(known && int(exit) == check.wantExit,
+				"fresh original Guest exit differs from the original terminal: "+check.label)
+			content, err := base64.StdEncoding.DecodeString(field(out, "content_base64"))
+			need(err == nil && len(content) <= 4096,
+				"fresh original Guest output is unverified: "+check.label)
+			if stream == "stdout" && check.stdoutMarker != "" {
+				need(bytes.Contains(content, []byte(check.stdoutMarker)),
+					"fresh original Git stdout commit differs: "+check.label)
+			}
+			if stream == "stderr" && check.stderrMarker != "" {
+				need(bytes.Contains(content, []byte(check.stderrMarker)),
+					"fresh original Guest test stderr differs: "+check.label)
+			}
+		}
+		fmt.Printf("S3_PHASE3_FRESH_ORIGINAL_EXEC=%s BW=%s NATIVE=%s EXIT=%d\n",
+			check.label, check.id, field(op, "native_operation_id"), check.wantExit)
+	}
+	fileOp := object(call(ctx, admin, "operation_get", map[string]any{
+		"operation_id": cp.FileCreateOp,
+	}), "operation")
+	need(field(fileOp, "state") == "SUCCEEDED" && field(fileOp, "native_operation_id") == "",
+		"fresh SFTP exclusive create receipt fabricated or lost its original status")
+	finalBytes := fileBytes(ctx, admin, cp.BoxUUID, "/root/s3-guest-git/calc.py")
+	finalSHA := sha256.Sum256(finalBytes)
+	need(hex.EncodeToString(finalSHA[:]) == cp.SourceSHA256,
+		"fresh official MCP file bytes do not match the original durable checkpoint")
+	fmt.Println("S3_PHASE3_FRESH_CLIENT_ORIGINAL_OPERATIONS_AND_FILE=PASS")
+}
+
 func cleanupS3GuestGitPhase3(ctx context.Context, admin *mcp.ClientSession) {
 	cp := loadS3GitCheckpoint()
 	// The CI native verifier independently read and compared this original
@@ -424,6 +472,12 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
+	if os.Getenv("BW_S3_PHASE3_MODE") == "verify" {
+		independent := connect(ctx, "fresh-restart-verifier", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
+		defer independent.Close()
+		verifyS3GuestGitOriginals(ctx, independent)
+		return
+	}
 	if os.Getenv("BW_S3_PHASE3_MODE") == "cleanup" {
 		agent := connect(ctx, "admin", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
 		defer agent.Close()
