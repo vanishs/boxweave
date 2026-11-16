@@ -302,6 +302,7 @@ until [ "$attempt" -ge 40 ]; do
 done
 test "$attempt" -lt 40
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_START"
 
 # A second serve on the identical SQLite must be rejected BEFORE it may
 # run Recover() on the original controller's still-live operations.
@@ -317,6 +318,7 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_
 test -s "$work/concurrent-status.json"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp)" = 401
 echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_PASS"
 
 # Prove a *shipped* older official Go SDK (v1.6.1, protocol <=2025-11-25)
 # negotiates against the current v1.8.0 server. Its independent temp module
@@ -345,6 +347,7 @@ grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EF
 grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS" "$work/legacy-sdk-probe.log"
 echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS"
 echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=LEGACY_OFFICIAL_MCP_SDK_PASS"
 
 # Seed a single original ADMITTED operation with no native dispatch under
 # the SAME restricted service actor/database. The official SDK prober then
@@ -390,6 +393,7 @@ sh scripts/s2_p1_simulated_wan_lab.sh setup "$work" "$project"
 simulated_wan_ca_b64="$(base64 -w0 "$work/s2-simwan-cert.pem")"
 test -n "$simulated_wan_ca_b64"
 
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BASELINE_S2_MCP_PROBE_START"
 # The independent official MCP SDK prober temporarily holds one completed
 # 16MiB+4-byte dual-stream Exec until this CI VM administrator measures its
 # ACTUAL native spool files. This is read-only and never deletes native logs.
@@ -563,6 +567,7 @@ sudo incus delete "$foreign_name" --project "$foreign_project"
 sudo incus project delete "$foreign_project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BASELINE_S2_MCP_PROBE_PASS"
 
 # BH-018: an additional native end-to-end acceptance through the *installed*
 # non-root, restricted-Project BoxWeave service and official Go MCP SDK.
@@ -573,6 +578,7 @@ echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
 # identity and output without native redispatch; fresh commands must work.
 # The original historical UNKNOWN claims on other hosts are never touched.
 test -z "$(sudo incus list --all-projects --format csv -c n)"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_MCP_PROBE_START"
 bh018_checkpoint="$work/bh018-atomic-original.json"
 test ! -e "$bh018_checkpoint"
 # S4-A only: start THREE independent read-only CLI observers before the
