@@ -33,6 +33,26 @@ func (s *Service) operationPrincipal(req *mcp.CallToolRequest) (actor, role, lay
 	return info.UserID, role, s.Native.Project, nil
 }
 
+// operationCredentialID obtains the revocable per-request access credential,
+// never the stable OAuth grant actor. SDK authorization constructs TokenInfo;
+// client-controlled tool parameters cannot supply this field.
+func operationCredentialID(req *mcp.CallToolRequest) string {
+	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
+		return ""
+	}
+	info := req.Extra.TokenInfo
+	if raw, exists := info.Extra["token_id"]; exists {
+		id, ok := raw.(string)
+		if !ok {
+			return ""
+		}
+		return id
+	}
+	// Existing direct-handler manual-token test fixtures have no Extra map.
+	// An OAuth grant ID has no credential row and therefore fails closed.
+	return info.UserID
+}
+
 type operationGetInput struct {
 	OperationID string `json:"operation_id"`
 	WaitMS      int    `json:"wait_ms,omitempty"`
@@ -117,7 +137,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
 		// cancel/retry the durable operation as a side-effect.
-		if err := s.Store.RequireActiveTokenID(ctx, actor); err != nil {
+		if err := s.Store.RequireActiveTokenID(ctx, operationCredentialID(req)); err != nil {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
@@ -146,6 +166,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
-		return privateReadReply(ctx, s, actor, operationListResult{TrackingID: tracking, Page: page})
+		return privateReadReply(ctx, s, operationCredentialID(req), operationListResult{TrackingID: tracking, Page: page})
 	})
 }

@@ -96,7 +96,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended, result.NextOffset = true, in.Offset
 			result.Availability = "expired"
 			result.UnavailableReason = "RETENTION_EXPIRED_VERIFIED"
-			return privateReadReply(ctx, s, actor, result)
+			return privateReadReply(ctx, s, operationCredentialID(req), result)
 		}
 		box, err := s.Store.OwnedBox(ctx, layer, original.BoxUUID)
 		if err != nil {
@@ -109,12 +109,12 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended = true
 			result.Availability = "unavailable"
 			result.UnavailableReason = "NO_NATIVE_RECORDED_STREAM_PATH"
-			return privateReadReply(ctx, s, actor, result)
+			return privateReadReply(ctx, s, operationCredentialID(req), result)
 		}
 		if in.Offset == native.MaxRecordedOutputBytes {
 			result.Ended, result.Truncated = true, true
 			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, actor, result)
+			return privateReadReply(ctx, s, operationCredentialID(req), result)
 		}
 		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
 		if errors.Is(err, native.ErrRecordedOutputUnavailable) {
@@ -122,7 +122,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.UnavailableReason = "NATIVE_RECORDED_OUTPUT_MISSING"
 			result.Ended = true
 			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, actor, result)
+			return privateReadReply(ctx, s, operationCredentialID(req), result)
 		}
 		if err != nil {
 			return nil, operationOutputResult{}, err
@@ -133,7 +133,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
 			result.Ended, result.Truncated = true, true
 		}
-		return privateReadReply(ctx, s, actor, result)
+		return privateReadReply(ctx, s, operationCredentialID(req), result)
 	})
 
 	addStrictTool(server, &mcp.Tool{

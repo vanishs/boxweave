@@ -118,7 +118,7 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 	if err != nil {
 		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{UserID: t.ID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
+	return &auth.TokenInfo{UserID: t.ActorID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
 }
 func (s *Service) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
@@ -166,7 +166,7 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
-			return privateReadReply(ctx, s, info.UserID, result)
+			return privateReadReply(ctx, s, operationCredentialID(req), result)
 		})
 	s.registerOperationReadTools(server)
 	s.registerBoxTools(server)

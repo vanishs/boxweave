@@ -552,8 +552,8 @@ func (s *Store) VerifyOAuthAccess(ctx context.Context, raw string) (Token, error
 	var expires int64
 	var epoch, current, revoked, grantRevoked int
 	var resource, origin string
-	err := s.db.QueryRowContext(ctx, "SELECT c.id,c.role,c.expires_at,c.revoked,g.revoked,g.epoch,o.epoch,g.resource,o.public_origin FROM credentials c JOIN oauth_access a ON a.token_id=c.id JOIN oauth_grants g ON g.id=a.grant_id CROSS JOIN oauth_config o WHERE o.id=1 AND c.token_digest=?",
-		DigestToken(raw)).Scan(&out.ID, &out.Role, &expires, &revoked, &grantRevoked, &epoch, &current, &resource, &origin)
+	err := s.db.QueryRowContext(ctx, "SELECT c.id,a.grant_id,c.role,c.expires_at,c.revoked,g.revoked,g.epoch,o.epoch,g.resource,o.public_origin FROM credentials c JOIN oauth_access a ON a.token_id=c.id JOIN oauth_grants g ON g.id=a.grant_id CROSS JOIN oauth_config o WHERE o.id=1 AND c.token_digest=?",
+		DigestToken(raw)).Scan(&out.ID, &out.ActorID, &out.Role, &expires, &revoked, &grantRevoked, &epoch, &current, &resource, &origin)
 	if err != nil || revoked != 0 || grantRevoked != 0 || epoch != current || resource != origin+"/mcp" || origin == "" || expires <= time.Now().Unix() {
 		return Token{}, ErrRevoked
 	}

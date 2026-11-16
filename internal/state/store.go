@@ -76,6 +76,9 @@ type Store struct{ db *sql.DB }
 
 type Token struct {
 	ID      string
+	// ActorID is stable for an OAuth grant; ID is the individual access credential.
+	// A manual Bearer token remains its own actor.
+	ActorID string
 	Role    string
 	Expires time.Time
 	Revoked bool
@@ -364,7 +367,7 @@ func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) 
 	if err != nil {
 		return "", Token{}, err
 	}
-	t := Token{ID: id, Role: role, Expires: time.Now().UTC().Add(ttl)}
+	t := Token{ID: id, ActorID: id, Role: role, Expires: time.Now().UTC().Add(ttl)}
 	_, err = s.db.ExecContext(ctx, "INSERT INTO credentials (id,token_digest,role,expires_at,created_at) VALUES (?,?,?,?,?)", id, DigestToken(raw), role, t.Expires.Unix(), time.Now().Unix())
 	if err != nil {
 		return "", Token{}, err
@@ -385,6 +388,7 @@ func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
 	if err != nil {
 		return Token{}, ErrRevoked
 	}
+	t.ActorID = t.ID
 	t.Expires = time.Unix(expires, 0).UTC()
 	t.Revoked = revoked != 0
 	if t.Revoked || !t.Expires.After(time.Now()) {
@@ -446,10 +450,36 @@ func (s *Store) RequireActiveTokenID(ctx context.Context, tokenID string) error 
 	return nil
 }
 
+// activeCredentialForActor verifies BOTH identities at the durable SQLite boundary.
+// OAuth grants are stable actors but only a currently live, correctly scoped access
+// credential may read or admit work. A manual token is scoped to its own ID.
+// Use the SAME transaction as admission/claim to prevent refresh/revoke races.
+type credentialRowQuery interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func activeCredentialForActor(ctx context.Context, q credentialRowQuery, actorID, tokenID string) (bool, error) {
+	if !validHexID(actorID) || !validHexID(tokenID) {
+		return false, nil
+	}
+	var count int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM credentials c
+		LEFT JOIN oauth_access a ON a.token_id=c.id
+		LEFT JOIN oauth_grants g ON g.id=a.grant_id
+		LEFT JOIN oauth_config cfg ON cfg.id=1
+		WHERE c.id=? AND COALESCE(a.grant_id,c.id)=?
+		  AND c.revoked=0 AND c.expires_at>?
+		  AND (a.grant_id IS NULL OR (g.revoked=0 AND g.role=c.role
+		       AND g.epoch=cfg.epoch AND g.resource=cfg.public_origin||'/mcp'
+		       AND cfg.public_origin!=''))`,
+		tokenID, actorID, time.Now().Unix()).Scan(&count)
+	return count == 1, err
+}
+
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
-	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || a.ActorID != a.TokenID || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
+	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
 		!validRef(a.WorkRef) || !validRef(a.AgentRef) || len(a.ResourceKey) > 192 ||
 		strings.ContainsAny(a.ResourceKey, "\x00\n\r") {
@@ -465,13 +495,20 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		return Receipt{}, err
 	}
 	defer tx.Rollback()
+	active, err := activeCredentialForActor(ctx, tx, a.ActorID, a.TokenID)
+	if err != nil {
+		return Receipt{}, err
+	}
+	if !active {
+		return Receipt{}, ErrRevoked
+	}
 	var found Receipt
 	var priorHash, priorToken string
 	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id,work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID, &found.WorkRef, &found.AgentRef, &found.Action, &found.BoxUUID, &found.Incarnation, &found.ErrorClass, &found.CreatedAt, &found.UpdatedAt)
 	if err == nil {
 		// Omitted optional labels do not erase the original attribution.
 		// Explicitly contradicting a prior label always conflicts.
-		if priorHash != intentHash || priorToken != a.TokenID ||
+		if priorHash != intentHash ||
 			(a.WorkRef != "" && a.WorkRef != found.WorkRef) ||
 			(a.AgentRef != "" && a.AgentRef != found.AgentRef) {
 			return Receipt{}, ErrConflict
@@ -551,14 +588,6 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
-	var active int
-	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", a.TokenID, time.Now().Unix()).Scan(&active)
-	if err != nil {
-		return Receipt{}, err
-	}
-	if active != 1 {
-		return Receipt{}, ErrRevoked
-	}
 	id, err := newID()
 	if err != nil {
 		return Receipt{}, err
@@ -624,19 +653,19 @@ func (s *Store) Claim(ctx context.Context, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	var token, state string
-	if err = tx.QueryRowContext(ctx, "SELECT token_id,state FROM operations WHERE id=?", id).Scan(&token, &state); err != nil {
+	var token, actor, state string
+	if err = tx.QueryRowContext(ctx, "SELECT token_id,actor_id,state FROM operations WHERE id=?", id).Scan(&token, &actor, &state); err != nil {
 		return err
 	}
 	if state != "ADMITTED" {
 		return ErrState
 	}
-	var active int
-	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", token, time.Now().Unix()).Scan(&active); err != nil {
+	active, err := activeCredentialForActor(ctx, tx, actor, token)
+	if err != nil {
 		return err
 	}
 	next, reason := "DISPATCHING", ""
-	if active != 1 {
+	if !active {
 		next, reason = "FAILED", "AUTH_REVOKED_BEFORE_DISPATCH"
 	}
 	now := time.Now().UnixNano()
@@ -649,7 +678,7 @@ func (s *Store) Claim(ctx context.Context, id string) error {
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	if active != 1 {
+	if !active {
 		return ErrRevoked
 	}
 	return nil
