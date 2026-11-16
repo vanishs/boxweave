@@ -2,6 +2,8 @@ package native
 
 import (
 	"os"
+	"errors"
+	"strings"
 	"path/filepath"
 	"testing"
 )
@@ -48,5 +50,21 @@ func TestS3NativeFileTypeClassificationDoesNotFollowLinks(t *testing.T) {
 	}
 	if info, err := os.Lstat(dir); err != nil || guestFileType(info) != "directory" {
 		t.Fatalf("directory changed: %+v %v", info, err)
+	}
+}
+
+func TestS3SFTPReadBudgetCannotDecodeUnboundedDirectory(t *testing.T) {
+	b := &sftpReadBudget{reader: strings.NewReader("123456789"), remaining: 4}
+	buf := make([]byte, 12)
+	n, err := b.Read(buf)
+	if n != 4 || err != nil || string(buf[:n]) != "1234" || b.exhausted.Load() {
+		t.Fatalf("first bounded SFTP packet read: %d %v", n, err)
+	}
+	n, err = b.Read(buf)
+	if n != 0 || !errors.Is(err, ErrNativeUnsupported) || !b.exhausted.Load() {
+		t.Fatalf("wire limit must fail closed without allocating remainder: %d %v", n, err)
+	}
+	if _, _, err := newBoundedSFTPClient(nil, MaxGuestFileListWireBytes); !errors.Is(err, ErrNativeUnsupported) {
+		t.Fatalf("nil underlying connection must fail closed: %v", err)
 	}
 }

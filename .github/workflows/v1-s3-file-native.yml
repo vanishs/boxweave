@@ -90,6 +90,12 @@ jobs:
             mkfifo /tmp/s3-file-native/fifo
             ln -s /tmp/s3-file-native /tmp/s3-file-native-link
             test ! -e /tmp/s3-file-native/race-new
+            mkdir -p /tmp/s3-file-native/many
+            i=0
+            while [ "$i" -lt 6000 ]; do
+              : > "/tmp/s3-file-native/many/entry-$i"
+              i=$((i+1))
+            done
           '
           echo S3_NATIVE_HOSTILE_GUEST_FIXTURES=PASS
       - name: Real official Incus SFTP link, original byte and 12-writer negative oracle
@@ -101,6 +107,7 @@ jobs:
             | tee "$RUNNER_TEMP/s3-file-native.log"
           grep -Fq 'S3_NATIVE_SFTP_12_WRITERS_SINGLE_WINNER_NO_FOREIGN_EFFECT=PASS' "$RUNNER_TEMP/s3-file-native.log"
           grep -Fq 'S3_NATIVE_SFTP_SYMLINK_HARDLINK_FIFO_NO_EFFECT=PASS' "$RUNNER_TEMP/s3-file-native.log"
+          grep -Fq 'S3_NATIVE_SFTP_HUGE_DIRECTORY_BOUNDED_WIRE_BYTES=PASS' "$RUNNER_TEMP/s3-file-native.log"
           sudo incus exec s3-file-native-ci-1115 -- /bin/sh -ec '
             test "$(cat /tmp/s3-file-native/victim)" = S3_ORIGINAL_VICTIM_BYTES_KEEP
             test "$(wc -c < /tmp/s3-file-native/race-new)" -eq 17

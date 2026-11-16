@@ -191,5 +191,25 @@ func TestS3RealIncusSFTPFileNegatives(t *testing.T) {
 	if _, err := c.Lstat(dir + "/missing"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing SFTP target must be recognizable as os.ErrNotExist: %v", err)
 	}
+	// An eager directory enumerator must stop at the incoming native wire
+	// budget instead of allocating a slice for all 6,000 native entries.
+	// Use the official Incus SFTP connection and the same guarded client.
+	conn, err := srv.GetInstanceFileSFTPConn(guest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundedClient, budget, err := newBoundedSFTPClient(conn, 8192)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, readErr = boundedClient.ReadDirContext(ctx, dir+"/many")
+	if readErr == nil || !budget.exhausted.Load() {
+		t.Fatalf("huge native directory was not rejected at wire limit: err=%v remaining=%d", readErr, budget.remaining)
+	}
+	_ = boundedClient.Close()
+	if !bytes.Equal(getBytes(victim), original) {
+		t.Fatal("wire limit refusal affected original Guest bytes")
+	}
+	t.Log("S3_NATIVE_SFTP_HUGE_DIRECTORY_BOUNDED_WIRE_BYTES=PASS")
 	t.Log("S3_NATIVE_SFTP_EXISTING_AND_MISSING_TARGET_TYPES=PASS")
 }

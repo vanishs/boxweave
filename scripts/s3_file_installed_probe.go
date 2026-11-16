@@ -220,6 +220,26 @@ func main() {
 	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base+"/victim"), bytesRead),
 		"authorized Viewer read did not return original Guest bytes")
 	fmt.Println("S3_INSTALLED_FILE_LIST_PAGINATION_ADMIN_VIEWER_READ=PASS")
+	hugeFixture := "mkdir -p /tmp/s3-file-phase2/many; " +
+		"i=0; while [ \"$i\" -lt 6000 ]; do " +
+		": > /tmp/s3-file-phase2/many/entry-$i; i=$((i+1)); done"
+	huge := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-ec", hugeFixture},
+		"idempotency_key": "s3-installed-huge-native-dir-fixture-1115",
+	})
+	hugeID := originalID(huge)
+	await(ctx, admin, hugeID, "SUCCEEDED")
+	hugeExit := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": hugeID, "stream": "stdout", "limit": 512,
+	})
+	hugeCode, hugeKnown := hugeExit["exit_code"].(float64)
+	need(hugeKnown && hugeCode == 0, "large-directory fixture failed in original Guest")
+	need(rejects(ctx, admin, "box_file_list", map[string]any{
+		"box_id": uuid, "path": base + "/many", "limit": 20,
+	}), "SFTP v1 eager huge directory exceeded safety budget but was accepted")
+	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/victim"), bytesRead),
+		"large-directory refusal changed native victim bytes")
+	fmt.Println("S3_INSTALLED_MCP_HUGE_DIRECTORY_READ_BUDGET_FAIL_CLOSED=PASS")
 	for _, bad := range []string{"/proc/self/fd/1", base + "/../victim", base + "/sym"} {
 		need(rejects(ctx, admin, "box_file_read", map[string]any{
 			"box_id": uuid, "path": bad,
