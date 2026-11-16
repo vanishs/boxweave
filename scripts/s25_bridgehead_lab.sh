@@ -213,6 +213,9 @@ assert len(x["box_uuid"]) == 36
 assert len(x["initial_git_commit"]) == 40
 assert len(x["final_git_commit"]) == 40
 assert x["initial_git_commit"] != x["final_git_commit"]
+assert x["final_git_clean"] is True
+for key in ["native_setup_op","native_fail_op","native_fix_op","native_pass_op"]:
+    assert len(x[key]) == 36
 print(x["box_uuid"])
 S3_CP_UUID
 )"
@@ -227,6 +230,10 @@ S3_CP_UUID
     native_git_count="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
       git -C /root/s3-guest-git rev-list --count HEAD)"
     test "$native_git_count" = 2
+    native_git_dirty="$(sudo incus exec s3-file-phase2-ci --project "$project" -- \
+      git -C /root/s3-guest-git status --porcelain)"
+    test -z "$native_git_dirty"
+    echo S3_PHASE3_INDEPENDENT_NATIVE_GIT_WORKTREE_CLEAN=PASS
     python3 - "$BW_S3_PHASE3_CHECKPOINT" "$work/staging/s3-phase3-native-calc.py" \
       "$work/staging/s3-phase3-native-test.py" "$native_git_head" <<'S3_VERIFY_NATIVE'
 import hashlib,json,sys
@@ -237,6 +244,7 @@ assert source == b"def double(value):\n    return value * 2\n"
 assert hashlib.sha256(source).hexdigest() == cp["source_sha256"]
 assert b"self.assertEqual(double(2), 4)" in test_source
 assert sys.argv[4] == cp["final_git_commit"] != cp["initial_git_commit"]
+assert cp["final_git_clean"] is True
 for field in ["setup_op","fail_op","fix_op","pass_op","file_create_op"]:
  assert len(cp[field]) == 32,field
 print("S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS")

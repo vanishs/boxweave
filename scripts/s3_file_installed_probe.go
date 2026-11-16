@@ -161,6 +161,11 @@ type s3GitCheckpoint struct {
 	FileCreateOp     string `json:"file_create_op"`
 	InitialGitCommit string `json:"initial_git_commit"`
 	FinalGitCommit   string `json:"final_git_commit"`
+	FinalGitClean    bool   `json:"final_git_clean"`
+	NativeSetupOp    string `json:"native_setup_op"`
+	NativeFailOp     string `json:"native_fail_op"`
+	NativeFixOp      string `json:"native_fix_op"`
+	NativePassOp     string `json:"native_pass_op"`
 	SourceSHA256     string `json:"source_sha256"`
 }
 
@@ -212,6 +217,8 @@ func loadS3GitCheckpoint() s3GitCheckpoint {
 		len(cp.SetupOp) == 32 && len(cp.FailOp) == 32 && len(cp.FixOp) == 32 &&
 		len(cp.PassOp) == 32 && len(cp.FileCreateOp) == 32 &&
 		len(cp.InitialGitCommit) == 40 && len(cp.FinalGitCommit) == 40 &&
+		cp.FinalGitClean && len(cp.NativeSetupOp) == 36 && len(cp.NativeFailOp) == 36 &&
+		len(cp.NativeFixOp) == 36 && len(cp.NativePassOp) == 36 &&
 		len(cp.SourceSHA256) == 64, "invalid original Git+native UUID checkpoint")
 	return cp
 }
@@ -250,6 +257,20 @@ func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, scrip
 		}
 	}
 	return id, exitCode, stdout, stderr
+}
+
+// Read the original durable Incus ID while the supervised source process
+// still holds the original BoxWeave operation ID. No native redispatch.
+func s3OriginalNativeID(ctx context.Context, admin *mcp.ClientSession, uuid, opID string) string {
+	op := object(call(ctx, admin, "operation_get", map[string]any{
+		"operation_id": opID,
+	}), "operation")
+	need(field(op, "state") == "SUCCEEDED" && field(op, "action") == "box_exec" &&
+		field(op, "box_uuid") == uuid,
+		"initial original Guest Exec receipt lost its Box and action identity")
+	nativeID := field(op, "native_operation_id")
+	need(len(nativeID) == 36, "initial original Guest Exec has no Incus Operation UUID")
+	return nativeID
 }
 
 func gitCommitLine(text, prefix string) string {
@@ -390,7 +411,12 @@ mkdir -p /root/s3-guest-git
 		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
 		SetupOp: setupID, FailOp: failID, FixOp: fixID, PassOp: passID,
 		FileCreateOp: created[0], InitialGitCommit: firstCommit,
-		FinalGitCommit: fixedCommit, SourceSHA256: hex.EncodeToString(sum[:]),
+		FinalGitCommit: fixedCommit, FinalGitClean: true,
+		NativeSetupOp: s3OriginalNativeID(ctx, admin, uuid, setupID),
+		NativeFailOp:  s3OriginalNativeID(ctx, admin, uuid, failID),
+		NativeFixOp:   s3OriginalNativeID(ctx, admin, uuid, fixID),
+		NativePassOp:  s3OriginalNativeID(ctx, admin, uuid, passID),
+		SourceSHA256:  hex.EncodeToString(sum[:]),
 	})
 	fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
 	fmt.Println("S3_PHASE3_GUEST_GIT_FAIL_FIX_PASS_STAGE=PASS")
@@ -401,19 +427,21 @@ func verifyS3GuestGitOriginals(ctx context.Context, admin *mcp.ClientSession) {
 	box := object(call(ctx, admin, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
 	need(field(box, "box_id") == cp.BoxUUID, "fresh MCP client cannot confirm the original native Box")
 	checks := []struct {
-		label, id                  string
+		label, id, nativeID        string
 		wantExit                   int
 		stdoutMarker, stderrMarker string
 	}{
-		{"setup", cp.SetupOp, 0, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, ""},
-		{"deliberate-failure", cp.FailOp, 1, "", "AssertionError: 5 != 4"},
-		{"guest-fix", cp.FixOp, 0, "S3_GIT_REPAIRED_COMMIT=" + cp.FinalGitCommit, ""},
-		{"passing-test", cp.PassOp, 0, "", "Ran 1 test"},
+		{"setup", cp.SetupOp, cp.NativeSetupOp, 0, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, ""},
+		{"deliberate-failure", cp.FailOp, cp.NativeFailOp, 1, "", "AssertionError: 5 != 4"},
+		{"guest-fix", cp.FixOp, cp.NativeFixOp, 0, "S3_GIT_REPAIRED_COMMIT=" + cp.FinalGitCommit, ""},
+		{"passing-test", cp.PassOp, cp.NativePassOp, 0, "", "Ran 1 test"},
 	}
 	for _, check := range checks {
 		op := object(call(ctx, admin, "operation_get", map[string]any{"operation_id": check.id}), "operation")
-		need(field(op, "state") == "SUCCEEDED" && field(op, "native_operation_id") != "",
-			"fresh original Exec receipt missing its proven native completion: "+check.label)
+		need(field(op, "state") == "SUCCEEDED" &&
+			field(op, "native_operation_id") == check.nativeID &&
+			field(op, "box_uuid") == cp.BoxUUID && field(op, "action") == "box_exec",
+			"fresh original Exec does not match its prereboot native ID/Box/action: "+check.label)
 		for _, stream := range []string{"stdout", "stderr"} {
 			out := call(ctx, admin, "operation_output_get", map[string]any{
 				"operation_id": check.id, "stream": stream, "limit": 4096,
