@@ -37,7 +37,7 @@ func TestS3NativeFileTypeClassificationDoesNotFollowLinks(t *testing.T) {
 	if err := os.Symlink("normal", filepath.Join(dir, "link")); err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"normal":"file", "link":"symlink"} {
+	for name, want := range map[string]string{"normal": "file", "link": "symlink"} {
 		info, err := os.Lstat(filepath.Join(dir, name))
 		if err != nil {
 			t.Fatal(err)

@@ -77,12 +77,6 @@ def check_file(name: str, data: bytes) -> list[str]:
         )
         if process.returncode or process.stdout:
             failures.append(f"{name}: gofmt mismatch (run gofmt -w)")
-            if name in {"internal/control/file_tools.go", "internal/native/file.go", "internal/native/file_test.go", "internal/state/file_create_test.go", "internal/state/file_create.go"}:
-                import base64
-                formatted = subprocess.run(["gofmt"], input=data, capture_output=True, cwd=ROOT).stdout
-                encoded = base64.b64encode(formatted).decode("ascii")
-                for i in range(0, len(encoded), 900):
-                    failures.append(f"S3_GO_FMT_CHUNK:{name}:{i // 900}:{encoded[i:i+900]}")
     return failures
 
 

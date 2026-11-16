@@ -16,10 +16,10 @@ func s3OwnedFileFixture(t *testing.T) (*Store, Token, OwnedBox) {
 		t.Fatal(err)
 	}
 	box := OwnedBox{
-		UUID: "c0000000-0000-4000-8000-000000000812",
+		UUID:    "c0000000-0000-4000-8000-000000000812",
 		Project: "s3", Name: "s3-file-box",
 		Incarnation: "c0000000-0000-4000-8000-000000000812",
-		State: "OWNED",
+		State:       "OWNED",
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO owned_boxes
 		(uuid,project,name,incarnation,state,created_at) VALUES (?,?,?,?,?,?)`,

@@ -17,31 +17,31 @@ import (
 // File access stays inside the official Incus instance SFTP endpoint.
 // v1 deliberately does not provide host filesystem paths or a custom agent.
 const (
-	MaxGuestFileBytes = 64 << 10
+	MaxGuestFileBytes   = 64 << 10
 	MaxGuestFileEntries = 4096
 )
 
 var ErrGuestFileExists = errors.New("exclusive guest file already exists; no create performed")
 
 type GuestFileEntry struct {
-	Name  string  `json:"name"`
-	Type  string  `json:"type"`
-	Size  int64   `json:"size"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Size int64  `json:"size"`
 }
 
 type GuestFileListing struct {
-	Entries             []GuestFileEntry  `json:"entries"`
-	NextCursor          string            `json:"next_cursor,omitempty"`
-	ConsistentSnapshot  bool              `json:"consistent_snapshot"`
+	Entries            []GuestFileEntry `json:"entries"`
+	NextCursor         string           `json:"next_cursor,omitempty"`
+	ConsistentSnapshot bool             `json:"consistent_snapshot"`
 }
 
 type GuestFilePage struct {
-	Data        []byte  `json:"-"`
-	Size        int64   `json:"size"`
-	Offset      int64   `json:"offset"`
-	Ended       bool    `json:"ended"`
-	WholeFile   bool    `json:"whole_file"`
-	PageSHA256  string  `json:"page_sha256"`
+	Data       []byte `json:"-"`
+	Size       int64  `json:"size"`
+	Offset     int64  `json:"offset"`
+	Ended      bool   `json:"ended"`
+	WholeFile  bool   `json:"whole_file"`
+	PageSHA256 string `json:"page_sha256"`
 }
 
 // Guest file paths are absolute, byte-bounded and canonical inside the Guest.
@@ -236,8 +236,8 @@ func (r Reader) ReadGuestFile(ctx context.Context, name, uuid, p string, offset 
 	sum := sha256.Sum256(data)
 	out = GuestFilePage{
 		Data: data, Size: before.Size(), Offset: offset,
-		Ended: offset+int64(n) >= before.Size(),
-		WholeFile: offset == 0 && int64(n) == before.Size(),
+		Ended:      offset+int64(n) >= before.Size(),
+		WholeFile:  offset == 0 && int64(n) == before.Size(),
 		PageSHA256: hex.EncodeToString(sum[:]),
 	}
 	return out, nil
