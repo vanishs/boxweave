@@ -186,6 +186,8 @@ func main() {
 	done := await(ctx, admin, createID, "SUCCEEDED")
 	uuid := field(done, "box_uuid")
 	need(len(uuid) >= 32, "new Box native UUID missing")
+	fmt.Println("S3_INSTALLED_BOX_ORIGINAL_OPERATION_ID=" + createID)
+	fmt.Println("S3_INSTALLED_EXACT_NATIVE_BOX_UUID=" + uuid)
 	state := object(call(ctx, admin, "box_get", map[string]any{"box_id": uuid}), "box")
 	need(field(state, "box_id") == uuid && field(state, "native_state") == "Running",
 		"native owned Guest is not running")
@@ -257,6 +259,7 @@ func main() {
 	}
 	receipt := call(ctx, admin, "box_file_apply", apply)
 	operation := originalID(receipt)
+	fmt.Println("S3_INSTALLED_FILE_CREATE_ORIGINAL_OPERATION_ID=" + operation)
 	terminal := await(ctx, admin, operation, "SUCCEEDED")
 	need(field(terminal, "native_operation_id") == "", "fabricated native Operation ID for synchronous SFTP")
 	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/created"), data),

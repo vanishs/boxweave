@@ -130,6 +130,9 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
   export BW_S3_VIEWER_TOKEN_FILE="$work/private/viewer.secret"
   export BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm
   echo "S3_INSTALLED_TEST_SOURCE_SHA=$(git rev-parse HEAD)"
+  installed_bin_sha="$(sudo sha256sum /usr/local/bin/boxweave | awk '{print $1}')"
+  test "$installed_bin_sha" = "$binary_sha"
+  echo "S3_INSTALLED_EXACT_BINARY_SHA256=$installed_bin_sha"
   "$work/staging/s3-file-installed-agent"
   if sudo incus info s3-file-phase2-ci --project "$project" >/dev/null 2>&1; then
     echo S3_INSTALLED_CLEANUP_NATIVE_BOX_STILL_PRESENT >&2
