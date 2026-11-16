@@ -184,6 +184,9 @@ func (s *Service) registerFileTools(server *mcp.Server) {
 			if errors.Is(err, native.ErrGuestFileExists) {
 				return state.PreDispatchError{Class: "SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS"}
 			}
+			if errors.Is(err, native.ErrGuestFilePreDispatchDenied) {
+				return state.PreDispatchError{Class: "SFTP_GUEST_FILE_PREFLIGHT_DENIED"}
+			}
 			return err
 		}
 		if err := s.worker().SubmitGuestFileCreate(rec.ID, box, effect); err != nil {

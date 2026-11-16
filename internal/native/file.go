@@ -23,6 +23,10 @@ const (
 
 var ErrGuestFileExists = errors.New("exclusive guest file already exists; no create performed")
 
+// ErrGuestFilePreDispatchDenied proves SFTP OpenFile was never called.
+// It is safe to finalize a local FAILED receipt without creating UNKNOWN.
+var ErrGuestFilePreDispatchDenied = errors.New("unsafe guest file rejected before SFTP mutation")
+
 type GuestFileEntry struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
@@ -249,15 +253,21 @@ func (r Reader) ReadGuestFile(ctx context.Context, name, uuid, p string, offset 
 // BoxWeave original UNKNOWN. SFTP does not return a native Operation ID.
 func (r Reader) CreateGuestFile(ctx context.Context, name, uuid, p string, data []byte) error {
 	if !SafeGuestFilePath(p) || len(data) > MaxGuestFileBytes {
-		return ErrNativeUnsupported
+		return ErrGuestFilePreDispatchDenied
 	}
 	c, closeClient, err := r.guestSFTP(ctx, name, uuid)
 	if err != nil {
-		return err
+		// No mutating file Open was issued. A failed setup is not UNKNOWN.
+		return ErrGuestFilePreDispatchDenied
 	}
 	defer closeClient()
 	if err = verifyGuestComponents(c, p, "file", true); err != nil {
-		return err
+		if errors.Is(err, ErrGuestFileExists) {
+			return err
+		}
+		// Component Lstat failures, a symlink ancestor, a special file and
+		// an absent parent all occur before the single native O_EXCL Open.
+		return ErrGuestFilePreDispatchDenied
 	}
 	f, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
 	if err != nil {
