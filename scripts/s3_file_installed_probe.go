@@ -316,7 +316,7 @@ command -v python3
 mkdir -p /root/s3-guest-git
 `
 	installScript = strings.ReplaceAll(installScript, "@S3_SCOPED_PROXY@", s3ApprovedPackageProxy())
-		installID, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
+	installID, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
 	if code != 0 {
 		// CI-owned disposable guest only. Keep a bounded diagnostic from
 		// the original native Exec; never redispatch an uncertain command.
