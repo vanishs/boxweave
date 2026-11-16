@@ -568,12 +568,74 @@ echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 bh018_checkpoint="$work/bh018-atomic-original.json"
 test ! -e "$bh018_checkpoint"
+# S4-A only: start THREE independent read-only CLI observers before the
+# first disposable native admission; Incus may expire a final Operation
+# immediately. They read one-use SQLite WAL and native daemon over the
+# restricted service identity's ordinary Incus CLI connection. No replay.
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  test -f scripts/s4_raw_operation_witness.py
+  s4_witness_pids=""
+  for case in create exit126 exit127; do
+    case "$case" in
+      create) key="s2-bh018-atomic-native-create-001" ;;
+      exit126) key="s2-bh018-original-exit-126-001" ;;
+      exit127) key="s2-bh018-original-exit-127-001" ;;
+    esac
+    digest="$(printf %s "$key" | sha256sum | cut -d ' ' -f 1)"
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+      -u XDG_CONFIG_HOME HOME=/home/boxweave \
+      XDG_CONFIG_HOME=/home/boxweave/.config \
+      python3 "$PWD/scripts/s4_raw_operation_witness.py" \
+      --db "$db" --key-digest "$digest" --timeout-seconds 120 \
+      > "$work/s4-raw-$case.json" 2> "$work/s4-raw-$case.redacted.err" &
+    s4_witness_pids="$s4_witness_pids $!"
+  done
+  unset key digest
+fi
 BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
   "$work/s2-bh018-atomic-mcp-probe" start > "$work/bh018-atomic-start.log" 2>&1
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  # Capture witnesses are test-only: do not print bearer tokens, raw stderr,
+  # unmanaged operation messages, or assume that a missing object failed.
+  for p in $s4_witness_pids; do
+    wait "$p" || :
+  done
+  python3 - "$work" <<'S4_RAW_ORIGINAL_CHECK'
+import json
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+seen = []
+for name in ("create", "exit126", "exit127"):
+    with (root / ("s4-raw-" + name + ".json")).open() as stream:
+        result = json.load(stream)
+    original = result.get("original_sqlite") or {}
+    terminal = result.get("native_terminal") or {}
+    if (result.get("observation") == "CAPTURED_TERMINAL"
+            and result.get("original_id_matches") is True
+            and original.get("project")
+            and original.get("native_operation_id") == terminal.get("native_operation_id")
+            and terminal.get("status_code") in (200, 400, 401)):
+        seen.append((name, original, terminal))
+    else:
+        print("S4_A_RAW_NATIVE_" + name.upper() + "=NOT_CAPTURED")
+if not seen:
+    print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=NOT_CAPTURED")
+    sys.exit(4)
+for name, original, native in seen:
+    print("S4_A_NATIVE_RAW_TERMINAL_CASE=" + name
+          + " BW_ID=" + original["operation_id"]
+          + " NATIVE_ID=" + native["native_operation_id"]
+          + " PROJECT=" + original["project"]
+          + " BOX_UUID=" + str(original.get("box_uuid") or "PENDING"))
+    print("S4_A_NATIVE_RAW_TERMINAL_STATUS=" + str(native["status_code"]))
+print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS")
+S4_RAW_ORIGINAL_CHECK
+fi
 # Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
 echo "BH018_MCP_PROJECT=$project"
 grep '^BH018_MCP_' "$work/bh018-atomic-start.log"

@@ -1,0 +1,64 @@
+name: S4-A original grant, atomic lifecycle and raw native evidence (disposable)
+
+on:
+  push:
+    branches:
+      - feat/v1-s4-runtime-integration-20261116
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s4-a-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  s4-a-installed-native:
+    name: s4-a-isolated-incus-76-installed-mcp-raw-verifier
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+      S4_A_RAW_WITNESS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Confirm one-use host, independent native witness and local regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          sh -n scripts/accept_s2_native.sh
+          python3 -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
+          go test -count=1 ./internal/state ./internal/control ./internal/native -run 'TestS4'
+          echo "S4_A_EXACT_HEAD=$GITHUB_SHA"
+          echo S4_A_FOCUSED_SOURCE_AND_WITNESS_CONTRACT=PASS
+      - name: Install nonroot restricted BoxWeave and real Incus 7.6 then witness original raw terminal
+        shell: bash
+        run: |
+          set -euo pipefail
+          logfile="$RUNNER_TEMP/s4-a-isolated-native.redacted.log"
+          if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
+            grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED)' "$logfile" | tail -n 75 || :
+            echo S4_A_INSTALLED_REAL_NATIVE_MCP=FAIL_OR_BLOCKED >&2
+            exit 1
+          fi
+          grep -Fxq 'S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS' "$logfile"
+          grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS' "$logfile"
+          grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS' "$logfile"
+          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$logfile"
+          grep -E '^S4_A_' "$logfile" | tail -n 30
+          echo S4_A_INSTALLED_INCUS_76_RESTRICTED_HTTP_MCP_AND_INDEPENDENT_RAW_TERMINAL=PASS
