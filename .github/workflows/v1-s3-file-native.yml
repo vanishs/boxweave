@@ -41,6 +41,7 @@ jobs:
           grep -Eq '^VERSION_ID="?24[.]04"?$' /etc/os-release
           test ! -e /var/lib/incus
           ! id boxweave >/dev/null 2>&1
+          gofmt -d internal/native/file_native_integration_test.go
           test -z "$(gofmt -l internal/native/file_native_integration_test.go)"
           go test -c -o "$RUNNER_TEMP/s3-file-native-test" ./internal/native
           chmod 0755 "$RUNNER_TEMP/s3-file-native-test"
