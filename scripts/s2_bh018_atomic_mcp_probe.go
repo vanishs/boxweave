@@ -211,12 +211,16 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		// An admitted fresh readback is new, independent work, never a retry
 		// of an uncertain original. Print only its immutable nonsecret ID.
 		fmt.Printf("BH018_MCP_FRESH_ADMITTED_EXIT_%d_BW_ID=%s\n", original.Exit, readID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_TERMINAL_WAIT\n", original.Exit)
 		fresh := poll(ctx, s, readID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_TERMINAL_PASS\n", original.Exit)
 		freshNativeID := getString(fresh, "native_operation_id")
 		require(len(freshNativeID) == 36, "new readback lacks native identity")
 		fmt.Printf("BH018_MCP_READBACK_EXIT_%d_BW_ID=%s NATIVE_ID=%s\n", original.Exit, readID, freshNativeID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_OUTPUT_READ\n", original.Exit)
 		readOutput(ctx, s, readID, "stdout", 0,
 			fmt.Sprintf("BH018_EFFECT_%d\n", original.Exit))
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_OUTPUT_PASS\n", original.Exit)
 		fmt.Printf("BH018_NATIVE_REAL_HTTP_MCP_EXIT_%d_DEDUPE_READBACK_AFTER_RESTART=PASS\n",
 			original.Exit)
 	}
