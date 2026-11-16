@@ -29,6 +29,16 @@ class WitnessTest(unittest.TestCase):
             db.execute("INSERT INTO exec_outputs VALUES (?,?,?)",
                        (self.opid, 127, 0))
 
+    def test_digest_finds_only_the_one_original(self):
+        import hashlib
+        value = "s4-stable-key"
+        hashed = hashlib.sha256(value.encode()).hexdigest()
+        with sqlite3.connect(self.path) as db:
+            db.execute("ALTER TABLE operations ADD COLUMN key_digest TEXT DEFAULT ''")
+            db.execute("UPDATE operations SET key_digest=? WHERE id=?", (hashed, self.opid))
+        self.assertEqual(witness.discover_original(self.path, hashed), self.opid)
+        self.assertIsNone(witness.discover_original(self.path, "0" * 64))
+
     def test_terminal_captured_and_guest_exit_not_inferred(self):
         def native(project, native_id):
             self.assertEqual((project, native_id), ("test-project", self.native_id))

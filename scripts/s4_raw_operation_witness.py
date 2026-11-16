@@ -42,6 +42,18 @@ def journal(db_path, op_id):
         return result
 
 
+def discover_original(db_path, key_digest):
+    """Locate exactly one fresh journal admission by its nonsecret key digest."""
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    with sqlite3.connect(uri, uri=True, timeout=3) as db:
+        matches = db.execute(
+            "SELECT id FROM operations WHERE key_digest=? LIMIT 2", (key_digest,)
+        ).fetchall()
+    # A digest is globally unique for a fresh one-use ledger test fixture.
+    # An ambiguous match must NOT select an arbitrary original.
+    return matches[0][0] if len(matches) == 1 else None
+
+
 def query_original(project, native_id):
     route = "/1.0/operations/" + native_id + "?project=" + quote(project, safe="")
     try:
@@ -113,14 +125,39 @@ def collect(db_path, op_id, seconds, read=journal, native=query_original):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", required=True)
-    parser.add_argument("--operation-id", required=True)
+    original = parser.add_mutually_exclusive_group(required=True)
+    original.add_argument("--operation-id")
+    original.add_argument("--key-digest", help="sha256 of fresh test-only idempotency key")
     parser.add_argument("--timeout-seconds", type=float, default=15)
     args = parser.parse_args()
-    if not HEX32.fullmatch(args.operation_id) or not (0 < args.timeout_seconds <= 120):
-        parser.error("invalid original ID or bounded timeout")
+    if not (0 < args.timeout_seconds <= 120) or (
+            args.operation_id and not HEX32.fullmatch(args.operation_id)) or (
+            args.key_digest and not re.fullmatch(r"[0-9a-f]{64}", args.key_digest)):
+        parser.error("invalid original selector or bounded timeout")
     if not Path(args.db).is_file():
         parser.error("SQLite file unavailable")
-    result = collect(args.db, args.operation_id, args.timeout_seconds)
+    start = time.monotonic()
+    op_id = args.operation_id
+    if args.key_digest:
+        # Start BEFORE the first mutating request. Discover only this new
+        # original by its opaque digest; never dispatch or infer an ID.
+        while time.monotonic() - start < args.timeout_seconds:
+            op_id = discover_original(args.db, args.key_digest)
+            if op_id:
+                break
+            time.sleep(.05)
+    if not op_id:
+        result = {
+            "source": "INDEPENDENT_INCUS_CLI_READ_ONLY",
+            "observation": "NOT_CAPTURED",
+            "reason": "SQLITE_FRESH_ORIGINAL_NOT_DISCOVERED",
+            "original_sqlite": None,
+            "native_terminal": None,
+            "original_id_matches": False,
+        }
+    else:
+        result = collect(args.db, op_id,
+                         max(.01, args.timeout_seconds - (time.monotonic() - start)))
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0 if result["original_id_matches"] else 2
 
