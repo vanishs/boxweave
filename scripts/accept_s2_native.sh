@@ -869,7 +869,15 @@ if [ "$bh018_resume_rc" -ne 0 ]; then
   elif grep -Fq 'BH018_MCP_FAIL: MCP operation_output_get rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OUTPUT_READ_REJECTED'
   elif grep -Fq 'BH018_MCP_FAIL: unexpected stdout for original' "$work/bh018-atomic-resume.log"; then
-    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_GUEST_EFFECT_MARKER_MISMATCH'
+    if grep -Fq 'class=DUPLICATE_EFFECT' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=DUPLICATE_GUEST_EFFECT_MARKER'
+    elif grep -Fq 'class=EMPTY' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=EMPTY_GUEST_EFFECT_MARKER'
+    elif grep -Fq 'class=EXTRA_BYTES' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=EXTRA_GUEST_EFFECT_BYTES'
+    else
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=WRONG_GUEST_EFFECT_MARKER'
+    fi
   elif grep -Fq 'BH018_MCP_FAIL: original guest exit was not retained' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=RECORDED_GUEST_EXIT_MISSING'
   elif grep -Fq 'BH018_MCP_FAIL: new readback lacks native identity' "$work/bh018-atomic-resume.log"; then
@@ -919,6 +927,31 @@ except (sqlite3.Error, OSError):
 S4_BH018_RESTART_INSPECT
   else
     echo "BH018_INSTALLED_FAILURE_FRESH_ORIGINAL_ID=NOT_CAPTURED"
+  fi
+  # Independent admin-native Guest observation for a known, disposable,
+  # exact UUID. Read only a fixed test marker's line count, no output bytes.
+  if grep -Fq 'BH018_MCP_FAIL: unexpected stdout for original' "$work/bh018-atomic-resume.log"; then
+    observed_uuid="$(sudo incus config get bw-s2-bh018-atomic-native volatile.uuid --project "$project" 2>/dev/null || :)"
+    expected_uuid="$(python3 - "$bh018_checkpoint" <<'S4_BH018_EXPECT_UUID'
+import json,sys
+try:
+    print(json.load(open(sys.argv[1]))["box_id"])
+except (OSError,ValueError,KeyError):
+    print("")
+S4_BH018_EXPECT_UUID
+)"
+    if [ -n "$expected_uuid" ] && [ "$expected_uuid" = "$observed_uuid" ]; then
+      for exit_case in 126 127; do
+        if count="$(sudo incus exec bw-s2-bh018-atomic-native --project "$project" -- /bin/sh -c "wc -l < /tmp/bh018-atomic-effect-$exit_case" 2>/dev/null)" &&
+            printf '%s' "$count" | grep -Eq '^[0-9]{1,8}$'; then
+          echo "BH018_INSTALLED_NATIVE_GUEST_MARKER_${exit_case}_LINES=$count"
+        else
+          echo "BH018_INSTALLED_NATIVE_GUEST_MARKER_${exit_case}_LINES=UNAVAILABLE"
+        fi
+      done
+    else
+      echo 'BH018_INSTALLED_NATIVE_GUEST_MARKER_WITNESS=UUID_UNVERIFIED'
+    fi
   fi
   echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
   exit 96

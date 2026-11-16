@@ -6,7 +6,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -90,7 +92,22 @@ func readOutput(ctx context.Context, s *mcp.ClientSession, id, stream string, ex
 	})
 	data, err := base64.StdEncoding.DecodeString(getString(out, "content_base64"))
 	require(err == nil, "base64 output %s: %v", stream, err)
-	require(string(data) == want, "unexpected %s for original %s: %q", stream, id, string(data))
+	if string(data) != want {
+		// Never write raw Guest bytes to CI diagnostic logs. The original
+		// one-effect claim requires exact content, not an optimistic exit code.
+		class := "UNEXPECTED_BYTES"
+		switch {
+		case len(data) == 0:
+			class = "EMPTY"
+		case bytes.Count(data, []byte(want)) > 1:
+			class = "DUPLICATE_EFFECT"
+		case bytes.Contains(data, []byte(want)):
+			class = "EXTRA_BYTES"
+		}
+		hash := sha256.Sum256(data)
+		panic(fmt.Sprintf("BH018_MCP_FAIL: unexpected %s for original %s class=%s expected_len=%d actual_len=%d actual_sha256=%x",
+			stream, id, class, len(want), len(data), hash))
+	}
 	code, ok := out["exit_code"].(float64)
 	require(ok && int(code) == exit, "original guest exit was not retained: %v", out["exit_code"])
 	success, ok := out["command_success"].(bool)
