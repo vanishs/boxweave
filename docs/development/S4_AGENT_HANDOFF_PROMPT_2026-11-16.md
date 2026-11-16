@@ -1,5 +1,7 @@
 # Next Agent prompt — start S4-A in existing PR #153 (2026-11-16)
 
+**Checkpoint 2026-11-16:** This is the historical *start S4-A* implementation prompt. S4-A is now implemented in existing PR #153 but **not signed**; use current HEAD and [actual S4-A lab log](../verification/S4_A_REPEATABLE_LAB_2026-11-16.md) for remaining verification, not a duplicate implementation or another PR.
+
 Copy the following to the next development Agent **as an implementation task**, not merely a planning request.
 
 ---
