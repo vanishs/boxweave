@@ -86,6 +86,57 @@ def query_original(project, native_id):
         return None, "NATIVE_RESPONSE_INVALID"
 
 
+
+def event_terminal(event_path, project, native_id):
+    """Read original terminal seen by a pre-dispatch, project-scoped Incus SDK event listener."""
+    if not event_path:
+        return None
+    last = None
+    try:
+        with Path(event_path).open(encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    item = json.loads(line)
+                except (ValueError, TypeError):
+                    # A partial append is never terminal evidence.
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                if item.get("source") != "INCUS_OPERATION_EVENT_WEBSOCKET":
+                    continue
+                if (item.get("project") != project or
+                        item.get("event_project") not in ("", project) or
+                        item.get("native_operation_id") != native_id):
+                    continue
+                if item.get("status_code") not in (200, 400, 401):
+                    continue
+                digest = item.get("raw_metadata_sha256")
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    continue
+                if not isinstance(item.get("status"), str):
+                    continue
+                if type(item.get("error_present")) is not bool:
+                    continue
+                last = {
+                    "native_operation_id": native_id,
+                    "status_code": item["status_code"],
+                    "status": item["status"],
+                    "error_present": item["error_present"],
+                    "evidence_source": "INCUS_OPERATION_EVENT_WEBSOCKET",
+                    "raw_metadata_sha256": digest,
+                }
+    except OSError:
+        return None
+    return last
+
+
+def query_event_or_original(project, native_id, event_path):
+    observed = event_terminal(event_path, project, native_id)
+    if observed is not None:
+        return observed, None
+    return query_original(project, native_id)
+
+
 def collect(db_path, op_id, seconds, read=journal, native=query_original):
     deadline = time.monotonic() + seconds
     first, observed = None, None
@@ -129,6 +180,7 @@ def main():
     original.add_argument("--operation-id")
     original.add_argument("--key-digest", help="sha256 of fresh test-only idempotency key")
     parser.add_argument("--timeout-seconds", type=float, default=15)
+    parser.add_argument("--events-jsonl", help="pre-dispatch native operation event receipt stream")
     args = parser.parse_args()
     if not (0 < args.timeout_seconds <= 120) or (
             args.operation_id and not HEX32.fullmatch(args.operation_id)) or (
@@ -136,6 +188,8 @@ def main():
         parser.error("invalid original selector or bounded timeout")
     if not Path(args.db).is_file():
         parser.error("SQLite file unavailable")
+    if args.events_jsonl and not Path(args.events_jsonl).is_file():
+        parser.error("native event receipt stream unavailable")
     start = time.monotonic()
     op_id = args.operation_id
     if args.key_digest:
@@ -156,8 +210,12 @@ def main():
             "original_id_matches": False,
         }
     else:
+        native = query_original if not args.events_jsonl else (
+            lambda project, native_id: query_event_or_original(
+                project, native_id, args.events_jsonl))
         result = collect(args.db, op_id,
-                         max(.01, args.timeout_seconds - (time.monotonic() - start)))
+                         max(.01, args.timeout_seconds - (time.monotonic() - start)),
+                         native=native)
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0 if result["original_id_matches"] else 2
 

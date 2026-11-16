@@ -66,5 +66,58 @@ class WitnessTest(unittest.TestCase):
         self.assertEqual(r["observation"], "NOT_CAPTURED")
 
 
+    def test_pre_dispatch_native_event_terminal_exact_id_and_project(self):
+        events = Path(self.dir.name) / "events.jsonl"
+        data = {
+            "source": "INCUS_OPERATION_EVENT_WEBSOCKET",
+            "project": "test-project",
+            "event_project": "test-project",
+            "native_operation_id": self.native_id,
+            "status_code": 400,
+            "status": "Failure",
+            "error_present": True,
+            "raw_metadata_sha256": "c" * 64,
+        }
+        import json
+        events.write_text(json.dumps(data) + "\n", encoding="utf-8")
+        r = witness.collect(
+            self.path, self.opid, 0.05,
+            native=lambda p, i: (witness.event_terminal(events, p, i), None))
+        self.assertEqual(r["observation"], "CAPTURED_TERMINAL")
+        self.assertEqual(r["native_terminal"]["evidence_source"],
+                         "INCUS_OPERATION_EVENT_WEBSOCKET")
+        self.assertEqual(r["native_terminal"]["raw_metadata_sha256"], "c" * 64)
+        self.assertEqual(r["original_sqlite"]["guest_exit_code"], 127)
+
+    def test_foreign_or_corrupt_event_never_fabricates_terminal(self):
+        events = Path(self.dir.name) / "events.jsonl"
+        import json
+        base = {
+            "source": "INCUS_OPERATION_EVENT_WEBSOCKET",
+            "project": "foreign-project",
+            "event_project": "foreign-project",
+            "native_operation_id": self.native_id,
+            "status_code": 200,
+            "status": "Success",
+            "error_present": False,
+            "raw_metadata_sha256": "d" * 64,
+        }
+        invalid = [base, {**base, "project": "test-project"},
+                   {**base, "project": "test-project",
+                    "event_project": "test-project",
+                    "native_operation_id": "f" * 32},
+                   {**base, "project": "test-project",
+                    "event_project": "test-project",
+                    "raw_metadata_sha256": "not-an-event-hash"}]
+        events.write_text("\n".join(json.dumps(v) for v in invalid) + "\n",
+                          encoding="utf-8")
+        self.assertIsNone(witness.event_terminal(events, "test-project", self.native_id))
+        r = witness.collect(
+            self.path, self.opid, 0.01,
+            native=lambda p, i: (witness.event_terminal(events, p, i),
+                                 "NATIVE_NOT_RETAINED_OR_UNAVAILABLE"))
+        self.assertEqual(r["observation"], "NOT_CAPTURED")
+
+
 if __name__ == "__main__":
     unittest.main()
