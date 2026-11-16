@@ -24,6 +24,7 @@ work="$(mktemp -d -p /tmp bw-v1-s2-ghci.XXXXXX)"
 chmod 0711 "$work"
 mkdir -m 0700 "$work/ledger"
 echo "S2_NATIVE_CANDIDATE_SOURCE_SHA=$(git rev-parse HEAD)"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FRESH_RUNNER_PRECHECK"
 
 # CI only: install an exact upstream 7.6 signed package on the pristine
 # disposable VM. Ubuntu 24.04's archive ships 6.0.0, whose bridged NIC does
@@ -62,6 +63,7 @@ sudo systemctl is-active --quiet incus.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 test "$(sudo incus project list --format csv | wc -l)" -eq 1
 sudo incus admin init --auto --storage-backend=dir
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INCUS_76_BASE_READY"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 
 # A real single-use mounted ext4 loop block device (NOT a host-root
@@ -164,6 +166,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.g
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
 if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go
+  echo "S4_A_NATIVE_STAGE=OAUTH_NATIVE_PROBE_COMPILED"
 fi
 chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
@@ -298,6 +301,7 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"
 
 # A second serve on the identical SQLite must be rejected BEFORE it may
 # run Recover() on the original controller's still-live operations.
