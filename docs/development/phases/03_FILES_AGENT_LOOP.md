@@ -1,5 +1,8 @@
 # S3 — Minimal safe Guest File Tools and one supervised Agent smoke
 
+**2026-11-15 current Stage 2 checkpoint:** [real native SFTP + nonroot installed HTTP MCP acceptance](../S3_FILE_TOOLS_PHASE2_NATIVE_ACCEPTANCE_2026-11-15.md) is **SCOPED_PASS** at source 2f51e26e: signed Incus 7.6, exclusive-create 12 concurrent writers, full original native readback, 6,000-file bounded SFTP refusal, Viewer/foreign/links/UNKNOWN negatives and independent cleanup. **Does NOT prove hostile Guest parent-path race or total-process RSS. S3 Phase 3 supervised single-Agent Git failure→fix→pass is NEXT and NOT RUN. S3_MINIMAL_PASS NOT signed.** Earlier phase-1-only status remains historical.
+
+
 **Phase-1 implementation milestone (2026-11-15):** [source+tests checkpoint](../S3_FILE_TOOLS_PHASE1_CODE_CHECKPOINT_2026-11-15.md) in Draft PR #152. All three Tool handlers and SQLite SFTP create receipt code are in the branch, but the **real Incus native File security/race/Agent evidence is still pending** and S3_MINIMAL_PASS is NOT signed. Continue at phase-2 negative native verification/fix, not a second File Tool rewrite.
 
 

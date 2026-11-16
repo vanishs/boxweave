@@ -1,5 +1,8 @@
 # S3 minimal execution kickoff — after scoped S2.5 (2026-11-15)
 
+**Current next task (2026-11-15): S3 Phase 3 single supervised Agent Git FAIL→FIX→PASS** in existing Draft PR #152. Phase 2 is [SCOPED_NATIVE_PASS](S3_FILE_TOOLS_PHASE2_NATIVE_ACCEPTANCE_2026-11-15.md), including true Incus 7.6 bounded 6,000-file and installed HTTP MCP native original-identity checks. A malicious concurrent Guest path-rename/open SFTP v3 race and process-wide memory guarantee are **not** signed. Prior Phase-1/2 TODOs below are historical, not instructions to redo completed work.
+
+
 **Phase-1 code checkpoint (2026-11-15):** The 3 typed File Tools, restricted native Incus SFTP list/read/O_EXCL create, synchronous SFTP SQLite finalization (no invented native Op) and basic tests are now committed to Draft PR #152. [Source and exact unresolved native phase-2 obligations](S3_FILE_TOOLS_PHASE1_CODE_CHECKPOINT_2026-11-15.md). Old step 1 below is an archival entry, NOT an instruction to reimplement tools. **Phase-2 actual native File negatives and phase-3 single-Agent loop have NOT passed.**
 
 
@@ -23,4 +26,4 @@
 
 **S2.5 accepted input:** official L0 RC6 binary/manifest, native 8/8, scoped trusted operator, separate L1 candidate and 5+10 running Boxes; original UNKNOWN locked, unverified quotas and stronger AA/BPF limitations preserved. [Signed host report](../verification/S25_PHYSICAL_HOST_DEV_BASE_POSTFLIGHT_2026-11-15.md).
 
-**Next code task:** safe native Guest file List/Read O_EXCL Create implementation and tests, *not* OAuth actor/schema overhaul. [Full Issue inventory](GITHUB_ISSUE_TRIAGE_2026-11-15.md).
+**Next code task (active):** one real installed *supervised* Agent guest Git failing→fix→passing test with authenticated original Exec exit/output and independent native/source UUID readback; *not* rewriting already accepted File Tools or advancing OAuth refresh/native fault-sweep into S3. [Full Issue inventory](GITHUB_ISSUE_TRIAGE_2026-11-15.md).
