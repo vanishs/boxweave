@@ -178,4 +178,3 @@ func TestS4OAuthViewerHistoryAfterRefreshHTTPMCP(t *testing.T) {
 		}
 	}
 }
-
