@@ -12,10 +12,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"path/filepath"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -148,7 +148,6 @@ func fileBytes(ctx context.Context, s *mcp.ClientSession, uuid, file string) []b
 	need(field(v, "page_sha256") == hex.EncodeToString(sum[:]), "page digest differs from read bytes")
 	return b
 }
-
 
 type s3GitCheckpoint struct {
 	BoxUUID          string `json:"box_uuid"`
@@ -296,9 +295,9 @@ class TestCalc(unittest.TestCase):
 	}{{dir + "/calc.py", wrongSource}, {dir + "/test_calc.py", unitTest}} {
 		r := call(ctx, admin, "box_file_apply", map[string]any{
 			"box_id": uuid, "path": v.path, "mode": "create",
-			"content_base64": base64.StdEncoding.EncodeToString([]byte(v.data)),
+			"content_base64":  base64.StdEncoding.EncodeToString([]byte(v.data)),
 			"idempotency_key": fmt.Sprintf("s3-guest-git-file-create-%d-once", i),
-			"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
+			"work_ref":        "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
 		})
 		id := originalID(r)
 		await(ctx, admin, id, "SUCCEEDED")
