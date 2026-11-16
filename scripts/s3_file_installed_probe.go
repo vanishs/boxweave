@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"path/filepath"
 	"fmt"
 	"net/http"
 	"os"
@@ -148,6 +149,232 @@ func fileBytes(ctx context.Context, s *mcp.ClientSession, uuid, file string) []b
 	return b
 }
 
+
+type s3GitCheckpoint struct {
+	BoxUUID          string `json:"box_uuid"`
+	NativeBoxName    string `json:"native_box_name"`
+	SetupOp          string `json:"setup_op"`
+	FailOp           string `json:"fail_op"`
+	FixOp            string `json:"fix_op"`
+	PassOp           string `json:"pass_op"`
+	FileCreateOp     string `json:"file_create_op"`
+	InitialGitCommit string `json:"initial_git_commit"`
+	FinalGitCommit   string `json:"final_git_commit"`
+	SourceSHA256     string `json:"source_sha256"`
+}
+
+func s3GitCheckpointFile() string {
+	return requiredEnv("BW_S3_PHASE3_CHECKPOINT")
+}
+
+func persistS3GitCheckpoint(data s3GitCheckpoint) {
+	filename := s3GitCheckpointFile()
+	out, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	// Refuse to overwrite a prior incomplete native attempt or adopt a
+	// previous Agent's Box UUID from a different CI run.
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := f.Write(append(out, '
+')); err != nil {
+		panic(err)
+	}
+	if err := f.Sync(); err != nil {
+		panic(err)
+	}
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
+	dir, err := os.Open(filepath.Dir(filename))
+	if err != nil {
+		panic(err)
+	}
+	if err := dir.Sync(); err != nil {
+		panic(err)
+	}
+	_ = dir.Close()
+}
+
+func loadS3GitCheckpoint() s3GitCheckpoint {
+	b, err := os.ReadFile(s3GitCheckpointFile())
+	if err != nil {
+		panic(err)
+	}
+	var cp s3GitCheckpoint
+	if err := json.Unmarshal(b, &cp); err != nil {
+		panic(err)
+	}
+	need(cp.NativeBoxName == "s3-file-phase2-ci" && len(cp.BoxUUID) >= 32 &&
+		len(cp.SetupOp) == 32 && len(cp.FailOp) == 32 && len(cp.FixOp) == 32 &&
+		len(cp.PassOp) == 32 && len(cp.FileCreateOp) == 32 &&
+		len(cp.InitialGitCommit) == 40 && len(cp.FinalGitCommit) == 40 &&
+		len(cp.SourceSHA256) == 64, "invalid original Git+native UUID checkpoint")
+	return cp
+}
+
+func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, script string) (string, int, string, string) {
+	r := call(ctx, admin, "box_exec", map[string]any{
+		"box_id": uuid, "argv": []string{"/bin/sh", "-c", script},
+		"timeout_ms": 180000, "idempotency_key": key,
+		"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
+	})
+	id := originalID(r)
+	// Operation state SUCCEEDED means native Exec completed, NOT guest exit 0.
+	await(ctx, admin, id, "SUCCEEDED")
+	var stdout, stderr string
+	exitCode := -9999
+	for _, stream := range []string{"stdout", "stderr"} {
+		o := call(ctx, admin, "operation_output_get", map[string]any{
+			"operation_id": id, "stream": stream, "limit": 4096,
+		})
+		exit, known := o["exit_code"].(float64)
+		need(known, "original Guest Exec has no independently read exit code")
+		if exitCode != -9999 {
+			need(exitCode == int(exit), "inconsistent original Guest output exit codes")
+		}
+		exitCode = int(exit)
+		b, err := base64.StdEncoding.DecodeString(field(o, "content_base64"))
+		if err != nil {
+			panic(err)
+		}
+		// Hard-bound and never log arbitrary source or secrets.
+		need(len(b) <= 4096, "Guest Exec output exceeded verifier bound")
+		if stream == "stdout" {
+			stdout = string(b)
+		} else {
+			stderr = string(b)
+		}
+	}
+	return id, exitCode, stdout, stderr
+}
+
+func gitCommitLine(text, prefix string) string {
+	for _, line := range strings.Split(text, "
+") {
+		if strings.HasPrefix(line, prefix) {
+			out := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+			if len(out) == 40 && strings.IndexFunc(out, func(c rune) bool {
+				return !strings.ContainsRune("0123456789abcdef", c)
+			}) == -1 {
+				return out
+			}
+		}
+	}
+	panic("original Guest Git commit is absent or invalid: " + prefix)
+}
+
+func runS3GuestGitPhase3(ctx context.Context, admin, viewer *mcp.ClientSession, uuid string) {
+	// One trusted attended Agent; no remote shared repo, network peer Tool
+	// or unsafe File replace. Guest has a native Git working tree.
+	const dir = "/root/s3-guest-git"
+	const wrongSource = "def double(value):
+    return value * 2 + 1
+"
+	const rightSource = "def double(value):
+    return value * 2
+"
+	const unitTest = "import unittest
+from calc import double
+
+class TestCalc(unittest.TestCase):
+    def test_double(self):
+        self.assertEqual(double(2), 4)
+"
+	installScript := "set -eu; if ! command -v git >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then " +
+		"DEBIAN_FRONTEND=noninteractive apt-get update -qq && " +
+		"DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git python3; fi; " +
+		"command -v git; command -v python3; mkdir -p " + dir
+	installID, code, _, _ := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
+	need(code == 0, "Guest git/python prerequisite failed, preserve original "+installID)
+	fmt.Println("S3_PHASE3_GUEST_GIT_PYTHON_NATIVE_PREREQUISITES=PASS")
+	var created []string
+	for i, v := range []struct {
+		path string
+		data string
+	}{{dir + "/calc.py", wrongSource}, {dir + "/test_calc.py", unitTest}} {
+		r := call(ctx, admin, "box_file_apply", map[string]any{
+			"box_id": uuid, "path": v.path, "mode": "create",
+			"content_base64": base64.StdEncoding.EncodeToString([]byte(v.data)),
+			"idempotency_key": fmt.Sprintf("s3-guest-git-file-create-%d-once", i),
+			"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
+		})
+		id := originalID(r)
+		await(ctx, admin, id, "SUCCEEDED")
+		created = append(created, id)
+		need(bytes.Equal(fileBytes(ctx, viewer, uuid, v.path), []byte(v.data)),
+			"Viewer could not independently read original Git source")
+	}
+	fmt.Println("S3_PHASE3_MCP_FILE_EXCLUSIVE_CREATE_TWO_SOURCE_FILES=PASS")
+	setupScript := "set -eu; cd " + dir +
+		"; git init -q; git config user.name 'S3 CI Agent'; " +
+		"git config user.email 's3-agent@example.invalid'; " +
+		"git add calc.py test_calc.py; " +
+		"git commit -q -m 'test: intentionally failing double'; " +
+		"printf 'S3_GIT_INITIAL_COMMIT=%s\n' "$(git rev-parse HEAD)""
+	setupID, setupExit, setupOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-initial-commit-once", setupScript)
+	need(setupExit == 0, "original Git commit setup exited nonzero")
+	firstCommit := gitCommitLine(setupOut, "S3_GIT_INITIAL_COMMIT=")
+	fmt.Println("S3_PHASE3_GIT_ORIGINAL_COMMIT=" + firstCommit)
+	failScript := "cd " + dir + "; python3 -B -m unittest -v test_calc"
+	failID, failExit, _, failErr := s3GuestExec(ctx, admin, uuid, "s3-git-deliberate-failing-test-once", failScript)
+	need(failExit == 1, "deliberate regression must exit exactly 1; native terminal alone is insufficient")
+	need(strings.Contains(failErr, "AssertionError: 5 != 4") &&
+		strings.Contains(failErr, "FAILED"), "original persisted stderr has no actual unittest failure")
+	fmt.Println("S3_PHASE3_GUEST_TEST_FAILED_ORIGINAL_EXIT_ONE=PASS")
+	fmt.Println("S3_PHASE3_GUEST_FAILED_TEST_ORIGINAL_OPERATION_ID=" + failID)
+	// File replace is intentionally UNSUPPORTED; authorized Guest Exec/Git
+	// is the verified safe route to an edit in this trusted supervised Box.
+	fixScript := "set -eu; cd " + dir +
+		"; sed -i 's/return value \* 2 + 1/return value * 2/' calc.py; " +
+		"git add calc.py; git commit -q -m 'fix: double returns exact value'; " +
+		"test "$(git rev-list --count HEAD)" = 2; " +
+		"test -z "$(git status --porcelain)"; " +
+		"printf 'S3_GIT_REPAIRED_COMMIT=%s\n' "$(git rev-parse HEAD)""
+	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
+	need(fixExit == 0, "Guest authorized repair or Git second commit failed")
+	fixedCommit := gitCommitLine(fixOut, "S3_GIT_REPAIRED_COMMIT=")
+	need(fixedCommit != firstCommit, "Git final commit matches deliberately failing original")
+	need(bytes.Equal(fileBytes(ctx, viewer, uuid, dir+"/calc.py"), []byte(rightSource)),
+		"File tool did not return corrected Guest source byte-for-byte")
+	passScript := "cd " + dir + "; python3 -B -m unittest -v test_calc"
+	passID, passExit, _, passErr := s3GuestExec(ctx, admin, uuid, "s3-git-passing-test-original-once", passScript)
+	need(passExit == 0 && strings.Contains(passErr, "Ran 1 test") &&
+		strings.Contains(passErr, "OK"), "original Guest regression was not repaired")
+	fmt.Println("S3_PHASE3_GUEST_REPAIR_GIT_COMMIT_AND_TEST_PASS=PASS")
+	sum := sha256.Sum256([]byte(rightSource))
+	persistS3GitCheckpoint(s3GitCheckpoint{
+		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
+		SetupOp: setupID, FailOp: failID, FixOp: fixID, PassOp: passID,
+		FileCreateOp: created[0], InitialGitCommit: firstCommit,
+		FinalGitCommit: fixedCommit, SourceSHA256: hex.EncodeToString(sum[:]),
+	})
+	fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
+	fmt.Println("S3_PHASE3_GUEST_GIT_FAIL_FIX_PASS_STAGE=PASS")
+}
+
+func cleanupS3GuestGitPhase3(ctx context.Context, admin *mcp.ClientSession) {
+	cp := loadS3GitCheckpoint()
+	// The CI native verifier independently read and compared this original
+	// UUID and source *before* cleanup. No cleanup of unknown old names.
+	original := object(call(ctx, admin, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
+	need(field(original, "box_id") == cp.BoxUUID, "cleanup cannot adopt replacement Box")
+	stop := call(ctx, admin, "box_stop", map[string]any{
+		"box_id": cp.BoxUUID, "idempotency_key": "s3-phase3-verified-native-stop-once",
+	})
+	await(ctx, admin, originalID(stop), "SUCCEEDED")
+	del := call(ctx, admin, "box_delete", map[string]any{
+		"box_id": cp.BoxUUID, "idempotency_key": "s3-phase3-verified-native-delete-once",
+	})
+	await(ctx, admin, originalID(del), "SUCCEEDED")
+	need(rejects(ctx, admin, "box_get", map[string]any{"box_id": cp.BoxUUID}),
+		"original UUID still visible after S3 phase3 cleanup")
+	fmt.Println("S3_PHASE3_MCP_ORIGINAL_GIT_BOX_STOP_DELETE_VERIFIED=PASS")
+}
+
 func main() {
 	if os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
@@ -157,6 +384,14 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
+	if os.Getenv("BW_S3_PHASE3_MODE") == "cleanup" {
+		agent := connect(ctx, "admin", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
+		defer agent.Close()
+		cleanupS3GuestGitPhase3(ctx, agent)
+		return
+	}
+	need(os.Getenv("BW_S3_PHASE3_MODE") == "" ||
+		os.Getenv("BW_S3_PHASE3_MODE") == "stage", "unsupported S3 phase3 verifier mode")
 	admin := connect(ctx, "admin", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
 	defer admin.Close()
 	viewer := connect(ctx, "viewer", requiredEnv("BW_S3_VIEWER_TOKEN_FILE"))
@@ -179,7 +414,7 @@ func main() {
 	const name = "s3-file-phase2-ci"
 	create := map[string]any{
 		"name": name, "cpu": 1, "memory_mib": 1024, "disk_gib": 2,
-		"start": true, "internet": false, "idempotency_key": "s3-file-installed-box-create-1115",
+		"start": true, "internet": os.Getenv("BW_S3_PHASE3_MODE") == "stage", "idempotency_key": "s3-file-installed-box-create-1115",
 	}
 	created := call(ctx, admin, "box_create", create)
 	createID := originalID(created)
@@ -310,6 +545,10 @@ func main() {
 	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/post-denial"), []byte("POST_DENIAL_OK")),
 		"denied Create retained false resource lock")
 	fmt.Println("S3_INSTALLED_MCP_POST_DENIAL_LOCK_RELEASE=PASS")
+	if os.Getenv("BW_S3_PHASE3_MODE") == "stage" {
+		runS3GuestGitPhase3(ctx, admin, viewer, uuid)
+		return
+	}
 	stop := call(ctx, admin, "box_stop", map[string]any{
 		"box_id": uuid, "idempotency_key": "s3-stopped-after-verified-files",
 	})
