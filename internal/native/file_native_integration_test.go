@@ -124,8 +124,8 @@ func TestS3RealIncusSFTPFileNegatives(t *testing.T) {
 	const writers = 12
 	race := path.Join(dir, "race-new")
 	type outcome struct {
-		id int
-		ok bool
+		id  int
+		ok  bool
 		err error
 	}
 	results := make(chan outcome, writers)
