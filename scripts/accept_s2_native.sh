@@ -1395,6 +1395,7 @@ for case in foreign corrupt legacy ambiguous versioned_foreign; do
 done
 echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
 echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_NEW_DISPOSABLE_DB_START"
 
 # Deliberate ACK loss after the REAL Incus server accepts a Create. This
 # does not retry or adopt any historical task; it uses a new independent
@@ -1402,6 +1403,7 @@ echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
 # user/Project. The MITM Unix socket cannot access privileged daemon APIs.
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
 wait "$service_pid" 2>/dev/null || :
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PRIOR_SERVICE_TERMINATED"
 ack_proxy="$work/ledger/ack-proxy.sock"
 ack_marker="$work/ledger/ack-trap.txt"
 ack_db="$work/ledger/ack.sqlite"
@@ -1417,7 +1419,9 @@ until sudo test -S "$ack_proxy" || [ "$attempt" -ge 30 ]; do
   sleep 1
 done
 sudo test -S "$ack_proxy"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PROXY_SOCKET_READY"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" -role admin > "$work/ack-admin.secret"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_ONE_USE_CREDENTIAL_READY"
 chmod 0600 "$work/ack-admin.secret"
 ack_admin="$(sed -n 's/^token=//p' "$work/ack-admin.secret")"
 test -n "$ack_admin"
@@ -1437,8 +1441,10 @@ test "$attempt" -lt 40
 BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_CLIENT_PROBE_PASS"
 sudo grep -Fqx "UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PROXY_NATIVE_ACK_SUPPRESSED_ONCE"
 echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
 
 # Second oracle: independent daemon administrator verifies exactly one
@@ -1453,6 +1459,7 @@ until [ "$attempt" -ge 50 ]; do
   sleep 1
 done
 test -n "$ack_uuid"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_NATIVE_UUID_READY"
 test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
 echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
 # Genuine accepted-but-unbound native Create is an explicit negative Delete
