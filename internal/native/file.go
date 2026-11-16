@@ -193,6 +193,11 @@ func (r Reader) ListGuestFiles(ctx context.Context, name, uuid, p, after string,
 			Name: info.Name(), Type: guestFileType(info), Size: info.Size(),
 		})
 	}
+	// A native name can be deleted/reused during a long SFTP enumeration.
+	// Do not disclose a result if it no longer belongs to the admitted UUID.
+	if _, _, err := r.GetExactBox(ctx, name, uuid); err != nil {
+		return GuestFileListing{}, err
+	}
 	return out, nil
 }
 
@@ -243,6 +248,11 @@ func (r Reader) ReadGuestFile(ctx context.Context, name, uuid, p string, offset 
 		Ended:      offset+int64(n) >= before.Size(),
 		WholeFile:  offset == 0 && int64(n) == before.Size(),
 		PageSHA256: hex.EncodeToString(sum[:]),
+	}
+	// Recheck the exact native Box incarnation at the response boundary;
+	// source name/project checks before SFTP cannot alone prevent reuse.
+	if _, _, err := r.GetExactBox(ctx, name, uuid); err != nil {
+		return GuestFilePage{}, err
 	}
 	return out, nil
 }
@@ -300,6 +310,11 @@ func (r Reader) CreateGuestFile(ctx context.Context, name, uuid, p string, data 
 	expectedDigest := sha256.Sum256(data)
 	if observedDigest != expectedDigest {
 		return ErrUnverified
+	}
+	// Verify UUID again after actual Guest byte readback; no successful
+	// receipt is allowed if the instance was replaced during verification.
+	if _, _, err := r.GetExactBox(ctx, name, uuid); err != nil {
+		return err
 	}
 	return nil
 }
