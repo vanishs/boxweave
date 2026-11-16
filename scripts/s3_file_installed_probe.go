@@ -179,8 +179,7 @@ func persistS3GitCheckpoint(data s3GitCheckpoint) {
 	if err != nil {
 		panic(err)
 	}
-	if _, err := f.Write(append(out, '
-')); err != nil {
+	if _, err := f.Write(append(out, byte(10))); err != nil {
 		panic(err)
 	}
 	if err := f.Sync(); err != nil {
@@ -253,8 +252,7 @@ func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, scrip
 }
 
 func gitCommitLine(text, prefix string) string {
-	for _, line := range strings.Split(text, "
-") {
+	for _, line := range strings.Split(text, string(byte(10))) {
 		if strings.HasPrefix(line, prefix) {
 			out := strings.TrimSpace(strings.TrimPrefix(line, prefix))
 			if len(out) == 40 && strings.IndexFunc(out, func(c rune) bool {
@@ -271,19 +269,19 @@ func runS3GuestGitPhase3(ctx context.Context, admin, viewer *mcp.ClientSession, 
 	// One trusted attended Agent; no remote shared repo, network peer Tool
 	// or unsafe File replace. Guest has a native Git working tree.
 	const dir = "/root/s3-guest-git"
-	const wrongSource = "def double(value):
+	const wrongSource = `def double(value):
     return value * 2 + 1
-"
-	const rightSource = "def double(value):
+`
+	const rightSource = `def double(value):
     return value * 2
-"
-	const unitTest = "import unittest
+`
+	const unitTest = `import unittest
 from calc import double
 
 class TestCalc(unittest.TestCase):
     def test_double(self):
         self.assertEqual(double(2), 4)
-"
+`
 	installScript := "set -eu; if ! command -v git >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then " +
 		"DEBIAN_FRONTEND=noninteractive apt-get update -qq && " +
 		"DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git python3; fi; " +
@@ -314,7 +312,7 @@ class TestCalc(unittest.TestCase):
 		"git config user.email 's3-agent@example.invalid'; " +
 		"git add calc.py test_calc.py; " +
 		"git commit -q -m 'test: intentionally failing double'; " +
-		"printf 'S3_GIT_INITIAL_COMMIT=%s\n' "$(git rev-parse HEAD)""
+		"echo S3_GIT_INITIAL_COMMIT=$(git rev-parse HEAD)"
 	setupID, setupExit, setupOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-initial-commit-once", setupScript)
 	need(setupExit == 0, "original Git commit setup exited nonzero")
 	firstCommit := gitCommitLine(setupOut, "S3_GIT_INITIAL_COMMIT=")
@@ -329,11 +327,11 @@ class TestCalc(unittest.TestCase):
 	// File replace is intentionally UNSUPPORTED; authorized Guest Exec/Git
 	// is the verified safe route to an edit in this trusted supervised Box.
 	fixScript := "set -eu; cd " + dir +
-		"; sed -i 's/return value \* 2 + 1/return value * 2/' calc.py; " +
+		"; sed -i 's/ + 1$//' calc.py; " +
 		"git add calc.py; git commit -q -m 'fix: double returns exact value'; " +
-		"test "$(git rev-list --count HEAD)" = 2; " +
-		"test -z "$(git status --porcelain)"; " +
-		"printf 'S3_GIT_REPAIRED_COMMIT=%s\n' "$(git rev-parse HEAD)""
+		"test $(git rev-list --count HEAD) = 2; " +
+		"test $(git status --porcelain | wc -l) -eq 0; " +
+		"echo S3_GIT_REPAIRED_COMMIT=$(git rev-parse HEAD)"
 	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
 	need(fixExit == 0, "Guest authorized repair or Git second commit failed")
 	fixedCommit := gitCommitLine(fixOut, "S3_GIT_REPAIRED_COMMIT=")
