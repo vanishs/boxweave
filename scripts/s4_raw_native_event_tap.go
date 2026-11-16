@@ -99,15 +99,15 @@ func main() {
 			}
 			sum := sha256.Sum256(event.Metadata)
 			receipt := map[string]any{
-				"source": "INCUS_OPERATION_EVENT_WEBSOCKET",
-				"project": *project,
-				"event_project": event.Project,
+				"source":              "INCUS_OPERATION_EVENT_WEBSOCKET",
+				"project":             *project,
+				"event_project":       event.Project,
 				"native_operation_id": op.ID,
-				"status_code": code,
-				"status": op.Status,
-				"error_present": op.Err != "",
+				"status_code":         code,
+				"status":              op.Status,
+				"error_present":       op.Err != "",
 				"raw_metadata_sha256": hex.EncodeToString(sum[:]),
-				"timestamp_utc": event.Timestamp.UTC().Format(time.RFC3339Nano),
+				"timestamp_utc":       event.Timestamp.UTC().Format(time.RFC3339Nano),
 			}
 			if err := json.NewEncoder(file).Encode(receipt); err != nil {
 				fail("EVENT_RECEIPT_WRITE_FAILED")
