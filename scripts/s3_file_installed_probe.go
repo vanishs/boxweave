@@ -430,13 +430,18 @@ func main() {
 		"ln -s " + base + "/victim " + base + "/sym; " +
 		"ln " + base + "/victim " + base + "/hard; " +
 		"mkfifo " + base + "/fifo; " +
-		"ln -s " + base + " /root/s3-file-phase2-link; echo S3_FIXTURE_READY"
+		"ln -s " + base + " /root/s3-file-phase2-link; " +
+		"test -f " + base + "/victim; sync; echo S3_FIXTURE_READY"
 	e := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-ec", fixture},
 		"idempotency_key": "s3-installed-fixture-one-native-exec-1115",
 	})
 	fixtureID := originalID(e)
-	await(ctx, admin, fixtureID, "SUCCEEDED")
+	fixtureReceipt := await(ctx, admin, fixtureID, "SUCCEEDED")
+	fixtureNativeID := field(fixtureReceipt, "native_operation_id")
+	need(fixtureNativeID != "", "original fixture Exec is missing Incus operation ID")
+	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_BW_OPERATION_ID=" + fixtureID)
+	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_NATIVE_OPERATION_ID=" + fixtureNativeID)
 	out := call(ctx, admin, "operation_output_get", map[string]any{
 		"operation_id": fixtureID, "stream": "stdout", "limit": 4096,
 	})
