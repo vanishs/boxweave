@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -73,8 +74,14 @@ func (w Worker) SubmitGuestFileCreate(id string, box OwnedBox, effect func(conte
 			return
 		}
 		if err := effect(ctx); err != nil {
-			// Even a remote O_EXCL failure may be a lost-response event.
-			// A file present after the call cannot be adopted as ours.
+			var denied PreDispatchError
+			if errors.As(err, &denied) && denied.Class != "" {
+				// Only proven exclusive-target-exists/no native write
+				// is a terminal failure. Never infer this from a timeout.
+				_ = w.Store.FailPreDispatch(context.Background(), id, denied.Class)
+				return
+			}
+			// A lost-response/partial-write is an unknown native effect.
 			reason := "SFTP_CREATE_OUTCOME_UNVERIFIED"
 			_ = w.Store.Unknown(context.Background(), id, "DISPATCHING", reason)
 			return

@@ -180,7 +180,11 @@ func (s *Service) registerFileTools(server *mcp.Server) {
 		// SFTP is synchronous and has no Incus Operation ID. Claim and
 		// finalization are durable; any lost reply/write is kept UNKNOWN.
 		effect := func(eCtx context.Context) error {
-			return s.Native.CreateGuestFile(eCtx, box.Name, box.UUID, in.Path, payload)
+			err := s.Native.CreateGuestFile(eCtx, box.Name, box.UUID, in.Path, payload)
+			if errors.Is(err, native.ErrGuestFileExists) {
+				return state.PreDispatchError{Class: "SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS"}
+			}
+			return err
 		}
 		if err := s.worker().SubmitGuestFileCreate(rec.ID, box, effect); err != nil {
 			return &mcp.CallToolResult{}, rec, errors.Join(err, state.ErrState)
