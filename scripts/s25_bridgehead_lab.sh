@@ -143,18 +143,18 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
       echo S3_PHASE3_ORIGINAL_MCP_FAILURE_NATIVE_READ_ONLY_DIAGNOSTIC
       sudo incus config get s3-file-phase2-ci volatile.uuid --project "$project" || :
       sudo incus exec s3-file-phase2-ci --project "$project" -- /bin/sh -c '
-        if test -d /tmp/s3-file-phase2; then
+        if test -d /root/s3-file-phase2; then
           echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_PRESENT
         else
           echo S3_PHASE3_NATIVE_GUEST_FIXTURE_DIR_MISSING
         fi
-        if test -f /tmp/s3-file-phase2/victim; then
+        if test -f /root/s3-file-phase2/victim; then
           echo S3_PHASE3_NATIVE_GUEST_VICTIM_PRESENT
         else
           echo S3_PHASE3_NATIVE_GUEST_VICTIM_MISSING
         fi
       ' || :
-      sudo incus file pull s3-file-phase2-ci/tmp/s3-file-phase2/victim \
+      sudo incus file pull s3-file-phase2-ci/root/s3-file-phase2/victim \
         "$work/staging/s3-phase3-failed-victim-read-only" --project "$project" || :
       exit 83
     fi

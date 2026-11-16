@@ -424,13 +424,13 @@ func main() {
 	need(field(state, "box_id") == uuid && field(state, "native_state") == "Running",
 		"native owned Guest is not running")
 	fmt.Println("S3_INSTALLED_BOX_CREATE_ORIGINAL_UUID=PASS")
-	base := "/tmp/s3-file-phase2"
+	base := "/root/s3-file-phase2"
 	fixture := "mkdir -p " + base + "; " +
 		"printf S3_PHASE2_VICTIM_LOCKED > " + base + "/victim; " +
 		"ln -s " + base + "/victim " + base + "/sym; " +
 		"ln " + base + "/victim " + base + "/hard; " +
 		"mkfifo " + base + "/fifo; " +
-		"ln -s " + base + " /tmp/s3-file-phase2-link; echo S3_FIXTURE_READY"
+		"ln -s " + base + " /root/s3-file-phase2-link; echo S3_FIXTURE_READY"
 	e := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-ec", fixture},
 		"idempotency_key": "s3-installed-fixture-one-native-exec-1115",
@@ -442,6 +442,12 @@ func main() {
 	})
 	exit, observed := out["exit_code"].(float64)
 	need(observed && exit == 0, "fixture Guest native Exec did not exit 0")
+	output, err := base64.StdEncoding.DecodeString(field(out, "content_base64"))
+	if err != nil {
+		panic(err)
+	}
+	need(bytes.Contains(output, []byte("S3_FIXTURE_READY")),
+		"Guest stdout missing fixture marker despite native exit=0")
 	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_EXEC_EXIT_ZERO=PASS")
 	// Read the fixed native victim before directory enumeration to separate
 	// native file/path visibility from SFTP readdir transport problems.
@@ -459,9 +465,9 @@ func main() {
 	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base+"/victim"), bytesRead),
 		"authorized Viewer read did not return original Guest bytes")
 	fmt.Println("S3_INSTALLED_FILE_LIST_PAGINATION_ADMIN_VIEWER_READ=PASS")
-	hugeFixture := "mkdir -p /tmp/s3-file-phase2/many; " +
+	hugeFixture := "mkdir -p /root/s3-file-phase2/many; " +
 		"i=0; while [ \"$i\" -lt 6000 ]; do " +
-		": > /tmp/s3-file-phase2/many/entry-$i; i=$((i+1)); done"
+		": > /root/s3-file-phase2/many/entry-$i; i=$((i+1)); done"
 	huge := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-ec", hugeFixture},
 		"idempotency_key": "s3-installed-huge-native-dir-fixture-1115",
@@ -524,7 +530,7 @@ func main() {
 	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/victim"), bytesRead),
 		"unsafe file mode modified original Guest bytes")
 	fmt.Println("S3_INSTALLED_VIEWER_AND_UNSUPPORTED_CAS_DENIAL=PASS")
-	for i, path := range []string{base + "/victim", base + "/sym", base + "/hard", base + "/fifo", "/tmp/s3-file-phase2-link/new"} {
+	for i, path := range []string{base + "/victim", base + "/sym", base + "/hard", base + "/fifo", "/root/s3-file-phase2-link/new"} {
 		input := map[string]any{
 			"box_id": uuid, "path": path, "mode": "create",
 			"content_base64":  base64.StdEncoding.EncodeToString([]byte("FORBIDDEN")),
