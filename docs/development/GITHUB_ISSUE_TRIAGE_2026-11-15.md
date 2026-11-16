@@ -24,4 +24,3 @@
 4. **After v1 functional phases/merge:** #121 and #123 remain open legacy operational investigations for a separately authorized original provider/backend reconciliation. They are not approval to operate on unrelated new BoxWeave v1 L0/L1 resources, nor a substitute for S3 recovery fixes.
 
 **Never close on optimism:** original UNKNOWN native operations stay locked; no privileged Incus admin socket, disabling AppArmor, ambiguous automatic DELETE or claiming resource reclamation merely from configured sizes. A scoped S2.5 early-dev PASS does not certify untrusted deep multitenant nesting, hard disk quotas, or physically executed live-host rollback.
-
