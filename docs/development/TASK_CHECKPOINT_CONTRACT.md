@@ -1,3 +1,5 @@
+**2026-11-15 S3 verification refinement:** the disposable supervised Git harness now checkpoints first/second Git commit IDs, `final_git_clean`, the original four BoxWeave IDs **and their native Incus Operation IDs**, plus source SHA-256. Following installed-service restart, a fresh authenticated MCP process compares the same original action/UUID/native IDs and persisted exits; the outer Incus verifier separately checks Git HEAD, file bytes and an empty porcelain worktree. This is bounded **harness evidence**, not a replacement for a real autonomous Agent run, not an authenticated `agent_ref`, and not independent raw Incus daemon terminal-operation capture. [Exact scope](S3_FILE_TOOLS_PHASE3_GIT_ACCEPTANCE_2026-11-15.md).
+
 # Lightweight Agent Task Checkpoint — client-owned handoff contract
 
 **2026-11-15 revised timing:** S3 only captures the minimal Guest Git SHA/dirty state and original Operation IDs in a supervised **single-Agent** evidence row. **Full second-Agent recovery and two-writer revision conflict TC-015/016 are mandatory in S5**; do not ship without their release proof. [Current phase contract](S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md).

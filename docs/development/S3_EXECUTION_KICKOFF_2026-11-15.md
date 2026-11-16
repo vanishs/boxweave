@@ -1,3 +1,5 @@
+**Prompt-compliance audit at 055cc7e0:** real native/installed Git FAIL→FIX→PASS and postrestart original receipt comparison PASS; native CLI now independently proves clean Git worktree. The caller was a deterministic Go MCP harness rather than a live autonomous coding Agent. No separately archived Incus native terminal object exists; distinguish stored original BoxWeave receipts from raw native metadata. [Exact evidence and remaining strict gaps](S3_FILE_TOOLS_PHASE3_GIT_ACCEPTANCE_2026-11-15.md). S3 minimal exit remains pending and #151 OPEN.
+
 **Latest checkpoint:** S3 Phase 3 supervised Guest Git failure→Guest Exec repair→passing test plus restart/fresh-original Operation and independent Incus file/Git verification completed as a [scoped real-native PASS](S3_FILE_TOOLS_PHASE3_GIT_ACCEPTANCE_2026-11-15.md) at tested `3edb8955`. Older “Phase 3 NEXT” lines below are historical. S3 minimal final signoff/merge remains pending; all #148/#151 and original unclassified failure boundaries preserved.
 
 # S3 minimal execution kickoff — after scoped S2.5 (2026-11-15)
