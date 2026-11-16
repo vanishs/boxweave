@@ -162,6 +162,10 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go
+  chmod 0755 "$work/s4-oauth-native-probe"
+fi
 chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
@@ -639,6 +643,1607 @@ fi
 # Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
 echo "BH018_MCP_PROJECT=$project"
 grep '^BH018_MCP_' "$work/bh018-atomic-start.log"
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  s4_box="$(sed -n 's/^BH018_MCP_CREATE_BOX_UUID=\\([^ ]*\\).*$/\\1/p' "$work/bh018-atomic-start.log" | head -n 1)"
+  echo "$s4_box" | grep -Eq '^[0-9a-f-]{36}
+
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+# A runuser/sudo wrapper can exit before its child has released the SQLite
+# serve lock; wait for the exact owned nonroot service, not merely the wrapper.
+attempt=0
+while sudo pgrep -u boxweave -f "^$work/boxweave serve" >/dev/null; do
+  if [ "$attempt" -ge 30 ]; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_STILL_ACTIVE=BLOCKED" >&2
+    exit 92
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+echo "BH018_INSTALLED_NORMAL_RESTART_OLD_SERVICE_EXITED=PASS"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+  -u XDG_CONFIG_HOME HOME=/home/boxweave \
+  XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_NORMAL_RESTART_NOT_READY=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  elif grep -Fqi 'address already in use' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=LISTEN_IN_USE" >&2
+  elif grep -Fqi 'permission denied' "$work/bh018-restarted-service.redacted.log"; then
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=PERMISSION_DENIED" >&2
+  else
+    echo "BH018_INSTALLED_NORMAL_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 93
+fi
+echo "BH018_INSTALLED_NORMAL_RESTART_HTTP_401=PASS"
+# Preserve the one-use client exit status instead of losing it through
+# a negated shell condition. Never print raw stderr, Authorization headers,
+# transport errors, Guest output or secrets in a public CI log.
+bh018_resume_rc=0
+( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
+  "$work/s2-bh018-atomic-mcp-probe" resume ) > "$work/bh018-atomic-resume.log" 2>&1 || bh018_resume_rc=$?
+if [ "$bh018_resume_rc" -ne 0 ]; then
+  echo "BH018_INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE=$bh018_resume_rc"
+  # Emit only fixed, secret-free phase and original-ID witnesses.
+  grep '^BH018_MCP_RESUME_PHASE=' "$work/bh018-atomic-resume.log" | tail -n 16 || :
+  grep '^BH018_MCP_FRESH_ADMITTED_EXIT_' "$work/bh018-atomic-resume.log" || :
+  if grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OPERATION_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=TERMINAL_POLL_TIMEOUT'
+  elif grep -Fq 'BH018_MCP_FAIL: original ' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_TERMINAL_UNVERIFIED'
+  elif grep -Fq 'BH018_MCP_FAIL:' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=OTHER_VERIFIER_ASSERTION'
+  elif [ "$bh018_resume_rc" -eq 137 ]; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=PROCESS_KILLED_137'
+  elif grep -Eq 'fatal error:|runtime: out of memory' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=GO_RUNTIME_ABORT'
+  else
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=UNTYPED_CLIENT_FAILURE'
+  fi
+  echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
+  exit 96
+fi
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_DEDUPE_READBACK_AFTER_RESTART=PASS' "$work/bh018-atomic-resume.log"
+grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh018-atomic-resume.log"
+# Preserve original native IDs and new readback/cleanup IDs in sanitized CI evidence.
+grep '^BH018_MCP_' "$work/bh018-atomic-resume.log"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS"
+
+# Independently kill the exact disposable BoxWeave service WHILE a native
+# guest Exec (whose original native ID is already durably acknowledged) runs.
+# Never restart the native effect; revive ONLY the same SQLite-backed MCP
+# process. Distinct earlier UNKNOWN tasks on any shared host are untouched.
+crash_state="$work/original-crash.json"
+if ! ( BW_S2_CRASH_STATE_FILE="$crash_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" start ) > "$work/crash-start.log" 2>&1; then
+  # Postmortem is read-only, on the exact disposable CI Project. Never
+  # reissue a possibly completed native create, nor touch a shared daemon.
+  cat "$work/crash-start.log"
+  echo "S2_NATIVE_DIAG_FAILED_CRASH_FIXTURE_CREATE"
+  sudo incus list --all-projects --format yaml || :
+  sudo incus config show bw-s2-crash-110b --expanded --project "$project" || :
+  sudo incus info bw-s2-crash-110b --project "$project" || :
+  original_id="$(sed -n 's/.*native_operation_id:\([0-9a-f-]*\).*/\1/p' "$work/crash-start.log" | head -n1)"
+  if [ -n "$original_id" ]; then
+    sudo incus operation show "$original_id" --project "$project" || :
+  fi
+  exit 93
+fi
+cat "$work/crash-start.log"
+test -s "$crash_state"
+
+# The first server now has an ACTUAL in-flight guest Exec with a persisted
+# native operation ID. Try a second serve on its SAME SQLite while it runs.
+# The second process must fail BEFORE startup Recover can rewrite that work.
+if timeout --signal=TERM 8s sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
+  -incus-socket "$socket" -project "$project" -listen 127.0.0.1:18655 > "$work/inflight-duplicate-serve.refusal" 2>&1; then
+  echo "S2_NATIVE_FAIL: concurrent serve adopted live original guest Exec" >&2
+  exit 99
+fi
+grep -Fq "serve already active for this database" "$work/inflight-duplicate-serve.refusal"
+sudo python3 - "$db" "$crash_state" <<'PY'
+import json,sqlite3,sys
+db,original_path=sys.argv[1:]
+with open(original_path) as f:
+    original=json.load(f)
+original_id=original["operation_id"]
+conn=sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3)
+row=conn.execute("SELECT state FROM operations WHERE id=?",(original_id,)).fetchone()
+conn.close()
+if not row or row[0] not in ("VERIFYING","SUCCEEDED"):
+    raise SystemExit("a second serve rewrote a live original operation")
+PY
+echo "S2_NATIVE_DUPLICATE_SERVE_DURING_REAL_EXEC_NO_RECOVERY=PASS"
+
+if ! sudo pkill -KILL -u boxweave -f "^$work/boxweave serve"; then
+  echo "S2_NATIVE_FAIL: exact disposable service process not found for kill" >&2
+  exit 88
+fi
+wait "$service_pid" 2>/dev/null || :
+echo "S2_NATIVE_EXACT_SERVICE_PROCESS_KILLED=PASS"
+
+# Reopen THE SAME journal. The host's native Incus daemon is not restarted,
+# touched, or reconciled by a privileged repair.
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$db" \
+  -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_STATE_FILE="$crash_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+  BW_S2_ADMIN_TOKEN="$admin" "$work/s2-crash-probe" resume
+
+# SECOND ORACLE: The original guest process must have produced exactly ONE
+# marker. A successful operation_get is never enough to prove that. This is
+# a separate administrator-only read of the single-use Incus test daemon.
+crash_uuid="$(python3 - "$crash_state" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))["box_uuid"])
+PY
+)"
+native_uuid="$(sudo incus config get bw-s2-crash-110b volatile.uuid --project "$project")"
+test -n "$native_uuid" && test "$native_uuid" = "$crash_uuid"
+attempt=0
+marker_count=""
+until [ "$attempt" -ge 45 ]; do
+  marker_count="$(sudo incus exec bw-s2-crash-110b --project "$project" -- /bin/sh -c 'wc -l < /tmp/bw-s2-crash-marker' 2>/dev/null || :)"
+  if [ "$marker_count" = 1 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$marker_count" = 1
+echo "S2_NATIVE_CRASH_ORIGINAL_GUEST_EFFECT_EXACTLY_ONCE=PASS"
+
+# The ONE-USE runner owns this exact test instance. Administrator-only test
+# fixture teardown after independent evidence is NOT BoxWeave's remote
+# UNKNOWN unlock and does not change this original journal's UNKNOWN state.
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-crash-110b
+sudo incus stop bw-s2-crash-110b --project "$project"
+sudo incus delete bw-s2-crash-110b --project "$project"
+echo "S2_NATIVE_DISPOSABLE_CRASH_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# Separate administrator's read-only inventory is a SECOND native oracle:
+# after exact delete no guest from this run remains in any Project.
+if [ -n "$(sudo incus list --all-projects --format csv -c n)" ]; then
+  echo "S2_NATIVE_FAIL: original Box still exists after claimed delete" >&2
+  sudo incus list --all-projects
+  exit 87
+fi
+echo "S2_NATIVE_INDEPENDENT_INCUS_POSTREAD_EMPTY=PASS"
+
+# BH-018: kill the actual one-use installed BoxWeave daemon when its
+# original Guest Exec terminal SQLite WAL commit begins. Unlike the earlier
+# separate SQLite helper SIGKILL and already-completed-output restart, this
+# uses the same production FinalizeVerifiedExec path as HTTP MCP box_exec.
+# It starts a NEW named fixture: an unrelated UNKNOWN is never reclaimed.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra \
+  -o "$work/s2-bh018-service-cut.so" scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-bh018-service-cut.so"
+cut_state="$work/bh018-service-cut-original.json"
+cut_arm="$work/ledger/bh018-service-cut-arm"
+cut_witness="$work/ledger/bh018-service-cut-witness"
+test ! -e "$cut_state"
+sudo test ! -e "$cut_arm"
+sudo test ! -e "$cut_witness"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_FSYNC_DB_WAL="$db-wal" BW_S2_FSYNC_ARM_FILE="$cut_arm" \
+  BW_S2_FSYNC_WITNESS_FILE="$cut_witness" BW_S2_FSYNC_CUT_MODE=before \
+  LD_PRELOAD="$work/s2-bh018-service-cut.so" \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-start.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" start > "$work/bh018-service-cut-original.redacted.log" 2>&1
+test -s "$cut_state"
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_COMMIT_CUT'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3) as c:
+    row=c.execute('SELECT state,native_operation_id FROM operations WHERE id=?',
+                  (original['operation_id'],)).fetchone()
+assert row == ('VERIFYING', original['native_operation_id']), (row,original)
+print('BH018_INSTALLED_ORIGINAL_NATIVE_ACK_BEFORE_COMMIT_CUT=PASS')
+print('BH018_INSTALLED_CUT_ORIGINAL_BW_ID='+original['operation_id'])
+print('BH018_INSTALLED_CUT_ORIGINAL_NATIVE_ID='+original['native_operation_id'])
+PY_BH018_COMMIT_CUT
+sudo touch "$cut_arm"
+attempt=0
+until [ "$attempt" -ge 45 ]; do
+  if sudo test -s "$cut_witness"; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$cut_witness"
+wait "$service_pid" 2>/dev/null || :
+sudo rm -f -- "$cut_arm"
+echo 'BH018_INSTALLED_SERVICE_KILLED_DURING_REAL_EXEC_SQLITE_WAL_COMMIT=PASS'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-cut-restarted.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-service-cut-restarted.redacted.log"; then
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  else
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 94
+fi
+echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" resume ) >"$work/bh018-service-cut-resume.redacted.log" 2>&1; then
+  grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-cut-resume.redacted.log" | tail -n 15 || :
+  echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
+  exit 95
+fi
+grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-cut-resume.redacted.log"
+grep -E '^BH018_INSTALLED_WAL_KILL_ATOMIC_(SUCCEEDED|UNKNOWN)_' "$work/bh018-service-cut-resume.redacted.log"
+# An independent sqlite3 read-only oracle must see exactly one of two
+# transactions: all three terminal rows committed OR none (UNKNOWN + lock).
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_ATOMIC_ORACLE'
+import json,sqlite3,sys
+db,checkpoint=sys.argv[1:]
+with open(checkpoint) as f: original=json.load(f)
+oid,native=original["operation_id"],original["native_operation_id"]
+with sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3) as conn:
+    op=conn.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outs=conn.execute("SELECT stdout_path,stderr_path,exit_code FROM exec_outputs WHERE operation_id=?",(oid,)).fetchall()
+    audit=conn.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert op and op[1]==native, (op,native)
+if op[0]=="SUCCEEDED":
+    assert len(outs)==1 and outs[0][2]==0 and audit==1,(outs,audit)
+    prefix="/1.0/instances/bw-s2-bh018-final-cut/logs/exec-output/exec_"+native
+    assert any(outs[0][:2])
+    assert outs[0][0] in ("",prefix+".stdout") and outs[0][1] in ("",prefix+".stderr"),outs
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_ALL_TERMINAL_ROWS_ATOMIC=PASS")
+elif op[0]=="UNKNOWN":
+    assert not outs and audit==0,(outs,audit)
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_NO_PARTIAL_TERMINAL_ROWS=PASS")
+else:
+    raise SystemExit("BH018 WAL SIGKILL recovered invalid/split state: "+op[0])
+print("BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS")
+PY_BH018_ATOMIC_ORACLE
+
+attempt=0
+count=""
+until [ "$attempt" -ge 45 ]; do
+  count="$(sudo incus exec bw-s2-bh018-final-cut --project "$project" -- \
+    /bin/sh -c 'wc -l < /tmp/bw-s2-bh018-final-cut-marker' 2>/dev/null || :)"
+  if [ "$count" = 1 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$count" = 1
+echo 'BH018_INSTALLED_SERVICE_PRECOMMIT_SIGKILL_GUEST_EFFECT_ONCE=PASS'
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-bh018-final-cut
+sudo incus stop bw-s2-bh018-final-cut --project "$project"
+sudo incus delete bw-s2-bh018-final-cut --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo 'BH018_INSTALLED_SERVICE_WAL_COMMIT_SIGKILL_UNKNOWN_LOCK_AND_TEARDOWN=PASS'
+
+# BH-018 separate post-fsync/ACK-loss original terminal, in a distinct
+# one-use named Box and idempotency scope. No earlier UNKNOWN is touched.
+# The test-only interposer SIGKILLs the installed service AFTER the real
+# WAL sync returns, before the normal commit caller receives its ACK.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra \
+  -o "$work/s2-bh018-service-after-cut.so" scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-bh018-service-after-cut.so"
+cut_state="$work/bh018-service-after-cut-original.json"
+cut_arm="$work/ledger/bh018-service-after-cut-arm"
+cut_witness="$work/ledger/bh018-service-after-cut-witness"
+test ! -e "$cut_state"
+sudo test ! -e "$cut_arm"
+sudo test ! -e "$cut_witness"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  BW_S2_FSYNC_DB_WAL="$db-wal" BW_S2_FSYNC_ARM_FILE="$cut_arm" \
+  BW_S2_FSYNC_WITNESS_FILE="$cut_witness" BW_S2_FSYNC_CUT_MODE=after \
+  LD_PRELOAD="$work/s2-bh018-service-after-cut.so" \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-after-cut-start.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_CRASH_VARIANT=bh018-final-wal-cut-after BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" start > "$work/bh018-service-after-cut-original.redacted.log" 2>&1
+test -s "$cut_state"
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_COMMIT_CUT'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True,timeout=3) as c:
+    row=c.execute('SELECT state,native_operation_id FROM operations WHERE id=?',
+                  (original['operation_id'],)).fetchone()
+assert row == ('VERIFYING', original['native_operation_id']), (row,original)
+print('BH018_INSTALLED_ORIGINAL_NATIVE_ACK_BEFORE_POSTSYNC_CUT=PASS')
+print('BH018_INSTALLED_POSTSYNC_CUT_ORIGINAL_BW_ID='+original['operation_id'])
+print('BH018_INSTALLED_POSTSYNC_CUT_ORIGINAL_NATIVE_ID='+original['native_operation_id'])
+PY_BH018_COMMIT_CUT
+sudo touch "$cut_arm"
+attempt=0
+until [ "$attempt" -ge 45 ]; do
+  if sudo test -s "$cut_witness"; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$cut_witness"
+wait "$service_pid" 2>/dev/null || :
+sudo rm -f -- "$cut_arm"
+echo 'BH018_INSTALLED_SERVICE_KILLED_AFTER_REAL_EXEC_SQLITE_WAL_SYNC=PASS'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18650 > "$work/bh018-service-after-cut-restarted.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 40 ]; then
+  echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=BLOCKED" >&2
+  if grep -Fqi 'serve already active for this database' "$work/bh018-service-after-cut-restarted.redacted.log"; then
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=SQLITE_SERVE_LOCK" >&2
+  else
+    echo "BH018_INSTALLED_SERVICE_CUT_RESTART_CLASS=UNCLASSIFIED" >&2
+  fi
+  exit 94
+fi
+echo "BH018_INSTALLED_SERVICE_CUT_RESTART_HTTP_401=PASS"
+# Read-only independent database oracle BEFORE the MCP verifier, so a
+# failed original replay can be classified without touching the claim.
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_POSTSYNC_DIAG'
+import json,sqlite3,sys
+with open(sys.argv[2]) as f: original=json.load(f)
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True,timeout=3) as c:
+    oid=original["operation_id"]
+    row=c.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outputs=c.execute("SELECT COUNT(*) FROM exec_outputs WHERE operation_id=?",(oid,)).fetchone()[0]
+    audits=c.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert row is not None
+print("BH018_INSTALLED_POSTSYNC_SQLITE_REOPEN_STATE="+row[0])
+print("BH018_INSTALLED_POSTSYNC_SQLITE_NATIVE_MATCH="+str(row[1]==original["native_operation_id"]))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_OUTPUT_ROWS="+str(outputs))
+print("BH018_INSTALLED_POSTSYNC_SQLITE_TERMINAL_AUDIT_ROWS="+str(audits))
+PY_BH018_POSTSYNC_DIAG
+if ! ( BW_S2_CRASH_VARIANT=bh018-final-wal-cut-after BW_S2_CRASH_STATE_FILE="$cut_state" \
+  BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" BW_S2_ADMIN_TOKEN="$admin" \
+  "$work/s2-crash-probe" resume ) >"$work/bh018-service-after-cut-resume.redacted.log" 2>&1; then
+  grep -E '^BH018_|^S2_NATIVE_|S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log" | tail -n 15 || :
+  if grep -Fq 'tool box_exec returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=BOX_EXEC_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OPERATION_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'tool operation_output_get returned error' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=OUTPUT_GET_TOOL_ERROR" >&2
+  elif grep -Fq 'S2_CRASH_ACCEPTANCE_FAILED' "$work/bh018-service-after-cut-resume.redacted.log"; then
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=ORIGINAL_ASSERTION" >&2
+  else
+    echo "BH018_INSTALLED_POSTSYNC_MCP_FAIL_CLASS=UNCLASSIFIED" >&2
+  fi
+  echo "BH018_INSTALLED_SERVICE_CUT_RECOVERY_MCP_VERIFIER=BLOCKED" >&2
+  exit 95
+fi
+grep -Fqx 'S2_NATIVE_COMPLETED_OUTPUT_AFTER_SQLITE_RESTART=PASS' "$work/bh018-service-after-cut-resume.redacted.log"
+grep -E '^BH018_INSTALLED_WAL_KILL_ATOMIC_(SUCCEEDED|UNKNOWN)_' "$work/bh018-service-after-cut-resume.redacted.log"
+grep -Fxq 'BH018_INSTALLED_WAL_KILL_ATOMIC_SUCCEEDED_OUTPUT_AND_NEXT_OPERATION=PASS' "$work/bh018-service-after-cut-resume.redacted.log"
+echo 'BH018_INSTALLED_POSTSYNC_ACK_LOST_FULL_COMMIT_RESTORED=PASS'
+# An independent sqlite3 read-only oracle must see exactly one of two
+# transactions: all three terminal rows committed OR none (UNKNOWN + lock).
+sudo python3 - "$db" "$cut_state" <<'PY_BH018_ATOMIC_ORACLE'
+import json,sqlite3,sys
+db,checkpoint=sys.argv[1:]
+with open(checkpoint) as f: original=json.load(f)
+oid,native=original["operation_id"],original["native_operation_id"]
+with sqlite3.connect("file:"+db+"?mode=ro",uri=True,timeout=3) as conn:
+    op=conn.execute("SELECT state,native_operation_id FROM operations WHERE id=?",(oid,)).fetchone()
+    outs=conn.execute("SELECT stdout_path,stderr_path,exit_code FROM exec_outputs WHERE operation_id=?",(oid,)).fetchall()
+    audit=conn.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='VERIFIED_NATIVE_EXEC_TERMINAL'",(oid,)).fetchone()[0]
+assert op and op[1]==native, (op,native)
+if op[0]=="SUCCEEDED":
+    assert len(outs)==1 and outs[0][2]==0 and audit==1,(outs,audit)
+    prefix="/1.0/instances/bw-s2-bh018-after-cut/logs/exec-output/exec_"+native
+    assert any(outs[0][:2])
+    assert outs[0][0] in ("",prefix+".stdout") and outs[0][1] in ("",prefix+".stderr"),outs
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_ALL_TERMINAL_ROWS_ATOMIC=PASS")
+elif op[0]=="UNKNOWN":
+    assert not outs and audit==0,(outs,audit)
+    print("BH018_INSTALLED_WAL_KILL_SQLITE_NO_PARTIAL_TERMINAL_ROWS=PASS")
+else:
+    raise SystemExit("BH018 WAL SIGKILL recovered invalid/split state: "+op[0])
+print("BH018_INSTALLED_WAL_KILL_SQLITE_TERMINAL_OR_UNKNOWN_CROSSCHECK=PASS")
+PY_BH018_ATOMIC_ORACLE
+
+attempt=0
+count=""
+until [ "$attempt" -ge 45 ]; do
+  count="$(sudo incus exec bw-s2-bh018-after-cut --project "$project" -- \
+    /bin/sh -c 'wc -l < /tmp/bw-s2-bh018-after-cut-marker' 2>/dev/null || :)"
+  if [ "$count" = 1 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$count" = 1
+echo 'BH018_INSTALLED_SERVICE_POSTSYNC_SIGKILL_GUEST_EFFECT_ONCE=PASS'
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-bh018-after-cut
+sudo incus stop bw-s2-bh018-after-cut --project "$project"
+sudo incus delete bw-s2-bh018-after-cut --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo 'BH018_INSTALLED_SERVICE_AFTER_WAL_FSYNC_ACKLOSS_RECOVERY=PASS'
+
+# The installed candidate must refuse arbitrary/foreign SQLite histories
+# BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
+# is intentionally constructed independently from the running journal.
+foreign_db="$work/ledger/foreign.sqlite"
+corrupt_db="$work/ledger/corrupt.sqlite"
+legacy_db="$work/ledger/legacy.sqlite"
+ambiguous_db="$work/ledger/ambiguous.sqlite"
+versioned_foreign_db="$work/ledger/versioned-foreign.sqlite"
+sudo runuser -u boxweave -- python3 - "$foreign_db" "$corrupt_db" "$legacy_db" "$ambiguous_db" "$versioned_foreign_db" <<'PY'
+import os,sqlite3,sys
+foreign,corrupt,legacy,ambiguous,versioned_foreign=sys.argv[1:]
+conn=sqlite3.connect(foreign)
+conn.execute("CREATE TABLE foreign_marker (proof TEXT NOT NULL)")
+conn.execute("INSERT INTO foreign_marker VALUES ('do-not-adopt')")
+conn.commit()
+conn.close()
+with open(corrupt,"wb") as f:
+    f.write(b"not a SQLite database; must remain exactly unchanged")
+for path,version,extra_row in ((legacy,0,False),(ambiguous,1,True),(versioned_foreign,1,False)):
+    conn=sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_version(version INTEGER NOT NULL)")
+    conn.execute("INSERT INTO schema_version VALUES (?)",(version,))
+    if extra_row:
+        conn.execute("INSERT INTO schema_version VALUES (1)")
+    if path==versioned_foreign:
+        conn.execute("CREATE TABLE outsider (proof TEXT)")
+    conn.commit()
+    conn.close()
+for path in sys.argv[1:]:
+    os.chmod(path,0o600)
+PY
+for case in foreign corrupt legacy ambiguous versioned_foreign; do
+  case "$case" in
+    foreign) f="$foreign_db" ;;
+    corrupt) f="$corrupt_db" ;;
+    legacy) f="$legacy_db" ;;
+    ambiguous) f="$ambiguous_db" ;;
+    versioned_foreign) f="$versioned_foreign_db" ;;
+  esac
+  before="$(sudo sha256sum "$f" | cut -d' ' -f1)"
+  if sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" doctor -db "$f" \
+      -incus-socket "$socket" -project "$project" > "$work/sqlite-$case.stderr" 2>&1; then
+    echo "S2_NATIVE_FAIL: adopted unauthorized $case SQLite layout" >&2
+    exit 94
+  fi
+  after="$(sudo sha256sum "$f" | cut -d' ' -f1)"
+  if [ "$before" != "$after" ]; then
+    echo "S2_NATIVE_FAIL: foreign SQLite bytes modified during refusal: $case" >&2
+    exit 95
+  fi
+done
+echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
+echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
+
+# Deliberate ACK loss after the REAL Incus server accepts a Create. This
+# does not retry or adopt any historical task; it uses a new independent
+# SQLite ledger, exact disposable original name and the same non-root Incus
+# user/Project. The MITM Unix socket cannot access privileged daemon APIs.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+ack_proxy="$work/ledger/ack-proxy.sock"
+ack_marker="$work/ledger/ack-trap.txt"
+ack_db="$work/ledger/ack.sqlite"
+ack_checkpoint="$work/ack-original.json"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  "$work/s2-ack-loss-proxy" -listen "$ack_proxy" -upstream "$socket" \
+  -marker "$ack_marker" -project "$project" > "$work/ack-proxy.log" 2>&1 &
+proxy_pid=$!
+trap 'kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :; kill "$proxy_pid" 2>/dev/null || :; wait "$proxy_pid" 2>/dev/null || :' EXIT
+attempt=0
+until sudo test -S "$ack_proxy" || [ "$attempt" -ge 30 ]; do
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo test -S "$ack_proxy"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" -role admin > "$work/ack-admin.secret"
+chmod 0600 "$work/ack-admin.secret"
+ack_admin="$(sed -n 's/^token=//p' "$work/ack-admin.secret")"
+test -n "$ack_admin"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/ack-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
+sudo grep -Fqx "UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
+
+# Second oracle: independent daemon administrator verifies exactly one
+# native Box of the original name actually exists. The MCP journal remains
+# UNKNOWN and cannot adopt it merely by this read.
+attempt=0
+ack_uuid=""
+until [ "$attempt" -ge 50 ]; do
+  ack_uuid="$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null || :)"
+  if [ -n "$ack_uuid" ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test -n "$ack_uuid"
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
+# Genuine accepted-but-unbound native Create is an explicit negative Delete
+# boundary: even an independently witnessed UUID cannot authorize adoption.
+BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+
+# Reopen the SAME unknown journal; do not replay the original Create.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/ack-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
+
+# Only this **one-use CI host administrator**, NOT BoxWeave's original
+# UNKNOWN recovery API, deletes the exact known test fixture after native
+# effects were independently witnessed. Leave the SQLite record UNKNOWN.
+# An ACK was intentionally suppressed immediately after HTTP 202; the native
+# Create can still be running when its UUID becomes visible. Inspect Incus
+# asynchronous operations read-only and wait for the REAL native Create to
+# settle before attempting cleanup. Never retry the original MCP mutation.
+attempt=0
+while [ "$attempt" -lt 120 ]; do
+  if sudo incus operation list --project "$project" --format json |
+      python3 -c 'import json,sys; ops=json.load(sys.stdin); sys.exit(0 if len(ops)==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 120 ]; then
+  echo "S2_NATIVE_FAIL: lost-ACK native create still running; cannot safely teardown" >&2
+  sudo incus operation list --project "$project" --format yaml || :
+  sudo incus info bw-s2-ack-native-110d --project "$project" || :
+  exit 96
+fi
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+# Genuine native Create accepted once, its ACK lost, and the original
+# controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
+# SQLite copy; original remains immutable and receives no retry/delete.
+ack_original_id="$(python3 - "$ack_checkpoint" <<'PY_SCRIPT'
+import json,sys
+op=json.load(open(sys.argv[1]))["original_id"]
+assert len(op)==32
+print(op)
+PY_SCRIPT
+)"
+test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")" = "$ack_original_id"
+echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
+ack_copy="$work/ledger/unknown-create-bind-copy"
+sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
+# The original checkpoint belongs to the runner and is deliberately 0600.
+# Give the restricted probe ONLY a new exact byte-copy owned by its UID.
+sudo install -m 0600 -o boxweave -g incus "$ack_checkpoint" "$ack_copy/ack-original.json"
+sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
+import sqlite3,sys
+src,dst=sys.argv[1:]
+with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
+    assert original.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
+    with sqlite3.connect(dst) as copy:
+        original.backup(copy)
+PY_SCRIPT
+sudo chmod 0600 "$ack_copy/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
+  "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
+# This original database remains truly unbound UNKNOWN; the test binding
+# happened ONLY on a disposable standalone copy.
+test "$(sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
+import sqlite3,sys
+db,op=sys.argv[1:]
+with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as c:
+    print(c.execute("SELECT state||':'||box_uuid FROM operations WHERE id=?",(op,)).fetchone()[0])
+PY_SCRIPT
+)" = "UNKNOWN:"
+echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_VERIFIED_BIND_COPY=PASS"
+echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
+sudo incus delete bw-s2-ack-native-110d --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# Same isolated native/proxy service, a separate new Box and request keys.
+# Advance the real native ETag just between S2's GetInstance and
+# UpdateInstance, proving the stale update cannot override newer settings.
+BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" etag
+sudo grep -Fqx "ETAG_FIXTURE_CREATE_FORWARDED" "$ack_marker"
+sudo grep -Fqx "ETAG_RACE_NATIVE_CHANGED_BEFORE_STALE_PUT" "$ack_marker"
+sudo grep -Fqx "ETAG_RACE_ORIGINAL_STALE_PUT_REFUSED" "$ack_marker"
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: stale ETag conflict caused a forbidden second native dispatch" >&2
+  exit 97
+fi
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 4
+test "$(sudo incus config get bw-s2-etag-native-110e user.s2-etag-race --project "$project")" = "native-proxy-race-witness"
+test "$(sudo incus config get bw-s2-etag-native-110e limits.cpu --project "$project")" = 1
+etag_uuid="$(sudo incus config get bw-s2-etag-native-110e volatile.uuid --project "$project")"
+test -n "$etag_uuid"
+echo "S2_NATIVE_STALE_ETAG_UPDATE_REJECTED_ORIGINAL_NATIVE_UNCHANGED=PASS"
+
+# This is independent CI admin teardown, not a BoxWeave recovery. Verify
+# no outstanding native work and only the exact disposable fixture exists.
+attempt=0
+while [ "$attempt" -lt 60 ]; do
+  if sudo incus operation list --project "$project" --format json |
+      python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 60
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-etag-native-110e
+sudo incus delete bw-s2-etag-native-110e --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_STALE_ETAG_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# A distinct newly created, UUID-registered Box receives an actual native
+# Update (If-Match, HTTP 202), but the test proxy drops only the reply after
+# Incus acceptance. Unlike the stale ETag 412 test, the mutation must really
+# change CPU. Only the one-use CI administrator performs independent readback
+# and eventually removes this disposable fixture. No original UNKNOWN replay.
+update_ack_checkpoint="$work/update-ack-original.json"
+BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack
+sudo grep -Fqx "UPDATE_ACK_FIXTURE_CREATE_FORWARDED" "$ack_marker"
+sudo grep -Fqx "UPDATE_ACK_NATIVE_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: accepted Update ACK loss caused a forbidden second dispatch" >&2
+  exit 98
+fi
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 6
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-update-ack-native-110f
+update_ack_uuid="$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")"
+test -n "$update_ack_uuid"
+attempt=0
+until [ "$attempt" -ge 90 ]; do
+  if [ "$(sudo incus config get bw-s2-update-ack-native-110f limits.cpu --project "$project" 2>/dev/null || :)" = 2 ] &&
+      sudo incus operation list --project "$project" --format json |
+        python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 90 ]; then
+  echo "S2_NATIVE_FAIL: native accepted Update did not settle with CPU=2" >&2
+  exit 99
+fi
+test "$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")" = "$update_ack_uuid"
+echo "S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_REAL_NATIVE_READBACK=PASS"
+
+# Restart with the exact same SQLite and original unknown Update. Every
+# replay is read-only: neither the old accepted request nor any new key may
+# generate another native PUT for this name.
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/update-ack-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack_resume
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 6
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: Update retransmitted after same-SQLite restart" >&2
+  exit 100
+fi
+test "$(sudo incus config get bw-s2-update-ack-native-110f volatile.uuid --project "$project")" = "$update_ack_uuid"
+test "$(sudo incus config get bw-s2-update-ack-native-110f limits.cpu --project "$project")" = 2
+sudo incus delete bw-s2-update-ack-native-110f --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_UPDATE_ACCEPTED_LOST_ACK_FIXTURE_ADMIN_TEARDOWN=PASS"
+
+# ACK DELIVERED but the first exact native postcondition GET is refused by
+# the one-use restricted socket proxy AFTER the genuine 202. BoxWeave must
+# preserve the originally acknowledged native operation ID and UNKNOWN lock.
+postread_checkpoint="$work/postread-original.json"
+BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread
+for event in POSTREAD_FIXTURE_CREATE_FORWARDED POSTREAD_NATIVE_UPDATE_202_ACK_DELIVERED POSTREAD_AFTER_NATIVE_ACK_INSTANCE_GET_REFUSED_ONCE; do
+  sudo grep -Fqx "$event" "$ack_marker"
+done
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 9
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: postread fault retransmitted Update" >&2
+  exit 101
+fi
+test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-update-postread-native-110g
+postread_uuid="$(sudo incus config get bw-s2-update-postread-native-110g volatile.uuid --project "$project")"
+test -n "$postread_uuid"
+attempt=0
+until [ "$attempt" -ge 90 ]; do
+  if [ "$(sudo incus config get bw-s2-update-postread-native-110g limits.cpu --project "$project" 2>/dev/null || :)" = 2 ] &&
+      sudo incus operation list --project "$project" --format json |
+        python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin))==0 else 1)'; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 90
+echo "S2_NATIVE_UPDATE_RECEIVED_ACK_LOST_POSTREAD_NATIVE_EFFECT_CONFIRMED=PASS"
+
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
+  -incus-socket "$ack_proxy" -project "$project" \
+  -listen 127.0.0.1:18652 > "$work/postread-restarted-service.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18652/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
+  BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+  BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread_resume
+test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 9
+test "$(sudo incus config get bw-s2-update-postread-native-110g volatile.uuid --project "$project")" = "$postread_uuid"
+test "$(sudo incus config get bw-s2-update-postread-native-110g limits.cpu --project "$project")" = 2
+if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
+  echo "S2_NATIVE_FAIL: postread uncertainty bypassed original lock" >&2
+  exit 102
+fi
+sudo incus delete bw-s2-update-postread-native-110g --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_UPDATE_POSTREAD_UNKNOWN_RESTART_AND_TEARDOWN=PASS"
+
+# Independent actual guest recorded-output quota exhaustion, on the same
+# specially created 4GiB ext4 Project Quota mount. Never fill host root.
+# This is a SECOND, unique, untracked CI-only Incus fixture, created only
+# after all main MCP/SQLite/native replay tests have finished and cleaned.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+quota_name="bw-s2-quota-native-110h"
+quota_uuid=""
+s2_quota_native() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_QUOTA_PROJECT="$project" BW_S2_QUOTA_SOCKET="$socket" \
+    BW_S2_QUOTA_UUID="$quota_uuid" "$work/s2-native-guest-quota" "$1"
+}
+s2_quota_native create > "$work/quota-guest-create.txt"
+quota_uuid="$(sed -n 's/^S2_NATIVE_QUOTA_GUEST_UUID=//p' "$work/quota-guest-create.txt")"
+echo "$quota_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")" = "$quota_uuid"
+
+# Wait for read-only guest shell readiness, never retry a native mutation.
+ready=0
+for attempt in $(seq 1 40); do
+  if sudo incus exec "$quota_name" --project "$project" -- /bin/true >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+test "$ready" -eq 1
+s2_quota_native seed > "$work/quota-guest-seed.txt"
+grep -Fqx "S2_NATIVE_QUOTA_SPOOL_SEEDED=PASS" "$work/quota-guest-seed.txt"
+
+native_quota_spool="$(printf '/var/lib/incus/containers/%s_%s/exec-output' "$project" "$quota_name")"
+sudo test -d "$native_quota_spool"
+test "$(sudo stat -Lc '%d' "$native_quota_spool")" = "$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+test "$(sudo stat -Lc '%d' "$native_quota_spool")" != "$(sudo stat -Lc '%d' /)"
+sudo lsattr -p -d "$native_quota_spool"
+quota_state_url="/1.0/storage-pools/bw-s2-native-pool/volumes/container/$quota_name/state?project=$project"
+sudo incus query "$quota_state_url" > "$work/quota-guest-before.json"
+quota_values="$(python3 - "$work/quota-guest-before.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+v=v.get("metadata",v)["usage"]
+print(int(v["used"]),int(v["total"]))
+PY
+)"
+quota_used="$(printf '%s\n' "$quota_values" | awk '{print $1}')"
+quota_limit="$(printf '%s\n' "$quota_values" | awk '{print $2}')"
+test "$quota_limit" -eq 2147483648
+test "$quota_used" -gt 10485760
+quota_headroom=50331648
+quota_fill_bytes=$((quota_limit - quota_used - quota_headroom))
+test "$quota_fill_bytes" -gt 1073741824
+physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+test "$physical_available" -gt $((quota_fill_bytes + 268435456))
+host_available_before_fill="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_available_before_fill" -gt $((quota_fill_bytes + 4294967296))
+quota_filler="$native_quota_spool/.boxweave-s2-guest-quota-filler"
+sudo test ! -e "$quota_filler"
+sudo timeout 30s setpriv --bounding-set=-sys_resource --nnp -- \
+  fallocate -l "$quota_fill_bytes" "$quota_filler"
+sudo incus query "$quota_state_url" > "$work/quota-guest-filled.json"
+quota_used_filled="$(python3 - "$work/quota-guest-filled.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$quota_used_filled" -gt $((quota_limit - 100663296))
+test "$quota_used_filled" -le "$quota_limit"
+echo "S2_NATIVE_GUEST_EXEC_QUOTA_NEAR_LIMIT_PRECONDITION=PASS"
+
+# This original Incus operation is dispatched ONCE by the test-only native
+# SDK helper. It tries to record 128MiB with only ~48MiB of quota left.
+s2_quota_native flood > "$work/quota-guest-flood.txt"
+quota_exec_id="$(sed -n 's/^S2_NATIVE_QUOTA_OP_ID=//p' "$work/quota-guest-flood.txt")"
+echo "$quota_exec_id" | grep -Eq '^[0-9a-f-]{36}$'
+grep -Fq 'S2_NATIVE_QUOTA_OP_STATUS=' "$work/quota-guest-flood.txt"
+grep -Fq 'S2_NATIVE_QUOTA_OP_STATUS_CODE=' "$work/quota-guest-flood.txt"
+# Only original Incus native status, operation ID and observed guest exit;
+# no auth material, guest output or arbitrary host paths are logged.
+cat "$work/quota-guest-flood.txt"
+quota_stdout="$(printf '%s/exec_%s.stdout' "$native_quota_spool" "$quota_exec_id")"
+sudo test -f "$quota_stdout"
+quota_stdout_bytes="$(sudo stat -c '%s' "$quota_stdout")"
+echo "S2_NATIVE_GUEST_QUOTA_PARTIAL_STDOUT_BYTES=$quota_stdout_bytes"
+test "$quota_stdout_bytes" -gt 0
+test "$quota_stdout_bytes" -lt 134217728
+# Native quota recovery may briefly overlap Incus's accounting refresh.
+# A failed read is NOT proof of safe quota; bounded read-only retries leave
+# the original native Exec, SQLite and output files completely untouched.
+quota_read_pass=0
+for quota_attempt in 1 2 3 4; do
+  if sudo incus query "$quota_state_url" > "$work/quota-guest-after-output.json"; then
+    quota_read_pass=1
+    break
+  fi
+  echo "S2_NATIVE_GUEST_QUOTA_STATE_TRANSIENT_READ_FAIL_ATTEMPT=$quota_attempt"
+  sleep 1
+done
+if [ "$quota_read_pass" -ne 1 ]; then
+  echo "S2_NATIVE_FAIL: actual native post-quota used/total unavailable" >&2
+  exit 121
+fi
+quota_used_output="$(python3 - "$work/quota-guest-after-output.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+echo "S2_NATIVE_GUEST_QUOTA_USAGE_AFTER_OUTPUT_BYTES=$quota_used_output"
+echo "S2_NATIVE_GUEST_QUOTA_VERIFIED_LIMIT_BYTES=$quota_limit"
+if [ "$quota_used_output" -gt "$quota_limit" ]; then
+  echo "S2_NATIVE_FAIL: actual native quota usage exceeded real limit" >&2
+  exit 122
+fi
+echo "S2_NATIVE_REAL_GUEST_RECORDED_EXEC_QUOTA_PARTIAL_OUTPUT=PASS"
+
+# Remove only the unique quota-test filler, NEVER original native
+# stdout/stderr or an unresolved task. Independently confirm recovered space.
+sudo rm -f -- "$quota_filler"
+sudo test ! -e "$quota_filler"
+sudo incus query "$quota_state_url" > "$work/quota-guest-reclaimed.json"
+quota_used_reclaimed="$(python3 - "$work/quota-guest-reclaimed.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$quota_used_reclaimed" -lt $((quota_used_output - quota_fill_bytes / 2))
+test "$(sudo incus config get "$quota_name" volatile.uuid --project "$project")" = "$quota_uuid"
+sudo incus delete --force "$quota_name" --project "$project"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_NATIVE_GUEST_QUOTA_SPACE_RECOVERED_AND_FIXTURE_REMOVED=PASS"
+
+# FINAL S2 native fault witness must pass the public BoxWeave MCP Tool,
+# original SQLite journal, 16MiB output-get and exact guest-exit semantics,
+# not merely a separate direct native SDK call. Entirely new Box/ledger.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+mkdir -m 0700 "$work/mcp-quota-ledger"
+sudo chown boxweave:incus "$work/mcp-quota-ledger"
+mcp_quota_db="$work/mcp-quota-ledger/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" token-create -db "$mcp_quota_db" -role admin > "$work/mcp-quota-admin.secret"
+chmod 0600 "$work/mcp-quota-admin.secret"
+mcp_quota_token="$(sed -n 's/^token=//p' "$work/mcp-quota-admin.secret")"
+test -n "$mcp_quota_token"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-quota-server.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+mcp_quota_uuid=""
+s2_mcp_quota() {
+  BW_S2_MCP_QUOTA_URL="http://127.0.0.1:18656/mcp" \
+    BW_S2_MCP_QUOTA_TOKEN="$mcp_quota_token" \
+    BW_S2_MCP_QUOTA_UUID="$mcp_quota_uuid" \
+    BW_S2_MCP_QUOTA_ORIGINAL_ID="${mcp_original:-}" \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    "$work/s2-mcp-quota-probe" "$1"
+}
+mcp_quota_name="bw-s2-mcp-quota-110i"
+s2_mcp_quota create > "$work/mcp-quota-create.txt"
+mcp_quota_uuid="$(sed -n 's/^S2_MCP_QUOTA_BOX_UUID=//p' "$work/mcp-quota-create.txt")"
+echo "$mcp_quota_uuid" | grep -Eq '^[0-9a-f-]{36}$'
+test "$(sudo incus config get "$mcp_quota_name" volatile.uuid --project "$project")" = "$mcp_quota_uuid"
+mcp_ready=0
+for attempt in $(seq 1 40); do
+  if sudo incus exec "$mcp_quota_name" --project "$project" -- /bin/true >/dev/null 2>&1; then
+    mcp_ready=1
+    break
+  fi
+  sleep 1
+done
+test "$mcp_ready" -eq 1
+s2_mcp_quota seed > "$work/mcp-quota-seed.txt"
+grep -Fqx "S2_MCP_QUOTA_SEED_RECORDED=PASS" "$work/mcp-quota-seed.txt"
+
+mcp_spool="$(printf '/var/lib/incus/containers/%s_%s/exec-output' "$project" "$mcp_quota_name")"
+sudo test -d "$mcp_spool"
+test "$(sudo stat -Lc '%d' "$mcp_spool")" = "$(sudo stat -Lc '%d' "$work/mounted/native-pool")"
+mcp_state_url="/1.0/storage-pools/bw-s2-native-pool/volumes/container/$mcp_quota_name/state?project=$project"
+sudo incus query "$mcp_state_url" > "$work/mcp-quota-before.json"
+mcp_quota_values="$(python3 - "$work/mcp-quota-before.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+v=v.get("metadata",v)["usage"]
+print(int(v["used"]),int(v["total"]))
+PY
+)"
+mcp_used="$(printf '%s\n' "$mcp_quota_values" | awk '{print $1}')"
+mcp_limit="$(printf '%s\n' "$mcp_quota_values" | awk '{print $2}')"
+test "$mcp_limit" -eq 2147483648
+test "$mcp_used" -gt 10485760
+mcp_fill_bytes=$((mcp_limit - mcp_used - 50331648))
+test "$mcp_fill_bytes" -gt 1073741824
+physical_available="$(df -B1 --output=avail "$work/mounted" | tail -n1 | tr -d ' ')"
+host_available="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$physical_available" -gt $((mcp_fill_bytes + 268435456))
+test "$host_available" -gt $((mcp_fill_bytes + 4294967296))
+mcp_filler="$mcp_spool/.boxweave-s2-public-mcp-quota-filler"
+sudo test ! -e "$mcp_filler"
+sudo timeout 30s setpriv --bounding-set=-sys_resource --nnp -- \
+  fallocate -l "$mcp_fill_bytes" "$mcp_filler"
+echo "S2_MCP_QUOTA_NEAR_LIMIT_SAFE_MOUNT=PASS"
+
+s2_mcp_quota flood > "$work/mcp-quota-flood.txt"
+grep -Fqx "S2_MCP_QUOTA_GUEST_EXIT_ONE_PUBLIC_OUTPUT=PASS" "$work/mcp-quota-flood.txt"
+mcp_original="$(sed -n 's/^S2_MCP_QUOTA_OPERATION_ID=//p' "$work/mcp-quota-flood.txt")"
+mcp_native="$(sed -n 's/^S2_MCP_QUOTA_NATIVE_ID=//p' "$work/mcp-quota-flood.txt")"
+echo "$mcp_original" | grep -Eq '^[0-9a-f]{32}$'
+echo "$mcp_native" | grep -Eq '^[0-9a-f-]{36}$'
+mcp_output_file="$(printf '%s/exec_%s.stdout' "$mcp_spool" "$mcp_native")"
+sudo test -f "$mcp_output_file"
+mcp_output_bytes="$(sudo stat -c '%s' "$mcp_output_file")"
+echo "S2_MCP_QUOTA_PHYSICAL_STDOUT_BYTES=$mcp_output_bytes"
+test "$mcp_output_bytes" -gt 16777216
+test "$mcp_output_bytes" -lt 134217728
+# At the hard native quota edge, the independent storage-state GET can
+# transiently fail or lag behind ext4 quota accounting. Retry ONLY this
+# read-only query, never Exec/native mutation or the original MCP operation.
+# Persistent over-limit or unreadable state still FAILS closed.
+mcp_after=""
+mcp_after_read_attempts=0
+for mcp_read_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  mcp_after_read_attempts="$mcp_read_attempt"
+  if sudo incus query "$mcp_state_url" > "$work/mcp-quota-after.json" 2> "$work/mcp-quota-after.last-error"; then
+    mcp_after="$(python3 - "$work/mcp-quota-after.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)" || mcp_after=""
+    case "$mcp_after" in
+      ''|*[!0-9]*) mcp_after="" ;;
+    esac
+    if [ -n "$mcp_after" ] && [ "$mcp_after" -le "$mcp_limit" ]; then
+      break
+    fi
+  fi
+  sleep 0.3
+done
+echo "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES=${mcp_after:-UNREADABLE}"
+echo "S2_MCP_QUOTA_POSTEXEC_LIMIT_BYTES=$mcp_limit"
+echo "S2_MCP_QUOTA_POSTEXEC_READ_ATTEMPTS=$mcp_after_read_attempts"
+if [ -z "$mcp_after" ] || [ "$mcp_after" -gt "$mcp_limit" ]; then
+  echo "S2_MCP_FAIL: bounded read-only native quota accounting not within its exact limit" >&2
+  cat "$work/mcp-quota-after.last-error" >&2 || :
+  exit 97
+fi
+echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
+
+# The one-use test has already independently verified the exact immutable
+# native operation and stdout path. Delete only its ORIGINAL stdout through
+# the project-scoped official Incus API; do not delete stderr or foreign logs.
+# This is an independent deliberate log-loss negative, NOT automatic GC.
+sudo incus query -X DELETE "/1.0/instances/$mcp_quota_name/logs/exec-output/exec_$mcp_native.stdout?project=$project"   > "$work/mcp-quota-native-log-delete.json"
+sudo test ! -f "$mcp_output_file"
+s2_mcp_quota missing > "$work/mcp-quota-native-missing.txt"
+grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_TYPED_UNAVAILABLE=PASS'   "$work/mcp-quota-native-missing.txt"
+echo "S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY=PASS"
+
+# Remove only disposable quota preallocation, preserve original logs until
+# public MCP cleanup removes the verified exact UUID, never an UNKNOWN Box.
+sudo rm -f -- "$mcp_filler"
+sudo test ! -e "$mcp_filler"
+sudo incus query "$mcp_state_url" > "$work/mcp-quota-reclaimed.json"
+mcp_reclaimed="$(python3 - "$work/mcp-quota-reclaimed.json" <<'PY'
+import json,sys
+v=json.load(open(sys.argv[1]))
+print(int(v.get("metadata",v)["usage"]["used"]))
+PY
+)"
+test "$mcp_reclaimed" -lt $((mcp_after - mcp_fill_bytes / 2))
+# 7-day retention real Incus/MCP proof on a new disposable original.
+retention_op=""
+retention_native=""
+s2_gc() {
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    BW_S2_GC_DB="$mcp_quota_db" BW_S2_GC_TOKEN="$mcp_quota_token" \
+    BW_S2_GC_PROJECT="$project" BW_S2_GC_UUID="$mcp_quota_uuid" \
+    BW_S2_GC_OPERATION="$retention_op" BW_S2_GC_NATIVE="$retention_native" \
+    BW_S2_GC_SOCKET="$socket" "$work/s2-exec-gc-probe" "$1"
+}
+s2_gc create > "$work/s2-gc-original.txt"
+grep -Fqx "S2_GC_PUBLIC_FRESH_BOTH_STREAMS=PASS" "$work/s2-gc-original.txt"
+retention_op="$(sed -n 's/^S2_GC_ORIGINAL_ID=//p' "$work/s2-gc-original.txt")"
+retention_native="$(sed -n 's/^S2_GC_NATIVE_ID=//p' "$work/s2-gc-original.txt")"
+echo "$retention_op" | grep -Eq '^[0-9a-f]{32}$'
+echo "$retention_native" | grep -Eq '^[0-9a-f-]{36}$'
+for stream in stdout stderr; do
+  sudo test -f "$mcp_spool/exec_$retention_native.$stream"
+done
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+s2_gc_nonroot() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_GC_DB="$mcp_quota_db" BW_S2_GC_TOKEN="$mcp_quota_token" \
+    BW_S2_GC_PROJECT="$project" BW_S2_GC_UUID="$mcp_quota_uuid" \
+    BW_S2_GC_OPERATION="$retention_op" BW_S2_GC_NATIVE="$retention_native" \
+    BW_S2_GC_SOCKET="$socket" "$work/s2-exec-gc-probe" "$1"
+}
+s2_gc_nonroot age > "$work/s2-gc-age.txt"
+grep -Fqx "S2_GC_SEVEN_DAYS_NOT_PREMATURELY_EXPIRED=PASS" "$work/s2-gc-age.txt"
+s2_gc_nonroot sweep > "$work/s2-gc-sweep.txt"
+grep -Fqx "S2_GC_NATIVE_7D_TWO_STREAMS_DELETE_AUDIT_404_NO_REPLAY=PASS" "$work/s2-gc-sweep.txt"
+for stream in stdout stderr; do
+  sudo test ! -f "$mcp_spool/exec_$retention_native.$stream"
+done
+echo "S2_GC_INDEPENDENT_PHYSICAL_TWO_NATIVE_LOGS_REMOVED=PASS"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-retention-restart.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+s2_gc check > "$work/s2-gc-public-expired.txt"
+grep -Fqx "S2_GC_PUBLIC_ORIGINAL_TWO_STREAMS_EXPIRED=PASS" "$work/s2-gc-public-expired.txt"
+echo "S2_GC_APPROVED_SEVEN_DAY_COMPLETE_NATIVE_MCP_CYCLE=PASS"
+
+
+# New independent original on this exact disposable owned Box. Incus really
+# deletes original stdout, but the test proxy suppresses only the HTTP ACK.
+# Never replay a native DELETE or silently delete the surviving stderr.
+s2_gc create-loss > "$work/s2-gc-loss-original.txt"
+grep -Fqx "S2_GC_PUBLIC_FRESH_BOTH_STREAMS=PASS" "$work/s2-gc-loss-original.txt"
+retention_op="$(sed -n 's/^S2_GC_ORIGINAL_ID=//p' "$work/s2-gc-loss-original.txt")"
+retention_native="$(sed -n 's/^S2_GC_NATIVE_ID=//p' "$work/s2-gc-loss-original.txt")"
+echo "$retention_op" | grep -Eq '^[0-9a-f]{32}$'
+echo "$retention_native" | grep -Eq '^[0-9a-f-]{36}$'
+for stream in stdout stderr; do
+  sudo test -f "$mcp_spool/exec_$retention_native.$stream"
+done
+sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
+wait "$service_pid" 2>/dev/null || :
+s2_gc_nonroot age > "$work/s2-gc-loss-age.txt"
+grep -Fqx "S2_GC_SEVEN_DAYS_NOT_PREMATURELY_EXPIRED=PASS" "$work/s2-gc-loss-age.txt"
+gc_socket="$work/ledger/gc-delete-proxy.sock"
+gc_marker="$work/ledger/gc-native-delete.txt"
+sudo runuser -u boxweave -- env GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+  "$work/s2-gc-delete-proxy" -listen "$gc_socket" -upstream "$socket" \
+  -marker "$gc_marker" -project "$project" -native-id "$retention_native" \
+  > "$work/gc-delete-proxy.redacted.log" 2>&1 &
+gc_proxy_pid=$!
+attempt=0
+until sudo test -S "$gc_socket" || [ "$attempt" -ge 30 ]; do
+  attempt=$((attempt+1))
+  sleep 1
+done
+sudo test -S "$gc_socket"
+real_socket="$socket"
+socket="$gc_socket"
+s2_gc_nonroot lossy-sweep > "$work/s2-gc-loss-sweep.txt"
+socket="$real_socket"
+grep -Fqx "S2_GC_REAL_NATIVE_DELETE_ACK_LOSS_REVIEW_REQUIRED_SIBLING_LOCKED=PASS" "$work/s2-gc-loss-sweep.txt"
+sudo grep -Fqx "GC_EXACT_NATIVE_STDOUT_DELETE_ACCEPTED_ACK_SUPPRESSED" "$gc_marker"
+sudo test ! -e "$gc_marker.unexpected"
+sudo test ! -f "$mcp_spool/exec_$retention_native.stdout"
+sudo test -f "$mcp_spool/exec_$retention_native.stderr"
+echo "S2_GC_REAL_NATIVE_DELETE_ACK_LOST_ORIGINAL_NOT_REPLAYED=PASS"
+kill "$gc_proxy_pid" 2>/dev/null || :
+wait "$gc_proxy_pid" 2>/dev/null || :
+# Direct-ledger fixture teardown, NOT proof of installed root CLI recovery.
+sh scripts/s2_exec_gc_installed_review.sh "$work" "$mcp_quota_db" "$project" "$socket" \
+  "$retention_op" "$retention_native" "$mcp_quota_uuid"
+s2_gc_nonroot release-test-fixture > "$work/s2-gc-loss-reviewed.txt"
+grep -Fqx "S2_GC_DISPOSABLE_LEDGER_REVIEW_RELEASE_NO_NATIVE_RETRY=PASS" "$work/s2-gc-loss-reviewed.txt"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" serve -db "$mcp_quota_db" -incus-socket "$socket" -project "$project" \
+  -listen 127.0.0.1:18656 > "$work/mcp-gc-loss-restart.redacted.log" 2>&1 &
+service_pid=$!
+attempt=0
+until [ "$attempt" -ge 40 ]; do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18656/mcp 2>/dev/null)" = 401 ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+test "$attempt" -lt 40
+s2_gc loss-check > "$work/s2-gc-loss-public.txt"
+grep -Fqx "S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS" "$work/s2-gc-loss-public.txt"
+echo "S2_GC_LOST_NATIVE_DELETE_ACK_SAME_SQLITE_RESTART_NO_FALSE_EXPIRY=PASS"
+
+s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
+grep -Fqx "S2_MCP_QUOTA_EXACT_BOX_DELETED=PASS" "$work/mcp-quota-cleanup.txt"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S2_MCP_QUOTA_FINAL_NATIVE_INVENTORY_EMPTY=PASS"
+
+# Disposable test-only LD_PRELOAD wrapper kills the exact SQLite WAL fsync
+# (before or just after the real syscall) during NativeAck.Commit on a
+# wholly separate, single-actor SQLite database. No native dispatch here:
+# the actual Incus post-acceptance ACK-loss proof is a different real gate.
+command -v cc >/dev/null
+cc -shared -fPIC -O2 -std=gnu11 -Wall -Wextra -o "$work/s2-fsync-cut.so" \
+  scripts/s2_sqlite_fsync_cut.c -ldl
+chmod 0755 "$work/s2-fsync-cut.so"
+for phase in before after; do
+  test -z "$(sudo incus list --all-projects --format csv -c n)"
+  fsync_dir="$work/fsync-$phase/fsync-ledger"
+  mkdir -p "$fsync_dir"
+  chmod 0700 "$fsync_dir"
+  sudo chown boxweave:incus "$fsync_dir"
+  fsync_db="$fsync_dir/ledger.sqlite"
+  fsync_arm="$fsync_dir/arm"
+  fsync_witness="$fsync_dir/sync-triggered"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    > "$work/fsync-$phase-admin.secret"
+  chmod 0600 "$work/fsync-$phase-admin.secret"
+  fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
+  test -n "$fsync_token"
+  s2_fsync() {
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+      GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+      HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+      BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_TOKEN="$fsync_token" \
+      BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$fsync_arm" \
+      "$work/s2-sqlite-fsync-probe" "$1"
+  }
+  s2_fsync prepare > "$work/fsync-$phase-prepare.txt"
+  grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/fsync-$phase-prepare.txt"
+  test ! -e "$fsync_arm"
+  test ! -e "$fsync_witness"
+  set +e
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$fsync_db" BW_S2_FSYNC_DB_WAL="$fsync_db-wal" \
+    BW_S2_FSYNC_TOKEN="$fsync_token" BW_S2_FSYNC_PROJECT="$project" \
+    BW_S2_FSYNC_ARM_FILE="$fsync_arm" BW_S2_FSYNC_WITNESS_FILE="$fsync_witness" \
+    BW_S2_FSYNC_CUT_MODE="$phase" LD_PRELOAD="$work/s2-fsync-cut.so" \
+    "$work/s2-sqlite-fsync-probe" ack > "$work/fsync-$phase-kill.redacted.txt" 2>&1
+  fsync_exit=$?
+  set -e
+  test "$fsync_exit" -ne 0
+  sudo grep -Fqx 'ORIGINAL_SQLITE_WAL_FSYNC_CUT_ACTUALLY_TRIGGERED' "$fsync_witness"
+  s2_fsync verify > "$work/fsync-$phase-verify.txt"
+  grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+    "$work/fsync-$phase-verify.txt"
+  if [ "$phase" = before ]; then
+    echo "S2_SQLITE_WAL_FSYNC_BEFORE_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  else
+    echo "S2_SQLITE_WAL_FSYNC_AFTER_REAL_KILL_UNKNOWN_NO_REPLAY=PASS"
+  fi
+done
+
+# A separate ~128MiB ext4 loop device supplies an actual SQLite FULL
+# fault: unlike WAL SIGKILL, this NativeAck cannot durably write while
+# free space is exhausted. The guest/Incus native effects are never
+# re-dispatched; the original is only a controller-local journal fixture.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+host_space="$(df -B1 --output=avail / | tail -n1 | tr -d ' ')"
+test "$host_space" -gt 8589934592
+sqlite_full_backing="$work/s2-sqlite-full-loop.img"
+truncate -s 128M "$sqlite_full_backing"
+sqlite_full_loop="$(sudo losetup --find --show "$sqlite_full_backing")"
+sudo mkfs.ext4 -F -q "$sqlite_full_loop"
+sqlite_full_dir="$work/sqlite-full/fsync-ledger"
+mkdir -p "$sqlite_full_dir"
+sudo mount -t ext4 -o nodev,nosuid "$sqlite_full_loop" "$sqlite_full_dir"
+sudo chown boxweave:incus "$sqlite_full_dir"
+sudo chmod 0700 "$sqlite_full_dir"
+test "$(sudo stat -Lc '%d' "$sqlite_full_dir")" != "$(stat -Lc '%d' /)"
+sqlite_full_db="$sqlite_full_dir/ledger.sqlite"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+  "$work/boxweave" token-create -db "$sqlite_full_db" -role admin \
+  > "$work/sqlite-full-admin.secret"
+chmod 0600 "$work/sqlite-full-admin.secret"
+sqlite_full_token="$(sed -n 's/^token=//p' "$work/sqlite-full-admin.secret")"
+test -n "$sqlite_full_token"
+s2_sqlite_full() {
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    BW_S2_FSYNC_DB="$sqlite_full_db" BW_S2_FSYNC_TOKEN="$sqlite_full_token" \
+    BW_S2_FSYNC_PROJECT="$project" BW_S2_FSYNC_ARM_FILE="$sqlite_full_dir/unused" \
+    "$work/s2-sqlite-fsync-probe" "$1"
+}
+s2_sqlite_full prepare > "$work/sqlite-full-prepare.txt"
+grep -Eq '^S2_FSYNC_ORIGINAL_OPERATION_ID=[0-9a-f]{32}$' "$work/sqlite-full-prepare.txt"
+s2_sqlite_full diskfull > "$work/sqlite-full-native-ack.txt"
+grep -Fqx 'S2_SQLITE_REAL_SEPARATE_EXT4_DISK_FULL_NATIVE_ACK_REFUSED=PASS' "$work/sqlite-full-native-ack.txt"
+sudo test -f "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo rm -f -- "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+sudo test ! -e "$sqlite_full_dir/.s2-sqlite-diskfull-only-filler"
+s2_sqlite_full verify > "$work/sqlite-full-verify.txt"
+grep -Fqx "S2_SQLITE_WAL_FSYNC_REAL_KILL_UNKNOWN_NO_REPLAY=PASS" \
+  "$work/sqlite-full-verify.txt"
+sudo umount "$sqlite_full_dir"
+sudo losetup -d "$sqlite_full_loop"
+echo "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY=PASS"
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+sh scripts/s2_p0_native_sqlite_fault.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_stop_delete_fault.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_token_inflight.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_operation_list_boundary.sh "$work" "$project" "$socket"
+# This separate test-only Go overlay adds ONE post-RegisterCreatedBox COMMIT
+# pause in an independently compiled disposable binary, without altering
+# the original release candidate used by the complete native suite. Unlike
+# prior GDB source-line experiments, its exact post-bind boundary is
+# verified by independent SQLite + Incus before 12 real MCP Deletes.
+# A failure is a real required CI failure, not an invented S2 PASS.
+sh scripts/s2_p1_native_create_delete_overlap.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_two_controllers.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_private_read_inflight.sh "$work" "$project" "$socket"
+sh scripts/s2_p1_bound_create_receipt_fault.sh "$work" "$project" "$socket"
+sh scripts/s2_p2_malformed_exec_fault.sh "$work" "$project" "$socket"
+sh scripts/s2_p2_alternate_pool.sh "$work" "$project" "$socket"
+echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
+# S2's historical isolated RFC2544 198.18.0.2 simulated WAN is
+# intentionally run against its ORIGINAL legacy S2 native fixture. The
+# S2.5 policy explicitly denies RFC2544 private-style external targets
+# and is separately accepted through the exact-source nested installed
+# v1 MCP + real IPv4/public and routed simulated IPv6 TLS packet gate.
+# No native Guest can be left running while changing these ACL rules.
+test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo S25_S2_LEGACY_SIMWAN_SEPARATE_FROM_HARDENED_ACL=PASS
+# S2.5's *separate* native prerequisite review rejects an empty ACL:
+# Internet=true otherwise permits routed access to OTHER native Projects.
+# This is a disposable, empty single-use project. Do not backport these
+# global-fixture commands into shared/physical-host native acceptance.
+if [ "$(printenv S25_NATIVE_PREREQ_PROBE 2>/dev/null || true)" = true ]; then
+  owned_net="incusbr-$(id -u boxweave)"
+  v4="$(sudo incus network get "$owned_net" ipv4.address | cut -d/ -f1)"
+  v6="$(sudo incus network get "$owned_net" ipv6.address | cut -d/ -f1)"
+  test -n "$v4"
+  # Incus rules are prioritized reject BEFORE allow, regardless of list
+  # order. Carve exactly one native gateway /32 and /128 from rejected
+  # private ranges; an "allow gateway" overlapping a reject is ineffective.
+  python3 - "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_GATEWAY_CARVE_OUT'
+import ipaddress,sys
+blocked4="0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4"
+blocked6="fc00::/7,::1/128"
+def carve(source, gateway):
+    out=[]
+    target=ipaddress.ip_address(gateway) if gateway not in ("","none") else None
+    for raw in source.split(","):
+        net=ipaddress.ip_network(raw)
+        if target is None or target not in net:
+            out.append(net)
+        else:
+            out.extend(net.address_exclude(ipaddress.ip_network(str(target)+("/32" if target.version==4 else "/128"))))
+    for n in out:
+        assert target not in n if target is not None else True
+    return ",".join(str(x) for x in out)
+open(sys.argv[1],"w").write(carve(blocked4,sys.argv[2])+"\n"+carve(blocked6,sys.argv[3])+"\n")
+S25_GATEWAY_CARVE_OUT
+  denied_v4="$(sed -n '1p' "$work/s25-native-private-cidrs.txt")"
+  denied_v6="$(sed -n '2p' "$work/s25-native-private-cidrs.txt")"
+  test -n "$denied_v4" && test -n "$denied_v6"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v4" \
+    --description "Deny routed private and reserved IPv4 networks except exact bridge gateway"
+  sudo incus network acl rule add bw-s2-native-acl egress \
+    action=reject state=enabled destination="$denied_v6" \
+    --description "Deny routed ULA IPv6 except gateway, preserve link-local RA"
+  # Native readback of the persisted disjoint private rules.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-egress-acl.json"
+  python3 - "$work/s25-native-egress-acl.json" "$work/s25-native-private-cidrs.txt" "$v4" "$v6" <<'S25_NATIVE_ACL_V'
+import ipaddress,json,sys
+a=json.load(open(sys.argv[1]))
+rules=a["egress"]
+approved=open(sys.argv[2]).read().splitlines()
+assert len(rules)==2,rules
+assert [x["action"] for x in rules]==["reject","reject"],rules
+assert [x["state"] for x in rules]==["enabled","enabled"],rules
+assert [x["destination"] for x in rules]==approved,rules
+for i,gw in enumerate(sys.argv[3:]):
+    if gw in ("","none"):
+        continue
+    address=ipaddress.ip_address(gw)
+    assert all(address not in ipaddress.ip_network(prefix) for prefix in approved[i].split(","))
+S25_NATIVE_ACL_V
+  echo S25_NATIVE_EXCLUSIVE_ACL_PRIVATE_ROUTED_EGRESS_DENY=PASS
+fi
+# S2.5 exact hardened-ACL native preflight on the now-EMPTY one-use
+# Project. This readback does not count as a live Guest packet witness:
+# the separately installed exact-source S2.5 L0/L1/L2 LAB must verify it.
+# The older S2 RFC2544 benchmark WAN simulator runs BEFORE hardening, so
+# its positive control is not mislabeled as S2.5 private-route evidence.
+if [ "${S25_NATIVE_PREREQ_PROBE:-}" = true ]; then
+  # Independent native-authority evidence for a failed prerequisite:
+  # JSON-only, no tokens, no SQLite, no secret files. This does not
+  # substitute for or bypass the subsequent product preflight.
+  sudo incus query /1.0/network-acls/bw-s2-native-acl > "$work/s25-native-final-acl.json"
+  sudo incus query "/1.0/networks/$owned_net" > "$work/s25-native-final-network.json"
+  python3 - "$work/s25-native-final-acl.json" "$work/s25-native-final-network.json" \
+    "$work/s25-native-private-cidrs.txt" "$project" <<'S25_FINAL_ROOT_NATIVE_CROSSCHECK'
+import hashlib,ipaddress,json,sys,urllib.parse
+acl,net=(json.load(open(x)) for x in sys.argv[1:3])
+cidrs=open(sys.argv[3]).read().splitlines()
+owned=sys.argv[4]
+refs=acl.get("used_by",[])
+def reference_allowed(ref):
+    u=urllib.parse.urlparse(ref)
+    return (u.path.startswith("/1.0/profiles/") or u.path.startswith("/1.0/instances/")) and \
+        urllib.parse.parse_qs(u.query)=={"project":[owned]} and not u.fragment
+ref_ok=bool(refs) and any(r==f"/1.0/profiles/default?project={owned}" for r in refs) and all(reference_allowed(r) for r in refs)
+egress=acl.get("egress",[])
+cidr_equal=len(egress)==2 and [r.get("destination") for r in egress]==cidrs
+expected_descriptions=["Deny routed private and reserved IPv4 networks except exact bridge gateway",
+                       "Deny routed ULA IPv6 except gateway, preserve link-local RA"]
+rule_shapes= len(egress)==2 and all(
+    r.get("action")=="reject" and r.get("state")=="enabled" and
+    r.get("description")==expected_descriptions[i] and
+    all(r.get(k,"")=="" for k in ("source","protocol","source_port","destination_port","icmp_type","icmp_code"))
+    for i,r in enumerate(egress))
+print("S25_NATIVE_FINAL_NATIVE_ACL_REFS="+json.dumps(refs))
+print("S25_NATIVE_FINAL_NATIVE_ACL_EXCLUSIVE="+str(ref_ok))
+print("S25_NATIVE_FINAL_NATIVE_ACL_CIDRS_MATCH_PYTHON="+str(cidr_equal))
+print("S25_NATIVE_FINAL_NATIVE_ACL_RULE_SHAPES="+str(rule_shapes))
+print("S25_NATIVE_FINAL_ROOT_BRIDGE_ADDRESSES="+json.dumps({
+    "ipv4.address":net.get("config",{}).get("ipv4.address"),
+    "ipv6.address":net.get("config",{}).get("ipv6.address")}))
+print("S25_NATIVE_FINAL_ACL_RULE_CIDR_SHA256="+json.dumps(
+    [hashlib.sha256(r.get("destination","").encode()).hexdigest() for r in egress]))
+S25_FINAL_ROOT_NATIVE_CROSSCHECK
+  sudo "$work/boxweave" native-prereq-plan -project "$project" > "$work/s25-native-prereq-plan.json"
+  python3 - "$work/s25-native-prereq-plan.json" <<'PY_S25_PREREQ'
+import json,sys
+data=json.load(open(sys.argv[1],encoding="utf-8"))
+for check in data["checks"]:
+    print("S25_NATIVE_PREREQ_%s=%s" % (check["id"].upper(), "PASS" if check["ok"] else "BLOCKED"))
+if not data["config_ready"] or not data["packet_witness_required"]:
+    raise SystemExit("S25 native operator prerequisite review is BLOCKED")
+PY_S25_PREREQ
+  s25_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["review_sha256"])' "$work/s25-native-prereq-plan.json")"
+  if ! sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > "$work/s25-native-prereq-verified.json"; then
+    python3 - "$work/s25-native-prereq-plan.json" "$work/s25-native-prereq-verified.json" <<'PY_S25_DIAGNOSTIC'
+import json,sys
+before,after=(json.load(open(x,encoding="utf-8")) for x in sys.argv[1:])
+print("S25_NATIVE_PREREQ_PLAN_DIGEST="+before["review_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_DIGEST="+after["review_sha256"])
+print("S25_NATIVE_PREREQ_PLAN_STATE_DIGEST="+before["native_state_sha256"])
+print("S25_NATIVE_PREREQ_VERIFY_STATE_DIGEST="+after["native_state_sha256"])
+print("S25_NATIVE_PREREQ_CHANGED_FIELDS="+str(sorted(
+    k for k in set(before)|set(after) if before.get(k)!=after.get(k))))
+PY_S25_DIAGNOSTIC
+    echo "S25_NATIVE_PREREQ_FAIL: refused changed review digest (no native write)" >&2
+    exit 93
+  fi
+  # On the single-use lab, confirm a changed *real* Project config
+  # invalidates the exact reviewed SHA. Always restore after the denial.
+  sudo incus project set "$project" user.s25-approval-drift=invalidated
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 "$s25_sha" -approve-local > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: native Project drift accepted" >&2
+    exit 94
+  fi
+  sudo incus project unset "$project" user.s25-approval-drift
+  echo "S25_NATIVE_PREREQ_NATIVE_PROJECT_DRIFT_DENIED=PASS"
+  if sudo "$work/boxweave" native-prereq-verify -project "$project" \
+    -native-prereq-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local \
+    > /dev/null 2>&1; then
+    echo "S25_NATIVE_PREREQ_FAIL: wrong plan digest accepted" >&2
+    exit 92
+  fi
+  echo "S25_NATIVE_PREREQ_CONFIG_AND_DIGEST=PASS"
+  echo "S25_NATIVE_PREREQ_PACKET_WITNESS=REQUIRED_SEPARATE"
+fi
+
+  s4_digest="$(printf %s 's4-oauth-native-one-effect-001' | sha256sum | cut -d ' ' -f 1)"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    python3 "$PWD/scripts/s4_raw_operation_witness.py" \
+    --db "$db" --key-digest "$s4_digest" --timeout-seconds 120 \
+    > "$work/s4-raw-oauth-native.json" 2> "$work/s4-raw-oauth-native.redacted.err" &
+  s4_oauth_witness_pid=$!
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    "$work/s4-oauth-native-probe" -db "$db" -project "$project" \
+    -box-id "$s4_box" -endpoint "http://127.0.0.1:18650/mcp" \
+    > "$work/s4-oauth-native.redacted.log" 2>&1 || {
+      echo S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=FAIL >&2
+      exit 7
+    }
+  grep -Fxq 'S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS' "$work/s4-oauth-native.redacted.log"
+  grep -Fxq 'S4_A_INDEPENDENT_GUEST_ONE_EFFECT=PASS' "$work/s4-oauth-native.redacted.log"
+  grep '^S4_A_' "$work/s4-oauth-native.redacted.log"
+  wait "$s4_oauth_witness_pid" || :
+  python3 - "$work/s4-raw-oauth-native.json" <<'S4_OAUTH_RAW_CHECK'
+import json
+import sys
+with open(sys.argv[1]) as stream:
+    result = json.load(stream)
+original = result.get("original_sqlite") or {}
+native = result.get("native_terminal") or {}
+if (result.get("observation") == "CAPTURED_TERMINAL"
+        and result.get("original_id_matches") is True
+        and original.get("native_operation_id") == native.get("native_operation_id")
+        and native.get("status_code") in (200, 400, 401)):
+    print("S4_A_OAUTH_INDEPENDENT_RAW_NATIVE_BW_ID=" + original["operation_id"]
+          + " NATIVE_ID=" + native["native_operation_id"])
+    print("S4_A_OAUTH_INDEPENDENT_RAW_OPERATION_TERMINAL=PASS")
+else:
+    print("S4_A_OAUTH_INDEPENDENT_RAW_OPERATION_TERMINAL=NOT_CAPTURED")
+S4_OAUTH_RAW_CHECK
+fi
 echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
 
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
