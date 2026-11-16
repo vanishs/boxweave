@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/pkg/sftp"
 )
@@ -19,6 +20,9 @@ import (
 const (
 	MaxGuestFileBytes   = 64 << 10
 	MaxGuestFileEntries = 4096
+	// pkg/sftp v1 ReadDirContext buffers the entire Guest directory. Bound
+	// received bytes before the library can decode unbounded directory data.
+	MaxGuestFileListWireBytes = 512 << 10
 )
 
 var ErrGuestFileExists = errors.New("exclusive guest file already exists; no create performed")
@@ -122,21 +126,72 @@ func verifyGuestComponents(c *sftp.Client, p string, finalType string, allowMiss
 	return nil
 }
 
-func (r Reader) guestSFTP(ctx context.Context, name, uuid string) (*sftp.Client, func(), error) {
-	box, _, err := r.GetExactBox(ctx, name, uuid)
+// sftpReadBudget limits transport bytes fed to the eager v1 SFTP decoder,
+// not just the number of records returned to the caller. SFTP v3 has no
+// native server-side snapshot or stable pagination cursor.
+type sftpReadBudget struct {
+	reader    io.Reader
+	remaining int64
+	exhausted atomic.Bool
+}
+
+func (b *sftpReadBudget) Read(p []byte) (int, error) {
+	if b.remaining <= 0 {
+		b.exhausted.Store(true)
+		return 0, ErrNativeUnsupported
+	}
+	if int64(len(p)) > b.remaining {
+		p = p[:int(b.remaining)]
+	}
+	n, err := b.reader.Read(p)
+	b.remaining -= int64(n)
+	return n, err
+}
+
+// Uses the existing official Incus native SFTP connection and pinned client.
+// The transport guard limits memory consumed by SFTP directory enumeration;
+// it is NOT a guarantee about total Go process RSS or concurrent Guest races.
+func newBoundedSFTPClient(conn io.ReadWriteCloser, maxReceived int64) (*sftp.Client, *sftpReadBudget, error) {
+	if conn == nil || maxReceived < 1024 || maxReceived > MaxGuestFileListWireBytes {
+		return nil, nil, ErrNativeUnsupported
+	}
+	reader := &sftpReadBudget{reader: conn, remaining: maxReceived}
+	client, err := sftp.NewClientPipe(reader, conn)
 	if err != nil {
+		_ = conn.Close()
 		return nil, nil, err
 	}
+	return client, reader, nil
+}
+
+func (r Reader) guestSFTP(ctx context.Context, name, uuid string, listWireLimit int64) (*sftp.Client, func(), *sftpReadBudget, error) {
+	box, _, err := r.GetExactBox(ctx, name, uuid)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	if box.NativeState != "Running" {
-		return nil, nil, ErrNativeUnsupported
+		return nil, nil, nil, ErrNativeUnsupported
 	}
 	c, err := r.confined(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	client, err := c.GetInstanceFileSFTP(name)
-	if err != nil {
-		return nil, nil, err
+	var client *sftp.Client
+	var budget *sftpReadBudget
+	if listWireLimit > 0 {
+		conn, err := c.GetInstanceFileSFTPConn(name)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		client, budget, err = newBoundedSFTPClient(conn, listWireLimit)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		client, err = c.GetInstanceFileSFTP(name)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 	done := make(chan struct{})
 	go func() {
@@ -149,12 +204,12 @@ func (r Reader) guestSFTP(ctx context.Context, name, uuid string) (*sftp.Client,
 	return client, func() {
 		close(done)
 		_ = client.Close()
-	}, nil
+	}, budget, nil
 }
 
-// ListGuestFiles is a bounded *response*, not a filesystem snapshot. The
-// pinned SFTP v1 client's ReadDirContext buffers a directory first, so reject
-// huge directories instead of implying that arbitrary size is supported.
+// ListGuestFiles is a bounded response with a bounded incoming SFTP stream.
+// The v1 client still buffers results up to the wire budget; the reply is
+// *not* a directory snapshot and lexical cursors may miss concurrent changes.
 func (r Reader) ListGuestFiles(ctx context.Context, name, uuid, p, after string, limit int) (GuestFileListing, error) {
 	var out GuestFileListing
 	if !SafeGuestFilePath(p) || limit < 0 || limit > 50 || len(after) > 255 ||
@@ -164,7 +219,7 @@ func (r Reader) ListGuestFiles(ctx context.Context, name, uuid, p, after string,
 	if limit == 0 {
 		limit = 20
 	}
-	c, closeClient, err := r.guestSFTP(ctx, name, uuid)
+	c, closeClient, budget, err := r.guestSFTP(ctx, name, uuid, MaxGuestFileListWireBytes)
 	if err != nil {
 		return out, err
 	}
@@ -173,6 +228,9 @@ func (r Reader) ListGuestFiles(ctx context.Context, name, uuid, p, after string,
 		return out, err
 	}
 	infos, err := c.ReadDirContext(ctx, p)
+	if budget.exhausted.Load() {
+		return out, ErrNativeUnsupported
+	}
 	if err != nil {
 		return out, err
 	}
@@ -209,7 +267,7 @@ func (r Reader) ReadGuestFile(ctx context.Context, name, uuid, p string, offset 
 		length < 1 || length > MaxGuestFileBytes {
 		return out, ErrNativeUnsupported
 	}
-	c, closeClient, err := r.guestSFTP(ctx, name, uuid)
+	c, closeClient, _, err := r.guestSFTP(ctx, name, uuid, 0)
 	if err != nil {
 		return out, err
 	}
@@ -265,7 +323,7 @@ func (r Reader) CreateGuestFile(ctx context.Context, name, uuid, p string, data 
 	if !SafeGuestFilePath(p) || len(data) > MaxGuestFileBytes {
 		return ErrGuestFilePreDispatchDenied
 	}
-	c, closeClient, err := r.guestSFTP(ctx, name, uuid)
+	c, closeClient, _, err := r.guestSFTP(ctx, name, uuid, 0)
 	if err != nil {
 		// No mutating file Open was issued. A failed setup is not UNKNOWN.
 		return ErrGuestFilePreDispatchDenied
