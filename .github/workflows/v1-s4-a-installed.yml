@@ -54,10 +54,18 @@ jobs:
         run: |
           set -euo pipefail
           logfile="$RUNNER_TEMP/s4-a-isolated-native.redacted.log"
-          if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
+          # Stream only the same fixed evidence/phase prefixes already allowed
+          # below. Raw native/probe errors and credentials stay runner-local.
+          # pipefail preserves failure in any stage, including the real suite.
+          if ! sh scripts/accept_s2_native.sh 2>&1 | tee "$logfile" | \
+              grep --line-buffered -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:)'; then
             grep -E '^S4_A_CANDIDATE_BINARY_SHA256=' "$logfile" || :
             grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:|(panic: )?S2_UNKNOWN_CREATE_NATIVE_BIND_FAIL:)' "$logfile" | tail -n 110 || :
             grep -E '^S2_NATIVE_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 12 || :
+            # These three probe prefixes contain fixed test assertions only,
+            # audited in source; never print arbitrary native/HTTP panic text.
+            grep -E '^panic: S2_P1_(STOP_DELETE_ACK_LOSS|TOKEN_INFLIGHT|INFLIGHT_LIST)_FAIL:' "$logfile" || :
+            grep -E '^S2_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 20 || :
             if grep -q '^panic: S2_ACK_LOSS_ACCEPTANCE_FAILED:' "$logfile"; then
               echo S4_A_FAILURE_CLASS=ACK_PROXY_PROBE_ASSERTION
             elif grep -q '^panic: S2_P1_' "$logfile"; then

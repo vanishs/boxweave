@@ -1,6 +1,6 @@
 #!/bin/sh
 # Exact original installed binary under its own service OS identity in GDB.
-# Pause at operation_tools.go:149 *after* durable ListOperations SQL, *before*
+# Derive the unique source boundary after durable ListOperations SQL and before
 # privateReadReply. Revocation/expiry is performed by an independent actor.
 # No production hook or mock handler; this fixture is never shipped.
 set -eu
@@ -26,6 +26,27 @@ actor() {
    BW_S2_TEST_UID="$(id -u boxweave)" \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
+# A historical fixed line can silently move into Tool registration when new
+# helpers are added. Require the exact post-query return and its error guard;
+# source drift or ambiguity must fail before any debugger fixture is started.
+boundary_line="$(python3 - internal/control/operation_tools.go <<'PY_LIST_BOUNDARY'
+from pathlib import Path
+import sys
+lines=Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+anchor="return privateReadReply(ctx, s, operationCredentialID(req), operationListResult{TrackingID: tracking, Page: page})"
+matches=[i for i,line in enumerate(lines) if line.strip()==anchor]
+assert len(matches)==1, "unique final operation_list response boundary missing"
+at=matches[0]
+assert [line.strip() for line in lines[at-3:at]]==[
+    "if err != nil {", "return nil, operationListResult{}, err", "}"
+], "operation_list post-query error guard changed"
+queries=[i for i,line in enumerate(lines[:at])
+         if line.strip()=="page, err := s.Store.ListOperations(ctx, state.OperationQuery{"]
+assert len(queries)==1 and at-queries[0]<=12, "final boundary is not immediately after ListOperations"
+print(at+1)
+PY_LIST_BOUNDARY
+)"
+echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_LINE=$boundary_line"
 # Populate exactly this test's private ledger; zero native mutation.
 actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-list-debugger-admin.secret"
 chmod 0600 "$work/p1-list-debugger-admin.secret"
@@ -37,7 +58,7 @@ set breakpoint pending off
 set print thread-events off
 handle SIGURG nostop noprint pass
 handle SIGPIPE nostop noprint pass
-break github.com/vanishs/boxweave/internal/control/operation_tools.go:149
+break github.com/vanishs/boxweave/internal/control/operation_tools.go:$boundary_line
 commands 1
 silent
 shell /bin/sh -c "if test -e $lab/armed; then touch $lab/held; timeout 30 /bin/sh -c 'until test -e $lab/release; do sleep 0.1; done'; fi"
