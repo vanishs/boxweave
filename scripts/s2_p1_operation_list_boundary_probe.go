@@ -37,6 +37,21 @@ type result struct {
 	e error
 }
 
+// A query that never reached the debugger boundary is not an auth-race PASS.
+// Classify only fixed metadata, never response content or credential values.
+func classifyEarly(out result) {
+	class := "EMPTY_REPLY"
+	switch {
+	case out.e != nil:
+		class = "TRANSPORT_OR_PROTOCOL_ERROR"
+	case out.r != nil && out.r.IsError:
+		class = "MCP_TOOL_REFUSAL"
+	case out.r != nil:
+		class = "MCP_TOOL_SUCCESS"
+	}
+	fmt.Println("S4_A_OPERATION_LIST_EARLY_REPLY_CLASS=" + class)
+}
+
 func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 	ttl := time.Hour
 	if mode == "expire" {
@@ -81,7 +96,8 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 			break
 		}
 		select {
-		case <-done:
+		case early := <-done:
+			classifyEarly(early)
 			panic("S2_P1_INFLIGHT_LIST_FAIL: query returned before debugger stopped final boundary")
 		default:
 		}
