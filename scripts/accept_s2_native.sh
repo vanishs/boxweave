@@ -606,9 +606,65 @@ if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
   done
   unset key digest
 fi
-BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+bh018_start_rc=0
+( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
-  "$work/s2-bh018-atomic-mcp-probe" start > "$work/bh018-atomic-start.log" 2>&1
+  "$work/s2-bh018-atomic-mcp-probe" start ) > "$work/bh018-atomic-start.log" 2>&1 || bh018_start_rc=$?
+if [ "$bh018_start_rc" -ne 0 ]; then
+  echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_START_FAILED"
+  if grep -Eq 'BH018_MCP_FAIL: original [0-9a-f]{32} stopped in UNKNOWN' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_TERMINAL_UNKNOWN'
+  elif grep -Eq 'BH018_MCP_FAIL: original [0-9a-f]{32} stopped in FAILED' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_TERMINAL_FAILED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP box_create rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=CREATE_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=TERMINAL_POLL_TIMEOUT'
+  elif grep -Fq 'BH018_MCP_FAIL: original guest exit was not retained' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=GUEST_EXIT_UNVERIFIED'
+  else
+    echo 'S4_A_BH018_FAILURE_CLASS=UNTYPED_CLIENT_FAILURE'
+  fi
+  # Read the one-use WAL through an independent, read-only local process.
+  # Print only immutable original IDs and bounded state/error enums, never
+  # the original Guest command/output or bearer credentials.
+  sudo python3 - "$db" <<'S4_BH018_FAILED_RECEIPT'
+import hashlib
+import sqlite3
+import sys
+db = sys.argv[1]
+originals = (
+    ("create", "s2-bh018-atomic-native-create-001"),
+    ("exit126", "s2-bh018-original-exit-126-001"),
+    ("exit127", "s2-bh018-original-exit-127-001"),
+)
+try:
+    with sqlite3.connect("file:" + db + "?mode=ro", uri=True, timeout=3) as conn:
+        for label, key in originals:
+            digest = hashlib.sha256(key.encode()).hexdigest()
+            rows = conn.execute(
+                "SELECT id,state,native_operation_id,error_class "
+                "FROM operations WHERE key_digest=? LIMIT 2", (digest,)
+            ).fetchall()
+            if len(rows) == 1:
+                oid, status, native_id, error_class = rows[0]
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " BW_ID=" + oid
+                      + " STATE=" + status + " NATIVE_ID=" + (native_id or "NONE")
+                      + " ERROR_CLASS=" + (error_class or "NONE"))
+            elif len(rows) > 1:
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " AMBIGUOUS")
+            else:
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " NOT_ADMITTED")
+except (sqlite3.Error, OSError):
+    print("S4_A_BH018_SQLITE_POSTMORTEM=UNAVAILABLE")
+S4_BH018_FAILED_RECEIPT
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_START_PASS"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
