@@ -1,3 +1,5 @@
+**Latest checkpoint:** S3 Phase 3 supervised Guest Git failure→Guest Exec repair→passing test plus restart/fresh-original Operation and independent Incus file/Git verification completed as a [scoped real-native PASS](S3_FILE_TOOLS_PHASE3_GIT_ACCEPTANCE_2026-11-15.md) at tested `3edb8955`. Older “Phase 3 NEXT” lines below are historical. S3 minimal final signoff/merge remains pending; all #148/#151 and original unclassified failure boundaries preserved.
+
 # S3 minimal execution kickoff — after scoped S2.5 (2026-11-15)
 
 **Current next task (2026-11-15): S3 Phase 3 single supervised Agent Git FAIL→FIX→PASS** in existing Draft PR #152. Phase 2 is [SCOPED_NATIVE_PASS](S3_FILE_TOOLS_PHASE2_NATIVE_ACCEPTANCE_2026-11-15.md), including true Incus 7.6 bounded 6,000-file and installed HTTP MCP native original-identity checks. A malicious concurrent Guest path-rename/open SFTP v3 race and process-wide memory guarantee are **not** signed. Prior Phase-1/2 TODOs below are historical, not instructions to redo completed work.
