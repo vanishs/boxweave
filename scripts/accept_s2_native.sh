@@ -1592,9 +1592,59 @@ if [ "$resume_ack_rc" -ne 0 ]; then
 fi
 grep -Fqx 'S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY=PASS' "$work/ack-resume.redacted.log"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_ORIGINAL_PASS"
-test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
-test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
-test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+if [ "$(sudo wc -l "$ack_marker" | awk '{print $1}')" != 1 ]; then
+  echo "S4_A_ACK_RESTART_NATIVE_MARKER_COUNT=UNEXPECTED" >&2
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_POST_COUNT_PASS"
+# This is a second independent native connection; the original daemon
+# Create may still be finishing when the original HTTP server reopens.
+# Only read native state. Never re-issue a Create or adopt UNKNOWN claims.
+attempt=0
+after_uuid=""
+uuid_read_rc=0
+while [ "$attempt" -lt 45 ]; do
+  uuid_read_rc=0
+  after_uuid="$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null)" || uuid_read_rc=$?
+  if [ "$uuid_read_rc" -eq 0 ] && [ "$after_uuid" = "$ack_uuid" ]; then
+    break
+  fi
+  # A DIFFERENT nonempty UUID is a safety failure, not transient lag.
+  if [ -n "$after_uuid" ] && [ "$after_uuid" != "$ack_uuid" ]; then
+    echo "S4_A_ACK_RESTART_NATIVE_UUID=IDENTITY_DRIFT" >&2
+    exit 96
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  echo "S4_A_ACK_RESTART_NATIVE_UUID=UNAVAILABLE" >&2
+  exit 96
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_NATIVE_UUID_VERIFIED"
+attempt=0
+inventory=""
+inventory_rc=0
+while [ "$attempt" -lt 45 ]; do
+  inventory_rc=0
+  inventory="$(sudo incus list --all-projects --format csv -c n 2>/dev/null)" || inventory_rc=$?
+  if [ "$inventory_rc" -eq 0 ] && [ "$inventory" = bw-s2-ack-native-110d ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  if [ "$inventory_rc" -ne 0 ]; then
+    echo "S4_A_ACK_RESTART_INVENTORY=READ_UNAVAILABLE" >&2
+  elif [ -z "$inventory" ]; then
+    echo "S4_A_ACK_RESTART_INVENTORY=EXPECTED_INSTANCE_NOT_LISTED" >&2
+  else
+    echo "S4_A_ACK_RESTART_INVENTORY=UNEXPECTED_OR_AMBIGUOUS_INSTANCES" >&2
+  fi
+  exit 96
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_INDEPENDENT_INVENTORY_PASS"
 echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
 
 # Only this **one-use CI host administrator**, NOT BoxWeave's original
