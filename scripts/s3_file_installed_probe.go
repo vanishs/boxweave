@@ -13,7 +13,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,7 +219,7 @@ func loadS3GitCheckpoint() s3GitCheckpoint {
 func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, script string) (string, int, string, string) {
 	r := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", script},
-		"timeout_ms": 180000, "idempotency_key": key,
+		"timeout_ms": 300000, "idempotency_key": key,
 		"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
 	})
 	id := originalID(r)
@@ -264,6 +266,18 @@ func gitCommitLine(text, prefix string) string {
 	panic("original Guest Git commit is absent or invalid: " + prefix)
 }
 
+func s3ApprovedPackageProxy() string {
+	raw := requiredEnv("BW_S3_PACKAGE_PROXY_URL")
+	u, err := url.Parse(raw)
+	need(err == nil && u != nil && u.Scheme == "http" &&
+		u.User == nil && u.Port() == "18466" && u.Path == "" && u.RawQuery == "" &&
+		u.Fragment == "", "unapproved S3 one-use package relay")
+	ip := net.ParseIP(u.Hostname())
+	need(ip != nil && ip.IsPrivate() && ip.To4() != nil,
+		"package relay must be private IPv4")
+	return raw
+}
+
 func runS3GuestGitPhase3(ctx context.Context, admin, viewer *mcp.ClientSession, uuid string) {
 	// One trusted attended Agent; no remote shared repo, network peer Tool
 	// or unsafe File replace. Guest has a native Git working tree.
@@ -281,11 +295,28 @@ class TestCalc(unittest.TestCase):
     def test_double(self):
         self.assertEqual(double(2), 4)
 `
-	installScript := "set -eu; if ! command -v git >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then " +
-		"DEBIAN_FRONTEND=noninteractive apt-get update -qq && " +
-		"DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git python3; fi; " +
-		"command -v git; command -v python3; mkdir -p " + dir
-	installID, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
+	installScript := `set -eu
+if ! command -v git >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+  echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99-s3-ipv4
+  printf 'Acquire::https::Proxy "%s";' '@S3_SCOPED_PROXY@' > /etc/apt/apt.conf.d/98-s3-relay
+  for sources in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+    if test -f "$sources"; then
+      sed -i -e 's#http://archive.ubuntu.com#https://archive.ubuntu.com#g'         -e 's#http://security.ubuntu.com#https://security.ubuntu.com#g' "$sources"
+    fi
+  done
+  if grep -ER '^(deb |URIs:).*http://' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+    echo S3_GUEST_PLAINTEXT_APT_REFUSED >&2
+    exit 72
+  fi
+  DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git python3
+fi
+command -v git
+command -v python3
+mkdir -p /root/s3-guest-git
+`
+	installScript = strings.ReplaceAll(installScript, "@S3_SCOPED_PROXY@", s3ApprovedPackageProxy())
+		installID, code, stdout, stderr := s3GuestExec(ctx, admin, uuid, "s3-guest-git-dependencies-once", installScript)
 	if code != 0 {
 		// CI-owned disposable guest only. Keep a bounded diagnostic from
 		// the original native Exec; never redispatch an uncertain command.

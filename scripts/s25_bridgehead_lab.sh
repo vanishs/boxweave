@@ -135,6 +135,30 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
   echo "S3_INSTALLED_EXACT_BINARY_SHA256=$installed_bin_sha"
   if [ "$(printenv S3_FILE_INSTALLED_PHASE3 2>/dev/null || true)" = true ]; then
     # Same installed candidate & exactly one supervised original Agent.
+    # Same strict HTTPS-only relay used by the already-accepted S2.5 lab:
+    # the disposable Guest has no direct public WAN package permission.
+    gateway="$(sudo incus network get "$net" ipv4.address | cut -d/ -f1)"
+    case "$gateway" in
+      10.*|172.*|192.168.*) ;;
+      *) echo S3_PACKAGE_RELAY_GATEWAY_NOT_PRIVATE >&2; exit 71;;
+    esac
+    export BW_S3_PACKAGE_PROXY_URL="http://$gateway:18466"
+    python3 scripts/s25_package_proxy.py "$gateway" 18466 \
+      > "$work/private/s3-package-proxy.log" 2>&1 &
+    s3_pkg_relay_pid=$!
+    trap 'kill "$s3_pkg_relay_pid" 2>/dev/null || :; wait "$s3_pkg_relay_pid" 2>/dev/null || :' EXIT
+    s3_relay_ready=no
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      if curl -4 -fsSI --noproxy '' --proxy "$BW_S3_PACKAGE_PROXY_URL" \
+          --connect-timeout 2 --max-time 10 https://pkgs.zabbly.com/key.asc \
+          >/dev/null 2>&1; then
+        s3_relay_ready=yes
+        break
+      fi
+      sleep 1
+    done
+    test "$s3_relay_ready" = yes
+    echo S3_PHASE3_SCOPED_HTTPS_PACKAGE_RELAY=PASS
     export BW_S3_PHASE3_MODE=stage
     export BW_S3_PHASE3_CHECKPOINT="$work/private/s3-phase3-original.json"
     if ! "$work/staging/s3-file-installed-agent"; then
