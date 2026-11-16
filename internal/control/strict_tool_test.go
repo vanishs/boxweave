@@ -30,7 +30,7 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 	}
 	defer s.Close()
 	tools, err := s.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 13 {
+	if err != nil || len(tools.Tools) != 16 {
 		t.Fatalf("all 13 S1+S2 typed tools must be discoverable: %v", err)
 	}
 	for _, tool := range tools.Tools {
