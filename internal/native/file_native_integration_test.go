@@ -202,7 +202,7 @@ func TestS3RealIncusSFTPFileNegatives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, readErr = boundedClient.ReadDirContext(ctx, dir+"/many")
+	_, readErr := boundedClient.ReadDirContext(ctx, dir+"/many")
 	if readErr == nil || !budget.exhausted.Load() {
 		t.Fatalf("huge native directory was not rejected at wire limit: err=%v remaining=%d", readErr, budget.remaining)
 	}

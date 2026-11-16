@@ -1,10 +1,10 @@
 package native
 
 import (
-	"os"
 	"errors"
-	"strings"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
