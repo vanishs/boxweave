@@ -188,7 +188,7 @@ func TestS3RealIncusSFTPFileNegatives(t *testing.T) {
 	if err := verifyGuestComponents(c, race, "file", true); !errors.Is(err, ErrGuestFileExists) {
 		t.Fatalf("repeat native create must refuse existing winner: %v", err)
 	}
-	if _, err := c.Lstat(dir+"/missing"); !errors.Is(err, os.ErrNotExist) {
+	if _, err := c.Lstat(dir + "/missing"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing SFTP target must be recognizable as os.ErrNotExist: %v", err)
 	}
 	t.Log("S3_NATIVE_SFTP_EXISTING_AND_MISSING_TARGET_TYPES=PASS")
