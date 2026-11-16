@@ -603,6 +603,9 @@ func main() {
 	fmt.Println("S3_INSTALLED_MCP_POST_DENIAL_LOCK_RELEASE=PASS")
 	if os.Getenv("BW_S3_PHASE3_MODE") == "stage" {
 		runS3GuestGitPhase3(ctx, admin, viewer, uuid)
+		// The same negative and idempotency matrix already passed before
+		// staging the supervised Git fixture. Emit its normal CI marker.
+		fmt.Println("S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS")
 		return
 	}
 	stop := call(ctx, admin, "box_stop", map[string]any{
