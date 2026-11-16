@@ -862,6 +862,8 @@ if [ "$bh018_resume_rc" -ne 0 ]; then
   grep '^BH018_MCP_FRESH_ADMITTED_EXIT_' "$work/bh018-atomic-resume.log" || :
   if grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: lost immutable BW original operation ID' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_RECEIPT_ID_MISSING'
   elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OPERATION_READ_REJECTED'
   elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-resume.log"; then

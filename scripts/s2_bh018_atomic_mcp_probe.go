@@ -205,7 +205,9 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 				fmt.Sprintf("/tmp/bh018-atomic-effect-%d", original.Exit)},
 			"idempotency_key": fmt.Sprintf("s2-bh018-independent-readback-%d-001", original.Exit),
 		})
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_CALL_RETURNED\n", original.Exit)
 		readID := originalID(check)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_ID_VALIDATED\n", original.Exit)
 		// An admitted fresh readback is new, independent work, never a retry
 		// of an uncertain original. Print only its immutable nonsecret ID.
 		fmt.Printf("BH018_MCP_FRESH_ADMITTED_EXIT_%d_BW_ID=%s\n", original.Exit, readID)
