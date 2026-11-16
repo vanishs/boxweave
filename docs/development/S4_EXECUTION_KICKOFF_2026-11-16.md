@@ -1,0 +1,5 @@
+# S4 development kickoff — 2026-11-16
+
+**State: PREPARATION ONLY / NOT IMPLEMENTED.** Based on protected `v1` merge `4a45a80c8de2fb36cde851a10e0f9c80f2f9b300`, which contains [S3_MINIMAL_PASS](S3_MINIMAL_PASS_2026-11-16.md). This kickoff will be completed in the existing S4 development Draft PR; no product feature, external host change, or phase PASS is implied by opening the PR.
+
+**Approved direction:** One S4 PR; S4-A OAuth grant identity #148 + Create/Delete X-02/X-03 + bounded independent native Operation terminal evidence capture *during newly admitted disposable tests*; S4-B four peer/forward Tools, one shared ACL/Scriptlet with approved host-local setup and dependent deletion; S4-C supported L1/L2 integration, core native negative/fault acceptance and scoped #150 capability/trust boundary. S5 retains #151 extended root cause/repeated raw-native proofs, full two-Agent, physical LAN/public IPv6, deep hostile multi-level security, 20/20 full reacceptance and controlled release. Never weaken host AppArmor or claim unsupported security as PASS.
