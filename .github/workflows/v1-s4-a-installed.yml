@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           logfile="$RUNNER_TEMP/s4-a-isolated-native.redacted.log"
           if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
-            grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED)' "$logfile" | tail -n 75 || :
+            grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:)' "$logfile" | tail -n 85 || :
             echo S4_A_INSTALLED_REAL_NATIVE_MCP=FAIL_OR_BLOCKED >&2
             exit 1
           fi

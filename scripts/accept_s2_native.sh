@@ -1297,6 +1297,7 @@ sudo incus delete bw-s2-bh018-after-cut --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo 'BH018_INSTALLED_SERVICE_AFTER_WAL_FSYNC_ACKLOSS_RECOVERY=PASS'
 
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_MATRIX_START"
 # The installed candidate must refuse arbitrary/foreign SQLite histories
 # BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
 # is intentionally constructed independently from the running journal.
@@ -1328,7 +1329,9 @@ for path,version,extra_row in ((legacy,0,False),(ambiguous,1,True),(versioned_fo
 for path in sys.argv[1:]:
     os.chmod(path,0o600)
 PY
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_FIXTURES_CREATED"
 for case in foreign corrupt legacy ambiguous versioned_foreign; do
+  [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_NEGATIVE_${case}_START"
   case "$case" in
     foreign) f="$foreign_db" ;;
     corrupt) f="$corrupt_db" ;;
@@ -1347,6 +1350,7 @@ for case in foreign corrupt legacy ambiguous versioned_foreign; do
     echo "S2_NATIVE_FAIL: foreign SQLite bytes modified during refusal: $case" >&2
     exit 95
   fi
+  [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_NEGATIVE_${case}_PASS"
 done
 echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
 echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
