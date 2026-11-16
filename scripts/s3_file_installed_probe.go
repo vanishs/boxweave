@@ -70,8 +70,19 @@ func connect(ctx context.Context, name, tokenPath string) *mcp.ClientSession {
 
 func call(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any) map[string]any {
 	result, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-	if err != nil || result == nil || result.IsError {
-		panic(fmt.Errorf("original MCP tool %s failed: %v; no retry", name, err))
+	if err != nil || result == nil {
+		panic(fmt.Errorf("original MCP tool %s transport failed: %v; no retry", name, err))
+	}
+	if result.IsError {
+		// Only locally-created disposable Guest fixture paths and typed
+		// errors are involved. Trim diagnostics, never log bearer tokens
+		// or arbitrary successful Guest file contents.
+		b, _ := json.Marshal(result.Content)
+		detail := string(b)
+		if len(detail) > 400 {
+			detail = detail[:400]
+		}
+		panic(fmt.Errorf("S3_INSTALLED_MCP_TOOL_ERROR name=%s reason=%s", name, detail))
 	}
 	b, err := json.Marshal(result.StructuredContent)
 	if err != nil {
@@ -190,8 +201,14 @@ func main() {
 		"box_id": uuid, "argv": []string{"/bin/sh", "-ec", fixture},
 		"idempotency_key": "s3-installed-fixture-one-native-exec-1115",
 	})
-	await(ctx, admin, originalID(e), "SUCCEEDED")
-	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_EXEC=PASS")
+	fixtureID := originalID(e)
+	await(ctx, admin, fixtureID, "SUCCEEDED")
+	out := call(ctx, admin, "operation_output_get", map[string]any{
+		"operation_id": fixtureID, "stream": "stdout", "limit": 4096,
+	})
+	exit, observed := out["exit_code"].(float64)
+	need(observed && exit == 0, "fixture Guest native Exec did not exit 0")
+	fmt.Println("S3_INSTALLED_GUEST_FIXTURE_ORIGINAL_EXEC_EXIT_ZERO=PASS")
 	listing := call(ctx, admin, "box_file_list", map[string]any{
 		"box_id": uuid, "path": base, "limit": 2,
 	})
