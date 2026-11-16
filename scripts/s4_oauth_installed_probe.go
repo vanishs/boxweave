@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -84,6 +85,26 @@ func connect(ctx context.Context, endpoint, access string) *mcp.ClientSession {
 	}, nil)
 	must(err == nil, "OFFICIAL_MCP_CONNECT_FAILED")
 	return session
+}
+
+// These independently authored negative cases use the actual installed HTTP
+// boundary. Refusal must leave both the admission count and Guest effect intact.
+func refused(ctx context.Context, session *mcp.ClientSession, name string, args map[string]any, class string) {
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	must(err == nil && result != nil && result.IsError, class)
+}
+
+func unauthorized(ctx context.Context, endpoint, access, class string) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"s4-refused","version":"1"}}}`))
+	must(err == nil, "NEGATIVE_HTTP_REQUEST_INVALID")
+	request.Header.Set("Authorization", "Bearer "+access)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := http.DefaultClient.Do(request)
+	must(err == nil && response != nil, "NEGATIVE_HTTP_READ_FAILED")
+	defer response.Body.Close()
+	must(response.StatusCode == http.StatusUnauthorized, class)
 }
 
 func main() {
@@ -174,6 +195,75 @@ func main() {
 	reloadedOp, ok := reloaded["operation"].(map[string]any)
 	must(ok && value(reloadedOp, "native_operation_id") == nativeID,
 		"REFRESH_LOST_ORIGINAL_NATIVE_RECEIPT")
+	readDB, err := sql.Open("sqlite3", "file:"+*db+"?mode=ro&_query_only=1")
+	must(err == nil, "NEGATIVE_SQLITE_READ_FAILED")
+	defer readDB.Close()
+	admissions := func() int {
+		var count int
+		must(readDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations").Scan(&count) == nil,
+			"NEGATIVE_SQLITE_COUNT_FAILED")
+		return count
+	}
+	beforeNegatives := admissions()
+	unauthorized(ctx, *endpoint, first.Access, "OLD_CREDENTIAL_HTTP_ACCEPTED")
+	issueGrant := func(scope, label string) state.OAuthPair {
+		pending, err := store.BeginOAuth(ctx, clientID, redirect, scope, challenge,
+			origin+"/mcp", "s4-a-negative-"+label)
+		must(err == nil, "NEGATIVE_GRANT_BEGIN_FAILED")
+		code, _, _, err := store.ApproveOAuth(ctx, pending, password)
+		must(err == nil, "NEGATIVE_GRANT_APPROVAL_FAILED")
+		pair, err := store.ExchangeOAuth(ctx, clientID, redirect, code, verifier, origin+"/mcp")
+		must(err == nil, "NEGATIVE_GRANT_EXCHANGE_FAILED")
+		return pair
+	}
+	other := issueGrant("mcp:admin", "independent")
+	must(other.GrantID != first.GrantID, "INDEPENDENT_GRANT_REUSED_ACTOR")
+	otherActor, err := store.VerifyToken(ctx, other.Access)
+	must(err == nil && otherActor.ActorID == other.GrantID, "INDEPENDENT_GRANT_ACTOR_INVALID")
+	otherSession := connect(ctx, *endpoint, other.Access)
+	defer otherSession.Close()
+	// Admin may read another actor's project-local history. Its idempotency
+	// namespace is nevertheless separate: the SAME key with different safe
+	// argv must admit a new harmless Exec, rather than borrow or conflict.
+	separateActor := func(session *mcp.ClientSession, actor state.Token, label string) {
+		admitted := call(ctx, session, "box_exec", map[string]any{
+			"box_id": *boxID, "argv": []string{"/bin/true"}, "idempotency_key": originalKey,
+		})
+		id := value(admitted, "operation_id")
+		must(len(id) == 32 && id != originalID && admitted["duplicate"] != true,
+			"OTHER_ACTOR_BORROWED_ORIGINAL")
+		terminal := waitFor(ctx, session, id)
+		must(value(terminal, "native_operation_id") != "" &&
+			value(terminal, "native_operation_id") != nativeID, "OTHER_ACTOR_BORROWED_NATIVE")
+		var storedActor, storedCredential, storedUUID, storedProject, storedNative string
+		must(readDB.QueryRowContext(ctx,
+			"SELECT actor_id,token_id,box_uuid,layer,native_operation_id FROM operations WHERE id=?", id).Scan(
+			&storedActor, &storedCredential, &storedUUID, &storedProject, &storedNative) == nil &&
+			storedActor == actor.ActorID && storedCredential == actor.ID && storedUUID == *boxID &&
+			storedProject == *project && storedNative == value(terminal, "native_operation_id"),
+			"OTHER_ACTOR_SQLITE_NATIVE_IDENTITY_MISMATCH")
+		fmt.Printf("S4_A_OAUTH_SEPARATE_ACTOR=%s BW_ID=%s NATIVE_ID=%s\n",
+			label, id, value(terminal, "native_operation_id"))
+	}
+	separateActor(otherSession, otherActor, "INDEPENDENT_GRANT")
+	viewer := issueGrant("mcp:viewer", "viewer")
+	viewerSession := connect(ctx, *endpoint, viewer.Access)
+	defer viewerSession.Close()
+	refused(ctx, viewerSession, "operation_get", map[string]any{"operation_id": originalID},
+		"VIEWER_GRANT_BORROWED_ORIGINAL")
+	refused(ctx, viewerSession, "box_exec", map[string]any{
+		"box_id": *boxID, "argv": argv, "idempotency_key": "s4-oauth-viewer-must-not-dispatch-001",
+	}, "VIEWER_GUEST_EXEC_ACCEPTED")
+	manualAccess, manual, err := store.IssueToken(ctx, "admin", time.Minute)
+	must(err == nil && manual.ActorID == manual.ID, "MANUAL_TOKEN_ACTOR_INVALID")
+	manualSession := connect(ctx, *endpoint, manualAccess)
+	defer manualSession.Close()
+	separateActor(manualSession, manual, "MANUAL_TOKEN")
+	must(store.RevokeToken(ctx, manual.ID) == nil, "MANUAL_TOKEN_REVOKE_FAILED")
+	unauthorized(ctx, *endpoint, manualAccess, "REVOKED_MANUAL_HTTP_ACCEPTED")
+	must(store.RevokeOAuthGrant(ctx, first.GrantID) == nil, "GRANT_REVOKE_FAILED")
+	unauthorized(ctx, *endpoint, next.Access, "REVOKED_GRANT_HTTP_ACCEPTED")
+	must(admissions() == beforeNegatives+2, "REFUSED_CALL_CREATED_ADMISSION")
 	// Independent source of the exact Guest effect count. Native Incus CLI
 	// reads a disposable guest file, bypassing BoxWeave's MCP and SQLite.
 	nativeRead := exec.CommandContext(ctx, "incus", "exec", guestName, "--project", *project,
@@ -185,5 +275,6 @@ func main() {
 	fmt.Printf("S4_A_OAUTH_NATIVE_ORIGINAL_BW_ID=%s NATIVE_ID=%s BOX_UUID=%s\n",
 		originalID, nativeID, *boxID)
 	fmt.Println("S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS")
+	fmt.Println("S4_A_INSTALLED_OAUTH_FOREIGN_VIEWER_MANUAL_REVOKED_NO_ADMISSION=PASS")
 	fmt.Println("S4_A_INDEPENDENT_GUEST_ONE_EFFECT=PASS")
 }

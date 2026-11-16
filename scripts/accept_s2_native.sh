@@ -197,6 +197,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-native-overlap-probe" ./scripts/s2_p1_native_create_delete_overlap_probe.go
 chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-unknown-create-bind-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
 sha256sum "$work/boxweave"
+echo "S4_A_CANDIDATE_BINARY_SHA256=$(sha256sum "$work/boxweave" | cut -d' ' -f1)"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
 socket=/var/lib/incus/unix.socket.user
@@ -1654,6 +1655,7 @@ echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
 # Create can still be running when its UUID becomes visible. Inspect Incus
 # asynchronous operations read-only and wait for the REAL native Create to
 # settle before attempting cleanup. Never retry the original MCP mutation.
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_NATIVE_SETTLEMENT_START"
 attempt=0
 while [ "$attempt" -lt 120 ]; do
   if sudo incus operation list --project "$project" --format json |
@@ -1669,7 +1671,12 @@ if [ "$attempt" -ge 120 ]; then
   sudo incus info bw-s2-ack-native-110d --project "$project" || :
   exit 96
 fi
-test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_NATIVE_SETTLEMENT_PASS"
+if [ "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" != "$ack_uuid" ]; then
+  echo "S4_A_ACK_BIND_UUID=IDENTITY_MISMATCH" >&2
+  exit 96
+fi
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_BIND_UUID_PASS"
 # Genuine native Create accepted once, its ACK lost, and the original
 # controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
 # SQLite copy; original remains immutable and receives no retry/delete.
@@ -1680,7 +1687,17 @@ assert len(op)==32
 print(op)
 PY_SCRIPT
 )"
-test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")" = "$ack_original_id"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_CHECKPOINT_READ"
+ack_native_marker="$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")"
+if [ "$ack_native_marker" != "$ack_original_id" ]; then
+  if [ -z "$ack_native_marker" ]; then
+    echo "S4_A_ACK_BIND_MARKER=MISSING" >&2
+  else
+    echo "S4_A_ACK_BIND_MARKER=ORIGINAL_MISMATCH" >&2
+  fi
+  exit 96
+fi
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_BIND_MARKER_PASS"
 echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
 ack_copy="$work/ledger/unknown-create-bind-copy"
 sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
@@ -1696,11 +1713,13 @@ with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
         original.backup(copy)
 PY_SCRIPT
 sudo chmod 0600 "$ack_copy/ledger.sqlite"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_READY"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
   "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_BIND_PASS"
 # This original database remains truly unbound UNKNOWN; the test binding
 # happened ONLY on a disposable standalone copy.
 test "$(sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'

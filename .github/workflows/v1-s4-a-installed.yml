@@ -55,7 +55,8 @@ jobs:
           set -euo pipefail
           logfile="$RUNNER_TEMP/s4-a-isolated-native.redacted.log"
           if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
-            grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:)' "$logfile" | tail -n 85 || :
+            grep -E '^S4_A_CANDIDATE_BINARY_SHA256=' "$logfile" || :
+            grep -E '^(S4_A_|BH018_INSTALLED_|BH018_MCP_RESUME_PHASE=|S2_NATIVE_BLOCKED|S2_NATIVE_FAIL:|(panic: )?S2_UNKNOWN_CREATE_NATIVE_BIND_FAIL:)' "$logfile" | tail -n 110 || :
             echo S4_A_INSTALLED_REAL_NATIVE_MCP=FAIL_OR_BLOCKED >&2
             exit 1
           fi
@@ -63,9 +64,10 @@ jobs:
           grep -Fxq 'S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=PASS' "$logfile"
           grep -Fxq 'S4_A_RAW_NATIVE_EVENT_STREAM=PASS' "$logfile"
           grep -Fxq 'S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS' "$logfile"
+          grep -Fxq 'S4_A_INSTALLED_OAUTH_FOREIGN_VIEWER_MANUAL_REVOKED_NO_ADMISSION=PASS' "$logfile"
           grep -Fxq 'S4_A_INDEPENDENT_GUEST_ONE_EFFECT=PASS' "$logfile"
           grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS' "$logfile"
           grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS' "$logfile"
           grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$logfile"
-          grep -E '^S4_A_' "$logfile" | tail -n 30
+          grep -E '^S4_A_' "$logfile"
           echo S4_A_INSTALLED_INCUS_76_RESTRICTED_HTTP_MCP_AND_INDEPENDENT_RAW_TERMINAL=PASS
