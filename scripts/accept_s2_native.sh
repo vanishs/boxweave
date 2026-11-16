@@ -1525,12 +1525,46 @@ test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$pr
 echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
 # Genuine accepted-but-unbound native Create is an explicit negative Delete
 # boundary: even an independently witnessed UUID cannot authorize adoption.
-BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_DELETE_REFUSAL_START"
+unbound_rc=0
+( BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
-  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete
-test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete ) \
+  > "$work/ack-unbound-delete.redacted.log" 2>&1 || unbound_rc=$?
+if [ "$unbound_rc" -ne 0 ]; then
+  if grep -Fq 'unbound real native UUID was deleted or adopted' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=REJECTION_MISSING" >&2
+  elif grep -Fq 'ACK-loss original lacked safe UNKNOWN lock' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_UNKNOWN_RECEIPT_DRIFT" >&2
+  elif grep -Fq 'original ACK loss never reached terminal safe UNKNOWN' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_UNKNOWN_NOT_READY" >&2
+  elif grep -Fq 'original accepted Create receipt missing' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_CHECKPOINT_MISSING" >&2
+  elif grep -Fq 'only private disposable MCP listener' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=CLIENT_ENDPOINT_SCOPE_MISMATCH" >&2
+  elif grep -Fq 'tool operation_get refused' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=READ_REFUSED" >&2
+  else
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=REDACTED_CLIENT_FAILURE" >&2
+  fi
+  if sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null |
+      grep -Fqx "$ack_uuid"; then
+    echo "S4_A_UNBOUND_DELETE_NATIVE_POSTREAD=ORIGINAL_UUID_RETAINED"
+  else
+    echo "S4_A_UNBOUND_DELETE_NATIVE_POSTREAD=UNVERIFIED_OR_MISSING"
+  fi
+  exit 94
+fi
+grep -Fqx 'S2_P1_REAL_UNBOUND_CREATE_UUID_DELETE_REFUSED_WITHOUT_REDISPATCH=PASS' "$work/ack-unbound-delete.redacted.log"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_DELETE_REFUSAL_PASS"
+if [ "$(sudo wc -l "$ack_marker" | awk '{print $1}')" != 1 ]; then
+  echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=UNEXPECTED_NATIVE_POST_COUNT" >&2
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_NATIVE_POST_COUNT_PASS"
 
 # Reopen the SAME unknown journal; do not replay the original Create.
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_REOPEN_SAME_UNKNOWN_START"
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
 wait "$service_pid" 2>/dev/null || :
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
@@ -1546,9 +1580,18 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
-BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_CLIENT_START"
+resume_ack_rc=0
+( BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
-  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume ) \
+  > "$work/ack-resume.redacted.log" 2>&1 || resume_ack_rc=$?
+if [ "$resume_ack_rc" -ne 0 ]; then
+  echo "S4_A_ACK_RESTART_FAILURE_CLASS=REDACTED_ORIGINAL_REPLAY_ASSERTION" >&2
+  exit 94
+fi
+grep -Fqx 'S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY=PASS' "$work/ack-resume.redacted.log"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_ORIGINAL_PASS"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
 test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
 test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
