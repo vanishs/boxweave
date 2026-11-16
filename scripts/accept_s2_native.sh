@@ -632,7 +632,8 @@ for name in ("create", "exit126", "exit127"):
         print("S4_A_RAW_NATIVE_" + name.upper() + "=NOT_CAPTURED")
 if not seen:
     print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=NOT_CAPTURED")
-    sys.exit(4)
+    # Continue independent OAuth/native tests. Missing retained raw Op is
+    # still a failing final acceptance gate, not a reason to omit other proof.
 for name, original, native in seen:
     print("S4_A_NATIVE_RAW_TERMINAL_CASE=" + name
           + " BW_ID=" + original["operation_id"]
