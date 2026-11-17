@@ -1,0 +1,85 @@
+name: S4-B2 disposable exclusive bridge / foreign Project admission probe
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths: [.github/workflows/v1-s4-b2-bridge-ownership-native.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Create fresh Incus 7.6 with separate operator-owned bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test ! -e /var/lib/incus
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/b2-net.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/b2-net.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/b2-net.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true
+          sudo incus project create bwowned \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project bwowned profile device add default root disk path=/ pool=default
+          sudo incus --project bwowned profile device add default eth0 nic name=eth0 network=bwbr0
+          sudo incus project create bwforeign \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=incusbr0
+          sudo incus --project bwforeign profile device add default root disk path=/ pool=default
+          sudo incus --project bwforeign profile device add default eth0 nic name=eth0 network=incusbr0
+          echo "S4_B2_SEPARATE_OPERATOR_BRIDGE_PROJECT_CONFIGURED=PASS"
+      - name: Foreign Project direct and raw-parent NIC attachment denials
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo incus --project bwforeign init images:ubuntu/24.04 foreignbox -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus --project bwowned init images:ubuntu/24.04 ownedbox -c limits.cpu=1 -c limits.memory=512MiB
+          echo "S4_B2_BWBR0_USED_BY_BEFORE_FOREIGN_ATTACH"
+          sudo incus network show bwbr0
+          if sudo incus --project bwforeign config device add foreignbox extra nic name=extra network=bwbr0; then
+            echo "S4_B2_FOREIGN_RESTRICTED_PROJECT_NETWORK_BYPASS=SECURITY_BREAK"
+            exit 71
+          else
+            echo "S4_B2_FOREIGN_RESTRICTED_PROJECT_NETWORK_REFERENCES_DENIED=PASS"
+          fi
+          if sudo incus --project bwforeign config device add foreignbox extra nic name=extra nictype=bridged parent=bwbr0; then
+            echo "S4_B2_FOREIGN_RESTRICTED_PROJECT_RAW_PARENT_BYPASS=SECURITY_BREAK"
+            exit 72
+          else
+            echo "S4_B2_FOREIGN_RESTRICTED_PROJECT_RAW_PARENT_DENIED=PASS"
+          fi
+          # The Incus administrator remains above this trust boundary.
+          # Verify its out-of-band attach is detectable and cannot be
+          # mistaken for a project-exclusive NIC network.
+          sudo incus --project default init images:ubuntu/24.04 privilegedbox -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus --project default config device override privilegedbox eth0 network=bwbr0
+          echo "S4_B2_BWBR0_USED_BY_AFTER_PRIVILEGED_FOREIGN_ATTACH"
+          sudo incus network show bwbr0
+          sudo incus --project default delete privilegedbox
+          sudo incus --project bwowned delete ownedbox
+          sudo incus --project bwforeign delete foreignbox
+          sudo incus project delete bwforeign
+          sudo incus project delete bwowned
+          sudo incus network delete bwbr0
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B2_BRIDGE_EXCLUSIVITY_NATIVE_DISPOSABLE_CLEANUP=PASS"
