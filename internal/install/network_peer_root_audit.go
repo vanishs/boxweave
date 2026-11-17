@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -163,9 +164,8 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 	if err != nil {
 		return out, err
 	}
-	if ntag != nt2 || atag != at2 || ptag != pt2 || pftag != pft2 ||
-		!slices.Equal(network.UsedBy, network2.UsedBy) || !slices.Equal(acl.UsedBy, acl2.UsedBy) ||
-		len(proj2.Config) != len(project.Config) || len(prof2.Devices) != len(profile.Devices) {
+	if !nativePeerAuditSnapshotEqual(network, ntag, acl, atag, project, ptag, profile, pftag,
+		network2, nt2, acl2, at2, proj2, pt2, prof2, pft2) {
 		return out, errors.New("native bridge, ACL or Project changed during read-only audit")
 	}
 	data, _ := json.Marshal(struct {
@@ -178,4 +178,22 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 	out = NativePeerBridgeAuditResult{Project: t.Project, Bridge: t.Bridge, ACL: t.ACL,
 		OwnedBoxes: len(t.Boxes), NativeDigestSHA256: hex.EncodeToString(sum[:])}
 	return out, nil
+}
+
+// A change of a same-length Project config or a single Profile NIC property
+// is just as security-critical as a changed object count. ETags and used_by
+// alone cannot be substituted for the complete independently read snapshot.
+func nativePeerAuditSnapshotEqual(n *api.Network, ne string, a *api.NetworkACL, ae string,
+	p *api.Project, pe string, f *api.Profile, fe string,
+	n2 *api.Network, ne2 string, a2 *api.NetworkACL, ae2 string,
+	p2 *api.Project, pe2 string, f2 *api.Profile, fe2 string) bool {
+	if n == nil || a == nil || p == nil || f == nil ||
+		n2 == nil || a2 == nil || p2 == nil || f2 == nil {
+		return false
+	}
+	return ne == ne2 && ae == ae2 && pe == pe2 && fe == fe2 &&
+		reflect.DeepEqual(n, n2) &&
+		reflect.DeepEqual(a, a2) &&
+		reflect.DeepEqual(p, p2) &&
+		reflect.DeepEqual(f, f2)
 }
