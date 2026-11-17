@@ -1,6 +1,6 @@
 # S4-B2 Stage 1: kernel same-IP tuple ambiguity (2026-11-17 PT)
 
-Status: Stage 1 evidence pending independent native confirmation. B2 PARTIAL; B3 not started.
+Status: RISK_CONFIRMED on native Incus 7.6; Stage 1 scope frozen. B2 PARTIAL, B3 not started.
 Baseline source: e201f1a785a1e02839ade389b6c5ca32a846cc85.
 
 ## Why this one experiment is necessary
@@ -45,3 +45,17 @@ Existing installed S4-A PASS and separate Scriptlet native PASS are
 not installed B2 acceptance. B2 remains PARTIAL until complete
 controller-root integration, application live flow revocation and
 cross-Project negative proof are obtained.
+
+## Independent result / engineering gate
+
+Source 3071f25edfca5ab275b9da7a3d63333777fec35a,
+[Actions #44201216635](https://github.com/vanishs/boxweave/actions/runs/44201216635), native job 134455484702 SUCCESS:
+S4_B2_NATIVE_ROOT_IP_ONLY_DELETE_COLLATERAL_SAME_IP_DISTINCT_PORTS=RISK_CONFIRMED.
+
+Two separate fixed-port TCP entries with the SAME original IPv4 A/B IP
+pair were first read back from the real kernel; one IP-only delete
+removed BOTH. This is NOT an actual foreign Project traffic test.
+Decision: forbid product IP-only delete when global network identity
+overlap cannot be independently rejected; alternatively prove a
+dedicated per-bridge conntrack zone before using it. In Stage 2,
+independently prove real foreign-Project TCP/UDP sessions survive.
