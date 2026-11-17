@@ -4,6 +4,9 @@ on:
     branches: [feat/v1-s4-runtime-integration-20261116]
     paths:
       - .github/workflows/v1-s4-b2-scriptlet-parity-native.yml
+      - internal/install/native_scriptlet_policy.go
+      - internal/install/native_scriptlet_plan.go
+      - internal/install/native_scriptlet_policy_native_test.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -151,35 +154,13 @@ jobs:
           legacy_files_exec_probe PRE_ROUTE
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
           writer_fpr="$(cat "$RUNNER_TEMP/writer.fingerprint")"
-          cat > "$RUNNER_TEMP/authorize.star" <<EOF
-          def authorize(details, object, entitlement):
-              if details.Protocol != "tls":
-                  return False
-              if details.Certificate == None or details.Certificate.restricted != True:
-                  return False
-              if details.IsAllProjectsRequest:
-                  return False
-              if details.Username == "$writer_fpr":
-                  return object == "network_acl:default/bw-s4b2-scriptlet" and details.ProjectName == "default" and details.Path == "/1.0/network-acls/bw-s4b2-scriptlet" and details.Method in ["GET", "PUT"] and entitlement in ["can_view", "can_edit"]
-              parts = object.split(":")
-              if len(parts) != 2:
-                  return False
-              obj_type = parts[0]
-              scope = parts[1].split("/")[0]
-              if obj_type == "server":
-                  return entitlement in ["can_view", "can_view_resources", "can_view_metrics"]
-              if obj_type in ["storage_pool", "certificate"]:
-                  return entitlement == "can_view"
-              if obj_type == "project" and entitlement == "can_edit":
-                  return False
-              allowed_types = ["project", "image", "image_alias", "instance", "network", "network_acl", "network_address_set", "network_zone", "profile", "storage_bucket", "storage_volume"]
-              if obj_type in allowed_types and scope in details.Certificate.projects:
-                  return True
-              inherited_types = ["image", "profile", "storage_volume", "storage_bucket", "network", "network_zone"]
-              if obj_type in inherited_types and scope == "default" and entitlement == "can_view" and details.ProjectName in details.Certificate.projects:
-                  return True
-              return False
-          EOF
+          # Generate the native source from the actual reviewed Go installer
+          # policy, not a hand-maintained CI-only second policy.
+          BOXWEAVE_S4B2_SCRIPTLET_POLICY_OUTPUT="$RUNNER_TEMP/authorize.star" \
+          BOXWEAVE_S4B2_SCRIPTLET_FPR="$writer_fpr" \
+            go test -count=1 -v ./internal/install -run '^TestS4B2ScriptletNativePolicySource$'
+          test -s "$RUNNER_TEMP/authorize.star"
+          echo "S4_B2_SCRIPTLET_PRODUCT_GENERATED_POLICY_SOURCE=PASS"
           sudo incus config set authorization.scriptlet="$(cat "$RUNNER_TEMP/authorize.star")"
           test -n "$(sudo incus config get authorization.scriptlet)"
           sudo incus config set authorization.client.tls-restricted=scriptlet
