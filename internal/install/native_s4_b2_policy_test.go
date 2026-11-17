@@ -148,10 +148,26 @@ func TestS4B2NativeExactTargetEgressAndIngress(t *testing.T) {
 	if err := c.UpdateNetworkACL(s4b1ProbeACL, desired.NetworkACLPut, tag); err != nil {
 		t.Fatal(err)
 	}
-	got, _, err := c.GetNetworkACL(s4b1ProbeACL)
+	got, newTag, err := c.GetNetworkACL(s4b1ProbeACL)
 	if err != nil || !reflect.DeepEqual(got.Ingress, desired.Ingress) || !reflect.DeepEqual(got.Egress, desired.Egress) {
 		t.Fatal("native exact-host ACL ETag write/readback mismatch", err)
 	}
+	if newTag == tag {
+		t.Fatal("native ACL update did not change provider ETag")
+	}
+	stale := c.UpdateNetworkACL(s4b1ProbeACL, desired.NetworkACLPut, tag)
+	if stale == nil {
+		t.Fatal("concurrent stale ETag update was accepted")
+	}
+	msg := strings.ToLower(stale.Error())
+	if !strings.Contains(msg, "412") && !strings.Contains(msg, "precondition") && !strings.Contains(msg, "etag") {
+		t.Fatalf("unrecognized stale-ETag native failure: %v", stale)
+	}
+	post, _, err := c.GetNetworkACL(s4b1ProbeACL)
+	if err != nil || !reflect.DeepEqual(post.Ingress, desired.Ingress) || !reflect.DeepEqual(post.Egress, desired.Egress) {
+		t.Fatalf("stale ETag changed native ACL: %v", err)
+	}
+	t.Log("S4_B2_NATIVE_STALE_ETAG_REFUSED_UNCHANGED=PASS")
 	t.Log("S4_B2_NATIVE_EXACT_PEER_S1_POLICY_SDK_READBACK=PASS")
 }
 func TestS4B2NativeRevokeBeforeIPRelease(t *testing.T) {
