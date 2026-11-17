@@ -97,6 +97,9 @@ jobs:
           sudo ip link del dev "$veth"
           test ! -e "/sys/class/net/$veth"
           echo "S4_B2_FANOUT_ONE_OWNED_HOST_VETH_REMOVED=OBSERVED"
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-fanout-after-veth-before-put.nft"
+          sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4"
+          echo "S4_B2_FANOUT_CONTROL_AFTER_C_LINK_LOSS_A_TO_B_STILL_REACHABLE=PASS"
           set +e
           probe TestS4B2NativeDedicatedBridgeRevoke > "$RUNNER_TEMP/s4b2-fanout-put.txt" 2>&1
           rc=$?
@@ -112,6 +115,29 @@ jobs:
           sudo nft list ruleset > "$RUNNER_TEMP/s4b2-fanout-after.nft"
           echo "S4_B2_FANOUT_BEFORE_NFT_SHA256=$(sha256sum "$RUNNER_TEMP/s4b2-fanout-before.nft" | awk '{print $1}')"
           echo "S4_B2_FANOUT_AFTER_NFT_SHA256=$(sha256sum "$RUNNER_TEMP/s4b2-fanout-after.nft" | awk '{print $1}')"
+          python3 - "$RUNNER_TEMP/s4b2-fanout-after-veth-before-put.nft" "$RUNNER_TEMP/s4b2-fanout-after.nft" <<'PY'
+          import re
+          import sys
+
+          def observed(path):
+              text = open(path, encoding="utf-8").read()
+              result = {}
+              for box in "abc":
+                  chains = re.findall(r"chain (?:in|fwd|out)\\.bwowned_s4b2" + box + r"\\.eth0 \\{(.*?)\\n\\t\\}", text, re.S)
+                  if len(chains) != 3:
+                      raise SystemExit("missing nft per-NIC chains for " + box)
+                  grant4 = sum(c.count("ip saddr 10.248.83.11 ip daddr 10.248.83.12 accept") for c in chains)
+                  grant6 = sum(c.count("ip6 saddr fd83:248::11 ip6 daddr fd83:248::12 accept") for c in chains)
+                  result[box] = (grant4, grant6)
+              return result
+
+          pre = observed(sys.argv[1])
+          post = observed(sys.argv[2])
+          for box in "abc":
+              print("S4_B2_FANOUT_NFT_BOX", box, "AFTER_VETH_BEFORE_PUT", pre[box], "AFTER_FAILED_PUT", post[box])
+          changed = [box for box in "abc" if pre[box] != post[box]]
+          print("S4_B2_FANOUT_PARTIAL_KERNEL_CHANGE_AFTER_FAILED_PUT=" + (",".join(changed) if changed else "NOT_OBSERVED"))
+          PY
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
             echo "S4_B2_FANOUT_AFTER_UNCERTAIN_REVOKE_A_TO_B=REACHABLE"
           else
