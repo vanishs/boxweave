@@ -24,7 +24,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-scriptlet-plan|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -64,6 +64,7 @@ func run() error {
 	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
 	scriptletWriter := f.String("scriptlet-writer-fingerprint", "", "exact existing restricted TLS certificate fingerprint for a single owned native ACL")
+	scriptletSHA := f.String("scriptlet-plan-sha256", "", "operator-reviewed exact global Scriptlet routing plan digest")
 	oldIncusPackage := f.String("old-incus-package", "", "exact current signed Ubuntu Incus package version")
 	confirmNativeHost := f.String("confirm-native-host-sha256", "", "operator-reviewed current local machine-ID digest")
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
@@ -85,7 +86,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-scriptlet-plan", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -95,7 +96,7 @@ func run() error {
 	// and plan commands deliberately remain available during maintenance.
 	switch command {
 	case "install-stage", "install-activate", "upgrade", "rollback", "install-commit",
-		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive",
+		"native-bootstrap", "native-prepare-apply", "native-prepare-rollback", "native-prepare-archive", "native-scriptlet-apply", "native-scriptlet-rollback",
 		"native-migrate-apply", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit", "recover":
 		release, err := acquireMaintenanceLock()
 		if err != nil {
@@ -155,6 +156,34 @@ func run() error {
 		} else {
 			report, err = install.NativePrerequisiteVerify(ctx, *project, *prereqSHA, *approveLocal)
 		}
+		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
+			return e
+		}
+		return err
+	}
+	if command == "native-scriptlet-apply" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		report, err := install.NativeScriptletApply(ctx, install.NativeScriptletTarget{
+			OwnerProject: *project, ACLProject: "default", ACL: *prepareACL,
+			WriterFingerprint: *scriptletWriter,
+		}, *scriptletSHA, *approveLocal)
+		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
+			return e
+		}
+		return err
+	}
+	if command == "native-scriptlet-status" {
+		report, err := install.NativeScriptletStatus()
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(report)
+	}
+	if command == "native-scriptlet-rollback" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		report, err := install.NativeScriptletRollback(ctx, *scriptletSHA, *approveLocal)
 		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
 			return e
 		}

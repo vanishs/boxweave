@@ -7,6 +7,9 @@ on:
       - internal/install/native_scriptlet_policy.go
       - internal/install/native_scriptlet_plan.go
       - internal/install/native_scriptlet_policy_native_test.go
+      - internal/install/native_scriptlet_apply.go
+      - internal/install/native_scriptlet_apply_test.go
+      - internal/install/native_scriptlet_apply_native_test.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,6 +47,8 @@ jobs:
           sudo incus config set core.https_address=127.0.0.1:8443
           sudo incus project create bwlegacy
           sudo incus project create bwother
+          sudo incus project create bwplan
+          sudo incus project set bwplan restricted=true
           # Fresh non-default Projects do not inherit the default Project's
           # root device. Guest Exec/Files fixtures require an explicit pool.
           sudo incus --project bwlegacy profile device add default root disk path=/ pool=default
@@ -154,6 +159,15 @@ jobs:
           legacy_files_exec_probe PRE_ROUTE
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
           writer_fpr="$(cat "$RUNNER_TEMP/writer.fingerprint")"
+          # Test real product journaled UpdateServer and exact native rollback
+          # on an isolated host, without using the production CLI on L0.
+          go_binary="$(command -v go)"
+          sudo env GITHUB_ACTIONS=true RUNNER_TEMP="$RUNNER_TEMP" \
+            BOXWEAVE_S4B2_SCRIPTLET_ROOT_NATIVE=disposable-7.6 \
+            BOXWEAVE_S4B2_SCRIPTLET_FPR="$writer_fpr" \
+            "$go_binary" test -count=1 -v ./internal/install \
+            -run '^TestS4B2ScriptletProductRootNativeApplyRollback$'
+          echo "S4_B2_NATIVE_PRODUCT_SCRIPTLET_JOURNALED_GLOBAL_UPDATE_ROLLBACK=PASS"
           # Generate the native source from the actual reviewed Go installer
           # policy, not a hand-maintained CI-only second policy.
           BOXWEAVE_S4B2_SCRIPTLET_POLICY_OUTPUT="$RUNNER_TEMP/authorize.star" \
