@@ -2,7 +2,7 @@
 
 > **Discussion archive, not an approved product change.** Observed 2026-11-16 (America/Los_Angeles). This note records an owner-led positioning discussion and a dated comparison of neighboring products. It grants **no** scope, feature, architecture, priority, milestone, implementation, acceptance, release, or merge approval. A later decision must explicitly update the authoritative product boundary and phase plans.
 >
-> **Pinned baseline:** protected `v1` at [`4a45a80c`](https://github.com/vanishs/boxweave/commit/4a45a80c8de2fb36cde851a10e0f9c80f2f9b300), with 16 registered public MCP tools following signed and merged S3. Concurrent, **unmerged** S4 work is in [PR #153](https://github.com/vanishs/boxweave/pull/153); S4-A has a separately scoped signoff, while S4-B network and S4-C full integration are **not accepted on this pinned baseline**. See [permanent v1 boundary](../decisions/PRODUCT_BOUNDARY.md), [Agent development loop](../product/DEVELOPMENT_LOOP.md), and [S4/S5 allocation](../development/S4_S5_EXECUTION_REBALANCE_2026-11-16.md) on the development branch. External product descriptions and URLs are snapshots, not independently verified security/performance guarantees.
+> **Pinned baseline:** protected `v1` at [`4a45a80c`](https://github.com/vanishs/boxweave/commit/4a45a80c8de2fb36cde851a10e0f9c80f2f9b300), with 16 registered public MCP tools following signed and merged S3. Concurrent, **unmerged** S4 work is in [PR #153](https://github.com/vanishs/boxweave/pull/153); S4-A has a separately scoped signoff, while S4-B network and S4-C full integration are **not accepted on this pinned baseline**. See [permanent v1 boundary](../decisions/PRODUCT_BOUNDARY.md), [Agent development loop](../product/DEVELOPMENT_LOOP.md), and [S4/S5 allocation](https://github.com/vanishs/boxweave/blob/feat/v1-s4-runtime-integration-20261116/docs/development/S4_S5_EXECUTION_REBALANCE_2026-11-16.md) on the development branch. External product descriptions and URLs are snapshots, not independently verified security/performance guarantees.
 
 ## 1. Positioning: the product is the environment, not a single Box
 
@@ -28,15 +28,13 @@ flowchart TB
     test[Test Box]
     web -.->|explicit directional permission: S4 target| api
     api -.->|explicit directional permission: S4 target| db
-    test
   end
   incus[Incus native operations / kernel isolation / network enforcement]
   bw -->|restricted, owned-only operations| incus
   host[Host administration and unrelated Incus resources: NOT exposed to Agent]
-  agent -.-x host
 ```
 
-The four example Box names are workload roles chosen by the Agent, **not** new BoxWeave resource types. Dashed arrows are **conceptual desired peer permissions**, not promises that S4 packet/security acceptance has finished. The host is still a trusted operator-managed substrate. Guest-root Exec inside an owned Box does not confer host-root privilege.
+The separate host-administration node is intentionally unconnected to the Agent's management path. The four example Box names are workload roles chosen by the Agent, **not** new BoxWeave resource types. Dashed arrows are **conceptual desired peer permissions**, not promises that S4 packet/security acceptance has finished. The host is still a trusted operator-managed substrate. Guest-root Exec inside an owned Box does not confer host-root privilege.
 
 ## 2. Differentiating contract (current and planned are distinct)
 
