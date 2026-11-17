@@ -127,8 +127,16 @@ jobs:
           echo "S4_B2_NDP_MLD_RULE_STAGE_COMPLETE=YES"
           sudo incus restart s4b2a
           sudo incus restart s4b2b
-          test "$(guest6 s4b2a)" = "$a6"
-          test "$(guest6 s4b2b)" = "$b6"
+          for i in $(seq 1 45); do
+            nowa="$(guest6 s4b2a)"; nowb="$(guest6 s4b2b)"
+            if [[ "$nowa" = "$a6" && "$nowb" = "$b6" ]]; then break; fi
+            sleep 2
+          done
+          echo "S4_B2_NDP_POST_RESTART_A=$nowa B=$nowb"
+          if [[ "$nowa" != "$a6" || "$nowb" != "$b6" ]]; then
+            echo "S4_B2_NDP_RESTART_CHANGED_NATIVE_IP_OR_NOT_READY=BLOCKED"
+            exit 81
+          fi
           ping6 MLD_143_EGRESS_130_INGRESS
           sudo ip link set dev incusbr0 type bridge mcast_snooping 0
           ping6 DISABLE_SNOOPING_DIAGNOSTIC_ONLY
@@ -136,6 +144,8 @@ jobs:
           ping6 B_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
           ping6 A_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device override s4b2b eth0 security.acls.default.egress.action=allow
+          ping6 B_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2a eth0 security.acls.default.ingress.action=allow
           ping6 A_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2b eth0 security.ipv6_filtering=false
