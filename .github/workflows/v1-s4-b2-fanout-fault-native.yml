@@ -123,7 +123,7 @@ jobs:
               text = open(path, encoding="utf-8").read()
               result = {}
               for box in "abc":
-                  chains = re.findall(r"chain (?:in|fwd|out)\\.bwowned_s4b2" + box + r"\\.eth0 \\{(.*?)\\n\\t\\}", text, re.S)
+                  chains = re.findall(r"chain (?:in|fwd|out)\.bwowned_s4b2" + box + r"\.eth0 \{(.*?)\n\t\}", text, re.S)
                   if len(chains) != 3:
                       raise SystemExit("missing nft per-NIC chains for " + box)
                   grant4 = sum(c.count("ip saddr 10.248.83.11 ip daddr 10.248.83.12 accept") for c in chains)
