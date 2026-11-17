@@ -5,7 +5,6 @@ package install
 // and no generic host shell: only a fixed conntrack binary with constrained
 // kernel tuples can be reached after independent root Incus verification.
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"strconv"
 	"strings"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -113,28 +113,79 @@ func nativePeerACLMatchesEndpoint(pattern string, endpoint netip.Addr) bool {
 	return false
 }
 
+// A successful process exit is NOT evidence that an empty stdout means
+// zero kernel connections. Require an explicit conntrack zero diagnostic or
+// original source/destination tuples. Unexpected, truncated or contradictory
+// output preserves UNKNOWN; never issue a blind -D after an ambiguous read.
 func nativePeerConntrackList(ctx context.Context, run nativePeerConntrackRun,
 	family, source, target string) (bool, error) {
-	output, err := run(ctx, "-L", "-f", family, "-s", source, "-d", target)
-	if err != nil {
-		// Some conntrack-tools builds exit 1 on an empty filtered list.
-		// Accept only its exact zero-entry diagnostic, never generic errors.
-		if bytes.Contains(output, []byte("0 flow entries have been shown")) &&
-			!bytes.Contains(output, []byte("src=")) {
-			return false, nil
-		}
-		return false, fmt.Errorf("bounded conntrack inventory cannot be verified: %w", err)
+	if run == nil {
+		return false, errors.New("missing bounded conntrack reader")
 	}
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(line, "flow entries have been shown") ||
-			strings.Contains(line, "flow entries shown") {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	output, cmdErr := run(ctx, "-L", "-f", family, "-s", source, "-d", target)
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	found, zero, nonzero := false, false, false
+	for _, raw := range strings.Split(string(output), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
 			continue
 		}
-		// Never believe an unexpected textual output is proof of emptiness.
+		pos := strings.Index(line, " flow entries have been shown")
+		if pos < 0 {
+			pos = strings.Index(line, " flow entries shown")
+		}
+		if pos >= 0 {
+			prefix := strings.Fields(strings.TrimSpace(line[:pos]))
+			if len(prefix) == 0 {
+				return false, errors.New("unparseable conntrack summary")
+			}
+			count, err := strconv.Atoi(prefix[len(prefix)-1])
+			if err != nil || count < 0 {
+				return false, errors.New("unparseable conntrack entry count")
+			}
+			if count == 0 {
+				zero = true
+			} else {
+				nonzero = true
+			}
+			continue
+		}
+		firstSource, firstTarget := "", ""
+		for _, f := range strings.Fields(line) {
+			if strings.HasPrefix(f, "src=") && firstSource == "" {
+				firstSource = strings.TrimPrefix(f, "src=")
+			}
+			if strings.HasPrefix(f, "dst=") && firstTarget == "" {
+				firstTarget = strings.TrimPrefix(f, "dst=")
+			}
+		}
+		if firstSource != source || firstTarget != target {
+			return false, errors.New("conntrack inventory contains unverified tuple or diagnostic")
+		}
+		found = true
+	}
+	if (zero && found) || (zero && nonzero) {
+		return false, errors.New("contradictory conntrack inventory readback")
+	}
+	if cmdErr != nil {
+		if zero && !found && !nonzero {
+			// Some conntrack-tools builds return code 1 for a filtered zero.
+			return false, nil
+		}
+		return false, fmt.Errorf("bounded conntrack inventory uncertain: %w", cmdErr)
+	}
+	if found {
 		return true, nil
 	}
-	return false, nil
+	if zero && !nonzero {
+		return false, nil
+	}
+	return false, errors.New("conntrack readback lacks explicit zero or verified original tuple")
 }
 func nativePeerConntrackPurgeExact(ctx context.Context, run nativePeerConntrackRun,
 	a, b native.PeerACLBox) (NativePeerConntrackReport, error) {

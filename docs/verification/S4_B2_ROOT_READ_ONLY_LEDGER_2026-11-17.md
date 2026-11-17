@@ -16,3 +16,6 @@ The ordinary controller state.Open can create an owner database and initializes 
 Development occurred only in a new L0 one-use Box c4d27042-49f4-44f1-8b66-379dbe9c8fce, original create 3e99653ed4f5cf3e93e12103e4f3fa2e, native b2fc453d-0db2-404b-9740-bad80a751298, based on e2858014a03db48f1ef1a7eccd108becf81ce630. Shared L0 global permissions, ACLs and existing Boxes were unchanged.
 
 This read-only snapshot is not a durable network lease or a complete root-to-controller operation transaction. Exact-HEAD fresh native execution, installed version, privilege handoff, per-NIC nft DROP, old-client parity and crash/ACK loss recovery still require independent verification. Never infer S4_B2_PASS or start B3 from this evidence.
+
+## Independent native source-exact witness
+[GitHub Actions #44154667584](https://github.com/vanishs/boxweave/actions/runs/44154667584), original job 134292059836, source 73e90352098a272209535eaa5cefd13fc6d244e5: SUCCESS. Fresh Incus 7.6 logs explicitly recorded S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS alongside complete SQLite-to-Incus root native identity/MAC/quarantine checks, unregistered host port refusal, no global conntrack flush and exact cleanup. This verifies the new read-only path in a root native test fixture, not installed v1 CLI+OAuth/MCP handoff or B2 PASS.
