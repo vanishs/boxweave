@@ -111,8 +111,8 @@ jobs:
           echo "S4_B2_NDP_NFT_RULES"
           sudo nft -a list ruleset | grep -E 'nd-neighbor|icmpv6 type|mld|fwd.s4b2|egress|ingress' | head -n 90 || :
           echo "S4_B2_NDP_BRIDGE_NETFILTER=$(cat /proc/sys/net/bridge/bridge-nf-call-ip6tables 2>/dev/null || echo absent)"
-          sudo nft -a list ruleset | sed -n '/chain fwd.s4b2a.eth0 {/,/^	}/p' | head -n 100 || :
-          sudo nft -a list ruleset | sed -n '/chain fwd.s4b2b.eth0 {/,/^	}/p' | head -n 100 || :
+          sudo nft -a list ruleset | grep -F -A 65 'chain fwd.s4b2a.eth0 {' | head -n 80 || :
+          sudo nft -a list ruleset | grep -F -A 65 'chain fwd.s4b2b.eth0 {' | head -n 80 || :
           sudo ip6tables -S FORWARD | head -n 40 || :
           if sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=143; then
             echo "S4_B2_NDP_MLD143_RULE_ADDED=YES"
