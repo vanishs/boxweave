@@ -120,8 +120,36 @@ jobs:
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
           probe writer POST '/1.0/network-acls?project=default' 403
           probe writer DELETE '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 403
-          probe writer GET '/1.0/instances?project=default' 403
+          probe writer GET '/1.0/projects/bwlegacy' 403
+          probe writer GET '/1.0/projects/bwother' 403
           echo "S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS=PASS"
+          # Writer must make exactly one real API ACL change, with native readback.
+          cat > "$RUNNER_TEMP/exact-acl-put.json" <<'JSON'
+          {"description":"S4-B2 exact scriptlet writer authorized native PUT","ingress":[],"egress":[],"config":{}}
+          JSON
+          acl_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+            -o "$RUNNER_TEMP/exact-acl-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-scriptlet?project=default')"
+          echo "S4_B2_SCRIPTLET_WRITER_EXACT_PUT_STATUS=$acl_code"
+          test "$acl_code" = 200
+          test "$(sudo incus network acl get bw-s4b2-scriptlet description)" = 'S4-B2 exact scriptlet writer authorized native PUT'
+          echo "S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK=PASS"
+          forbidden_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+            -o "$RUNNER_TEMP/foreign-acl-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-not-owned?project=default')"
+          echo "S4_B2_SCRIPTLET_WRITER_FOREIGN_PUT_STATUS=$forbidden_code"
+          test "$forbidden_code" = 403
+          test "$(sudo incus network acl get bw-s4b2-not-owned description)" != 'S4-B2 exact scriptlet writer authorized native PUT'
+          echo "S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED=PASS"
+
           set +e
           sudo incus config set authorization.scriptlet='def authorize(details, object, entitlement):' > "$RUNNER_TEMP/bad-scriptlet.txt" 2>&1
           bad_rc=$?
