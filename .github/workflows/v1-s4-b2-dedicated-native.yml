@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/v1-s4-b2-dedicated-native.yml
       - internal/install/native_s4_b2_dedicated_test.go
+      - internal/install/native_s4_b2_fault_lab_test.go
       - internal/install/network_peer_policy.go
       - internal/install/network_peer_bridge_guard.go
   workflow_dispatch:
@@ -96,6 +97,7 @@ jobs:
           echo "S4_B2_NATIVE_DEDICATED_EXCLUSIVE_ROOT_NETWORK_USED_BY"
           sudo incus network show bwbr0
           probe TestS4B2NativeDedicatedBridgeExactPeer
+          probe TestS4B2NativeFaultLabStaleETag
           sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
           v6_ok=0
           for i in 1 2 3 4 5; do
@@ -127,6 +129,19 @@ jobs:
           echo "S4_B2_NATIVE_DEDICATED_FOREIGN_RESTRICTED_ATTACH=DENIED_PASS"
           sudo incus --project bwforeign delete s4b2foreign
           sudo incus project delete bwforeign
+          sudo incus --project bwowned init images:ubuntu/24.04 s4b2unknown -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus --project bwowned config device override s4b2unknown eth0 ipv4.address=10.248.83.14 ipv6.address=fd83:248::14
+          sudo incus --project bwowned start s4b2unknown
+          for i in $(seq 1 40); do
+            if [[ "$(guest4 s4b2unknown)" = 10.248.83.14 && "$(guest6 s4b2unknown)" = fd83:248::14 ]]; then break; fi
+            sleep 2
+          done
+          test "$(guest4 s4b2unknown)" = 10.248.83.14
+          test "$(guest6 s4b2unknown)" = fd83:248::14
+          probe TestS4B2NativeFaultLabUnknownSameProjectConsumer
+          sudo incus --project bwowned stop s4b2unknown
+          sudo incus --project bwowned delete s4b2unknown
+          echo "S4_B2_FAULT_LAB_UNKNOWN_CONSUMER_CLEANUP=PASS"
           probe TestS4B2NativeDedicatedBridgeRevoke
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 64; fi
           if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 65; fi
@@ -142,6 +157,9 @@ jobs:
           test "$(guest4 s4b2replacement)" = "$b4" && test "$(guest6 s4b2replacement)" = "$b6"
           sudo incus --project bwowned exec s4b2a -- ip -4 neigh del "$b4" dev eth0 || :
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 2 -W 2 "$b4" >/dev/null 2>&1; then exit 66; fi
+          sudo incus --project bwowned exec s4b2a -- ip -6 neigh del "$b6" dev eth0 || :
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 2 -W 2 "$b6" >/dev/null 2>&1; then exit 68; fi
+          echo "S4_B2_FAULT_LAB_IPV6_REVOKE_BEFORE_REUSED_UUID_DENY=PASS"
           echo "S4_B2_NATIVE_DEDICATED_REVOKE_BEFORE_DUAL_STACK_REUSE_NO_IP_TRANSFER=PASS"
           for box in s4b2a s4b2c s4b2replacement; do
             sudo incus --project bwowned stop "$box"
