@@ -132,4 +132,6 @@ func s4b2NativeRootReadOnlyPeerReviewFixture(t *testing.T, ctx context.Context,
 		t.Fatal("root read-only peer review accepted poisoned persisted MAC")
 	}
 	t.Log("S4_B2_ROOT_PEER_REVIEW_MAC_DRIFT_REFUSED=PASS")
+	// Separate disposable kernel risk experiment: not an approved root journal replay.
+	s4b2NativeWitnessIPOnlyTupleCollision(t, ctx, target.Boxes[0], target.Boxes[1])
 }
