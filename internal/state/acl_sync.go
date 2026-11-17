@@ -11,6 +11,12 @@ import (
 // The caller supplies independently verified ACL/NIC/kernel postconditions.
 type SynchronousACLEffect func(context.Context) error
 
+// SynchronousACLIsolation must prove the native endpoints are stopped,
+// autostart is disabled, dual-stack addresses stay pinned and every affected
+// NIC is contained before ACL PUT. Unknown results preserve that barrier.
+// A no-op is NEVER a valid installed-controller implementation.
+type SynchronousACLIsolation func(context.Context) error
+
 // AckSynchronousACL durably marks a successful synchronous SDK return.
 // It deliberately does NOT manufacture a native Operation ID, or imply every
 // NIC's in-kernel ACL reload converged: the verifier must establish that.
@@ -22,8 +28,8 @@ func (s *Store) AckSynchronousACL(ctx context.Context, id string) error {
 // not the normal asynchronous Worker.Execute. Dispatch intent is journaled
 // first. On timeout, any SDK error after dispatch or uncertain poststate,
 // retain UNKNOWN and the exact shared ACL/Box claims; never blindly retry.
-func (w Worker) ExecuteSynchronousACL(id string, effect SynchronousACLEffect, verify VerifyEffect) {
-	if w.Store == nil || effect == nil || verify == nil {
+func (w Worker) ExecuteSynchronousACL(id string, isolate SynchronousACLIsolation, effect SynchronousACLEffect, verify VerifyEffect) {
+	if w.Store == nil || isolate == nil || effect == nil || verify == nil {
 		return
 	}
 	rec, err := w.Store.Get(context.Background(), id)
@@ -38,12 +44,11 @@ func (w Worker) ExecuteSynchronousACL(id string, effect SynchronousACLEffect, ve
 	if err = w.Store.Claim(ctx, id); err != nil {
 		return
 	}
+	if err = isolate(ctx); err != nil {
+		_ = w.Store.Unknown(context.Background(), id, "DISPATCHING", "SYNC_ACL_ISOLATION_UNVERIFIED")
+		return
+	}
 	if err = effect(ctx); err != nil {
-		var before PreDispatchError
-		if errors.As(err, &before) && before.Class != "" {
-			_ = w.Store.FailPreDispatch(context.Background(), id, before.Class)
-			return
-		}
 		_ = w.Store.Unknown(context.Background(), id, "DISPATCHING", "SYNC_ACL_NATIVE_OUTCOME_AMBIGUOUS")
 		return
 	}
@@ -61,8 +66,8 @@ func (w Worker) ExecuteSynchronousACL(id string, effect SynchronousACLEffect, ve
 	}
 }
 
-func (w Worker) SubmitSynchronousACL(id string, effect SynchronousACLEffect, verify VerifyEffect) error {
-	if w.Store == nil || effect == nil || verify == nil {
+func (w Worker) SubmitSynchronousACL(id string, isolate SynchronousACLIsolation, effect SynchronousACLEffect, verify VerifyEffect) error {
+	if w.Store == nil || isolate == nil || effect == nil || verify == nil {
 		return errors.New("ACL worker not configured")
 	}
 	r, err := w.Store.Get(context.Background(), id)
@@ -75,6 +80,6 @@ func (w Worker) SubmitSynchronousACL(id string, effect SynchronousACLEffect, ver
 	if r.State != "ADMITTED" {
 		return ErrState
 	}
-	go w.ExecuteSynchronousACL(id, effect, verify)
+	go w.ExecuteSynchronousACL(id, isolate, effect, verify)
 	return nil
 }
