@@ -144,11 +144,11 @@ jobs:
           ping6 B_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
           ping6 A_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
-          sudo incus config device override s4b2b eth0 security.acls.default.egress.action=allow
+          sudo incus config device set s4b2b eth0 security.acls.default.egress.action=allow
           ping6 B_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
-          sudo incus config device override s4b2a eth0 security.acls.default.ingress.action=allow
+          sudo incus config device set s4b2a eth0 security.acls.default.ingress.action=allow
           ping6 A_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
-          sudo incus config device override s4b2b eth0 security.ipv6_filtering=false
+          sudo incus config device set s4b2b eth0 security.ipv6_filtering=false
           ping6 B_IPV6_FILTER_OFF_DIAGNOSTIC_ONLY
           echo "S4_B2_NDP_DIFFERENTIAL_COMPLETE=YES_NOT_A_PRODUCT_FIX"
           for box in s4b2a s4b2b s4b2c; do sudo incus stop "$box"; sudo incus delete "$box"; done
