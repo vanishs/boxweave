@@ -51,6 +51,9 @@ func NativePeerConntrackPurgeFromStore(ctx context.Context, s *state.Store,
 	if os.Geteuid() != 0 {
 		return zero, errors.New("protected conntrack invalidation requires host-local root")
 	}
+	if !s.IsNetworkAuditReadOnly() {
+		return zero, errors.New("root conntrack invalidation requires validated read-only SQLite owner ledger")
+	}
 	target, before, err := nativePeerConntrackTargetFromStore(ctx, s, project, bridge, acl, srcUUID, dstUUID)
 	if err != nil {
 		return zero, err

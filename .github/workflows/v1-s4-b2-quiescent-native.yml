@@ -25,6 +25,9 @@ on:
       - internal/install/network_peer_conntrack.go
       - internal/install/network_peer_conntrack_test.go
       - internal/install/network_peer_conntrack_native_test.go
+      - internal/install/network_peer_conntrack_review.go
+      - internal/install/network_peer_conntrack_review_test.go
+      - internal/install/network_peer_conntrack_review_native_test.go
       - internal/install/network_peer_kernel_ports.go
       - internal/install/network_peer_kernel_ports_test.go
       - internal/install/network_peer_revocation.go
@@ -195,6 +198,14 @@ jobs:
           grep -Fq 'S4_B2_NATIVE_ROOT_UNREGISTERED_HOST_BRIDGE_PORT_REFUSED=PASS' \
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
           grep -Fq 'S4_B2_NATIVE_ROOT_ZERO_HOST_BRIDGE_PORTS_AFTER_STOP=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_WRITABLE_SQLITE_DENIED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_PROTECTED_LEDGER_AND_STOPPED_NATIVE_DROP=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_FOREIGN_PAIR_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_MAC_DRIFT_REFUSED=PASS' \
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
           probe TestS4B2NativeCompiledDropTombstoneRemove
           echo "S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER=PASS"

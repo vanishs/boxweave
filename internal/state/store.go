@@ -84,7 +84,18 @@ var (
 	ErrResourceLocked = errors.New("original unresolved resource claim is still locked")
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db *sql.DB
+	// auditReadOnly is set only by the validated existing-owner,
+	// SQLite mode=ro / query_only root-side audit constructor.
+	auditReadOnly bool
+}
+
+// IsNetworkAuditReadOnly distinguishes a protected root witness handle from
+// an ordinary writable service Store. It does not grant OS privileges.
+func (s *Store) IsNetworkAuditReadOnly() bool {
+	return s != nil && s.db != nil && s.auditReadOnly
+}
 
 type Token struct {
 	ID string

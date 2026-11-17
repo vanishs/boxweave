@@ -78,6 +78,7 @@ func TestS4B2NativeRootPairConntrackAfterQuiescence(t *testing.T) {
 		t.Fatal("foreign test link cleanup failed:", err)
 	}
 	t.Log("S4_B2_NATIVE_ROOT_ZERO_HOST_BRIDGE_PORTS_AFTER_STOP=PASS")
+	s4b2NativeRootReadOnlyPeerReviewFixture(t, ctx, root, scope)
 	a, b := scope.Boxes[0], scope.Boxes[1]
 	actual, _, err := root.GetNetworkACL(scope.ACL)
 	if err != nil {

@@ -55,7 +55,7 @@ func OpenNetworkAuditReadOnly(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	out := &Store{db: db}
+	out := &Store{db: db, auditReadOnly: true}
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, err

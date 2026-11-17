@@ -19,3 +19,18 @@ func TestS4B2NativePeerAuditCLIRefusesMissingSQLiteWithoutCreatingIt(t *testing.
 		t.Fatalf("read-only CLI created a database: %v", err)
 	}
 }
+
+func TestS4B2NativePeerPurgePlanMissingDBDoesNotCreateOrMutate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing-purge-review.sqlite")
+	old := os.Args
+	defer func() { os.Args = old }()
+	os.Args = []string{"boxweave", "native-peer-purge-plan",
+		"--db", path, "--project", "user-1001", "--network", "bwbr0", "--acl", "bw-s4b2",
+		"--peer-source-uuid", "uuid-a", "--peer-target-uuid", "uuid-b"}
+	if err := run(); err == nil {
+		t.Fatal("native peer plan accepted missing protected root/SQLite state")
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("native peer read-only review created database: %v", err)
+	}
+}
