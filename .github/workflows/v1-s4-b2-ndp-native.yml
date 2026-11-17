@@ -2,7 +2,10 @@ name: S4-B2 isolated native IPv6 NDP and MLD differential
 on:
   push:
     branches: [feat/v1-s4-runtime-integration-20261116]
-    paths: [.github/workflows/v1-s4-b2-ndp-native.yml]
+    paths:
+      - .github/workflows/v1-s4-b2-ndp-native.yml
+      - internal/install/network_peer_policy.go
+      - internal/install/native_s4_b2_policy_test.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -102,6 +105,13 @@ jobs:
           pb=$!
           sleep 1
           ping6 BASELINE
+          # Distinguish actual ACL egress propagation / IPv6 NDP
+          # convergence from a subsequent native ACL re-apply.
+          for retry in 1 2 3 4 5; do
+            sleep 3
+            ping6 "PASSIVE_NO_NATIVE_WRITE_RETRY_$retry"
+          done
+          echo "S4_B2_NDP_PASSIVE_RETRY_SEQUENCE_COMPLETED=YES"
           wait "$pa" || :
           wait "$pb" || :
           echo "S4_B2_NDP_PACKET_CAPTURE_A"
