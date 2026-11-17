@@ -101,3 +101,7 @@ Underlying non-Agent products matter too: [Docker Compose networking](https://do
 - The earlier architecture-only discussion remains separate: [PR #154](https://github.com/vanishs/boxweave/pull/154). Its Socket/worker/recovery questions are **not** implementation authorization either.
 
 **One-sentence working positioning:** *BoxWeave is a self-hosted, secure agent-programmable Linux container environment in which authorized Agents can safely create, connect, run and maintain several owned Boxes, while the host-management boundary and durable operation evidence remain outside the Agent's control.*
+
+## 7. README documentation status (2026-11-16 PT addendum)
+
+The public-facing [README](https://github.com/vanishs/boxweave/blob/v1/README.md) was updated by [PR #156](https://github.com/vanishs/boxweave/pull/156), merged at `22d8021f62d95b5c79dba5c1755582a4da04513f`, to explain the multi-Box positioning, example relationships and current-versus-planned capability boundary. This remains an **archived discussion note** in Draft [PR #155](https://github.com/vanishs/boxweave/pull/155), not a new S4/S5 requirement or product approval.
