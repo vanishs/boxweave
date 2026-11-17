@@ -104,7 +104,24 @@ jobs:
           echo "S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED=PASS"
           # Independently root-observe native bridge UsedBy and the complete
           # actual NIC UUID/MAC/static IPv4/IPv6 inventory before quiescence.
-          sudo env BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only             "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeRootBridgeAudit$'
+          # Read-only retries are allowed for DHCP/native UsedBy churn at
+          # first boot; never weaken the exact snapshot invariant or retry
+          # any ACL PUT. Record every original refusal for inspection.
+          root_audit_stable=0
+          for attempt in 1 2 3 4 5; do
+            if sudo env BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only \
+                "$RUNNER_TEMP/s4b2-dedicated-test" -test.v \
+                -test.run '^TestS4B2NativeRootBridgeAudit$' \
+                > "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt" 2>&1; then
+              cat "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt"
+              root_audit_stable=1
+              echo "S4_B2_NATIVE_ROOT_AUDIT_CONSISTENT_READ_ATTEMPT=$attempt"
+              break
+            fi
+            cat "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt"
+            sleep 2
+          done
+          test "$root_audit_stable" = 1
           echo "S4_B2_NATIVE_ROOT_BRIDGE_AUDIT_AND_REFUSALS=PASS"
           # The actual new Incus SDK barrier is tested on all three NICs
           # before the separate partial-PUT fault setup, on THIS disposable
@@ -247,6 +264,27 @@ jobs:
             echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=REACHABLE"
           else
             echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=DENIED"
+          fi
+          # Separate native ACL research: test an explicit exact-pair DROP
+          # against an already established IPv4 conntrack entry. This does
+          # NOT prove or authorize a production tombstone policy.
+          if sudo incus network acl rule add bw-s4b2-native ingress \
+              action=drop source="$a4" destination="$b4" \
+              > "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-add.txt" 2>&1; then
+            sudo incus network acl show bw-s4b2-native \
+              > "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-acl.txt"
+            if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+              echo "S4_B2_QUIESCENT_EXPLICIT_DROP_OLD_CONNTRACK_IPV4=REACHABLE"
+            else
+              echo "S4_B2_QUIESCENT_EXPLICIT_DROP_OLD_CONNTRACK_IPV4=DENIED"
+            fi
+            sudo incus network acl rule remove bw-s4b2-native ingress \
+              action=drop source="$a4" destination="$b4"
+            sudo incus network acl show bw-s4b2-native | grep -Fqx 'ingress: []'
+            echo "S4_B2_QUIESCENT_EXPLICIT_DROP_NATIVE_RULE_RESTORED=PASS"
+          else
+            echo "S4_B2_QUIESCENT_EXPLICIT_DROP_NATIVE_RULE_UPDATE=UNAVAILABLE"
+            cat "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-add.txt"
           fi
           # B2 research: can revocation plus native static dual-stack
           # identity rotation invalidate an established pair WITHOUT a
