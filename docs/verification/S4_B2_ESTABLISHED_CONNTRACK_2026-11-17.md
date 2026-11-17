@@ -23,3 +23,8 @@
 ## Remaining acceptance gates
 
 **Not signed:** installed host-specific Scriptlet authorization migration and complete legacy client parity, production limited root-only inventory/conntrack verifier and secure MCP/SQLite-bound handoff, exact unaffected foreign flows, all-B2 guest/lease/kernel negative tests and independent verification. Continue S4-B2 until true `S4_B2_PASS`; keep sole PR #153 Draft; no B3 implementation, handoff or release yet.
+
+## 2026-11-17 — remove old experimental global flush
+The quiescent CI workflow previously contained a **test-only** `sudo conntrack -F` late in its disposable-host experiment, despite the production primitive correctly prohibiting global flush. That was outside the approved B2 safety constraint. The new workflow removes the command entirely and replaces it with one attempt per **exact A↔B, B↔A, IPv4/IPv6** conntrack tuple, recording empty/uncertain outcomes without silently retrying. All future results must carry the exact workflow source SHA; earlier runners may have executed the old code. This does not itself validate the future production root handoff, unaffected foreign flows, or all race conditions.
+
+**Observed old-source CI:** [#44146138590](https://github.com/vanishs/boxweave/actions/runs/44146138590), native job `134261651172`, SHA `a72d3dcc126ef11196d4ee8f307faef2c3e69ed3`, SUCCESS. Root SQLite-to-Incus ledger (3 markers), unregistered host veth rejection, zero kernel ports, exact conntrack readback, and fixture cleanup were logged. However that **immutable old workflow also executed `conntrack -F` at 18:19:29 UTC**. Therefore it is not acceptable as proof of the corrected no-global-flush policy. Only a fresh exact-commit corrected run can provide that evidence.

@@ -523,20 +523,33 @@ jobs:
           else
             echo "S4_B2_QUIESCENT_AFTER_SCOPED_CONNTRACK_IPV4=DENIED"
           fi
-          sudo conntrack -F
-          echo "S4_B2_QUIESCENT_DISPOSABLE_HOST_CONNTRACK_FLUSH_DONE=OBSERVED"
+          # Never flush host-global conntrack, including on disposable CI.
+          # Delete only A<->B exact verified dual-stack tuples, each once.
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then x="$a4"; y="$b4"; else x="$a6"; y="$b6"; fi
+            for direction in ab ba; do
+              if [[ "$direction" = ab ]]; then src="$x"; dst="$y"; else src="$y"; dst="$x"; fi
+              if sudo conntrack -D -f "$family" -s "$src" -d "$dst" \
+                > "$RUNNER_TEMP/s4b2-quiescent-exact-$family-$direction.txt" 2>&1; then
+                echo "S4_B2_QUIESCENT_EXACT_PAIR_DELETE_$family-$direction=OBSERVED"
+              else
+                echo "S4_B2_QUIESCENT_EXACT_PAIR_DELETE_$family-$direction=EMPTY_OR_UNCERTAIN"
+              fi
+            done
+          done
+          echo "S4_B2_QUIESCENT_NO_GLOBAL_CONNTRACK_FLUSH=PASS"
           status=0
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
-            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_CONNTRACK_FLUSH=REACHABLE_UNSAFE"; status=80
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_SCOPED_CONNTRACK=REACHABLE_UNSAFE"; status=80
           else
-            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_CONNTRACK_FLUSH=DENIED"
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_SCOPED_CONNTRACK=DENIED"
           fi
           if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then
-            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_CONNTRACK_FLUSH=REACHABLE_UNSAFE"; status=81
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_SCOPED_CONNTRACK=REACHABLE_UNSAFE"; status=81
           else
-            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_CONNTRACK_FLUSH=DENIED"
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_SCOPED_CONNTRACK=DENIED"
           fi
-          if [[ "$status" -eq 0 ]]; then echo "S4_B2_QUIESCENT_NEW_FLOWS_AFTER_REVOKE_CONNTRACK_FLUSH_DENIED=PASS"; fi
+          if [[ "$status" -eq 0 ]]; then echo "S4_B2_QUIESCENT_NEW_FLOWS_AFTER_REVOKE_SCOPED_CONNTRACK_DENIED=PASS"; fi
           for box in s4b2a s4b2b s4b2c; do
             sudo incus --project bwowned stop "$box" --force
             sudo incus --project bwowned delete "$box" --force
