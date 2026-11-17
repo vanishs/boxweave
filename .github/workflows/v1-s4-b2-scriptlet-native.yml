@@ -98,10 +98,12 @@ jobs:
                   return False
               if details.Username == "$writer_fpr":
                   return details.ProjectName == "default" and details.Path == "/1.0/network-acls/bw-s4b2-scriptlet" and details.Method in ["GET", "PUT"] and entitlement in ["can_view", "can_edit"]
-              if details.ProjectName not in details.Certificate.projects:
-                  return False
-              if details.Method == "GET" and details.Path in ["/1.0/instances", "/1.0/projects/bwlegacy", "/1.0/projects/bwother"]:
-                  return entitlement in ["can_view", "can_view_resources"]
+              if details.Method == "GET" and details.Path == "/1.0/instances":
+                  return details.ProjectName in details.Certificate.projects and entitlement in ["can_view", "can_view_resources"]
+              if details.Method == "GET" and entitlement == "can_view":
+                  for project in details.Certificate.projects:
+                      if details.Path == "/1.0/projects/" + project:
+                          return True
               return False
           EOF
           sudo incus config set authorization.scriptlet="$(cat "$RUNNER_TEMP/authorize.star")"
