@@ -104,6 +104,13 @@ jobs:
           # daemon only. Root is used solely for independent test-side UsedBy.
           sudo env BOXWEAVE_S4B2_DISPOSABLE_BARRIER=20261117-single-use \
             "$RUNNER_TEMP/s4b2-native-isolation-test" -test.v -test.run '^TestS4B2NativeSDKSharedACLQuiescence$'
+          # Exercise the actual official SDK ACL PUT/ETag path while ALL
+          # shared-ACL NICs remain isolated by the new native pre-PUT barrier.
+          # This is a disposable native test integration, not the MCP product.
+          probe TestS4B2NativeDedicatedBridgeExactPeer
+          probe TestS4B2NativeDedicatedBridgeRevoke
+          sudo incus network acl show bw-s4b2-native | grep -Fxq 'ingress: []'
+          echo "S4_B2_NATIVE_SDK_BARRIER_BEFORE_ACL_GRANT_REVOKE=PASS"
           for name in s4b2a s4b2b s4b2c; do
             test "$(sudo incus --project bwowned list "$name" -c s --format csv)" = STOPPED
             test "$(sudo incus --project bwowned config get "$name" boot.autostart)" = false
