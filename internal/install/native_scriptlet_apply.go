@@ -353,3 +353,87 @@ func nativeScriptletRollbackWithClient(ctx context.Context, root incus.InstanceS
 	}
 	return nativeScriptletReport(j), nil
 }
+
+// NativeScriptletReconcile only observes native Server state; it never retries
+// an uncertain authorization PUT and never enables peer writes.
+func NativeScriptletReconcile(ctx context.Context, approvedSHA string, approved bool) (NativeScriptletStatusReport, error) {
+	var zero NativeScriptletStatusReport
+	if os.Geteuid() != 0 {
+		return zero, errors.New("native Scriptlet reconciliation requires root")
+	}
+	unlock, err := nativeScriptletAcquireLock(nativeScriptletLockPath)
+	if err != nil {
+		return zero, err
+	}
+	defer unlock()
+	host, err := migrationHostDigest()
+	if err != nil {
+		return zero, err
+	}
+	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		return zero, err
+	}
+	return nativeScriptletReconcileWithClient(ctx, root, host, nativeScriptletJournalPath, approvedSHA, approved)
+}
+func nativeScriptletReconcileWithClient(ctx context.Context, root incus.InstanceServer,
+	host, path, approvedSHA string, approved bool) (NativeScriptletStatusReport, error) {
+	var zero NativeScriptletStatusReport
+	if !approved || !scriptletFingerprint.MatchString(approvedSHA) {
+		return zero, errors.New("explicit exact Scriptlet reconciliation approval required")
+	}
+	j, err := nativeScriptletLoadJournal(path)
+	if err != nil {
+		return zero, err
+	}
+	if j.Plan.ReviewSHA256 != approvedSHA || host == "" || j.Plan.HostSHA256 != host {
+		return zero, errors.New("original Scriptlet plan or host mismatch")
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	one, etag, err := root.GetServer()
+	if err != nil {
+		return nativeScriptletReport(j), err
+	}
+	two, secondETag, err := root.GetServer()
+	if err != nil {
+		return nativeScriptletReport(j), err
+	}
+	if one == nil || two == nil || etag == "" || etag != secondETag || !reflect.DeepEqual(one.Config, two.Config) {
+		return nativeScriptletReport(j), errors.New("native Server snapshot changed")
+	}
+	isBefore := reflect.DeepEqual(two.Config, j.BeforeConfig)
+	isApplied := reflect.DeepEqual(two.Config, j.AppliedConfig)
+	if isBefore == isApplied {
+		return nativeScriptletReport(j), errors.New("native Scriptlet config ambiguous or drifted")
+	}
+	switch j.Status {
+	case "DISPATCH_UNKNOWN":
+		if !isApplied {
+			return nativeScriptletReport(j), errors.New("original native apply may still be in flight")
+		}
+		j.Status = "ROUTE_APPLIED_PARITY_PENDING"
+	case "ROLLBACK_UNKNOWN":
+		if !isBefore {
+			return nativeScriptletReport(j), errors.New("original native rollback not proven complete")
+		}
+		j.Status = "ROLLED_BACK"
+	case "ROUTE_APPLIED_PARITY_PENDING":
+		if !isApplied {
+			return nativeScriptletReport(j), errors.New("native Scriptlet authorization drift")
+		}
+		return nativeScriptletReport(j), nil
+	case "ROLLED_BACK":
+		if !isBefore {
+			return nativeScriptletReport(j), errors.New("native Scriptlet rollback drift")
+		}
+		return nativeScriptletReport(j), nil
+	default:
+		return nativeScriptletReport(j), errors.New("unknown Scriptlet journal state")
+	}
+	if err := nativeScriptletSaveJournal(path, j); err != nil {
+		return nativeScriptletReport(j), err
+	}
+	return nativeScriptletReport(j), nil
+}

@@ -23,3 +23,14 @@ The original guest worktree at 5f6ee4b4 was preserved untouched, and a new detac
 - Negative tests cover competing first-intent writes (single writer), lock reentry, symlink/mode attack, forbidden journal rewind, uncertain rollback ACK retry, and interrupted incomplete original intent.
 
 This is unit and isolated-guest evidence only. Root Scriptlet installed-native security, original TLS client rights, host-specific approval, S4-B2 MCP end-to-end, external NIC IP spoofing, cross-project isolation and independent final-head reacceptance are still required. Exact-head CI 851bcbd8 has quality and dual-arch SUCCESS, B2 isolated native SUCCESS, but S4-A native installed FAILURE at operation_list debugger boundary; same SHA rerun requested. No B2 PASS or B3 admission.
+
+## 2026-11-17 PT — explicit root-only no-PUT reconciliation (B2 still PARTIAL)
+
+A subsequent isolated B2 source change provides `boxweave native-scriptlet-reconcile` (a local operator CLI command, **not** an MCP Tool). Under the same root-only authorization lock, exact approved review SHA and host identity, the command reads the Incus Server configuration twice with matching ETag and config. It **does not issue UpdateServer**, never makes the peer writer ready, and only records:
+- `DISPATCH_UNKNOWN -> ROUTE_APPLIED_PARITY_PENDING` if both reads show the exact planned applied configuration. Real restricted-client parity remains a separate gate.
+- `ROLLBACK_UNKNOWN -> ROLLED_BACK` if both reads show the exact original configuration.
+- All uncertain, partial, unproven-in-flight, foreign-host, unapproved or drifted cases retain the original journal and return an error. Observing the original state after an uncertain *apply* never automatically declares it rolled back.
+
+Unit fixtures proved lost apply ACK, lost rollback ACK, second reconciliation idempotency and refusals for partial/before-dispatch and wrong host/SHA. This is a **source-only** recovery primitive; a real Incus Server crash/restart, installed authorization parity and full host-global approval have not been demonstrated. B2 stays `S4_B2_PARTIAL`; B3 remains prohibited.
+
+**Local final quality receipt:** L0 guest Exec operation `3d904067c98819cc193fd263fd395254`, native Exec `597ca4a7-e978-4e8b-a075-a378798f5031`, independently read `SUCCEEDED`. The staged five-file worktree passed full `make verify`: Go vet, full race suite (all packages), format/YAML, module checks and 7/7 Python witness cases. No installer/live Incus Server write was attempted.
