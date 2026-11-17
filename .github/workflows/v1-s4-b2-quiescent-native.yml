@@ -218,6 +218,24 @@ jobs:
           else
             echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=DENIED"
           fi
+          # Investigate whether the observed post-revoke established ICMP
+          # reachability can be removed with exact *pair-scoped* conntrack
+          # cleanup. This is a disposable privileged test ONLY; it does not
+          # authorize a host-wide flush or install a privileged helper.
+          sudo conntrack -L > "$RUNNER_TEMP/s4b2-quiescent-conntrack-before-scoped.txt" 2>&1 || :
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then src="$a4"; dst="$b4"; else src="$a6"; dst="$b6"; fi
+            if sudo conntrack -D -f "$family" -s "$src" -d "$dst" > "$RUNNER_TEMP/s4b2-quiescent-conntrack-scoped-$family.txt" 2>&1; then
+              echo "S4_B2_QUIESCENT_SCOPED_CONNTRACK_DELETE_$family=OBSERVED"
+            else
+              echo "S4_B2_QUIESCENT_SCOPED_CONNTRACK_DELETE_$family=UNAVAILABLE_OR_EMPTY"
+            fi
+          done
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_AFTER_SCOPED_CONNTRACK_IPV4=REACHABLE"
+          else
+            echo "S4_B2_QUIESCENT_AFTER_SCOPED_CONNTRACK_IPV4=DENIED"
+          fi
           sudo conntrack -F
           echo "S4_B2_QUIESCENT_DISPOSABLE_HOST_CONNTRACK_FLUSH_DONE=OBSERVED"
           status=0
