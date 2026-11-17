@@ -1,8 +1,10 @@
 # Public MCP tool catalog — intentionally narrow v1 P0
 
-**Status:** accepted 20-tool P0 design; the protected `v1` branch has accepted S1 `host_status` only. [S2 Draft PR #130](https://github.com/vanishs/boxweave/pull/130) currently adds source-verified `operation_get` and `operation_list`, not the remaining 10 S2 tools, native installed acceptance, or a release. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
+**Status (2026-11-16):** accepted 20-tool P0 target; protected `v1` has 16 accepted S1–S3 Tools, while four S4 network Tools remain under development in [Draft PR #153](https://github.com/vanishs/boxweave/pull/153). No completed 20/20 acceptance or supported v1 release is implied. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
 
 **Continuity enhancement to existing Tools, not extra Tools:** [single design](AGENT_OPERATION_CONTINUITY.md) and [TC tests](../verification/CONTINUITY_ACCEPTANCE.md) extend S2 receipts and `operation_list/get/output_get` with authorized optional work/Agent correlation, structured evidence and safe next reads. Authenticated principal and untrusted label must never be confused.
+
+**Git / Task Checkpoint scope:** MCP `tools/list` can expose `box_exec` and the generic `operation_*` Tools. An Agent must choose and call guest `git` commands through `box_exec` (or use its own external terminal), then interpret their output itself. BoxWeave does **not** advertise a Git-specific Tool, auto-detect Git commands, persist parsed Git HEAD/branch/dirty state, or write a Task Checkpoint. [The external client-owned Checkpoint contract](../development/TASK_CHECKPOINT_CONTRACT.md) records derived Git state only when an Agent/workflow explicitly collects and saves it; merely connecting to MCP does not restore such a file.
 
 ## P0 — 20 tools
 
