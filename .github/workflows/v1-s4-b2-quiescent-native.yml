@@ -30,6 +30,7 @@ on:
       - internal/install/network_peer_conntrack_review.go
       - internal/install/network_peer_conntrack_review_test.go
       - internal/install/network_peer_conntrack_review_native_test.go
+      - internal/install/network_peer_conntrack_seed_native_test.go
       - internal/install/network_peer_conntrack_journal.go
       - internal/install/network_peer_conntrack_journal_test.go
       - internal/install/network_peer_kernel_ports.go
@@ -213,6 +214,12 @@ jobs:
           grep -Fq 'S4_B2_ROOT_PEER_REVIEW_MAC_DRIFT_REFUSED=PASS' \
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
           grep -Fq 'S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_JOURNALED_FOUR_SCOPES=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_SEEDED_TCP_UDP_DUALSTACK_AND_FOREIGN=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_EXACT_PAIR_FOUR_SCOPES_DELETED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_FOREIGN_TCP_UDP_FLOW_UNTOUCHED=PASS' \
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
           grep -Fq 'S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_REPLAY_DENIED=PASS' \
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"

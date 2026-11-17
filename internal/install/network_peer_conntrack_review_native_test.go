@@ -85,6 +85,7 @@ func s4b2NativeRootReadOnlyPeerReviewFixture(t *testing.T, ctx context.Context,
 		t.Fatal("unowned source pair reached root review")
 	}
 	t.Log("S4_B2_ROOT_PEER_REVIEW_FOREIGN_PAIR_REFUSED=PASS")
+	seeded := s4b2NativeSeedRealKernelConntrack(t, ctx, target.Boxes)
 	// Real root SDK+kernel conntrack effect, bounded to this disposable
 	// 3-Box stopped bridge and the verified protected SQLite ledger.
 	journalPath := filepath.Join(dir, "native-peer-original.json")
@@ -97,7 +98,7 @@ func s4b2NativeRootReadOnlyPeerReviewFixture(t *testing.T, ctx context.Context,
 		})
 	if err != nil || receipt.Status != "COMPLETE_VERIFIED" ||
 		!receipt.MutationComplete || receipt.ReadyForPeer ||
-		receipt.ProbedScopes != 4 || nativeDispatches != 1 {
+		receipt.ProbedScopes != 4 || receipt.DeletedScopes != 4 || nativeDispatches != 1 {
 		t.Fatalf("real root-native one-shot incomplete: %+v %v dispatches=%d",
 			receipt, err, nativeDispatches)
 	}
@@ -108,6 +109,7 @@ func s4b2NativeRootReadOnlyPeerReviewFixture(t *testing.T, ctx context.Context,
 		actual.Report.ProbedScopes != 4 {
 		t.Fatalf("root-native journal not durably bound: %+v %v", actual, err)
 	}
+	s4b2NativeVerifySeededKernelConntrackAfterPurge(t, ctx, seeded)
 	t.Log("S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_JOURNALED_FOUR_SCOPES=PASS")
 	if _, err := nativePeerConntrackDispatchOnce(ctx, journalPath, plan,
 		plan.PlanSHA256, true, func(context.Context) (NativePeerConntrackReport, error) {
