@@ -76,6 +76,22 @@ jobs:
           echo "S4_B2_BWBR0_USED_BY_AFTER_PRIVILEGED_FOREIGN_ATTACH"
           sudo incus network show bwbr0
           sudo incus --project default delete privilegedbox
+          # Host-global administrators can additionally attach raw parent
+          # veths without a managed "network=" reference. Test whether
+          # UsedBy captures this case; absent a reference, checks must inspect
+          # physical bridge ports and all effective NICs, not UsedBy alone.
+          sudo incus profile create s4b2rawparent
+          sudo incus profile device add s4b2rawparent root disk path=/ pool=default
+          sudo incus profile device add s4b2rawparent eth0 nic name=eth0 nictype=bridged parent=bwbr0
+          sudo incus --project default init images:ubuntu/24.04 rawparentbox -p s4b2rawparent
+          sudo incus --project default start rawparentbox
+          echo "S4_B2_BWBR0_USED_BY_AFTER_RAW_PARENT_ATTACH"
+          sudo incus network show bwbr0
+          echo "S4_B2_BWBR0_ACTUAL_BRIDGE_PORTS_AFTER_RAW_PARENT_ATTACH"
+          sudo bridge link show | grep -F 'master bwbr0' || :
+          sudo incus --project default stop rawparentbox
+          sudo incus --project default delete rawparentbox
+          sudo incus profile delete s4b2rawparent
           sudo incus --project bwowned delete ownedbox
           sudo incus --project bwforeign delete foreignbox
           sudo incus project delete bwforeign
