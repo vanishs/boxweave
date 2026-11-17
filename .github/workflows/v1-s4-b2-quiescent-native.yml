@@ -7,6 +7,9 @@ on:
       - internal/install/native_s4_b2_dedicated_test.go
       - internal/install/network_peer_policy.go
       - internal/install/network_peer_bridge_guard.go
+      - internal/native/peer_acl_isolation.go
+      - internal/native/peer_acl_isolation_native_test.go
+      - internal/native/peer_acl_isolation_test.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +49,7 @@ jobs:
           sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
           test -z "$(gofmt -l internal/install/native_s4_b2_dedicated_test.go internal/install/network_peer_policy.go internal/install/network_peer_bridge_guard.go)"
           go test -c -o "$RUNNER_TEMP/s4b2-dedicated-test" ./internal/install
+          go test -c -o "$RUNNER_TEMP/s4b2-native-isolation-test" ./internal/native
           sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
           sudo incus project create bwowned \
             -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
@@ -95,6 +99,18 @@ jobs:
           test -n "$b_uuid"
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 76; fi
           echo "S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED=PASS"
+          # The actual new Incus SDK barrier is tested on all three NICs
+          # before the separate partial-PUT fault setup, on THIS disposable
+          # daemon only. Root is used solely for independent test-side UsedBy.
+          sudo env BOXWEAVE_S4B2_DISPOSABLE_BARRIER=20261117-single-use \
+            "$RUNNER_TEMP/s4b2-native-isolation-test" -test.v -test.run '^TestS4B2NativeSDKSharedACLQuiescence$'
+          for name in s4b2a s4b2b s4b2c; do
+            test "$(sudo incus --project bwowned list "$name" -c s --format csv)" = STOPPED
+            test "$(sudo incus --project bwowned config get "$name" boot.autostart)" = false
+            sudo incus --project bwowned start "$name"
+          done
+          require_addresses
+          echo "S4_B2_NATIVE_SDK_ALL_THREE_ENDPOINTS_BARRIER_AND_RECOVERED_FIXTURE=PASS"
           # A crash/restart must not silently reanimate isolated endpoints.
           # Configure this *before* the Stop calls so it survives a controller
           # crash between native Stop and the later ACL write.
