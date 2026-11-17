@@ -1,5 +1,7 @@
 # Minimal P0 MCP tool contracts
 
+**2026-11-16 PT S4-C planned addition:** Owner selected `box_get(detail:boolean=false)` (`true`: admin-only native `InstanceFull` with State/Snapshots/Backups) and one `box_wait_ready` async observation Tool (admin, real `exec_ready`, optional IP; maximum 600 seconds), bringing planned Tools to **21**, **after** S4-B completion. See [S4-C implementation and evidence contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). The older 20-only overview below remains the S4-B baseline until implemented.
+
 **Status:** design, not frozen wire schemas. See [20-tool catalog](MCP_TOOLS.md) and [permanent scope](../decisions/PRODUCT_BOUNDARY.md). Freeze exact JSON Schema after official SDK/native tests. Every mutation requires a nonempty, caller-generated, reusable idempotency key.
 
 ## `box_file_apply`

@@ -1,5 +1,7 @@
 # S4 implementation kickoff — three checkpoints, one existing PR (2026-11-16)
 
+**Owner-selected S4-C extension (planning only):** Once S4-B1–B6 is accepted, implement `box_get(detail)` native full inspection and one `box_wait_ready` async observed Exec/IP readiness Tool as the S4-C functional scope. This changes the final Tool count **20 → 21**; do not affect B2–B6 or start S4-C yet. [Full S4-C developer contract](S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md).
+
 **Current state (2026-11-16): S4_A_PASS at code3407; later reporting-head checks and verdict are tracked on PR153.** [Formal scoped evidence](../verification/S4_A_FORMAL_ACCEPTANCE_2026-11-16.md). Use existing **[Draft PR #153](https://github.com/vanishs/boxweave/pull/153)**, source branch `feat/v1-s4-runtime-integration-20261116`, base protected `v1` initial SHA `4a45a80c8de2fb36cde851a10e0f9c80f2f9b300` (scoped [S3_MINIMAL_PASS](S3_MINIMAL_PASS_2026-11-16.md)). The complete installed/native run43947870241 and independent Verifier signed code3407. S4-B/C remain unstarted. [S4-A actual repeatable lab evidence](../verification/S4_A_REPEATABLE_LAB_2026-11-16.md). Newest policy: [S4/S5 rebalance](S4_S5_EXECUTION_REBALANCE_2026-11-16.md) overrides conflicting dated stage-order claims. **Do not open another PR for S4**, retag RC7 or change physical L0/L1 without explicit host-specific permission.
 
 ## First Agent task: S4-A — P0 identity + lifecycle, not network features
