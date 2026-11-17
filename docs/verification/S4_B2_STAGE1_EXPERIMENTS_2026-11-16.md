@@ -19,7 +19,7 @@ The existing dedicated-native GitHub Actions workflow is extended with these **n
 | N-F02 | Create a fourth **unknown** NIC consumer in the same otherwise restricted Project while A/B has a grant | Root-observed network `UsedBy` lists it and internal native ownership guard refuses it; resource then deleted | Continuous protection from host root/OOB attachment; actual restricted-cert unauthorized write |
 | N-F03 | Revoke exact dual-stack A→B, delete B, reallocate *both* addresses to a new UUID, clear **IPv6** neighbor entry | Actual A→reused IPv6 packet denied after native ACL readback (existing IPv4 negative repeated) | Crash/lost ACK/partial update path; entire established-flow teardown |
 
-**Follow-up still required in Step 1**: ACK loss, restart and durable quarantine; full existing restricted TLS client **write/execute** rights parity and reviewed installer rollback; external IPv4/IPv6 TCP/UDP denial and positive control; native lease/MAC/source spoof under concurrent changes. Do not falsely mark an experiment PASS until its actual GitHub run, SHA and raw logs are reviewed.
+**Follow-up still required in Step 1**: ACK loss, restart and durable quarantine; full existing restricted TLS client **instance exec/inherited resource** parity and reviewed installed-service rollback; external IPv4/IPv6 TCP/UDP denial and positive control; native lease/MAC/source spoof under concurrent changes. Do not falsely mark an experiment PASS until its actual GitHub run, SHA and raw logs are reviewed.
 
 ## Step 1 original native results — 2026-11-17 UTC (no product writer)
 
@@ -77,6 +77,19 @@ The job then attempted to install **syntactically invalid** Scriptlet source: In
 4. The **test Scriptlet only replicated the selected legacy Project-object GET authorization**, while enforcing narrow GET/PUT for the writer. This is **NOT full old-client capability parity**: real earlier restricted clients may also edit/launch/stop/exec instances or view inherited resources. Do not copy the test-only narrow legacy rule into production as if it preserves prior rights. The production Scriptlet must reproduce the documented TLS driver permission matrix including server view limits, project edit refusal, inherited-resource read-only exceptions, all-project semantics, object project and entitlements. Source-exact [Incus 7.6 `driver_tls.go`](https://github.com/lxc/incus/blob/v7.6.0/internal/server/auth/driver_tls.go) must be consulted and a larger native allow/deny matrix independently tested.
 
 **Stage verdict:** The *authorized disposable Scriptlet switch and exact ACL writer* feasibility is now **NATIVE_TEST_PASS**; **installation-ready Scriptlet old-client compatibility is still PARTIAL**, and installed BoxWeave actor/ACK-loss/quarantine/kernel fanout recovery are not accepted. No L0 global changes occurred. B2 stays `S4_B2_PARTIAL`.
+
+### Expanded source-derived legacy TLS *write* parity
+
+A **separate**, fully disposable Incus 7.6 signed-Zabbly runner [44033677061](https://github.com/vanishs/boxweave/actions/runs/44033677061) **SUCCESS** on `2b76eab688947c7359e25490531db727b11a68a5`, native job `133871322553`, exercised [`v1-s4-b2-scriptlet-parity-native.yml`](../../.github/workflows/v1-s4-b2-scriptlet-parity-native.yml). This scriptlet uses the actual upstream [`authorization_objects.go`](https://github.com/lxc/incus/blob/v7.6.0/internal/server/auth/authorization_objects.go) representation `object_type:project/resource` and derives project/server/object permission branches from [`driver_tls.go`](https://github.com/lxc/incus/blob/v7.6.0/internal/server/auth/driver_tls.go), rather than relying only on request paths. Its exact ACL writer still additionally checks the authenticated fingerprint, exact canonical ACL object and exact GET/PUT path+method. These are test-only Starlark formulas **not** a production installer.
+
+The independently observed new HTTP/native controls:
+
+- Existing legacy cert GET owned native Profile 200; GET existing foreign Profile 403. Existing other cert shows symmetric owned 200 / foreign 403. Both preserve named Project 200/403 before, during and after route change.
+- **Legacy restricted TLS client PUT its own `bwlegacy/s4b2legacy` Profile returned HTTP 200**, and an independently privileged native `incus profile show` confirmed the exact new description. The same legacy client PUT to foreign `bwother/s4b2other` Profile returned **403**, and that foreign Profile was unchanged.
+- Legacy cert GET `/1.0` 200 (permitted limited server view); PUT owned Project configuration 403; POST create global Project 403. The dedicated ACL writer continued to have only the exact ACL GET/PUT, with foreign ACL PUT 403 and native unchanged.
+- Invalid Scriptlet source was refused while the existing good Scriptlet remained effective; original TLS route and empty Scriptlet were restored, and the legacy profile read/foreign denial matrix passed after rollback.
+
+**Interpretation:** Source-derived *selected* old-client **read AND write** parity is **NATIVE_TEST_PASS**, including a real instance-scope-independent Profile update, cross-Project negative and exact ACL writer. Still **not** proof of every legacy client's complete native TLS entitlement, inherited default Profile/image handling, instance Start/Exec/Files, or installed service upgrade. Those must be inventoried and tested before B2 signoff. Source exact object identity is much safer than a broad `Method=="GET"` Scriptlet fallback. This closes the previous *only-GET* experiment gap for the tested Profile endpoints but not the full installer gate.
 
 ## Important official upstream contract
 
