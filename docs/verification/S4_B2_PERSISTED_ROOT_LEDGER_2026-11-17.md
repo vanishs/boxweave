@@ -17,3 +17,9 @@ In L0 isolated worktree `/root/boxweave-b2-runtime-1117` (Box UUID `745d1550-97e
 The disposable Incus 7.6 native fixture `TestS4B2NativeStoreLedgerBridgeAudit` now exercises real SDK identities seeded into a temporary test SQLite DB, root readback, canonical forged MAC denial, and IPv6-quarantine denial; the quiescent GitHub workflow requires non-SKIP markers. **The exact-commit native result is pending until CI runs.**
 
 This is a **read-only prerequisite** only: production worker has not yet recorded PINNED bindings, the installed controller has no root-audit handoff, and independent per-NIC DROP/conntrack revocation and post-UNKNOWN recovery are not closed. An unprepared legacy/S1 DB must fail closed. No `S4_B2_PASS` or B3 authorization is claimed.
+
+## First exact-head native run — failed (2026-11-17)
+
+- [GitHub Actions #44144350444](https://github.com/vanishs/boxweave/actions/runs/44144350444), original native job `134255284885`, source `e691abadb0f9c9f5e13ad1f2ed9a88819ebfcc97`, **FAILURE**.
+- On fresh Incus 7.6, `S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED=PASS` and existing exact root bridge, MAC spoof, missing-sibling and foreign-bridge negatives all PASS. Immediately afterward, the new temporary-SQLite native test returned a nonzero exit. The original workflow redirected its stdout/stderr to `s4b2-sqlite-native-root-audit.txt` without printing or uploading it on failure, so the *specific native error was not captured*. This is **not** evidence of native pass, spoof bypass or a known root cause.
+- Follow-up workflow change prints the native test's original failure output before exiting and uploads the exact test output as a CI artifact. No native shared L0 state was touched. Keep B2 PARTIAL; do not infer success until a fresh exact-commit run with all required markers.

@@ -139,7 +139,11 @@ jobs:
           # Full protected SQLite binding/fence set must be verified again
           # using the actual root Incus SDK, not merely internally consistent
           # SQLite claims. A skipped Go test MUST NOT count as native proof.
-          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only             "$RUNNER_TEMP/s4b2-dedicated-test" -test.v             -test.run '^TestS4B2NativeStoreLedgerBridgeAudit$'             > "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt" 2>&1
+          if ! sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only             "$RUNNER_TEMP/s4b2-dedicated-test" -test.v             -test.run '^TestS4B2NativeStoreLedgerBridgeAudit$'             > "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt" 2>&1; then
+            cat "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+            echo "S4_B2_SQLITE_ROOT_NATIVE_FAILURE_CAPTURED=TRUE"
+            exit 88
+          fi
           cat "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           grep -Fq 'S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           grep -Fq 'S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
