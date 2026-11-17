@@ -90,6 +90,7 @@ func TestS4B2NativeStoreLedgerBridgeAudit(t *testing.T) {
 	}
 	t.Log("S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS")
 	t.Log("S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS")
+	t.Log("S4_B2_ROOT_SQLITE_NATIVE_DOUBLE_SNAPSHOT_STABLE=PASS")
 	if _, err = db.ExecContext(ctx, "UPDATE network_bindings SET mac='02:16:3e:fe:fe:fe' WHERE box_uuid=(SELECT uuid FROM owned_boxes WHERE name='s4b2a')"); err != nil {
 		t.Fatal(err)
 	}

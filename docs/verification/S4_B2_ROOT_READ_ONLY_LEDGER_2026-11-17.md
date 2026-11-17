@@ -19,3 +19,10 @@ This read-only snapshot is not a durable network lease or a complete root-to-con
 
 ## Independent native source-exact witness
 [GitHub Actions #44154667584](https://github.com/vanishs/boxweave/actions/runs/44154667584), original job 134292059836, source 73e90352098a272209535eaa5cefd13fc6d244e5: SUCCESS. Fresh Incus 7.6 logs explicitly recorded S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS alongside complete SQLite-to-Incus root native identity/MAC/quarantine checks, unregistered host port refusal, no global conntrack flush and exact cleanup. This verifies the new read-only path in a root native test fixture, not installed v1 CLI+OAuth/MCP handoff or B2 PASS.
+
+## 2026-11-17 — bound read-only audit to a stable service ledger and native inventory
+The first read-only host-root audit adapter had a subtle race: it read a consistent SQLite ownership/lease snapshot only ONCE, then independently read native Incus and returned the digest. A concurrent service ledger MAC/lease/UUID change during native verification could therefore leave the root auditor returning a stale positive result even though SQLite no longer owned the verified native identity.
+
+The root adapter now requires three independent complete protected SQLite reads around **two independent native root Incus snapshots**. It refuses any changed PINNED MAC/IPv4/IPv6/UUID/incarnation/lease between any reads, any changed native digest, or mismatched project/bridge/ACL/Box count. It returns **no digest** on a drift/error, and does not mutate ACL, Scriptlet, SQLite or guests. Deterministic tests exercise stable input and injected MAC drift on first native read, IPv6 lease quarantine during second native read, changed Incus digest, wrong root scope, upstream root error, already unpinned ledger and canceled context. Native Incus 7.6 workflow now requires explicit S4_B2_ROOT_SQLITE_NATIVE_DOUBLE_SNAPSHOT_STABLE=PASS.
+
+This is **not** an atomic lifetime lock against a privileged out-of-band writer. Installed root/controller handoff, complete effective per-NIC nft DROP proof and all recovery/Scriptlet gates remain pending. B2 PARTIAL; B3 not started.

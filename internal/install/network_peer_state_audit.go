@@ -3,8 +3,10 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/user"
+	"reflect"
 
 	incus "github.com/lxc/incus/v7/client"
 	"github.com/vanishs/boxweave/internal/native"
@@ -42,14 +44,54 @@ func NativePeerBridgeAuditFromStore(ctx context.Context, s *state.Store, project
 	return nativePeerBridgeAuditFromStoreWithClient(ctx, s, root, project, bridge, acl)
 }
 
-func nativePeerBridgeAuditFromStoreWithClient(ctx context.Context, s *state.Store, root incus.InstanceServer, project, bridge, acl string) (NativePeerBridgeAuditResult, error) {
+// nativePeerBridgeAuditFromStoreWithVerifier sandwiches two independent
+// native root audits between three protected SQLite owner/lease snapshots.
+// A single stale SQLite claim or a changed native digest never authorizes
+// a positive audit receipt. This is NOT a cross-resource transaction: trusted
+// out-of-band host root writers can still race after the last read.
+func nativePeerBridgeAuditFromStoreWithVerifier(ctx context.Context, s *state.Store, project, bridge, acl string,
+	readNative func(context.Context, NativePeerBridgeAuditTarget) (NativePeerBridgeAuditResult, error)) (NativePeerBridgeAuditResult, error) {
 	var zero NativePeerBridgeAuditResult
-	if s == nil || root == nil {
-		return zero, errors.New("missing protected state or native root witness")
+	if s == nil || readNative == nil {
+		return zero, errors.New("missing protected ledger or native root witness")
 	}
-	ledger, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	before, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
 	if err != nil {
 		return zero, err
 	}
-	return nativePeerBridgeAuditWithClient(ctx, root, nativePeerTargetFromLedger(ledger))
+	target := nativePeerTargetFromLedger(before)
+	first, err := readNative(ctx, target)
+	if err != nil {
+		return zero, err
+	}
+	if first.Project != project || first.Bridge != bridge || first.ACL != acl ||
+		first.OwnedBoxes != len(before.Boxes) || len(first.NativeDigestSHA256) != 64 {
+		return zero, errors.New("native audit proof is incomplete or mismatched")
+	}
+	middle, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	if err != nil || !reflect.DeepEqual(before, middle) {
+		return zero, fmt.Errorf("protected network identity/lease changed during root audit: %w", errors.Join(err, state.ErrResourceLocked))
+	}
+	second, err := readNative(ctx, target)
+	if err != nil {
+		return zero, err
+	}
+	if !reflect.DeepEqual(first, second) {
+		return zero, errors.New("independent native root audit changed between reads")
+	}
+	after, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		return zero, fmt.Errorf("protected network identity/lease changed after root audit: %w", errors.Join(err, state.ErrResourceLocked))
+	}
+	return second, nil
+}
+
+func nativePeerBridgeAuditFromStoreWithClient(ctx context.Context, s *state.Store, root incus.InstanceServer, project, bridge, acl string) (NativePeerBridgeAuditResult, error) {
+	if root == nil {
+		return NativePeerBridgeAuditResult{}, errors.New("missing native root witness")
+	}
+	return nativePeerBridgeAuditFromStoreWithVerifier(ctx, s, project, bridge, acl,
+		func(ctx context.Context, target NativePeerBridgeAuditTarget) (NativePeerBridgeAuditResult, error) {
+			return nativePeerBridgeAuditWithClient(ctx, root, target)
+		})
 }
