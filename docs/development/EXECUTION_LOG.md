@@ -1210,3 +1210,10 @@ Owner signed into Codex CLI. Isolated bwcodex now reports Logged in using ChatGP
 - L0 inspection BW fc216f1d174c85969d9a9db4da8b51d4 / native 1fd7092e-8209-48c9-bd42-aa4fee123584 SUCCEEDED; focused BW 1c3cb5170a722299ab41758a6bbec974 / native 614a67bc-474b-486b-9cd9-e6ae75406748 SUCCEEDED; final gofmt/focused tests and make verify BW 38e57993d750efeb5e2601958f393c40 / native c529c934-2b41-42e6-a2c2-94695e7082e6 SUCCEEDED.
 - Prior head 851bcbd8 quality #44081186523, dualarch #44081186903, B2 native #44081186918 SUCCESS. S4-A installed #44081186504 FAILURE near operation_list debugger boundary; same-SHA rerun requested, not B2 acceptance.
 - L0 shared global Scriptlet/ACL/bridge/other Boxes untouched. B2 S4_B2_PARTIAL, B3 NOT STARTED; root-to-worker trust bridge, external NIC spoof, installed MCP, host-specific authorization and independent final-head reacceptance remain open. See docs/verification/S4_B2_SCRIPTLET_ATOMIC_JOURNAL_2026-11-17.md.
+
+
+### 2026-11-17 UTC — foreign raw-parent NIC root audit negative prepared (B2 PARTIAL)
+- New fresh Incus 7.6 CI-only regression: attach unfiltered raw-parent NIC in a foreign Project on the dedicated bridge; independently read A/B/C original UUID/MAC/static dualstack and require product root audit to refuse that foreign consumer. Clean foreign NIC/Project before continuing original ACL/conntrack tests. No shared L0 native configuration changed.
+- One-use L0 source gofmt, focused Go, YAML parser and make verify PASS. Original BW 8a61d7643624c11ac4cc6aebd2c5d241 / native 59a3000a-3083-4f70-bdf7-dfaef03680ba SUCCEEDED. Fresh native result **PENDING**, not a new B2 PASS.
+- fdf643af Scriptlet native #44119736412 SUCCESS, quality #44119736660 SUCCESS, dualarch #44119736400 SUCCESS. At prior 851bcbd8, S4-A #44081186504 first attempt FAILURE then same-SHA attempt 2 SUCCESS; preserve failure evidence. Full installed B2 root-to-worker handoff, spoofed packets and concurrent host attachment remain open. Report: docs/verification/S4_B2_FOREIGN_RAW_NIC_GUARD_2026-11-17.md.
+- S4_B2_PARTIAL; S4_B3_NOT_STARTED.

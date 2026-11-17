@@ -132,6 +132,16 @@ jobs:
           done
           test "$root_audit_stable" = 1
           echo "S4_B2_NATIVE_ROOT_BRIDGE_AUDIT_AND_REFUSALS=PASS"
+          # A privileged foreign Project can attach an unfiltered raw-parent
+          # NIC on this dedicated bridge. Root native used_by auditing must
+          # refuse that topology before any guarded ACL mutation.
+          sudo incus project create bwforeign
+          sudo incus --project bwforeign profile device add default spoof0 nic nictype=bridged parent=bwbr0
+          sudo env BOXWEAVE_S4B2_FOREIGN_RAW_NIC=fresh-ci-only GITHUB_ACTIONS=true \
+            "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeRootRejectsForeignRawNIC$'
+          sudo incus --project bwforeign profile device remove default spoof0
+          sudo incus project delete bwforeign
+          echo "S4_B2_FOREIGN_RAW_NIC_AUDIT_REFUSED_AND_EXACT_CLEANUP=PASS"
           # The actual new Incus SDK barrier is tested on all three NICs
           # before the separate partial-PUT fault setup, on THIS disposable
           # daemon only. Root is used solely for independent test-side UsedBy.
