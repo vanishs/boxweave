@@ -126,9 +126,42 @@ jobs:
                 echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH=DENIED"
                 sudo incus exec s4b2a -- ip -6 neigh show || :
                 sudo incus exec s4b2b -- ip -6 neigh show || :
-                # Continue negative probes only after true traffic evidence;
-                # do not print a false IPv6 PASS.
-                exit 73
+                echo "S4_B2_V6_NDP_ALLOW_IS_NOT_ENOUGH=OBSERVED"
+                # Native-only differential: if static neighbor entries
+                # restore exact IPv6 traffic, the kernel ACL unicast path
+                # works but dynamic NDP is still missing.
+                amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+                bmac="$(sudo incus exec s4b2b -- cat /sys/class/net/eth0/address)"
+                sudo incus exec s4b2a -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+                sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$amac" nud permanent dev eth0
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6=PASS"
+                else
+                  echo "S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6=DENIED"
+                fi
+                sudo incus exec s4b2a -- ip -6 neigh del "$b6" dev eth0 || :
+                sudo incus exec s4b2b -- ip -6 neigh del "$a6" dev eth0 || :
+                # Preserve internet=false until after its egress negative
+                # check, then compare which endpoint egress switch affects NDP.
+                gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
+                if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$gw4" >/dev/null 2>&1; then
+                  echo "S4_B2_INTERNET_FALSE_GATEWAY=UNEXPECTED_REACHABLE"; exit 64
+                fi
+                echo "S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED=PASS"
+                sudo incus config device override s4b2b eth0 security.acls.default.egress.action=allow
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_B_ONLY_EGRESS_ALLOW_IPV6=PASS"
+                else
+                  echo "S4_B2_B_ONLY_EGRESS_ALLOW_IPV6=DENIED"
+                fi
+                sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6=PASS"
+                else
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6=DENIED"
+                  exit 74
+                fi
+              fi
               fi
             fi
           fi
@@ -139,9 +172,15 @@ jobs:
           done
           echo "S4_B2_REVERSE_AND_THIRD_PARTY_V4V6_DENY=PASS"
           gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
-          if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$gw4" >/dev/null 2>&1; then exit 64; fi
-          echo "S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED=PASS"
-          sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+          # If the NDP differential changed A's egress action, use existing
+          # local NIC override; otherwise validate the false gateway here.
+          if sudo incus config device get s4b2a eth0 security.acls.default.egress.action | grep -Fqx allow; then
+            echo "S4_B2_INTERNET_FALSE_GATEWAY_PREVIOUSLY_PROBED=YES"
+          else
+            if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$gw4" >/dev/null 2>&1; then exit 64; fi
+            echo "S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED=PASS"
+            sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+          fi
           sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$b4"
           sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"
           sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$gw4"
@@ -199,3 +238,5 @@ jobs:
           sudo incus network acl delete bw-s4b1-native
           test -z "$(sudo incus list --all-projects --format csv -c n)"
           echo "S4_B2_NATIVE_EXACT_CLEANUP=PASS"
+          echo "S4_B2_NATIVE_PROVISIONAL_V6_NDP_NEGATIVE_REMAINS_BLOCKER=PARTIAL"
+          exit 75

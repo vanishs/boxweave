@@ -40,8 +40,11 @@ func (s *Store) Replay(ctx context.Context, a Admission) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	expected := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" +
-		a.BoxUUID + "\x00" + a.Incarnation)
+	claims, err := normalizeAdmissionResourceKeys(a)
+	if err != nil {
+		return Receipt{}, ErrInvalid
+	}
+	expected := admissionIntentDigest(a, claims)
 	if hash != expected ||
 		(a.WorkRef != "" && a.WorkRef != r.WorkRef) ||
 		(a.AgentRef != "" && a.AgentRef != r.AgentRef) {

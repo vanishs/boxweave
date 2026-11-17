@@ -19,9 +19,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
-// Pre-release schema v2: fresh pilots only; historical v1 SQLite is refused.
+// Pre-release schema v3: fresh pilots only; older v1/v2 SQLite is refused.
 // The OAuth slice must be independently staged with a clean pilot database.
 // Both tables and indexes are exact-fingerprinted; old S1 test DBs are refused,
 // never silently migrated, adopted or deleted. Once deployed, schema changes
@@ -45,6 +45,11 @@ var schemaDDL = []string{
 	"CREATE TABLE oauth_access (token_id TEXT PRIMARY KEY REFERENCES credentials(id), grant_id TEXT NOT NULL REFERENCES oauth_grants(id))",
 	"CREATE TABLE oauth_refresh (digest TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES oauth_grants(id), expires_at INTEGER NOT NULL)",
 	"CREATE TABLE oauth_attempts (at INTEGER NOT NULL, kind TEXT NOT NULL)",
+	"CREATE TABLE operation_resource_claims (operation_id TEXT NOT NULL REFERENCES operations(id), layer TEXT NOT NULL, resource_key TEXT NOT NULL, PRIMARY KEY(operation_id,resource_key))",
+	"CREATE TABLE network_bindings (project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, nic TEXT NOT NULL, bridge TEXT NOT NULL, acl TEXT NOT NULL, mac TEXT NOT NULL, ipv4 TEXT NOT NULL, ipv6 TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('OBSERVED','PINNED','QUARANTINED','RELEASED')), observed_at INTEGER NOT NULL, PRIMARY KEY(project,box_uuid,incarnation,nic))",
+	"CREATE TABLE network_address_fences (bridge TEXT NOT NULL, family TEXT NOT NULL CHECK(family IN ('ipv4','ipv6')), address TEXT NOT NULL, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('RESERVED','QUARANTINED','RELEASED')), operation_id TEXT NOT NULL DEFAULT '', observed_at INTEGER NOT NULL, PRIMARY KEY(bridge,family,address))",
+	"CREATE TABLE peer_grants (project TEXT NOT NULL, source_uuid TEXT NOT NULL, source_incarnation TEXT NOT NULL, target_uuid TEXT NOT NULL, target_incarnation TEXT NOT NULL, desired INTEGER NOT NULL CHECK(desired IN (0,1)), status TEXT NOT NULL CHECK(status IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), source_ipv4 TEXT NOT NULL DEFAULT '', target_ipv4 TEXT NOT NULL DEFAULT '', source_ipv6 TEXT NOT NULL DEFAULT '', target_ipv6 TEXT NOT NULL DEFAULT '', acl_generation TEXT NOT NULL DEFAULT '', operation_id TEXT NOT NULL DEFAULT '', PRIMARY KEY(project,source_uuid,source_incarnation,target_uuid,target_incarnation))",
+	"CREATE TABLE forward_claims (forward_id TEXT PRIMARY KEY, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_device TEXT NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('tcp','udp')), host_bind TEXT NOT NULL, host_port INTEGER NOT NULL CHECK(host_port BETWEEN 1 AND 65535), guest_port INTEGER NOT NULL CHECK(guest_port BETWEEN 1 AND 65535), guest_ip TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), operation_id TEXT NOT NULL DEFAULT '')",
 }
 
 var schemaIndexes = []string{
@@ -61,6 +66,13 @@ var schemaIndexes = []string{
 	"CREATE INDEX oauth_access_grant ON oauth_access(grant_id)",
 	"CREATE INDEX oauth_refresh_grant ON oauth_refresh(grant_id)",
 	"CREATE INDEX oauth_attempts_kind_time ON oauth_attempts(kind,at)",
+	"CREATE INDEX operation_resource_key_state ON operation_resource_claims(layer,resource_key)",
+	"CREATE UNIQUE INDEX network_bindings_pinned_v4 ON network_bindings(bridge,ipv4) WHERE state='PINNED' AND ipv4!=''",
+	"CREATE UNIQUE INDEX network_bindings_pinned_v6 ON network_bindings(bridge,ipv6) WHERE state='PINNED' AND ipv6!=''",
+	"CREATE UNIQUE INDEX network_bindings_pinned_mac ON network_bindings(bridge,mac) WHERE state='PINNED' AND mac!=''",
+	"CREATE INDEX network_address_fences_owner_state ON network_address_fences(project,box_uuid,state)",
+	"CREATE INDEX peer_grants_target_state ON peer_grants(project,target_uuid,status)",
+	"CREATE UNIQUE INDEX forward_claims_active_listener ON forward_claims(host_bind,protocol,host_port) WHERE state!='REVOKED'",
 }
 
 var (
@@ -99,8 +111,11 @@ type Admission struct {
 	// ResourceKey is a typed, domain-constructed per-native-Box name lock, never
 	// a caller-provided arbitrary SQL scope. It survives create before UUID exists.
 	ResourceKey string
-	WorkRef     string
-	AgentRef    string
+	// ResourceKeys are additional typed locks acquired atomically with admission.
+	// Peer operations require both Boxes and the exact shared ACL.
+	ResourceKeys []string
+	WorkRef      string
+	AgentRef     string
 }
 
 type Receipt struct {
@@ -334,7 +349,7 @@ func (s *Store) init(fresh bool) error {
 		return err
 	}
 	schema := append(append([]string{}, schemaDDL...), schemaIndexes...)
-	schema = append(schema, "INSERT INTO schema_version(version) VALUES (2)")
+	schema = append(schema, fmt.Sprintf("INSERT INTO schema_version(version) VALUES (%d)", SchemaVersion))
 	for _, q := range schema {
 		if _, err := tx.Exec(q); err != nil {
 			return err
@@ -485,11 +500,15 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		strings.ContainsAny(a.ResourceKey, "\x00\n\r") {
 		return Receipt{}, ErrInvalid
 	}
+	claims, err := normalizeAdmissionResourceKeys(a)
+	if err != nil {
+		return Receipt{}, ErrInvalid
+	}
 	// A non-secret digest avoids storing raw client key.
 	keyHash := digest(a.Key)
 	// Labels are stored immutably but are not part of the native intent hash.
 	// A retry that omits optional attribution reuses the original labels.
-	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
+	intentHash := admissionIntentDigest(a, claims)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Receipt{}, err
@@ -530,6 +549,25 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
 			AND NOT EXISTS (SELECT 1 FROM recovery_audit ra WHERE ra.operation_id=o.id AND ra.decision='RELEASED')`,
 			a.Layer, a.ResourceKey).Scan(&busy)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if busy != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
+	// Multi-resource locks are checked in the SAME SQLite admission
+	// transaction. UNKNOWN claims remain latched until reviewed release.
+	for _, key := range claims {
+		var busy int
+		err = tx.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM operation_resource_claims c "+
+				"JOIN operations o ON o.id=c.operation_id "+
+				"WHERE c.layer=? AND c.resource_key=? "+
+				"AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') "+
+				"AND NOT EXISTS (SELECT 1 FROM recovery_audit ra "+
+				"WHERE ra.operation_id=o.id AND ra.decision='RELEASED')",
+			a.Layer, key).Scan(&busy)
 		if err != nil {
 			return Receipt{}, err
 		}
@@ -604,6 +642,11 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state) VALUES (?,?,?)", id, now, "ADMITTED"); err != nil {
 		return Receipt{}, err
+	}
+	for _, key := range claims {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES (?,?,?)", id, a.Layer, key); err != nil {
+			return Receipt{}, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return Receipt{}, err
