@@ -139,8 +139,14 @@ jobs:
                 else
                   echo "S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6=DENIED"
                 fi
-                sudo incus exec s4b2a -- ip -6 neigh del "$b6" dev eth0 || :
-                sudo incus exec s4b2b -- ip -6 neigh del "$a6" dev eth0 || :
+                # Diagnostic pinned neighbors are deliberately kept
+                # through all later negative packet tests, then discarded
+                # with the fresh disposable Incus runner. Never productize.
+                cmac="$(sudo incus exec s4b2c -- cat /sys/class/net/eth0/address)"
+                sudo incus exec s4b2a -- ip -6 neigh replace "$c6" lladdr "$cmac" nud permanent dev eth0
+                sudo incus exec s4b2c -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+                sudo incus exec s4b2b -- ip -6 neigh replace "$c6" lladdr "$cmac" nud permanent dev eth0
+                echo "S4_B2_NEGATIVE_IPV6_TRAFFIC_NEIGHBOR_PREFLIGHT=TEST_ONLY"
                 # Preserve internet=false until after its egress negative
                 # check, then compare which endpoint egress switch affects NDP.
                 gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
@@ -156,9 +162,9 @@ jobs:
                 fi
                 sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
                 if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
-                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6=PASS"
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6_WITH_STATIC_NEIGHBOR=PASS"
                 else
-                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6=DENIED"
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6_WITH_STATIC_NEIGHBOR=DENIED"
                   exit 74
                 fi
               fi
@@ -200,6 +206,11 @@ jobs:
           done
           test -n "$d4" && test -n "$d6"
           echo "S4_B2_FOREIGN_PROJECT_IPV4=$d4 IPV6=$d6"
+          dmac="$(sudo incus --project s4b2foreign exec s4b2d -- cat /sys/class/net/eth0/address)"
+          sudo incus exec s4b2a -- ip -6 neigh replace "$d6" lladdr "$dmac" nud permanent dev eth0
+          sudo incus --project s4b2foreign exec s4b2d -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+          sudo incus exec s4b2b -- ip -6 neigh replace "$d6" lladdr "$dmac" nud permanent dev eth0
+          echo "S4_B2_FOREIGN_NEGATIVE_IPV6_NEIGHBORS_PINNED_FOR_PACKET_PROOF=YES"
           sudo incus network info incusbr0
           sudo incus network acl show bw-s4b1-native
           if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$d4" >/dev/null 2>&1; then exit 66; fi
