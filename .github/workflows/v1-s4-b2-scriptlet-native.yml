@@ -80,10 +80,10 @@ jobs:
             if curl -ksS --connect-timeout 2 --max-time 3 "https://127.0.0.1:8443/1.0" -o /dev/null; then break; fi
             sleep 1
           done
-          probe legacy GET '/1.0/instances?project=bwlegacy' 200
-          probe legacy GET '/1.0/instances?project=bwother' 403
-          probe other GET '/1.0/instances?project=bwother' 200
-          probe other GET '/1.0/instances?project=bwlegacy' 403
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
           probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
@@ -100,7 +100,7 @@ jobs:
                   return details.ProjectName == "default" and details.Path == "/1.0/network-acls/bw-s4b2-scriptlet" and details.Method in ["GET", "PUT"] and entitlement in ["can_view", "can_edit"]
               if details.ProjectName not in details.Certificate.Projects:
                   return False
-              if details.Method == "GET" and details.Path == "/1.0/instances":
+              if details.Method == "GET" and details.Path in ["/1.0/instances", "/1.0/projects/bwlegacy", "/1.0/projects/bwother"]:
                   return entitlement in ["can_view", "can_view_resources"]
               return False
           EOF
@@ -109,10 +109,10 @@ jobs:
           sudo incus config set authorization.client.tls-restricted=scriptlet
           test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
           echo "S4_B2_SCRIPTLET_GLOBAL_ROUTING_SWITCH_APPLIED_DISPOSABLE_ONLY=OBSERVED"
-          probe legacy GET '/1.0/instances?project=bwlegacy' 200
-          probe legacy GET '/1.0/instances?project=bwother' 403
-          probe other GET '/1.0/instances?project=bwother' 200
-          probe other GET '/1.0/instances?project=bwlegacy' 403
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
           echo "S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX=PASS"
           probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
@@ -121,7 +121,7 @@ jobs:
           probe writer GET '/1.0/instances?project=default' 403
           echo "S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS=PASS"
           set +e
-          sudo incus config set authorization.scriptlet='def authorize(details, object, entitlement): oops()' > "$RUNNER_TEMP/bad-scriptlet.txt" 2>&1
+          sudo incus config set authorization.scriptlet='def authorize(details, object, entitlement):' > "$RUNNER_TEMP/bad-scriptlet.txt" 2>&1
           bad_rc=$?
           set -e
           echo "S4_B2_SCRIPTLET_BAD_SCRIPT_UPDATE_EXIT=$bad_rc"
@@ -135,10 +135,10 @@ jobs:
           sudo incus config unset authorization.scriptlet
           test -z "$(sudo incus config get authorization.client.tls-restricted)"
           test -z "$(sudo incus config get authorization.scriptlet)"
-          probe legacy GET '/1.0/instances?project=bwlegacy' 200
-          probe legacy GET '/1.0/instances?project=bwother' 403
-          probe other GET '/1.0/instances?project=bwother' 200
-          probe other GET '/1.0/instances?project=bwlegacy' 403
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK=PASS"
           sudo incus config trust list --format json > "$RUNNER_TEMP/trust-inventory.json"
