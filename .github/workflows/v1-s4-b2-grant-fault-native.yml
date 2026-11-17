@@ -1,0 +1,147 @@
+name: S4-B2 disposable fail-open ACL GRANT fanout diagnostic (non-acceptance)
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-grant-fault-native.yml
+      - internal/install/native_s4_b2_dedicated_test.go
+      - internal/install/network_peer_policy.go
+      - internal/install/network_peer_bridge_guard.go
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fresh signed Incus 7.6, exact owned bridge and SDK fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test ! -e /var/lib/incus
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-dedicated-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-dedicated-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b2-dedicated-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          test -z "$(gofmt -l internal/install/native_s4_b2_dedicated_test.go internal/install/network_peer_policy.go internal/install/network_peer_bridge_guard.go)"
+          go test -c -o "$RUNNER_TEMP/s4b2-dedicated-test" ./internal/install
+          sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+          sudo incus project create bwowned \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project bwowned profile device add default root disk path=/ pool=default
+          sudo incus --project bwowned profile device add default eth0 nic name=eth0 \
+            network=bwbr0 security.acls=bw-s4b2-native \
+            security.acls.default.ingress.action=reject security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true security.ipv6_filtering=true security.mac_filtering=true
+          echo "S4_B2_DEDICATED_SOURCE=$GITHUB_SHA"
+          echo "S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE=PASS"
+      - name: Force stale guest NIC, then repeatedly probe failed grant and native kernel divergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          a4=10.248.83.11; b4=10.248.83.12; c4=10.248.83.13
+          a6=fd83:248::11; b6=fd83:248::12; c6=fd83:248::13
+          guest4() {
+            sudo incus --project bwowned exec "$1" -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :
+          }
+          init_owned() {
+            sudo incus --project bwowned init images:ubuntu/24.04 "$1" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project bwowned config device override "$1" eth0 "ipv4.address=$2" "ipv6.address=$3"
+            sudo incus --project bwowned start "$1"
+          }
+          init_owned s4b2a "$a4" "$a6"
+          init_owned s4b2b "$b4" "$b6"
+          init_owned s4b2c "$c4" "$c6"
+          for i in $(seq 1 50); do
+            if [[ "$(guest4 s4b2a)" = "$a4" && "$(guest4 s4b2b)" = "$b4" &&
+                  "$(guest4 s4b2c)" = "$c4" ]]; then break; fi
+            sleep 2
+          done
+          test "$(guest4 s4b2a)" = "$a4" && test "$(guest4 s4b2b)" = "$b4" && test "$(guest4 s4b2c)" = "$c4"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 76; fi
+          echo "S4_B2_GRANT_FAULT_PREGRANT_A_TO_B_DENIED=PASS"
+          veth="$(sudo incus --project bwowned config get s4b2c volatile.eth0.host_name)"
+          test -n "$veth" && test -d "/sys/class/net/$veth"
+          sudo ip link del dev "$veth"
+          test ! -e "/sys/class/net/$veth"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 77; fi
+          echo "S4_B2_GRANT_FAULT_AFTER_C_VETH_LOSS_PREPUT_A_TO_B_DENIED=PASS"
+          for i in $(seq 1 15); do
+            set +e
+            sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+              S4B2_A4="$a4" S4B2_B4="$b4" S4B2_A6="$a6" S4B2_B6="$b6" \
+              "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeDedicatedBridgeExactPeer$' \
+              > "$RUNNER_TEMP/s4b2-grant-attempt-$i.txt" 2>&1
+            rc=$?
+            set -e
+            echo "S4_B2_GRANT_FAULT_ATTEMPT=$i SDK_EXIT=$rc"
+            if [[ "$rc" -eq 0 ]]; then
+              echo "S4_B2_GRANT_FAULT_UNEXPECTED_PROVIDER_SUCCESS"; exit 78
+            fi
+            grep -E 'Failed updating bridge NIC ACL|Unknown or missing host side veth' "$RUNNER_TEMP/s4b2-grant-attempt-$i.txt"
+            sudo nft list ruleset > "$RUNNER_TEMP/s4b2-grant-attempt-$i.nft"
+            sudo incus network acl show bw-s4b2-native > "$RUNNER_TEMP/s4b2-grant-native-acl-$i.txt"
+            if grep -Fq 'source: 10.248.83.11/32' "$RUNNER_TEMP/s4b2-grant-native-acl-$i.txt"; then
+              echo "S4_B2_GRANT_FAULT_API_ACL_UNEXPECTED_ALLOW_AFTER_SDK_FAILURE"; exit 79
+            fi
+            python3 - "$RUNNER_TEMP/s4b2-grant-attempt-$i.nft" "$i" <<'PY'
+          import re
+          import sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          for box in "abc":
+              chains = re.findall(r"chain (?:in|fwd|out)\.bwowned_s4b2" + box + r"\.eth0 \{(.*?)\n\t\}", text, re.S)
+              if len(chains) != 3:
+                  raise SystemExit("missing native per-NIC nft chains for " + box)
+              grant4 = sum(c.count("ip saddr 10.248.83.11 ip daddr 10.248.83.12 accept") for c in chains)
+              grant6 = sum(c.count("ip6 saddr fd83:248::11 ip6 daddr fd83:248::12 accept") for c in chains)
+              print("S4_B2_GRANT_FAULT_NFT_ATTEMPT", sys.argv[2], "BOX", box, "V4_ALLOW", grant4, "V6_ALLOW", grant6)
+          PY
+            if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+              echo "S4_B2_GRANT_FAULT_AFTER_SDK_FAILURE_A_TO_B=REACHABLE_FAIL_OPEN_OBSERVED"
+              break
+            fi
+            echo "S4_B2_GRANT_FAULT_ATTEMPT_$i_A_TO_B=DENIED"
+          done
+          sudo incus network acl show bw-s4b2-native | head -n 15
+          for name in s4b2a s4b2b s4b2c; do
+            sudo incus --project bwowned stop "$name" --force || :
+            sudo incus --project bwowned delete "$name" --force
+          done
+          sudo incus --project bwowned profile device unset default eth0 security.acls
+          sudo incus project delete bwowned
+          sudo incus network acl delete bw-s4b2-native
+          sudo incus network delete bwbr0
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B2_GRANT_FAULT_NATIVE_EXACT_CLEANUP=PASS"
+          echo "S4_B2_GRANT_FAULT_DIAGNOSTIC_ONLY_NOT_PRODUCT_ACCEPTANCE=TRUE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s4b2-disposable-grant-fault-evidence
+          path: |
+            ${{ runner.temp }}/s4b2-grant-attempt-*.nft
+            ${{ runner.temp }}/s4b2-grant-attempt-*.txt
+            ${{ runner.temp }}/s4b2-grant-native-acl-*.txt
+          if-no-files-found: ignore
