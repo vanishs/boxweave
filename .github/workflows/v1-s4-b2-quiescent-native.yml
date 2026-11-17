@@ -140,7 +140,12 @@ jobs:
           # recorded and an inconsistent per-NIC kernel ACL fanout. This is a
           # deliberately disposable host; never restart shared L0 Incus.
           sudo systemctl restart incus.service
-          sudo incus waitready --timeout=90
+          # incus 7.6 has no "incus waitready" CLI command.
+          for attempt in $(seq 1 45); do
+            if sudo incus version >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          sudo incus version
           sudo systemctl is-active --quiet incus.service
           for name in s4b2a s4b2b; do
             test "$(sudo incus --project bwowned list "$name" -c s --format csv)" = STOPPED
