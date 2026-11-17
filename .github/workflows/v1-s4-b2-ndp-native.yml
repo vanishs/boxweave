@@ -110,8 +110,21 @@ jobs:
           tail -n 70 "$RUNNER_TEMP/ndp-b.log"
           echo "S4_B2_NDP_NFT_RULES"
           sudo nft -a list ruleset | grep -E 'nd-neighbor|icmpv6 type|mld|fwd.s4b2|egress|ingress' | head -n 90 || :
-          sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=143
-          sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=130
+          echo "S4_B2_NDP_BRIDGE_NETFILTER=$(cat /proc/sys/net/bridge/bridge-nf-call-ip6tables 2>/dev/null || echo absent)"
+          sudo nft -a list ruleset | sed -n '/chain fwd.s4b2a.eth0 {/,/^	}/p' | head -n 100 || :
+          sudo nft -a list ruleset | sed -n '/chain fwd.s4b2b.eth0 {/,/^	}/p' | head -n 100 || :
+          sudo ip6tables -S FORWARD | head -n 40 || :
+          if sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=143; then
+            echo "S4_B2_NDP_MLD143_RULE_ADDED=YES"
+          else
+            echo "S4_B2_NDP_MLD143_RULE_ADDED=NO"
+          fi
+          if sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=130; then
+            echo "S4_B2_NDP_MLD130_RULE_ADDED=YES"
+          else
+            echo "S4_B2_NDP_MLD130_RULE_ADDED=NO"
+          fi
+          echo "S4_B2_NDP_MLD_RULE_STAGE_COMPLETE=YES"
           sudo incus restart s4b2a
           sudo incus restart s4b2b
           test "$(guest6 s4b2a)" = "$a6"
@@ -123,6 +136,8 @@ jobs:
           ping6 B_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
           ping6 A_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device override s4b2a eth0 security.acls.default.ingress.action=allow
+          ping6 A_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
           sudo incus config device override s4b2b eth0 security.ipv6_filtering=false
           ping6 B_IPV6_FILTER_OFF_DIAGNOSTIC_ONLY
           echo "S4_B2_NDP_DIFFERENTIAL_COMPLETE=YES_NOT_A_PRODUCT_FIX"
