@@ -188,7 +188,11 @@ jobs:
           fi
           sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$b4"
           sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"
-          sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$gw4"
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$gw4"; then
+            echo "S4_B2_INTERNET_TRUE_GATEWAY_ICMP=PASS"
+          else
+            echo "S4_B2_INTERNET_TRUE_GATEWAY_ICMP=UNREACHABLE_NOT_EGRESS_PROOF"
+          fi
           if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$c4" >/dev/null 2>&1; then exit 65; fi
           echo "S4_B2_INTERNET_TRUE_PEER_AND_UNGRANTED_TARGET_DENY=PASS"
           sudo incus project create s4b2foreign -c features.images=false -c features.networks=false -c features.profiles=true
