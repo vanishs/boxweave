@@ -10,6 +10,9 @@ on:
       - internal/native/peer_acl_isolation.go
       - internal/native/peer_acl_isolation_native_test.go
       - internal/native/peer_acl_isolation_test.go
+      - internal/native/peer_acl_binding.go
+      - internal/install/network_peer_root_audit.go
+      - internal/install/network_peer_root_audit_test.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -99,6 +102,10 @@ jobs:
           test -n "$b_uuid"
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 76; fi
           echo "S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED=PASS"
+          # Independently root-observe native bridge UsedBy and the complete
+          # actual NIC UUID/MAC/static IPv4/IPv6 inventory before quiescence.
+          sudo env BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only             "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeRootBridgeAudit$'
+          echo "S4_B2_NATIVE_ROOT_BRIDGE_AUDIT_AND_REFUSALS=PASS"
           # The actual new Incus SDK barrier is tested on all three NICs
           # before the separate partial-PUT fault setup, on THIS disposable
           # daemon only. Root is used solely for independent test-side UsedBy.
