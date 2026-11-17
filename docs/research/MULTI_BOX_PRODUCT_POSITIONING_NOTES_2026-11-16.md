@@ -105,3 +105,5 @@ Underlying non-Agent products matter too: [Docker Compose networking](https://do
 ## 7. README documentation status (2026-11-16 PT addendum)
 
 The public-facing [README](https://github.com/vanishs/boxweave/blob/v1/README.md) was updated by [PR #156](https://github.com/vanishs/boxweave/pull/156), merged at `22d8021f62d95b5c79dba5c1755582a4da04513f`, to explain the multi-Box positioning, example relationships and current-versus-planned capability boundary. This remains an **archived discussion note** in Draft [PR #155](https://github.com/vanishs/boxweave/pull/155), not a new S4/S5 requirement or product approval.
+
+**Notes-maintenance update:** Git Hooks and GitHub's required docs-only `quality-gate` now follow the same minimal, mechanical formatting policy after [PR #158](https://github.com/vanishs/boxweave/pull/158). This is CI process documentation only, **not** an additional BoxWeave product feature or acceptance claim.
