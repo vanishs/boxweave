@@ -101,12 +101,19 @@ jobs:
           test "$(sudo incus --project bwowned list s4b2b -c s --format csv)" = STOPPED
           test "$(sudo incus --project bwowned config get s4b2b volatile.uuid)" = "$b_uuid"
           echo "S4_B2_QUIESCENT_BOTH_ENDPOINTS_STOPPED_NATIVE_UUID_RETAINED=PASS"
-          sudo incus --project bwowned init images:ubuntu/24.04 s4b2duplicate
-          if sudo incus --project bwowned config device override s4b2duplicate eth0 "ipv4.address=$b4" "ipv6.address=$b6"; then
-            echo "S4_B2_QUIESCENT_STOPPED_B_ADDRESS_DUPLICATION_ACCEPTED_SECURITY_BREAK"; exit 77
+          sudo incus --project bwowned init images:ubuntu/24.04 s4b2duplicatev4
+          if sudo incus --project bwowned config device override s4b2duplicatev4 eth0 "ipv4.address=$b4" "ipv6.address=fd83:248::14"; then
+            echo "S4_B2_QUIESCENT_STOPPED_B_IPV4_COLLISION_UNEXPECTEDLY_ACCEPTED"; exit 77
           fi
-          sudo incus --project bwowned delete s4b2duplicate
-          echo "S4_B2_QUIESCENT_STOPPED_B_V4V6_ADDRESS_HELD=PASS"
+          sudo incus --project bwowned delete s4b2duplicatev4
+          echo "S4_B2_QUIESCENT_STOPPED_B_IPV4_COLLISION_REFUSED=PASS"
+          sudo incus --project bwowned init images:ubuntu/24.04 s4b2duplicatev6
+          if sudo incus --project bwowned config device override s4b2duplicatev6 eth0 "ipv4.address=10.248.83.14" "ipv6.address=$b6"; then
+            echo "S4_B2_QUIESCENT_STOPPED_B_IPV6_COLLISION_UNEXPECTEDLY_ACCEPTED"; exit 78
+          fi
+          sudo incus --project bwowned delete s4b2duplicatev6
+          echo "S4_B2_QUIESCENT_STOPPED_B_IPV6_COLLISION_REFUSED=PASS"
+          echo "S4_B2_QUIESCENT_STOPPED_B_BOTH_NATIVE_STATIC_ADDRESSES_HELD=PASS"
           veth="$(sudo incus --project bwowned config get s4b2c volatile.eth0.host_name)"
           test -n "$veth" && test -e "/sys/class/net/$veth"
           sudo ip link del dev "$veth"
