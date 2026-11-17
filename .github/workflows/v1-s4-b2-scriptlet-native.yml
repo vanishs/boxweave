@@ -136,7 +136,7 @@ jobs:
             'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-scriptlet?project=default')"
           echo "S4_B2_SCRIPTLET_WRITER_EXACT_PUT_STATUS=$acl_code"
           test "$acl_code" = 200
-          test "$(sudo incus network acl get bw-s4b2-scriptlet description)" = 'S4-B2 exact scriptlet writer authorized native PUT'
+          sudo incus network acl show bw-s4b2-scriptlet | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'
           echo "S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK=PASS"
           forbidden_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
             --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
@@ -147,7 +147,7 @@ jobs:
             'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-not-owned?project=default')"
           echo "S4_B2_SCRIPTLET_WRITER_FOREIGN_PUT_STATUS=$forbidden_code"
           test "$forbidden_code" = 403
-          test "$(sudo incus network acl get bw-s4b2-not-owned description)" != 'S4-B2 exact scriptlet writer authorized native PUT'
+          if sudo incus network acl show bw-s4b2-not-owned | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'; then exit 68; fi
           echo "S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED=PASS"
 
           set +e
