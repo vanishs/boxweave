@@ -85,6 +85,44 @@ func s4b2NativeRootReadOnlyPeerReviewFixture(t *testing.T, ctx context.Context,
 		t.Fatal("unowned source pair reached root review")
 	}
 	t.Log("S4_B2_ROOT_PEER_REVIEW_FOREIGN_PAIR_REFUSED=PASS")
+	// Real root SDK+kernel conntrack effect, bounded to this disposable
+	// 3-Box stopped bridge and the verified protected SQLite ledger.
+	journalPath := filepath.Join(dir, "native-peer-original.json")
+	nativeDispatches := 0
+	receipt, err := nativePeerConntrackDispatchOnce(ctx, journalPath, plan,
+		plan.PlanSHA256, true, func(ctx context.Context) (NativePeerConntrackReport, error) {
+			nativeDispatches++
+			return nativePeerConntrackPurgeFromStoreWithClient(ctx, reader, root, nativePeerConntrackOS,
+				target.Project, target.Bridge, target.ACL, src, dst)
+		})
+	if err != nil || receipt.Status != "COMPLETE_VERIFIED" ||
+		!receipt.MutationComplete || receipt.ReadyForPeer ||
+		receipt.ProbedScopes != 4 || nativeDispatches != 1 {
+		t.Fatalf("real root-native one-shot incomplete: %+v %v dispatches=%d",
+			receipt, err, nativeDispatches)
+	}
+	actual, err := nativePeerConntrackLoadJournal(journalPath)
+	if err != nil || actual.Status != "COMPLETE_VERIFIED" ||
+		actual.Plan.PlanSHA256 != plan.PlanSHA256 ||
+		actual.Report.NativeDigestSHA256 != plan.NativeDigestSHA256 ||
+		actual.Report.ProbedScopes != 4 {
+		t.Fatalf("root-native journal not durably bound: %+v %v", actual, err)
+	}
+	t.Log("S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_JOURNALED_FOUR_SCOPES=PASS")
+	if _, err := nativePeerConntrackDispatchOnce(ctx, journalPath, plan,
+		plan.PlanSHA256, true, func(context.Context) (NativePeerConntrackReport, error) {
+			nativeDispatches++
+			t.Fatal("native effect retried after verified completion")
+			return NativePeerConntrackReport{}, nil
+		}); err == nil || nativeDispatches != 1 {
+		t.Fatalf("root-native dispatch replay: %v count=%d", err, nativeDispatches)
+	}
+	t.Log("S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_REPLAY_DENIED=PASS")
+	if _, err := nativePeerConntrackPurgeFromStoreWithClient(ctx, writer, root, nativePeerConntrackOS,
+		target.Project, target.Bridge, target.ACL, src, dst); err == nil {
+		t.Fatal("writable SQLite owner ledger admitted to root-native purge")
+	}
+	t.Log("S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_WRITER_DENIED=PASS")
 	if _, err := db.ExecContext(ctx, "UPDATE network_bindings SET mac='02:16:3e:fe:fe:fe' WHERE box_uuid=?", dst); err != nil {
 		t.Fatal(err)
 	}
