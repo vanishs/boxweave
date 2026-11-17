@@ -29,7 +29,14 @@ func TestS4B2NativeStoreLedgerBridgeAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "owned.sqlite")
+	// A GitHub runner can have a non-private inherited test directory.
+	// Match the product's SQLite security requirements instead of relaxing
+	// Store.Open: the immediate DB parent must be an actual private 0700 dir.
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "owned.sqlite")
 	st, err := state.Open(path)
 	if err != nil {
 		t.Fatal(err)
