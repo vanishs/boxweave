@@ -248,6 +248,44 @@ jobs:
           else
             echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=DENIED"
           fi
+          # B2 research: can revocation plus native static dual-stack
+          # identity rotation invalidate an established pair WITHOUT a
+          # privileged conntrack deletion? Only on this disposable runner.
+          # Preserve old address reservations in the product until a safe
+          # native lease-fencing design exists; this is NOT yet activation.
+          new4=10.248.83.32
+          new6=fd83:248::32
+          sudo conntrack -L -f ipv4 -s "$a4" -d "$b4" \
+            > "$RUNNER_TEMP/s4b2-quiescent-before-rotation-ct4.txt" 2>&1 || :
+          sudo incus --project bwowned stop s4b2b
+          sudo incus --project bwowned config device set s4b2b eth0 ipv4.address "$new4"
+          sudo incus --project bwowned config device set s4b2b eth0 ipv6.address "$new6"
+          sudo incus --project bwowned start s4b2b
+          for i in $(seq 1 45); do
+            if [[ "$(guest4 s4b2b)" = "$new4" && "$(guest6 s4b2b)" = "$new6" ]]; then break; fi
+            sleep 2
+          done
+          test "$(guest4 s4b2b)" = "$new4" && test "$(guest6 s4b2b)" = "$new6"
+          echo "S4_B2_QUIESCENT_REVOKE_NATIVE_ROTATED_IPV4_IPV6=PASS"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 2 -W 2 "$new4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_REVOKE_ROTATED_IPV4_REACHABLE_UNSAFE"; exit 82
+          fi
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 2 -W 2 "$new6" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_REVOKE_ROTATED_IPV6_REACHABLE_UNSAFE"; exit 83
+          fi
+          echo "S4_B2_QUIESCENT_REVOKE_ROTATED_BOTH_FAMILIES_DENIED=PASS"
+          sudo conntrack -L -f ipv4 -s "$a4" -d "$b4" \
+            > "$RUNNER_TEMP/s4b2-quiescent-after-rotation-ct4.txt" 2>&1 || :
+          sudo incus --project bwowned stop s4b2b
+          sudo incus --project bwowned config device set s4b2b eth0 ipv4.address "$b4"
+          sudo incus --project bwowned config device set s4b2b eth0 ipv6.address "$b6"
+          sudo incus --project bwowned start s4b2b
+          require_addresses
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_OLD_IP_AFTER_ROTATION_RESTORE=REACHABLE"
+          else
+            echo "S4_B2_QUIESCENT_OLD_IP_AFTER_ROTATION_RESTORE=DENIED"
+          fi
           # Investigate whether the observed post-revoke established ICMP
           # reachability can be removed with exact *pair-scoped* conntrack
           # cleanup. This is a disposable privileged test ONLY; it does not
