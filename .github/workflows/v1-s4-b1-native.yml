@@ -281,11 +281,30 @@ jobs:
           echo "S4_B1_REUSED_OLD_B4=$b4 NEW_C4=$new_c4"
           if [[ "$new_c4" = "$b4" ]]; then
             echo S4_B1_NATIVE_OLD_IPV4_ALLOCATED_TO_DIFFERENT_UUID=PASS
-            if sudo incus exec s4b1a -- ping -n -c 2 -W 3 "$b4"; then
-              echo S4_B1_STALE_IPV4_PEER_GRANT_REACHES_NEW_UUID=CONFIRMED
+            echo "S4_B1_OWNED_NEW_C_UUID=$(sudo incus config get s4b1c volatile.uuid)"
+            echo S4_B1_OLD_B_REMOVED_AND_C_EFFECTIVE_NIC
+            sudo incus list --format csv -c n
+            sudo incus config show s4b1c --expanded | grep -E 'ipv4.address:|security.acls:|security.ipv4_filtering:|security.mac_filtering:' || :
+            sudo incus exec s4b1c -- sh -c 'ip -4 -o addr show eth0; ip -o link show eth0'
+            echo S4_B1_SOURCE_A_NEIGHBOR_BEFORE
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
+            # A just reached the deleted B. Cached old B MAC can mask the
+            # stale-grant problem until ARP expires; verify this independently.
+            if sudo incus exec s4b1a -- ip -4 neigh del "$b4" dev eth0; then
+              echo S4_B1_SOURCE_A_OLD_NEIGHBOR_CLEARED=PASS
             else
-              echo S4_B1_STALE_IPV4_PEER_GRANT_REACHES_NEW_UUID=NOT_CONFIRMED
+              echo S4_B1_SOURCE_A_OLD_NEIGHBOR_CLEARED=DENIED_SLEEP_FOR_EXPIRATION
+              sleep 40
             fi
+            echo S4_B1_SOURCE_A_NEIGHBOR_AFTER
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
+            if sudo incus exec s4b1a -- ping -n -c 3 -W 3 "$b4"; then
+              echo S4_B1_STALE_IPV4_PEER_GRANT_AFTER_ARP_REFRESH=REACHABLE_NEW_UUID
+            else
+              echo S4_B1_STALE_IPV4_PEER_GRANT_AFTER_ARP_REFRESH=NOT_REACHABLE
+            fi
+            echo S4_B1_SOURCE_A_NEIGHBOR_POST_PACKET
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
           else
             echo S4_B1_NATIVE_DHCP_REUSE=NOT_REPRODUCED
           fi
