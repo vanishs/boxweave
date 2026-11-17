@@ -152,7 +152,7 @@ jobs:
           if sudo incus network acl show bw-s4b1-native >/dev/null 2>&1; then exit 49; fi
           test -z "$(sudo incus list --all-projects --format csv -c n)"
           echo "S4_B1_EXACT_NATIVE_CLEANUP=PASS"
-- name: S4 B1 exact S1 egress and IPv4 address reuse (disposable native host only)
+      - name: S4 B1 exact S1 egress and IPv4 address reuse (disposable native host only)
         shell: bash
         run: |
           set -euo pipefail
@@ -238,8 +238,12 @@ jobs:
           sudo incus exec s4b1a -- ping -n -c 1 -W 4 "$b4"
           sudo incus exec s4b1a -- ping -n -6 -c 1 -W 4 "$b6"
           echo S4_B1_EXPERIMENT_CARVED_S1_PEER_ALLOW_IPV4_IPV6=PASS
-          for entry in "s4b1b:$a4:$a6" "s4b1c:$b4:$b6" "s4b1a:$c4:$c6"; do
-            IFS=: read -r origin dst4 dst6 <<< "$entry"
+          for origin in s4b1b s4b1c s4b1a; do
+            case "$origin" in
+              s4b1b) dst4="$a4"; dst6="$a6" ;;
+              s4b1c) dst4="$b4"; dst6="$b6" ;;
+              s4b1a) dst4="$c4"; dst6="$c6" ;;
+            esac
             if sudo incus exec "$origin" -- ping -n -c 1 -W 2 "$dst4" >/dev/null 2>&1; then
               echo "S4_B1_UNEXPECTED_REVERSE_OR_THIRD_PARTY_V4_$origin" >&2
               exit 82
@@ -303,4 +307,3 @@ jobs:
           sudo incus network acl delete bw-s4b1-native
           test -z "$(sudo incus list --all-projects --format csv -c n)"
           echo S4_B1_S1_EGRESS_LEASE_EXPERIMENT_EXACT_CLEANUP=PASS
-
