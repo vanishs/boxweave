@@ -1,6 +1,6 @@
 # Next Agent prompt — start S4-A in existing PR #153 (2026-11-16)
 
-**Checkpoint 2026-11-16:** This is the historical *start S4-A* implementation prompt. S4-A is now implemented in existing PR #153 but **not signed**; use current HEAD and [actual S4-A lab log](../verification/S4_A_REPEATABLE_LAB_2026-11-16.md) for remaining verification, not a duplicate implementation or another PR.
+**Checkpoint 2026-11-16:** This is the historical *start S4-A* implementation prompt. S4-A code `3407e2a2` has [independent scoped PASS](../verification/S4_A_FORMAL_ACCEPTANCE_2026-11-16.md) in existing PR #153. Refresh the latest PR HEAD and its exact-head checks/final verdict; do not duplicate implementation, open another PR or start S4-B without the owner initiating it.
 
 Copy the following to the next development Agent **as an implementation task**, not merely a planning request.
 

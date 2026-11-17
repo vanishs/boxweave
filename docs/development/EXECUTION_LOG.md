@@ -199,17 +199,17 @@ Actual authenticated `_meta` malformed type/control/URL/argument-conflict and Vi
 
 | Field | Current recorded fact |
 |---|---|
-| Last updated | 2026-11-16 PT; S4-A continuation in existing Draft PR #153; **S4_A_PARTIAL**, no S4-B authority. |
-| Branch / recovered source | `feat/v1-s4-runtime-integration-20261116`; GitHub ref independently refreshed at `b3db44f5ff832f50a252908b2e0c5833224b163e`. |
-| Current failure | Native [43944870116](https://github.com/vanishs/boxweave/actions/runs/43944870116), source `070e421b`, proves original UNKNOWN/core S4-A and P0/Stop/Delete/token races PASS; exact remaining failure is operation_list response returning before GDB hold. Source169 is correct but its first PC is a skipped inlined credential branch; next fixture uses the unique actual privateReadReply CALL instruction from exact candidate bytes. |
-| Safe work in progress | Add bounded native settlement/marker/SQLite-copy diagnostics, expose fixed bind-probe failure classes, and supplement installed OAuth negative coverage. Product OAuth/WAL core unchanged. |
-| Local environment | Task-owned L1 RC7 `s4a-dev-l1-20261116`, UUID `0fe7cd96-417e-4824-905e-4967ccf33d77`; focused S4 tests repeated three times PASS at recovered source. Native child Start remains BPF/AppArmor blocked; no parent policy changes. |
-| Verification | Independent Verifier reviewing source and authoring missing installed negatives. Full quality uses isolated `/tmp/boxweave-s4a-verify` worktree because root untracked legacy Go directories contaminate module discovery. Preserve all user untracked files. |
-| Next actions | Complete quality, run diagnostic candidate on pristine Incus Actions, fix the evidenced failure, then same-final-source installed/native/independent acceptance and exact-head Actions. |
-| Original UNKNOWN / cautions | Never replay/adopt/delete historical UNKNOWN. Existing L0/L1 incidents and three legacy original tasks `7e1cbf043d1fd4ea3d9ec0093a04371e`, `f811afeeb778c422fe99b9881baa40f2`, `192a6601c54078f8eaf1437a6a3dc13b` remain protected. New CI ACK-loss original must stay UNKNOWN/unbound; only its disposable SQLite backup may bind identity. |
-| Boundaries | No shared-host policy change, physical install, new PR, force push, merge, release or S4-B. |
+| Last updated | 2026-11-16 PT; existing Draft PR153; S4-A code3407 independently signed; later-head verdict is governed by its exact-head PR checks. |
+| Branch | `feat/v1-s4-runtime-integration-20261116`; always refresh latest PR HEAD. No new PR, merge or S4-B. |
+| Accepted runtime source | `3407e2a25609e885756f2fe3446394967041d37c`; actual binary SHA256 `6d8aa027926b64104ba8baa70bf69219ad5d008e6cfed15eb510fca0027a7cb7`. |
+| Native / independent verdict | [43947870241](https://github.com/vanishs/boxweave/actions/runs/43947870241) SUCCESS; same-head quality/S1/dualarch SUCCESS; independent Verifier **S4_A_PASS at code3407**. [Formal record](../verification/S4_A_FORMAL_ACCEPTANCE_2026-11-16.md). |
+| Repair | Test-only atomic-boundary assumptions and optimized GDB skipped-branch PC corrected; unique real CALL selected from immutable candidate. Product OAuth/WAL/runtime untouched in this continuation. |
+| Final-head gate | Full make verify, same-head S4-native/quality/S1/dualarch plus original S3 File/Git and SFTP-native regressions; independent final-log review and verdict recorded on PR153. Only then report that later HEAD and stop. |
+| Local lab | L1 RC7 task Box `0fe7cd96-417e-4824-905e-4967ccf33d77` used for Go/SQLite/source checks; deeper Start BPF/AppArmor blocked and not retried/weakened. Clean tracked-only quality worktree `/tmp/boxweave-s4a-verify`; preserve root untracked user files. |
+| Protected originals | All historical/shared-host UNKNOWN unchanged. CI ACK-loss original remains unbound UNKNOWN; only its standalone SQLite copy binds. No uncertain native redispatch. |
+| Remaining scope | S4-B/C/#150/#151/S5 retain their own gates; owner starts S4-B after final report. No shared-host Scriptlet/AA/BPF change, physical deploy or release. |
 
-The checkpoint is mutable; dated observations remain append-only below.
+This checkpoint is mutable; dated observations below remain append-only.
 
 ## Log entry format
 
@@ -1100,3 +1100,10 @@ Owner signed into Codex CLI. Isolated bwcodex now reports Logged in using ChatGP
 - Source `070e421bf47c98c08a8ae0840d6d4c98ec2a3abf`: complete local/pre-push quality and build PASS, same-head quality/S1/two-arch Actions SUCCESS. Installed [43944870116](https://github.com/vanishs/boxweave/actions/runs/43944870116) repeats S4-A core positives/negatives and proves P0 native/SQLite faults, real Stop/Delete lost-ACK restart and token-inflight races PASS, but operation_list boundary test FAILS: fixed literal `query returned before debugger stopped final boundary`. Derived source line169 was correct; no overlap or atomic-trigger installed signoff yet.
 - Independent optimized Go1.26.9 disassembly shows line169 has several branch-specific PCs after inlining `operationCredentialID`. GDB's first source-line PC is in an invalid-token type branch skipped by a valid HTTP token_id. Both coordinator and independent Verifier locate a unique real CALL to `privateReadReply` for `OperationPage` at the same source return. This establishes why a source-line-only breakpoint is insufficient; it is not evidence of a private-data leak.
 - Fix only the test fixture: derive unique CALL instruction from the exact candidate's objdump, confirm executable ELF/address/source/callee and fail closed on mismatch/ambiguity; suspend immediately before actual privateReadReply, preserve the original authenticated request and independent expiry/revocation assertions. Add sanitized early-result/error classification and an actual breakpoint-hit marker. No product Go or candidate bytes are modified, no arbitrary credential/response/error bodies printed. Native reacceptance remains mandatory; S4_A_PARTIAL.
+
+### 2026-11-16 PT — complete native S4-A and independent scoped signoff at3407
+
+- Exact source `3407e2a25609e885756f2fe3446394967041d37c`, actual controller SHA256 `6d8aa027926b64104ba8baa70bf69219ad5d008e6cfed15eb510fca0027a7cb7`: installed run [43947870241](https://github.com/vanishs/boxweave/actions/runs/43947870241) SUCCESS, finished20:26:27UTC. Same-head quality/S1/two-arch all SUCCESS. Independent Verifier separately fetched job133582211751 and formally signed **S4_A_PASS for code3407**, with sixteen mandatory native marker checks and original/SQLite/native IDs correlated; [formal record](../verification/S4_A_FORMAL_ACCEPTANCE_2026-11-16.md).
+- Both actual compiled-CALL revoke/expiry pauses passed. All remaining overlap/atomic-trigger/two-controller/private-read/malformed-Exec/alternate-pool gates passed; native Create/Exec/Delete, OAuth once-effect/negative matrix, concurrent Delete+tombstone, WAL and original UNKNOWN unchanged checks all PASS. Overlay evidence is explicitly separate from main candidate bytes. No native UNKNOWN redispatch or shared-host changes.
+- Added formal report with original IDs, actual terminal status, Guest exits, SQLite/tombstone state and exact hashes. Current code entry points now link it; earlier failure observations remain append-only. S4-B/C and release remain unstarted.
+- Final reporting/workflow head must run its own complete checks. Enable existing S3 installed File/Git and SFTP-native workflows for manual dispatch on the exact S4 branch only, preserving all pristine-host/version/UID/permission guards and existing S3 push behavior. They were NOT rerun on3407; do not infer that evidence from16-tool discovery. Final HEAD acceptance remains pending these new runs and final S4-native rerun.

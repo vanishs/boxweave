@@ -1,6 +1,6 @@
 # S4-A runtime integration — repeatable L0/L1 lab and signed-evidence gate
 
-**Date:** 2026-11-16 UTC. **Status:** `S4_A_PARTIAL` (not signed and not merged). **Development vehicle:** [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; current source before this report `6693972544ea943a65ebd47c438a1b62297d4912`. Protected `v1` and S3 remain untouched.
+**Current code verdict:** [S4_A_PASS at exact code3407, formal evidence and scope](S4_A_FORMAL_ACCEPTANCE_2026-11-16.md). Final reporting-head checks are tracked in PR153. **Historical lab report date:** 2026-11-16 UTC. The earlier PARTIAL observations below remain historical, not a claim that the accepted code is unsigned. **Development vehicle:** [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; current source before this report `6693972544ea943a65ebd47c438a1b62297d4912`. Protected `v1` and S3 remain untouched.
 
 ## Code under test and isolated checks
 
@@ -26,7 +26,7 @@
 
 ## Remaining exit criteria and S4-B handoff
 
-**Not yet established:** one **exact-final-head** workflow successfully completing restricted installed S4 HTTP MCP OAuth refresh one-native-effect, S4-A Create/Delete original native UUID/terminal and durable tombstone, full affected S2 restart + SIGKILL + lost ACK + UNKNOWN negative checks, independently bound original native operation events and absence after cleanup. Preserve all historical UNKNOWN and keep #151 open for S5. If the GitHub workflow fails, collect only redacted failure classes and original IDs, fix and rerun; do not mark a partial green log as complete.
+**Historical outstanding gate, now satisfied for code3407:** one **exact-final-head** workflow successfully completing restricted installed S4 HTTP MCP OAuth refresh one-native-effect, S4-A Create/Delete original native UUID/terminal and durable tombstone, full affected S2 restart + SIGKILL + lost ACK + UNKNOWN negative checks, independently bound original native operation events and absence after cleanup. Preserve all historical UNKNOWN and keep #151 open for S5. If the GitHub workflow fails, collect only redacted failure classes and original IDs, fix and rerun; do not mark a partial green log as complete.
 
 **S4-B entry:** require `S4_A_PASS` at a named final code SHA, independent verifier and same-SHA Actions; until then keep PR #153 Draft. Never touch parent global Incus, AppArmor, or Scriptlet automatically.
 
