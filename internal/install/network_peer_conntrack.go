@@ -208,7 +208,19 @@ func NativePeerConntrackPurge(ctx context.Context, t NativePeerBridgeAuditTarget
 	if err != nil {
 		return zero, err
 	}
-	return nativePeerConntrackWithClient(ctx, root, t, sourceUUID, targetUUID, nativePeerConntrackOS)
+	// The full stop fence must leave zero live ports on the dedicated host bridge.
+	// Reject raw NICs that escaped a restricted-Project inventory.
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, t.Bridge); err != nil {
+		return zero, err
+	}
+	report, err := nativePeerConntrackWithClient(ctx, root, t, sourceUUID, targetUUID, nativePeerConntrackOS)
+	if err != nil {
+		return report, err
+	}
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, t.Bridge); err != nil {
+		return report, fmt.Errorf("bridge acquired port during native conntrack purge: %w", err)
+	}
+	return report, nil
 }
 
 func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServer,

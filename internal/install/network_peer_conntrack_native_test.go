@@ -2,7 +2,9 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +48,36 @@ func TestS4B2NativeRootPairConntrackAfterQuiescence(t *testing.T) {
 			IPv6: inst.Devices["eth0"]["ipv6.address"],
 		})
 	}
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
+		t.Fatal("stopped dedicated bridge still has kernel ports:", err)
+	}
+	// Independently attach a foreign raw veth without Incus's UsedBy.
+	// Only on this disposable GitHub-owned Incus runner, never shared L0.
+	cmd := func(args ...string) error {
+		output, err := exec.CommandContext(ctx, "/usr/sbin/ip", args...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("host-only test ip %v: %s: %w", args, output, err)
+		}
+		return nil
+	}
+	if err := cmd("link", "add", "bwprb0", "type", "veth", "peer", "name", "bwprb1"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = exec.Command("/usr/sbin/ip", "link", "del", "bwprb0").Run() }()
+	if err := cmd("link", "set", "bwprb0", "master", scope.Bridge); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err == nil {
+		t.Fatal("unregistered raw host bridge NIC evaded kernel port guard")
+	}
+	t.Log("S4_B2_NATIVE_ROOT_UNREGISTERED_HOST_BRIDGE_PORT_REFUSED=PASS")
+	if err := cmd("link", "del", "bwprb0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
+		t.Fatal("foreign test link cleanup failed:", err)
+	}
+	t.Log("S4_B2_NATIVE_ROOT_ZERO_HOST_BRIDGE_PORTS_AFTER_STOP=PASS")
 	a, b := scope.Boxes[0], scope.Boxes[1]
 	actual, _, err := root.GetNetworkACL(scope.ACL)
 	if err != nil {
