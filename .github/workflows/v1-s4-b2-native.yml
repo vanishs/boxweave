@@ -101,8 +101,37 @@ jobs:
           echo "S4_B2_S1_DEFAULT_DENIAL_V4V6=PASS"
           probe TestS4B2NativeExactTargetEgressAndIngress
           sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$b4"
-          sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"
-          echo "S4_B2_PROVISIONAL_INTERNET_FALSE_PEER_V4V6=PASS"
+          echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV4=PASS"
+          if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+            echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_INITIAL=PASS"
+          else
+            echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_INITIAL=DENIED"
+            sudo incus exec s4b2a -- ip -6 neigh show || :
+            sudo incus exec s4b2b -- ip -6 neigh show || :
+            sudo incus exec s4b2a -- ip -6 route show || :
+            # Disposable native experiment: does rejecting ICMPv6 NDP
+            # prevent address discovery despite an exact unicast pair?
+            sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=135
+            sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=136
+            sudo incus network acl show bw-s4b1-native
+            if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+              echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_EGRESS=PASS"
+            else
+              echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_EGRESS=DENIED"
+              sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=135
+              sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=136
+              if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH=PASS"
+              else
+                echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH=DENIED"
+                sudo incus exec s4b2a -- ip -6 neigh show || :
+                sudo incus exec s4b2b -- ip -6 neigh show || :
+                # Continue negative probes only after true traffic evidence;
+                # do not print a false IPv6 PASS.
+                exit 73
+              fi
+            fi
+          fi
           for spec in "s4b2b $a4 $a6" "s4b2c $b4 $b6" "s4b2a $c4 $c6"; do
             read -r src dst4 dst6 <<<"$spec"
             if sudo incus exec "$src" -- ping -n -c 1 -W 2 "$dst4" >/dev/null 2>&1; then exit 62; fi

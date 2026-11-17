@@ -164,8 +164,8 @@ func TestS4B2NativeRevokeBeforeIPRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(acl.Ingress) != 2 || len(acl.Egress) != 4 {
-		t.Fatal("expected exact previous peer grant")
+	if len(acl.Ingress) < 2 || len(acl.Egress) < 4 {
+		t.Fatal("expected exact previous peer grant and optional NDP experiment")
 	}
 	baseline, err := nativePrepareACL(NativePrepareTarget{ACL: s4b1ProbeACL}, network)
 	if err != nil {
