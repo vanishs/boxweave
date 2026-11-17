@@ -13,6 +13,10 @@ on:
       - internal/native/peer_acl_binding.go
       - internal/install/network_peer_root_audit.go
       - internal/install/network_peer_root_audit_test.go
+      - internal/install/network_peer_root_audit_snapshot_test.go
+      - internal/install/network_peer_conntrack.go
+      - internal/install/network_peer_conntrack_test.go
+      - internal/install/network_peer_conntrack_native_test.go
       - internal/install/network_peer_revocation.go
       - internal/install/network_peer_revocation_test.go
       - internal/install/network_peer_revocation_native_test.go
@@ -136,6 +140,10 @@ jobs:
           # Exercise the actual official SDK ACL PUT/ETag path while ALL
           # shared-ACL NICs remain isolated by the new native pre-PUT barrier.
           # This is a disposable native test integration, not the MCP product.
+          probe TestS4B2NativeCompiledDropTombstoneApply
+          probe TestS4B2NativeRootPairConntrackAfterQuiescence
+          probe TestS4B2NativeCompiledDropTombstoneRemove
+          echo "S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER=PASS"
           probe TestS4B2NativeDedicatedBridgeExactPeer
           probe TestS4B2NativeDedicatedBridgeRevoke
           sudo incus network acl show bw-s4b2-native | grep -Fxq 'ingress: []'
