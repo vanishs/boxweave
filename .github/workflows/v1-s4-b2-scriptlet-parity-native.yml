@@ -22,7 +22,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_ACTIONS" = true && test ! -e /var/lib/incus
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg openssl >/dev/null
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg openssl jq >/dev/null
           curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
           fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
           test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
@@ -57,6 +57,15 @@ jobs:
           test "${#writer_fpr}" = 64
           echo "$writer_fpr" > "$RUNNER_TEMP/writer.fingerprint"
           openssl x509 -in /var/lib/incus/server.crt -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64 -A > "$RUNNER_TEMP/server.spki"
+          # Real owned and foreign instance fixtures for restricted TLS
+          # Files/Exec parity; all effects are inside this fresh CI Incus.
+          sudo incus --project bwlegacy init images:ubuntu/24.04 s4b2legacyguest
+          sudo incus --project bwother init images:ubuntu/24.04 s4b2otherguest
+          sudo incus --project bwlegacy start s4b2legacyguest
+          sudo incus --project bwother start s4b2otherguest
+          test "$(sudo incus --project bwlegacy list s4b2legacyguest -c s --format csv)" = RUNNING
+          test "$(sudo incus --project bwother list s4b2otherguest -c s --format csv)" = RUNNING
+          echo "S4_B2_SCRIPTLET_REAL_GUEST_EXECS_FILES_FIXTURE=PASS"
           echo "S4_B2_SCRIPTLET_DISPOSABLE_PREPARE_NATIVE_7_6=PASS"
       - name: Test native legacy rights before switch, scriptlet routing, denied escalation, exact rollback
         shell: bash
@@ -78,6 +87,34 @@ jobs:
               return 1
             fi
           }
+          legacy_files_exec_probe() {
+            local stage="$1" code op_id response
+            probe legacy GET '/1.0/instances/s4b2legacyguest/files?path=/etc/hostname&project=bwlegacy' 200
+            probe legacy GET '/1.0/instances/s4b2otherguest/files?path=/etc/hostname&project=bwother' 403
+            response="$RUNNER_TEMP/legacy-exec-$stage.json"
+            code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+              --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+              --connect-timeout 4 --max-time 30 \
+              -X POST -H 'Content-Type: application/json' \
+              --data-binary '{"command":["/bin/true"],"wait-for-websocket":false,"record-output":true}' \
+              -o "$response" -w '%{http_code}' \
+              'https://127.0.0.1:8443/1.0/instances/s4b2legacyguest/exec?project=bwlegacy')"
+            echo "S4_B2_SCRIPTLET_LEGACY_EXEC_$stage HTTP=$code"
+            if [[ "$code" != 202 ]]; then cat "$response"; return 1; fi
+            op_id="$(jq -er '.metadata.id | select(type=="string" and length>0)' "$response")"
+            test -n "$op_id"
+            echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_NATIVE_ID_$stage=$op_id"
+            code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+              --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+              --connect-timeout 4 --max-time 30 \
+              -X POST -H 'Content-Type: application/json' \
+              --data-binary '{"command":["/bin/true"],"wait-for-websocket":false,"record-output":true}' \
+              -o "$RUNNER_TEMP/foreign-exec-$stage.json" -w '%{http_code}' \
+              'https://127.0.0.1:8443/1.0/instances/s4b2otherguest/exec?project=bwother')"
+            echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_EXEC_$stage HTTP=$code"
+            if [[ "$code" != 403 ]]; then cat "$RUNNER_TEMP/foreign-exec-$stage.json"; return 1; fi
+            echo "S4_B2_SCRIPTLET_NATIVE_RESTRICTED_FILES_EXEC_$stage=PASS"
+          }
           for i in $(seq 1 30); do
             if curl -ksS --connect-timeout 2 --max-time 3 "https://127.0.0.1:8443/1.0" -o /dev/null; then break; fi
             sleep 1
@@ -92,6 +129,7 @@ jobs:
           probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
           probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
           probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+          legacy_files_exec_probe PRE_ROUTE
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
           writer_fpr="$(cat "$RUNNER_TEMP/writer.fingerprint")"
           cat > "$RUNNER_TEMP/authorize.star" <<EOF
@@ -136,6 +174,7 @@ jobs:
           probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
           probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
           probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+          legacy_files_exec_probe AFTER_SCRIPTLET
           echo "S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX=PASS"
           probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
@@ -222,6 +261,7 @@ jobs:
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
           probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
           probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+          legacy_files_exec_probe POST_ROLLBACK
           echo "S4_B2_SCRIPTLET_LEGACY_POST_ROLLBACK_PROFILE_PARITY=PASS"
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK=PASS"
           sudo incus config trust list --format json > "$RUNNER_TEMP/trust-inventory.json"
