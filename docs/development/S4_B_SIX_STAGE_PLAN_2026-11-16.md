@@ -1,0 +1,93 @@
+# S4-B six-stage implementation and acceptance plan (2026-11-16)
+
+> **Status: planning baseline / discussion record; B1–B6 NOT STARTED.** This document records the owner's requested six-stage decomposition, not permission to begin implementation, to mutate a shared host, or to sign off S4-B. Use only existing [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; do not open another PR, merge or publish a release in S4-B.
+>
+> **Time/source anchor:** planned against PR #153 HEAD `8205e5c177a98944b190d24bd0d244194f574c49`, independently accepted as `S4_A_PASS` on 2026-11-16 PT. Subsequent documentation commits advance the branch HEAD but **do not themselves constitute a new code/native acceptance**. Recheck actual HEAD, latest PR decision and original receipts before any work. S4-B and S4-C were unstarted at this snapshot.
+
+## Purpose and precedence
+
+S4-B delivers four **and only four** public network MCP Tools — `port_forward_list`, `port_forward_create`, `port_forward_delete`, `box_peer_set` — with owned shared ACL/Scriptlet, native TCP/UDP instance proxies, directional network authorization, and safe dependent Box deletion. Together with the existing 16 Tools this yields 20 registered Tools, but **20/20 integration acceptance belongs to S4-C** and exhaustive MCP+CLI coverage to S5.
+
+This is an **internal B1→B6 execution decomposition of S4-B**, not six new PRs, not a replacement for S4-A/B/C, and not a change to the final trust or security promises. Where dated docs disagree on feature/stage ownership, [S4/S5 execution rebalance](S4_S5_EXECUTION_REBALANCE_2026-11-16.md), [S4 kickoff](S4_EXECUTION_KICKOFF_2026-11-16.md), [S4 phase card](phases/04_NETWORK_NESTING.md), and actual current PR/code are controlling. Read detailed design/evidence **on demand**, rather than loading full historical logs at B1.
+
+### Execution rule for each substage
+
+1. Inspect current code and original evidence; distinguish *verified SDK-only feasibility*, current installed v1, a limited/nested lab, and actual independent native acceptance. Do not assume an earlier Incus experiment proves v1 production integration.
+2. Do bounded experiments in an approved disposable Box/host to resolve assumptions that affect ownership, data schema, authorization, packets or failure outcome. Prefer small, disposable Go SDK probes when appropriate. Reuse already-verified knowledge; do not repeat unrelated research.
+3. B2–B5: complete the related product code **as one coherent vertical slice** after essential assumptions are verified; then cycle test → repair → retest until that slice's safety gates pass or its blockers are documented. B1 may create experimental probes but **should not prematurely integrate unproven prototype code into the controller**.
+4. Record source commit, candidate/install binary SHA256, Incus/client version, Project/Box UUID, roles (no secrets), original BoxWeave and native operation IDs *where actually available*, SQLite/ACL/NIC/proxy native state, packet/Guest poststate, negative/refusal outcome and independently obtained evidence. An expired/nonexistent native terminal must be marked `EXPIRED`/`NOT_CAPTURED`, not invented.
+5. Maintain the append-only [execution log](EXECUTION_LOG.md) and stage-specific evidence. A failed or blocked mandatory safety case is `PARTIAL/BLOCKED`, not PASS; continue only safely independent work. Use targeted local/isolated tests during iteration, and final exact-HEAD Actions/independent Verifier in B6. No unnecessary prerelease builds on every change.
+
+## B1 — Code audit, risk-driven native investigation and implementation contract
+
+**Goal:** validate the few kernel/Incus behaviors that determine the safe design *before committing to public APIs and SQLite structure*.
+
+- Inspect S4-A stable grant actor, Claim/idempotency, exact UUID ownership, atomic Create/Delete/tombstone and worker/UNKNOWN path; trace S1 installation and restricted TLS/Scriptlet setup; identify current Incus SDK network/instance device capabilities.
+- Use prior SDK acceptance for three NICs/one shared ACL, directional A→B allow, TCP/UDP proxy, isolated Scriptlet and basic IPv4 spoof resistance as starting evidence, **not v1 PASS**.
+- In disposable real native Incus, selectively probe: existing ACL and NIC ownership/`used_by`; default ingress-deny/egress-allow; IPv4/IPv6/MAC anti-spoof and nested NAT; Get/UpdateNetworkACL ETag conflicts; per-NIC ACL reapplication/partial failure; IP change/lease recycling; proxy TCP/UDP and bind conflicts; delete-vs-network-update ordering; native operation existence and lost-reply/UNKNOWN classification.
+- Examine Scriptlet's daemon-global authorization surface, old restricted-client compatibility and installer rollback **without changing a shared daemon**. Any real global switch experiment requires a separate explicitly authorized isolated host.
+- Decide minimal typed schemas, owned-resource/Claim/SQLite desired-vs-native-vs-observed model, lock scope, denial/UNKNOWN semantics, exposure and rollback contract, and how dependent cleanup hooks into S4-A Delete. Flag native limitations or unsupported configurations explicitly; do not add a generic ACL DSL, new proxy daemon or public admin Tool.
+
+**Deliverables:** concise decision table of proven assumptions vs still blocked/unsupported; original probe receipts/packet evidence; reviewed API, schema, locking and test plan for B2–B5; reproducible disposable probes if useful. **Gate `S4_B1_PASS`:** enough concrete evidence to implement B2 safely, with no concealed critical assumption. No official network Tools exposed yet.
+
+## B2 — Shared network safety foundation, owned state and guarded Scriptlet setup
+
+**Goal:** build the safe base that new network mutations will rely on, while keeping peer/forward writes unavailable.
+
+- Implement exact Box UUID↔owned NIC/IPv4/IPv6/MAC/ACL associations, durable resource claims and per-layer/native identity checks; reuse one existing installer-owned shared ACL where valid, or create exactly one on a clean installation. Never attach to foreign NICs or silently take over a bridge/ACL.
+- Before first Box start, enforce **default ingress deny, egress allow**, verified supported IPv4/IPv6 and MAC anti-spoof, and fail closed for unsafe/unknown native state. Account for updates applied one NIC at a time and for re-read of `used_by`/ETag.
+- Integrate S1 local installer handling for restricted TLS client and Scriptlet authorization; inventory preexisting Scriptlet, global `authorization.client.tls-restricted`, client certs and rights. Preserve recognized old restricted-client allowed/denied behavior and rollback. **A separate, explicit host-specific approval is required for daemon-global Scriptlet settings, even on a disposable host**; absent that, complete safe code/tests but label actual global-switch acceptance BLOCKED, never bypass with full Incus admin privileges.
+- Implement bounded admission, persistent desired/native/observed state, rollback/recovery and audit; no false success after partial application, failure, conflict or uncertain ACK.
+- Test clean install, existing-ACL re-use, incompatibility refusal, exact foreign ownership denial, native readback, IPv4/IPv6 packet spoof negative, incomplete/failed rollback; ensure S4-A safety regression stays green.
+
+**Deliverables:** integrated network foundation/installer code + tests + isolated native results. **Gate `S4_B2_PASS`:** ownership/default-deny/spoof and all mandatory Scriptlet compatibility/rollback claims supported by authorized native proof, with no new public network writes yet. Otherwise `PARTIAL/BLOCKED`.
+
+## B3 — Directional private peer: `box_peer_set`
+
+**Goal:** publish and verify exactly one safe directional owned-peer operation.
+
+- Implement `box_peer_set(A,B,true/false)` with verified owned source/target UUIDs, token role/grant actor, original idempotency and durable direction-scoped claims. Generate a whole allowlist from durable grants (all ports; **not** arbitrary CIDR/port rules).
+- Use native GetNetworkACL/ETag/UpdateNetworkACL and validate exact `used_by`, binding and poststate; apply/reapply NIC rules conservatively. Handle concurrent peers, collisions, reused IPs, unexpected native edits, partial per-NIC updates and lost response without unsafe success.
+- Real packets: A→B explicitly allowed, B→A and unrelated C→B denied unless separately granted; revoke restores denial for new flows, including enabled IPv6; record established-flow behavior instead of assuming it is revoked instantaneously.
+- Verify admin/viewer/foreign/cross-grant/refreshed-credential positives and refusals using current S4-A identity design.
+
+**Deliverables:** working `box_peer_set`, schema, journal and native packet receipts. **Gate `S4_B3_PASS`:** safe one-way allow/revoke, ownership and failure conservatism are independently read back in an isolated actual native environment.
+
+## B4 — Native TCP/UDP instance-owned port forwarding: three Tools
+
+**Goal:** implement `port_forward_list`, `port_forward_create`, `port_forward_delete` using only verified **native per-instance proxy devices**.
+
+- Bind owned Box UUID, native device identity, TCP/UDP protocol, host bind address/port and guest target port to persistent claims. Default host bind is **loopback**; LAN/public exposure requires separate explicit authorization and exact address/interface restrictions.
+- Deny arbitrary foreign guest IP targets, overlapping bind conflicts, unsupported protocols, unauthorized exposure and unsafe native edits. Preserve exactly-once intent/response semantics on restart, parallel creates/deletes and lost ACK.
+- Verify actual guest listener and TCP/UDP payloads through the host proxy; packet refusal after delete, loopback-only reachability, alternate port/device collisions and source/target ownership. Host proxy remains independent of private peer grants; record originals and native device poststate. Never claim a native Operation ID where Incus returned none.
+
+**Deliverables:** all four S4-B public Tool implementations registered, contracts/errors and native test receipts. **Gate `S4_B4_PASS`:** TCP/UDP positive and negative native network results, safe ownership/idempotency and correct exposure boundaries; do not claim physical LAN/public Internet tested.
+
+## B5 — Forward/peer dependent Box Delete and fault recovery
+
+**Goal:** close the lifecycle so network claims cannot outlive or race Box deletion unsafely.
+
+- Reuse S4-A exact Box UUID ownership, Delete tombstone and atomic operation result. Lock/preflight peer+forward dependencies; safely remove and verify owned proxies and directional grants **before** native Box Delete, then commit final state/tombstone only after original independent native readback.
+- Cover Box deletion racing `box_peer_set` or forward create/delete, ACL ETag conflict, stalled per-NIC rules, partial dependency cleanup, native Box Delete failure after proxy removal, lost successful native Delete ACK, crash/SQLite commit/compensation failure, expired original native receipts and genuinely uncertain `UNKNOWN`.
+- Ensure no foreign cleanup, no extra peer allow, no blind unknown mutation redispatch and no deletion of unrelated shared ACL. Expose truthful original state via `operation_get`, `box_get`, `port_forward_list`; reaccept S2 Delete A-043–046 and relevant TC-017/018 original attribution where possible.
+
+**Deliverables:** complete dependent Delete orchestration/recovery tests and actual native/SQLite/packet poststate comparison. **Gate `S4_B5_PASS`:** failures remain fail-closed and recoverable without unsafe replay, native/SQLite identity and tombstone agree.
+
+## B6 — Installed integration, regression and independent B acceptance
+
+**Goal:** assess the integrated B1–B5 code on the **same final source**, not merely the isolated successes of earlier substeps.
+
+- Install restricted non-root v1 HTTP MCP with real Incus on an authorized disposable environment; use official MCP client to exercise the four new schemas and selected real calls, OAuth role/refresh/manual/foreign negatives, ACL/Scriptlet pre/post compatibility and rollback, native proxy/peer, IPv4 and enabled IPv6 packet isolation/spoof/revoke, concurrency and dependent Delete.
+- Repeat actual fault cases with original ID and SQLite/native/packet correlation; test ordinary restart/reconnect original receipt. Regress affected S4-A grant/atomic lifecycle, S2 Box operation receipts and S3 three File Tools; do not re-run the entire S5 campaign.
+- Run exact-final-HEAD Go quality/race, dual-arch builds, affected installed/native GitHub Actions and **independent Verifier** that reviews original raw evidence and failure classifications. Fix issues then rerun impacted tests and final-head checks.
+- Record `S4_B_PASS` only when all mandatory owned-resource, authorization, Scriptlet isolated-host approval/rollback, native ACL/IPv4+enabled IPv6 anti-spoof/revoke, TCP/UDP, partial update and Delete safety gates are proven. If host approval/capability is missing or a critical exposure is uncertain, use `S4_B_PARTIAL/BLOCKED` with original evidence and a precise next action.
+
+**Deliverables:** one commit-anchored B acceptance verdict, independent verifier, installed binary digest, CI links, known limits, no fabricated network/host/global PASS; ready S4-C handoff. **PR stays Draft** until full S4-C scoped acceptance and owner's merge decision.
+
+## Explicit exclusions and stage handoff
+
+- **S4-C:** 20 Tool schema/basic call integration, supported installed L1→L2, #150 kernel nesting/trust capability vs `UNSUPPORTED`, TC-017/018 fuller scoped integration, selected native security/packet/cleanup/quotas, S4 scoped independent review.
+- **S5:** #151 repeated root-cause/long-soak, full 20-by-MCP-and-CLI, full two-Agent TC-015/016 and TC-019/020, physical independent LAN, **real** public IPv6, advertised strong deep-nesting security independent proof, final release provenance/tag.
+- No L0/L1 shared Incus/AppArmor/global Scriptlet modification, no privileged/unconfined workaround, no parent Incus socket in guest, no unknown historic-resource adoption/replay, no foreign NIC/ACL deletion, no public bind by default, no second PR and no S4 release tag. Missing native capability must be a truthful blocker/unsupported branch with any required owner decision, not an invented PASS.
+
+**Next owner control:** This plan is recorded for discussion. Start B1 only upon a subsequent explicit `开始 S4-B1` / `开始 S4-B` request; after each stage provide `S4_Bn_PASS/PARTIAL/BLOCKED` and exact current source+evidence before proceeding.
