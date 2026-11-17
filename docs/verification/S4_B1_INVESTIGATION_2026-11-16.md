@@ -2,6 +2,8 @@
 
 **Verdict: S4_B1_PARTIAL.** Investigation and one-use real Incus 7.6 positive/negative packet experiments are completed; a fully safe B2 design cannot be signed off yet because address recycling, IPv6/MAC spoof, partial per-NIC kernel reload and shared-host Scriptlet compatibility/rollback have no new adequate native proof. This is **not** S4-B product, installed MCP, or S4-C acceptance. Existing `S4_A_PASS` at `8205e5c177a98944b190d24bd0d244194f574c49` remains unchanged.
 
+**Owner-authorized L0 RC7 follow-up (2026-11-16 PT):** [Full native recursion retest and original receipts](S4_B1_L0_RC7_RECURSION_RETEST_2026-11-16.md) independently shows L0 `unconfined` inner bridge/child PASS, then the same AppArmor `exit 243` in its `enforce` child. A guest-only diagnostic AppArmor-off daemon creates a bridge but still cannot launch its child (BPF program and forbidden `unconfined` label errors). All disposable Boxes deleted; original five L0 Boxes unchanged. This **does not** close BH-019 or upgrade B1 from PARTIAL.
+
 ## Provenance, environment, and source audit
 
 - Unique [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), `feat/v1-s4-runtime-integration-20261116`. B1 began at independently re-fetched PR HEAD `b60d35c886a430b8592077c0a103c3fe660fcfea`. New **probe-only** commits `815fe4a2089d8cc83486c67ff3035af999e94d3e` and `6267a54004bde41f12685a5eaf4ef3b71b48eb4a`. No four new network MCP Tools or new product mutation code.
