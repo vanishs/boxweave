@@ -221,7 +221,38 @@ jobs:
           if sudo incus --project s4b2foreign exec s4b2d -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 68; fi
           if sudo incus --project s4b2foreign exec s4b2d -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 69; fi
           echo "S4_B2_FOREIGN_PROJECT_NORMAL_ADDRESS_DENY=PASS"
-          echo "S4_B2_FOREIGN_SPOOF_AND_CONCURRENT_ATTACH=NOT_TESTED"
+          # Explicit source-spoof attempt in the isolated, disposable Incus
+          # runner ONLY. Force return-route neighbor A->foreign-D MAC so an
+          # ICMP reply cannot falsely fail merely because B replies to A.
+          # This is a threat-model probe, NOT an accepted network policy.
+          amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+          spoof4=BLOCKED
+          if sudo incus --project s4b2foreign exec s4b2d -- ip -4 addr add "$a4/32" dev eth0; then
+            sudo incus exec s4b2b -- ip -4 neigh replace "$a4" lladdr "$dmac" nud permanent dev eth0
+            sudo incus --project s4b2foreign exec s4b2d -- ip -4 neigh replace "$b4" lladdr "$bmac" nud permanent dev eth0
+            if sudo incus --project s4b2foreign exec s4b2d -- ping -n -I "$a4" -c 2 -W 2 "$b4" >/dev/null 2>&1; then
+              spoof4=REACHED_B_SECURITY_BREAK
+            else
+              spoof4=NO_ECHO_REPLY_INCONCLUSIVE
+            fi
+            sudo incus --project s4b2foreign exec s4b2d -- ip -4 addr del "$a4/32" dev eth0
+            sudo incus exec s4b2b -- ip -4 neigh replace "$a4" lladdr "$amac" nud permanent dev eth0
+          fi
+          echo "S4_B2_FOREIGN_UNFILTERED_NIC_FORGED_A_SOURCE_V4=$spoof4"
+          spoof6=BLOCKED
+          if sudo incus --project s4b2foreign exec s4b2d -- ip -6 addr add "$a6/128" dev eth0 nodad; then
+            sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$dmac" nud permanent dev eth0
+            sudo incus --project s4b2foreign exec s4b2d -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+            if sudo incus --project s4b2foreign exec s4b2d -- ping -n -6 -I "$a6" -c 2 -W 2 "$b6" >/dev/null 2>&1; then
+              spoof6=REACHED_B_SECURITY_BREAK
+            else
+              spoof6=NO_ECHO_REPLY_INCONCLUSIVE
+            fi
+            sudo incus --project s4b2foreign exec s4b2d -- ip -6 addr del "$a6/128" dev eth0
+            sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$amac" nud permanent dev eth0
+          fi
+          echo "S4_B2_FOREIGN_UNFILTERED_NIC_FORGED_A_SOURCE_V6=$spoof6"
+          echo "S4_B2_FOREIGN_CONCURRENT_ATTACH=NOT_TESTED"
           sudo incus --project s4b2foreign stop s4b2d
           sudo incus --project s4b2foreign delete s4b2d
           sudo incus project delete s4b2foreign
