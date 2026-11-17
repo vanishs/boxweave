@@ -96,6 +96,11 @@ jobs:
           echo "S4_B2_A_UUID=$(sudo incus config get s4b2a volatile.uuid)"
           echo "S4_B2_B_UUID=$(sudo incus config get s4b2b volatile.uuid)"
           echo "S4_B2_C_UUID=$(sudo incus config get s4b2c volatile.uuid)"
+          # Needed even when exact source+target exceptions repair native NDP
+          # and the test-only static neighbor fallback never runs.
+          amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+          bmac="$(sudo incus exec s4b2b -- cat /sys/class/net/eth0/address)"
+          test -n "$amac" && test -n "$bmac"
           if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 60; fi
           if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 61; fi
           echo "S4_B2_S1_DEFAULT_DENIAL_V4V6=PASS"
