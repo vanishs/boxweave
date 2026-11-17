@@ -4,6 +4,8 @@
 >
 > **Time/source anchor:** planned against PR #153 HEAD `8205e5c177a98944b190d24bd0d244194f574c49`, independently accepted as `S4_A_PASS` on 2026-11-16 PT. Subsequent documentation commits advance the branch HEAD but **do not themselves constitute a new code/native acceptance**. Recheck actual HEAD, latest PR decision and original receipts before any work. S4-B and S4-C were unstarted at this snapshot.
 
+**2026-11-16 PT owner override — flat L0 network first:** [Decision](../decisions/S4_FLAT_NETWORK_FIRST_NESTING_S5_2026-11-16.md). Start with fresh **non-nested L0 sibling A/B/C** using existing RC7 MCP; no inner Incus installation required. Recursion/AppArmor/BPF #150 remains a documented blocker transferred to late S5, not a B2–B6 prerequisite. The present RC7 MCP has no peer/forward mutation Tools: guest root cannot change shared host ACL; use narrow authorized SDK labs and eventual new v1 Tools. Preserve Scriptlet global host-approval boundary.
+
 ## Purpose and precedence
 
 S4-B delivers four **and only four** public network MCP Tools — `port_forward_list`, `port_forward_create`, `port_forward_delete`, `box_peer_set` — with owned shared ACL/Scriptlet, native TCP/UDP instance proxies, directional network authorization, and safe dependent Box deletion. Together with the existing 16 Tools this yields 20 registered Tools, but **20/20 integration acceptance belongs to S4-C** and exhaustive MCP+CLI coverage to S5.
@@ -24,7 +26,7 @@ This is an **internal B1→B6 execution decomposition of S4-B**, not six new PRs
 
 - Inspect S4-A stable grant actor, Claim/idempotency, exact UUID ownership, atomic Create/Delete/tombstone and worker/UNKNOWN path; trace S1 installation and restricted TLS/Scriptlet setup; identify current Incus SDK network/instance device capabilities.
 - Use prior SDK acceptance for three NICs/one shared ACL, directional A→B allow, TCP/UDP proxy, isolated Scriptlet and basic IPv4 spoof resistance as starting evidence, **not v1 PASS**.
-- In disposable real native Incus, selectively probe: existing ACL and NIC ownership/`used_by`; default ingress-deny/egress-allow; IPv4/IPv6/MAC anti-spoof and nested NAT; Get/UpdateNetworkACL ETag conflicts; per-NIC ACL reapplication/partial failure; IP change/lease recycling; proxy TCP/UDP and bind conflicts; delete-vs-network-update ordering; native operation existence and lost-reply/UNKNOWN classification.
+- In disposable real native Incus, selectively probe: existing ACL and NIC ownership/`used_by`; default ingress-deny/egress-allow; IPv4/IPv6/MAC anti-spoof on **flat sibling NICs** (not nested NAT); Get/UpdateNetworkACL ETag conflicts; per-NIC ACL reapplication/partial failure; IP change/lease recycling; proxy TCP/UDP and bind conflicts; delete-vs-network-update ordering; native operation existence and lost-reply/UNKNOWN classification.
 - Examine Scriptlet's daemon-global authorization surface, old restricted-client compatibility and installer rollback **without changing a shared daemon**. Any real global switch experiment requires a separate explicitly authorized isolated host.
 - Decide minimal typed schemas, owned-resource/Claim/SQLite desired-vs-native-vs-observed model, lock scope, denial/UNKNOWN semantics, exposure and rollback contract, and how dependent cleanup hooks into S4-A Delete. Flag native limitations or unsupported configurations explicitly; do not add a generic ACL DSL, new proxy daemon or public admin Tool.
 
@@ -86,8 +88,8 @@ This is an **internal B1→B6 execution decomposition of S4-B**, not six new PRs
 
 ## Explicit exclusions and stage handoff
 
-- **S4-C:** 20 Tool schema/basic call integration, supported installed L1→L2, #150 kernel nesting/trust capability vs `UNSUPPORTED`, TC-017/018 fuller scoped integration, selected native security/packet/cleanup/quotas, S4 scoped independent review.
-- **S5:** #151 repeated root-cause/long-soak, full 20-by-MCP-and-CLI, full two-Agent TC-015/016 and TC-019/020, physical independent LAN, **real** public IPv6, advertised strong deep-nesting security independent proof, final release provenance/tag.
+- **S4-C:** 20 Tool schema/basic call integration, installed **L0 flat sibling A/B/C** network and lifecycle, honest `UNSUPPORTED` labeling for unfinished #150 recursion, TC-017/018 flat-network integration, selected native security/packet/cleanup/quotas, S4 scoped independent review. No mandatory nested inner Incus fixture.
+- **S5:** #151 repeated root-cause/long-soak, full 20-by-MCP-and-CLI, full two-Agent TC-015/016 and TC-019/020, physical independent LAN, **real** public IPv6, **late #150 secure recursive nesting research/proof or owner-approved narrower advertised contract**, final release provenance/tag.
 - No L0/L1 shared Incus/AppArmor/global Scriptlet modification, no privileged/unconfined workaround, no parent Incus socket in guest, no unknown historic-resource adoption/replay, no foreign NIC/ACL deletion, no public bind by default, no second PR and no S4 release tag. Missing native capability must be a truthful blocker/unsupported branch with any required owner decision, not an invented PASS.
 
 **Next owner control:** This plan is recorded for discussion. Start B1 only upon a subsequent explicit `开始 S4-B1` / `开始 S4-B` request; after each stage provide `S4_Bn_PASS/PARTIAL/BLOCKED` and exact current source+evidence before proceeding.
