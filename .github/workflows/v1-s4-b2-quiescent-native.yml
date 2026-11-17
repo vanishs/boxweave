@@ -18,6 +18,10 @@ on:
       - internal/install/network_peer_state_audit_native_test.go
       - internal/state/network_audit_ledger.go
       - internal/state/network_audit_ledger_test.go
+      - internal/state/network_audit_read_only.go
+      - internal/state/network_audit_read_only_test.go
+      - cmd/boxweave/main.go
+      - cmd/boxweave/native_peer_audit_test.go
       - internal/install/network_peer_conntrack.go
       - internal/install/network_peer_conntrack_test.go
       - internal/install/network_peer_conntrack_native_test.go
@@ -148,6 +152,7 @@ jobs:
           fi
           cat "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           grep -Fq 'S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           grep -Fq 'S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           grep -Fq 'S4_B2_SQLITE_ADDRESS_QUARANTINE_REFUSED=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
           echo "S4_B2_DURABLE_LEDGER_NATIVE_ROOT_READONLY_GATE=PASS"

@@ -210,123 +210,130 @@ func Open(path string) (*Store, error) {
 }
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) init(fresh bool) error {
-	if !fresh {
-		// Inspect existing files with read-only SQL BEFORE any journal mode,
-		// DDL or migration: never modify a foreign/unversioned database.
-		var n int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
-			return err
-		}
-		if n != 1 {
-			return fmt.Errorf("existing database missing version: refuse foreign adoption")
-		}
-		var version int
-		if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
-			return err
-		}
-		if version != SchemaVersion {
-			return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
-		}
-		// A LIMIT 1 version read alone can hide a second conflicting migration
-		// record. Never choose one history or adopt unknown application tables.
-		var versionRows int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
-			return err
-		}
-		if versionRows != 1 {
-			return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
-		}
-		rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
-		if err != nil {
-			return err
-		}
-		actualTables := make(map[string]bool)
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			actualTables[name] = true
-		}
-		if err := rows.Err(); err != nil {
+func (s *Store) validateExistingSchema() error {
+	// Inspect existing files with read-only SQL BEFORE any journal mode,
+	// DDL or migration: never modify a foreign/unversioned database.
+	var n int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("existing database missing version: refuse foreign adoption")
+	}
+	var version int
+	if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
+		return err
+	}
+	if version != SchemaVersion {
+		return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
+	}
+	// A LIMIT 1 version read alone can hide a second conflicting migration
+	// record. Never choose one history or adopt unknown application tables.
+	var versionRows int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
+		return err
+	}
+	if versionRows != 1 {
+		return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
+	}
+	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
+	if err != nil {
+		return err
+	}
+	actualTables := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			_ = rows.Close()
 			return err
 		}
-		if err := rows.Close(); err != nil {
-			return err
+		actualTables[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(actualTables) != len(schemaDDL) {
+		return fmt.Errorf("unexpected SQLite schema/migration tables: refuse foreign adoption")
+	}
+	for _, expected := range schemaDDL {
+		if !actualTables[strings.Fields(expected)[2]] {
+			return fmt.Errorf("missing declared schema table: refuse foreign adoption")
 		}
-		if len(actualTables) != len(schemaDDL) {
-			return fmt.Errorf("unexpected SQLite schema/migration tables: refuse foreign adoption")
+	}
+	for _, expected := range schemaDDL {
+		name := strings.Fields(expected)[2]
+		var actual string
+		if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
+			return fmt.Errorf("missing exact schema table %s: %w", name, err)
 		}
-		for _, expected := range schemaDDL {
-			if !actualTables[strings.Fields(expected)[2]] {
-				return fmt.Errorf("missing declared schema table: refuse foreign adoption")
-			}
+		if actual != expected {
+			return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
 		}
-		for _, expected := range schemaDDL {
-			name := strings.Fields(expected)[2]
-			var actual string
-			if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
-				return fmt.Errorf("missing exact schema table %s: %w", name, err)
-			}
-			if actual != expected {
-				return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
-			}
-		}
-		// Validate every index in the new initial schema as well as tables. No
-		// silently changed/foreign index may influence a security-scoped query.
-		indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
-		if err != nil {
-			return err
-		}
-		actualIndexes := map[string]string{}
-		for indexRows.Next() {
-			var name, sqlText string
-			if err := indexRows.Scan(&name, &sqlText); err != nil {
-				_ = indexRows.Close()
-				return err
-			}
-			actualIndexes[name] = sqlText
-		}
-		if err := indexRows.Err(); err != nil {
+	}
+	// Validate every index in the new initial schema as well as tables. No
+	// silently changed/foreign index may influence a security-scoped query.
+	indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+	if err != nil {
+		return err
+	}
+	actualIndexes := map[string]string{}
+	for indexRows.Next() {
+		var name, sqlText string
+		if err := indexRows.Scan(&name, &sqlText); err != nil {
 			_ = indexRows.Close()
 			return err
 		}
-		if err := indexRows.Close(); err != nil {
-			return err
+		actualIndexes[name] = sqlText
+	}
+	if err := indexRows.Err(); err != nil {
+		_ = indexRows.Close()
+		return err
+	}
+	if err := indexRows.Close(); err != nil {
+		return err
+	}
+	if len(actualIndexes) != len(schemaIndexes) {
+		return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
+	}
+	for _, expected := range schemaIndexes {
+		words := strings.Fields(expected)
+		nameOffset := 2 // CREATE INDEX <name>
+		if len(words) > 3 && words[1] == "UNIQUE" {
+			nameOffset = 3 // CREATE UNIQUE INDEX <name>
 		}
-		if len(actualIndexes) != len(schemaIndexes) {
-			return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
-		}
-		for _, expected := range schemaIndexes {
-			words := strings.Fields(expected)
-			nameOffset := 2 // CREATE INDEX <name>
-			if len(words) > 3 && words[1] == "UNIQUE" {
-				nameOffset = 3 // CREATE UNIQUE INDEX <name>
-			}
-			name := words[nameOffset]
-			if actualIndexes[name] != expected {
-				return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
-			}
-		}
-		// A foreign trigger/view can silently change mutation semantics even when
-		// the six declared table names and schema_version are unchanged.
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
-			return err
-		}
-		if n != 0 {
-			return errors.New("unexpected SQLite trigger/view: refuse foreign database")
-		}
-		var integrity string
-		if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
-			return err
-		}
-		if integrity != "ok" {
-			return fmt.Errorf("integrity check failed")
+		name := words[nameOffset]
+		if actualIndexes[name] != expected {
+			return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
 		}
 	}
+	// A foreign trigger/view can silently change mutation semantics even when
+	// the six declared table names and schema_version are unchanged.
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
+		return err
+	}
+	if n != 0 {
+		return errors.New("unexpected SQLite trigger/view: refuse foreign database")
+	}
+	var integrity string
+	if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("integrity check failed")
+	}
+	return nil
+}
+func (s *Store) init(fresh bool) error {
+	if !fresh {
+		if err := s.validateExistingSchema(); err != nil {
+			return err
+		}
+	}
+
 	for _, q := range []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=FULL",

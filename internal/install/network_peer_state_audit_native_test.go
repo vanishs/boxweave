@@ -77,22 +77,30 @@ func TestS4B2NativeStoreLedgerBridgeAudit(t *testing.T) {
 			}
 		}
 	}
-	result, err := nativePeerBridgeAuditFromStoreWithClient(ctx, st, root, "bwowned", "bwbr0", "bw-s4b2-native")
+	// Reopen this live WAL database via the dedicated root-audit read-only
+	// path; the root verifier must not take a writable controller handle.
+	reader, err := state.OpenNetworkAuditReadOnly(path)
+	if err != nil {
+		t.Fatal("native root ledger cannot open read-only", err)
+	}
+	defer reader.Close()
+	result, err := nativePeerBridgeAuditFromStoreWithClient(ctx, reader, root, "bwowned", "bwbr0", "bw-s4b2-native")
 	if err != nil || result.OwnedBoxes != 3 || len(result.NativeDigestSHA256) != 64 {
 		t.Fatalf("full SQLite-to-native root proof: %+v: %v", result, err)
 	}
 	t.Log("S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS")
+	t.Log("S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS")
 	if _, err = db.ExecContext(ctx, "UPDATE network_bindings SET mac='02:16:3e:fe:fe:fe' WHERE box_uuid=(SELECT uuid FROM owned_boxes WHERE name='s4b2a')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = nativePeerBridgeAuditFromStoreWithClient(ctx, st, root, "bwowned", "bwbr0", "bw-s4b2-native"); err == nil {
+	if _, err = nativePeerBridgeAuditFromStoreWithClient(ctx, reader, root, "bwowned", "bwbr0", "bw-s4b2-native"); err == nil {
 		t.Fatal("root native MAC drift accepted despite internally consistent SQLite")
 	}
 	t.Log("S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED=PASS")
 	if _, err = db.ExecContext(ctx, "UPDATE network_address_fences SET state='QUARANTINED' WHERE family='ipv6'"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = nativePeerBridgeAuditFromStoreWithClient(ctx, st, root, "bwowned", "bwbr0", "bw-s4b2-native"); err == nil {
+	if _, err = nativePeerBridgeAuditFromStoreWithClient(ctx, reader, root, "bwowned", "bwbr0", "bw-s4b2-native"); err == nil {
 		t.Fatal("quarantined dual-stack address admitted")
 	}
 	t.Log("S4_B2_SQLITE_ADDRESS_QUARANTINE_REFUSED=PASS")
