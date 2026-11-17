@@ -1,9 +1,14 @@
 #!/bin/sh
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-# Git index, not worktree: catches staged unformatted Go even if an unstaged
-# correction makes the working tree appear formatted.
+# Validate staged content; unstaged edits cannot hide a bad committed blob.
 git diff --cached --check
-python3 scripts/check_format.py --cached
-go run scripts/check_yaml.go --cached
-# Additional non-format checks are intentionally run in pre-push / CI.
+if python3 scripts/local_hook_scope.py pre-commit; then
+  # Docs-only: inspect only the changed staged documents, not every Go file.
+  git diff --cached --no-renames --name-only --diff-filter=ACM -z HEAD -- |
+    python3 scripts/check_format.py --cached --paths0
+else
+  # Any executable/config/mixed/uncertain change keeps the original checks.
+  python3 scripts/check_format.py --cached
+  go run scripts/check_yaml.go --cached
+fi

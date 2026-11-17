@@ -40,9 +40,17 @@ jobs:
         run: python3 scripts/ci_change_scope.py >> "$GITHUB_OUTPUT"
       - name: Unit-test change classification
         run: python3 -m unittest -v scripts/test_ci_change_scope.py
-      - name: Docs-only PR — no executable/source changes to test
+      - name: Test local docs-only hook classification
+        run: python3 -m unittest -v scripts/test_local_hook_scope.py
+      - name: Docs-only PR — check changed text format only
         if: steps.scope.outputs.docs_only == 'true'
-        run: echo "Documentation-only PR; Go/shell/source gates are not applicable."
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(git merge-base HEAD origin/v1)"
+          git diff --check "$base" HEAD
+          git diff --no-renames --name-only --diff-filter=ACM -z "$base" HEAD -- |
+            python3 scripts/check_format.py --paths0
       - name: Set up pinned Go
         if: steps.scope.outputs.docs_only != 'true'
         uses: actions/setup-go@v5

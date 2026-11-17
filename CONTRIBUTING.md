@@ -5,9 +5,9 @@ This repository is deliberately a staged, security-sensitive Go implementation. 
 ## Before any commit
 
 1. Work on an isolated topic branch; do not commit directly to `v1`, force-push or publish an unfinished stage. Avoid mixing S1 fixes with S2–S5 work.
-2. Run `make hooks` **once per clone** to install this repository's versioned Git `pre-commit` and `pre-push` hooks.
-3. For Go/source/config changes, fix Go code with `gofmt -w` (or `make fmt`), then run `make fmt-check` and `make verify`; inspect `git diff --check` and `git diff --cached --check`. Pure Markdown documentation PRs take the lightweight CI path described in [quality gates](docs/process/QUALITY_GATES.md); this does not disable local hooks.
-4. Stage only intended files. The hook checks the **staged Go source**, including any file whose worktree was fixed but index was not.
+2. Run `make hooks` **once per clone** to install this repository's versioned Git `pre-commit` and `pre-push` hooks. Existing installations of the repository-scoped `.githooks` path pick up tracked hook changes after checkout; separate clones need their own installation.
+3. For Go/source/config changes, fix Go code with `gofmt -w` (or `make fmt`), then run `make fmt-check` and `make verify`; inspect `git diff --check` and `git diff --cached --check`. Pure Markdown/MDX/RST documentation commits and pushes use the fast local hook and CI path described in [quality gates](docs/process/QUALITY_GATES.md): changed-document byte format is checked, not prose meaning or Go behavior. Any mixed/uncertain changes continue through full checks.
+4. Stage only intended files. The hook checks **staged** changes, not just the worktree. The fast documentation path verifies selected staged file bytes; Go/config commits retain the complete staged-source validation.
 5. Use descriptive commit messages (`feat:`, `fix:`, `test:`, `docs:`, `ci:`, `chore:`) and include original issue ID or required acceptance ID for risky native changes. Never commit tokens, private keys, credential receipts, native backup artifacts or guessed PASS evidence.
 
 ## Pull requests and merges

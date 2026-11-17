@@ -10,9 +10,10 @@ review and no bypass. **Do not add `paths-ignore` to the required PR workflow:**
 an absent required check can leave the PR waiting forever.
 
 For a PR changing **only Markdown/MDX/reStructuredText files**, the required
-job only checks that the change really is documentation-only and runs a small
-classifier regression suite; it **does not assess document meaning**, perform
-repo-wide Markdown lint, run Go builds, Go race tests, module operations or
+job verifies the change is documentation-only, checks **changed document bytes**
+(UTF-8, LF, final newline and accidental whitespace), and runs small scope
+regression suites. It **does not assess document meaning**, perform repo-wide
+Markdown content lint, run Go builds, Go race tests, module operations or
 native tests. The independent S1 source-check and two-arch candidate PR
 workflows use path exclusions to avoid starting at all on these PRs.
 
@@ -25,10 +26,17 @@ full original source/build/native/provenance pipeline. A docs-only push on
 change-scope job; its expensive source and dual-arch jobs are skipped.
 
 This is a **CI trigger/cost policy**, not permission to merge incorrect docs
-or remove required human review. Local hooks remain independently in force:
-pre-commit still checks staged UTF-8/LF/whitespace and the pre-push hook still
-runs `make verify` until separately changed. Source-changing PRs retain all
-original full-source checks. No release or S4/S5 native signoff is inferred.
+or remove required human review. The repository-local hooks now follow the
+**same distinction**: a docs-only staged commit checks its changed staged
+document bytes and `git diff --cached --check` without Go/YAML checks; a
+docs-only push of an entire branch against the tracked remote `v1` base
+skips redundant `make verify`. **Mixed/unknown changes, missing remote refs,
+force pushes and release branches use full verification.** Local pre-push
+uses an available local remote-tracking ref and is advisory; the GitHub
+PR's current authoritative base remains decisive. A pushed branch may be
+fully checked locally if `origin/v1` is absent or stale, by design.
+Source-changing PRs retain all original full-source checks. No release or
+S4/S5 native signoff is inferred.
 
 ## Deterministic local checks
 
@@ -38,9 +46,9 @@ original full-source checks. No release or S4/S5 native signoff is inferred.
 | All tracked text files | `python3 scripts/check_format.py`, `.editorconfig`, `.gitattributes` | Not UTF-8/LF, missing final newline, disallowed tabs/trailing whitespace or invalid JSON; `go run scripts/check_yaml.go` additionally rejects invalid YAML syntax and duplicate mapping keys |
 | Changed lines on a PR | `git diff --check <merge-base> HEAD` | Newly added whitespace errors or extra blank EOF lines, including historical Markdown hard-break exceptions |
 | Shell files | `sh -n` on versioned hooks and tracked `*.sh` | Shell syntax failure |
-| Git index before commit | `.githooks/pre-commit`, installed with `make hooks` | Staged blob gofmt mismatch, staged YAML syntax or duplicate-key error, or `git diff --cached --check` failure; an unstaged worktree fix does not bypass |
-| Before push | `.githooks/pre-push` and `make verify` | Any source check failure |
-| GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`**, lightweight for docs-only PRs | Any GitHub status other than SUCCESS for the candidate SHA; source-changing PRs run full gates, while docs-only PRs have scope-only checks |
+| Git index before commit | `.githooks/pre-commit`, installed with `make hooks` | Pure-doc staged edits: selected-doc byte format and staged whitespace; mixed/code/config: original entire staged format and YAML checks |
+| Before push | `.githooks/pre-push` | Pure-doc branch against tracked remote `v1`: skips redundant Go checks; mixed/code/config/release/uncertain changes run full `make verify` |
+| GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`**, lightweight for docs-only PRs | Any GitHub status other than SUCCESS for the candidate SHA; docs-only PRs check only changed document byte-format and scope; all other changes run full gates |
 
 **Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. The server-side required-check rule on `v1` **now blocks merge/update of the protected branch**, not the creation of an invalid commit on another branch.
 

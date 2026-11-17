@@ -1,4 +1,12 @@
 #!/bin/sh
 set -eu
 cd "$(git rev-parse --show-toplevel)"
-make verify
+# Git provides each outgoing ref on stdin and the remote name as argument 1.
+# A docs-only *entire proposed v1 PR branch* may skip redundant Go testing.
+# Releases, code/config changes, missing remote tracking or uncertain/force
+# pushes fall back to the unchanged full local verification.
+if python3 scripts/local_hook_scope.py pre-push "${1:-}"; then
+  echo "Docs-only push: Go source/tests are unchanged; GitHub quality-gate remains required."
+else
+  make verify
+fi
