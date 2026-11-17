@@ -29,6 +29,8 @@ on:
       - internal/install/network_peer_conntrack_review.go
       - internal/install/network_peer_conntrack_review_test.go
       - internal/install/network_peer_conntrack_review_native_test.go
+      - internal/install/network_peer_conntrack_journal.go
+      - internal/install/network_peer_conntrack_journal_test.go
       - internal/install/network_peer_kernel_ports.go
       - internal/install/network_peer_kernel_ports_test.go
       - internal/install/network_peer_revocation.go
@@ -211,6 +213,15 @@ jobs:
             "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
           probe TestS4B2NativeCompiledDropTombstoneRemove
           echo "S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER=PASS"
+          # This tests the real durable root journal on disposable private
+          # local files, with deterministic mock effects. NO host conntrack
+          # delete or new host-wide ACL permission is attempted here.
+          sudo env GITHUB_ACTIONS=true "$RUNNER_TEMP/s4b2-dedicated-test"             -test.v -test.run '^TestS4B2RootConntrack'             > "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt" 2>&1
+          cat "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_DURABLE_ONE_SHOT=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_CRASH_ORIGINAL_UNKNOWN_NO_REPLAY=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_PARTIAL_SCOPE_OR_DIGEST_REFUSED=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          echo "S4_B2_ROOT_CONNTRACK_NO_REPLAY_JOURNAL_NATIVE_RUNNER=PASS"
           probe TestS4B2NativeDedicatedBridgeExactPeer
           probe TestS4B2NativeDedicatedBridgeRevoke
           sudo incus network acl show bw-s4b2-native | grep -Fxq 'ingress: []'
