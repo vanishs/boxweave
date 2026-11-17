@@ -2,6 +2,34 @@
 
 **Scope:** The v1 development branch (and later v1 release PRs), not the existing legacy `main` workflows. These controls are intentionally separate from the real-native stage acceptance gate.
 
+## What docs-only PRs should (and should not) trigger
+
+**Required GitHub status remains `quality-gate` on every PR into `v1`.**
+The active ruleset still enforces that exact job, strict freshness, normal PR
+review and no bypass. **Do not add `paths-ignore` to the required PR workflow:**
+an absent required check can leave the PR waiting forever.
+
+For a PR changing **only Markdown/MDX/reStructuredText files**, the required
+job only checks that the change really is documentation-only and runs a small
+classifier regression suite; it **does not assess document meaning**, perform
+repo-wide Markdown lint, run Go builds, Go race tests, module operations or
+native tests. The independent S1 source-check and two-arch candidate PR
+workflows use path exclusions to avoid starting at all on these PRs.
+
+The classifier is fail-closed. A mixed diff (e.g., `.go`, `.yml`, workflow
+config, source/test scripts, images or binary assets), a missing merge base
+or an unrecognized event **uses the full original checks**, never the docs
+shortcut. Release-candidate `release/v1.*-rc.*` pushes always receive the
+full original source/build/native/provenance pipeline. A docs-only push on
+`v1` or `feat/v1-*` may still create one minimal candidate-workflow
+change-scope job; its expensive source and dual-arch jobs are skipped.
+
+This is a **CI trigger/cost policy**, not permission to merge incorrect docs
+or remove required human review. Local hooks remain independently in force:
+pre-commit still checks staged UTF-8/LF/whitespace and the pre-push hook still
+runs `make verify` until separately changed. Source-changing PRs retain all
+original full-source checks. No release or S4/S5 native signoff is inferred.
+
 ## Deterministic local checks
 
 | Change | Check | Reject condition |
@@ -12,7 +40,7 @@
 | Shell files | `sh -n` on versioned hooks and tracked `*.sh` | Shell syntax failure |
 | Git index before commit | `.githooks/pre-commit`, installed with `make hooks` | Staged blob gofmt mismatch, staged YAML syntax or duplicate-key error, or `git diff --cached --check` failure; an unstaged worktree fix does not bypass |
 | Before push | `.githooks/pre-push` and `make verify` | Any source check failure |
-| GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`** | Any GitHub status other than SUCCESS for the candidate SHA; scheduled smoke and installed verification remain separate additional gates |
+| GitHub PR | `.github/workflows/quality-gate.yml`: stable **job `quality-gate`**, lightweight for docs-only PRs | Any GitHub status other than SUCCESS for the candidate SHA; source-changing PRs run full gates, while docs-only PRs have scope-only checks |
 
 **Enforcement scope:** `make hooks` is repository-local opt-in. It does not protect against `git -c core.hooksPath=/dev/null commit`, `--no-verify`, GitHub API commits, alternate Git clients or direct pushes to unprotected branches. The server-side required-check rule on `v1` **now blocks merge/update of the protected branch**, not the creation of an invalid commit on another branch.
 

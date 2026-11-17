@@ -4,6 +4,11 @@ on:
     branches: [feat/v1-s1-foundation-20261108]
   pull_request:
     branches: [v1]
+    # Source checks are not relevant for Markdown-only PRs.
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.mdx"
+      - "**/*.rst"
   workflow_dispatch:
 permissions:
   contents: read
