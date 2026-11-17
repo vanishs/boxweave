@@ -575,6 +575,30 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
+	// An active peer grant, unknown network address fence or exposed proxy
+	// forbids lifecycle mutations that could recycle an authorized native IP.
+	// This is checked in the SAME transaction as per-Box/ACL admission locks.
+	// S4-B2 intentionally has NO implicit revoke/release on Box deletion.
+	if (a.Action == "box_delete" || a.Action == "box_stop" ||
+		a.Action == "box_start" || a.Action == "box_update") &&
+		a.BoxUUID != "" && a.Incarnation != "" {
+		var dependent int
+		err = tx.QueryRowContext(ctx,
+			"SELECT "+
+				"(SELECT COUNT(*) FROM peer_grants WHERE project=? AND status!='REVOKED' "+
+				"AND ((source_uuid=? AND source_incarnation=?) OR (target_uuid=? AND target_incarnation=?)))+"+
+				"(SELECT COUNT(*) FROM network_address_fences WHERE project=? AND box_uuid=? AND incarnation=? AND state!='RELEASED')+"+
+				"(SELECT COUNT(*) FROM forward_claims WHERE project=? AND box_uuid=? AND incarnation=? AND state!='REVOKED')",
+			a.Layer, a.BoxUUID, a.Incarnation, a.BoxUUID, a.Incarnation,
+			a.Layer, a.BoxUUID, a.Incarnation,
+			a.Layer, a.BoxUUID, a.Incarnation).Scan(&dependent)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if dependent != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
 	// A failed create may have left an exactly registered, still-owned Box.
 	// Do not allow another create to claim its name merely because the
 	// original operation has a terminal FAILED receipt. A new box_delete
