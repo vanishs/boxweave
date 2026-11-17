@@ -64,6 +64,13 @@ func TestS4B2ExactPeerCompilerKeepsS1AndForeignDenials(t *testing.T) {
 		if s4b2CIDRMatches(proposed.Egress[i].Destination, v.target) {
 			t.Fatal("approved target remains in blocked reject range")
 		}
+		source := pair.SourceIPv4
+		if i == 1 {
+			source = pair.SourceIPv6
+		}
+		if s4b2CIDRMatches(proposed.Egress[i].Destination, source) {
+			t.Fatal("NDP reply destination source Box remains in blocked reject range")
+		}
 		if !s4b2CIDRMatches(proposed.Egress[i].Destination, v.foreign) {
 			t.Fatal("foreign same-bridge IP was unintentionally exempted")
 		}

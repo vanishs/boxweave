@@ -135,8 +135,13 @@ func nativeACLForVerifiedPeers(t NativePrepareTarget, network *api.Network, bind
 			}
 			entry.m[entry.ip] = entry.id
 		}
-		except4 = append(except4, p.TargetIPv4)
-		except6 = append(except6, p.TargetIPv6)
+		// Native NDP response B -> A is addressed to A, not B.
+		// The global reserved-destination reject takes precedence over
+		// any later specific allow in Incus. Carve only the exact two
+		// verified endpoint hosts, NEVER the entire bridge prefix.
+		// The source/destination NIC rule still controls direction.
+		except4 = append(except4, p.SourceIPv4, p.TargetIPv4)
+		except6 = append(except6, p.SourceIPv6, p.TargetIPv6)
 	}
 	base.Egress[0].Destination, err = nativeACLExceptAddresses(nativeACLBlockedIPv4, except4)
 	if err != nil {
