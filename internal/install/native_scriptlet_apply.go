@@ -276,9 +276,10 @@ func nativeScriptletApplyWithClient(ctx context.Context, root incus.InstanceServ
 	if !reflect.DeepEqual(actual.Config, applied) {
 		return nativeScriptletReport(j), errors.New("native Scriptlet postread differed; journal held UNKNOWN")
 	}
+	persisted := nativeScriptletReport(j)
 	j.Status = "ROUTE_APPLIED_PARITY_PENDING"
 	if err := nativeScriptletSaveJournal(path, j); err != nil {
-		return nativeScriptletReport(j), fmt.Errorf("Scriptlet routing applied but journal final status uncertain: %w", err)
+		return persisted, fmt.Errorf("Scriptlet routing applied but journal final status uncertain: %w", err)
 	}
 	return nativeScriptletReport(j), nil
 }
@@ -327,15 +328,17 @@ func nativeScriptletRollbackWithClient(ctx context.Context, root incus.InstanceS
 		return nativeScriptletReport(j), errors.New("native server authorization drift or partial route; refuse unsafe rollback")
 	}
 	if reflect.DeepEqual(actual.Config, j.BeforeConfig) {
+		persisted := nativeScriptletReport(j)
 		j.Status = "ROLLED_BACK"
 		if err := nativeScriptletSaveJournal(path, j); err != nil {
-			return nativeScriptletReport(j), err
+			return persisted, err
 		}
 		return nativeScriptletReport(j), nil
 	}
+	persisted := nativeScriptletReport(j)
 	j.Status = "ROLLBACK_UNKNOWN"
 	if err := nativeScriptletSaveJournal(path, j); err != nil {
-		return nativeScriptletReport(j), err
+		return persisted, err
 	}
 	if err := root.UpdateServer(api.ServerPut{Config: j.BeforeConfig}, etag); err != nil {
 		return nativeScriptletReport(j), fmt.Errorf("native Scriptlet rollback effect uncertain: %w", err)
@@ -347,9 +350,10 @@ func nativeScriptletRollbackWithClient(ctx context.Context, root incus.InstanceS
 	if !reflect.DeepEqual(check.Config, j.BeforeConfig) {
 		return nativeScriptletReport(j), errors.New("native Scriptlet rollback postread disagrees; manual root reconciliation required")
 	}
+	persisted = nativeScriptletReport(j)
 	j.Status = "ROLLED_BACK"
 	if err := nativeScriptletSaveJournal(path, j); err != nil {
-		return nativeScriptletReport(j), err
+		return persisted, err
 	}
 	return nativeScriptletReport(j), nil
 }
@@ -408,6 +412,7 @@ func nativeScriptletReconcileWithClient(ctx context.Context, root incus.Instance
 	if isBefore == isApplied {
 		return nativeScriptletReport(j), errors.New("native Scriptlet config ambiguous or drifted")
 	}
+	persisted := nativeScriptletReport(j)
 	switch j.Status {
 	case "DISPATCH_UNKNOWN":
 		if !isApplied {
@@ -433,7 +438,7 @@ func nativeScriptletReconcileWithClient(ctx context.Context, root incus.Instance
 		return nativeScriptletReport(j), errors.New("unknown Scriptlet journal state")
 	}
 	if err := nativeScriptletSaveJournal(path, j); err != nil {
-		return nativeScriptletReport(j), err
+		return persisted, err
 	}
 	return nativeScriptletReport(j), nil
 }

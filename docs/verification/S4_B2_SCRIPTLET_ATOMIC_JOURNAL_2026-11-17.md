@@ -34,3 +34,9 @@ A subsequent isolated B2 source change provides `boxweave native-scriptlet-recon
 Unit fixtures proved lost apply ACK, lost rollback ACK, second reconciliation idempotency and refusals for partial/before-dispatch and wrong host/SHA. This is a **source-only** recovery primitive; a real Incus Server crash/restart, installed authorization parity and full host-global approval have not been demonstrated. B2 stays `S4_B2_PARTIAL`; B3 remains prohibited.
 
 **Local final quality receipt:** L0 guest Exec operation `3d904067c98819cc193fd263fd395254`, native Exec `597ca4a7-e978-4e8b-a075-a378798f5031`, independently read `SUCCEEDED`. The staged five-file worktree passed full `make verify`: Go vet, full race suite (all packages), format/YAML, module checks and 7/7 Python witness cases. No installer/live Incus Server write was attempted.
+
+## 2026-11-17 PT — durability failure cannot promote in-memory status
+
+The root journal workflow now distinguishes an **attempted** status transition from a **persisted** one. When the final O_EXCL/atomic journal update fails after native readback or rollback, the error report retains the last durable `DISPATCH_UNKNOWN`, `ROLLBACK_UNKNOWN` or other prior status; it must never report `ROUTE_APPLIED_PARITY_PENDING`/`ROLLED_BACK` just because an in-memory struct was updated. No native PUT is replayed.
+
+A fault-injection unit fixture switches the 0600 journal to an unsafe mode between two root Server reads and final save. Both lost-ACK apply and rollback cases returned an error with the **original durable UNKNOWN** status; after restoring mode, independent journal readback confirmed no state advancement. This does not replace native process-crash or installed-host testing. **B2 remains PARTIAL; no B3.**
