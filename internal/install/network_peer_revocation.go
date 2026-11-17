@@ -35,7 +35,24 @@ func nativeACLWithDeniedPeers(t NativePrepareTarget, network *api.Network, activ
 	if len(denied) == 0 {
 		return result, nil
 	}
-	tombstones := make(map[string]struct{}, len(denied)*2)
+	// A stateful reply to A->B traverses B->A. To guarantee that an
+	// established session is revoked, tombstone both directions. If the
+	// caller has an independent live B->A grant we cannot preserve it and
+	// simultaneously guarantee revocation without per-flow primitives.
+	// Fail closed rather than silently de-authorize a different grant.
+	for _, block := range denied {
+		for _, live := range active {
+			if block.SourceUUID == live.TargetUUID && block.TargetUUID == live.SourceUUID {
+				return api.NetworkACLsPost{}, errors.New("reverse peer grant must be revoked in same dependency set")
+			}
+		}
+		for _, other := range denied {
+			if block.SourceUUID == other.TargetUUID && block.TargetUUID == other.SourceUUID {
+				return api.NetworkACLsPost{}, errors.New("duplicate symmetric revoked peer identity")
+			}
+		}
+	}
+	tombstones := make(map[string]struct{}, len(denied)*4)
 	for _, binding := range denied {
 		tombstones[exactPeerRuleKey(binding.SourceIPv4, binding.TargetIPv4, 32)] = struct{}{}
 		tombstones[exactPeerRuleKey(binding.SourceIPv6, binding.TargetIPv6, 128)] = struct{}{}
@@ -70,6 +87,12 @@ func nativeACLWithDeniedPeers(t NativePrepareTarget, network *api.Network, activ
 			}
 			result.Ingress = append(result.Ingress, block)
 			result.Egress = append(result.Egress, block)
+			// Conntrack reply traffic must be stopped as well. This is not a
+			// new grant; the reverse-direction DROP remains exact-host only.
+			reverse := block
+			reverse.Source, reverse.Destination = block.Destination, block.Source
+			result.Ingress = append(result.Ingress, reverse)
+			result.Egress = append(result.Egress, reverse)
 		}
 	}
 	return result, nil

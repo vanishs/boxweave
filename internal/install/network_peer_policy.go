@@ -98,12 +98,20 @@ func nativeACLForVerifiedPeers(t NativePrepareTarget, network *api.Network, bind
 	if err != nil {
 		return base, errors.New("bridge IPv6 prefix unavailable")
 	}
+	gateway4, e4 := nativeACLGateway(network.Config, "ipv4.address", false)
+	gateway6, e6 := nativeACLGateway(network.Config, "ipv6.address", true)
+	if e4 != nil || e6 != nil {
+		return base, errors.New("native bridge gateway identity unavailable")
+	}
 	v4, v6 = v4.Masked(), v6.Masked()
 	sorted := slices.Clone(bindings)
 	slices.SortFunc(sorted, func(a, b nativePeerBinding) int {
 		return strings.Compare(a.SourceUUID+"/"+a.TargetUUID, b.SourceUUID+"/"+b.TargetUUID)
 	})
 	owners4, owners6 := map[netip.Addr]string{}, map[netip.Addr]string{}
+	// A single native UUID must have one exact dual-stack pinned identity
+	// across every directed grant. IP->UUID uniqueness alone is insufficient.
+	uuid4, uuid6 := map[string]netip.Addr{}, map[string]netip.Addr{}
 	seen := map[string]bool{}
 	except4, except6 := []netip.Addr{v4.Addr()}, []netip.Addr{v6.Addr()}
 	for _, p := range sorted {
@@ -118,7 +126,9 @@ func nativeACLForVerifiedPeers(t NativePrepareTarget, network *api.Network, bind
 			!v4.Contains(p.SourceIPv4) || !v4.Contains(p.TargetIPv4) ||
 			!v6.Contains(p.SourceIPv6) || !v6.Contains(p.TargetIPv6) ||
 			p.SourceIPv4 == v4.Addr() || p.TargetIPv4 == v4.Addr() ||
-			p.SourceIPv6 == v6.Addr() || p.TargetIPv6 == v6.Addr() {
+			p.SourceIPv6 == v6.Addr() || p.TargetIPv6 == v6.Addr() ||
+			p.SourceIPv4 == gateway4 || p.TargetIPv4 == gateway4 ||
+			p.SourceIPv6 == gateway6 || p.TargetIPv6 == gateway6 {
 			return base, errors.New("peer IP is untrusted or outside selected bridge")
 		}
 		pairs := []struct {
@@ -134,6 +144,14 @@ func nativeACLForVerifiedPeers(t NativePrepareTarget, network *api.Network, bind
 				return base, errors.New("address assigned to multiple native UUIDs")
 			}
 			entry.m[entry.ip] = entry.id
+			uuidOwners := uuid4
+			if entry.ip.Is6() {
+				uuidOwners = uuid6
+			}
+			if previous, ok := uuidOwners[entry.id]; ok && previous != entry.ip {
+				return base, errors.New("native UUID bound to more than one static address")
+			}
+			uuidOwners[entry.id] = entry.ip
 		}
 		// Native NDP response B -> A is addressed to A, not B.
 		// The global reserved-destination reject takes precedence over

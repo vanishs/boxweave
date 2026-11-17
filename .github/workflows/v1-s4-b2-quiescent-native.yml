@@ -16,6 +16,8 @@ on:
       - internal/install/network_peer_revocation.go
       - internal/install/network_peer_revocation_test.go
       - internal/install/network_peer_revocation_native_test.go
+      - internal/install/network_peer_live_native_test.go
+      - scripts/s4_b2_native_flow_probe.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -241,6 +243,77 @@ jobs:
           done
           test "$v6ok" = 1
           echo "S4_B2_QUIESCENT_AFTER_SUCCESSFUL_GRANT_A_TO_B_DUAL_STACK=PASS"
+          # Disposable-only live-flow mechanics research. Product SDK ACL
+          # changes require the whole-project stop/autostart barrier and
+          # never use this test's live-update path.
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/s4b2-native-flow-probe" \
+            ./scripts/s4_b2_native_flow_probe.go
+          for name in s4b2a s4b2b; do
+            sudo incus --project bwowned file push "$RUNNER_TEMP/s4b2-native-flow-probe" \
+              "$name/root/s4b2-native-flow-probe"
+            sudo incus --project bwowned exec "$name" -- chmod 0755 /root/s4b2-native-flow-probe
+          done
+          sudo incus --project bwowned exec s4b2b -- sh -c \
+            'nohup /root/s4b2-native-flow-probe server >/tmp/s4b2-flow-server.log 2>&1 </dev/null &'
+          server_ready=0
+          for attempt in $(seq 1 30); do
+            if sudo incus --project bwowned exec s4b2b -- test -f /tmp/s4b2-flow-server-ready; then
+              server_ready=1; break
+            fi
+            sleep 1
+          done
+          test "$server_ready" = 1
+          start_disposable_flow() {
+            local label="$1" protocol="$2" destination="$3"
+            sudo incus --project bwowned exec s4b2a -- sh -c \
+              "nohup /root/s4b2-native-flow-probe client $protocol $destination $label >/tmp/s4b2-flow-$label.log 2>&1 </dev/null &"
+          }
+          start_disposable_flow tcp4 tcp "$b4"
+          start_disposable_flow tcp6 tcp "$b6"
+          start_disposable_flow udp4 udp "$b4"
+          start_disposable_flow udp6 udp "$b6"
+          for label in tcp4 tcp6 udp4 udp6; do
+            seen=0; count=""
+            for attempt in $(seq 1 35); do
+              count="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+              if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 4 )); then seen=1; break; fi
+              sleep 1
+            done
+            if [[ "$seen" != 1 ]]; then
+              sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label.log" || :
+              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_ESTABLISHED"; exit 86
+            fi
+            echo "S4_B2_NATIVE_LIVE_TRACKED_$label=ESTABLISHED_COUNT_$count"
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-live-tcp-before.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-before.txt" 2>&1 || :
+          probe TestS4B2NativeCompiledLiveTrackedFlowDrop
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-live-symmetric-drop.nft"
+          for label in tcp4 tcp6 udp4 udp6; do
+            blocked=0; result=""
+            for attempt in $(seq 1 15); do
+              result="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-result" 2>/dev/null || :)"
+              if [[ "$result" == BLOCKED_AFTER=* ]]; then blocked=1; break; fi
+              sleep 1
+            done
+            if [[ "$blocked" != 1 ]]; then
+              sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label.log" || :
+              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_BLOCKED"; exit 87
+            fi
+            echo "S4_B2_NATIVE_LIVE_TRACKED_$label=$result"
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-live-tcp-after.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-after.txt" 2>&1 || :
+          echo "S4_B2_NATIVE_COMPILED_DROP_LIVE_ESTABLISHED_TCP_UDP_BOTH_FAMILIES_DENIED=PASS"
+          probe TestS4B2NativeCompiledLiveTrackedFlowRestore
+          sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
+          restored6=0
+          for attempt in 1 2 3 4 5; do
+            if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then restored6=1; break; fi
+            sleep 2
+          done
+          test "$restored6" = 1
+          echo "S4_B2_NATIVE_DISPOSABLE_LIVE_ACL_GRANT_RESTORED=PASS"
           sudo incus --project bwowned stop s4b2a
           sudo incus --project bwowned stop s4b2b
           probe TestS4B2NativeDedicatedBridgeRevoke
