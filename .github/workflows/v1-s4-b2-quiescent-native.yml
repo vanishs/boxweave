@@ -289,6 +289,39 @@ jobs:
           sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-before.txt" 2>&1 || :
           probe TestS4B2NativeCompiledLiveTrackedFlowDrop
           sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-live-symmetric-drop.nft"
+          # Previous native runner proved Incus places ct established
+          # acceptance BEFORE ACL DROP. Observe old sessions before trying
+          # exact-pair conntrack invalidation; never claim ACL alone works.
+          sleep 3
+          pre_scoped_alive=0
+          for label in tcp4 tcp6 udp4 udp6; do
+            result="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-result" 2>/dev/null || :)"
+            count="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+            echo "S4_B2_NATIVE_LIVE_ACL_ONLY_$label result=$result count=$count"
+            if [[ "$result" != BLOCKED_AFTER=* ]]; then
+              pre_scoped_alive=$((pre_scoped_alive+1))
+            fi
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-before-tcp.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-before-udp.txt" 2>&1 || :
+          # On THIS disposable host only: delete all four tracked directed
+          # tuples for verified A/B addresses, BOTH families and protocols;
+          # never run conntrack -F and never touch foreign IPs.
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then src="$a4"; dst="$b4"; else src="$a6"; dst="$b6"; fi
+            for protocol in tcp udp; do
+              if [[ "$protocol" = tcp ]]; then port=19091; else port=19092; fi
+              if sudo conntrack -D -f "$family" -p "$protocol" -s "$src" -d "$dst" --dport "$port" \
+                > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-delete-$family-$protocol.txt" 2>&1; then
+                echo "S4_B2_NATIVE_EXACT_CONNTRACK_DELETE_$family-$protocol=OBSERVED"
+              else
+                echo "S4_B2_NATIVE_EXACT_CONNTRACK_DELETE_$family-$protocol=EMPTY_OR_FAILED"
+                cat "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-delete-$family-$protocol.txt"
+              fi
+            done
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-after-tcp.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-after-udp.txt" 2>&1 || :
           for label in tcp4 tcp6 udp4 udp6; do
             blocked=0; result=""
             for attempt in $(seq 1 15); do
@@ -298,13 +331,13 @@ jobs:
             done
             if [[ "$blocked" != 1 ]]; then
               sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label.log" || :
-              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_BLOCKED"; exit 87
+              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_BLOCKED_AFTER_PAIR_SCOPED_CONNTRACK_DELETE"; exit 87
             fi
             echo "S4_B2_NATIVE_LIVE_TRACKED_$label=$result"
           done
           sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-live-tcp-after.txt" 2>&1 || :
           sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-after.txt" 2>&1 || :
-          echo "S4_B2_NATIVE_COMPILED_DROP_LIVE_ESTABLISHED_TCP_UDP_BOTH_FAMILIES_DENIED=PASS"
+          echo "S4_B2_NATIVE_COMPILED_DROP_PLUS_EXACT_CONNTRACK_DELETE_TCP_UDP_DUALSTACK_DENIED=PASS"
           probe TestS4B2NativeCompiledLiveTrackedFlowRestore
           sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
           restored6=0
