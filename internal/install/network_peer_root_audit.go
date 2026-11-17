@@ -164,16 +164,19 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 	if err != nil {
 		return out, err
 	}
-	if !nativePeerAuditSnapshotEqual(network, ntag, acl, atag, project, ptag, profile, pftag,
-		network2, nt2, acl2, at2, proj2, pt2, prof2, pft2) {
-		return out, errors.New("native bridge, ACL or Project changed during read-only audit")
+	if reason := nativePeerAuditSnapshotReason(network, ntag, acl, atag, project, ptag, profile, pftag,
+		network2, nt2, acl2, at2, proj2, pt2, prof2, pft2); reason != "" {
+		return out, fmt.Errorf("native root snapshot changed during audit: %s", reason)
 	}
+	networkUsedBy, aclUsedBy := slices.Clone(network.UsedBy), slices.Clone(acl.UsedBy)
+	slices.Sort(networkUsedBy)
+	slices.Sort(aclUsedBy)
 	data, _ := json.Marshal(struct {
 		Target                                     NativePeerBridgeAuditTarget
 		NativeNames                                []string
 		NetworkTag, ACLTag, ProjectTag, ProfileTag string
 		NetworkUsedBy, ACLUsedBy                   []string
-	}{t, names, ntag, atag, ptag, pftag, network.UsedBy, acl.UsedBy})
+	}{t, names, ntag, atag, ptag, pftag, networkUsedBy, aclUsedBy})
 	sum := sha256.Sum256(append([]byte("s4b2-root-peer-audit-v1\n"), data...))
 	out = NativePeerBridgeAuditResult{Project: t.Project, Bridge: t.Bridge, ACL: t.ACL,
 		OwnedBoxes: len(t.Boxes), NativeDigestSHA256: hex.EncodeToString(sum[:])}
@@ -183,17 +186,58 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 // A change of a same-length Project config or a single Profile NIC property
 // is just as security-critical as a changed object count. ETags and used_by
 // alone cannot be substituted for the complete independently read snapshot.
+// Stable authorization fields must match exactly, but Incus does not
+// promise a particular ordering for used_by collections. Compare those as
+// sets, NOT serialized list positions; never relax config/device/ACL diffs.
+func nativePeerAuditSameUsedBy(a, b []string) bool {
+	x, y := slices.Clone(a), slices.Clone(b)
+	slices.Sort(x)
+	slices.Sort(y)
+	return slices.Equal(x, y)
+}
+func nativePeerAuditSnapshotReason(n *api.Network, ne string, a *api.NetworkACL, ae string,
+	p *api.Project, pe string, f *api.Profile, fe string,
+	n2 *api.Network, ne2 string, a2 *api.NetworkACL, ae2 string,
+	p2 *api.Project, pe2 string, f2 *api.Profile, fe2 string) string {
+	if n == nil || a == nil || p == nil || f == nil ||
+		n2 == nil || a2 == nil || p2 == nil || f2 == nil {
+		return "missing independent root read"
+	}
+	if ne != ne2 || ae != ae2 || pe != pe2 || fe != fe2 {
+		return "native resource ETag changed"
+	}
+	if n.Name != n2.Name || n.Type != n2.Type || n.Managed != n2.Managed ||
+		n.Status != n2.Status || n.Description != n2.Description ||
+		!reflect.DeepEqual(n.Config, n2.Config) {
+		return "native bridge configuration changed"
+	}
+	if !nativePeerAuditSameUsedBy(n.UsedBy, n2.UsedBy) {
+		return "native bridge consumers changed"
+	}
+	if a.Name != a2.Name || !reflect.DeepEqual(a.NetworkACLPut, a2.NetworkACLPut) ||
+		a.Project != a2.Project {
+		return "native ACL rules or scope changed"
+	}
+	if !nativePeerAuditSameUsedBy(a.UsedBy, a2.UsedBy) {
+		return "native ACL consumers changed"
+	}
+	if p.Name != p2.Name || !reflect.DeepEqual(p.ProjectPut, p2.ProjectPut) {
+		return "native Project restriction changed"
+	}
+	if !nativePeerAuditSameUsedBy(p.UsedBy, p2.UsedBy) {
+		return "native Project consumers changed"
+	}
+	if f.Name != f2.Name || !reflect.DeepEqual(f.ProfilePut, f2.ProfilePut) {
+		return "native Profile NIC/device changed"
+	}
+	if !nativePeerAuditSameUsedBy(f.UsedBy, f2.UsedBy) {
+		return "native Profile consumers changed"
+	}
+	return ""
+}
 func nativePeerAuditSnapshotEqual(n *api.Network, ne string, a *api.NetworkACL, ae string,
 	p *api.Project, pe string, f *api.Profile, fe string,
 	n2 *api.Network, ne2 string, a2 *api.NetworkACL, ae2 string,
 	p2 *api.Project, pe2 string, f2 *api.Profile, fe2 string) bool {
-	if n == nil || a == nil || p == nil || f == nil ||
-		n2 == nil || a2 == nil || p2 == nil || f2 == nil {
-		return false
-	}
-	return ne == ne2 && ae == ae2 && pe == pe2 && fe == fe2 &&
-		reflect.DeepEqual(n, n2) &&
-		reflect.DeepEqual(a, a2) &&
-		reflect.DeepEqual(p, p2) &&
-		reflect.DeepEqual(f, f2)
+	return nativePeerAuditSnapshotReason(n, ne, a, ae, p, pe, f, fe, n2, ne2, a2, ae2, p2, pe2, f2, fe2) == ""
 }

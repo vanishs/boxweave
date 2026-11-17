@@ -223,15 +223,10 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 		return zero, err
 	}
 	var src, dst native.PeerACLBox
-	own := root.UseProject(t.Project)
+	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
+		return zero, err
+	}
 	for _, b := range t.Boxes {
-		inst, _, err := own.GetInstance(b.Name)
-		if err != nil {
-			return zero, err
-		}
-		if err = native.ValidatePeerACLBox(inst, t.Project, t.Bridge, t.ACL, b, true); err != nil {
-			return zero, fmt.Errorf("native ACL consumer not stopped or identity drift: %w", err)
-		}
 		if b.UUID == srcUUID {
 			src = b
 		}
@@ -253,6 +248,9 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 	if err != nil || repeat.NativeDigestSHA256 != audit.NativeDigestSHA256 {
 		return zero, errors.New("root network identity changed before conntrack")
 	}
+	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
+		return zero, fmt.Errorf("native stop fence changed immediately before kernel operation: %w", err)
+	}
 	report, err := nativePeerConntrackPurgeExact(ctx, run, src, dst)
 	report.NativeDigestSHA256 = audit.NativeDigestSHA256
 	if err != nil {
@@ -262,5 +260,29 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 	if err != nil || last.NativeDigestSHA256 != audit.NativeDigestSHA256 {
 		return report, errors.New("root network identity changed during conntrack")
 	}
+	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
+		return report, fmt.Errorf("native stop fence changed after kernel operation: %w", err)
+	}
 	return report, nil
+}
+
+func nativePeerConntrackAllStopped(ctx context.Context, root incus.InstanceServer,
+	t NativePeerBridgeAuditTarget) error {
+	if root == nil || len(t.Boxes) == 0 {
+		return errors.New("no root-owned complete stop fence")
+	}
+	own := root.UseProject(t.Project)
+	for _, b := range t.Boxes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		inst, _, err := own.GetInstance(b.Name)
+		if err != nil {
+			return err
+		}
+		if err := native.ValidatePeerACLBox(inst, t.Project, t.Bridge, t.ACL, b, true); err != nil {
+			return fmt.Errorf("native ACL consumer %q not stopped or identity drift: %w", b.Name, err)
+		}
+	}
+	return nil
 }

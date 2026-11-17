@@ -25,6 +25,16 @@ func TestS4B2RootAuditSnapshotDetectsSameSizeSecurityDrift(t *testing.T) {
 	if !eq(n, tag, acl, tag, p, tag, prof, tag) {
 		t.Fatal("stable identical snapshot refused")
 	}
+	n.UsedBy = []string{"/1.0/instances/a", "/1.0/instances/b"}
+	n2order := *n
+	n2order.UsedBy = []string{"/1.0/instances/b", "/1.0/instances/a"}
+	if !eq(&n2order, tag, acl, tag, p, tag, prof, tag) {
+		t.Fatal("same native UsedBy identities must not fail due only to listing order")
+	}
+	n2order.UsedBy = []string{"/1.0/instances/a", "/1.0/instances/foreign"}
+	if eq(&n2order, tag, acl, tag, p, tag, prof, tag) {
+		t.Fatal("foreign native bridge consumer accepted in equal-length UsedBy")
+	}
 	if eq(n, "new-etag", acl, tag, p, tag, prof, tag) {
 		t.Fatal("network ETag drift ignored")
 	}
