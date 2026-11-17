@@ -26,3 +26,16 @@ This is a **read-only prerequisite** only: production worker has not yet recorde
 
 ## Exact native failure and narrow fixture repair (2026-11-17)
 Run [#44145170209](https://github.com/vanishs/boxweave/actions/runs/44145170209), original job `134258211023`, exact source `3f44d5f45683266fe6f4a9d9ad23dbe1fcee8ba6`, failed **before** Incus root identity comparisons. Captured original Go error: `database parent must be a private real directory` at the temporary SQLite setup in `TestS4B2NativeStoreLedgerBridgeAudit`. The fixture now explicitly makes its own one-use DB parent `0700`, preserving `state.Open` security checks unmodified. This is a test-environment fix only: latest exact-commit native outcome must still be retested, and B2 remains PARTIAL.
+
+## Exact-head native SQLite-to-root audit acceptance — 2026-11-17
+
+[Disposable native Incus 7.6 Actions #44146138590](https://github.com/vanishs/boxweave/actions/runs/44146138590), original job `134261651172`, exact source commit `a72d3dcc126ef11196d4ee8f307faef2c3e69ed3`: **SUCCESS**. Raw Go test log and workflow markers, not a skipped fixture, independently show:
+
+- `S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS` — complete A/B/C persisted UUID/incarnation/MAC/IPv4/IPv6/ACL/fence snapshot checked against root-owned live native inventory.
+- `S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED=PASS` — a syntactically valid but deliberately falsified SQLite MAC is rejected by real root Incus.
+- `S4_B2_SQLITE_ADDRESS_QUARANTINE_REFUSED=PASS` — quarantining IPv6 cannot silently preserve native audit readiness.
+- `S4_B2_DURABLE_LEDGER_NATIVE_ROOT_READONLY_GATE=PASS`, `S4_B2_FOREIGN_RAW_NIC_AUDIT_REFUSED_AND_EXACT_CLEANUP=PASS`, `S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER=PASS`, `S4_B2_QUIESCENT_EXACT_CLEANUP=PASS`.
+
+The quiescent root conntrack test reported `scopes=4 deleted=0` in that phase because endpoints had been stopped; **this is not evidence that running TCP/UDP flows were cleaned by the product**. Separate prior live-flow native tests cover the conntrack mechanism, but the installed controller still lacks atomic integration.
+
+**Scoped verdict: persisted-ledger to native-root read-only gate PASS, full stage `S4_B2_PARTIAL`.** No production installed MCP root handoff, persistent verified binding writer, per-NIC kernel convergence guarantee, installed Scriptlet cutover/rollback, or independent B2 final acceptance was established. No B3.
