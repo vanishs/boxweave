@@ -108,6 +108,21 @@ jobs:
             op_id="$(jq -er '.metadata.id | select(type=="string" and length>0)' "$response")"
             test -n "$op_id"
             echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_NATIVE_ID_$stage=$op_id"
+            # HTTP 202 is only an accepted async Exec. The SAME restricted
+            # client must retain permission to wait for its original native
+            # operation and prove a successful final state across the route.
+            local terminal_code
+            terminal_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+              --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+              --connect-timeout 4 --max-time 35 \
+              -o "$RUNNER_TEMP/legacy-exec-terminal-$stage.json" -w '%{http_code}' \
+              "https://127.0.0.1:8443/1.0/operations/$op_id/wait?timeout=30&project=bwlegacy")"
+            echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_TERMINAL_$stage HTTP=$terminal_code"
+            if [[ "$terminal_code" != 200 ]]; then
+              cat "$RUNNER_TEMP/legacy-exec-terminal-$stage.json"; return 1
+            fi
+            jq -e '.metadata.status_code == 200' "$RUNNER_TEMP/legacy-exec-terminal-$stage.json" >/dev/null
+            echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_SUCCESS_$stage=PASS"
             code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
               --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
               --connect-timeout 4 --max-time 30 \
