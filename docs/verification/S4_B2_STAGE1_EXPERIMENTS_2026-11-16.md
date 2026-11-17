@@ -19,7 +19,7 @@ The existing dedicated-native GitHub Actions workflow is extended with these **n
 | N-F02 | Create a fourth **unknown** NIC consumer in the same otherwise restricted Project while A/B has a grant | Root-observed network `UsedBy` lists it and internal native ownership guard refuses it; resource then deleted | Continuous protection from host root/OOB attachment; actual restricted-cert unauthorized write |
 | N-F03 | Revoke exact dual-stack A→B, delete B, reallocate *both* addresses to a new UUID, clear **IPv6** neighbor entry | Actual A→reused IPv6 packet denied after native ACL readback (existing IPv4 negative repeated) | Crash/lost ACK/partial update path; entire established-flow teardown |
 
-**Follow-up still required in Step 1**: ACK loss, restart and durable quarantine; native unauthorized restricted TLS client permission matrix; Scriptlet model/read-only preflight and rollback dry-run; external IPv4/IPv6 TCP/UDP denial and positive control; native lease/MAC/source spoof under concurrent changes. Do not falsely mark an experiment PASS until its actual GitHub run, SHA and raw logs are reviewed.
+**Follow-up still required in Step 1**: ACK loss, restart and durable quarantine; full existing restricted TLS client **write/execute** rights parity and reviewed installer rollback; external IPv4/IPv6 TCP/UDP denial and positive control; native lease/MAC/source spoof under concurrent changes. Do not falsely mark an experiment PASS until its actual GitHub run, SHA and raw logs are reviewed.
 
 ## Step 1 original native results — 2026-11-17 UTC (no product writer)
 
@@ -46,6 +46,37 @@ The repeat logged `S4_B2_FANOUT_CONTROL_AFTER_C_LINK_LOSS_A_TO_B_STILL_REACHABLE
 **Mandatory product consequence for Step 2:** on failed, timed-out, or unverified ACL PUT, keep the original durable intent `UNKNOWN`/locked, **do not release either endpoint address, detach an owned NIC, delete an involved Box or offer a new grant**, and audit every affected effective NIC/kernel state plus actual new-flow packets in an isolated recovery path. A failed revoke must not be reinterpreted as harmless because the ACL GET rolled back. Explicit active containment/fencing must be designed, implemented and independently tested; a periodic ACL GET alone is insufficient.
 
 **Still open for Step 1 / no acceptance claim:** true live competing writers; ACK loss, native restart/recovery and SQLite quarantine; source spoof and unknown same-Project client capabilities under *restricted TLS*; external IPv4/IPv6 TCP+UDP `internet=false` controls; Scriptlet old restricted-client rights and installer rollback. The latter requires **new host-specific authorization to change global daemon settings**, even in an isolated host; no Scriptlet/global change was performed. The unreviewed `internet=false` Peer exception remains an owner semantic decision. `S4_B2_PARTIAL`; no B3, public Peer writer or S4 release.
+
+## Authorized native TLS Scriptlet experiment — 2026-11-17 UTC
+
+**Explicit owner permission was granted for a disposable standalone Incus host** (and optional L0), but **only newly provisioned isolated GitHub Actions Incus 7.6 was used**. No shared L0, production cert, physical host, prior Scriptlet or daemon-global state was touched. The disposable CI workflow is [`v1-s4-b2-scriptlet-native.yml`](../../.github/workflows/v1-s4-b2-scriptlet-native.yml).
+
+**Actual green evidence:** [run 44033052427](https://github.com/vanishs/boxweave/actions/runs/44033052427), commit `2f4fe3564c04805f2c0b5c126a625e198f68d94e`, native job `133869301570`, **SUCCESS**. A freshly installed Incus 7.6 daemon listened on local-loopback HTTPS; the job created three independent ephemeral, restricted, real client TLS certificates: `legacy` scoped to `bwlegacy`, `other` to `bwother`, and `writer` to `default`. Curl used the actual client certificate and pinned the Incus server's public key; secrets and private keys were **not uploaded**.
+
+| Native HTTP operation | Original `tls` route | Under disposable `scriptlet` route | After reverting exactly to original route |
+|---|---|---|---|
+| Legacy GET existing `bwlegacy` Project | 200 | 200 | 200 |
+| Legacy GET existing `bwother` Project | 403 | 403 | 403 |
+| Other GET existing `bwother` Project | 200 | 200 | 200 |
+| Other GET existing `bwlegacy` Project | 403 | 403 | 403 |
+| Writer GET its dedicated `bw-s4b2-scriptlet` ACL | 200 | 200 | (not needed) |
+| Writer GET `bw-s4b2-not-owned` ACL in same `default` Project | **200** (existing TLS project-wide privilege) | **403** (Scriptlet restricted) | **200** (original TLS behavior restored) |
+| Writer PUT dedicated ACL | Not tested | **200**, independently read back through native root ACL show | Not tested |
+| Writer PUT foreign same-Project ACL | Not tested | **403**, native foreign ACL unchanged | Not tested |
+| Writer POST create new ACL | Not tested | 403 | Not tested |
+| Writer DELETE its named ACL | Not tested | 403 | Not tested |
+| Writer GET other Project objects | Not tested | 403 | Not tested |
+
+The job then attempted to install **syntactically invalid** Scriptlet source: Incus rejected it (exit 1), the previous restricted Scriptlet rights still worked, and exact `authorization.client.tls-restricted` and `authorization.scriptlet` values were **unset/restored to their original empty settings**; old/other/writer HTTP rights were tested again. The isolated host was ephemeral. A preflight-before-change and a `trap` to unset the two global settings were installed for the authorized test only.
+
+**Important new implementation knowledge:**
+
+1. Upstream [Incus 7.6 `shared/scriptlet/marshal.go`](https://github.com/lxc/incus/blob/v7.6.0/shared/scriptlet/marshal.go) uses **Go JSON tags**, not exported Go field names, for `details.Certificate`. Correct Scriptlet attributes are `details.Certificate.restricted` and `details.Certificate.projects`; capitalized `Restricted` caused real `403 Invalid field "Restricted"` in earlier red probe [44032441909](https://github.com/vanishs/boxweave/actions/runs/44032441909).
+2. `details.ProjectName` is the **request's project context**, not always the project identified by the resource URL. An existing Project GET `/1.0/projects/bwlegacy` can have default request context: checking it alone incorrectly denied old clients in [44032642777](https://github.com/vanishs/boxweave/actions/runs/44032642777). Explicit named-Project resource authorization (and the provider's native `object`/entitlement) must be respected.
+3. Foreign `GET /1.0/instances?project=...` can return **HTTP 200 with an empty filtered list**, so `200` is not an authorization proof. Tests switched to actual existing named Project objects. That initial mistaken negative assertion failed in [44032250952](https://github.com/vanishs/boxweave/actions/runs/44032250952).
+4. The **test Scriptlet only replicated the selected legacy Project-object GET authorization**, while enforcing narrow GET/PUT for the writer. This is **NOT full old-client capability parity**: real earlier restricted clients may also edit/launch/stop/exec instances or view inherited resources. Do not copy the test-only narrow legacy rule into production as if it preserves prior rights. The production Scriptlet must reproduce the documented TLS driver permission matrix including server view limits, project edit refusal, inherited-resource read-only exceptions, all-project semantics, object project and entitlements. Source-exact [Incus 7.6 `driver_tls.go`](https://github.com/lxc/incus/blob/v7.6.0/internal/server/auth/driver_tls.go) must be consulted and a larger native allow/deny matrix independently tested.
+
+**Stage verdict:** The *authorized disposable Scriptlet switch and exact ACL writer* feasibility is now **NATIVE_TEST_PASS**; **installation-ready Scriptlet old-client compatibility is still PARTIAL**, and installed BoxWeave actor/ACK-loss/quarantine/kernel fanout recovery are not accepted. No L0 global changes occurred. B2 stays `S4_B2_PARTIAL`.
 
 ## Important official upstream contract
 
