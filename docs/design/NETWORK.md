@@ -1,5 +1,7 @@
 # Minimal native networking — no managed proxy
 
+**2026-11-16 source-exact native correction (supersedes simplified egress wording below):** [Real S1 ACL/peer experiment](../verification/S4_B1_NATIVE_S1_EGRESS_LEASE_2026-11-16.md) proved that even though **BoxWeave `box_create` defaults `internet=true`** and enables that Box's NIC default egress `allow`, S1's shared ACL still has **private/reserved destination `reject`** rules (except one bridge gateway). With only ingress A→B grants, native IPv4 and IPv6 packets remain denied. The Incus *default Profile* egress is implicitly `reject`, to prevent bypassing BoxWeave create policy; these are distinct layers. A temporary managed-bridge subnet carve showed A→B IPv4/IPv6 work while other *owned ACL-attached* siblings remain denied, **but foreign/cross-Project safety is unverified and this is not a selected production fix**. B2 must design and re-prove an egress/peer solution before B3, and explicitly settle peer access when `internet=false`. Keep old successful egress-open SDK test as limited historical proof, not an exact-S1 integration PASS.
+
 **Permanent scope:** BoxWeave delegates networking to typed Incus native APIs and controls only its owned Box resources. It **does not ship, install, upgrade or configure Caddy**, HTTP site routers, TLS certificates or a custom forwarding daemon.
 
 ## Do not confuse native SDK method families
