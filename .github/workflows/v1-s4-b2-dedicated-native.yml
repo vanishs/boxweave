@@ -90,6 +90,11 @@ jobs:
           b_uuid="$(sudo incus --project bwowned config get s4b2b volatile.uuid)"
           test -n "$b_uuid"
           echo "S4_B2_NATIVE_DEDICATED_THREE_STATIC_DUAL_STACK_GUESTS=PASS"
+          for box in s4b2a s4b2b s4b2c; do
+            echo "S4_B2_NATIVE_DEDICATED_IDENTITY box=$box uuid=$(sudo incus --project bwowned config get "$box" volatile.uuid) mac=$(sudo incus --project bwowned exec "$box" -- cat /sys/class/net/eth0/address)"
+          done
+          echo "S4_B2_NATIVE_DEDICATED_EXCLUSIVE_ROOT_NETWORK_USED_BY"
+          sudo incus network show bwbr0
           probe TestS4B2NativeDedicatedBridgeExactPeer
           sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
           v6_ok=0
@@ -99,6 +104,11 @@ jobs:
           done
           test "$v6_ok" = 1
           echo "S4_B2_NATIVE_DEDICATED_INTERNET_FALSE_EXACT_PEER_IPV4_IPV6=PASS"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 10.248.83.1 >/dev/null 2>&1; then
+            echo "S4_B2_NATIVE_DEDICATED_INTERNET_FALSE_GATEWAY=UNEXPECTEDLY_REACHABLE"
+            exit 67
+          fi
+          echo "S4_B2_NATIVE_DEDICATED_INTERNET_FALSE_GATEWAY_EGRESS_DENY=PASS"
           for spec in "s4b2b $a4 $a6" "s4b2c $b4 $b6" "s4b2a $c4 $c6"; do
             read -r src dest4 dest6 <<<"$spec"
             if sudo incus --project bwowned exec "$src" -- ping -n -c 1 -W 2 "$dest4" >/dev/null 2>&1; then exit 61; fi
