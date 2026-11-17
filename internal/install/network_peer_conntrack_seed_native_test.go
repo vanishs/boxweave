@@ -24,7 +24,9 @@ type s4b2NativeSeededConntrack struct {
 
 func s4b2NativeConntrackSeedArgs(p s4b2NativeSeededConntrack) []string {
 	args := []string{
-		"-I", "-f", p.family, "-p", p.proto,
+		// Conntrack 1.4.8 permits --family on -L, but rejects it on
+		// -I and -D; infer family from the exact source/dest IPs.
+		"-I", "-p", p.proto,
 		"-s", p.source, "-d", p.target,
 		"-r", p.target, "-q", p.source,
 		"--sport", strconv.Itoa(p.sourcePort),
@@ -73,7 +75,7 @@ func s4b2NativeSeedRealKernelConntrack(t *testing.T, ctx context.Context, boxes 
 		defer cancel()
 		for _, p := range inserted {
 			_ = s4b2NativeConntrackBoundedCommand(cleanupCtx,
-				"-D", "-f", p.family, "-p", p.proto,
+				"-D", "-p", p.proto,
 				"-s", p.source, "-d", p.target,
 				"--sport", strconv.Itoa(p.sourcePort),
 				"--dport", strconv.Itoa(p.targetPort))

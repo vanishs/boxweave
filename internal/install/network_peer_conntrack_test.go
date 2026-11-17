@@ -81,11 +81,29 @@ func TestS4B2RootConntrackDeletesOnlyVerifiedPairAndNeverFlushes(t *testing.T) {
 	sessions[foreign] = true
 	deletes := 0
 	run := func(_ context.Context, args ...string) ([]byte, error) {
-		if len(args) != 7 || (args[0] != "-L" && args[0] != "-D") ||
-			args[1] != "-f" || args[3] != "-s" || args[5] != "-d" {
-			t.Fatalf("unsafe root conntrack argv %v", args)
+		key := ""
+		switch args[0] {
+		case "-L":
+			if len(args) != 7 || args[1] != "-f" ||
+				(args[2] != "ipv4" && args[2] != "ipv6") ||
+				args[3] != "-s" || args[5] != "-d" {
+				t.Fatalf("unbounded root conntrack -L argv %v", args)
+			}
+			key = args[2] + "|" + args[4] + "|" + args[6]
+		case "-D":
+			// conntrack-tools v1.4.8 rejects --family with -D. Kernel
+			// derives family from the already-validated numeric IPs.
+			if len(args) != 5 || args[1] != "-s" || args[3] != "-d" {
+				t.Fatalf("invalid root conntrack -D argv %v", args)
+			}
+			family := "ipv4"
+			if strings.Contains(args[2], ":") {
+				family = "ipv6"
+			}
+			key = family + "|" + args[2] + "|" + args[4]
+		default:
+			t.Fatalf("unsafe root conntrack command %v", args)
 		}
-		key := args[2] + "|" + args[4] + "|" + args[6]
 		if key == foreign {
 			t.Fatal("unrelated tuple touched")
 		}

@@ -29,3 +29,13 @@ The root journal still requires four direction probes, durable COMPLETE_VERIFIED
 ## Limits
 
 The kernel entries are test-created TCP ESTABLISHED/UDP records, not actual network application sessions. This tests real kernel deletion of pre-existing *entries*, but does not prove installed live TCP/UDP business-session cutoff or per-NIC nft convergence after restart. It also does not prove cross-Project conntrack isolation: A/C is a non-target sibling-Box control. Installed controller/root authority, Scriptlet fault handling and independent full B2 signoff remain pending. No new MCP Peer writer or shared L0 host mutation. B2 stays PARTIAL; B3 remains blocked.
+
+## First real Incus 7.6 runner finding and correction
+
+Source a4a16ccd7dc9d74a87c0b4afcbe4c3a1d592d18b, native [Actions #44182928794](https://github.com/vanishs/boxweave/actions/runs/44182928794), job 134391747875 FAILED before the kernel seed. Native conntrack-tools v1.4.8 returned exit code 2 with:
+
+    Illegal option '--family' with this command
+
+This test failure also revealed a real production bug: nativePeerConntrackPurgeExact passed -f to conntrack -D, which conntrack-tools rejects. Earlier zero-session tests never executed this delete path. The official manpage specifies -f/--family for -L; IPv4/IPv6 numeric IP tuple selectors infer the family for -I and -D.
+
+The correction removes -f only from kernel insert and delete calls. Bounded -L -f ipv4|ipv6 -s exact -d exact remains unchanged, as do re-read, UNKNOWN no-replay journal and exact cleanup. The Go runner unit test enforces that -D has exactly five arguments with only the original source and destination, and rejects unbounded commands. New exact-SHA CI is required.

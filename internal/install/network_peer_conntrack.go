@@ -227,7 +227,7 @@ func nativePeerConntrackPurgeExact(ctx context.Context, run nativePeerConntrackR
 			continue
 		}
 		// NEVER repeat a native delete whose result was uncertain.
-		if _, err := run(ctx, "-D", "-f", pair.family, "-s", pair.x, "-d", pair.y); err != nil {
+		if _, err := run(ctx, "-D", "-s", pair.x, "-d", pair.y); err != nil {
 			return out, fmt.Errorf("exact conntrack delete uncertain: %w", err)
 		}
 		out.DeletedScopes++
