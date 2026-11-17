@@ -88,7 +88,7 @@ def main() -> int:
     errors: list[str] = []
     if args.paths0:
         try:
-            paths = [p.decode("utf-8") for p in sys.stdin.buffer.read().split(b"\\0") if p]
+            paths = [p.decode("utf-8") for p in sys.stdin.buffer.read().split(b"\0") if p]
         except UnicodeDecodeError as exc:
             print(f"FORMAT FAIL: invalid changed path encoding ({exc})", file=sys.stderr)
             return 1
