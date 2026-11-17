@@ -92,13 +92,13 @@ jobs:
           def authorize(details, object, entitlement):
               if details.Protocol != "tls":
                   return False
-              if details.Certificate == None or details.Certificate.Restricted != True:
+              if details.Certificate == None or details.Certificate.restricted != True:
                   return False
               if details.IsAllProjectsRequest:
                   return False
               if details.Username == "$writer_fpr":
                   return details.ProjectName == "default" and details.Path == "/1.0/network-acls/bw-s4b2-scriptlet" and details.Method in ["GET", "PUT"] and entitlement in ["can_view", "can_edit"]
-              if details.ProjectName not in details.Certificate.Projects:
+              if details.ProjectName not in details.Certificate.projects:
                   return False
               if details.Method == "GET" and details.Path in ["/1.0/instances", "/1.0/projects/bwlegacy", "/1.0/projects/bwother"]:
                   return entitlement in ["can_view", "can_view_resources"]
