@@ -109,6 +109,34 @@ jobs:
           done
           test "$status" = 200
           echo "S4_B1_NATIVE_TCP_PROXY_WITH_REVOKED_PEER=PASS"
+          if sudo incus config device add s4b1a s4b1-collision proxy \
+            listen=tcp:127.0.0.1:18086 connect=tcp:"$a4":18085 bind=host >/dev/null 2>&1; then
+            sudo incus config device remove s4b1a s4b1-collision
+            echo "S4_B1_UNEXPECTED_PROXY_LISTENER_COLLISION_ACCEPTED" >&2
+            exit 48
+          fi
+          test "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:18086/)" = 200
+          echo "S4_B1_NATIVE_TCP_PROXY_PORT_COLLISION_REJECTED=PASS"
+          sudo incus exec s4b1b -- sh -c 'cat >/tmp/s4b1-udp.py' <<'PY'
+          import socket
+          sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          sock.bind(("0.0.0.0", 18087))
+          while True:
+              payload, peer = sock.recvfrom(2048)
+              sock.sendto(b"ack:" + payload, peer)
+          PY
+          sudo incus exec s4b1b -- sh -c 'nohup python3 /tmp/s4b1-udp.py >/tmp/s4b1-udp.log 2>&1 </dev/null &'
+          sudo incus config device add s4b1b s4b1-udp proxy \
+            listen=udp:127.0.0.1:18088 connect=udp:"$b4":18087 bind=host
+          udp_reply=""
+          for i in $(seq 1 12); do
+            udp_reply="$(python3 -c 'import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(2); s.sendto(b"s4b1",("127.0.0.1",18088)); print(s.recvfrom(128)[0].decode())' 2>/dev/null || :)"
+            if [[ "$udp_reply" = 'ack:s4b1' ]]; then break; fi
+            sleep 1
+          done
+          test "$udp_reply" = 'ack:s4b1'
+          echo "S4_B1_NATIVE_UDP_PROXY_PACKET=PASS"
+          sudo incus config device remove s4b1b s4b1-udp
           sudo incus config device remove s4b1b s4b1-proxy
           if curl -s --max-time 3 http://127.0.0.1:18086/ >/dev/null; then exit 47; fi
           echo "S4_B1_PROXY_REMOVAL_REFUSED_NEW_CONNECTION=PASS"
@@ -116,6 +144,11 @@ jobs:
           sudo incus stop s4b1b
           sudo incus delete s4b1a
           sudo incus delete s4b1b
-          sudo incus network acl show bw-s4b1-native
+          # The default Profile remains an ACL consumer even after both instances
+          # are deleted; detach its OWN newly-created ACL before deleting that ACL.
+          sudo incus profile device unset default eth0 security.acls
+          sudo incus network acl show bw-s4b1-native | grep -Fqx 'used_by: []'
           sudo incus network acl delete bw-s4b1-native
+          if sudo incus network acl show bw-s4b1-native >/dev/null 2>&1; then exit 49; fi
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
           echo "S4_B1_EXACT_NATIVE_CLEANUP=PASS"
