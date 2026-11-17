@@ -1,0 +1,237 @@
+name: S4-B2 disposable Scriptlet full restricted TLS permission-parity investigation
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-scriptlet-parity-native.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scriptlet:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Provision brand new standalone Incus 7.6 and actual TLS certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test ! -e /var/lib/incus
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg openssl >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-scriptlet-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-scriptlet-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b2-scriptlet-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          test -z "$(sudo incus config get authorization.scriptlet)"
+          test -z "$(sudo incus config get authorization.client.tls-restricted)"
+          sudo incus config set core.https_address=127.0.0.1:8443
+          sudo incus project create bwlegacy
+          sudo incus project create bwother
+          sudo incus --project bwlegacy profile create s4b2legacy
+          sudo incus --project bwother profile create s4b2other
+          sudo incus network acl create bw-s4b2-scriptlet
+          sudo incus network acl create bw-s4b2-not-owned
+          for name in legacy other writer; do
+            openssl req -new -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-384 -nodes -days 1 \
+              -subj "/CN=s4b2-$name" -keyout "$RUNNER_TEMP/$name.key" -out "$RUNNER_TEMP/$name.crt" >/dev/null 2>&1
+            chmod 600 "$RUNNER_TEMP/$name.key"
+          done
+          sudo incus config trust add-certificate "$RUNNER_TEMP/legacy.crt" --projects=bwlegacy --restricted
+          sudo incus config trust add-certificate "$RUNNER_TEMP/other.crt" --projects=bwother --restricted
+          sudo incus config trust add-certificate "$RUNNER_TEMP/writer.crt" --projects=default --restricted
+          writer_fpr="$(openssl x509 -in "$RUNNER_TEMP/writer.crt" -outform der | sha256sum | awk '{print $1}')"
+          test "${#writer_fpr}" = 64
+          echo "$writer_fpr" > "$RUNNER_TEMP/writer.fingerprint"
+          openssl x509 -in /var/lib/incus/server.crt -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64 -A > "$RUNNER_TEMP/server.spki"
+          echo "S4_B2_SCRIPTLET_DISPOSABLE_PREPARE_NATIVE_7_6=PASS"
+      - name: Test native legacy rights before switch, scriptlet routing, denied escalation, exact rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'sudo incus config unset authorization.client.tls-restricted >/dev/null 2>&1 || :; sudo incus config unset authorization.scriptlet >/dev/null 2>&1 || :' EXIT
+          probe() {
+            local client="$1" method="$2" path="$3" expected="$4"
+            local code
+            code="$(curl -ksS --cert "$RUNNER_TEMP/$client.crt" --key "$RUNNER_TEMP/$client.key" \
+              --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+              --connect-timeout 4 --max-time 12 \
+              -X "$method" -H 'Content-Type: application/json' \
+              -o "$RUNNER_TEMP/last-response.json" -w '%{http_code}' \
+              "https://127.0.0.1:8443$path")"
+            echo "S4_B2_SCRIPTLET_OBSERVED client=$client method=$method url=$path code=$code expected=$expected"
+            if [[ "$code" != "$expected" ]]; then
+              cat "$RUNNER_TEMP/last-response.json"
+              return 1
+            fi
+          }
+          for i in $(seq 1 30); do
+            if curl -ksS --connect-timeout 2 --max-time 3 "https://127.0.0.1:8443/1.0" -o /dev/null; then break; fi
+            sleep 1
+          done
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
+          probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+          probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
+          probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+          probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+          probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+          probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+          echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
+          writer_fpr="$(cat "$RUNNER_TEMP/writer.fingerprint")"
+          cat > "$RUNNER_TEMP/authorize.star" <<EOF
+          def authorize(details, object, entitlement):
+              if details.Protocol != "tls":
+                  return False
+              if details.Certificate == None or details.Certificate.restricted != True:
+                  return False
+              if details.IsAllProjectsRequest:
+                  return False
+              if details.Username == "$writer_fpr":
+                  return object == "network_acl:default/bw-s4b2-scriptlet" and details.ProjectName == "default" and details.Path == "/1.0/network-acls/bw-s4b2-scriptlet" and details.Method in ["GET", "PUT"] and entitlement in ["can_view", "can_edit"]
+              parts = object.split(":")
+              if len(parts) != 2:
+                  return False
+              obj_type = parts[0]
+              scope = parts[1].split("/")[0]
+              if obj_type == "server":
+                  return entitlement in ["can_view", "can_view_resources", "can_view_metrics"]
+              if obj_type in ["storage_pool", "certificate"]:
+                  return entitlement == "can_view"
+              if obj_type == "project" and entitlement == "can_edit":
+                  return False
+              allowed_types = ["project", "image", "image_alias", "instance", "network", "network_acl", "network_address_set", "network_zone", "profile", "storage_bucket", "storage_volume"]
+              if obj_type in allowed_types and scope in details.Certificate.projects:
+                  return True
+              inherited_types = ["image", "profile", "storage_volume", "storage_bucket", "network", "network_zone"]
+              if obj_type in inherited_types and scope == "default" and entitlement == "can_view" and details.ProjectName in details.Certificate.projects:
+                  return True
+              return False
+          EOF
+          sudo incus config set authorization.scriptlet="$(cat "$RUNNER_TEMP/authorize.star")"
+          test -n "$(sudo incus config get authorization.scriptlet)"
+          sudo incus config set authorization.client.tls-restricted=scriptlet
+          test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
+          echo "S4_B2_SCRIPTLET_GLOBAL_ROUTING_SWITCH_APPLIED_DISPOSABLE_ONLY=OBSERVED"
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
+          probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+          probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+          probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+          probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+          echo "S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX=PASS"
+          probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+          probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
+          probe writer POST '/1.0/network-acls?project=default' 403
+          probe writer DELETE '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 403
+          probe writer GET '/1.0/projects/bwlegacy' 403
+          probe writer GET '/1.0/projects/bwother' 403
+          cat > "$RUNNER_TEMP/legacy-profile-put.json" <<'JSON'
+          {"description":"Legacy restricted client retains same-Project PUT via Scriptlet","config":{},"devices":{}}
+          JSON
+          profile_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/legacy-profile-put.json" \
+            -o "$RUNNER_TEMP/legacy-profile-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/profiles/s4b2legacy?project=bwlegacy')"
+          echo "S4_B2_SCRIPTLET_LEGACY_SAME_PROJECT_PROFILE_PUT_STATUS=$profile_code"
+          test "$profile_code" = 200
+          sudo incus --project bwlegacy profile show s4b2legacy | grep -Fq "Legacy restricted client retains same-Project PUT via Scriptlet"
+          echo "S4_B2_SCRIPTLET_LEGACY_SAME_PROJECT_EDIT_PARITY=PASS"
+          forbidden_profile_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/legacy-profile-put.json" \
+            -o "$RUNNER_TEMP/foreign-profile-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/profiles/s4b2other?project=bwother')"
+          echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_PROFILE_PUT_STATUS=$forbidden_profile_code"
+          test "$forbidden_profile_code" = 403
+          if sudo incus --project bwother profile show s4b2other | grep -Fq "Legacy restricted client retains same-Project PUT via Scriptlet"; then exit 70; fi
+          echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_PROJECT_EDIT_DENIED=PASS"
+          probe legacy GET '/1.0' 200
+          probe legacy PUT '/1.0/projects/bwlegacy' 403
+          probe legacy POST '/1.0/projects' 403
+          echo "S4_B2_SCRIPTLET_LEGACY_GLOBAL_AND_PROJECT_EDIT_DENY=PASS"
+          echo "S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS=PASS"
+          # Writer must make exactly one real API ACL change, with native readback.
+          cat > "$RUNNER_TEMP/exact-acl-put.json" <<'JSON'
+          {"description":"S4-B2 exact scriptlet writer authorized native PUT","ingress":[],"egress":[],"config":{}}
+          JSON
+          acl_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+            -o "$RUNNER_TEMP/exact-acl-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-scriptlet?project=default')"
+          echo "S4_B2_SCRIPTLET_WRITER_EXACT_PUT_STATUS=$acl_code"
+          test "$acl_code" = 200
+          sudo incus network acl show bw-s4b2-scriptlet | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'
+          echo "S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK=PASS"
+          forbidden_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+            --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+            --connect-timeout 4 --max-time 12 \
+            -X PUT -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+            -o "$RUNNER_TEMP/foreign-acl-put-response.json" -w '%{http_code}' \
+            'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-not-owned?project=default')"
+          echo "S4_B2_SCRIPTLET_WRITER_FOREIGN_PUT_STATUS=$forbidden_code"
+          test "$forbidden_code" = 403
+          if sudo incus network acl show bw-s4b2-not-owned | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'; then exit 68; fi
+          echo "S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED=PASS"
+
+          set +e
+          sudo incus config set authorization.scriptlet='def authorize(details, object, entitlement):' > "$RUNNER_TEMP/bad-scriptlet.txt" 2>&1
+          bad_rc=$?
+          set -e
+          echo "S4_B2_SCRIPTLET_BAD_SCRIPT_UPDATE_EXIT=$bad_rc"
+          if [[ "$bad_rc" -eq 0 ]]; then
+            echo "S4_B2_SCRIPTLET_BAD_SCRIPTLET_UPDATE_ACCEPTED_UNEXPECTED"; exit 69
+          fi
+          test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
+          probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+          echo "S4_B2_SCRIPTLET_FAILED_SCRIPT_CHANGE_EXISTING_RIGHTS_UNCHANGED=PASS"
+          sudo incus config unset authorization.client.tls-restricted
+          sudo incus config unset authorization.scriptlet
+          test -z "$(sudo incus config get authorization.client.tls-restricted)"
+          test -z "$(sudo incus config get authorization.scriptlet)"
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe other GET '/1.0/projects/bwother' 200
+          probe other GET '/1.0/projects/bwlegacy' 403
+          probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
+          probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+          probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+          echo "S4_B2_SCRIPTLET_LEGACY_POST_ROLLBACK_PROFILE_PARITY=PASS"
+          echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK=PASS"
+          sudo incus config trust list --format json > "$RUNNER_TEMP/trust-inventory.json"
+          sudo incus config get authorization.client.tls-restricted
+          sudo incus config get authorization.scriptlet
+          echo "S4_B2_SCRIPTLET_GLOBAL_AUTH_TEST_COMPLETED_EXACT_ROLLBACK=PASS"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s4b2-scriptlet-disposable-diagnostics
+          path: |
+            ${{ runner.temp }}/bad-scriptlet.txt
+          if-no-files-found: ignore
