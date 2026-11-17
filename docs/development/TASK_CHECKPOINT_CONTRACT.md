@@ -7,6 +7,17 @@
 
 **Purpose:** help any Agent/workflow client resume long-running work that used BoxWeave; this is **not** a BoxWeave database record, MCP Tool, authentication role, private model thought log or new product boundary. [Design owner](../design/AGENT_OPERATION_CONTINUITY.md). Agents in projects other than BoxWeave may implement the same checkpoint format in their own storage.
 
+## Actual support boundary and MCP call path
+
+**Task Checkpoint is a client/workflow-owned format, not an implemented BoxWeave subsystem.** MCP `tools/list` exposes generic `box_exec`, `operation_get`, `operation_list` and `operation_output_get` (subject to the installed version); it exposes **no** Git-specific Tool, `checkpoint_save/get` Tool or automatic task-resumption service. MCP does not announce that a particular guest directory is a Git repository or teach an Agent a Checkpoint workflow. The task instructions, Agent policy or external workflow must supply that convention.
+
+1. **Agent/client chooses the command:** if Git is installed inside an owned guest and the given `cwd` is a repository, the client can call `box_exec` with typed `argv` such as `["git", "rev-parse", "HEAD"]` and `["git", "status", "--porcelain"]`. These are ordinary guest commands, not special MCP Git APIs. Git run by a separate local terminal is outside this BoxWeave call path.
+2. **BoxWeave executes without interpreting Git:** it records the usual durable `box_exec` Operation/Incus evidence, guest exit status and bounded output. The client reads the original receipt with `operation_get` and, when authorized, `operation_output_get`. BoxWeave does **not** detect `git` commands to create special records, parse commits/branches/dirty status into schema fields, poll Git, or automatically write a Checkpoint.
+3. **Client/workflow interprets and saves:** the Agent or test harness reads the command results, decides what the observed Git state means and explicitly writes its own versioned Checkpoint to a trusted file/Git/workflow store. `source.commit` and `source.worktree` below are **optional client-supplied example fields**, not values that BoxWeave produces or guarantees.
+4. **Another Agent resumes explicitly:** it needs a handoff instruction/location for that external Checkpoint, then independently re-runs relevant Git checks and reads original authorized Operations/native poststate. Simply connecting to the BoxWeave MCP server does **not** discover or load the prior Agent's work context.
+
+**Implemented vs tested:** S2 supplies the generic persistent Operations and scoped work/Agent labels; S3 tested actual guest Git commands and an external harness-written evidence Checkpoint plus a supervised Agent Git loop. That does **not** constitute a built-in checkpoint writer, Git status service, automatic second-Agent takeover or two-writer conflict resolution. Full latter-case acceptance remains TC-015/016 in S5.
+
 ## Example format (illustrative, safe placeholder IDs only)
 
 ```yaml
