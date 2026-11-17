@@ -1,6 +1,6 @@
 # S4-B six-stage implementation and acceptance plan (2026-11-16)
 
-> **Status: planning baseline / discussion record; B1–B6 NOT STARTED.** This document records the owner's requested six-stage decomposition, not permission to begin implementation, to mutate a shared host, or to sign off S4-B. Use only existing [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; do not open another PR, merge or publish a release in S4-B.
+> **Status: B1 investigation completed as S4_B1_PARTIAL (2026-11-16 PT); B2–B6 NOT STARTED.** B1 original evidence and implementation contract: [B1 report](../verification/S4_B1_INVESTIGATION_2026-11-16.md) and [B2 handoff](S4_B1_B2_HANDOFF_2026-11-16.md). This document records the owner's requested six-stage decomposition, not permission to begin implementation, to mutate a shared host, or to sign off S4-B. Use only existing [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; do not open another PR, merge or publish a release in S4-B.
 >
 > **Time/source anchor:** planned against PR #153 HEAD `8205e5c177a98944b190d24bd0d244194f574c49`, independently accepted as `S4_A_PASS` on 2026-11-16 PT. Subsequent documentation commits advance the branch HEAD but **do not themselves constitute a new code/native acceptance**. Recheck actual HEAD, latest PR decision and original receipts before any work. S4-B and S4-C were unstarted at this snapshot.
 
