@@ -239,6 +239,55 @@ jobs:
           done
           echo S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY=PASS
 
+      # Capture scoped disposable-native witnesses BEFORE Project teardown.
+      # Never upload service token tables, raw cloud-init or production DB.
+      - name: Capture scoped original and kernel evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          ev=/tmp/s4b3-evidence
+          mkdir -p "$ev"
+          project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
+          original="$(cat "$RUNNER_TEMP/s4b3-original" 2>/dev/null)"
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "scenario=${{ matrix.scenario }}"
+            echo "original=$original"
+            echo "project=$project"
+            echo "incus_version=$(sudo incus version 2>&1 | head -1)"
+          } > "$ev/provenance.txt"
+          if test -n "$project"; then
+            sudo incus --project "$project" list --format json 2>&1 |
+              jq '[.[] | {name,status,uuid:.config["volatile.uuid"],autostart:.config["boot.autostart"],eth0:.devices.eth0}]' > "$ev/owned-instances.json"
+            echo "incus_owned_inventory_exit=$?" >> "$ev/provenance.txt"
+          fi
+          sudo incus network acl show bw-s4b2-native > "$ev/native-acl.yaml" 2>&1
+          echo "native_acl_exit=$?" >> "$ev/provenance.txt"
+          sudo nft -a list ruleset > "$ev/kernel-nft.txt" 2>&1
+          echo "nft_exit=$?" >> "$ev/provenance.txt"
+          if test -n "$original"; then
+            sudo cat "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" > "$ev/original-root-journal.json" 2>&1
+            echo "root_journal_exit=$?" >> "$ev/provenance.txt"
+          fi
+          if test -e /var/lib/boxweave/ledger.sqlite; then
+            sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT id,action,state,layer,box_uuid,incarnation,error_class,updated_at FROM operations WHERE action='box_peer_set' ORDER BY created_at;"               > "$ev/sqlite-original-operations.csv" 2>&1
+            echo "sqlite_operations_exit=$?" >> "$ev/provenance.txt"
+            sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT project,source_uuid,source_incarnation,target_uuid,target_incarnation,desired,status,operation_id FROM peer_grants ORDER BY source_uuid,target_uuid;"               > "$ev/sqlite-peer-grants.csv" 2>&1
+            echo "sqlite_peer_grants_exit=$?" >> "$ev/provenance.txt"
+          fi
+          (cd "$ev" && sha256sum provenance.txt owned-instances.json native-acl.yaml kernel-nft.txt             original-root-journal.json sqlite-original-operations.csv sqlite-peer-grants.csv 2>/dev/null)             > "$ev/file-sha256.txt"
+          echo "S4_B3_DISPOSABLE_NATIVE_EVIDENCE_CAPTURED sha=$GITHUB_SHA scenario=${{ matrix.scenario }}"
+
+      - name: Upload sealed disposable native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s4b3-native-${{ matrix.scenario }}
+          path: /tmp/s4b3-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Original native Project cleanup evidence
         if: always()
         shell: bash
