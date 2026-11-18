@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 )
 
@@ -209,4 +211,65 @@ func TestS4B2RootConntrackPartialVerificationPreservesUnknown(t *testing.T) {
 		})
 	}
 	t.Log("S4_B2_ROOT_CONNTRACK_PARTIAL_SCOPE_OR_DIGEST_REFUSED=PASS")
+}
+
+// TestS4B2RootConntrackActualSIGKILLAfterPersistedIntent uses a REAL
+// abrupt OS process kill (not a panic or timeout) after the intent has
+// been fsynced. This tests the durable no-replay fence in a new process,
+// while deliberately avoiding touching any host-native Incus/conntrack.
+func TestS4B2RootConntrackActualSIGKILLAfterPersistedIntent(t *testing.T) {
+	path := os.Getenv("BOXWEAVE_B2_KILL_INTENT_PATH")
+	marker := os.Getenv("BOXWEAVE_B2_KILL_MARKER")
+	if path != "" || marker != "" {
+		if path == "" || marker == "" {
+			t.Fatal("incomplete crash-subprocess fixture")
+		}
+		plan := s4b2JournalPlan()
+		_, _ = nativePeerConntrackDispatchOnce(t.Context(), path, plan, plan.PlanSHA256, true,
+			func(context.Context) (NativePeerConntrackReport, error) {
+				j, err := nativePeerConntrackLoadJournal(path)
+				if err != nil || j.Status != "DISPATCH_UNKNOWN" {
+					t.Fatal("native effect preceded durable UNKNOWN", err)
+				}
+				if err := os.WriteFile(marker, []byte("ROOT_INTENT_FSYNCED"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				panic("SIGKILL unexpectedly returned")
+			})
+		t.Fatal("native root crash subprocess did not die")
+	}
+	dir := t.TempDir()
+	path = filepath.Join(dir, "crash-original.json")
+	marker = filepath.Join(dir, "durable-witness")
+	command := exec.Command(os.Args[0], "-test.run=^TestS4B2RootConntrackActualSIGKILLAfterPersistedIntent$")
+	command.Env = append(os.Environ(), "BOXWEAVE_B2_KILL_INTENT_PATH="+path, "BOXWEAVE_B2_KILL_MARKER="+marker)
+	err := command.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("root process was not killed: %v", err)
+	}
+	status, ok := exitErr.Sys().(syscall.WaitStatus)
+	if !ok || !status.Signaled() || status.Signal() != syscall.SIGKILL {
+		t.Fatalf("root process did not die from the expected real SIGKILL: %v", status)
+	}
+	b, err := os.ReadFile(marker)
+	if err != nil || string(b) != "ROOT_INTENT_FSYNCED" {
+		t.Fatal("root intent was not persisted before SIGKILL", err)
+	}
+	journal, err := nativePeerConntrackLoadJournal(path)
+	if err != nil || journal.Status != "DISPATCH_UNKNOWN" {
+		t.Fatal("root journal after actual SIGKILL was not UNKNOWN", journal, err)
+	}
+	count := 0
+	plan := s4b2JournalPlan()
+	_, err = nativePeerConntrackDispatchOnce(t.Context(), path, plan, plan.PlanSHA256, true,
+		func(context.Context) (NativePeerConntrackReport, error) {
+			count++
+			return NativePeerConntrackReport{}, nil
+		})
+	if err == nil || count != 0 {
+		t.Fatal("crashed original was redispatched", err, count)
+	}
+	t.Log("S4_B2_ROOT_ACTUAL_SIGKILL_DURABLE_UNKNOWN_NO_REPLAY=PASS")
 }
