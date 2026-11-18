@@ -190,6 +190,20 @@ jobs:
           probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
           legacy_files_exec_probe AFTER_SCRIPTLET
           echo "S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX=PASS"
+          sudo systemctl restart incus.service
+          for _ in $(seq 1 30); do
+            if sudo incus version >/dev/null 2>&1 && \
+              test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet; then break; fi
+            sleep 1
+          done
+          test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
+          probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+          probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+          probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+          probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+          probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
+          legacy_files_exec_probe POST_DAEMON_RESTART
+          echo "S4_B2_SCRIPTLET_INSTALLED_NATIVE_DAEMON_RESTART_OLD_CLIENT_RIGHTS_PARITY=PASS"
           probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
           probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
           probe writer POST '/1.0/network-acls?project=default' 403
@@ -264,6 +278,13 @@ jobs:
           test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
           probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
           echo "S4_B2_SCRIPTLET_FAILED_SCRIPT_CHANGE_EXISTING_RIGHTS_UNCHANGED=PASS"
+          sudo systemctl restart incus.service
+          sudo incus version
+          test "$(sudo incus config get authorization.client.tls-restricted)" = scriptlet
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+          echo "S4_B2_SCRIPTLET_FAILED_NATIVE_UPDATE_RESTART_PRESERVES_EXACT_RIGHTS=PASS"
           sudo incus config unset authorization.client.tls-restricted
           sudo incus config unset authorization.scriptlet
           test -z "$(sudo incus config get authorization.client.tls-restricted)"
@@ -278,6 +299,13 @@ jobs:
           legacy_files_exec_probe POST_ROLLBACK
           echo "S4_B2_SCRIPTLET_LEGACY_POST_ROLLBACK_PROFILE_PARITY=PASS"
           echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK=PASS"
+          sudo systemctl restart incus.service
+          sudo incus version
+          test -z "$(sudo incus config get authorization.client.tls-restricted)"
+          probe legacy GET '/1.0/projects/bwlegacy' 200
+          probe legacy GET '/1.0/projects/bwother' 403
+          legacy_files_exec_probe POST_ROLLBACK_RESTART
+          echo "S4_B2_SCRIPTLET_EXACT_ROLLBACK_SURVIVES_NATIVE_DAEMON_RESTART=PASS"
           sudo incus config trust list --format json > "$RUNNER_TEMP/trust-inventory.json"
           sudo incus config get authorization.client.tls-restricted
           sudo incus config get authorization.scriptlet
