@@ -125,6 +125,32 @@ jobs:
         run: |
           set -euo pipefail
           project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          # A root NIC Start ACK/Incus Running state is not a guest IPv6
+          # network-ready signal. Preserve true packet acceptance by waiting
+          # for the source and destination guest dual-stack addresses/routes.
+          # If the timeout expires, fail with original guest route evidence.
+          network_ready=0
+          for _ in $(seq 1 80); do
+            if sudo incus --project "$project" exec s4b2a -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11' && ip -6 route get fd83:248::12 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2b -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12' && ip -6 route get fd83:248::11 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2c -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13'"; then
+              network_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if test "$network_ready" != 1; then
+            echo S4_B3_GUEST_POST_ROOT_RESUME_DUALSTACK_NOT_READY
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" exec "$name" -- ip -6 addr show eth0 || :
+              sudo incus --project "$project" exec "$name" -- ip -6 route show || :
+            done
+            exit 89
+          fi
+          echo S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY=PASS
           CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
           for name in s4b2a s4b2b s4b2c; do
             sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
