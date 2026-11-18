@@ -361,7 +361,7 @@ jobs:
             sudo cat "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" > "$ev/original-root-journal.json" 2>&1
             echo "root_journal_exit=$?" >> "$ev/provenance.txt"
           fi
-          if test -e /var/lib/boxweave/ledger.sqlite; then
+          if sudo test -f /var/lib/boxweave/ledger.sqlite; then
             sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT id,action,state,layer,box_uuid,incarnation,error_class,updated_at FROM operations WHERE action='box_peer_set' ORDER BY created_at;"               > "$ev/sqlite-original-operations.csv" 2>&1
             echo "sqlite_operations_exit=$?" >> "$ev/provenance.txt"
             sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT project,source_uuid,source_incarnation,target_uuid,target_incarnation,desired,status,operation_id FROM peer_grants ORDER BY source_uuid,target_uuid;"               > "$ev/sqlite-peer-grants.csv" 2>&1
