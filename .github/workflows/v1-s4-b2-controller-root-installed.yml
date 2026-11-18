@@ -104,6 +104,53 @@ jobs:
           echo "S4_B2_INSTALLED_SOURCE_SHA=$GITHUB_SHA"
           echo "S4_B2_INSTALLED_EXACT_ORIGINAL=$original"
           echo "S4_B2_INSTALLED_SETUP_RESTRICTED_PROJECT_AND_PINNED_ROOT_GRANT=PASS"
+          # Foreign Project uses a DIFFERENT restricted managed bridge.
+          # Its four established TCP/UDP IPv4/IPv6 sessions MUST survive.
+          sudo incus network create bwforeign ipv4.address=10.248.84.1/24 ipv4.nat=true ipv6.address=fd83:249::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          sudo incus project create bwforeign             -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false             -c restricted.devices.nic=managed -c restricted.networks.access=bwforeign
+          sudo incus --project bwforeign profile device add default root disk path=/ pool=default
+          sudo incus --project bwforeign profile device add default eth0 nic name=eth0 network=bwforeign
+          for spec in 'foreign-a 10.248.84.11 fd83:249::11' 'foreign-b 10.248.84.12 fd83:249::12'; do
+            read -r name ipv4 ipv6 <<< "$spec"
+            sudo incus --project bwforeign init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project bwforeign config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+            sudo incus --project bwforeign start "$name"
+          done
+          foreign_ready=0
+          for _ in $(seq 1 50); do
+            if test "$(sudo incus --project bwforeign exec foreign-a -- sh -c 'ip -4 -o addr show eth0 | grep -c 10.248.84.11' 2>/dev/null || :)" = 1 &&
+              test "$(sudo incus --project bwforeign exec foreign-b -- sh -c 'ip -4 -o addr show eth0 | grep -c 10.248.84.12' 2>/dev/null || :)" = 1; then foreign_ready=1; break; fi
+            sleep 2
+          done
+          test "$foreign_ready" = 1
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/s4b2-foreign-flow" ./scripts/s4_b2_native_flow_probe.go
+          for name in foreign-a foreign-b; do
+            sudo incus --project bwforeign file push "$RUNNER_TEMP/s4b2-foreign-flow" "$name/root/s4b2-flow"
+            sudo incus --project bwforeign exec "$name" -- chmod 0755 /root/s4b2-flow
+          done
+          sudo incus --project bwforeign exec foreign-b -- sh -c             'nohup /root/s4b2-flow server >/tmp/foreign-server.log 2>&1 </dev/null &'
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo incus --project bwforeign exec foreign-b -- test -f /tmp/s4b2-flow-server-ready; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          for item in 'tcp4 tcp 10.248.84.12' 'tcp6 tcp fd83:249::12' 'udp4 udp 10.248.84.12' 'udp6 udp fd83:249::12'; do
+            read -r label protocol dest <<< "$item"
+            sudo incus --project bwforeign exec foreign-a -- sh -c               "nohup /root/s4b2-flow client $protocol $dest $label >/tmp/foreign-$label.log 2>&1 </dev/null &"
+          done
+          for label in tcp4 tcp6 udp4 udp6; do
+            ready=0
+            for _ in $(seq 1 40); do
+              count="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+              if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 4 )); then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            echo "$count" > "$RUNNER_TEMP/s4b2-foreign-$label-baseline"
+          done
+          echo S4_B2_INSTALLED_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT=PASS
+
           echo "$original" > "$RUNNER_TEMP/s4b2-root-original-id"
           echo "$project" > "$RUNNER_TEMP/s4b2-root-project"
       - name: Execute actual nonroot controller to operator-approved root socket and verify original
@@ -141,6 +188,15 @@ jobs:
           phase=STAGE
           sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+          phase=FOREIGN_HOST_ROUTE_OVERLAP
+          sudo ip -4 route add table 100 10.248.83.11/32 dev lo
+          set +e
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" >/dev/null 2>&1
+          overlap_result=$?
+          set -e
+          sudo ip -4 route del table 100 10.248.83.11/32 dev lo
+          test "$overlap_result" -ne 0
+          echo S4_B2_INSTALLED_ROOT_UNMANAGED_OVERLAPPING_KERNEL_ROUTE_REFUSED=PASS
           phase=ROOT_PLAN
           sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native \
             -operation-id "$original" > "$RUNNER_TEMP/s4b2-root-plan.json"
@@ -210,6 +266,16 @@ jobs:
             echo S4_B2_INSTALLED_REVOKE_IPV6_REACHABLE; exit 94
           fi
           echo "S4_B2_INSTALLED_NONROOT_ROOT_SOCKET_OPERATOR_SHA_ORIGINAL_NFT_SQLITE_REVOKE=PASS"
+          phase=FOREIGN_FLOW_NONINTERFERENCE
+          for label in tcp4 tcp6 udp4 udp6; do
+            prior="$(cat "$RUNNER_TEMP/s4b2-foreign-$label-baseline")"
+            current="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count")"
+            test "$current" -gt "$((prior+3))"
+            if sudo incus --project bwforeign exec foreign-a -- test -e "/tmp/s4b2-flow-$label-result"; then
+              echo "S4_B2_FOREIGN_$label_INTERRUPTED"; exit 88
+            fi
+          done
+          echo S4_B2_INSTALLED_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_DUALSTACK_SURVIVED_REVOKE=PASS
           phase=ROOT_BINARY_UPGRADE
           root_journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           before_journal="$(sudo sha256sum "$root_journal" | cut -d' ' -f1)"
@@ -247,6 +313,10 @@ jobs:
             for name in s4b2a s4b2b s4b2c; do
               sudo incus --project "$project" delete "$name" --force 2>/dev/null || :
             done
+            sudo incus --project bwforeign delete foreign-a --force 2>/dev/null || :
+            sudo incus --project bwforeign delete foreign-b --force 2>/dev/null || :
+            sudo incus project delete bwforeign 2>/dev/null || :
+            sudo incus network delete bwforeign 2>/dev/null || :
             sudo incus project delete "$project" 2>/dev/null || :
             sudo incus network acl delete bw-s4b2-native 2>/dev/null || :
             sudo incus network delete bwbr0 2>/dev/null || :
