@@ -147,3 +147,80 @@ func TestS4B2RootSocketOperatorPinsOneOriginalAndPlan(t *testing.T) {
 	}
 	t.Log("S4_B2_ROOT_SOCKET_OPERATOR_EXACT_OPERATION_AND_DIGEST_ONLY=PASS")
 }
+
+// A killed root helper can strand its Unix socket. Restart is safe only
+// when the exact socket is dead, has unchanged ownership/mode and was never
+// replaced; the immutable UNKNOWN journal remains untouched.
+func TestS4B2RootSocketCrashRestartOnlyExactStaleInode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "helper.sock")
+	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err != nil {
+		t.Fatalf("fresh approved helper refused: %v", err)
+	}
+	listen := func() *net.UnixListener {
+		t.Helper()
+		ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ln.SetUnlinkOnClose(false)
+		if err := os.Chmod(path, 0660); err != nil {
+			t.Fatal(err)
+		}
+		return ln
+	}
+	ln := listen()
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err == nil {
+		t.Fatal("live listener was displaced")
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err != nil {
+		t.Fatalf("stale listener not recoverable: %v", err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("stale inode not removed: %v", err)
+	}
+	ln = listen()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid+1); err == nil {
+		t.Fatal("foreign group socket removed")
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err == nil {
+		t.Fatal("wrong-mode socket removed")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("foreign"), 0660); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err == nil {
+		t.Fatal("foreign regular file removed")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("foreign", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativePeerRootReclaimStaleSocket(path, uid, gid); err == nil {
+		t.Fatal("symlink was replaced")
+	}
+	if dest, err := os.Readlink(path); err != nil || dest != "foreign" {
+		t.Fatalf("foreign symlink altered: %q %v", dest, err)
+	}
+	t.Log("S4_B2_ROOT_SOCKET_CRASH_RESTART_STALE_ONLY_LIVE_FOREIGN_DENIED=PASS")
+}

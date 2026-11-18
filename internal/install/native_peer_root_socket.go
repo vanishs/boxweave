@@ -9,7 +9,9 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/vanishs/boxweave/internal/state"
@@ -140,6 +142,45 @@ func nativePeerRootServeListener(ctx context.Context, ln *net.UnixListener,
 	}
 }
 
+// nativePeerRootReclaimStaleSocket handles only the exact old socket inode
+// stranded by an interrupted helper. This does not clear root journals or
+// authorize an operation that was previously dispatched.
+func nativePeerRootReclaimStaleSocket(path string, uid, gid uint32) error {
+	previous, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	stat, ok := previous.Sys().(*syscall.Stat_t)
+	if !ok || previous.Mode()&os.ModeSocket == 0 ||
+		previous.Mode().Perm() != 0660 || stat.Uid != uid || stat.Gid != gid {
+		return errors.New("existing root peer socket type or ownership requires operator inspection")
+	}
+	conn, err := net.DialTimeout("unix", path, 500*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return errors.New("root peer listener already active")
+	}
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Errorf("root peer socket state uncertain; operator inspection required: %w", err)
+	}
+	current, err := os.Lstat(path)
+	if err != nil || !os.SameFile(previous, current) {
+		return errors.New("root peer socket changed during stale-listener verification")
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}
+
 // NativePeerRootServe must be explicitly started as host root by a local
 // operator for a fixed Project/bridge/ACL. Root checks the restricted
 // service UID on EACH connection with SO_PEERCRED, and independently reads
@@ -171,11 +212,9 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 		return err
 	}
 	defer db.Close()
-	// The root daemon never replaces an existing socket path. An old
-	// original, even if stale, requires an operator to inspect it first.
-	if _, err := os.Lstat(nativePeerRootSocketPath); err == nil {
-		return errors.New("existing root-peer socket requires operator inspection")
-	} else if !errors.Is(err, os.ErrNotExist) {
+	// Recover only a confirmed dead exact root-owned endpoint after crash;
+	// no root intent or previously dispatched effect may be replayed.
+	if err := nativePeerRootReclaimStaleSocket(nativePeerRootSocketPath, 0, uint32(gid)); err != nil {
 		return err
 	}
 	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: nativePeerRootSocketPath, Net: "unix"})
