@@ -113,6 +113,9 @@ func nativePeerRootGrantReview(ctx context.Context, s *state.Store,
 	if a.UUID == "" || b.UUID == "" {
 		return zero, errors.New("native grant pair not in owned NIC inventory")
 	}
+	if !nativePeerGrantEndpointsRunning(target, running, a.UUID, b.UUID) {
+		return zero, errors.New("grant source and target must both be running for actual per-NIC verification")
+	}
 	mid, err := os.ReadFile("/etc/machine-id")
 	if err != nil {
 		return zero, err
@@ -159,4 +162,21 @@ func NativePeerRootGrantReviewOperation(ctx context.Context, s *state.Store,
 	project, bridge, acl, original string) (NativePeerConntrackPlan, error) {
 	p, err := nativePeerRootGrantReview(ctx, s, project, bridge, acl, original)
 	return p.Plan, err
+}
+
+// Require both live endpoints before a grant can be acknowledged. A prior
+// pair of unrelated running siblings cannot substitute for native evidence.
+func nativePeerGrantEndpointsRunning(target NativePeerBridgeAuditTarget, running []string, srcUUID, dstUUID string) bool {
+	var src, dst bool
+	for _, b := range target.Boxes {
+		for _, name := range running {
+			if b.Name == name && b.UUID == srcUUID {
+				src = true
+			}
+			if b.Name == name && b.UUID == dstUUID {
+				dst = true
+			}
+		}
+	}
+	return src && dst
 }

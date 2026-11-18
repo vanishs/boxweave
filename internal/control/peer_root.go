@@ -79,31 +79,37 @@ func (s *Service) ReconcileCompletedUnknownRootPeerRevocation(original, sha stri
 // original into DISPATCHING. It does NOT execute an ACL PUT or assume that a
 // staged SQLite row authorizes the host kernel. Root independently reviews.
 func (s *Service) PrepareRootPeerGrant(original string) error {
-	if s==nil || s.Store==nil {return errors.New("missing durable peer controller")}
-	ctx:=context.Background()
-	if err:=s.Store.StagePeerGrant(ctx,original);err!=nil{return err}
-	return s.Store.Claim(ctx,original)
+	if s == nil || s.Store == nil {
+		return errors.New("missing durable peer controller")
+	}
+	ctx := context.Background()
+	if err := s.Store.StagePeerGrant(ctx, original); err != nil {
+		return err
+	}
+	return s.Store.Claim(ctx, original)
 }
 
 // ExecutePreparedRootPeerGrant passes ONLY the immutable original and an
 // operator-approved SHA through the existing restricted PRS socket. Neither
 // nonroot controller nor MCP supplies ACL, IP, host commands or root paths.
 func (s *Service) ExecutePreparedRootPeerGrant(original string) error {
-	if s==nil || s.Store==nil {return errors.New("missing durable peer controller")}
-	return (state.Worker{Store:s.Store}).ExecutePreparedRootPeerGrant(original,
-		func(ctx context.Context,id,sha string)(state.RootPeerResult,error){
-			report,err:=install.NativePeerRootCall(ctx,id,sha)
-			out:=state.RootPeerResult{Status:report.Status,PlanSHA256:report.PlanSHA256}
-			if report.Receipt!=nil {
-				out.PlanSHA256=report.Receipt.PlanSHA256
-				out.ProbedScopes=report.Receipt.ProbedScopes
-				out.DeletedScopes=report.Receipt.DeletedScopes
-				out.MutationComplete=report.Receipt.MutationComplete
-				out.ReadyForPeer=report.Receipt.ReadyForPeer
-				out.KernelVerified=report.Receipt.KernelVerified
-				out.VerifiedNICs=report.Receipt.VerifiedNICs
-				out.PostNativeDigestSHA256=report.Receipt.PostNativeDigestSHA256
+	if s == nil || s.Store == nil {
+		return errors.New("missing durable peer controller")
+	}
+	return (state.Worker{Store: s.Store}).ExecutePreparedRootPeerGrant(original,
+		func(ctx context.Context, id, sha string) (state.RootPeerResult, error) {
+			report, err := install.NativePeerRootCall(ctx, id, sha)
+			out := state.RootPeerResult{Status: report.Status, PlanSHA256: report.PlanSHA256}
+			if report.Receipt != nil {
+				out.PlanSHA256 = report.Receipt.PlanSHA256
+				out.ProbedScopes = report.Receipt.ProbedScopes
+				out.DeletedScopes = report.Receipt.DeletedScopes
+				out.MutationComplete = report.Receipt.MutationComplete
+				out.ReadyForPeer = report.Receipt.ReadyForPeer
+				out.KernelVerified = report.Receipt.KernelVerified
+				out.VerifiedNICs = report.Receipt.VerifiedNICs
+				out.PostNativeDigestSHA256 = report.Receipt.PostNativeDigestSHA256
 			}
-			return out,err
+			return out, err
 		})
 }
