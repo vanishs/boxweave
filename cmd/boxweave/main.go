@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"golang.org/x/term"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/vanishs/boxweave/internal/control"
@@ -24,7 +26,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -64,6 +66,9 @@ func run() error {
 	prepareACL := f.String("acl", "", "new exclusively owned bw-prefixed Incus network ACL")
 	peerSource := f.String("peer-source-uuid", "", "exact original owned source UUID, only for root-local read-only peer review")
 	peerTarget := f.String("peer-target-uuid", "", "exact original owned target UUID, only for root-local read-only peer review")
+	peerOriginal := f.String("operation-id", "", "root peer handoff: immutable original claimed operation ID")
+	peerSHA := f.String("peer-plan-sha256", "", "root peer handoff: exact reviewed root-only plan digest")
+
 	prepareSHA := f.String("native-prepare-sha256", "", "operator-reviewed exact native prepare plan/journal digest")
 	scriptletWriter := f.String("scriptlet-writer-fingerprint", "", "exact existing restricted TLS certificate fingerprint for a single owned native ACL")
 	scriptletSHA := f.String("scriptlet-plan-sha256", "", "operator-reviewed exact global Scriptlet routing plan digest")
@@ -88,7 +93,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -159,6 +164,27 @@ func run() error {
 			report, err = install.NativePrerequisiteVerify(ctx, *project, *prereqSHA, *approveLocal)
 		}
 		if e := json.NewEncoder(os.Stdout).Encode(report); e != nil {
+			return e
+		}
+		return err
+	}
+	if command == "native-peer-root-serve" {
+		if os.Geteuid() != 0 || !*approveLocal {
+			return errors.New("root peer helper requires explicit local host-root approval")
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return install.NativePeerRootServe(ctx, install.NativePeerRootScope{
+			DBPath: *db, Project: *project, Bridge: *prepareNetwork,
+			ACL: *prepareACL, Approved: *approveLocal,
+			OriginalID: *peerOriginal, ApprovedPlanSHA: *peerSHA,
+		})
+	}
+	if command == "native-peer-root-request" {
+		ctx, cancel := context.WithTimeout(context.Background(), 95*time.Second)
+		defer cancel()
+		result, err := install.NativePeerRootCall(ctx, *peerOriginal, *peerSHA)
+		if e := json.NewEncoder(os.Stdout).Encode(result); e != nil {
 			return e
 		}
 		return err

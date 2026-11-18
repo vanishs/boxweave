@@ -165,5 +165,8 @@ func NativePeerConntrackReview(ctx context.Context, s *state.Store, project, bri
 	if _, err := nativePeerGlobalNetworkScopeSnapshot(ctx, root, target); err != nil {
 		return zero, fmt.Errorf("root conntrack review refused ambiguous host-wide native networks: %w", err)
 	}
+	if _, err := nativePeerHostRoutes(ctx, target); err != nil {
+		return zero, fmt.Errorf("root conntrack review refused foreign host kernel routing: %w", err)
+	}
 	return nativePeerConntrackReviewWithClient(ctx, s, root, hex.EncodeToString(hostSum[:]), project, bridge, acl, sourceUUID, targetUUID)
 }

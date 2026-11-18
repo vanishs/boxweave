@@ -93,10 +93,26 @@ func NativePeerConntrackPurgeFromStore(ctx context.Context, s *state.Store,
 	if err != nil || project != "user-"+u.Uid {
 		return zero, errors.New("conntrack scope is not the confined service Project")
 	}
+	target, _, err := nativePeerConntrackTargetFromStore(ctx, s, project, bridge, acl, srcUUID, dstUUID)
+	if err != nil {
+		return zero, err
+	}
+	hostRoutes, err := nativePeerHostRoutes(ctx, target)
+	if err != nil {
+		return zero, fmt.Errorf("host kernel routing scope not exclusive: %w", err)
+	}
 	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
 	if err != nil {
 		return zero, err
 	}
-	return nativePeerConntrackPurgeFromStoreWithClient(ctx, s, root, nativePeerConntrackOS,
+	report, err := nativePeerConntrackPurgeFromStoreWithClient(ctx, s, root, nativePeerConntrackOS,
 		project, bridge, acl, srcUUID, dstUUID)
+	if err != nil {
+		return report, err
+	}
+	after, err := nativePeerHostRoutes(ctx, target)
+	if err != nil || after != hostRoutes {
+		return report, errors.New("host kernel routing changed during bounded conntrack purge")
+	}
+	return report, nil
 }
