@@ -557,6 +557,27 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
 	}
+	// An installed root Peer revoke temporarily stops ALL owned NICs in a
+	// Project, including siblings not present in the original two-Box claim.
+	// The SQLite admission writer provides a Project-wide exclusive barrier.
+	// A root UNKNOWN may NEVER be bypassed by generic recovery RELEASED.
+	var projectBusy int
+	if a.Action == "box_peer_set" {
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.layer=? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+			AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+			  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, a.Layer).Scan(&projectBusy)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.layer=? AND o.action='box_peer_set'
+			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer).Scan(&projectBusy)
+	}
+	if err != nil {
+		return Receipt{}, err
+	}
+	if projectBusy != 0 {
+		return Receipt{}, ErrResourceLocked
+	}
 	// Reserve the native Box name across any potentially in-flight effect,
 	// including a create that cannot know the native UUID until postread.
 	// This is transactional with admission, not a process-local mutex.

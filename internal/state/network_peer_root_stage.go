@@ -53,6 +53,17 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 	if err != nil || !active {
 		return ErrRevoked
 	}
+	// Independently enforce the all-NIC Project barrier at staging, including
+	// old databases containing an in-flight sibling admitted before this fix.
+	var siblingBusy int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+		WHERE o.layer=? AND o.id<>?
+		AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+		AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+		  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
+		intent.Project, id).Scan(&siblingBusy); err != nil || siblingBusy != 0 {
+		return ErrResourceLocked
+	}
 	// All three exact claims must have been acquired atomically at Admit.
 	rows, err := tx.QueryContext(ctx,
 		"SELECT resource_key FROM operation_resource_claims WHERE operation_id=? ORDER BY resource_key", id)

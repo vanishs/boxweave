@@ -79,6 +79,17 @@ func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, br
 		token == "" || layer != project {
 		return zero, ErrResourceLocked
 	}
+	// Host root repeats the independent barrier proof before any native effect.
+	// An unclaimed sibling may be operating in a pre-upgrade database: refuse.
+	var concurrent int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+		WHERE o.layer=? AND o.id<>?
+		AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+		AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+		  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
+		project, id).Scan(&concurrent); err != nil || concurrent != 0 {
+		return zero, ErrResourceLocked
+	}
 	var intent RootPeerRevokeSafeIntent
 	if err := json.Unmarshal(raw, &intent); err != nil {
 		return zero, ErrInvalid
