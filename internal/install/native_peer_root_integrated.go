@@ -228,12 +228,15 @@ func nativePeerRootStartVerified(ctx context.Context, root incus.InstanceServer,
 		if success {
 			return
 		}
-		// Do not restore autostart or release any UNKNOWN claim. Best-effort
-		// stop of resumed members is containment, not recovery or a PASS.
+		// Native start may take effect even when its SDK response is missing.
+		// Contain ALL previously authenticated bridge consumers, including
+		// the member whose start failed before it could enter `resumed`.
+		// This is best effort only: SQLite/root journals remain UNKNOWN and
+		// no lease, autostart setting or claim is released on uncertainty.
 		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		for _, name := range resumed {
-			op, e := owned.UpdateInstanceState(name, api.InstanceStatePut{Action: "stop", Timeout: 20}, "")
+		for _, box := range target.Boxes {
+			op, e := owned.UpdateInstanceState(box.Name, api.InstanceStatePut{Action: "stop", Timeout: 20}, "")
 			if e == nil && op != nil {
 				_ = op.WaitContext(stopCtx)
 			}

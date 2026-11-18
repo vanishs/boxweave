@@ -205,3 +205,56 @@ func TestS4B2NativeInstalledNonrootSeedOriginal(t *testing.T) {
 	fmt.Printf("S4_B2_INSTALLED_ORIGINAL_ID=%s\n", op.ID)
 	t.Log("S4_B2_INSTALLED_NONROOT_SQLITE_ORIGINAL_AND_GRANT=PASS")
 }
+
+// This root-only disposable regression forces an ambiguous SDK Start on a
+// nonexistent member AFTER a successful root revocation. Even if a native
+// Start succeeds before losing its SDK ACK, containment must attempt to stop
+// every verified sibling, not only members with acknowledged starts.
+func TestS4B2NativeInstalledAmbiguousResumeStopsAllSiblings(t *testing.T) {
+	s4b2InstalledOneUse(t, true)
+	raw, err := os.ReadFile(os.Getenv("BOXWEAVE_S4B2_INSTALLED_SCOPE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scope s4b2InstalledScope
+	if err := json.Unmarshal(raw, &scope); err != nil || len(scope.Boxes) != 3 {
+		t.Fatalf("missing exact native sibling inventory: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, box := range scope.Boxes {
+		inst, _, err := root.UseProject(scope.Project).GetInstance(box.Name)
+		if err != nil || inst.Config["volatile.uuid"] != box.UUID ||
+			(inst.Status != "Running" && inst.Status != "Ready") || inst.Config["boot.autostart"] != "false" {
+			t.Fatalf("unverified pre-test native member %s: %v", box.Name, err)
+		}
+	}
+	a, b := scope.Boxes[0], scope.Boxes[1]
+	a4, e1 := netip.ParseAddr(a.IPv4)
+	b4, e2 := netip.ParseAddr(b.IPv4)
+	a6, e3 := netip.ParseAddr(a.IPv6)
+	b6, e4 := netip.ParseAddr(b.IPv6)
+	if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
+		t.Fatal("invalid protected peer identity")
+	}
+	pair := nativePeerBinding{SourceUUID: a.UUID, TargetUUID: b.UUID,
+		SourceIPv4: a4, TargetIPv4: b4, SourceIPv6: a6, TargetIPv6: b6}
+	target := NativePeerBridgeAuditTarget{Project: scope.Project, Bridge: scope.Bridge,
+		ACL: scope.ACL, Boxes: scope.Boxes}
+	if _, err := nativePeerRootStartVerified(ctx, root, scope.Project, target,
+		[]string{"s4b2-not-an-owned-member"}, pair); err == nil {
+		t.Fatal("ambiguous unowned resume incorrectly succeeded")
+	}
+	for _, box := range scope.Boxes {
+		inst, _, err := root.UseProject(scope.Project).GetInstance(box.Name)
+		if err != nil || inst.Config["volatile.uuid"] != box.UUID ||
+			inst.Status != "Stopped" || inst.Config["boot.autostart"] != "false" {
+			t.Fatalf("ambiguous native Start left sibling %s running/rearmed: state=%v err=%v", box.Name, inst, err)
+		}
+	}
+	t.Log("S4_B2_INSTALLED_ROOT_AMBIGUOUS_RESUME_ALL_SIBLINGS_STOPPED_NO_REARM=PASS")
+}

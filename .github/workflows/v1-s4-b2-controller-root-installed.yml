@@ -363,6 +363,15 @@ jobs:
           sudo systemctl is-active --quiet boxweave-native-peer-root.service
           test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
           echo S4_B2_ROOT_SYSTEMD_BINARY_ROLLBACK_PRESERVES_ORIGINAL_JOURNAL=PASS
+          # Independent disposable fault: no acknowledged Start may leave
+          # any previously verified sibling running on a partial/ambiguous ACK.
+          phase=AMBIGUOUS_START_ALL_SIBLINGS
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+            BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledAmbiguousResumeStopsAllSiblings$'
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          echo S4_B2_INSTALLED_ROOT_AMBIGUOUS_START_NO_JOURNAL_REPLAY=PASS
 
       - name: Independent one-use root/Project/ACL cleanup
         if: always()
