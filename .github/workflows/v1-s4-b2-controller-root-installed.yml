@@ -111,17 +111,39 @@ jobs:
           db=/var/lib/boxweave/ledger.sqlite
           bin=/usr/local/bin/bw-s4b2-installed
           rootpid=''
+          phase=INIT
           cleanup_helper() {
             if test -n "$rootpid"; then sudo kill "$rootpid" 2>/dev/null || :; fi
           }
+          failure_diagnostics() {
+            local rc=$?
+            echo "S4_B2_INSTALLED_FAILURE_PHASE=$phase EXIT=$rc"
+            echo "S4_B2_INSTALLED_SQLITE_OPERATION_STATE=$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'" 2>/dev/null || echo QUERY_FAILED)"
+            echo "S4_B2_INSTALLED_SQLITE_PEER_STATUS=$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'" 2>/dev/null || echo QUERY_FAILED)"
+            local journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            if sudo test -f "$journal"; then
+              sudo jq -cr '{status:.status,probed:.report.probed_scopes,deleted:.report.deleted_scopes,kernel:.report.kernel_verified,verified_nics:.report.verified_nics}' "$journal" 2>/dev/null || :
+            else
+              echo "S4_B2_INSTALLED_ROOT_JOURNAL=ABSENT"
+            fi
+            if test -f "$RUNNER_TEMP/s4b2-root-helper.log"; then
+              echo S4_B2_INSTALLED_ROOT_HELPER_LOG_BEGIN
+              sed -n '1,20p' "$RUNNER_TEMP/s4b2-root-helper.log" | cut -c 1-240
+              echo S4_B2_INSTALLED_ROOT_HELPER_LOG_END
+            fi
+          }
+          trap failure_diagnostics ERR
           trap cleanup_helper EXIT
+          phase=STAGE
           sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+          phase=ROOT_PLAN
           sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native \
             -operation-id "$original" > "$RUNNER_TEMP/s4b2-root-plan.json"
           sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b2-root-plan.json")"
           test "${#sha}" -eq 64
           echo "S4_B2_INSTALLED_OPERATOR_PREMUTATION_SHA=$sha"
+          phase=ROOT_SERVE
           sudo "$bin" native-peer-root-serve -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native \
             -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local \
             > "$RUNNER_TEMP/s4b2-root-helper.log" 2>&1 &
@@ -136,9 +158,14 @@ jobs:
             sed -n '1,20p' "$RUNNER_TEMP/s4b2-root-helper.log"
             exit 91
           fi
+          phase=ROOT_EXECUTE
           sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+          echo S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS
+          phase=SQLITE_FINAL_OPERATION
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+          phase=SQLITE_GRANT
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'")" = REVOKED
+          phase=ROOT_JOURNAL
           test -f "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
@@ -146,7 +173,9 @@ jobs:
           fi
           sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
             BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root BOXWEAVE_S4B2_NATIVE_ROOT_PROJECT="$project" \
+          phase=KERNEL_NFT
             /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeRootKernelPerNICDropReadback$'
+          phase=RESUMED_GUEST_STATES
           for name in s4b2a s4b2b; do
             test "$(sudo incus --project "$project" list "$name" -c s --format csv)" = RUNNING
             test "$(sudo incus --project "$project" config get "$name" boot.autostart)" = false
