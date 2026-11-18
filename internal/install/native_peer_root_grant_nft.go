@@ -19,7 +19,7 @@ import (
 func nativePeerRootVerifyGrantNFT(rules, project string, boxes []native.PeerACLBox,
 	resumed []string, grants []state.PeerGrantBinding) error {
 	if !safePrereqName.MatchString(project) || len(boxes) < 2 || len(resumed) == 0 ||
-		len(grants) == 0 || len(rules) == 0 {
+		len(rules) == 0 {
 		return errors.New("incomplete native grant NIC/ACL kernel evidence")
 	}
 	owners := map[string]native.PeerACLBox{}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -32,6 +33,8 @@ type nativePeerIntegratedPreflight struct {
 	Binding                      nativePeerBinding
 	GlobalSHA, RoutesSHA, ACLTag string
 	Running                      []string
+	Before, After                api.NetworkACLsPost
+	Remaining                    []state.PeerGrantBinding
 }
 
 func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
@@ -98,15 +101,23 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 	}
 	pair := nativePeerBinding{SourceUUID: a.UUID, TargetUUID: b.UUID,
 		SourceIPv4: a4, SourceIPv6: a6, TargetIPv4: b4, TargetIPv6: b6}
-	expected, err := nativeACLForVerifiedPeers(NativePrepareTarget{Project: project, ACL: acl},
-		network, []nativePeerBinding{pair})
+	beforeRows, afterRows, err := s.ReadPeerRevocationSnapshot(ctx, project, bridge, acl, original)
 	if err != nil {
 		return zero, err
 	}
-	// Never silently revoke, overwrite or re-order another live peer grant.
-	if !reflect.DeepEqual(current.Ingress, expected.Ingress) ||
-		!reflect.DeepEqual(current.Egress, expected.Egress) {
-		return zero, errors.New("native ACL is not the exact single reviewed peer grant")
+	scope := NativePrepareTarget{Project: project, ACL: acl}
+	before, err := NativePeerACLFromGrantSnapshot(scope, network, beforeRows)
+	if err != nil {
+		return zero, err
+	}
+	after, err := nativeACLRevokeOneFromSnapshot(scope, network, afterRows, pair)
+	if err != nil {
+		return zero, err
+	}
+	if !reflect.DeepEqual(current.Ingress, before.Ingress) ||
+		!reflect.DeepEqual(current.Egress, before.Egress) ||
+		(reflect.DeepEqual(before.Ingress, after.Ingress) && reflect.DeepEqual(before.Egress, after.Egress)) {
+		return zero, errors.New("native ACL is not exact durable pre-revoke full allowlist")
 	}
 	owned := root.UseProject(project)
 	states := []string{}
@@ -137,8 +148,16 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 	if _, err := hex.DecodeString(mid); err != nil {
 		return zero, err
 	}
-	hostHash := sha256.Sum256([]byte("boxweave/root-peer-pre-isolation/v1\n" +
-		mid + "\n" + original + "\n" + global + "\n" + routes + "\n" + tag + "\n" + strings.Join(states, "\n")))
+	sealedACL, err := json.Marshal(struct {
+		Before, After api.NetworkACLsPost
+		Remaining     []state.PeerGrantBinding
+	}{before, after, afterRows})
+	if err != nil {
+		return zero, err
+	}
+	hostHash := sha256.Sum256([]byte("boxweave/root-peer-pre-isolation/v2\n" +
+		mid + "\n" + original + "\n" + global + "\n" + routes + "\n" + tag + "\n" +
+		strings.Join(states, "\n") + "\n" + string(sealedACL)))
 	plan, err := nativePeerConntrackSealedPlan(ledger, hex.EncodeToString(hostHash[:]),
 		first.NativeDigestSHA256, a.UUID, b.UUID)
 	if err != nil {
@@ -153,7 +172,8 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 		return zero, errors.New("native owner scope changed during preflight")
 	}
 	return nativePeerIntegratedPreflight{Plan: plan, Target: target, Binding: pair,
-		GlobalSHA: global, RoutesSHA: routes, ACLTag: tag, Running: running}, nil
+		GlobalSHA: global, RoutesSHA: routes, ACLTag: tag, Running: running,
+		Before: before, After: after, Remaining: afterRows}, nil
 }
 
 // An installed controller must only request the exact root plan through the
@@ -218,9 +238,27 @@ func nativePeerRootVerifyNFT(rules, project string, boxes []string, p nativePeer
 	return nil
 }
 
+// Legacy B2 native ambiguity fixture exercises the original containment
+// helper. Production revocation uses the whole-snapshot verifier below.
 func nativePeerRootStartVerified(ctx context.Context, root incus.InstanceServer,
 	project string, target NativePeerBridgeAuditTarget, running []string,
 	pair nativePeerBinding) (int, error) {
+	return nativePeerRootStartVerifiedWithSnapshot(ctx, root, project, target, running, pair, nil,
+		func(ctx context.Context) error {
+			rules, err := nativePeerRootKernelRules(ctx)
+			if err != nil {
+				return err
+			}
+			return nativePeerRootVerifyNFT(rules, project, running, pair)
+		})
+}
+
+func nativePeerRootStartVerifiedWithSnapshot(ctx context.Context, root incus.InstanceServer,
+	project string, target NativePeerBridgeAuditTarget, running []string,
+	pair nativePeerBinding, remaining []state.PeerGrantBinding, finalCheck func(context.Context) error) (int, error) {
+	if finalCheck == nil {
+		return 0, errors.New("revoke resume missing final full-ACL evidence")
+	}
 	owned := root.UseProject(project)
 	resumed := []string{}
 	success := false
@@ -233,8 +271,11 @@ func nativePeerRootStartVerified(ctx context.Context, root incus.InstanceServer,
 		// the member whose start failed before it could enter `resumed`.
 		// This is best effort only: SQLite/root journals remain UNKNOWN and
 		// no lease, autostart setting or claim is released on uncertainty.
-		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
+		if fresh, e := incus.ConnectIncusUnixWithContext(stopCtx, "/var/lib/incus/unix.socket", nil); e == nil {
+			owned = fresh.UseProject(project)
+		}
 		for _, box := range target.Boxes {
 			op, e := owned.UpdateInstanceState(box.Name, api.InstanceStatePut{Action: "stop", Timeout: 20}, "")
 			if e == nil && op != nil {
@@ -278,6 +319,15 @@ func nativePeerRootStartVerified(ctx context.Context, root incus.InstanceServer,
 		if err := nativePeerRootVerifyNFT(rules, project, resumed, pair); err != nil {
 			return 0, err
 		}
+		if err := nativePeerRootVerifyGrantNFT(rules, project, target.Boxes, resumed, remaining); err != nil {
+			return 0, err
+		}
+	}
+	if len(resumed) < 2 {
+		return 0, errors.New("revoke lacks native per-NIC kernel witness")
+	}
+	if err := finalCheck(ctx); err != nil {
+		return 0, err
 	}
 	success = true
 	return len(resumed), nil
@@ -341,6 +391,20 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 				if err != nil || proof.OperationID != original {
 					return errors.New("root original lost ownership during quiescence")
 				}
+				before, after, err := s.ReadPeerRevocationSnapshot(ctx, project, bridge, acl, original)
+				if err != nil || !reflect.DeepEqual(after, pre.Remaining) {
+					return errors.New("root full revoke ledger drift")
+				}
+				nw, _, err := root.GetNetwork(bridge)
+				if err != nil {
+					return err
+				}
+				compiledBefore, e1 := NativePeerACLFromGrantSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, before)
+				compiledAfter, e2 := nativeACLRevokeOneFromSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, after, pre.Binding)
+				if e1 != nil || e2 != nil || !reflect.DeepEqual(compiledBefore, pre.Before) ||
+					!reflect.DeepEqual(compiledAfter, pre.After) {
+					return errors.New("root revoke compiler or bridge changed")
+				}
 				return nil
 			}
 			if err := native.IsolateSharedPeerACLWithClient(ctx, root, project, bridge, acl, pre.Target.Boxes, check); err != nil {
@@ -350,24 +414,20 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 				return NativePeerConntrackReport{}, err
 			}
 			current, tag, err := root.GetNetworkACL(acl)
-			if err != nil || current == nil || tag != pre.ACLTag {
-				return NativePeerConntrackReport{}, errors.New("native ACL changed across full-NIC stop barrier")
+			if err != nil || current == nil || tag != pre.ACLTag ||
+				!reflect.DeepEqual(current.Ingress, pre.Before.Ingress) ||
+				!reflect.DeepEqual(current.Egress, pre.Before.Egress) {
+				return NativePeerConntrackReport{}, errors.New("native full ACL changed across stop barrier")
 			}
-			nw, _, err := root.GetNetwork(bridge)
-			if err != nil {
+			if err := check(ctx); err != nil {
 				return NativePeerConntrackReport{}, err
 			}
-			denied, err := nativeACLWithDeniedPeers(NativePrepareTarget{Project: project, ACL: acl},
-				nw, nil, []nativePeerBinding{pre.Binding})
-			if err != nil {
-				return NativePeerConntrackReport{}, err
-			}
-			if err := root.UpdateNetworkACL(acl, denied.NetworkACLPut, tag); err != nil {
+			if err := root.UpdateNetworkACL(acl, pre.After.NetworkACLPut, tag); err != nil {
 				return NativePeerConntrackReport{}, fmt.Errorf("native ACL ETag DROP update uncertain: %w", err)
 			}
 			got, _, err := root.GetNetworkACL(acl)
-			if err != nil || !reflect.DeepEqual(got.Ingress, denied.Ingress) ||
-				!reflect.DeepEqual(got.Egress, denied.Egress) {
+			if err != nil || got == nil || !reflect.DeepEqual(got.Ingress, pre.After.Ingress) ||
+				!reflect.DeepEqual(got.Egress, pre.After.Egress) {
 				return NativePeerConntrackReport{}, errors.New("native dual-stack DROP ACL readback incomplete")
 			}
 			var a, b native.PeerACLBox
@@ -404,18 +464,34 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 			if err := check(ctx); err != nil {
 				return report, err
 			}
-			count, err := nativePeerRootStartVerified(ctx, root, project, pre.Target, pre.Running, pre.Binding)
+			// Final fallible checks must remain inside the resume's
+			// stop-on-error guard, including whole-policy ACL readback.
+			finish := func(ctx context.Context) error {
+				if err := check(ctx); err != nil {
+					return err
+				}
+				applied, _, err := root.GetNetworkACL(acl)
+				if err != nil || applied == nil ||
+					!reflect.DeepEqual(applied.Ingress, pre.After.Ingress) ||
+					!reflect.DeepEqual(applied.Egress, pre.After.Egress) {
+					return errors.New("final resumed revoke ACL drift")
+				}
+				rules, err := nativePeerRootKernelRules(ctx)
+				if err != nil {
+					return err
+				}
+				if err := nativePeerRootVerifyNFT(rules, project, pre.Running, pre.Binding); err != nil {
+					return err
+				}
+				return nativePeerRootVerifyGrantNFT(rules, project, pre.Target.Boxes, pre.Running, pre.Remaining)
+			}
+			count, err := nativePeerRootStartVerifiedWithSnapshot(ctx, root, project, pre.Target, pre.Running,
+				pre.Binding, pre.Remaining, finish)
 			if err != nil {
 				return report, err
 			}
 			report.VerifiedNICs = count
-			report.KernelVerified = count >= 2
-			if !report.KernelVerified {
-				return report, errors.New("no live per-NIC dual-stack kernel evidence")
-			}
-			if err := check(ctx); err != nil {
-				return report, err
-			}
+			report.KernelVerified = true
 			return report, nil
 		})
 }

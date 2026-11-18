@@ -95,6 +95,12 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 	if !slices.Equal(claims, expected) {
 		return ErrResourceLocked
 	}
+	// Pending or UNKNOWN sibling directions must never be dropped
+	// during an otherwise valid whole-policy ACL rewrite.
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE project=? AND status IN ('PENDING','UNKNOWN')",
+		intent.Project).Scan(&siblingBusy); err != nil || siblingBusy != 0 {
+		return ErrResourceLocked
+	}
 	// The row cannot be staged from a prior UNKNOWN or guessed foreign
 	// grant, and its native identity must be exactly pinned in SQLite.
 	var srcInc, dstInc, src4, dst4, src6, dst6 string
