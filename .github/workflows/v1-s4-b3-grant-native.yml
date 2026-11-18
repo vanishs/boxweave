@@ -70,7 +70,8 @@ jobs:
           if test "${{ matrix.scenario }}" = installed_mcp; then
             # Incus 7.6: 'incus' is the *restricted user socket* group.
             # 'incus-admin' (and sudo/lxd/docker) are privileged and forbidden.
-            sudo useradd -m -g incus -s /bin/sh boxweave
+            sudo useradd -m -s /bin/sh boxweave
+            sudo usermod -aG incus boxweave
             test -S /var/lib/incus/unix.socket.user
             id -nG boxweave | tr ' ' '\n' | grep -qx incus
             if id -nG boxweave | tr ' ' '\n' | grep -Eq '^(incus-admin|sudo|lxd|docker)$'; then
