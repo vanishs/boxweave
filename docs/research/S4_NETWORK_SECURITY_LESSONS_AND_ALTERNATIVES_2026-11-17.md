@@ -293,7 +293,7 @@ Before proposing a backend change, produce a **side-by-side proof** on the same 
 
 | Future question | Reusable evidence / starting point |
 | --- | --- |
-| Could a Box inherit permission when an address is recycled? | ``6` identity table, `4` B1/B2 reuse experiment and current SQLite lease/UUID fencing; `9.1` host-veth-name allocator alternative |
+| Could a Box inherit permission when an address is recycled? | `6` identity table, `4` B1/B2 reuse experiment and current SQLite lease/UUID fencing; `9.1` host-veth-name allocator alternative |
 | Why can a network rule update succeed in the DB but fail in packets? | `4` partial native ACL grant fan-out; `9.3` atomicity and missing-policy fail-open |
 | Why did an established TCP connection survive a revoke? | `2` conntrack explanation; `4` real dual-stack TCP/UDP revocation results; `9.4` fast-path experiment |
 | Why all the Scriptlet tests if a permission script looks simple? | `2.1` global restricted-client behavior and old-client parity; `4` prior installed acceptance |
@@ -301,6 +301,6 @@ Before proposing a backend change, produce a **side-by-side proof** on the same 
 | Can we skip OVN and still authorize arbitrary A↔B and B↔C? | `3` graph model; `7` VLAN/port-isolation limitations; `9` direct host-veth policy hypothesis |
 | Is there already an Incus/Proxmox implementation to copy? | `8` original upstream code and community requests; don't equate per-interface dispatch with Box-pair policy |
 
-**Provenance and reading discipline:** [product scope](../decisions/PRODUCT_BOUNDARY.md), [selected current network design](../design/NETWORK.md), [sole S4 implementation PR #153](https://github.com/vanishs/boxweave/pull/153), [source-exact B2 audit](https://github.com/vanishs/boxweave/blob/feat/v1-s4-runtime-integration-20261116/docs/verification/S4_B2_FINAL_INDEPENDENT_AUDIT_2026-11-17.md), separate [PR #155](https://github.com/vanishs/boxweave/pull/155); native mechanism sources in ``5–9`. A vendor source proves its own code path, not acceptance of BoxWeave's future design.
+**Provenance and reading discipline:** [product scope](../decisions/PRODUCT_BOUNDARY.md), [selected current network design](../design/NETWORK.md), [sole S4 implementation PR #153](https://github.com/vanishs/boxweave/pull/153), [source-exact B2 audit](https://github.com/vanishs/boxweave/blob/feat/v1-s4-runtime-integration-20261116/docs/verification/S4_B2_FINAL_INDEPENDENT_AUDIT_2026-11-17.md), separate [PR #155](https://github.com/vanishs/boxweave/pull/155); native mechanism sources in `5–9`. A vendor source proves its own code path, not acceptance of BoxWeave's future design.
 
 **Bottom line:** the current S4 design is a credible conventional path and has already solved or guarded many real challenges. Keep the knowledge from alternatives available, but do not turn a narrower IP-reuse improvement into an unjustified wholesale rewrite. The next concrete milestone is final B2 independent acceptance, not an experimental replacement.
