@@ -21,6 +21,11 @@ type PeerGrantBinding struct {
 // omitted from an ACL rebuild. Root must still recheck actual host NIC/ACL
 // ownership and the kernel effect before acknowledging this plan.
 func (s *Store) ReadPeerGrantSnapshot(ctx context.Context, project, bridge, acl, stagedOriginal string) ([]PeerGrantBinding, error) {
+	return s.readPeerGrantSnapshot(ctx, project, bridge, acl, stagedOriginal, false)
+}
+
+// UNKNOWN is inspectable only by the separately approved root read-only recovery.
+func (s *Store) readPeerGrantSnapshot(ctx context.Context, project, bridge, acl, stagedOriginal string, allowUnknownRecovery bool) ([]PeerGrantBinding, error) {
 	if s == nil || s.db == nil || (stagedOriginal != "" && !validHexID(stagedOriginal)) {
 		return nil, ErrInvalid
 	}
@@ -97,7 +102,7 @@ func (s *Store) ReadPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 		err = tx.QueryRowContext(ctx, `SELECT state,actor_id,token_id,layer,box_uuid,incarnation,safe_intent
    FROM operations WHERE id=? AND action='box_peer_set'`, stagedOriginal).
 			Scan(&status, &actor, &token, &rawLayer, &srcUUID, &srcInc, &raw)
-		if err != nil || (status != "ADMITTED" && status != "DISPATCHING") ||
+		if err != nil || (status != "ADMITTED" && status != "DISPATCHING" && !(allowUnknownRecovery && status == "UNKNOWN")) ||
 			actor == "" || token == "" || rawLayer != project {
 			return nil, ErrResourceLocked
 		}

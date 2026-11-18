@@ -287,3 +287,30 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 	}
 	t.Log("S4_B3_REAL_ROOT_GRANT_EXACT_ACL_NFT_ALL_NICS_AND_NO_REPLAY=PASS")
 }
+
+// A test-only lost controller ACK after a separately installed PRS has already
+// journaled COMPLETE_VERIFIED. No native call is dispatched by this fixture.
+func TestS4B3NativeNonrootMarkCompletedGrantACKLost(t *testing.T) {
+	s4b3InstalledOneUse(t, false)
+	db, original := os.Getenv("BOXWEAVE_S4B3_DB"), os.Getenv("BOXWEAVE_S4B3_ORIGINAL")
+	if db == "" || len(original) != 32 {
+		t.Fatal("missing exact ACK-loss original")
+	}
+	s, err := state.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	rec, err := s.Get(context.Background(), original)
+	if err != nil || rec.State != "DISPATCHING" || rec.Action != "box_peer_set" {
+		t.Fatalf("ACK-loss fixture requires unfinalized exact original: %+v %v", rec, err)
+	}
+	if err := s.Unknown(context.Background(), original, "DISPATCHING", "B3_TEST_ONLY_ACK_LOST_AFTER_COMPLETE_ROOT_JOURNAL"); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = s.Get(context.Background(), original)
+	if err != nil || rec.State != "UNKNOWN" {
+		t.Fatalf("original not frozen %+v %v", rec, err)
+	}
+	t.Log("S4_B3_INSTALLED_ROOT_COMPLETE_ACK_LOST_SQLITE_ORIGINAL_UNKNOWN=PASS")
+}

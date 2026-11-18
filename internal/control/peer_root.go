@@ -53,7 +53,7 @@ func (s *Service) ExecutePreparedRootPeerRevocation(original string) error {
 // ReconcileCompletedUnknownRootPeerRevocation accepts ONLY the exact already
 // completed root journal and independent post-native read-only kernel proof.
 // It never reapplies Stop, ACL PUT, conntrack or re-arms an UNKNOWN original.
-func (s *Service) ReconcileCompletedUnknownRootPeerRevocation(original, sha string) error {
+func (s *Service) ReconcileCompletedUnknownRootPeer(original, sha string) error {
 	if s == nil || s.Store == nil {
 		return errors.New("missing restricted controller")
 	}
@@ -112,4 +112,10 @@ func (s *Service) ExecutePreparedRootPeerGrant(original string) error {
 			}
 			return out, err
 		})
+}
+
+// Preserve the B2 API name without weakening its existing revoke safety.
+// The generic version selects grant/revoke solely from protected SQLite.
+func (s *Service) ReconcileCompletedUnknownRootPeerRevocation(original, sha string) error {
+	return s.ReconcileCompletedUnknownRootPeer(original, sha)
 }

@@ -15,6 +15,12 @@ on:
       - internal/install/native_peer_root_grant_nft.go
       - internal/state/network_peer_root_grant.go
       - internal/state/network_peer_root_grant_worker.go
+      - internal/install/native_peer_root_grant_recovery.go
+      - internal/install/native_peer_root_recovery.go
+      - internal/state/network_peer_root_recovery.go
+      - internal/state/network_peer_root_grant_recovery_test.go
+      - internal/state/network_peer_grant_snapshot.go
+      - internal/control/peer_root.go
       - internal/state/network_peer_operation_mode.go
       - internal/install/native_peer_root_service.go
       - cmd/boxweave/main.go
@@ -36,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault, installed_normal, multi_revoke, multi_regrant, installed_mcp]
+        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault, installed_normal, multi_revoke, multi_regrant, installed_mcp, grant_ack_lost]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,7 +139,7 @@ jobs:
             BOXWEAVE_S4B3_SCOPE="$scope" \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
           admit_only=0
-          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp; then admit_only=1; fi
+          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp || test "${{ matrix.scenario }}" = grant_ack_lost; then admit_only=1; fi
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
             BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_ADMIT_ONLY="$admit_only" \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$' \
@@ -141,7 +147,7 @@ jobs:
           original="$(sed -n 's/^S4_B3_NATIVE_GRANT_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-seed.log" | tail -n1)"
           test "${#original}" -eq 32
           echo "$original" > "$RUNNER_TEMP/s4b3-original"
-          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp; then
+          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp || test "${{ matrix.scenario }}" = grant_ack_lost; then
             bin=/usr/local/bin/boxweave
             sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
@@ -161,14 +167,36 @@ jobs:
             if sudo "$bin" native-peer-root-request -operation-id "$original" >/dev/null 2>&1; then
               echo S4_B3_INSTALLED_FOREIGN_UID_ROOT_REQUEST_ACCEPTED; exit 87
             fi
-            sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
-            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
-            test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original')")" = CONFIRMED:1
-            test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
-            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
-              echo S4_B3_INSTALLED_ORIGINAL_REPLAYED; exit 88
+            if test "${{ matrix.scenario }}" = grant_ack_lost; then
+              sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" > "$RUNNER_TEMP/s4b3-ack-root-response.json"
+              test "$(jq -r .status "$RUNNER_TEMP/s4b3-ack-root-response.json")" = COMPLETE_VERIFIED
+              journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+              test "$(sudo jq -r .status "$journal")" = COMPLETE_VERIFIED
+              before="$(sudo sha256sum "$journal" | awk '{print $1}')"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+              sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_ORIGINAL="$original" /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootMarkCompletedGrantACKLost$'
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+              sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" -operation-id "$original" -peer-plan-sha256 "$sha"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE operation_id=''")" = CONFIRMED:1
+              test "$(sudo sha256sum "$journal" | awk '{print $1}')" = "$before"
+              if sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+                echo S4_B3_COMPLETED_ACK_LOSS_ORIGINAL_REDISPATCHED; exit 94
+              fi
+              if sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+                echo S4_B3_COMPLETED_ACK_LOSS_TWICE_SETTLED; exit 95
+              fi
+              echo "S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY=PASS original=$original"
+            else
+              sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original')")" = CONFIRMED:1
+              test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+              if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+                echo S4_B3_INSTALLED_ORIGINAL_REPLAYED; exit 88
+              fi
+              echo "S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS original=$original"
             fi
-            echo "S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS original=$original"
           else
             sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
               BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
@@ -300,7 +328,7 @@ jobs:
           fi
 
       - name: Test real IPv4 and IPv6 TCP/UDP permit, reverse and sibling denies
-        if: matrix.scenario == 'normal' || matrix.scenario == 'installed_normal' || matrix.scenario == 'installed_mcp'
+        if: matrix.scenario == 'normal' || matrix.scenario == 'installed_normal' || matrix.scenario == 'installed_mcp' || matrix.scenario == 'grant_ack_lost'
         shell: bash
         run: |
           set -euo pipefail

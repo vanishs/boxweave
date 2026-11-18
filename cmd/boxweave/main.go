@@ -480,12 +480,8 @@ func run() error {
 			if *peerSHA == "" {
 				return errors.New("exact original approved root digest required")
 			}
-			if allow {
-				// Never send a grant UNKNOWN original into the B2 revoke-only
-				// recovery witness. Separate complete-journal grant proof is required.
-				return errors.New("grant UNKNOWN read-only reconciliation is not yet verified")
-			}
-			return svc.ReconcileCompletedUnknownRootPeerRevocation(*peerOriginal, *peerSHA)
+			_ = allow // The durable pending original is independently selected by PRS.
+			return svc.ReconcileCompletedUnknownRootPeer(*peerOriginal, *peerSHA)
 		}
 		if allow {
 			return svc.ExecutePreparedRootPeerGrant(*peerOriginal)

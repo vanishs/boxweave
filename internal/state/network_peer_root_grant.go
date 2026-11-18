@@ -25,7 +25,19 @@ type RootPeerGrant struct {
 // ADMITTED/UNKNOWN originals and does NOT loosen B2's revoke-only checker.
 // The root process must separately reprove NIC/native scope before dispatch.
 func (s *Store) ReadRootPeerGrant(ctx context.Context, original, project, bridge, acl string) (RootPeerGrant, error) {
+	return s.readRootPeerGrantState(ctx, original, project, bridge, acl, "DISPATCHING")
+}
+
+// ReadRootPeerUnknownGrant is for read-only recovery; never root dispatch.
+func (s *Store) ReadRootPeerUnknownGrant(ctx context.Context, original, project, bridge, acl string) (RootPeerGrant, error) {
+	return s.readRootPeerGrantState(ctx, original, project, bridge, acl, "UNKNOWN")
+}
+
+func (s *Store) readRootPeerGrantState(ctx context.Context, original, project, bridge, acl, expected string) (RootPeerGrant, error) {
 	var zero RootPeerGrant
+	if expected != "DISPATCHING" && expected != "UNKNOWN" {
+		return zero, ErrInvalid
+	}
 	if s == nil || s.db == nil || !s.IsNetworkAuditReadOnly() ||
 		!validHexID(original) || !auditName(project) || project == "default" ||
 		!auditName(bridge) || !auditName(acl) {
@@ -47,7 +59,7 @@ func (s *Store) ReadRootPeerGrant(ctx context.Context, original, project, bridge
 	}
 	canonical, err := json.Marshal(intent)
 	if err != nil || !bytes.Equal(canonical, raw) || action != "box_peer_set" ||
-		status != "DISPATCHING" || actor == "" || token == "" ||
+		status != expected || actor == "" || token == "" ||
 		!intent.Allow || layer != project || intent.Project != project ||
 		intent.Bridge != bridge || intent.ACL != acl ||
 		intent.SourceUUID == "" || intent.SourceUUID == intent.TargetUUID ||
@@ -58,7 +70,7 @@ func (s *Store) ReadRootPeerGrant(ctx context.Context, original, project, bridge
 	// Snapshot independently enforces complete SQLite NIC/IPv4/v6/MAC/fence
 	// ledger, full-project sibling barrier, active actor/admin token, exact
 	// ACL+two Box resource claims, pending/UNKNOWN uniqueness and all rows.
-	target, err := s.ReadPeerGrantSnapshot(ctx, project, bridge, acl, original)
+	target, err := s.readPeerGrantSnapshot(ctx, project, bridge, acl, original, expected == "UNKNOWN")
 	if err != nil {
 		return zero, err
 	}
@@ -81,7 +93,7 @@ func (s *Store) ReadRootPeerGrant(ctx context.Context, original, project, bridge
 	var rawAfter []byte
 	err = s.db.QueryRowContext(ctx, "SELECT state,safe_intent FROM operations WHERE id=?", original).
 		Scan(&stateAfter, &rawAfter)
-	if err != nil || stateAfter != "DISPATCHING" || !bytes.Equal(raw, rawAfter) {
+	if err != nil || stateAfter != expected || !bytes.Equal(raw, rawAfter) {
 		return zero, ErrResourceLocked
 	}
 	if err := s.RequireActiveTokenID(ctx, token); err != nil {

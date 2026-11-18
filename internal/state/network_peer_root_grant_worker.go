@@ -64,6 +64,60 @@ func (s *Store) FinalizeRootPeerGrant(ctx context.Context, original string) erro
 	return tx.Commit()
 }
 
+// FinalizeCompletedUnknownRootPeerGrant only runs after independent root
+// proof of a COMPLETE_VERIFIED original; no native effect may be replayed.
+func (s *Store) FinalizeCompletedUnknownRootPeerGrant(ctx context.Context, original string) error {
+	if s == nil || s.db == nil || s.auditReadOnly || !validHexID(original) {
+		return ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var action, status string
+	if err := tx.QueryRowContext(ctx, "SELECT action,state FROM operations WHERE id=?", original).Scan(&action, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if action != "box_peer_set" || status != "UNKNOWN" {
+		return ErrState
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE operation_id=? AND desired=1 AND status='PENDING'", original).Scan(&n); err != nil || n != 1 {
+		return ErrResourceLocked
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE operation_id=?", original).Scan(&n); err != nil || n != 1 {
+		return ErrResourceLocked
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id=''
+ WHERE operation_id=? AND desired=1 AND status='PENDING'`, original)
+	if err != nil {
+		return err
+	}
+	n64, err := result.RowsAffected()
+	if err != nil || n64 != 1 {
+		return ErrResourceLocked
+	}
+	now := time.Now().UnixNano()
+	result, err = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',error_class='',updated_at=?
+ WHERE id=? AND state='UNKNOWN' AND action='box_peer_set'`, now, original)
+	if err != nil {
+		return err
+	}
+	n64, err = result.RowsAffected()
+	if err != nil || n64 != 1 {
+		return ErrState
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events(operation_id,at,state,safe_detail)
+ VALUES(?,?,'SUCCEEDED','PEER_ROOT_COMPLETED_UNKNOWN_GRANT_READONLY_NO_REPLAY')`, original, now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // ExecutePreparedRootPeerGrant invokes only one already-claimed original
 // through the installed operator-approved local PRS socket. It deliberately
 // cannot create a peer from an unclaimed/request-selected native tuple.

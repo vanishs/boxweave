@@ -24,6 +24,12 @@ func NativePeerRootReconcileCompletedUnknown(ctx context.Context, s *state.Store
 	if os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() || approvedSHA == "" {
 		return zero, errors.New("root recovery requires protected read-only ledger and approval")
 	}
+	// The current durable original, never the socket caller, selects the mode.
+	// Grant recovery is separately checked against the complete positive ACL
+	// and actual per-NIC kernel policy; legacy B2 revoke stays unchanged.
+	if _, grantErr := s.ReadRootPeerUnknownGrant(ctx, original, project, bridge, acl); grantErr == nil {
+		return NativePeerRootReconcileCompletedUnknownGrant(ctx, s, project, bridge, acl, original, approvedSHA)
+	}
 	proof, err := s.ReadRootPeerUnknownRevocation(ctx, original, project, bridge, acl)
 	if err != nil {
 		return zero, err

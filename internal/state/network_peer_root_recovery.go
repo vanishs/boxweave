@@ -87,5 +87,19 @@ func (w Worker) ReconcileCompletedUnknownRootPeer(original, sha string, call Roo
 		len(proof.PostNativeDigestSHA256) != 64 {
 		return ErrResourceLocked
 	}
-	return w.Store.FinalizeCompletedUnknownRootPeerRevocation(context.Background(), original)
+	// Only the canonical pending ledger selects the settlement kind. The
+	// original stays UNKNOWN if the root proof or transaction is incomplete.
+	var desired int
+	err = w.Store.db.QueryRowContext(context.Background(),
+		"SELECT desired FROM peer_grants WHERE operation_id=? AND status='PENDING'", original).Scan(&desired)
+	if err != nil {
+		return ErrResourceLocked
+	}
+	if desired == 0 {
+		return w.Store.FinalizeCompletedUnknownRootPeerRevocation(context.Background(), original)
+	}
+	if desired == 1 {
+		return w.Store.FinalizeCompletedUnknownRootPeerGrant(context.Background(), original)
+	}
+	return ErrResourceLocked
 }
