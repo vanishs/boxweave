@@ -69,3 +69,23 @@ func TestS4B3ReadPeerCompilerSnapshotFailsClosed(t *testing.T) {
 	}
 	t.Log("S4_B3_COMPILER_SNAPSHOT_UNKNOWN_FOREIGN_IDENTITY_FAIL_CLOSED=PASS")
 }
+
+// Historical DROP rules are part of the next canonical whole-ACL projection,
+// but must never survive a stale native UUID/address mapping unchecked.
+func TestS4B3ReadHistoricalRevokedSnapshotRequiresCurrentLease(t *testing.T) {
+	s, reader, _ := s4b2RootOperationFixture(t)
+	s4b2PendingExistingGrantToConfirmed(t, s)
+	if _, err := s.db.Exec("UPDATE peer_grants SET status='REVOKED',desired=0,operation_id=''"); err != nil {
+		t.Fatal(err)
+	}
+	revoked, err := reader.ReadPeerRevokedSnapshot(context.Background(), "user-1001", "bwbr0", "bw-s4b2")
+	if err != nil || len(revoked) != 1 {
+		t.Fatalf("missing exact durable DROP tombstone: %+v %v", revoked, err)
+	}
+	if _, err := s.db.Exec("UPDATE peer_grants SET target_ipv6='fd43:18::99' WHERE status='REVOKED'"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := reader.ReadPeerRevokedSnapshot(context.Background(), "user-1001", "bwbr0", "bw-s4b2"); err == nil {
+		t.Fatalf("stale revoked IP was accepted for native ACL rebuild: %+v", got)
+	}
+}

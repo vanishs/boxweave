@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"reflect"
+	"slices"
 	"strings"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -73,11 +74,25 @@ func nativePeerRootGrantReview(ctx context.Context, s *state.Store,
 		return zero, errors.New("unverifiable pre-grant ACL ETag")
 	}
 	scope := NativePrepareTarget{Project: project, ACL: acl}
-	before, err := NativePeerACLFromGrantSnapshot(scope, nw, proof.Confirmed)
+	beforeRevoked := slices.Clone(proof.Revoked)
+	if proof.Regrant {
+		var found bool
+		for _, row := range proof.Target {
+			if row.SourceUUID == proof.Intent.SourceUUID && row.TargetUUID == proof.Intent.TargetUUID {
+				beforeRevoked = append(beforeRevoked, row)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return zero, errors.New("missing exact pending regrant tombstone")
+		}
+	}
+	before, err := NativePeerACLFromPolicySnapshot(scope, nw, proof.Confirmed, beforeRevoked)
 	if err != nil {
 		return zero, err
 	}
-	after, err := NativePeerACLFromGrantSnapshot(scope, nw, proof.Target)
+	after, err := NativePeerACLFromPolicySnapshot(scope, nw, proof.Target, proof.Revoked)
 	if err != nil {
 		return zero, err
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 )
 
 // StagePeerGrant records an inert, directional B3 grant intent. It does not
@@ -167,6 +168,14 @@ func (s *Store) StagePeerGrant(ctx context.Context, original string) error {
 		}
 	} else if n != 1 {
 		return ErrResourceLocked
+	} else {
+		// The previous revocation's exact native DROP must persist until
+		// this *same* original is safely re-granted. Keep the transition
+		// marker inside the staged operation's atomic transaction.
+		if _, err := tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'ADMITTED','PEER_REGRANT_FROM_REVOKED')",
+			original, time.Now().UnixNano()); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }

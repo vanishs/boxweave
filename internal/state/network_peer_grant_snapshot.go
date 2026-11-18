@@ -173,3 +173,49 @@ func (s *Store) ReadPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 	}
 	return out, nil
 }
+
+// ReadPeerRevokedSnapshot returns durable historical DROP tombstones. It
+// validates the CURRENT full owner/lease fence even for revoked peers; stale
+// UUIDs/IP reuse refuse any subsequent ACL rebuild rather than stripping
+// safety rules silently.
+func (s *Store) ReadPeerRevokedSnapshot(ctx context.Context, project, bridge, acl string) ([]PeerGrantBinding, error) {
+	if s == nil || s.db == nil || !auditName(project) || !auditName(bridge) || !auditName(acl) {
+		return nil, ErrInvalid
+	}
+	ledger, err := s.ReadCompleteNetworkAuditLedger(ctx, project, bridge, acl)
+	if err != nil {
+		return nil, ErrResourceLocked
+	}
+	owners := map[string]NetworkAuditBinding{}
+	for _, b := range ledger.Boxes {
+		owners[b.UUID] = b
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,target_incarnation,
+ source_ipv4,target_ipv4,source_ipv6,target_ipv6
+ FROM peer_grants WHERE project=? AND status='REVOKED' AND desired=0 ORDER BY source_uuid,target_uuid`, project)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var revoked []PeerGrantBinding
+	for rows.Next() {
+		var p PeerGrantBinding
+		if err := rows.Scan(&p.SourceUUID, &p.SourceIncarnation, &p.TargetUUID, &p.TargetIncarnation,
+			&p.SourceIPv4, &p.TargetIPv4, &p.SourceIPv6, &p.TargetIPv6); err != nil {
+			return nil, err
+		}
+		src, a := owners[p.SourceUUID]
+		dst, b := owners[p.TargetUUID]
+		if len(revoked) >= 32 || !a || !b || p.SourceUUID == p.TargetUUID ||
+			p.SourceIncarnation != src.Incarnation || p.TargetIncarnation != dst.Incarnation ||
+			p.SourceIPv4 != src.IPv4 || p.SourceIPv6 != src.IPv6 ||
+			p.TargetIPv4 != dst.IPv4 || p.TargetIPv6 != dst.IPv6 {
+			return nil, ErrResourceLocked
+		}
+		revoked = append(revoked, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return revoked, nil
+}

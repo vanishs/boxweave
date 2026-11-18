@@ -102,7 +102,8 @@ func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.S
 			if err != nil {
 				return NativePeerConntrackReport{}, err
 			}
-			want, err := NativePeerACLFromGrantSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, pre.Proof.Target)
+			want, err := NativePeerACLFromPolicySnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw,
+				pre.Proof.Target, pre.Proof.Revoked)
 			if err != nil || !reflect.DeepEqual(want, pre.After) {
 				return NativePeerConntrackReport{}, errors.New("bridge config or grant compiler target drifted")
 			}
@@ -168,6 +169,10 @@ func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.S
 					pre.Running, pre.Proof.Target); err != nil {
 					return err
 				}
+				if err := nativePeerRootVerifyRevokedNFT(rules, pre.Target.Project, pre.Running,
+					pre.Proof.Revoked); err != nil {
+					return err
+				}
 				if afterResume != nil {
 					if err := afterResume(); err != nil {
 						return fmt.Errorf("injected final grant check failed: %w", err)
@@ -191,21 +196,26 @@ func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.S
 // durably commit. Re-identify each NIC by UUID before any stop by name;
 // never stop a replacement/foreign object. Failure retains UNKNOWN/claims.
 func nativePeerRootContainFailedCompletion(pre nativePeerGrantPreflight) error {
+	return nativePeerRootContainFailedTarget(pre.Target)
+}
+
+// Both grant and revoke must re-isolate after ambiguous final journal writes.
+func nativePeerRootContainFailedTarget(target NativePeerBridgeAuditTarget) error {
 	stopCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	root, err := incus.ConnectIncusUnixWithContext(stopCtx, "/var/lib/incus/unix.socket", nil)
 	if err != nil {
 		return fmt.Errorf("post-resume journal failure could not reach native Incus: %w", err)
 	}
-	owned := root.UseProject(pre.Target.Project)
+	owned := root.UseProject(target.Project)
 	var failures []error
-	for _, box := range pre.Target.Boxes {
+	for _, box := range target.Boxes {
 		inst, _, err := owned.GetInstance(box.Name)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("missing exact protected instance %s: %w", box.Name, err))
 			continue
 		}
-		if err := native.ValidatePeerACLBox(inst, pre.Target.Project, pre.Target.Bridge, pre.Target.ACL, box, false); err != nil {
+		if err := native.ValidatePeerACLBox(inst, target.Project, target.Bridge, target.ACL, box, false); err != nil {
 			failures = append(failures, fmt.Errorf("protected NIC identity drift %s: %w", box.Name, err))
 			continue
 		}
@@ -221,10 +231,10 @@ func nativePeerRootContainFailedCompletion(pre nativePeerGrantPreflight) error {
 			failures = append(failures, fmt.Errorf("protected NIC journal-failure stop ACK %s: %w", box.Name, err))
 		}
 	}
-	if err := nativePeerConntrackAllStopped(stopCtx, root, pre.Target); err != nil {
+	if err := nativePeerConntrackAllStopped(stopCtx, root, target); err != nil {
 		failures = append(failures, fmt.Errorf("journal-failure NIC status remains unsafe: %w", err))
 	}
-	if err := nativePeerBridgeKernelNoLivePorts(stopCtx, pre.Target.Bridge); err != nil {
+	if err := nativePeerBridgeKernelNoLivePorts(stopCtx, target.Bridge); err != nil {
 		failures = append(failures, fmt.Errorf("journal-failure live bridge ports: %w", err))
 	}
 	return errors.Join(failures...)
@@ -300,4 +310,20 @@ func nativePeerRootResumeGrantVerified(ctx context.Context, root incus.InstanceS
 	}
 	success = true
 	return len(resumed), nil
+}
+
+// A successful later grant must preserve previously revoked pair DROP rules
+// in each live protected Incus chain, not just the new positive allowlist.
+func nativePeerRootVerifyRevokedNFT(rules, project string, running []string,
+	revoked []state.PeerGrantBinding) error {
+	denied, err := nativePeerBindingsFromSnapshot(revoked)
+	if err != nil {
+		return err
+	}
+	for _, p := range denied {
+		if err := nativePeerRootVerifyNFT(rules, project, running, p); err != nil {
+			return err
+		}
+	}
+	return nil
 }

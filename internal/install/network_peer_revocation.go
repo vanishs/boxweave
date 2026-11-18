@@ -107,28 +107,15 @@ func exactPeerRuleKey(source, target netip.Addr, bits int) string {
 // Existing reverse live grants are deliberately refused: a stateful response
 // cannot be simultaneously treated as both a revoked flow and a live new flow.
 func nativeACLRevokeOneFromSnapshot(t NativePrepareTarget, network *api.Network,
-	remaining []state.PeerGrantBinding, denied nativePeerBinding) (api.NetworkACLsPost, error) {
-	var live []nativePeerBinding
-	for _, row := range remaining {
-		a4, e1 := netip.ParseAddr(row.SourceIPv4)
-		b4, e2 := netip.ParseAddr(row.TargetIPv4)
-		a6, e3 := netip.ParseAddr(row.SourceIPv6)
-		b6, e4 := netip.ParseAddr(row.TargetIPv6)
-		if e1 != nil || e2 != nil || e3 != nil || e4 != nil ||
-			!a4.IsGlobalUnicast() || !b4.IsGlobalUnicast() ||
-			!a6.IsGlobalUnicast() || !b6.IsGlobalUnicast() ||
-			!a4.Is4() || !b4.Is4() || !a6.Is6() || !b6.Is6() ||
-			a4.String() != row.SourceIPv4 || b4.String() != row.TargetIPv4 ||
-			a6.String() != row.SourceIPv6 || b6.String() != row.TargetIPv6 ||
-			row.SourceUUID == "" || row.TargetUUID == "" ||
-			row.SourceUUID == row.TargetUUID ||
-			row.SourceIncarnation == "" || row.TargetIncarnation == "" {
-			return api.NetworkACLsPost{}, errors.New("invalid durable peer remaining direction")
-		}
-		live = append(live, nativePeerBinding{
-			SourceUUID: row.SourceUUID, TargetUUID: row.TargetUUID,
-			SourceIPv4: a4, TargetIPv4: b4, SourceIPv6: a6, TargetIPv6: b6,
-		})
+	remaining []state.PeerGrantBinding, denied nativePeerBinding,
+	historical ...state.PeerGrantBinding) (api.NetworkACLsPost, error) {
+	live, err := nativePeerBindingsFromSnapshot(remaining)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
 	}
-	return nativeACLWithDeniedPeers(t, network, live, []nativePeerBinding{denied})
+	old, err := nativePeerBindingsFromSnapshot(historical)
+	if err != nil {
+		return api.NetworkACLsPost{}, err
+	}
+	return nativeACLWithDeniedPeers(t, network, live, append(old, denied))
 }

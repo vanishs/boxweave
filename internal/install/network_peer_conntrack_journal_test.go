@@ -273,3 +273,36 @@ func TestS4B2RootConntrackActualSIGKILLAfterPersistedIntent(t *testing.T) {
 	}
 	t.Log("S4_B2_ROOT_ACTUAL_SIGKILL_DURABLE_UNKNOWN_NO_REPLAY=PASS")
 }
+
+// An ambiguous completion after successful native resumption must re-isolate,
+// retain the original UNKNOWN and refuse a repeated network mutation.
+func TestS4B3GuardedRevokeCompletionFailureRetainsUnknown(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "revoke-completion.json")
+	plan := s4b2JournalPlan()
+	effects, quarantines := 0, 0
+	effect := func(context.Context) (NativePeerConntrackReport, error) {
+		effects++
+		return NativePeerConntrackReport{
+			ProbedScopes: 4, DeletedScopes: 4,
+			NativeDigestSHA256: plan.NativeDigestSHA256,
+			KernelVerified:     true, VerifiedNICs: 3,
+		}, nil
+	}
+	receipt, err := nativePeerConntrackDispatchOnceGuarded(t.Context(), path, plan,
+		plan.PlanSHA256, true, effect,
+		func() error { return errors.New("injected completed-revoke fsync failure") },
+		func() error { quarantines++; return nil })
+	if err == nil || receipt.Status != "DISPATCH_UNKNOWN" || receipt.MutationComplete ||
+		effects != 1 || quarantines != 1 {
+		t.Fatalf("revoke falsely completed: %+v %v effects=%d stopped=%d",
+			receipt, err, effects, quarantines)
+	}
+	j, err := nativePeerConntrackLoadJournal(path)
+	if err != nil || j.Status != "DISPATCH_UNKNOWN" {
+		t.Fatal("revoke original journal not UNKNOWN", j, err)
+	}
+	if _, err := nativePeerConntrackDispatchOnceGuarded(t.Context(), path, plan,
+		plan.PlanSHA256, true, effect, nil, nil); err == nil || effects != 1 {
+		t.Fatal("UNKNOWN original redispatched", err, effects)
+	}
+}

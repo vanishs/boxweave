@@ -35,6 +35,7 @@ type nativePeerIntegratedPreflight struct {
 	Running                      []string
 	Before, After                api.NetworkACLsPost
 	Remaining                    []state.PeerGrantBinding
+	Tombstones                   []state.PeerGrantBinding
 }
 
 func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
@@ -106,11 +107,15 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 		return zero, err
 	}
 	scope := NativePrepareTarget{Project: project, ACL: acl}
-	before, err := NativePeerACLFromGrantSnapshot(scope, network, beforeRows)
+	tombstones, err := s.ReadPeerRevokedSnapshot(ctx, project, bridge, acl)
 	if err != nil {
 		return zero, err
 	}
-	after, err := nativeACLRevokeOneFromSnapshot(scope, network, afterRows, pair)
+	before, err := NativePeerACLFromPolicySnapshot(scope, network, beforeRows, tombstones)
+	if err != nil {
+		return zero, err
+	}
+	after, err := nativeACLRevokeOneFromSnapshot(scope, network, afterRows, pair, tombstones...)
 	if err != nil {
 		return zero, err
 	}
@@ -173,7 +178,7 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 	}
 	return nativePeerIntegratedPreflight{Plan: plan, Target: target, Binding: pair,
 		GlobalSHA: global, RoutesSHA: routes, ACLTag: tag, Running: running,
-		Before: before, After: after, Remaining: afterRows}, nil
+		Before: before, After: after, Remaining: afterRows, Tombstones: tombstones}, nil
 }
 
 // An installed controller must only request the exact root plan through the
@@ -346,6 +351,14 @@ func NativePeerRootIntegratedApplyOperation(ctx context.Context, s *state.Store,
 func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *state.Store,
 	project, bridge, acl, original, approvedSHA string, approved bool,
 	afterACL func() error) (NativePeerConntrackJournalReceipt, error) {
+	return nativePeerRootIntegratedApplyWithCompletionFault(ctx, s, project, bridge, acl,
+		original, approvedSHA, approved, afterACL, nil)
+}
+
+// Only tests inject the pre-COMPLETE fault; no IPC or MCP parameter exposes it.
+func nativePeerRootIntegratedApplyWithCompletionFault(ctx context.Context, s *state.Store,
+	project, bridge, acl, original, approvedSHA string, approved bool,
+	afterACL, beforeComplete func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, errors.New("root integrated peer revoke requires explicit scope approval")
@@ -369,7 +382,7 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 	if err := nativePeerConntrackPrepareOriginalJournalDirectory(); err != nil {
 		return zero, err
 	}
-	return nativePeerConntrackDispatchOnce(ctx, path, pre.Plan, approvedSHA, approved,
+	return nativePeerConntrackDispatchOnceGuarded(ctx, path, pre.Plan, approvedSHA, approved,
 		func(ctx context.Context) (NativePeerConntrackReport, error) {
 			root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
 			if err != nil {
@@ -395,12 +408,16 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 				if err != nil || !reflect.DeepEqual(after, pre.Remaining) {
 					return errors.New("root full revoke ledger drift")
 				}
+				tombstones, err := s.ReadPeerRevokedSnapshot(ctx, project, bridge, acl)
+				if err != nil || !reflect.DeepEqual(tombstones, pre.Tombstones) {
+					return errors.New("root revoke historical tombstones changed")
+				}
 				nw, _, err := root.GetNetwork(bridge)
 				if err != nil {
 					return err
 				}
-				compiledBefore, e1 := NativePeerACLFromGrantSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, before)
-				compiledAfter, e2 := nativeACLRevokeOneFromSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, after, pre.Binding)
+				compiledBefore, e1 := NativePeerACLFromPolicySnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, before, tombstones)
+				compiledAfter, e2 := nativeACLRevokeOneFromSnapshot(NativePrepareTarget{Project: project, ACL: acl}, nw, after, pre.Binding, tombstones...)
 				if e1 != nil || e2 != nil || !reflect.DeepEqual(compiledBefore, pre.Before) ||
 					!reflect.DeepEqual(compiledAfter, pre.After) {
 					return errors.New("root revoke compiler or bridge changed")
@@ -483,7 +500,10 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 				if err := nativePeerRootVerifyNFT(rules, project, pre.Running, pre.Binding); err != nil {
 					return err
 				}
-				return nativePeerRootVerifyGrantNFT(rules, project, pre.Target.Boxes, pre.Running, pre.Remaining)
+				if err := nativePeerRootVerifyGrantNFT(rules, project, pre.Target.Boxes, pre.Running, pre.Remaining); err != nil {
+					return err
+				}
+				return nativePeerRootVerifyRevokedNFT(rules, project, pre.Running, pre.Tombstones)
 			}
 			count, err := nativePeerRootStartVerifiedWithSnapshot(ctx, root, project, pre.Target, pre.Running,
 				pre.Binding, pre.Remaining, finish)
@@ -493,5 +513,7 @@ func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *s
 			report.VerifiedNICs = count
 			report.KernelVerified = true
 			return report, nil
+		}, beforeComplete, func() error {
+			return nativePeerRootContainFailedTarget(pre.Target)
 		})
 }

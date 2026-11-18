@@ -17,6 +17,8 @@ type RootPeerGrant struct {
 	Intent      RootPeerRevokeSafeIntent
 	Confirmed   []PeerGrantBinding
 	Target      []PeerGrantBinding
+	Revoked     []PeerGrantBinding
+	Regrant     bool
 }
 
 // ReadRootPeerGrant is the B3 analogue of ReadRootPeerRevocation. It refuses
@@ -88,5 +90,15 @@ func (s *Store) ReadRootPeerGrant(ctx context.Context, original, project, bridge
 	if len(target) != len(confirmed)+1 || reflect.DeepEqual(target, confirmed) {
 		return zero, ErrResourceLocked
 	}
-	return RootPeerGrant{OperationID: original, Intent: intent, Confirmed: confirmed, Target: target}, nil
+	revoked, err := s.ReadPeerRevokedSnapshot(ctx, project, bridge, acl)
+	if err != nil {
+		return zero, ErrResourceLocked
+	}
+	var regrants int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND safe_detail='PEER_REGRANT_FROM_REVOKED'",
+		original).Scan(&regrants); err != nil || regrants > 1 {
+		return zero, ErrResourceLocked
+	}
+	return RootPeerGrant{OperationID: original, Intent: intent, Confirmed: confirmed,
+		Target: target, Revoked: revoked, Regrant: regrants == 1}, nil
 }
