@@ -19,14 +19,14 @@ import (
 // it never returns a speculative grant or exposes a general ACL/root API.
 func NativePeerRootGrantApplyOperation(ctx context.Context, s *state.Store,
 	project, bridge, acl, original, approvedSHA string, approved bool) (NativePeerConntrackJournalReceipt, error) {
-	return nativePeerRootGrantApplyWithTestFault(ctx, s, project, bridge, acl, original, approvedSHA, approved, nil)
+	return nativePeerRootGrantApplyWithTestFault(ctx, s, project, bridge, acl, original, approvedSHA, approved, nil, nil)
 }
 
 // Fault seam is package-private and is never available from IPC/production.
 // It lets native tests prove that a real completed ETag PUT followed by an
 // uncertain response retains stopped NICs and the DISPATCH_UNKNOWN journal.
 func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
-	project, bridge, acl, original, approvedSHA string, approved bool, afterACL func() error) (NativePeerConntrackJournalReceipt, error) {
+	project, bridge, acl, original, approvedSHA string, approved bool, afterACL, afterResume func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, errors.New("grant root requires operator approval and read-only state")
@@ -138,18 +138,40 @@ func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 			if err := check(ctx); err != nil {
 				return report, err
 			}
-			count, err := nativePeerRootResumeGrantVerified(ctx, root, pre)
+
+			// The last fallible checks must run inside the resume stop-on-error
+			// guard, never after it has declared resumption successful.
+			finalCheck := func(ctx context.Context) error {
+				if err := check(ctx); err != nil {
+					return err
+				}
+				applied, _, err := root.GetNetworkACL(acl)
+				if err != nil || applied == nil ||
+					!reflect.DeepEqual(applied.Ingress, pre.After.Ingress) ||
+					!reflect.DeepEqual(applied.Egress, pre.After.Egress) {
+					return errors.New("grant final resumed ACL readback mismatch")
+				}
+				rules, err := nativePeerRootKernelRules(ctx)
+				if err != nil {
+					return err
+				}
+				if err := nativePeerRootVerifyGrantNFT(rules, pre.Target.Project, pre.Target.Boxes,
+					pre.Running, pre.Proof.Target); err != nil {
+					return err
+				}
+				if afterResume != nil {
+					if err := afterResume(); err != nil {
+						return fmt.Errorf("injected final grant check failed: %w", err)
+					}
+				}
+				return check(ctx)
+			}
+			count, err := nativePeerRootResumeGrantVerified(ctx, root, pre, finalCheck)
 			if err != nil {
 				return report, err
 			}
 			report.VerifiedNICs = count
-			report.KernelVerified = count >= 2
-			if !report.KernelVerified {
-				return report, errors.New("grant native per-NIC kernel evidence incomplete")
-			}
-			if err := check(ctx); err != nil {
-				return report, err
-			}
+			report.KernelVerified = true
 			return report, nil
 		})
 }
@@ -158,7 +180,10 @@ func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 // uncertainty, attempt to STOP every formerly protected NIC, including the
 // member whose start was ambiguous. Root journal and SQLite remain UNKNOWN.
 func nativePeerRootResumeGrantVerified(ctx context.Context, root incus.InstanceServer,
-	pre nativePeerGrantPreflight) (int, error) {
+	pre nativePeerGrantPreflight, finalCheck func(context.Context) error) (int, error) {
+	if finalCheck == nil || len(pre.Running) < 2 {
+		return 0, errors.New("grant resume needs final checks and both live endpoints")
+	}
 	owned := root.UseProject(pre.Target.Project)
 	var resumed []string
 	success := false
@@ -166,8 +191,12 @@ func nativePeerRootResumeGrantVerified(ctx context.Context, root incus.InstanceS
 		if success {
 			return
 		}
-		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
+		// The original request context may already be cancelled.
+		if fresh, e := incus.ConnectIncusUnixWithContext(stopCtx, "/var/lib/incus/unix.socket", nil); e == nil {
+			owned = fresh.UseProject(pre.Target.Project)
+		}
 		for _, box := range pre.Target.Boxes {
 			op, e := owned.UpdateInstanceState(box.Name, api.InstanceStatePut{Action: "stop", Timeout: 20}, "")
 			if e == nil && op != nil {
@@ -211,6 +240,9 @@ func nativePeerRootResumeGrantVerified(ctx context.Context, root incus.InstanceS
 		if err := nativePeerRootVerifyGrantNFT(rules, pre.Target.Project, pre.Target.Boxes, resumed, pre.Proof.Target); err != nil {
 			return 0, err
 		}
+	}
+	if err := finalCheck(ctx); err != nil {
+		return 0, err
 	}
 	success = true
 	return len(resumed), nil

@@ -183,7 +183,7 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 	scopePath, dbPath := os.Getenv("BOXWEAVE_S4B3_SCOPE"), os.Getenv("BOXWEAVE_S4B3_DB")
 	original, scenario := os.Getenv("BOXWEAVE_S4B3_ORIGINAL"), os.Getenv("BOXWEAVE_S4B3_SCENARIO")
 	if scopePath == "" || dbPath == "" || len(original) != 32 ||
-		(scenario != "normal" && scenario != "after_acl_fault") {
+		(scenario != "normal" && scenario != "after_acl_fault" && scenario != "after_resume_fault") {
 		t.Fatal("missing exact disposable native grant original or scenario")
 	}
 	raw, err := os.ReadFile(scopePath)
@@ -206,10 +206,18 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 		t.Fatalf("native root review did not seal claimed original: %+v %v", plan, err)
 	}
 	var receipt NativePeerConntrackJournalReceipt
-	if scenario == "after_acl_fault" {
+	if scenario == "after_acl_fault" || scenario == "after_resume_fault" {
 		faults := 0
-		receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
-			original, plan.PlanSHA256, true, func() error { faults++; return errors.New("injected after REAL ACL PUT") })
+		if scenario == "after_acl_fault" {
+			receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+				original, plan.PlanSHA256, true, func() error { faults++; return errors.New("injected after REAL ACL PUT") }, nil)
+		} else {
+			receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+				original, plan.PlanSHA256, true, nil, func() error {
+					faults++
+					return errors.New("injected after actual NIC resume and final checks")
+				})
+		}
 		if err == nil || faults != 1 || receipt.Status != "DISPATCH_UNKNOWN" || receipt.MutationComplete {
 			t.Fatalf("uncertain real ACL PUT was reported as granted: %+v faults=%d err=%v", receipt, faults, err)
 		}
@@ -234,7 +242,11 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 		if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
 			t.Fatal(err)
 		}
-		t.Log("S4_B3_REAL_ACL_PUT_UNKNOWN_ROOT_JOURNAL_ALL_OWNED_NICS_STOPPED=PASS")
+		if scenario == "after_resume_fault" {
+			t.Log("S4_B3_REAL_POST_RESUME_FINAL_CHECK_UNKNOWN_ALL_NICS_REISOLATED=PASS")
+		} else {
+			t.Log("S4_B3_REAL_ACL_PUT_UNKNOWN_ROOT_JOURNAL_ALL_OWNED_NICS_STOPPED=PASS")
+		}
 		return
 	}
 	receipt, err = NativePeerRootGrantApplyOperation(ctx, s, scope.Project, scope.Bridge, scope.ACL,
