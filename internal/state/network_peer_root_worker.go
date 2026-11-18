@@ -11,12 +11,15 @@ import (
 // RootPeerResult is a strictly limited local transport acknowledgement.
 // It is NOT evidence of kernel nft convergence or re-authorized peer access.
 type RootPeerResult struct {
-	Status           string
-	PlanSHA256       string
-	ProbedScopes     int
-	DeletedScopes    int
-	MutationComplete bool
-	ReadyForPeer     bool
+	Status                 string
+	PlanSHA256             string
+	ProbedScopes           int
+	DeletedScopes          int
+	MutationComplete       bool
+	ReadyForPeer           bool
+	KernelVerified         bool
+	VerifiedNICs           int
+	PostNativeDigestSHA256 string
 }
 
 type RootPeerCall func(context.Context, string, string) (RootPeerResult, error)
@@ -146,5 +149,56 @@ func (w Worker) SubmitRootPeerRevocation(original string, isolate SynchronousACL
 		return ErrState
 	}
 	go w.ExecuteRootPeerRevocation(original, isolate, call, verify)
+	return nil
+}
+
+// ExecutePreparedRootPeerRevocation is the installed, non-injectable phase.
+// The operator must FIRST prepare the durable DISPATCHING original, review
+// the pre-isolation SHA as host root and start the exact approved root helper.
+// Root itself journals UNKNOWN before touching any native NIC/ACL/conntrack.
+// There is deliberately no external isolate or verifier callback here.
+func (w Worker) ExecutePreparedRootPeerRevocation(original string, call RootPeerCall) error {
+	if w.Store == nil || call == nil {
+		return ErrInvalid
+	}
+	rec, err := w.Store.Get(context.Background(), original)
+	if err != nil {
+		return err
+	}
+	if rec.Action != "box_peer_set" || rec.State != "DISPATCHING" {
+		return ErrState
+	}
+	if w.Budget <= 0 {
+		w.Budget = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), w.Budget)
+	defer cancel()
+	unknown := func(reason string) {
+		_ = w.Store.Unknown(context.Background(), original, "DISPATCHING", reason)
+		_ = w.Store.Unknown(context.Background(), original, "VERIFYING", reason)
+	}
+	review, err := call(ctx, original, "")
+	if err != nil || review.Status != "REVIEW_ONLY" || len(review.PlanSHA256) != 64 ||
+		strings.Trim(review.PlanSHA256, "0123456789abcdef") != "" {
+		unknown("PEER_ROOT_PREISOLATION_REVIEW_UNVERIFIED")
+		return ErrResourceLocked
+	}
+	result, err := call(ctx, original, review.PlanSHA256)
+	if err != nil || result.Status != "COMPLETE_VERIFIED" || result.PlanSHA256 != review.PlanSHA256 ||
+		!result.MutationComplete || result.ReadyForPeer || result.ProbedScopes != 4 ||
+		result.DeletedScopes < 0 || result.DeletedScopes > 4 ||
+		!result.KernelVerified || result.VerifiedNICs < 2 ||
+		len(result.PostNativeDigestSHA256) != 64 {
+		unknown("PEER_ROOT_KERNEL_ACK_UNVERIFIED")
+		return ErrResourceLocked
+	}
+	if err := w.Store.AckSynchronousACL(context.Background(), original); err != nil {
+		unknown("PEER_ROOT_ACK_UNVERIFIED")
+		return err
+	}
+	if err := w.Store.FinalizeRootPeerRevocation(context.Background(), original); err != nil {
+		unknown("PEER_ROOT_ATOMIC_COMMIT_UNVERIFIED")
+		return err
+	}
 	return nil
 }

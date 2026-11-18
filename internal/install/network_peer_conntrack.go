@@ -21,11 +21,14 @@ import (
 )
 
 type NativePeerConntrackReport struct {
-	NativeDigestSHA256 string `json:"native_digest_sha256"`
-	PairIPv4           string `json:"pair_ipv4"`
-	PairIPv6           string `json:"pair_ipv6"`
-	ProbedScopes       int    `json:"probed_scopes"`
-	DeletedScopes      int    `json:"deleted_scopes"`
+	NativeDigestSHA256     string `json:"native_digest_sha256"`
+	PostNativeDigestSHA256 string `json:"post_native_digest_sha256,omitempty"`
+	VerifiedNICs           int    `json:"verified_nics,omitempty"`
+	KernelVerified         bool   `json:"kernel_verified,omitempty"`
+	PairIPv4               string `json:"pair_ipv4"`
+	PairIPv6               string `json:"pair_ipv6"`
+	ProbedScopes           int    `json:"probed_scopes"`
+	DeletedScopes          int    `json:"deleted_scopes"`
 	// No readiness claim is made before an independently checked ACL
 	// native per-NIC kernel state and the full controller transaction.
 	ReadyForPeer bool `json:"ready_for_peer"`

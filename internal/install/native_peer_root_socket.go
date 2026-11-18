@@ -129,7 +129,7 @@ func nativePeerRootServeListener(ctx context.Context, ln *net.UnixListener,
 				return
 			}
 			_ = conn.SetReadDeadline(time.Time{})
-			callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			callCtx, cancel := context.WithTimeout(ctx, 210*time.Second)
 			defer cancel()
 			result, err := handle(callCtx, req)
 			if err != nil {
@@ -245,17 +245,24 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 				return NativePeerRootResponse{}, errors.New("root helper operator approval does not match original and plan")
 			}
 			if req.PlanSHA256 == "" {
-				plan, err := NativePeerConntrackReviewOperation(callCtx, db,
+				plan, err := NativePeerRootIntegratedReviewOperation(callCtx, db,
 					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID)
 				if err != nil {
 					return NativePeerRootResponse{}, err
 				}
+				if plan.PlanSHA256 != cfg.ApprovedPlanSHA {
+					return NativePeerRootResponse{}, errors.New("root preview differs from operator-approved pre-isolation SHA")
+				}
 				return NativePeerRootResponse{Status: "REVIEW_ONLY", PlanSHA256: plan.PlanSHA256}, nil
 			}
-			receipt, err := NativePeerConntrackApplyOperation(callCtx, db,
+			receipt, err := NativePeerRootIntegratedApplyOperation(callCtx, db,
 				cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256, true)
 			if err != nil {
 				return NativePeerRootResponse{Status: "DENIED_OR_UNKNOWN", Receipt: &receipt}, err
+			}
+			if !receipt.KernelVerified || receipt.VerifiedNICs < 2 || receipt.PostNativeDigestSHA256 == "" {
+				return NativePeerRootResponse{Status: "DENIED_OR_UNKNOWN", Receipt: &receipt},
+					errors.New("root effect lacks per-NIC nft kernel evidence")
 			}
 			return NativePeerRootResponse{Status: receipt.Status, Receipt: &receipt}, nil
 		})
@@ -282,7 +289,7 @@ func nativePeerRootCall(ctx context.Context, path string, req NativePeerRootRequ
 	if err := uc.CloseWrite(); err != nil {
 		return out, err
 	}
-	_ = uc.SetReadDeadline(time.Now().Add(90 * time.Second))
+	_ = uc.SetReadDeadline(time.Now().Add(210 * time.Second))
 	if err := json.NewDecoder(io.LimitReader(uc, 4096)).Decode(&out); err != nil {
 		return out, err
 	}

@@ -10,6 +10,8 @@ import (
 	"golang.org/x/term"
 	"os"
 	"os/signal"
+	"os/user"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -26,7 +28,7 @@ var (
 )
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
+	fmt.Fprintln(os.Stderr, "usage: boxweave serve|status|doctor|token-create|token-revoke|oauth-setup|oauth-set-origin|oauth-disable|oauth-status|oauth-list-grants|oauth-revoke-grant|build-info|install-stage|install-activate|install-status|upgrade|rollback|install-commit|recover|native-plan|native-bootstrap|native-prereq-plan|native-prereq-verify|native-prepare-plan|native-prepare-apply|native-prepare-status|native-prepare-rollback|native-prepare-archive|native-peer-audit|native-peer-purge-plan|native-peer-root-plan|native-peer-root-stage|native-peer-root-execute|native-peer-root-serve|native-peer-root-request|native-scriptlet-plan|native-scriptlet-apply|native-scriptlet-status|native-scriptlet-rollback|native-scriptlet-reconcile|native-migrate-plan|native-migrate-apply|native-migrate-status|native-migrate-reconcile|native-migrate-rollback|native-migrate-commit [flags]")
 }
 func run() error {
 	if len(os.Args) < 2 {
@@ -93,7 +95,7 @@ func run() error {
 		return errors.New("unexpected arguments")
 	}
 	switch command {
-	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
+	case "serve", "status", "doctor", "token-create", "token-revoke", "oauth-setup", "oauth-set-origin", "oauth-disable", "oauth-status", "oauth-list-grants", "oauth-revoke-grant", "build-info", "install-stage", "install-activate", "install-status", "upgrade", "rollback", "install-commit", "recover", "native-plan", "native-bootstrap", "native-prereq-plan", "native-prereq-verify", "native-prepare-plan", "native-prepare-apply", "native-prepare-status", "native-prepare-rollback", "native-prepare-archive", "native-peer-audit", "native-peer-purge-plan", "native-peer-root-plan", "native-peer-root-stage", "native-peer-root-execute", "native-peer-root-serve", "native-peer-root-request", "native-scriptlet-plan", "native-scriptlet-apply", "native-scriptlet-status", "native-scriptlet-rollback", "native-scriptlet-reconcile", "native-migrate-plan", "native-migrate-apply", "native-migrate-status", "native-migrate-reconcile", "native-migrate-rollback", "native-migrate-commit":
 	default:
 		usage()
 		return errors.New("unsupported command")
@@ -168,6 +170,23 @@ func run() error {
 		}
 		return err
 	}
+	if command == "native-peer-root-plan" {
+		if os.Geteuid() != 0 {
+			return errors.New("root pre-isolation plan requires host root")
+		}
+		db, err := state.OpenNetworkAuditReadOnly(*db)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		plan, err := install.NativePeerRootIntegratedReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(plan)
+	}
 	if command == "native-peer-root-serve" {
 		if os.Geteuid() != 0 || !*approveLocal {
 			return errors.New("root peer helper requires explicit local host-root approval")
@@ -181,7 +200,7 @@ func run() error {
 		})
 	}
 	if command == "native-peer-root-request" {
-		ctx, cancel := context.WithTimeout(context.Background(), 95*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 		defer cancel()
 		result, err := install.NativePeerRootCall(ctx, *peerOriginal, *peerSHA)
 		if e := json.NewEncoder(os.Stdout).Encode(result); e != nil {
@@ -397,6 +416,23 @@ func run() error {
 		if _, err := s.RecoverExecGC(ctx); err != nil {
 			return err
 		}
+	}
+	if command == "native-peer-root-stage" || command == "native-peer-root-execute" {
+		if os.Geteuid() == 0 {
+			return errors.New("root peer controller must run as restricted service account")
+		}
+		if *peerOriginal == "" || *project == "" {
+			return errors.New("exact original and Project required")
+		}
+		serviceUser, err := user.Lookup("boxweave")
+		if err != nil || strconv.Itoa(os.Geteuid()) != serviceUser.Uid || *project != "user-"+serviceUser.Uid {
+			return errors.New("host root peer controller requires installed boxweave UID and exact Project")
+		}
+		svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}}
+		if command == "native-peer-root-stage" {
+			return svc.PrepareRootPeerRevocation(*peerOriginal)
+		}
+		return svc.ExecutePreparedRootPeerRevocation(*peerOriginal)
 	}
 	// OAuth configuration is host-local only. A browser request may never
 	// alter the approval secret, public issuer, grants or server identity.

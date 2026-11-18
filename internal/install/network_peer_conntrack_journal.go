@@ -21,12 +21,15 @@ const nativePeerConntrackJournalPath = "/var/lib/boxweave-native-peer-conntrack-
 const nativePeerConntrackLockPath = "/var/lib/boxweave-native-peer-conntrack-v1.lock"
 
 type NativePeerConntrackJournalReceipt struct {
-	Status           string `json:"status"`
-	PlanSHA256       string `json:"plan_sha256"`
-	ProbedScopes     int    `json:"probed_scopes"`
-	DeletedScopes    int    `json:"deleted_scopes"`
-	ReadyForPeer     bool   `json:"ready_for_peer"`
-	MutationComplete bool   `json:"mutation_complete"`
+	Status                 string `json:"status"`
+	PlanSHA256             string `json:"plan_sha256"`
+	ProbedScopes           int    `json:"probed_scopes"`
+	DeletedScopes          int    `json:"deleted_scopes"`
+	ReadyForPeer           bool   `json:"ready_for_peer"`
+	MutationComplete       bool   `json:"mutation_complete"`
+	KernelVerified         bool   `json:"kernel_verified,omitempty"`
+	VerifiedNICs           int    `json:"verified_nics,omitempty"`
+	PostNativeDigestSHA256 string `json:"post_native_digest_sha256,omitempty"`
 }
 
 type nativePeerConntrackJournal struct {
@@ -40,7 +43,10 @@ func nativePeerConntrackReceipt(j nativePeerConntrackJournal) NativePeerConntrac
 	return NativePeerConntrackJournalReceipt{
 		Status: j.Status, PlanSHA256: j.Plan.PlanSHA256, ProbedScopes: j.Report.ProbedScopes,
 		DeletedScopes: j.Report.DeletedScopes, ReadyForPeer: false,
-		MutationComplete: j.Status == "COMPLETE_VERIFIED",
+		MutationComplete:       j.Status == "COMPLETE_VERIFIED",
+		KernelVerified:         j.Status == "COMPLETE_VERIFIED" && j.Report.KernelVerified,
+		VerifiedNICs:           j.Report.VerifiedNICs,
+		PostNativeDigestSHA256: j.Report.PostNativeDigestSHA256,
 	}
 }
 

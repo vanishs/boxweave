@@ -8,27 +8,44 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
-// SubmitRootPeerRevocation wires the restricted, durable controller worker
-// to the host-approved SO_PEERCRED root helper. The public MCP Peer writer
-// is intentionally NOT exposed in B2: it must supply a real native
-// quarantine callback AND independent per-NIC nft/foreign packet verifier
-// before this private path may ever be used for a caller's request.
-func (s *Service) SubmitRootPeerRevocation(original string,
-	isolate state.SynchronousACLIsolation, verify state.RootPeerVerifier) error {
-	if s == nil || s.Store == nil || isolate == nil || verify == nil {
-		return errors.New("installed root peer revocation requires durable controller and kernel verifier")
+// PrepareRootPeerRevocation is a private installed-controller phase. It
+// atomically moves an already admitted admin-owned original to DISPATCHING,
+// without touching native state. The host-root operator can then review the
+// exact pre-isolation digest and approve the bounded helper. No public MCP
+// peer writer is exposed during B2.
+func (s *Service) PrepareRootPeerRevocation(original string) error {
+	if s == nil || s.Store == nil {
+		return errors.New("missing durable controller")
 	}
-	rootCall := func(ctx context.Context, id, sha string) (state.RootPeerResult, error) {
-		report, err := install.NativePeerRootCall(ctx, id, sha)
-		out := state.RootPeerResult{Status: report.Status, PlanSHA256: report.PlanSHA256}
-		if report.Receipt != nil {
-			out.PlanSHA256 = report.Receipt.PlanSHA256
-			out.ProbedScopes = report.Receipt.ProbedScopes
-			out.DeletedScopes = report.Receipt.DeletedScopes
-			out.MutationComplete = report.Receipt.MutationComplete
-			out.ReadyForPeer = report.Receipt.ReadyForPeer
-		}
-		return out, err
+	ctx := context.Background()
+	if err := s.Store.StageRootPeerRevocation(ctx, original); err != nil {
+		return err
 	}
-	return (state.Worker{Store: s.Store}).SubmitRootPeerRevocation(original, isolate, rootCall, verify)
+	return s.Store.Claim(ctx, original)
+}
+
+// ExecutePreparedRootPeerRevocation has NO client-supplied callbacks or
+// arbitrary native arguments. The separate host-root daemon performs all
+// preflight, no-replay journaling, full-NIC isolation, ACL ETag DROP, exact
+// conntrack and per-NIC nft verification before its positive response.
+func (s *Service) ExecutePreparedRootPeerRevocation(original string) error {
+	if s == nil || s.Store == nil {
+		return errors.New("missing durable controller")
+	}
+	return (state.Worker{Store: s.Store}).ExecutePreparedRootPeerRevocation(
+		original, func(ctx context.Context, id, sha string) (state.RootPeerResult, error) {
+			report, err := install.NativePeerRootCall(ctx, id, sha)
+			out := state.RootPeerResult{Status: report.Status, PlanSHA256: report.PlanSHA256}
+			if report.Receipt != nil {
+				out.PlanSHA256 = report.Receipt.PlanSHA256
+				out.ProbedScopes = report.Receipt.ProbedScopes
+				out.DeletedScopes = report.Receipt.DeletedScopes
+				out.MutationComplete = report.Receipt.MutationComplete
+				out.ReadyForPeer = report.Receipt.ReadyForPeer
+				out.KernelVerified = report.Receipt.KernelVerified
+				out.VerifiedNICs = report.Receipt.VerifiedNICs
+				out.PostNativeDigestSHA256 = report.Receipt.PostNativeDigestSHA256
+			}
+			return out, err
+		})
 }

@@ -282,3 +282,15 @@ func isolatePeerACL(ctx context.Context, d peerACLDriver, project, bridge, acl s
 	}
 	return nil
 }
+
+// IsolateSharedPeerACLWithClient is the host-root counterpart to the
+// confined Reader barrier. ONLY a root-local installer/helper with independent
+// complete bridge/SQLite review may supply its client and verifier; never
+// publish this as an MCP or accept a caller-provided native client.
+func IsolateSharedPeerACLWithClient(ctx context.Context, c incus.InstanceServer,
+	project, bridge, acl string, boxes []PeerACLBox, check PeerACLBridgeCheck) error {
+	if c == nil || check == nil || project == "" || project == "default" {
+		return ErrUnverified
+	}
+	return isolatePeerACL(ctx, peerACLSDK{c: c.UseProject(project)}, project, bridge, acl, boxes, check)
+}

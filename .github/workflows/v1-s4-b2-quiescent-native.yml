@@ -54,6 +54,10 @@ on:
       - internal/install/network_peer_revocation.go
       - internal/install/network_peer_revocation_test.go
       - internal/install/network_peer_revocation_native_test.go
+      - internal/install/native_peer_root_integrated.go
+      - internal/install/native_peer_root_integrated_test.go
+      - internal/install/native_peer_root_integrated_native_test.go
+      - internal/state/network_peer_root_installed_test.go
       - internal/install/network_peer_live_native_test.go
       - scripts/s4_b2_native_flow_probe.go
   workflow_dispatch:
@@ -114,7 +118,7 @@ jobs:
           a4=10.248.83.11; b4=10.248.83.12; c4=10.248.83.13
           a6=fd83:248::11; b6=fd83:248::12; c6=fd83:248::13
           probe() {
-            sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
               S4B2_A4="$a4" S4B2_B4="$b4" S4B2_A6="$a6" S4B2_B6="$b6" \
               "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run "^$1$"
           }
@@ -501,6 +505,7 @@ jobs:
           # crafted rule. Verify old tracked flow is DENIED without any
           # privileged conntrack deletion or NIC-wide lease rotation.
           probe TestS4B2NativeCompiledDropTombstoneApply
+          probe TestS4B2NativeRootKernelPerNICDropReadback
           if sudo incus --project bwowned exec s4b2a -- ping -n -c 2 -W 2 "$b4" >/dev/null 2>&1; then
             echo "S4_B2_NATIVE_COMPILED_DROP_OLD_CT_IPV4=REACHABLE_UNSAFE"; exit 84
           fi
