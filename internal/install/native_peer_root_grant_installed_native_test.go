@@ -168,11 +168,13 @@ func TestS4B3NativeNonrootSeedClaimedGrantOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StagePeerGrant(ctx, op.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Claim(ctx, op.ID); err != nil {
-		t.Fatal(err)
+	if os.Getenv("BOXWEAVE_S4B3_ADMIT_ONLY") != "1" {
+		if err := s.StagePeerGrant(ctx, op.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Claim(ctx, op.ID); err != nil {
+			t.Fatal(err)
+		}
 	}
 	fmt.Printf("S4_B3_NATIVE_GRANT_ORIGINAL=%s\n", op.ID)
 	t.Log("S4_B3_NATIVE_NONROOT_ADMIN_CLAIM_AND_PENDING_GRANT=PASS")

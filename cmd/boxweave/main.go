@@ -202,7 +202,16 @@ func run() error {
 		defer db.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		plan, err := install.NativePeerRootIntegratedReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
+		allow, err := db.PeerOperationDirection(ctx, *peerOriginal, "DISPATCHING")
+		if err != nil {
+			return err
+		}
+		var plan install.NativePeerConntrackPlan
+		if allow {
+			plan, err = install.NativePeerRootGrantReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
+		} else {
+			plan, err = install.NativePeerRootIntegratedReviewOperation(ctx, db, *project, *prepareNetwork, *prepareACL, *peerOriginal)
+		}
 		if err != nil {
 			return err
 		}
@@ -450,14 +459,36 @@ func run() error {
 			return errors.New("host root peer controller requires installed boxweave UID and exact Project")
 		}
 		svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}}
+		expected := "DISPATCHING"
 		if command == "native-peer-root-stage" {
+			expected = "ADMITTED"
+		}
+		if command == "native-peer-root-reconcile" {
+			expected = "UNKNOWN"
+		}
+		allow, err := s.PeerOperationDirection(context.Background(), *peerOriginal, expected)
+		if err != nil {
+			return err
+		}
+		if command == "native-peer-root-stage" {
+			if allow {
+				return svc.PrepareRootPeerGrant(*peerOriginal)
+			}
 			return svc.PrepareRootPeerRevocation(*peerOriginal)
 		}
 		if command == "native-peer-root-reconcile" {
 			if *peerSHA == "" {
 				return errors.New("exact original approved root digest required")
 			}
+			if allow {
+				// Never send a grant UNKNOWN original into the B2 revoke-only
+				// recovery witness. Separate complete-journal grant proof is required.
+				return errors.New("grant UNKNOWN read-only reconciliation is not yet verified")
+			}
 			return svc.ReconcileCompletedUnknownRootPeerRevocation(*peerOriginal, *peerSHA)
+		}
+		if allow {
+			return svc.ExecutePreparedRootPeerGrant(*peerOriginal)
 		}
 		return svc.ExecutePreparedRootPeerRevocation(*peerOriginal)
 	}

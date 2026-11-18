@@ -11,6 +11,9 @@ on:
       - internal/install/native_peer_root_grant_nft.go
       - internal/state/network_peer_root_grant.go
       - internal/state/network_peer_root_grant_worker.go
+      - internal/state/network_peer_operation_mode.go
+      - internal/install/native_peer_root_service.go
+      - cmd/boxweave/main.go
       - scripts/s4_b3_native_packet_probe.go
   workflow_dispatch:
 
@@ -25,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault]
+        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault, installed_normal]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +66,8 @@ jobs:
           sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
           go test -c -o "$RUNNER_TEMP/s4b3-root-fixture" ./internal/install
           sudo install -m0755 "$RUNNER_TEMP/s4b3-root-fixture" /usr/local/bin/s4b3-root-fixture
+          go build -o "$RUNNER_TEMP/s4b3-installed" ./cmd/boxweave
+          sudo install -m0755 "$RUNNER_TEMP/s4b3-installed" /usr/local/bin/boxweave
           sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
           sudo incus project create "$project" \
@@ -106,21 +111,53 @@ jobs:
           sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
             BOXWEAVE_S4B3_SCOPE="$scope" \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
+          admit_only=0
+          if test "${{ matrix.scenario }}" = installed_normal; then admit_only=1; fi
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
-            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
+            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_ADMIT_ONLY="$admit_only" \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$' \
             | tee "$RUNNER_TEMP/s4b3-seed.log"
           original="$(sed -n 's/^S4_B3_NATIVE_GRANT_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-seed.log" | tail -n1)"
           test "${#original}" -eq 32
           echo "$original" > "$RUNNER_TEMP/s4b3-original"
-          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
-            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
-            BOXWEAVE_S4B3_ORIGINAL="$original" BOXWEAVE_S4B3_SCENARIO="${{ matrix.scenario }}" \
-            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeInstalledRootGrantActualEffect$'
+          if test "${{ matrix.scenario }}" = installed_normal; then
+            bin=/usr/local/bin/boxweave
+            sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+            sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" > "$RUNNER_TEMP/s4b3-installed-plan.json"
+            sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-installed-plan.json")"
+            test "$(printf '%s' "$sha" | wc -c)" = 64
+            sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now boxweave-native-peer-root.service
+            ready=0
+            for _ in $(seq 1 35); do
+              if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            test "$(stat -c '%a:%U:%G' /run/boxweave-native-peer-root.sock)" = "660:root:boxweave"
+            if sudo "$bin" native-peer-root-request -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B3_INSTALLED_FOREIGN_UID_ROOT_REQUEST_ACCEPTED; exit 87
+            fi
+            sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original')")" = CONFIRMED:1
+            test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B3_INSTALLED_ORIGINAL_REPLAYED; exit 88
+            fi
+            echo "S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS original=$original"
+          else
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+              BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
+              BOXWEAVE_S4B3_ORIGINAL="$original" BOXWEAVE_S4B3_SCENARIO="${{ matrix.scenario }}" \
+              /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeInstalledRootGrantActualEffect$'
+          fi
           echo "S4_B3_NATIVE_ROOT_ONE_SHOT_RESULT=${{ matrix.scenario }}"
 
       - name: Test real IPv4 and IPv6 TCP/UDP permit, reverse and sibling denies
-        if: matrix.scenario == 'normal'
+        if: matrix.scenario == 'normal' || matrix.scenario == 'installed_normal'
         shell: bash
         run: |
           set -euo pipefail
@@ -194,6 +231,7 @@ jobs:
         run: |
           set +e
           project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
+          sudo systemctl stop boxweave-native-peer-root.service 2>/dev/null || :
           if test -n "$project"; then
             for name in s4b2a s4b2b s4b2c; do
               sudo incus --project "$project" stop "$name" 2>/dev/null || :

@@ -90,7 +90,16 @@ func NativePeerRootUnitStage(ctx context.Context, cfg NativePeerRootScope) error
 		return err
 	}
 	defer db.Close()
-	plan, err := NativePeerRootIntegratedReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
+	allow, err := db.PeerOperationDirection(ctx, cfg.OriginalID, "DISPATCHING")
+	if err != nil {
+		return fmt.Errorf("native root original direction refused: %w", err)
+	}
+	var plan NativePeerConntrackPlan
+	if allow {
+		plan, err = NativePeerRootGrantReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
+	} else {
+		plan, err = NativePeerRootIntegratedReviewOperation(ctx, db, cfg.Project, cfg.Bridge, cfg.ACL, cfg.OriginalID)
+	}
 	if err != nil {
 		return fmt.Errorf("native root service preflight refused: %w", err)
 	}
