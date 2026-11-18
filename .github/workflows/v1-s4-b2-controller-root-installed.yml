@@ -9,6 +9,12 @@ on:
       - internal/state/network_peer_root_recovery.go
       - internal/state/network_peer_root_recovery_test.go
       - internal/state/network_peer_root_handoff.go
+      # Full-NIC root isolation depends on shared admission and root staging.
+      - internal/state/store.go
+      - internal/state/network_peer_project_barrier_test.go
+      - internal/state/network_peer_root_stage.go
+      - internal/state/network_peer_root_stage_test.go
+      - internal/state/network_peer_root_handoff_test.go
       - internal/install/native_peer_root_service.go
       - internal/install/native_peer_root_service_test.go
       - internal/install/native_peer_root_integrated.go

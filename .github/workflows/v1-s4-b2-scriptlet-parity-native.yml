@@ -10,6 +10,8 @@ on:
       - internal/install/native_scriptlet_apply.go
       - internal/install/native_scriptlet_apply_test.go
       - internal/install/native_scriptlet_apply_native_test.go
+      # Shared state admission changes must revalidate restricted TLS parity.
+      - internal/state/store.go
   workflow_dispatch:
 permissions:
   contents: read

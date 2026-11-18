@@ -34,6 +34,9 @@ on:
       - internal/install/native_peer_root_socket.go
       - internal/install/native_peer_root_socket_test.go
       - internal/state/network_peer_root_handoff.go
+      # Recheck all-Box Project admission whenever its implementation changes.
+      - internal/state/store.go
+      - internal/state/network_peer_project_barrier_test.go
       - internal/state/network_peer_root_handoff_test.go
       - internal/state/network_peer_root_stage.go
       - internal/state/network_peer_root_stage_test.go
