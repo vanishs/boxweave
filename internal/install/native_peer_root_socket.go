@@ -248,6 +248,15 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 			if !nativePeerRootApprovedRequest(cfg, req) {
 				return NativePeerRootResponse{}, errors.New("root helper operator approval does not match original and plan")
 			}
+			// Grant/revoke mode comes only from independently verified SQLite,
+			// never a request-controlled root mode or arbitrary ACL tuple.
+			_, grantErr := db.ReadRootPeerGrant(callCtx, req.OperationID, cfg.Project, cfg.Bridge, cfg.ACL)
+			isGrant := grantErr == nil
+			if !isGrant && !req.Reconcile {
+				if _, err := db.ReadRootPeerRevocation(callCtx, req.OperationID, cfg.Project, cfg.Bridge, cfg.ACL); err != nil {
+					return NativePeerRootResponse{}, errors.New("no eligible exact claimed peer original")
+				}
+			}
 			if req.Reconcile {
 				receipt, err := NativePeerRootReconcileCompletedUnknown(callCtx, db,
 					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256)
@@ -257,8 +266,15 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 				return NativePeerRootResponse{Status: "RECONCILE_VERIFIED", Receipt: &receipt}, nil
 			}
 			if req.PlanSHA256 == "" {
-				plan, err := NativePeerRootIntegratedReviewOperation(callCtx, db,
-					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID)
+				var plan NativePeerConntrackPlan
+				var err error
+				if isGrant {
+					plan, err = NativePeerRootGrantReviewOperation(callCtx, db,
+						cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID)
+				} else {
+					plan, err = NativePeerRootIntegratedReviewOperation(callCtx, db,
+						cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID)
+				}
 				if err != nil {
 					return NativePeerRootResponse{}, err
 				}
@@ -267,8 +283,15 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 				}
 				return NativePeerRootResponse{Status: "REVIEW_ONLY", PlanSHA256: plan.PlanSHA256}, nil
 			}
-			receipt, err := NativePeerRootIntegratedApplyOperation(callCtx, db,
-				cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256, true)
+			var receipt NativePeerConntrackJournalReceipt
+			var err error
+			if isGrant {
+				receipt, err = NativePeerRootGrantApplyOperation(callCtx, db,
+					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256, true)
+			} else {
+				receipt, err = NativePeerRootIntegratedApplyOperation(callCtx, db,
+					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256, true)
+			}
 			if err != nil {
 				return NativePeerRootResponse{Status: "DENIED_OR_UNKNOWN", Receipt: &receipt}, err
 			}
