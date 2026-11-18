@@ -100,7 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           project="$(cat "$RUNNER_TEMP/s4b3-project")"
-          scope="$RUNNER_TEMP/s4b3-scope.json"
+          scope="/tmp/s4b3-disposable-native-scope.json"
           db=/var/lib/boxweave/ledger.sqlite
           sudo install -d -m0700 -o boxweave -g boxweave /var/lib/boxweave
           sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
