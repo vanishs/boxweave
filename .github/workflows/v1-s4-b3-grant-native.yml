@@ -299,7 +299,8 @@ jobs:
           for _ in $(seq 1 80); do
             if sudo incus --project "$project" exec s4b2a -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11'" &&
                sudo incus --project "$project" exec s4b2b -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12'" &&
-               sudo incus --project "$project" exec s4b2c -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13'"; then ready=1; break; fi
+               sudo incus --project "$project" exec s4b2c -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13'" &&
+               sudo incus --project "$project" exec s4b2b -- ip -6 route get fd83:248::13 >/dev/null; then ready=1; break; fi
             sleep 2
           done
           test "$ready" = 1
@@ -319,8 +320,23 @@ jobs:
           done
           for proto in tcp udp; do
             for dst in 10.248.83.13 fd83:248::13; do
-              sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"
-              echo "S4_B3_NATIVE_RETAINED_B_TO_C=PASS proto=$proto dst=$dst"
+              accepted=0
+              for attempt in $(seq 1 12); do
+                if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"; then
+                  accepted=1
+                  echo "S4_B3_NATIVE_RETAINED_B_TO_C=PASS proto=$proto dst=$dst attempt=$attempt"
+                  break
+                fi
+                echo "S4_B3_MULTI_REVOKE_RETAINED_ALLOW_WAIT $proto $dst attempt=$attempt"
+                sleep 2
+              done
+              if test "$accepted" != 1; then
+                echo "S4_B3_MULTI_REVOKE_RETAINED_ALLOW_FAILED $proto $dst"
+                sudo incus --project "$project" exec s4b2b -- ip -6 addr show eth0 || :
+                sudo incus --project "$project" exec s4b2b -- ip -6 route show || :
+                sudo incus --project "$project" exec s4b2b -- ip -6 neigh show || :
+                exit 91
+              fi
             done
             for dst in 10.248.83.12 fd83:248::12; do
               if sudo incus --project "$project" exec s4b2a -- /root/s4b3-packet probe "$proto" "$dst"; then
