@@ -5,6 +5,10 @@ on:
     branches: [feat/v1-s4-runtime-integration-20261116]
     paths:
       - .github/workflows/v1-s4-b2-controller-root-installed.yml
+      - internal/install/native_peer_root_recovery.go
+      - internal/state/network_peer_root_recovery.go
+      - internal/state/network_peer_root_recovery_test.go
+      - internal/state/network_peer_root_handoff.go
       - internal/install/native_peer_root_service.go
       - internal/install/native_peer_root_service_test.go
       - internal/install/native_peer_root_integrated.go
@@ -24,6 +28,10 @@ jobs:
     if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [normal, lost_ack]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -238,7 +246,23 @@ jobs:
           sudo test ! -e "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           echo S4_B2_ROOT_SYSTEMD_SIGKILL_RESTART_STALE_SOCKET_NO_EFFECT=PASS
           phase=ROOT_EXECUTE
-          sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+          if test "${{ matrix.scenario }}" = lost_ack; then
+            # Root performs the *real* effect, but the durable controller
+            # never sees this ACK. It must mark the original UNKNOWN.
+            sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" > "$RUNNER_TEMP/s4b2-discarded-root-ack.json"
+            jq -e '.status=="COMPLETE_VERIFIED" and .receipt.kernel_verified==true' "$RUNNER_TEMP/s4b2-discarded-root-ack.json" >/dev/null
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B2_ROOT_ACK_LOSS_ILLEGALLY_REPLAYED; exit 85
+            fi
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+            sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            before="$(sudo sha256sum "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" | cut -d' ' -f1)"
+            sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project"               -operation-id "$original" -peer-plan-sha256 "$sha"
+            test "$(sudo sha256sum "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" | cut -d' ' -f1)" = "$before"
+            echo S4_B2_INSTALLED_ROOT_ACK_LOST_COMPLETED_JOURNAL_READONLY_RECOVERED_NO_REPLAY=PASS
+          else
+            sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+          fi
           echo S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS
           phase=SQLITE_FINAL_OPERATION
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED

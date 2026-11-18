@@ -27,6 +27,7 @@ const nativePeerRootSocketPath = "/run/boxweave-native-peer-root.sock"
 type NativePeerRootRequest struct {
 	OperationID string `json:"operation_id"`
 	PlanSHA256  string `json:"plan_sha256"`
+	Reconcile   bool   `json:"reconcile,omitempty"`
 }
 type NativePeerRootResponse struct {
 	Status     string                             `json:"status"`
@@ -74,6 +75,9 @@ func nativePeerRootPeerUID(conn *net.UnixConn, expected uint32) error {
 func nativePeerRootValidateRequest(req NativePeerRootRequest) error {
 	if _, err := nativePeerConntrackOperationJournalPath(req.OperationID); err != nil {
 		return err
+	}
+	if req.Reconcile && req.PlanSHA256 == "" {
+		return errors.New("root reconciliation requires the original reviewed digest")
 	}
 	if req.PlanSHA256 != "" {
 		if len(req.PlanSHA256) != 64 {
@@ -244,6 +248,14 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 			if !nativePeerRootApprovedRequest(cfg, req) {
 				return NativePeerRootResponse{}, errors.New("root helper operator approval does not match original and plan")
 			}
+			if req.Reconcile {
+				receipt, err := NativePeerRootReconcileCompletedUnknown(callCtx, db,
+					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID, req.PlanSHA256)
+				if err != nil {
+					return NativePeerRootResponse{Status: "RECONCILE_REFUSED"}, err
+				}
+				return NativePeerRootResponse{Status: "RECONCILE_VERIFIED", Receipt: &receipt}, nil
+			}
 			if req.PlanSHA256 == "" {
 				plan, err := NativePeerRootIntegratedReviewOperation(callCtx, db,
 					cfg.Project, cfg.Bridge, cfg.ACL, req.OperationID)
@@ -307,5 +319,13 @@ func nativePeerRootCall(ctx context.Context, path string, req NativePeerRootRequ
 func NativePeerRootCall(ctx context.Context, original, reviewedSHA string) (NativePeerRootResponse, error) {
 	return nativePeerRootCall(ctx, nativePeerRootSocketPath, NativePeerRootRequest{
 		OperationID: original, PlanSHA256: reviewedSHA,
+	})
+}
+
+// NativePeerRootCallReconcile is ONLY a read-only post-effect root witness.
+// It cannot dispatch the original again, clear UNKNOWN or edit host policy.
+func NativePeerRootCallReconcile(ctx context.Context, original, reviewedSHA string) (NativePeerRootResponse, error) {
+	return nativePeerRootCall(ctx, nativePeerRootSocketPath, NativePeerRootRequest{
+		OperationID: original, PlanSHA256: reviewedSHA, Reconcile: true,
 	})
 }

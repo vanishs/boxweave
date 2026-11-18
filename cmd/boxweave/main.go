@@ -438,7 +438,7 @@ func run() error {
 			return err
 		}
 	}
-	if command == "native-peer-root-stage" || command == "native-peer-root-execute" {
+	if command == "native-peer-root-stage" || command == "native-peer-root-execute" || command == "native-peer-root-reconcile" {
 		if os.Geteuid() == 0 {
 			return errors.New("root peer controller must run as restricted service account")
 		}
@@ -452,6 +452,12 @@ func run() error {
 		svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}}
 		if command == "native-peer-root-stage" {
 			return svc.PrepareRootPeerRevocation(*peerOriginal)
+		}
+		if command == "native-peer-root-reconcile" {
+			if *peerSHA == "" {
+				return errors.New("exact original approved root digest required")
+			}
+			return svc.ReconcileCompletedUnknownRootPeerRevocation(*peerOriginal, *peerSHA)
 		}
 		return svc.ExecutePreparedRootPeerRevocation(*peerOriginal)
 	}

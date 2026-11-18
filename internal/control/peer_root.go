@@ -49,3 +49,28 @@ func (s *Service) ExecutePreparedRootPeerRevocation(original string) error {
 			return out, err
 		})
 }
+
+// ReconcileCompletedUnknownRootPeerRevocation accepts ONLY the exact already
+// completed root journal and independent post-native read-only kernel proof.
+// It never reapplies Stop, ACL PUT, conntrack or re-arms an UNKNOWN original.
+func (s *Service) ReconcileCompletedUnknownRootPeerRevocation(original, sha string) error {
+	if s == nil || s.Store == nil {
+		return errors.New("missing restricted controller")
+	}
+	return (state.Worker{Store: s.Store}).ReconcileCompletedUnknownRootPeer(original, sha,
+		func(ctx context.Context, id, digest string) (state.RootPeerResult, error) {
+			resp, err := install.NativePeerRootCallReconcile(ctx, id, digest)
+			out := state.RootPeerResult{Status: resp.Status}
+			if resp.Receipt != nil {
+				out.PlanSHA256 = resp.Receipt.PlanSHA256
+				out.ProbedScopes = resp.Receipt.ProbedScopes
+				out.DeletedScopes = resp.Receipt.DeletedScopes
+				out.MutationComplete = resp.Receipt.MutationComplete
+				out.ReadyForPeer = resp.Receipt.ReadyForPeer
+				out.KernelVerified = resp.Receipt.KernelVerified
+				out.VerifiedNICs = resp.Receipt.VerifiedNICs
+				out.PostNativeDigestSHA256 = resp.Receipt.PostNativeDigestSHA256
+			}
+			return out, err
+		})
+}

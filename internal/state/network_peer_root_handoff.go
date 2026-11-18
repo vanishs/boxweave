@@ -37,6 +37,20 @@ type RootPeerRevocation struct {
 // canonical safe intent, credential and multi-resource claims. No arbitrary
 // unclaimed or UNKNOWN operation is ever eligible for host-root dispatch.
 func (s *Store) ReadRootPeerRevocation(ctx context.Context, id, project, bridge, acl string) (RootPeerRevocation, error) {
+	return s.readRootPeerRevocationState(ctx, id, project, bridge, acl, "DISPATCHING")
+}
+
+// ReadRootPeerUnknownRevocation is for read-only host-root post-mutation
+// reconciliation. It preserves every claim, token, ledger and UUID check,
+// and NEVER authorizes a second native dispatch of the old operation.
+func (s *Store) ReadRootPeerUnknownRevocation(ctx context.Context, id, project, bridge, acl string) (RootPeerRevocation, error) {
+	return s.readRootPeerRevocationState(ctx, id, project, bridge, acl, "UNKNOWN")
+}
+
+func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, bridge, acl, expectedState string) (RootPeerRevocation, error) {
+	if expectedState != "DISPATCHING" && expectedState != "UNKNOWN" {
+		return RootPeerRevocation{}, ErrInvalid
+	}
 	var zero RootPeerRevocation
 	if !s.IsNetworkAuditReadOnly() || !validHexID(id) || !auditName(project) ||
 		project == "default" || !auditName(bridge) || !auditName(acl) {
@@ -61,7 +75,7 @@ func (s *Store) ReadRootPeerRevocation(ctx context.Context, id, project, bridge,
 	if err != nil {
 		return zero, err
 	}
-	if action != "box_peer_set" || state != "DISPATCHING" || actor == "" ||
+	if action != "box_peer_set" || state != expectedState || actor == "" ||
 		token == "" || layer != project {
 		return zero, ErrResourceLocked
 	}
