@@ -14,9 +14,9 @@ import (
 // native ACL permission, a packet witness or an authority to change host root.
 type RootPeerGrant struct {
 	OperationID string
-	Intent RootPeerRevokeSafeIntent
-	Confirmed []PeerGrantBinding
-	Target []PeerGrantBinding
+	Intent      RootPeerRevokeSafeIntent
+	Confirmed   []PeerGrantBinding
+	Target      []PeerGrantBinding
 }
 
 // ReadRootPeerGrant is the B3 analogue of ReadRootPeerRevocation. It refuses
