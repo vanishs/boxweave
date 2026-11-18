@@ -19,7 +19,7 @@ import (
 func TestS4B3NativeNonrootAdmitFollowupPeer(t *testing.T) {
 	s4b3InstalledOneUse(t, false)
 	step := os.Getenv("BOXWEAVE_S4B3_STEP")
-	if step != "grant_bc" && step != "revoke_ab" {
+	if step != "grant_bc" && step != "revoke_ab" && step != "grant_cb" && step != "regrant_ab" {
 		t.Fatal("invalid native followup step")
 	}
 	raw, err := os.ReadFile(os.Getenv("BOXWEAVE_S4B3_SCOPE"))
@@ -44,10 +44,16 @@ func TestS4B3NativeNonrootAdmitFollowupPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, b := scope.Boxes[0], scope.Boxes[1]
-	allow := false
-	if step == "grant_bc" {
+	allow := step != "revoke_ab"
+	switch step {
+	case "grant_bc":
 		a, b = scope.Boxes[1], scope.Boxes[2]
-		allow = true
+	case "grant_cb":
+		a, b = scope.Boxes[2], scope.Boxes[1]
+	case "regrant_ab", "revoke_ab":
+		// Exact original A->B identity; regrant replaces only its own tombstone.
+	default:
+		t.Fatal("unapproved native peer followup")
 	}
 	intent := state.RootPeerRevokeSafeIntent{
 		Project: scope.Project, Bridge: scope.Bridge, ACL: scope.ACL,
@@ -110,11 +116,18 @@ func TestS4B3NativeNonrootConfirmFollowupPeer(t *testing.T) {
 	if bc.status != "CONFIRMED" || bc.desired != 1 {
 		t.Fatalf("confirmed second grant lost: %+v", bc)
 	}
-	if step == "grant_bc" && (ab.status != "CONFIRMED" || ab.desired != 1) {
-		t.Fatalf("first grant was overwritten: %+v", ab)
+	wantStatus, wantDesired := "CONFIRMED", 1
+	if step == "revoke_ab" || step == "grant_cb" {
+		wantStatus, wantDesired = "REVOKED", 0
 	}
-	if step == "revoke_ab" && (ab.status != "REVOKED" || ab.desired != 0) {
-		t.Fatalf("directional revoke did not commit: %+v", ab)
+	if ab.status != wantStatus || ab.desired != wantDesired {
+		t.Fatalf("historic A->B policy not retained: step=%s row=%+v", step, ab)
 	}
-	t.Logf("S4_B3_NATIVE_MULTI_GRANT_SINGLE_REVOKE_SQLITE_%s=PASS", step)
+	if step == "grant_cb" || step == "regrant_ab" {
+		cb := readPeer(2, 1)
+		if cb.status != "CONFIRMED" || cb.desired != 1 {
+			t.Fatalf("third grant lost: %+v", cb)
+		}
+	}
+	t.Logf("S4_B3_NATIVE_MULTI_GRANT_REVOKE_AND_REGRANT_SQLITE_%s=PASS", step)
 }
