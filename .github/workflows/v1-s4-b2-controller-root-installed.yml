@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [normal, lost_ack]
+        scenario: [normal, lost_ack, after_acl_fault]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -283,6 +283,51 @@ jobs:
           sudo test ! -e "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           echo S4_B2_ROOT_SYSTEMD_SIGKILL_RESTART_STALE_SOCKET_NO_EFFECT=PASS
           phase=ROOT_EXECUTE
+          if test "${{ matrix.scenario }}" = after_acl_fault; then
+            # Only a disposable Go test binary can inject this post-ACL error.
+            phase=POST_ACL_NATIVE_PARTIAL_ROOT_JOURNAL
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+              BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+              BOXWEAVE_S4B2_INSTALLED_DB="$db" BOXWEAVE_S4B2_INSTALLED_ORIGINAL="$original" \
+              BOXWEAVE_S4B2_INSTALLED_SHA="$sha" \
+              /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledPostACLRealEffectUnknown$'
+            journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            test "$(sudo jq -r .status "$journal")" = DISPATCH_UNKNOWN
+            before_journal="$(sudo sha256sum "$journal" | cut -d' ' -f1)"
+            phase=POST_ACL_CONTROLLER_UNKNOWN
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_POST_ACL_ORIGINAL_REPLAYED; exit 85
+            fi
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'")" = PENDING
+            echo S4_B2_INSTALLED_ROOT_POST_ACL_NATIVE_PARTIAL_SQLITE_UNKNOWN=PASS
+            phase=POST_ACL_SQLITE_PROJECT_FENCE
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+              BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+              BOXWEAVE_S4B2_INSTALLED_DB="$db" BOXWEAVE_S4B2_INSTALLED_ORIGINAL="$original" \
+              /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledPartialUnknownProjectLock$'
+            phase=POST_ACL_ROOT_READONLY_REFUSAL
+            if sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" \
+              -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_INCOMPLETE_JOURNAL_INCORRECTLY_RECOVERED; exit 85
+            fi
+            if sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_INCOMPLETE_JOURNAL_REPLAYED; exit 85
+            fi
+            test "$(sudo sha256sum "$journal" | cut -d' ' -f1)" = "$before_journal"
+            test "$(sudo jq -r .status "$journal")" = DISPATCH_UNKNOWN
+            echo S4_B2_INSTALLED_ROOT_INCOMPLETE_JOURNAL_READONLY_REFUSAL_NO_REPLAY=PASS
+            for label in tcp4 tcp6 udp4 udp6; do
+              prior="$(cat "$RUNNER_TEMP/s4b2-foreign-$label-baseline")"
+              current="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count")"
+              test "$current" -gt "$((prior+3))"
+              if sudo incus --project bwforeign exec foreign-a -- test -e "/tmp/s4b2-flow-$label-result"; then
+                echo "S4_B2_POST_ACL_FOREIGN_$label_INTERRUPTED"; exit 86
+              fi
+            done
+            echo S4_B2_INSTALLED_ROOT_POST_ACL_PARTIAL_FOREIGN_FOUR_FLOWS_UNAFFECTED=PASS
+            exit 0
+          fi
           if test "${{ matrix.scenario }}" = lost_ack; then
             # Root performs the *real* effect, but the durable controller
             # never sees this ACK. It must mark the original UNKNOWN.

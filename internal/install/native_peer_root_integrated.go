@@ -288,6 +288,14 @@ func nativePeerRootStartVerified(ctx context.Context, root incus.InstanceServer,
 // root call accepts arbitrary IP ranges, ACL rules, host paths or commands.
 func NativePeerRootIntegratedApplyOperation(ctx context.Context, s *state.Store,
 	project, bridge, acl, original, approvedSHA string, approved bool) (NativePeerConntrackJournalReceipt, error) {
+	return nativePeerRootIntegratedApplyWithPostACLTestFault(ctx, s, project, bridge, acl,
+		original, approvedSHA, approved, nil)
+}
+
+// Package-private test seam; installed root and MCP always pass nil.
+func nativePeerRootIntegratedApplyWithPostACLTestFault(ctx context.Context, s *state.Store,
+	project, bridge, acl, original, approvedSHA string, approved bool,
+	afterACL func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, errors.New("root integrated peer revoke requires explicit scope approval")
@@ -376,6 +384,13 @@ func NativePeerRootIntegratedApplyOperation(ctx context.Context, s *state.Store,
 			}
 			if err := check(ctx); err != nil {
 				return NativePeerConntrackReport{}, err
+			}
+			// Exercise real native ACL PUT/GET followed by an uncertain result;
+			// Root original journal must remain UNKNOWN with all NICs stopped.
+			if afterACL != nil {
+				if err := afterACL(); err != nil {
+					return NativePeerConntrackReport{}, fmt.Errorf("post-ACL effect uncertain: %w", err)
+				}
 			}
 			report, err := NativePeerConntrackPurgeFromStore(ctx, s, project, bridge, acl, a.UUID, b.UUID)
 			if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -257,4 +258,128 @@ func TestS4B2NativeInstalledAmbiguousResumeStopsAllSiblings(t *testing.T) {
 		}
 	}
 	t.Log("S4_B2_INSTALLED_ROOT_AMBIGUOUS_RESUME_ALL_SIBLINGS_STOPPED_NO_REARM=PASS")
+}
+
+// Disposable native root fixture: real Incus ETag DROP occurs, then a
+// package-private uncertain result stops the single original before conntrack.
+func TestS4B2NativeInstalledPostACLRealEffectUnknown(t *testing.T) {
+	s4b2InstalledOneUse(t, true)
+	path, dbPath := os.Getenv("BOXWEAVE_S4B2_INSTALLED_SCOPE"), os.Getenv("BOXWEAVE_S4B2_INSTALLED_DB")
+	original, sha := os.Getenv("BOXWEAVE_S4B2_INSTALLED_ORIGINAL"), os.Getenv("BOXWEAVE_S4B2_INSTALLED_SHA")
+	if path == "" || dbPath == "" || len(original) != 32 || len(sha) != 64 {
+		t.Fatal("missing exact one-use native original and approved digest")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scope s4b2InstalledScope
+	if err := json.Unmarshal(raw, &scope); err != nil || len(scope.Boxes) != 3 {
+		t.Fatalf("invalid native scope: %v", err)
+	}
+	ledger, err := state.OpenNetworkAuditReadOnly(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ledger.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	before, err := ledger.Get(ctx, original)
+	if err != nil || before.State != "DISPATCHING" {
+		t.Fatalf("not a claimed controller original: %+v %v", before, err)
+	}
+	faults := 0
+	receipt, err := nativePeerRootIntegratedApplyWithPostACLTestFault(ctx, ledger,
+		scope.Project, scope.Bridge, scope.ACL, original, sha, true,
+		func() error { faults++; return fmt.Errorf("one-use after real ACL PUT") })
+	if err == nil || faults != 1 || receipt.Status != "DISPATCH_UNKNOWN" || receipt.MutationComplete {
+		t.Fatalf("real ACL effect was not frozen: %+v %v fault_calls=%d", receipt, err, faults)
+	}
+	journalPath, err := nativePeerConntrackOperationJournalPath(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := nativePeerConntrackLoadJournal(journalPath)
+	if err != nil || journal.Status != "DISPATCH_UNKNOWN" || journal.Plan.PlanSHA256 != sha {
+		t.Fatalf("root original unexpectedly completed: %+v %v", journal, err)
+	}
+	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, _, err := root.GetNetworkACL(scope.ACL)
+	if err != nil || acl == nil {
+		t.Fatalf("lost native ACL: %v", err)
+	}
+	if err := nativePeerACLDropCovered(acl, scope.Boxes[0], scope.Boxes[1]); err != nil {
+		t.Fatalf("real ACL readback does not prove exact dual-stack DROP: %v", err)
+	}
+	for _, b := range scope.Boxes {
+		inst, _, err := root.UseProject(scope.Project).GetInstance(b.Name)
+		if err != nil || inst.Config["volatile.uuid"] != b.UUID || inst.Status != "Stopped" || inst.Config["boot.autostart"] != "false" {
+			t.Fatalf("partial native mutation rearmed sibling %s: %v", b.Name, err)
+		}
+	}
+	if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
+		t.Fatalf("partial native mutation left active bridge NICs: %v", err)
+	}
+	t.Log("S4_B2_INSTALLED_ROOT_REAL_ACL_PUT_THEN_UNKNOWN_JOURNAL_ALL_NICS_STOPPED=PASS")
+}
+
+// The same one-use original must freeze its sibling Project in SQLite, even
+// after a malicious/obsolete generic RELEASED audit row is inserted.
+func TestS4B2NativeInstalledPartialUnknownProjectLock(t *testing.T) {
+	s4b2InstalledOneUse(t, false)
+	path, dbPath, original := os.Getenv("BOXWEAVE_S4B2_INSTALLED_SCOPE"),
+		os.Getenv("BOXWEAVE_S4B2_INSTALLED_DB"), os.Getenv("BOXWEAVE_S4B2_INSTALLED_ORIGINAL")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scope s4b2InstalledScope
+	if err := json.Unmarshal(raw, &scope); err != nil || len(scope.Boxes) != 3 {
+		t.Fatal("missing original scope", err)
+	}
+	s, err := state.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	rec, err := s.Get(ctx, original)
+	if err != nil || rec.State != "UNKNOWN" {
+		t.Fatalf("no original UNKNOWN: %+v %v", rec, err)
+	}
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var status string
+	var desired int
+	if err := db.QueryRowContext(ctx, "SELECT status,desired FROM peer_grants WHERE operation_id=?", original).Scan(&status, &desired); err != nil || status != "PENDING" || desired != 0 {
+		t.Fatalf("partial root released or lost grant: %s %d %v", status, desired, err)
+	}
+	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sibling := scope.Boxes[2]
+	admit := func(key string) error {
+		_, e := s.Admit(ctx, state.Admission{Layer: scope.Project, ActorID: token.ID, TokenID: token.ID,
+			Key: key, RequestID: key, Action: "box_exec", SafeIntent: []byte("{}"),
+			ResourceKey: "box:" + sibling.UUID, BoxUUID: sibling.UUID, Incarnation: sibling.UUID})
+		return e
+	}
+	if err := admit("partial-root-sibling-before-release"); !errors.Is(err, state.ErrResourceLocked) {
+		t.Fatalf("partial root allowed sibling admission: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO recovery_audit(operation_id,at,reviewer,decision,evidence_digest)
+		VALUES(?,?,?,?,?)`, original, time.Now().UnixNano(), "forged-legacy", "RELEASED", "untrusted"); err != nil {
+		t.Fatal(err)
+	}
+	if err := admit("partial-root-sibling-after-forged-release"); !errors.Is(err, state.ErrResourceLocked) {
+		t.Fatalf("generic RELEASED bypassed root project lock: %v", err)
+	}
+	t.Log("S4_B2_INSTALLED_ROOT_PARTIAL_UNKNOWN_SQLITE_GRANT_PROJECT_FENCE_FORGED_RELEASE_DENIED=PASS")
 }
