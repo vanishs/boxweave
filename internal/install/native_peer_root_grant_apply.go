@@ -27,6 +27,15 @@ func NativePeerRootGrantApplyOperation(ctx context.Context, s *state.Store,
 // uncertain response retains stopped NICs and the DISPATCH_UNKNOWN journal.
 func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 	project, bridge, acl, original, approvedSHA string, approved bool, afterACL, afterResume func() error) (NativePeerConntrackJournalReceipt, error) {
+	return nativePeerRootGrantApplyWithCompletionFault(ctx, s, project, bridge, acl,
+		original, approvedSHA, approved, afterACL, afterResume, nil)
+}
+
+// Private test-only fault before the final COMPLETE journal write. Production
+// never accepts this hook from the Controller, MCP or root Unix socket.
+func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.Store,
+	project, bridge, acl, original, approvedSHA string, approved bool,
+	afterACL, afterResume, beforeComplete func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, errors.New("grant root requires operator approval and read-only state")
@@ -50,7 +59,7 @@ func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 	if err := nativePeerConntrackPrepareOriginalJournalDirectory(); err != nil {
 		return zero, err
 	}
-	return nativePeerConntrackDispatchOnce(ctx, path, pre.Plan, approvedSHA, approved,
+	return nativePeerConntrackDispatchOnceGuarded(ctx, path, pre.Plan, approvedSHA, approved,
 		func(ctx context.Context) (NativePeerConntrackReport, error) {
 			root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
 			if err != nil {
@@ -173,7 +182,52 @@ func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 			report.VerifiedNICs = count
 			report.KernelVerified = true
 			return report, nil
+		}, beforeComplete, func() error {
+			return nativePeerRootContainFailedCompletion(pre)
 		})
+}
+
+// A completed resume is not a completed mutation if the journal cannot
+// durably commit. Re-identify each NIC by UUID before any stop by name;
+// never stop a replacement/foreign object. Failure retains UNKNOWN/claims.
+func nativePeerRootContainFailedCompletion(pre nativePeerGrantPreflight) error {
+	stopCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	root, err := incus.ConnectIncusUnixWithContext(stopCtx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		return fmt.Errorf("post-resume journal failure could not reach native Incus: %w", err)
+	}
+	owned := root.UseProject(pre.Target.Project)
+	var failures []error
+	for _, box := range pre.Target.Boxes {
+		inst, _, err := owned.GetInstance(box.Name)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("missing exact protected instance %s: %w", box.Name, err))
+			continue
+		}
+		if err := native.ValidatePeerACLBox(inst, pre.Target.Project, pre.Target.Bridge, pre.Target.ACL, box, false); err != nil {
+			failures = append(failures, fmt.Errorf("protected NIC identity drift %s: %w", box.Name, err))
+			continue
+		}
+		if inst.Status == "Stopped" && inst.Config["boot.autostart"] == "false" {
+			continue
+		}
+		op, err := owned.UpdateInstanceState(box.Name, api.InstanceStatePut{Action: "stop", Timeout: 20}, "")
+		if err != nil || op == nil {
+			failures = append(failures, fmt.Errorf("protected NIC journal-failure stop %s uncertain: %v", box.Name, err))
+			continue
+		}
+		if err := op.WaitContext(stopCtx); err != nil {
+			failures = append(failures, fmt.Errorf("protected NIC journal-failure stop ACK %s: %w", box.Name, err))
+		}
+	}
+	if err := nativePeerConntrackAllStopped(stopCtx, root, pre.Target); err != nil {
+		failures = append(failures, fmt.Errorf("journal-failure NIC status remains unsafe: %w", err))
+	}
+	if err := nativePeerBridgeKernelNoLivePorts(stopCtx, pre.Target.Bridge); err != nil {
+		failures = append(failures, fmt.Errorf("journal-failure live bridge ports: %w", err))
+	}
+	return errors.Join(failures...)
 }
 
 // A Start SDK failure can mean that a guest actually resumed. On ANY

@@ -152,8 +152,20 @@ type nativePeerConntrackEffect func(context.Context) (NativePeerConntrackReport,
 // local lock and rederive their review from real native root and protected DB.
 // This function deliberately cannot retry an existing successful OR UNKNOWN
 // original journal, including when a previous native ACK was lost.
+// Existing B2 callers retain their signed one-shot semantics. B3 can
+// additionally quarantine resumed NICs if final journal persistence fails.
 func nativePeerConntrackDispatchOnce(ctx context.Context, path string, plan NativePeerConntrackPlan,
 	approvedSHA string, approved bool, effect nativePeerConntrackEffect) (NativePeerConntrackJournalReceipt, error) {
+	return nativePeerConntrackDispatchOnceGuarded(ctx, path, plan, approvedSHA, approved, effect, nil, nil)
+}
+
+// A successful native effect is not a successful authorization if the
+// COMPLETE journal cannot be durably recorded. Only the exact B3 caller
+// supplies an abort callback to re-isolate its previously verified NICs.
+// beforeComplete is an internal test-only fault seam, never remote input.
+func nativePeerConntrackDispatchOnceGuarded(ctx context.Context, path string, plan NativePeerConntrackPlan,
+	approvedSHA string, approved bool, effect nativePeerConntrackEffect,
+	beforeComplete, abortResumed func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || approvedSHA == "" || approvedSHA != plan.PlanSHA256 || plan.MutationAuthorized ||
 		plan.HostSHA256 == "" || plan.NativeDigestSHA256 == "" || plan.LedgerSHA256 == "" || effect == nil {
@@ -167,6 +179,14 @@ func nativePeerConntrackDispatchOnce(ctx context.Context, path string, plan Nati
 		return zero, err
 	}
 	unknown := nativePeerConntrackReceipt(j)
+	abortUnknown := func(cause error) (NativePeerConntrackJournalReceipt, error) {
+		if abortResumed != nil {
+			if err := abortResumed(); err != nil {
+				cause = errors.Join(cause, fmt.Errorf("cannot independently confirm resumed NIC quarantine: %w", err))
+			}
+		}
+		return unknown, cause
+	}
 	// After the persisted intent is written, any failure is UNKNOWN, not a
 	// reason to retry. This also covers a canceled context before dispatch.
 	if err := ctx.Err(); err != nil {
@@ -179,10 +199,15 @@ func nativePeerConntrackDispatchOnce(ctx context.Context, path string, plan Nati
 	if report.ReadyForPeer || report.ProbedScopes != 4 ||
 		report.DeletedScopes < 0 || report.DeletedScopes > report.ProbedScopes ||
 		report.NativeDigestSHA256 != plan.NativeDigestSHA256 {
-		return unknown, errors.New("root conntrack result is incomplete or identity drifted; original UNKNOWN")
+		return abortUnknown(errors.New("root conntrack result is incomplete or identity drifted; original UNKNOWN"))
+	}
+	if beforeComplete != nil {
+		if err := beforeComplete(); err != nil {
+			return abortUnknown(fmt.Errorf("root conntrack completion fault; UNKNOWN: %w", err))
+		}
 	}
 	if err := nativePeerConntrackSaveCompletion(path, j, report); err != nil {
-		return unknown, fmt.Errorf("root conntrack completion could not be durably confirmed; UNKNOWN: %w", err)
+		return abortUnknown(fmt.Errorf("root conntrack completion could not be durably confirmed; UNKNOWN: %w", err))
 	}
 	j.Status = "COMPLETE_VERIFIED"
 	j.Report = report

@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [normal, after_acl_fault, after_resume_fault]
+        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault]
     steps:
       - uses: actions/checkout@v4
         with:

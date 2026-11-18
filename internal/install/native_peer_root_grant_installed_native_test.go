@@ -183,7 +183,7 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 	scopePath, dbPath := os.Getenv("BOXWEAVE_S4B3_SCOPE"), os.Getenv("BOXWEAVE_S4B3_DB")
 	original, scenario := os.Getenv("BOXWEAVE_S4B3_ORIGINAL"), os.Getenv("BOXWEAVE_S4B3_SCENARIO")
 	if scopePath == "" || dbPath == "" || len(original) != 32 ||
-		(scenario != "normal" && scenario != "after_acl_fault" && scenario != "after_resume_fault") {
+		(scenario != "normal" && scenario != "after_acl_fault" && scenario != "after_resume_fault" && scenario != "before_completion_fault") {
 		t.Fatal("missing exact disposable native grant original or scenario")
 	}
 	raw, err := os.ReadFile(scopePath)
@@ -206,16 +206,32 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 		t.Fatalf("native root review did not seal claimed original: %+v %v", plan, err)
 	}
 	var receipt NativePeerConntrackJournalReceipt
-	if scenario == "after_acl_fault" || scenario == "after_resume_fault" {
+	if scenario == "after_acl_fault" || scenario == "after_resume_fault" || scenario == "before_completion_fault" {
 		faults := 0
 		if scenario == "after_acl_fault" {
 			receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
 				original, plan.PlanSHA256, true, func() error { faults++; return errors.New("injected after REAL ACL PUT") }, nil)
-		} else {
+		} else if scenario == "after_resume_fault" {
 			receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
 				original, plan.PlanSHA256, true, nil, func() error {
 					faults++
 					return errors.New("injected after actual NIC resume and final checks")
+				})
+		} else {
+			receipt, err = nativePeerRootGrantApplyWithCompletionFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+				original, plan.PlanSHA256, true, nil, nil, func() error {
+					faults++
+					root, e := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+					if e != nil {
+						return e
+					}
+					for _, b := range scope.Boxes {
+						inst, _, e := root.UseProject(scope.Project).GetInstance(b.Name)
+						if e != nil || (inst.Status != "Running" && inst.Status != "Ready") {
+							return fmt.Errorf("completion fault not after all NIC resumes: %s %v", b.Name, e)
+						}
+					}
+					return errors.New("injected journal-fsync failure AFTER completed native NIC resume")
 				})
 		}
 		if err == nil || faults != 1 || receipt.Status != "DISPATCH_UNKNOWN" || receipt.MutationComplete {
@@ -242,9 +258,16 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 		if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
 			t.Fatal(err)
 		}
-		if scenario == "after_resume_fault" {
+		if _, e := NativePeerRootGrantApplyOperation(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+			original, plan.PlanSHA256, true); e == nil {
+			t.Fatal("UNKNOWN journal original was redispatched")
+		}
+		switch scenario {
+		case "after_resume_fault":
 			t.Log("S4_B3_REAL_POST_RESUME_FINAL_CHECK_UNKNOWN_ALL_NICS_REISOLATED=PASS")
-		} else {
+		case "before_completion_fault":
+			t.Log("S4_B3_REAL_POST_RESUME_COMPLETION_JOURNAL_FAILURE_UNKNOWN_ALL_NICS_REISOLATED=PASS")
+		default:
 			t.Log("S4_B3_REAL_ACL_PUT_UNKNOWN_ROOT_JOURNAL_ALL_OWNED_NICS_STOPPED=PASS")
 		}
 		return
