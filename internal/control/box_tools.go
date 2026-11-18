@@ -492,7 +492,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native running is not guest readiness.",
+		Description: "Inspect exact owned Box UUID/native state after reconnect before further effects; Running is not guest Exec-ready or proof an interrupted operation succeeded. Check original operation_get as well.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
 			_, _, _, err := s.operationPrincipal(req)

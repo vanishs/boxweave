@@ -93,7 +93,7 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
-		Description: "Read an original authorized durable Operation. wait_ms <= 20000 never cancels or retries native work.",
+		Description: "Read an authorized original operation_id after a timeout/reconnect; compare durable state and next_action before any further mutation. UNKNOWN may have dispatched native work: do not retry with a new key; require independent read-only post-state/host review. wait_ms 0..20000 only polls, never cancels or retries.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
 		actor, role, layer, err := s.operationPrincipal(req)
@@ -146,7 +146,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_list",
-		Description: "Read a bounded, authenticated, indexed page of controller-local Operations. Client work/Agent labels never grant visibility.",
+		Description: "After agent interruption/reconnect, search original Operations by known work_ref, or bounded action/time pages and cursor; follow exact operation_id with operation_get. Empty results do not prove no native effect or that work finished. Client work/Agent labels never grant visibility.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationListInput) (*mcp.CallToolResult, operationListResult, error) {
 		actor, role, layer, err := s.operationPrincipal(req)

@@ -43,6 +43,31 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 			t.Fatalf("public tool %s is open to silently discarded intent: %s", tool.Name, schema)
 		}
 	}
+	// Tools/list is what a reconnecting Agent actually sees; test the
+	// operational hints here rather than merely checking source comments.
+	for _, tool := range tools.Tools {
+		if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
+			for _, word := range []string{"idempotency_key", "work_ref", "operation_list", "operation_get", "UNKNOWN", "new-key"} {
+				if !strings.Contains(tool.Description, word) {
+					t.Fatalf("mutation tool %s missing recovery hint %q", tool.Name, word)
+				}
+			}
+		}
+		switch tool.Name {
+		case "operation_list":
+			if !strings.Contains(tool.Description, "Empty results") {
+				t.Fatal("operation_list must not imply missing original means no native effect")
+			}
+		case "operation_get":
+			if !strings.Contains(tool.Description, "UNKNOWN") || !strings.Contains(tool.Description, "read-only") {
+				t.Fatal("operation_get missing UNKNOWN post-state review boundary")
+			}
+		case "operation_output_get":
+			if !strings.Contains(tool.Description, "next_offset") {
+				t.Fatal("operation_output_get missing original pagination guidance")
+			}
+		}
+	}
 	for _, name := range []string{"host_status", "box_list"} {
 		ok, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
 		if err != nil || ok == nil || ok.IsError {

@@ -22,7 +22,7 @@ type peerSetInput struct {
 func (s *Service) registerPeerTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "box_peer_set",
-		Description: "Admit a directional private-network grant/revoke for two UUID-owned Boxes in an already operator-pinned Project/ACL. Returns an original Operation receipt for operation_get; host-root operator must separately stage, approve the exact digest and run PRS. This MCP tool never directly changes native network state.",
+		Description: "Admit a directional private-network grant/revoke for two UUID-owned Boxes in an already operator-pinned Project/ACL. Returns an original Operation receipt for operation_get; host-root operator must separately stage, approve the exact digest and run PRS. ADMITTED/PENDING does not mean connectivity changed; this MCP tool never directly changes native network state.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in peerSetInput) (*mcp.CallToolResult, state.Receipt, error) {
 		actor, layer, err := requireAdmin(req, s)

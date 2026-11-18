@@ -8,6 +8,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// All mutations publish one compact, consistent reconnect protocol.
+const mutationContinuityHint = " Before a mutation, save its idempotency_key and optional stable work_ref outside BoxWeave. After a lost reply/reconnect, find the original via operation_list or operation_get before another effect; reuse a key only with identical intent. UNKNOWN or an empty list never permits a new-key retry."
+
 // addStrictTool derives the public schema from the same typed Go input used by
 // the official MCP SDK. Its default object schema otherwise permits extra
 // keys; silently ignoring root_pool, project or other unsupported client
@@ -32,5 +35,8 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		profile.Enum = []any{"unset", "unchanged", "generated", "unconfined"}
 	}
 	tool.InputSchema = schema
+	if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
+		tool.Description += mutationContinuityHint
+	}
 	mcp.AddTool(server, tool, handler)
 }
