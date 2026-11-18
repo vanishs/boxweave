@@ -51,6 +51,10 @@ func TestS4B2NativeRootPairConntrackAfterQuiescence(t *testing.T) {
 	if err := nativePeerBridgeKernelNoLivePorts(ctx, scope.Bridge); err != nil {
 		t.Fatal("stopped dedicated bridge still has kernel ports:", err)
 	}
+	if proof, err := nativePeerGlobalNetworkScopeSnapshot(ctx, root, scope); err != nil || len(proof) != 64 {
+		t.Fatalf("all-project native root scope absent or ambiguous: digest=%q err=%v", proof, err)
+	}
+	t.Log("S4_B2_GLOBAL_ROOT_NATIVE_ALL_PROJECTS_NETWORK_SCOPE=PASS")
 	// Independently attach a foreign raw veth without Incus's UsedBy.
 	// Only on this disposable GitHub-owned Incus runner, never shared L0.
 	cmd := func(args ...string) error {

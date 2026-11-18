@@ -285,6 +285,10 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 	if err != nil {
 		return zero, err
 	}
+	globalBefore, err := nativePeerGlobalNetworkScopeSnapshot(ctx, root, t)
+	if err != nil {
+		return zero, fmt.Errorf("host-wide native network provenance uncertain before conntrack: %w", err)
+	}
 	var src, dst native.PeerACLBox
 	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
 		return zero, err
@@ -314,6 +318,10 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
 		return zero, fmt.Errorf("native stop fence changed immediately before kernel operation: %w", err)
 	}
+	globalBeforeDispatch, err := nativePeerGlobalNetworkScopeSnapshot(ctx, root, t)
+	if err != nil || globalBeforeDispatch != globalBefore {
+		return zero, errors.New("native global network identity changed before conntrack")
+	}
 	report, err := nativePeerConntrackPurgeExact(ctx, run, src, dst)
 	report.NativeDigestSHA256 = audit.NativeDigestSHA256
 	if err != nil {
@@ -325,6 +333,10 @@ func nativePeerConntrackWithClient(ctx context.Context, root incus.InstanceServe
 	}
 	if err := nativePeerConntrackAllStopped(ctx, root, t); err != nil {
 		return report, fmt.Errorf("native stop fence changed after kernel operation: %w", err)
+	}
+	globalAfter, err := nativePeerGlobalNetworkScopeSnapshot(ctx, root, t)
+	if err != nil || globalAfter != globalBefore {
+		return report, errors.New("native global network identity changed during conntrack")
 	}
 	return report, nil
 }
