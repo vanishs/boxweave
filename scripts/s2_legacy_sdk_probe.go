@@ -205,8 +205,9 @@ func main() {
 		"box_exec": true, "operation_get": true, "operation_list": true,
 		"operation_output_get": true, "operation_cancel": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
+		"box_peer_set": true,
 	}
-	verify(len(list.Tools) == len(known), "old SDK did not discover all 16 public tools")
+	verify(len(list.Tools) == len(known), "old SDK did not discover all 16 legacy plus B3 peer tools")
 	for _, tool := range list.Tools {
 		verify(known[tool.Name], "unknown tool disclosed by old SDK: "+tool.Name)
 		delete(known, tool.Name)
@@ -251,5 +252,6 @@ func main() {
 	}
 	readBoxes(ctx, session)
 	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS")
+	fmt.Println("S4_B3_PREVIOUS_OFFICIAL_SDK_17_TOOLS_DISCOVERY=PASS")
 	legacyLifecycle(ctx, session)
 }

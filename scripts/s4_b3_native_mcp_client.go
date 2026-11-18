@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -62,7 +63,27 @@ func main() {
 	args := map[string]any{"source_box_id": source, "target_box_id": target, "allow": true, "idempotency_key": key}
 	reply, err := admin.CallTool(ctx, &mcp.CallToolParams{Name: "box_peer_set", Arguments: args})
 	if err != nil || reply == nil || reply.IsError {
-		panic(fmt.Sprintf("MCP first admission failed: %v %+v", err, reply))
+		// Print only a known typed failure class from this disposable runner.
+		// Never echo native error bodies, headers or bearer credentials.
+		class := "UNCLASSIFIED"
+		if reply != nil {
+			for _, part := range reply.Content {
+				if msg, ok := part.(*mcp.TextContent); ok {
+					for _, known := range []string{
+						"RESOURCE_LOCKED", "INVALID", "PERMISSION_DENIED", "UNAUTHENTICATED",
+						"CONFLICT", "NOT_FOUND", "REVOKED", "NOT_OWNED", "INCUS",
+						"SQLITE", "DATABASE", "NATIVE", "UNKNOWN", "TOKEN",
+					} {
+						if strings.Contains(strings.ToUpper(msg.Text), known) {
+							class = known
+							break
+						}
+					}
+				}
+			}
+		}
+		fmt.Println("S4_B3_PUBLIC_MCP_ADMISSION_REFUSED_CLASS=" + class)
+		panic("official MCP first admission refused; no native side effect")
 	}
 	encoded, err := json.Marshal(reply.StructuredContent)
 	if err != nil {
