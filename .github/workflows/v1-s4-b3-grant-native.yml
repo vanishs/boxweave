@@ -67,15 +67,18 @@ jobs:
           sudo incus admin init --auto --storage-backend=dir
           sudo incus version
           test -z "$(sudo incus list --all-projects --format csv -c n)"
-          sudo useradd -m -s /bin/sh boxweave
           if test "${{ matrix.scenario }}" = installed_mcp; then
-            # This must exercise the restricted per-UID Incus socket, never
-            # elevate the public Controller into the daemon-admin incus group.
+            # Incus 7.6: 'incus' is the *restricted user socket* group.
+            # 'incus-admin' (and sudo/lxd/docker) are privileged and forbidden.
+            sudo useradd -m -g incus -s /bin/sh boxweave
             test -S /var/lib/incus/unix.socket.user
-            if id -nG boxweave | tr ' ' '\n' | grep -qx incus; then
+            id -nG boxweave | tr ' ' '\n' | grep -qx incus
+            if id -nG boxweave | tr ' ' '\n' | grep -Eq '^(incus-admin|sudo|lxd|docker)$'; then
               echo S4_B3_REFUSE_PRIVILEGED_CONTROLLER_GROUP; exit 89
             fi
-            echo S4_B3_RESTRICTED_UNIX_USER_SOCKET_NO_INCUS_ADMIN_GROUP=PASS
+            echo S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN=PASS
+          else
+            sudo useradd -m -s /bin/sh boxweave
           fi
           uid="$(id -u boxweave)"
           test "$uid" -ge 1000
@@ -190,6 +193,15 @@ jobs:
           viewer_token="$(printf '%s\n' "$viewer_raw" | sed -n 's/^token=//p')"
           unset admin_raw viewer_raw
           test -n "$admin_token" && test -n "$viewer_token"
+          # Use the same production nonroot Incus preflight as the MCP handler.
+          # Emit only the bounded error classification, never credentials.
+          sudo -u boxweave "$bin" doctor -db "$db" -project "$project" \
+            -incus-socket /var/lib/incus/unix.socket.user > "$RUNNER_TEMP/s4b3-mcp-native-doctor.json"
+          if test "$(jq -r .native.ready "$RUNNER_TEMP/s4b3-mcp-native-doctor.json")" != true; then
+            echo "S4_B3_NATIVE_NONROOT_PREFLIGHT_CLASS=$(jq -r .native.error_class "$RUNNER_TEMP/s4b3-mcp-native-doctor.json")"
+            exit 96
+          fi
+          echo S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT=PASS
           sudo -u boxweave env BOXWEAVE_S4B3_SERVE_PROJECT="$project" sh -c             'nohup /usr/local/bin/boxweave serve -db /var/lib/boxweave/ledger.sqlite -project "$BOXWEAVE_S4B3_SERVE_PROJECT" -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650 >/tmp/s4b3-mcp-serve.log 2>&1 </dev/null & echo $! >/tmp/s4b3-mcp-serve.pid'
           ready=0
           for _ in $(seq 1 40); do
