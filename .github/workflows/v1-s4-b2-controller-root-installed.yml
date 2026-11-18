@@ -5,6 +5,8 @@ on:
     branches: [feat/v1-s4-runtime-integration-20261116]
     paths:
       - .github/workflows/v1-s4-b2-controller-root-installed.yml
+      - internal/install/native_peer_root_service.go
+      - internal/install/native_peer_root_service_test.go
       - internal/install/native_peer_root_integrated.go
       - internal/install/native_peer_root_installed_e2e_native_test.go
       - internal/install/native_peer_root_socket.go
@@ -87,6 +89,8 @@ jobs:
           sudo install -d -m0700 -o boxweave -g boxweave /var/lib/boxweave
           go build -o "$RUNNER_TEMP/boxweave-candidate" ./cmd/boxweave
           sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/bw-s4b2-installed
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/boxweave
+          test "$(sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" = "$(sha256sum /usr/local/bin/bw-s4b2-installed | cut -d' ' -f1)"
           sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
             BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
             /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledRootSeedReviewedGrant$'
@@ -143,21 +147,40 @@ jobs:
           sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b2-root-plan.json")"
           test "${#sha}" -eq 64
           echo "S4_B2_INSTALLED_OPERATOR_PREMUTATION_SHA=$sha"
-          phase=ROOT_SERVE
-          sudo "$bin" native-peer-root-serve -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native \
-            -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local \
-            > "$RUNNER_TEMP/s4b2-root-helper.log" 2>&1 &
-          rootpid=$!
+          phase=UNIT_STAGE
+          sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native             -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+          sudo test -f /etc/systemd/system/boxweave-native-peer-root.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now boxweave-native-peer-root.service
           ready=0
-          for _ in $(seq 1 30); do
-            if sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+          for _ in $(seq 1 35); do
+            if sudo systemctl is-active --quiet boxweave-native-peer-root.service &&
+              sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
             sleep 1
           done
-          if test "$ready" != 1; then
-            echo S4_B2_INSTALLED_ROOT_SOCKET_START_FAILED
-            sed -n '1,20p' "$RUNNER_TEMP/s4b2-root-helper.log"
-            exit 91
+          test "$ready" = 1
+          test "$(stat -c '%a:%U:%G' /run/boxweave-native-peer-root.sock)" = '660:root:boxweave'
+          first_pid="$(sudo systemctl show boxweave-native-peer-root.service -p MainPID --value)"
+          test "$first_pid" -gt 1
+          test "$(awk '/^Uid:/ {print $2}' "/proc/$first_pid/status")" = 0
+          echo S4_B2_ROOT_SYSTEMD_PINNED_ROOT_UID_SOCKET_PERMISSION=PASS
+          if sudo "$bin" native-peer-root-request -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UNTRUSTED_UID_AUTHORIZED; exit 82
           fi
+          echo S4_B2_ROOT_SYSTEMD_SO_PEERCRED_FOREIGN_REJECT=PASS
+          phase=ROOT_SIGKILL_RESTART
+          sudo systemctl kill -s SIGKILL --kill-whom=main boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            new_pid="$(sudo systemctl show boxweave-native-peer-root.service -p MainPID --value)"
+            if test "$new_pid" -gt 1 && test "$new_pid" != "$first_pid" &&
+              sudo systemctl is-active --quiet boxweave-native-peer-root.service &&
+              sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          sudo test ! -e "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          echo S4_B2_ROOT_SYSTEMD_SIGKILL_RESTART_STALE_SOCKET_NO_EFFECT=PASS
           phase=ROOT_EXECUTE
           sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
           echo S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS
@@ -187,6 +210,33 @@ jobs:
             echo S4_B2_INSTALLED_REVOKE_IPV6_REACHABLE; exit 94
           fi
           echo "S4_B2_INSTALLED_NONROOT_ROOT_SOCKET_OPERATOR_SHA_ORIGINAL_NFT_SQLITE_REVOKE=PASS"
+          phase=ROOT_BINARY_UPGRADE
+          root_journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          before_journal="$(sudo sha256sum "$root_journal" | cut -d' ' -f1)"
+          before_acl="$(sudo incus network acl show bw-s4b2-native | sha256sum | cut -d' ' -f1)"
+          if sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native             -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UNIT_OVERWRITTEN; exit 83
+          fi
+          go build -ldflags "-X main.version=1.0.0-s4b2-upgrade-probe -X main.commit=$GITHUB_SHA" -o "$RUNNER_TEMP/boxweave-root-upgrade" ./cmd/boxweave
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-root-upgrade" /usr/local/bin/boxweave
+          test "$(sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" != "$(sha256sum "$RUNNER_TEMP/boxweave-candidate" | cut -d' ' -f1)"
+          sudo systemctl start boxweave-native-peer-root.service
+          sudo systemctl is-active --quiet boxweave-native-peer-root.service
+          sudo test -S /run/boxweave-native-peer-root.sock
+          if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UPGRADE_REPLAYED_ORIGINAL; exit 84
+          fi
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          test "$(sudo incus network acl show bw-s4b2-native | sha256sum | cut -d' ' -f1)" = "$before_acl"
+          echo S4_B2_ROOT_SYSTEMD_NEW_BINARY_UPGRADE_NO_REPLAY=PASS
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/boxweave
+          sudo systemctl start boxweave-native-peer-root.service
+          sudo systemctl is-active --quiet boxweave-native-peer-root.service
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          echo S4_B2_ROOT_SYSTEMD_BINARY_ROLLBACK_PRESERVES_ORIGINAL_JOURNAL=PASS
+
       - name: Independent one-use root/Project/ACL cleanup
         if: always()
         shell: bash
