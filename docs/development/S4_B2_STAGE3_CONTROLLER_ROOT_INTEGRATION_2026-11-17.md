@@ -1,9 +1,9 @@
-# S4-B2 Stage 3 - scoped controller -> root integration candidate
+# S4-B2 Stage 3 - scoped controller -> root integration acceptance
 
 Date: 2026-11-17 PT
 Single development PR: https://github.com/vanishs/boxweave/pull/153
 Audited baseline: `a9c6f51c35d6b3d94a63ff4013e6a897c4c85ff5`
-Status: **S4_B2_PARTIAL**. **B3_NOT_STARTED**. This file is NOT an installed acceptance declaration.
+Status: **ROOT_INTEGRATION_PASS** on the verified code SHA, **S4_B2_PARTIAL / B3_NOT_STARTED** overall. This is not an acceptance declaration for all of S4-B2.
 
 ## What changed
 
@@ -21,10 +21,10 @@ The old narrower standalone root conntrack primitives remain available solely as
 
 Fresh disposable L0 RC7 Box: `4c0e7d92-14ff-4cb0-b3a0-e4013e2ba4f2`; original Create `f4dd83a27adf6fce1631509bb75d8dbc` / native `82f6d2fb-c020-4630-9751-c24fb8921220`. Clean branch baseline cloned and Go 1.26.9 installed. Focused installed-worker tests PASS for atomic closeout and lost-ACK/incomplete-kernel UNKNOWN non-replay; exact per-NIC nft negative tests PASS (missing/duplicate chain, missing DROP and residual ACCEPT rejected). Complete `make verify` including full race tests passed: BW original Exec `63ac4320e9ab69bd2b6aa2c1cd3bc945` / native `4e1f4c71-0261-4197-bf17-c64fd67e71a6`, exit 0.
 
-## Independent native acceptance still REQUIRED
+## Independent acceptance evidence and remaining B2 gates
 
-- This source-level implementation is **not yet installed-native B2 PASS**. The new opt-in real Incus 7.6 nft witness in `v1-s4-b2-quiescent-native.yml` must be observed on exact source SHA and tuned only after independent raw kernel readback, not by weakening fail-closed checks.
-- The actual installed nonroot CLI!-> host-root Unix service!-> full native stop/ETag/nft/conntrack!-> original SQLite atomic finalization must be exercised in a **separate** approved disposable native host with a real admitted original and operator-pinned exact preflight SHA, plus foreign-Project live noninterference and negative faults.
+- The real Incus 7.6 per-NIC nft witness **PASSED** on `65227b7` and the full installed controller-root flow **PASSED** independently on `c3ed36d`. No nft checks or root permissions were weakened.
+- The actual installed nonroot CLI -> host-root Unix service -> native stop/ETag/nft/conntrack -> original SQLite atomic finalization **PASSED** on disposable Incus 7.6. Foreign-Project live noninterference and extended negative-fault tests remain separate B2 gates.
 - There is intentionally no new public B2 peer mutation Tool; root helper systemd/upgrade/restart lifecycle, Scriptlet permissions and independent UNKNOWN re-arm remain distinct pending P0 gates.
 - The controller stages an **already admitted** original. B2 does not fabricate a public grant writer or mint authority to prepare arbitrary native operations.
 - Current state admission locks the ACL and source/target Box operations; it does not yet hold claims for every additional sibling affected by the all-NIC quarantine. Root/native readbacks fail closed on ordinary concurrent drift but do not substitute for full independent host/claim exclusivity. This remains an integrated P0 before installed acceptance.
@@ -48,7 +48,7 @@ The work was recovered from the **existing** Draft PR #153 and a still-running o
 - L0 `box_list(limit=20)` rediscovered `s4b2-root-wire-1117`; `box_get(box_id=4c0e7d92-14ff-4cb0-b3a0-e4013e2ba4f2)` confirmed exact native `Running`, project `user-1001`, and guest readiness `null`. The latter is not an execution-ready claim.
 - L0 `operation_list(work_ref=S4-B2-controller-root,limit=20)` rediscovered the persisted Create, staged source writes and native Exec UUIDs, including original `814b106230e5efa76ed98679ec927675` with native Incus ID `83fbafe0-b976-45fc-8a69-5483f49476ad`. `operation_get` confirmed SUCCEEDED; `operation_output_get` confirmed guest process exit 0. `box_file_read` recovered this complete report and its independent SHA256 page hash.
 - L0 `box_exec` confirmed the original worktree was based on `a9c6f51c` with staged integration files, while remote PR HEAD was already `4efd78b`. **Before any checkout**, the old staged patch was saved as `/root/s4b2-previous-staged-preserved.patch` with SHA256 `068c2c8e1fcb8350123d3390e5dcaacc5fdb0a5a47d89ccae826702ccbdaffe4`, and a clean, independently cloned `/root/boxweave-root-resume` was used for continuation. No unrelated L0 Box was changed.
-- GitHub MCP `get_pr_info`, `fetch_workflow_job_steps` and `fetch_workflow_job_logs` revealed source `99d119af` produced actual installed nonroot→root `S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS`, SQLite `SUCCEEDED`, peer grant `REVOKED`, root journal `COMPLETE_VERIFIED`, 4 scoped probes, three verified NICs. Job failure was **only a runner assertion** that used unprivileged `test -f` on the intentionally private root-owned journal directory. The exact native kernel probe had also been accidentally split by a misplaced shell `phase` marker. These two test-harness issues were corrected **without weakening any root permissions** at candidate `c3ed36d814ab6912f9cfcaa6d61adac63f227a6d`; acceptance remains pending its independent CI.
+- GitHub MCP `get_pr_info`, `fetch_workflow_job_steps` and `fetch_workflow_job_logs` revealed source `99d119af` produced actual installed nonroot→root `S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS`, SQLite `SUCCEEDED`, peer grant `REVOKED`, root journal `COMPLETE_VERIFIED`, 4 scoped probes, three verified NICs. Job failure was **only a runner assertion** that used unprivileged `test -f` on the intentionally private root-owned journal directory. The exact native kernel probe had also been accidentally split by a misplaced shell `phase` marker. These two test-harness issues were corrected **without weakening any root permissions** at candidate `c3ed36d814ab6912f9cfcaa6d61adac63f227a6d`; acceptance was subsequently confirmed by independent CI #44235991186.
 - The original private root helper continues to require fixed original ID, pre-mutation SHA, SO_PEERCRED, native dual-stack/UUID validation, an fsynced UNKNOWN journal before side effects, four-direction conntrack verification and per-NIC nft evidence. Independent S4-B2 signoff/merge remain separate from root integration.
 
 
