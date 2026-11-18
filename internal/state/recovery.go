@@ -122,6 +122,14 @@ func (s *Store) IssueRecoveryChallenge(ctx context.Context, r RecoverySnapshot, 
 // separate acknowledgement, and independently repeated native observation.
 // The original UNKNOWN receipt and original idempotency key NEVER change.
 func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, reviewer, challenge, confirmUUID, reason, observed string, acknowledge bool) error {
+	// Root peer UNKNOWN may include a partially applied host-global
+	// ACL and conntrack effect. The legacy generic release flow does
+	// not inspect its fsynced root journal or native packet reality.
+	// Only the dedicated root completed-journal reconciliation may
+	// resolve the original. Never unlock it by a general challenge.
+	if r.Action == "box_peer_set" {
+		return ErrResourceLocked
+	}
 	if !safeReviewer.MatchString(reviewer) || !acknowledge || confirmUUID != r.BoxUUID ||
 		len(challenge) != 64 || len(reason) < 16 || len(reason) > 240 || observed == "" || r.Released {
 		return ErrInvalid
@@ -131,10 +139,13 @@ func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, re
 		return err
 	}
 	defer tx.Rollback()
-	var state string
+	var state, action string
 	var updated int64
-	if err = tx.QueryRowContext(ctx, "SELECT state,updated_at FROM operations WHERE id=?", r.OperationID).Scan(&state, &updated); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT state,updated_at,action FROM operations WHERE id=?", r.OperationID).Scan(&state, &updated, &action); err != nil {
 		return err
+	}
+	if action == "box_peer_set" || action != r.Action {
+		return ErrResourceLocked
 	}
 	if state != "UNKNOWN" || updated != r.UpdatedAt {
 		return ErrState

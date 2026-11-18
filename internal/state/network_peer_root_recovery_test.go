@@ -118,3 +118,53 @@ func TestS4B2RootUnknownIncompleteOrForgedReceiptPreservesFence(t *testing.T) {
 	}
 	t.Log("S4_B2_ROOT_UNKNOWN_BAD_RECOVERY_FROZEN_AND_NO_NEW_ADMISSION=PASS")
 }
+
+// The older local recovery challenge is insufficient to release a
+// kernel-global root ACL/conntrack UNKNOWN. Even explicit acknowledgment and
+// an exact UUID cannot bypass a partially unknown host effect.
+func TestS4B2RootUnknownGenericLegacyRecoveryCannotReleasePeerClaims(t *testing.T) {
+	ctx := context.Background()
+	s, _, id := s4b2RootOperationFixture(t)
+	s4b2PendingExistingGrantToConfirmed(t, s)
+	if err := s.StageRootPeerRevocation(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Claim(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Unknown(ctx, id, "DISPATCHING", "ROOT_INTENT_ACK_UNKNOWN"); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.RecoveryInspect(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Action != "box_peer_set" || snap.State != "UNKNOWN" {
+		t.Fatal("not the root peer original")
+	}
+	observation := "operator observed no finished root journal"
+	challenge, err := s.IssueRecoveryChallenge(ctx, snap, "rootreview", observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.ReleaseRecoveryClaim(ctx, snap, "rootreview", challenge, snap.BoxUUID,
+		"Root peer UNKNOWN must not be generically unlocked", observation, true)
+	if !errors.Is(err, ErrResourceLocked) {
+		t.Fatalf("general recovery bypassed root journal: %v", err)
+	}
+	record, err := s.Get(ctx, id)
+	if err != nil || record.State != "UNKNOWN" {
+		t.Fatal("root original moved after unsafe release")
+	}
+	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Admit(ctx, Admission{Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID,
+		Key: "s4b2-generic-root-unlock-forbidden", RequestID: "old-root-bypass",
+		Action: "network_acl_reconcile", SafeIntent: []byte("forbidden native ACL release"),
+		ResourceKey: "acl:default/bw-s4b2"}); !errors.Is(err, ErrResourceLocked) {
+		t.Fatalf("generic recovery released the root peer ACL despite UNKNOWN: %v", err)
+	}
+	t.Log("S4_B2_PEER_UNKNOWN_LEGACY_GENERIC_RELEASE_SECURITY_BYPASS_DENIED=PASS")
+}

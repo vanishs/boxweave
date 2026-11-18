@@ -130,7 +130,12 @@ jobs:
               test "$(sudo incus --project bwforeign exec foreign-b -- sh -c 'ip -4 -o addr show eth0 | grep -c 10.248.84.12' 2>/dev/null || :)" = 1; then foreign_ready=1; break; fi
             sleep 2
           done
-          test "$foreign_ready" = 1
+          if test "$foreign_ready" != 1; then
+            echo S4_B2_INSTALLED_FOREIGN_STATIC_ADDRESS_NOT_READY
+            sudo incus --project bwforeign list --format csv -c ns4 || :
+            exit 87
+          fi
+          echo S4_B2_INSTALLED_FOREIGN_STATIC_ADDRESS_READY=PASS
           CGO_ENABLED=0 go build -o "$RUNNER_TEMP/s4b2-foreign-flow" ./scripts/s4_b2_native_flow_probe.go
           for name in foreign-a foreign-b; do
             sudo incus --project bwforeign file push "$RUNNER_TEMP/s4b2-foreign-flow" "$name/root/s4b2-flow"
@@ -142,7 +147,27 @@ jobs:
             if sudo incus --project bwforeign exec foreign-b -- test -f /tmp/s4b2-flow-server-ready; then ready=1; break; fi
             sleep 1
           done
-          test "$ready" = 1
+          if test "$ready" != 1; then
+            echo S4_B2_INSTALLED_FOREIGN_ECHO_SERVER_NOT_READY
+            sudo incus --project bwforeign exec foreign-b -- cat /tmp/foreign-server.log || :
+            exit 87
+          fi
+          # Guest address assignment alone is not proof the network path
+          # is ready to support four established foreign flows.
+          for addr in 10.248.84.12 fd83:249::12; do
+            connected=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project bwforeign exec foreign-a -- ping -n -c 1 -W 2 "$addr" >/dev/null 2>&1; then
+                connected=1; break
+              fi
+              sleep 1
+            done
+            if test "$connected" != 1; then
+              echo "S4_B2_INSTALLED_FOREIGN_GUEST_PATH_NOT_READY_$addr"
+              exit 87
+            fi
+          done
+          echo S4_B2_INSTALLED_FOREIGN_NETWORK_PATH_READY_BOTH_FAMILIES=PASS
           for item in 'tcp4 tcp 10.248.84.12' 'tcp6 tcp fd83:249::12' 'udp4 udp 10.248.84.12' 'udp6 udp fd83:249::12'; do
             read -r label protocol dest <<< "$item"
             sudo incus --project bwforeign exec foreign-a -- sh -c               "nohup /root/s4b2-flow client $protocol $dest $label >/tmp/foreign-$label.log 2>&1 </dev/null &"
@@ -154,7 +179,13 @@ jobs:
               if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 4 )); then ready=1; break; fi
               sleep 1
             done
-            test "$ready" = 1
+            if test "$ready" != 1; then
+              echo "S4_B2_INSTALLED_FOREIGN_FLOW_NOT_ESTABLISHED_$label"
+              sudo incus --project bwforeign exec foreign-a -- cat "/tmp/foreign-$label.log" || :
+              sudo incus --project bwforeign exec foreign-b -- cat /tmp/foreign-server.log || :
+              exit 87
+            fi
+            echo "S4_B2_INSTALLED_FOREIGN_FLOW_ESTABLISHED_$label"
             echo "$count" > "$RUNNER_TEMP/s4b2-foreign-$label-baseline"
           done
           echo S4_B2_INSTALLED_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT=PASS
