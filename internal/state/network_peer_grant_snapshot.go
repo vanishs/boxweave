@@ -122,6 +122,31 @@ func (s *Store) ReadPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 		if !found {
 			return nil, ErrResourceLocked
 		}
+		claimsRows, e := tx.QueryContext(ctx, "SELECT resource_key FROM operation_resource_claims WHERE operation_id=? ORDER BY resource_key", stagedOriginal)
+		if e != nil {
+			return nil, e
+		}
+		var claims []string
+		for claimsRows.Next() {
+			var key string
+			if e = claimsRows.Scan(&key); e != nil {
+				claimsRows.Close()
+				return nil, e
+			}
+			claims = append(claims, key)
+		}
+		if e = claimsRows.Err(); e != nil {
+			claimsRows.Close()
+			return nil, e
+		}
+		if e = claimsRows.Close(); e != nil {
+			return nil, e
+		}
+		expected := []string{"acl:default/" + acl, "box:" + intent.SourceUUID, "box:" + intent.TargetUUID}
+		slices.Sort(expected)
+		if !slices.Equal(claims, expected) {
+			return nil, ErrResourceLocked
+		}
 		var role string
 		if tx.QueryRowContext(ctx, "SELECT role FROM credentials WHERE id=?", token).Scan(&role) != nil || role != "admin" {
 			return nil, ErrRevoked

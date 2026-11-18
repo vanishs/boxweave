@@ -51,6 +51,7 @@ func TestS4B3ReadPeerCompilerSnapshotFailsClosed(t *testing.T) {
 		{"fake-confirmation", "UPDATE peer_grants SET status='CONFIRMED' WHERE status='PENDING'"},
 		{"unknown-grant", "UPDATE peer_grants SET status='UNKNOWN'"},
 		{"wrong-original", "UPDATE peer_grants SET operation_id='other'"},
+		{"lost-staged-target-claim", "DELETE FROM operation_resource_claims WHERE resource_key='box:" + s4b2RootDst + "'"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
