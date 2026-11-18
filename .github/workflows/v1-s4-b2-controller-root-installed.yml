@@ -166,14 +166,14 @@ jobs:
           phase=SQLITE_GRANT
           test "$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'")" = REVOKED
           phase=ROOT_JOURNAL
-          test -f "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          sudo test -f "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
           if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
             echo S4_B2_INSTALLED_ROOT_REPLAY_UNSAFE; exit 92
           fi
+          phase=KERNEL_NFT
           sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
             BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root BOXWEAVE_S4B2_NATIVE_ROOT_PROJECT="$project" \
-          phase=KERNEL_NFT
             /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeRootKernelPerNICDropReadback$'
           phase=RESUMED_GUEST_STATES
           for name in s4b2a s4b2b; do
