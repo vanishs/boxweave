@@ -134,12 +134,12 @@ func TestOfficialMCPHandshakeAndS2ReadTools(t *testing.T) {
 		}
 		expected := []string{
 			"host_status", "box_create", "box_list", "box_get", "box_update",
-			"box_start", "box_stop", "box_delete", "box_exec",
+			"box_start", "box_stop", "box_delete", "box_exec", "box_peer_set",
 			"operation_get", "operation_list", "operation_output_get", "operation_cancel",
 			"box_file_list", "box_file_read", "box_file_apply",
 		}
 		if len(gotNames) != len(expected) {
-			t.Fatalf("S3 requires exact 16-tool inventory: %+v", tools.Tools)
+			t.Fatalf("v1 requires exact 17-tool inventory: %+v", tools.Tools)
 		}
 		for _, name := range expected {
 			if !gotNames[name] {
