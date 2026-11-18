@@ -1,0 +1,182 @@
+name: S4-B3 original-scoped PRS grant native dual-stack (disposable)
+
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b3-grant-native.yml
+      - internal/install/native_peer_root_grant_installed_native_test.go
+      - internal/install/native_peer_root_grant_review.go
+      - internal/install/native_peer_root_grant_apply.go
+      - internal/install/native_peer_root_grant_nft.go
+      - internal/state/network_peer_root_grant.go
+      - internal/state/network_peer_root_grant_worker.go
+      - scripts/s4_b3_native_packet_probe.go
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-grant:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [normal, after_acl_fault]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Provision one-use fresh Incus 7.6 and protected native Project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus && ! id boxweave >/dev/null 2>&1
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base nftables conntrack sqlite3 jq >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b3-root-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b3-root-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b3-root-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo useradd -m -s /bin/sh boxweave
+          uid="$(id -u boxweave)"
+          test "$uid" -ge 1000
+          project="user-$uid"
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          go test -c -o "$RUNNER_TEMP/s4b3-root-fixture" ./internal/install
+          sudo install -m0755 "$RUNNER_TEMP/s4b3-root-fixture" /usr/local/bin/s4b3-root-fixture
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+          sudo incus project create "$project" \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project "$project" profile device add default root disk path=/ pool=default
+          sudo incus --project "$project" profile device add default eth0 nic name=eth0 \
+            network=bwbr0 security.acls=bw-s4b2-native \
+            security.acls.default.ingress.action=reject security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true security.ipv6_filtering=true security.mac_filtering=true
+          for spec in 's4b2a 10.248.83.11 fd83:248::11' 's4b2b 10.248.83.12 fd83:248::12' 's4b2c 10.248.83.13 fd83:248::13'; do
+            read -r name ipv4 ipv6 <<< "$spec"
+            sudo incus --project "$project" init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project "$project" config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+            sudo incus --project "$project" start "$name"
+          done
+          ready=0
+          for _ in $(seq 1 55); do
+            if sudo incus --project "$project" exec s4b2a -- ip -4 -o addr show eth0 | grep -q '10.248.83.11' &&
+               sudo incus --project "$project" exec s4b2b -- ip -4 -o addr show eth0 | grep -q '10.248.83.12' &&
+               sudo incus --project "$project" exec s4b2c -- ip -4 -o addr show eth0 | grep -q '10.248.83.13' &&
+               sudo incus --project "$project" exec s4b2a -- ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11' &&
+               sudo incus --project "$project" exec s4b2b -- ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12'; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          echo "$project" > "$RUNNER_TEMP/s4b3-project"
+          echo "S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS=PASS"
+          echo "S4_B3_NATIVE_SOURCE_SHA=$GITHUB_SHA"
+
+      - name: Admit nonroot original and execute journaled root GRANT
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          scope="$RUNNER_TEMP/s4b3-scope.json"
+          db=/var/lib/boxweave/ledger.sqlite
+          sudo install -d -m0700 -o boxweave -g boxweave /var/lib/boxweave
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+            BOXWEAVE_S4B3_SCOPE="$scope" \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$' \
+            | tee "$RUNNER_TEMP/s4b3-seed.log"
+          original="$(sed -n 's/^S4_B3_NATIVE_GRANT_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-seed.log" | tail -n1)"
+          test "${#original}" -eq 32
+          echo "$original" > "$RUNNER_TEMP/s4b3-original"
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
+            BOXWEAVE_S4B3_ORIGINAL="$original" BOXWEAVE_S4B3_SCENARIO="${{ matrix.scenario }}" \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeInstalledRootGrantActualEffect$'
+          echo "S4_B3_NATIVE_ROOT_ONE_SHOT_RESULT=${{ matrix.scenario }}"
+
+      - name: Test real IPv4 and IPv6 TCP/UDP permit, reverse and sibling denies
+        if: matrix.scenario == 'normal'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
+          for name in s4b2a s4b2b s4b2c; do
+            sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
+            sudo incus --project "$project" exec "$name" -- chmod 0755 /root/s4b3-packet
+          done
+          sudo incus --project "$project" exec s4b2b -- sh -c \
+            'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+          sudo incus --project "$project" exec s4b2a -- sh -c \
+            'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+          for name in s4b2a s4b2b; do
+            ready=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project "$project" exec "$name" -- test -f /tmp/s4b3-packet-ready; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          done
+          for proto in tcp udp; do
+            for dst in 10.248.83.12 fd83:248::12; do
+              sudo incus --project "$project" exec s4b2a -- /root/s4b3-packet probe "$proto" "$dst"
+              echo "S4_B3_REAL_NATIVE_ACCEPT=PASS $proto $dst"
+            done
+            for dst in 10.248.83.11 fd83:248::11; do
+              if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_REVERSE_UNEXPECTEDLY_ALLOWED $proto $dst"; exit 84
+              fi
+              echo "S4_B3_REAL_NATIVE_REVERSE_REJECT=PASS $proto $dst"
+            done
+            for dst in 10.248.83.12 fd83:248::12; do
+              if sudo incus --project "$project" exec s4b2c -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_SIBLING_UNEXPECTEDLY_ALLOWED $proto $dst"; exit 85
+              fi
+              echo "S4_B3_REAL_NATIVE_UNRELATED_REJECT=PASS $proto $dst"
+            done
+          done
+          echo S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY=PASS
+
+      - name: Original native Project cleanup evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
+          if test -n "$project"; then
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" stop "$name" 2>/dev/null || :
+              sudo incus --project "$project" delete "$name" 2>/dev/null || :
+            done
+            sudo incus --project "$project" profile device remove default eth0 >/dev/null 2>&1 || :
+            sudo incus --project "$project" project delete "$project" >/dev/null 2>&1 || :
+          fi
+          sudo incus network acl delete bw-s4b2-native 2>/dev/null || :
+          sudo incus network delete bwbr0 2>/dev/null || :
+          echo "S4_B3_NATIVE_CLEANUP_ATTEMPTED"
+          sudo incus list --all-projects --format csv -c n 2>/dev/null || :
