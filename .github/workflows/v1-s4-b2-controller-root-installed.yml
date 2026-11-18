@@ -145,6 +145,7 @@ jobs:
             echo S4_B2_INSTALLED_ROOT_REPLAY_UNSAFE; exit 92
           fi
           sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root BOXWEAVE_S4B2_NATIVE_ROOT_PROJECT="$project" \
             /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeRootKernelPerNICDropReadback$'
           for name in s4b2a s4b2b; do
             test "$(sudo incus --project "$project" list "$name" -c s --format csv)" = RUNNING

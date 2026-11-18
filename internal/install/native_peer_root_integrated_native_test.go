@@ -3,6 +3,7 @@ package install
 import (
 	"net/netip"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,14 @@ func TestS4B2NativeRootKernelPerNICDropReadback(t *testing.T) {
 		SourceIPv6: netip.MustParseAddr("fd83:248::11"),
 		TargetIPv6: netip.MustParseAddr("fd83:248::12"),
 	}
-	if err := nativePeerRootVerifyNFT(rules, "bwowned", []string{"s4b2a", "s4b2b", "s4b2c"}, pair); err != nil {
+	project := os.Getenv("BOXWEAVE_S4B2_NATIVE_ROOT_PROJECT")
+	if project == "" {
+		project = "bwowned"
+	} else if !strings.HasPrefix(project, "user-") ||
+		os.Getenv("BOXWEAVE_S4B2_INSTALLED_ONE_USE") != "20261117-controller-root" {
+		t.Fatal("unapproved installed kernel test Project")
+	}
+	if err := nativePeerRootVerifyNFT(rules, project, []string{"s4b2a", "s4b2b", "s4b2c"}, pair); err != nil {
 		t.Fatalf("real per-NIC nft DROP did not converge: %v", err)
 	}
 	t.Log("S4_B2_NATIVE_INTEGRATED_ROOT_NFT_DUALSTACK_PER_NIC=PASS")
