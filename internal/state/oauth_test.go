@@ -246,7 +246,7 @@ func TestOAuthRejectUntrustedOriginRedirectAndPKCE(t *testing.T) {
 			t.Errorf("accepted redirect %q: %v", bad, err)
 		}
 	}
-	for _, bad := range []string{"bad", "mcp:other", "mcp:admin mcp:admin"} {
+	for _, bad := range []string{"bad", "mcp:other", "mcp:admin", "mcp:viewer", "mcp:admin mcp:admin"} {
 		if _, err := s.BeginOAuth(ctx, client, redirect, bad, challenge, testOAuthOrigin+"/mcp", "my-state-12345678"); !errors.Is(err, ErrOAuthInvalid) {
 			t.Errorf("accepted scope %q: %v", bad, err)
 		}
