@@ -311,6 +311,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 		{"box_exec", map[string]any{"box_id": "no-such-owned-box", "argv": "not-typed-argv", "idempotency_key": "s2-schema-negative-exec"}},
 		{"operation_get", map[string]any{"operation_id": 42}},
 		{"operation_list", map[string]any{"limit": []string{"50"}}},
+		{"box_activity_get", map[string]any{"limit": "not-a-number"}},
 		{"operation_output_get", map[string]any{"operation_id": 42, "stream": "stdout"}},
 		{"operation_cancel", map[string]any{"target_operation_id": 1, "idempotency_key": "s2-schema-negative-cancel"}},
 	}
@@ -327,7 +328,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	// argument object for every public tool, not silently ignore an
 	// unsupported native Project or root-pool selection.
 	list, err := admin.ListTools(ctx, nil)
-	check(err == nil && len(list.Tools) == 17, "strict schema discovery unavailable")
+	check(err == nil && len(list.Tools) == 18, "strict schema discovery unavailable")
 	for _, tool := range list.Tools {
 		schema, marshalErr := json.Marshal(tool.InputSchema)
 		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\":false")),
