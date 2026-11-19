@@ -335,12 +335,15 @@ jobs:
           source="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE name='s4b2b' AND project='$project'")"
           target="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE name='s4b2c' AND project='$project'")"
           test -n "$source" && test -n "$target" && test "$source" != "$target"
-          admin_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -role admin -ttl 1h)"
-          viewer_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -role viewer -ttl 1h)"
+          admin_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h)"
+          revoked_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h)"
           admin_token="$(printf '%s\n' "$admin_raw" | sed -n 's/^token=//p')"
-          viewer_token="$(printf '%s\n' "$viewer_raw" | sed -n 's/^token=//p')"
-          unset admin_raw viewer_raw
-          test -n "$admin_token" && test -n "$viewer_token"
+          revoked_token="$(printf '%s\n' "$revoked_raw" | sed -n 's/^token=//p')"
+          revoked_id="$(printf '%s\n' "$revoked_raw" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
+          test -n "$revoked_id"
+          sudo -u boxweave "$bin" token-revoke -db "$db" -id "$revoked_id" >/dev/null
+          unset admin_raw revoked_raw
+          test -n "$admin_token" && test -n "$revoked_token"
           # Use the same production nonroot Incus preflight as the MCP handler.
           # Emit only the bounded error classification, never credentials.
           sudo -u boxweave "$bin" doctor -db "$db" -project "$project" \
@@ -361,8 +364,8 @@ jobs:
             sudo cat /tmp/s4b3-mcp-serve.log || :
             echo S4_B3_PUBLIC_MCP_INSTALLED_SERVER_NOT_READY; exit 98
           fi
-          S4B3_MCP_TOKEN="$admin_token" S4B3_VIEWER_TOKEN="$viewer_token"             S4B3_SOURCE_UUID="$source" S4B3_TARGET_UUID="$target"             go run -tags s4b3_native_ci ./scripts/s4_b3_native_mcp_client.go             | tee "$RUNNER_TEMP/s4b3-public-mcp.log"
-          unset admin_token viewer_token
+          S4B3_MCP_TOKEN="$admin_token" S4B3_REVOKED_TOKEN="$revoked_token"             S4B3_SOURCE_UUID="$source" S4B3_TARGET_UUID="$target"             go run -tags s4b3_native_ci ./scripts/s4_b3_native_mcp_client.go             | tee "$RUNNER_TEMP/s4b3-public-mcp.log"
+          unset admin_token revoked_token
           original="$(sed -n 's/^S4_B3_NATIVE_MCP_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-public-mcp.log" | tail -n1)"
           test "$(printf '%s' "$original" | wc -c)" = 32
           echo "$original" > "$RUNNER_TEMP/s4b3-original"

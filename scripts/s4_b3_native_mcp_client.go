@@ -26,8 +26,8 @@ func (b peerBearer) RoundTrip(req *http.Request) (*http.Response, error) {
 	return b.base.RoundTrip(cp)
 }
 func main() {
-	token, viewer, source, target := os.Getenv("S4B3_MCP_TOKEN"), os.Getenv("S4B3_VIEWER_TOKEN"), os.Getenv("S4B3_SOURCE_UUID"), os.Getenv("S4B3_TARGET_UUID")
-	if token == "" || viewer == "" || source == "" || target == "" || source == target {
+	token, revoked, source, target := os.Getenv("S4B3_MCP_TOKEN"), os.Getenv("S4B3_REVOKED_TOKEN"), os.Getenv("S4B3_SOURCE_UUID"), os.Getenv("S4B3_TARGET_UUID")
+	if token == "" || revoked == "" || source == "" || target == "" || source == target {
 		panic("exact tokens and UUIDs required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -119,12 +119,20 @@ func main() {
 	if err != nil || read == nil || read.IsError {
 		panic("operation_get missing original")
 	}
-	viewerSession := connect(viewer)
-	defer viewerSession.Close()
-	reject, err = viewerSession.CallTool(ctx, &mcp.CallToolParams{Name: "box_peer_set", Arguments: args})
-	if err == nil && reject != nil && !reject.IsError {
-		panic("viewer was able to write directional grant")
+	// A revoked credential cannot even reach the installed MCP tool dispatcher.
+	negativeRequest, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"http://127.0.0.1:18650/mcp",
+		strings.NewReader(`{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"box_peer_set","arguments":{}}}`))
+	if err != nil { panic(err) }
+	negativeRequest.Header.Set("Authorization", "Bearer "+revoked)
+	negativeRequest.Header.Set("Content-Type", "application/json")
+	negativeRequest.Header.Set("Accept", "application/json")
+	negativeReply, err := http.DefaultClient.Do(negativeRequest)
+	if err != nil { panic(err) }
+	negativeReply.Body.Close()
+	if negativeReply.StatusCode != http.StatusUnauthorized {
+		panic("revoked credential reached directional network grant")
 	}
 	fmt.Printf("S4_B3_NATIVE_MCP_ORIGINAL=%s\n", receipt.ID)
-	fmt.Println("S4_B3_NATIVE_OFFICIAL_MCP_ADMIN_OAUTH_TOKEN_REPLAY_SCHEMA_VIEWER_OPERATION_GET=PASS")
+	fmt.Println("S4_B3_NATIVE_OFFICIAL_MCP_AUTH_TOKEN_REPLAY_SCHEMA_REVOKED_DENIAL_OPERATION_GET=PASS")
 }
