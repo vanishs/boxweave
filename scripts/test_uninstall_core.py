@@ -82,9 +82,9 @@ class FakeHost(unittest.TestCase):
         self.box = "11111111-2222-3333-4444-555555555555"
 
     def fake_command(self, args, **kwargs):
-        self.cmds.append(args)
         if args[:2] == ["systemctl", "show"]:
             return ("FragmentPath=" + str(u.UNIT) + "\nDropInPaths=", 0)
+        self.cmds.append(args)
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
         if args[:2] == ["incus", "delete"]:
@@ -226,7 +226,7 @@ class FakeHost(unittest.TestCase):
 
     def test_audit_replay_and_modified_unit_are_blocked(self):
         u.audited_write({"status": "STARTED"})
-        with self.assertRaisesRegex(u.UninstallError, "previous uninstall audit"):
+        with self.assertRaisesRegex(u.UninstallError, "previous uninstall interrupted"):
             u.audited_write({"status": "STARTED"})
         u.UNIT.write_text("malicious unit")
         with self.assertRaisesRegex(u.UninstallError, "modified"):
