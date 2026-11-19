@@ -24,7 +24,7 @@ func bh018InjectedAtomicFixture(t *testing.T) (*Store, OwnedBox, Admission, stri
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

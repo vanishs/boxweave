@@ -101,7 +101,7 @@ func TestS2SQLiteTwoLocalWritersSerializeWithoutJournalDamage(t *testing.T) {
 			if i%2 != 0 {
 				write, read = two, one
 			}
-			raw, issued, err := write.IssueToken(ctx, "viewer", time.Hour)
+			raw, issued, err := write.IssueToken(ctx,time.Hour)
 			if err != nil {
 				errs <- err
 				return

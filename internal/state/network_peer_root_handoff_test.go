@@ -17,7 +17,7 @@ func s4b2RootOperationFixture(t *testing.T) (*Store, *Store, string) {
 	ctx := context.Background()
 	s := newStore(t)
 	s4b2InsertAuditFixture(t, s)
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -123,7 +123,7 @@ func TestS4B2ControllerRootRevocationUnknownFences(t *testing.T) {
 			if calls != prior {
 				t.Fatal("root UNKNOWN original replayed")
 			}
-			_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+			_, tok, err := s.IssueToken(ctx,time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}

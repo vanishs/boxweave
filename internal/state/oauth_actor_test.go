@@ -114,7 +114,7 @@ func TestS4OAuthRefreshQueuedClaimAndForeignActor(t *testing.T) {
 		t.Fatalf("fresh credential must see non-dispatched original: %+v %v", again, err)
 	}
 	// A second grant issued to the SAME OAuth client is still a different actor.
-	otherPending, err := s.BeginOAuth(ctx, client, redirect, "mcp:admin", challenge, testOAuthOrigin+"/mcp", "other-state-12345678")
+	otherPending, err := s.BeginOAuth(ctx, client, redirect, "", challenge, testOAuthOrigin+"/mcp", "other-state-12345678")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestS4OAuthRefreshQueuedClaimAndForeignActor(t *testing.T) {
 	if _, err := s.Replay(ctx, queued); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other grant borrowed operation: %v", err)
 	}
-	manualRaw, manual, err := s.IssueToken(ctx, "admin", time.Hour)
+	manualRaw, manual, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

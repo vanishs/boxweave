@@ -33,7 +33,7 @@ func oauthFixture(t *testing.T) (*Store, string, string, string, string, string,
 	verifier := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
 	h := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h[:])
-	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer mcp:admin", challenge, testOAuthOrigin+"/mcp", "test-state-12345678")
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "", challenge, testOAuthOrigin+"/mcp", "test-state-12345678")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func oauthFixture(t *testing.T) (*Store, string, string, string, string, string,
 func TestOAuthAtomicPKCERefreshAndOriginRevocation(t *testing.T) {
 	ctx := context.Background()
 	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
-	manual, manualInfo, err := s.IssueToken(ctx, "viewer", time.Hour)
+	manual, manualInfo, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,11 +70,11 @@ func TestOAuthAtomicPKCERefreshAndOriginRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pair.Scope != "mcp:admin" || pair.Access == pair.Refresh || pair.GrantID == "" {
+	if pair.Access == pair.Refresh || pair.GrantID == "" {
 		t.Fatalf("bad pair: %+v", pair)
 	}
 	verified, err := s.VerifyToken(ctx, pair.Access)
-	if err != nil || verified.Role != "admin" {
+	if err != nil || verified.ActorID == "" {
 		t.Fatalf("OAuth admin not mapped: %+v %v", verified, err)
 	}
 	if err = s.RequireActiveTokenID(ctx, verified.ID); err != nil {
@@ -199,7 +199,7 @@ func TestOAuthFailedSQLiteTransactionDoesNotConsumeCodeOrRefresh(t *testing.T) {
 	}
 	verifier := "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
 	h := sha256.Sum256([]byte(verifier))
-	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer", base64.RawURLEncoding.EncodeToString(h[:]), testOAuthOrigin+"/mcp", "my-state-12345678")
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "", base64.RawURLEncoding.EncodeToString(h[:]), testOAuthOrigin+"/mcp", "my-state-12345678")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestOAuthRejectUntrustedOriginRedirectAndPKCE(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"https://evil.example/callback", "http://evil.example/callback", ""} {
-		if _, err := s.BeginOAuth(ctx, client, bad, "mcp:viewer", challenge, testOAuthOrigin+"/mcp", "my-state-12345678"); !errors.Is(err, ErrOAuthInvalid) {
+		if _, err := s.BeginOAuth(ctx, client, bad, "", challenge, testOAuthOrigin+"/mcp", "my-state-12345678"); !errors.Is(err, ErrOAuthInvalid) {
 			t.Errorf("accepted redirect %q: %v", bad, err)
 		}
 	}
@@ -267,7 +267,7 @@ func TestOAuthCredentialAndTunnelOriginResetInvalidatesPendingAndGrants(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := s.BeginOAuth(ctx, client, redirect, "mcp:viewer", challenge, testOAuthOrigin+"/mcp", "state-for-next-12345")
+	next, err := s.BeginOAuth(ctx, client, redirect, "", challenge, testOAuthOrigin+"/mcp", "state-for-next-12345")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestOAuthCredentialAndTunnelOriginResetInvalidatesPendingAndGrants(t *testi
 	if _, err = s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp"); !errors.Is(err, ErrOAuthInvalid) {
 		t.Fatalf("refresh survives password rotation: %v", err)
 	}
-	newPending, err := s.BeginOAuth(ctx, client, redirect, "mcp:viewer", challenge, testOAuthOrigin+"/mcp", "state-before-oscillation-123")
+	newPending, err := s.BeginOAuth(ctx, client, redirect, "", challenge, testOAuthOrigin+"/mcp", "state-before-oscillation-123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestOAuthCredentialAndTunnelOriginResetInvalidatesPendingAndGrants(t *testi
 func TestOAuthAccessIDRevokeAlsoRevokesRefreshFamily(t *testing.T) {
 	ctx := context.Background()
 	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
-	manual, manualInfo, err := s.IssueToken(ctx, "viewer", time.Hour)
+	manual, manualInfo, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestOAuthRestartPersistenceAndLocalRevoke(t *testing.T) {
 	verifier := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
 	h := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(h[:])
-	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer", challenge,
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "", challenge,
 		testOAuthOrigin+"/mcp", "nonce-state-restart-1234")
 	if err != nil {
 		t.Fatal(err)
@@ -392,7 +392,7 @@ func TestOAuthRestartPersistenceAndLocalRevoke(t *testing.T) {
 	}
 	defer s.Close()
 	token, err := s.VerifyToken(ctx, pair.Access)
-	if err != nil || token.Role != "viewer" {
+	if err != nil || token.ActorID == "" {
 		t.Fatalf("restarted OAuth access invalid: %+v %v", token, err)
 	}
 	next, err := s.RefreshOAuth(ctx, pair.Refresh, client, testOAuthOrigin+"/mcp")
@@ -522,7 +522,7 @@ func TestOAuthReplayedRefreshAfterRestartRevokesActiveGrant(t *testing.T) {
 	}
 	verifier := "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
 	hash := sha256.Sum256([]byte(verifier))
-	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "mcp:viewer", base64.RawURLEncoding.EncodeToString(hash[:]), testOAuthOrigin+"/mcp", "replay-state-12345678")
+	pending, err := s.BeginOAuth(ctx, client, testOAuthRedirect, "", base64.RawURLEncoding.EncodeToString(hash[:]), testOAuthOrigin+"/mcp", "replay-state-12345678")
 	if err != nil {
 		t.Fatal(err)
 	}

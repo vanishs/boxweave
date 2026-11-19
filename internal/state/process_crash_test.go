@@ -24,7 +24,7 @@ func TestProcessCrashUnknownNoReplay(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+		_, token, err := s.IssueToken(ctx,time.Hour)
 		if err != nil {
 			panic(err)
 		}

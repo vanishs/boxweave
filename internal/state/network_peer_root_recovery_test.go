@@ -43,7 +43,7 @@ func TestS4B2RootUnknownCompletedReceiptReadOnlyRecoveryAndNewAdmission(t *testi
 	if err := w.ReconcileCompletedUnknownRootPeer(id, sha, proof); err == nil || calls != 1 {
 		t.Fatal("already reconciled original replayed")
 	}
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestS4B2RootUnknownIncompleteOrForgedReceiptPreservesFence(t *testing.T) {
 			if err != nil || r.State != "UNKNOWN" {
 				t.Fatalf("unknown recovered without proof: %+v %v", r, err)
 			}
-			_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+			_, tok, err := s.IssueToken(ctx,time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -156,7 +156,7 @@ func TestS4B2RootUnknownGenericLegacyRecoveryCannotReleasePeerClaims(t *testing.
 	if err != nil || record.State != "UNKNOWN" {
 		t.Fatal("root original moved after unsafe release")
 	}
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
