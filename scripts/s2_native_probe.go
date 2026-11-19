@@ -227,7 +227,7 @@ func hostileProtocolMatrix(ctx context.Context, admin, peer *mcp.ClientSession) 
 	boxes, ok := unchanged["boxes"].([]any)
 	check(ok && len(boxes) == 0,
 		"hostile metadata or invalid schema admitted a native Box")
-	fmt.Println("S2_P1_REAL_SDK_HOSTILE_META_PEER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS")
+	fmt.Println("S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS")
 }
 
 // SDK structured result is optional for old clients. Read-only legacy JSON
