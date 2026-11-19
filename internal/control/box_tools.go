@@ -99,15 +99,8 @@ type execBoxInput struct {
 	AgentRef       string            `json:"agent_ref,omitempty"`
 }
 
-func requireAdmin(req *mcp.CallToolRequest, s *Service) (string, string, error) {
-	actor, role, layer, err := s.operationPrincipal(req)
-	if err != nil {
-		return "", "", err
-	}
-	if role != "admin" {
-		return "", "", errors.New("PERMISSION_DENIED")
-	}
-	return actor, layer, nil
+func requireAuthenticated(req *mcp.CallToolRequest, s *Service) (string, string, error) {
+	return s.operationPrincipal(req)
 }
 
 func mutationAnnotations(destructive bool) *mcp.ToolAnnotations {
@@ -158,7 +151,7 @@ func safeJSON(v any) ([]byte, error) {
 // timeout, UNKNOWN and process restart without redispatch or name adoption.
 func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
 	action, key, boxID, work, agent string, intent any) (state.Receipt, bool, error) {
-	actor, layer, err := requireAdmin(req, s)
+	actor, layer, err := requireAuthenticated(req, s)
 	if err != nil {
 		return state.Receipt{}, false, err
 	}
@@ -187,7 +180,7 @@ func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
 
 func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	action, key, boxUUID, incarnation, resourceKey, work, agent string, intent any) (state.Receipt, error) {
-	actor, layer, err := requireAdmin(req, s)
+	actor, layer, err := requireAuthenticated(req, s)
 	if err != nil {
 		return state.Receipt{}, err
 	}
@@ -231,7 +224,7 @@ func preflightNative(err error) error {
 }
 
 func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
-	_, _, layer, err := s.operationPrincipal(req)
+	_, layer, err := s.operationPrincipal(req)
 	if err != nil {
 		return state.OwnedBox{}, err
 	}
@@ -468,7 +461,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "List only UUID-registered owned Boxes with independently observed exact native identity.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listBoxesInput) (*mcp.CallToolResult, listBoxesResult, error) {
-			_, _, project, err := s.operationPrincipal(req)
+			_, project, err := s.operationPrincipal(req)
 			if err != nil {
 				return nil, listBoxesResult{}, err
 			}
@@ -495,7 +488,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "Inspect exact owned Box UUID/native state after reconnect before further effects; Running is not guest Exec-ready or proof an interrupted operation succeeded. Check original operation_get as well.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
-			_, _, _, err := s.operationPrincipal(req)
+			_, _, err := s.operationPrincipal(req)
 			if err != nil {
 				return nil, getBoxResult{}, err
 			}
@@ -522,7 +515,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		}
 		addStrictTool(server, &mcp.Tool{Name: action, Description: desc, Annotations: mutationAnnotations(false)},
 			func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-				if _, _, err := requireAdmin(req, s); err != nil {
+				if _, _, err := requireAuthenticated(req, s); err != nil {
 					return nil, state.Receipt{}, err
 				}
 				intent := struct {
@@ -590,7 +583,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, _, err := requireAuthenticated(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			if in.Internet == nil && in.CPU == nil && in.MemoryMiB == nil &&
@@ -661,7 +654,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "Delete only an exact owned STOPPED Box after refusing native proxy/peer dependencies; retain UNKNOWN on unverified deletion.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, _, err := requireAuthenticated(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			intent := struct {
@@ -712,7 +705,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "Durable asynchronous argv execution INSIDE an exact owned guest, guest UID/GID typed; original stdout/stderr through operation_output_get.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in execBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, _, err := requireAuthenticated(req, s); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			if len(in.Argv) == 0 || len(in.Argv) > 64 ||
