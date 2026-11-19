@@ -148,6 +148,9 @@ func (s *Store) ReadActivity(ctx context.Context, input ActivityQuery) (Activity
 	if err != nil || s == nil || s.db == nil {
 		return ActivityResult{}, ErrInvalid
 	}
+	if err := s.RequireActiveTokenID(ctx, q.Requester); err != nil {
+		return ActivityResult{}, err
+	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return ActivityResult{}, err
@@ -169,6 +172,12 @@ func (s *Store) ReadActivity(ctx context.Context, input ActivityQuery) (Activity
 		return ActivityResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
+		return ActivityResult{}, err
+	}
+	// An access token may be revoked during a slow historical scan. The
+	// controller must still perform its own privateReadReply recheck if this
+	// private query is ever exposed as a public MCP Tool.
+	if err := s.RequireActiveTokenID(ctx, q.Requester); err != nil {
 		return ActivityResult{}, err
 	}
 	return result, nil
