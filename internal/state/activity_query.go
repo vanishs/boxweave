@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -116,12 +116,18 @@ func (q ActivityQuery) normalize() (ActivityQuery, error) {
 }
 
 func validActivityBoxID(id string) bool {
-	if len(id) == 0 || len(id) > 128 {
+	if validHexID(id) {
+		return true
+	}
+	if len(id) != 36 {
 		return false
 	}
-	for _, r := range id {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+	for i, r := range id {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if r != '-' {
+				return false
+			}
+		} else if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
 			return false
 		}
 	}
