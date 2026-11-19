@@ -1,9 +1,9 @@
 # BoxWeave v1 — 单一授权能力与历史包袱整改方案（2026-11-18）
 
-**状态：Owner 选定无 Scope 的方案 B / 仅整改设计，未实施、未获得真实 ChatGPT 无 Scope 端到端 PASS。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
+**状态：阶段 1 的角色/Scope 全链源码改造已写入 Draft PR #153，独立 Box 的 Go 全量单测已经通过；尚未取得真实 ChatGPT 无 Scope 端到端 PASS，未完成独立 Native/CI 签收。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
 
 - **开发位置**：唯一 Draft PR [#153](https://github.com/vanishs/boxweave/pull/153)，分支 `feat/v1-s4-runtime-integration-20261116`；源码调查参考 HEAD `36b6662627050b81b946a7b9eedf922fb2e5b271`，实施前重新确认远程 HEAD。
-- **本次交付**：先记录设计、清单、测试与开放决策，**不**改 Go、数据库、安装实例或 CI；正式重构与验收需后续明确执行。
+- **当前交付**：Owner 已明确授权阶段 1，一次性修改 Go/新 Schema/测试和现行文档；**不**迁移旧 DB、不部署共享宿主、不改旧发布产物。阶段 2/3 独立 Native 和真实 ChatGPT 验收仍需继续。
 - **产品定位**：**人 + 多个可信 Agent，可靠接手、安全并发**。不做 Agent 主从/调度、身份注册、通用 RBAC、工作流引擎。彼此信任是协作假设，不取代有效凭据、Project/Box 所有权、幂等或内核隔离。
 - **优先级**：清理双角色基础负担属于当前 v1 架构收敛，可在新增 S4-C/Activity 接口之前做完；不得将它宣称为 S4-B3～B6 已通过，或绕过旧安全目标。
 
@@ -65,8 +65,8 @@
 1. `go-oauth2` 的 `ValidationAuthorizeRequest` 使用 `r.FormValue("scope")`（缺省即空字符串），并未将空值判为无效；`ValidationTokenRequest` 在授权码交换时不强制 `scope`，刷新流程可以传空值。
 2. 上游 `GetTokenData` **只在 `ti.GetScope() != ""` 时添加 JSON `scope`**。BoxWeave 当前 Token JSON 是自己手工拼装的（`internal/control/oauth.go`），整改时**仍需主动删除它无条件返回 `scope` 的代码**，不能以“SDK 支持”代替应用整改。
 3. `MCP Go SDK` 的 `ScopesSupported` 字段为 `json:"scopes_supported,omitempty"`；`RequireBearerToken` 仅在 `opts.Scopes` 非空时要求 Scope，并且缺少 Bearer Header 时仍返回 HTTP 401。**Scope-free ≠ authentication-free**。
-4. BoxWeave 当前 `internal/control/server.go` `TokenVerifier` 仍用 `t.Role` 填入 `TokenInfo.Scopes`，`operationPrincipal` 也要求 `admin/viewer`，`parseOAuthScope("")` 仍返回 `viewer`。**所以 HEAD 仍是双角色实现，不是 B**。
-5. **验收分层：** `SDK_STATIC_SOURCE_COMPATIBLE=YES`；`BOXWEAVE_SCOPE_FREE_IMPLEMENTED=NO`；`SDK_E2E_TESTED=NO`；`REAL_CHATGPT_CONNECT_REFRESH_PASS=NOT_TESTED`。当前不需要切换 OAuth/MCP SDK 版本；完成代码修改后增加无 Scope SDK HTTP 测试，随后再用真实 ChatGPT 验证发现、同意、授权码、Token、刷新、撤销。
+4. BoxWeave 当前 `internal/control/server.go` `TokenVerifier` 仍用 `t.Role` 填入 `TokenInfo.Scopes`，`operationPrincipal` 也要求 `admin/viewer`，`parseOAuthScope("")` 仍返回 `viewer`。**这是整改前源码事实；整改后的 PR #153 不再保持双角色实现**。
+5. **验收分层：** `SDK_STATIC_SOURCE_COMPATIBLE=YES`；`BOXWEAVE_SCOPE_FREE_SOURCE_CANDIDATE=YES`；`ISOLATED_GO_SDK_HTTP_TESTS=PASS`；`REAL_CHATGPT_CONNECT_REFRESH_PASS=NOT_TESTED`。当前不需要切换 OAuth/MCP SDK 版本；完成代码修改后增加无 Scope SDK HTTP 测试，随后再用真实 ChatGPT 验证发现、同意、授权码、Token、刷新、撤销。
 
 ### 2.3 主要源码锚点（已核实）
 
@@ -121,8 +121,8 @@
 
 ## 7. 已做决策与剩余风险
 
-**A. OAuth：Owner 已选 B。** 当前目标是**无应用权限 Scope** 的 OAuth，非 `mcp:manage` 单 Scope；最终实现不再有 `admin/viewer` 角色。已经核对锁定的 `go-oauth2 v4.6.0` 与 `MCP Go SDK v1.8.0` 上游源码，都允许无 Scope；现有 BoxWeave 实现仍需修改，真实 ChatGPT 端到端授权/刷新尚未测试。必须先用 disposable server + ChatGPT 客户端对 `discovery → consent → code/PKCE → token → Tool → refresh → revoke` 给出独立证据，才能标记完全通过。
+**A. OAuth：Owner 已选 B。** 当前目标是**无应用权限 Scope** 的 OAuth，非 `mcp:manage` 单 Scope；最终实现不再有 `admin/viewer` 角色。已经核对锁定的 `go-oauth2 v4.6.0` 与 `MCP Go SDK v1.8.0` 上游源码，都允许无 Scope；当前 PR 候选代码已完成角色链整改，但真实 ChatGPT 端到端授权/刷新尚未测试。必须先用 disposable server + ChatGPT 客户端对 `discovery → consent → code/PKCE → token → Tool → refresh → revoke` 给出独立证据，才能标记完全通过。
 
 **B. 清理边界不变。** 执行**角色整链清理**和现行文档瘦身，再按静态引用与安全证据删旧 Helper/脚本。其他旧 S4 网络、恢复和 Installer 代码不得凭文件名批量删掉；需要先证明未被当前安全契约和原生验收引用。
 
-**本文件仍是设计，不代表代码已实现。** 需同步修订现行产品边界、README、MCP Catalog、S5 验收文档，保留旧候选验收事实作为历史证据。
+**本文件同时是整改方案和阶段 1 的源码进度记录。** PR #153 已实现无 Role/Scope 的 Go 候选并通过隔离 Box 单元测试（首个完整 Go 通过的格式化源码提交 `a46d168d`）；新增明确缺省 Scope/旧 Schema 负例后仍须最终同 SHA 复验、CI 与独立 Native/真实 ChatGPT 签收。所有此前静态源码表格与旧角色锚点记录的是整改**之前**的状态，不应再作为当前代码判定。

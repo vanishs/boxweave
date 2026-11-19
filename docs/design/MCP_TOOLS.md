@@ -44,7 +44,7 @@ Every public tool below maps to a tagged upstream API in [the complete 20/20 map
 
 ## Shared semantics
 
-- Tokens are `admin` (manage all **owned** resources, including guest-root Exec) or `viewer` (read-only inspection of owned metadata, guest files and original operation output); multiple independently revocable credentials. Viewer access can disclose guest data and must never imply low sensitivity. No per-Box Token grants or tool-level RBAC.
+- Each authorized Actor uses its own independently revocable management credential (manual Bearer or OAuth grant with stable Actor across refresh); **no application Scope or admin/viewer roles**. Valid credentials can read/mutate only exact Layer-owned resources, including guest-root Exec. MCP authentication still rejects anonymous, forged, expired and revoked Tokens; no per-Box Token delegation or tool-level RBAC. Operation evidence within the same Layer may be read by a different authenticated Actor for safe takeover, never to reuse another Actor's original idempotency identity.
 - Every mutation requires nonempty client-generated reusable `idempotency_key`. Exact same key+intent+actor returns the same original Tracking/Operation IDs; conflicting reuse is denied before effect.
 - Every native change is journaled, scoped by actual Incus Box UUID, independently checked, and accurately classified UNKNOWN if observation fails. Reader disconnect does not cancel original async work.
 - Guest-root `box_exec` inherently permits modifying that guest's files; don't pretend restricting file tools restricts guest Exec. Safe guest file writes require native point-of-use guarantees; otherwise UNSUPPORTED.

@@ -26,7 +26,7 @@ The latest published v1 prerelease is **[v1.0.0-rc.7](https://github.com/vanishs
    | authenticated typed Streamable HTTP MCP (local or operator HTTPS)
    v
  BoxWeave — one Go executable + local maintenance CLI
-   | role/ownership policy + SQLite durable operation receipts
+   | authenticated Actor/ownership policy + SQLite durable operation receipts
    | official Incus Go SDK
    v
  Incus daemon — operator-managed
@@ -52,6 +52,8 @@ BoxWeave does **not** manage arbitrary Incus/foreign containers, DNS, website ce
 ## Active development — not part of the published RC
 
 [Draft PR #153](https://github.com/vanishs/boxweave/pull/153) is the **unmerged v1 S4 runtime/networking candidate**, not a new release. S4-A (OAuth/atomic lifecycle) and S4-B2 (restricted shared-network safety foundation) have independent scoped PASS reports; S4-B3 (directional `box_peer_set` grant/revoke) has **`S4_B3_PASS` under the owner's bounded native/service-restart acceptance** (16 scoped receipts: 14 retained plus 2 final closure groups). **It remains unmerged and unpublished**, so RC.7 does not contain this Draft PR functionality. Physical-host reboot belongs to B6/S5; see the [formal B3 signoff](docs/verification/S4_B3_FINAL_SIGNOFF_2026-11-18.md). S4-B4–B6 and S4-C are not accepted. See the [B3 residual audit](docs/verification/S4_B3_FINAL_RESIDUAL_AUDIT_2026-11-18.md) and [PR evidence summary](https://github.com/vanishs/boxweave/pull/153). Do not treat a Draft PR feature as present in RC.7.
+
+**Auth redesign in this Draft PR only:** source now removes the `admin/viewer` permission model and OAuth application Scopes, uses independently revocable full-management Actor credentials and initializes role-free SQLite Schema v4. The isolated Go suite has passed; real ChatGPT no-Scope OAuth refresh, exact-source native/CI gates and independent signoff are **not yet complete**. This does **not** change published RC.7; see the [cleanup plan](docs/development/V1_SINGLE_AUTH_AND_LEGACY_CLEANUP_PLAN_2026-11-18.md).
 
 ## Evidence snapshots — do not confuse readiness with acceptance
 

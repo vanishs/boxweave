@@ -1,8 +1,8 @@
 # Security and ownership — small fixed policy
 
-**Invariant:** A BoxWeave MCP caller, including an `admin` token, can inspect or mutate **only** this layer's BoxWeave-owned Incus resources and their approved consequences. It cannot acquire host shell, foreign Incus admin, host file, parent BoxWeave or arbitrary network/Caddy authority.
+**Invariant:** A BoxWeave MCP caller, with any valid management credential, can inspect or mutate **only** this layer's BoxWeave-owned Incus resources and their approved consequences. It cannot acquire host shell, foreign Incus admin, host file, parent BoxWeave or arbitrary network/Caddy authority.
 
-**Multi-Agent continuity does not expand authority.** Verified `actor_id`/`token_id` is from server authentication; `work_ref`, `agent_ref`, clientInfo, MCP sessions and future Task handles are never credentials, ownership grants or a reason to read other controllers. For `operation_list`, restrict the permitted controller/layer/role/owned resources **before** filtering and pagination; honor existing viewer and Exec output limits. Use separate revocable credentials for trustworthy per-Agent attribution, and never log raw guest args/tokens/prompt chains. [Design](AGENT_OPERATION_CONTINUITY.md) and [TC security cases](../verification/CONTINUITY_ACCEPTANCE.md).
+**Multi-Agent continuity does not expand authority.** Verified `actor_id`/`token_id` is from server authentication; `work_ref`, `agent_ref`, clientInfo, MCP sessions and future Task handles are never credentials, ownership grants or a reason to read other controllers. For `operation_list`, restrict the permitted controller/layer/owned resources **before** filtering and pagination; preserve bounded Exec output limits. Use separate revocable credentials for trustworthy per-Agent attribution, and never log raw guest args/tokens/prompt chains. [Design](AGENT_OPERATION_CONTINUITY.md) and [TC security cases](../verification/CONTINUITY_ACCEPTANCE.md).
 
 ## Owned native boundary
 
@@ -33,9 +33,9 @@ Use MCP `auth.RequireBearerToken` with a BoxWeave revocation-aware verifier; **t
 
 ## Minimal access control
 
-- Local bootstrap creates super-admin; multiple independently revocable MCP credentials are `admin` or `viewer`. No per-Box Token grants, separate file/delete/cancel/tool rights or general RBAC platform. Admin can issue authorized mutations and guest-root Exec only within this controller's ownership domain.
-- Viewer **cannot mutate or Exec**, but can read owned Box metadata, files and bounded Exec output, which can contain secrets. Never market viewer as a privacy/redaction role; revoke/limit issuance as appropriate.
-- Revocation rejects new requests and provably undispatched queued operations. It does not imply that a dispatched/possibly dispatched operation was stopped, rolled back or resolved. A revoked Token cannot fetch old receipts; a valid admin can inspect redacted audit evidence.
+- Local bootstrap issues independently revocable authenticated management credentials. OAuth grants retain a stable Actor across refresh; manual credentials each identify their own Actor. There are **no** application permission Scopes, viewer/admin roles, per-Box Token grants or separate per-Tool rights.
+- Each approved Actor may read, change, Exec inside and delete **only** this Layer's owned managed Boxes. Reads and guest-root Exec are sensitive; preserve Layer/Project/UUID isolation, credential expiration, revocation and original-operation visibility boundaries.
+- Revocation rejects new requests and provably undispatched queued operations. It does not imply that a dispatched/possibly dispatched operation was stopped, rolled back or resolved. A revoked Token cannot fetch old receipts; a valid authenticated Actor within the same Layer can inspect redacted audit evidence.
 
 ## MCP and async safety
 
@@ -47,6 +47,6 @@ Use MCP `auth.RequireBearerToken` with a BoxWeave revocation-aware verifier; **t
 
 ## Negative acceptance
 
-Test foreign Box UUID/host file, raw Incus settings, old IP/name reuse, unsafe guest file symlink/hardlink, token viewer Exec/write, revoked queued/active operations, uncontrolled IPv4/IPv6 paths, foreign port listener, public bind authorization, nested parent/sibling privilege, duplicate idempotency and UNKNOWN. Refusals must have independent no-side-effect evidence.
+Test foreign Box UUID/host file, raw Incus settings, old IP/name reuse, unsafe guest file symlink/hardlink, unauthenticated/expired/revoked Token Exec/write, revoked queued/active operations, uncontrolled IPv4/IPv6 paths, foreign port listener, public bind authorization, nested parent/sibling privilege, duplicate idempotency and UNKNOWN. Refusals must have independent no-side-effect evidence.
 
 See [scope](../product/SCOPE.md), [MCP tool contracts](MCP_TOOL_CONTRACTS.md), [network](NETWORK.md), [operations](OPERATIONS.md).
