@@ -235,7 +235,7 @@ func (s *Store) validateExistingSchema() error {
 		return err
 	}
 	if version != SchemaVersion {
-		return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
+		return fmt.Errorf("unsupported schema %d (expected %d): pre-release database is incompatible; preserve unresolved original/UNKNOWN native operations, then recreate a fresh isolated controller environment with explicit reset approval; no automatic migration or deletion", version, SchemaVersion)
 	}
 	// A LIMIT 1 version read alone can hide a second conflicting migration
 	// record. Never choose one history or adopt unknown application tables.
