@@ -69,9 +69,9 @@ func TestS2RequestPrincipalRequiresExplicitSDKCredential(t *testing.T) {
 	actor := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	credential := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	tests := []struct {
-		name string
+		name  string
 		token any
-		want bool
+		want  bool
 	}{
 		{"missing", nil, false},
 		{"numeric", 7, false},
