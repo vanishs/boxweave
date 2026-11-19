@@ -63,6 +63,9 @@ jobs:
           while IFS= read -r path; do
             sh -n "$path"
           done < <(git ls-files '*.sh' '.githooks/pre-*')
+      - name: Python MCP loopback client and protocol negative tests
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
       - name: Ensure precise Go module formatting and verified checksums
         if: steps.scope.outputs.full == 'true'
         run: |
