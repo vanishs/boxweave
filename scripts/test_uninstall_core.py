@@ -35,6 +35,11 @@ class FakeHost(unittest.TestCase):
                                    return_value=types.SimpleNamespace(pw_uid=1001))
         self.p.start()
         self.addCleanup(self.p.stop)
+        # GitHub Actions runner is intentionally nonroot; tests use a fake
+        # filesystem fixture while real CLI main() requires host-root.
+        self.owner_check = mock.patch.object(u, "require_root_owned")
+        self.owner_check.start()
+        self.addCleanup(self.owner_check.stop)
         self.host = mock.patch.object(u, "machine_sha", return_value="a" * 64)
         self.host.start()
         self.addCleanup(self.host.stop)
