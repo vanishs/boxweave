@@ -31,7 +31,7 @@
 
 可置于后续段落的补充原则：
 
-> work_ref and agent_ref are untrusted correlation labels, not authorization or reliable Agent identities. Separate admin actors may read authorized originals, but cannot replay another actor's mutation as the same idempotent request. Use operation_output_get to inspect guest Exec exits; SUCCEEDED means the BoxWeave operation finalized, not necessarily that the guest command exited zero. Use box_get to inspect observed native Box state; Running does not prove guest readiness. BoxWeave does not preserve Agent plans, Git checkpoints, conversation state, or activity outside its own durable Operations.
+> work_ref and agent_ref are untrusted correlation labels, not authorization or reliable Agent identities. Separate authenticated actors may inspect same-layer authorized original operations, but cannot borrow another actor's idempotency identity or mutate foreign resources. Use operation_output_get to inspect guest Exec exits; SUCCEEDED means the BoxWeave operation finalized, not necessarily that the guest command exited zero. Use box_get to inspect observed native Box state; Running does not prove guest readiness. BoxWeave does not preserve Agent plans, Git checkpoints, conversation state, or activity outside its own durable Operations.
 
 中文含义：工作/Agent 标识不可作为权限或可信身份；Exec 需要检查退出码/command_success；Running 不等于 Guest 就绪；服务不存储 Agent 计划、Git Checkpoint、会话内容或其他工具的活动。
 
