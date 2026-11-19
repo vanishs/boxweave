@@ -151,8 +151,9 @@ func TestActivityPeerEvidenceVerifiedLinkNotNativePermission(t *testing.T) {
 	if err := s.FinalizeRootPeerGrant(ctx, id); err != nil {
 		t.Fatal(err)
 	}
+	tok := activityTestToken(t, s)
 	result, err := s.ReadActivity(ctx, ActivityQuery{Layer: "user-1001",
-		Requester: id, View: "evidence", OperationID: id})
+		Requester: tok.ID, View: "evidence", OperationID: id})
 	if err != nil || result.Evidence == nil || len(result.Evidence.Peers) != 1 ||
 		result.Evidence.Peers[0].VerifiedID != id ||
 		result.Evidence.Peers[0].PendingID != "" {
@@ -185,5 +186,27 @@ func TestActivityQueryRejectsInvalidAndTruncates(t *testing.T) {
 		Requester: tok.ID, View: "overview", Limit: 1})
 	if err != nil || len(page.Operations) != 1 || !page.Truncated {
 		t.Fatalf("bounded view claimed complete: %+v %v", page, err)
+	}
+}
+
+func TestActivityRevokedTokenNeverReceivesReadback(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	tok := activityTestToken(t, s)
+	if _, err := s.ReadActivity(ctx, ActivityQuery{Layer: "user-1001",
+		Requester: tok.ID, View: "overview"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RevokeToken(ctx, tok.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, view := range []string{"overview", "issues", "evidence"} {
+		query := ActivityQuery{Layer: "user-1001", Requester: tok.ID, View: view}
+		if view == "evidence" {
+			query.OperationID = strings.Repeat("a", 32)
+		}
+		if _, err := s.ReadActivity(ctx, query); !errors.Is(err, ErrRevoked) {
+			t.Fatalf("revoked token read %s: %v", view, err)
+		}
 	}
 }
