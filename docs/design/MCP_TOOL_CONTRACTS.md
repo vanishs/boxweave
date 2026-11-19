@@ -50,7 +50,7 @@ For `box_exec`, report separately: observed zero exit, observed nonzero exit, an
 
 ## Auth and source visibility
 
-Two independently revocable role types: `admin` may manage BoxWeave-owned resources and Exec inside owned guests; `viewer` may inspect owned metadata and guest files/output, but must never mutate or Exec. No per-Box grants, tool-class ACL matrix, tenant roles or inherited parent credentials. Viewer read access may expose confidential guest data; do not describe it as harmless.
+One approved full-management capability per independently revocable Actor credential (manual Bearer or OAuth Grant); **no** admin/viewer roles and **no** application OAuth permission Scope. All reads, mutations and guest-root Exec require live authentication and exact Layer/owned-UUID protection. Same-Layer original Operation evidence is visible to another approved Actor for recovery, but original Actor idempotency and credential liveness cannot be borrowed.
 
 Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not proved-dispatched work. On unsafe/incapable native operation, fail closed with Tracking ID and classified error; logs remain local. No Caddy, HTTP-route, generic ACL or dedicated diagnostic API.
 
@@ -63,4 +63,4 @@ Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not prov
 
 ## Required native black-box checks
 
-Verify whole Agent create/read/create-or-replace/file-delete/async test/recover/fix/retest cycle; file race/symlink/hardlink denial; viewer forbidden Exec and write; Box peer A->B allow/revoke without changing B->A initiation; host loopback/public TCP+UDP mapping; foreign resource denial; repeated idempotency/UNKNOWN; nested L1/L2 matching behavior. No P0 PASS without real Incus evidence.
+Verify the whole Agent create/read/file/async recovery/fix/retest cycle, file race/symlink/hardlink refusals, anonymous/expired/revoked or forged Token denial, authenticated peer-Actor positive takeover plus distinct idempotency, A-to-B directional peer grant/revoke, TCP/UDP port behavior, foreign Project/Box refusal, UNKNOWN no-replay, nested L1/L2 boundaries and exact native proof.

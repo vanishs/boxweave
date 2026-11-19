@@ -187,7 +187,7 @@ sudo runuser -u boxweave -- env \
 sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-status
 ```
 
-Expect `Origin` to match **exactly** and `Enabled=true`. The URL entered into an OAuth-capable ChatGPT/custom MCP connection is **`$PUBLIC_ORIGIN/mcp`**, not the bare origin or `/mcp/oauth`. Review OAuth client, redirect URI and granted `admin`/`viewer` role; keep credentials private. ChatGPT connection UI depends on account/workspace access. Verify genuine `host_status` and `box_list` reads **before** writes; OAuth browser approval alone is not end-to-end proof.
+Expect the configured public Origin exactly and `Enabled=true`. Connect an OAuth-capable ChatGPT/custom MCP client to `$PUBLIC_ORIGIN/mcp` (not the bare Origin or `/mcp/oauth`). **This RC.3 installation guide describes published historical OAuth;** Draft PR #153 instead requires fresh Schema v4 credentials and new explicit approval for scope-free full BoxWeave management, without old client/Grant reuse. Do not roll over the old DB or erase native UNKNOWN evidence. Inspect client and redirect URI, protect tokens, and test genuine `host_status` and `box_list` reads before any write. See [reconstruction policy](../process/VERSIONING.md).
 
 Quick Tunnel URLs change between sessions. Update `oauth-set-origin` when that happens. To finish public testing, stop the tunnel and run `sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-disable`. Long-lived public access needs separate review of HTTPS, identity, exposure, revocation and negative tests.
 

@@ -6,7 +6,7 @@
 |---|---|
 | R-001 | One controller and restricted Incus ownership domain per host/layer; implementation Go + official MCP/Incus SDK; no second management protocol or Containarium. |
 | R-002 | Authenticated Streamable HTTP MCP binds loopback by default. Operator configures public HTTPS/Tunnel separately. |
-| R-003 | Host-local CLI installs/upgrades/diagnoses/repairs and bootstraps multiple independently revocable `admin` or `viewer` tokens. Viewer read access can reveal sensitive guest data. |
+| R-003 | Host-local CLI installs/upgrades/diagnoses/repairs and bootstraps independently revocable full-management Actor credentials, without admin/viewer roles or OAuth application-permission Scope. Tokens must be kept private and revocation must fail closed. |
 | R-004 | Exact native Incus UUID/incarnation checked for every sensitive Box, port, peer, operation; foreign host/resources remain inaccessible through MCP. |
 | R-005 | Basic owned Box create/list/get/update/start/stop/delete; default Ubuntu LTS guest, start=true/readiness observed, safe CPU/memory/disk growth/nesting/internet changes; no raw Incus settings or shrink. |
 | R-006 | `box_exec` uses native Incus guest Exec as guest root by default, typed argv/cwd/env/limits, and never host Exec/SSH/guest Agent. |

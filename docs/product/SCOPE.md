@@ -1,13 +1,13 @@
 # v1 permanent scope and exclusions
 
-**2026-11-13 owner-approved exception to old exclusions:** small embedded OAuth for the existing `/mcp` resource is in scope as S2.5 Agent-connectivity work, not yet implemented. Keep `admin/viewer` and the same protected Tool handlers. OAuth is **not** permission for a Web console, general RBAC, Cloudflare management or second server. [Exact development plan](../development/S25_EMBEDDED_OAUTH_IMPLEMENTATION.md).
+**Current Draft PR #153 scope (2026-11-18):** Embedded OAuth remains part of the single `/mcp` Go service but the candidate has **no** application permission Scope and **no** admin/viewer role classes. Every newly authorized Actor receives explicit full-management consent bounded to owned Layer/Box resources, with refresh/revocation and original Actor-idempotency protection. This is unmerged development source, not the published RC.7 contract. [Owner's selected design](../development/V1_SINGLE_AUTH_AND_LEGACY_CLEANUP_PLAN_2026-11-18.md). OAuth does not imply a Web console, generalized RBAC, Cloudflare management or a second transport.
 
 **Status:** This is the intentionally small product boundary, not merely a P0/P1 rollout order. Supersedes superseded older broad design assumptions; see [boundary decision](../decisions/PRODUCT_BOUNDARY.md).
 
 ## Required core
 
 - One BoxWeave controller per host/layer, implemented in Go with official MCP and Incus Go SDKs. No Containarium, Web console, public REST management, guest management Agent, SSH dependency or generic host shell.
-- HTTP MCP listens on loopback by default; external HTTPS/Tunnel is operator-owned. Local CLI limited to install/upgrade/status/bootstrap/token recovery/doctor. MCP tokens are independently revocable **admin** or **viewer** only, never an RBAC/per-Box delegation platform.
+- HTTP MCP listens on loopback by default; external HTTPS/Tunnel remains operator-owned. Local CLI is limited to authorized install/upgrade/status/bootstrap/token recovery/doctor; independently revocable credentials grant **one** approved, Layer/Box-bounded management capability. No admin/viewer split, permission Scopes or delegated per-Box RBAC.
 - Managed Incus Linux Boxes with native UUID-verified ownership: create/start (default ready), list/get, typed resource update, stop/delete, nesting opt-in and guest-root asynchronous Exec. Ubuntu LTS verified first; other Linux guest images added with explicit compatibility tests.
 - Guest file list/read and `box_file_apply(mode=create|replace|delete)` for safe single regular-file changes. Complex edits, repository Git and build/test commands run inside the authorized Box via `box_exec`; no built-in patch engine.
 - Mutations are journaled and async; caller-provided reusable idempotency key, server Tracking ID, distinct durable operation IDs, bounded/retained output, honest UNKNOWN and independent native post-state reads. `operation_get` includes redacted diagnostic summary; no standalone diagnostic MCP tool.

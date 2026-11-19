@@ -21,7 +21,7 @@ Built-in patch engine, file search/bulk file transfer, independent diagnostics M
 
 ## Security and acceptance
 
-Admin tokens may Exec as guest root and therefore edit any guest file allowed by Incus confinement. Viewer tokens can read guest files and output, potentially containing secrets, but cannot Exec or mutate. Never expose host files or foreign Incus/project/port/peer resources.
+Any independently revocable, explicitly approved management credential may Exec as guest root and therefore edit any guest files allowed by Incus confinement; another authorized Actor may also read managed guest files and output (sensitive). There is no viewer role or separate file/read Tool permission tier. Never grant host filesystem or foreign Project/Box/port/peer authority.
 
 Test the complete create -> clone -> file read/change -> deliberate failing guest test -> inspect original output -> correct -> successful test -> demonstrate owned port forwarding and peer allow/revoke -> independently verify and delete owned test resources. Test native race/unsupported file semantics, unsupported isolation, client disconnect, lost native receipt, token revocation, nested L1/L2 behavior and real resource cleanup.
 
