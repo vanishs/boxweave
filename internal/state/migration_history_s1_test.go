@@ -37,7 +37,7 @@ func TestS1ForeignSQLiteMigrationHistoryFailClosed(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			raw, tok, err := original.IssueToken(context.Background(),time.Hour)
+			raw, tok, err := original.IssueToken(context.Background(), time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestS1ConcurrentSQLiteOpenAndOriginalOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, tok, err := first.IssueToken(context.Background(),time.Hour)
+	_, tok, err := first.IssueToken(context.Background(), time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestS1AbortedSQLiteMigrationTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, tok, err := s.IssueToken(context.Background(),time.Hour)
+	_, tok, err := s.IssueToken(context.Background(), time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

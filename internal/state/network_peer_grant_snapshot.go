@@ -152,7 +152,7 @@ func (s *Store) readPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 		if !slices.Equal(claims, expected) {
 			return nil, ErrResourceLocked
 		}
-			active, e := activeCredentialForActor(ctx, tx, actor, token)
+		active, e := activeCredentialForActor(ctx, tx, actor, token)
 		if e != nil || !active {
 			return nil, ErrRevoked
 		}

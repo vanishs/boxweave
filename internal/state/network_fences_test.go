@@ -98,7 +98,7 @@ func TestS4B2AddressFenceAndLifecycleSurviveReopen(t *testing.T) {
 	if err := reopened.ReserveNetworkAddress(ctx, c); !errors.Is(err, ErrResourceLocked) {
 		t.Fatalf("new incarnation stole quarantined IP after reboot: %v", err)
 	}
-	_, tok, err := reopened.IssueToken(ctx,time.Hour)
+	_, tok, err := reopened.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

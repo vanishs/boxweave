@@ -10,7 +10,7 @@ import (
 func TestS4B2NetworkMultiResourceAdmissionAndUnknownFence(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
