@@ -6,8 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -114,7 +114,6 @@ func (q ActivityQuery) normalize() (ActivityQuery, error) {
 	}
 	return q, nil
 }
-
 
 func validActivityBoxID(id string) bool {
 	if len(id) == 0 || len(id) > 128 {
