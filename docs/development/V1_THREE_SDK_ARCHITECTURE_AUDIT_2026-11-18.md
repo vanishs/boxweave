@@ -1,7 +1,7 @@
 # BoxWeave v1 — Three pinned SDKs vs current architecture: pre-S4 native reacceptance audit
 
-**Date:** 2026-11-18 PT  
-**Scope:** pre-release Draft PR #153, source SHA `42e68f09cef407022df428ba5f76e91345e005e4` (before this documentation audit).  
+**Date:** 2026-11-18 PT
+**Scope:** pre-release Draft PR #153, source SHA `42e68f09cef407022df428ba5f76e91345e005e4` (before this documentation audit).
 **Status:** **Three-SDK design audit followed by OWNER-AUTHORIZED SOURCE REFACTOR; native/CI/real-ChatGPT acceptance remains pending.** Original audit baseline is preserved below; implementation evidence is in section 0.
 
 ## 0. Owner-authorized all-at-once source remediation — implemented 2026-11-18
