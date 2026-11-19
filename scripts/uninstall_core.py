@@ -55,6 +55,11 @@ def checked_file(path, kind, max_size=None):
     return info
 
 
+def require_root_owned(path):
+    if path.lstat().st_uid != 0:
+        raise UninstallError("installer-owned root path has foreign owner: " + str(path))
+
+
 def file_fingerprint(path):
     info = checked_file(path, "file", 120 * 1024 * 1024 if path == BINARY else None)
     if info is None:
@@ -222,8 +227,9 @@ def audit_status():
     if record is None:
         return {"status": "ABSENT", "sha256": None}
     info = AUDIT.lstat()
-    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
-        raise UninstallError("unsafe owner or permissions on uninstall audit")
+    require_root_owned(AUDIT)
+    if stat.S_IMODE(info.st_mode) != 0o600:
+        raise UninstallError("unsafe permissions on uninstall audit")
     if record.get("status") not in ("STARTED", "COMPLETE"):
         raise UninstallError("unrecognized interrupted uninstall audit")
     return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
@@ -258,8 +264,9 @@ def inspect(scope, project, box_uuids, native_sha):
     if binary and (binary["sha256"] != manifest.get("binary_sha256") or
                    unit["sha256"] != manifest.get("unit_sha256")):
         raise UninstallError("owned binary or systemd unit modified after install")
-    if binary and (BINARY.lstat().st_uid != 0 or UNIT.lstat().st_uid != 0):
-        raise UninstallError("installer binary/unit must be root-owned")
+    if binary:
+        require_root_owned(BINARY)
+        require_root_owned(UNIT)
     service = systemd_status()
     fragment = effective_unit()
     if (unit and fragment != str(UNIT)) or (not unit and fragment not in ("", str(UNIT))):
@@ -336,8 +343,9 @@ def inspect(scope, project, box_uuids, native_sha):
 
 def _replace_audit(record):
     old = checked_file(AUDIT, "file", 1024 * 1024)
-    if old is None or old.st_uid != 0 or stat.S_IMODE(old.st_mode) != 0o600:
+    if old is None or stat.S_IMODE(old.st_mode) != 0o600:
         raise UninstallError("untrusted existing root uninstall audit")
+    require_root_owned(AUDIT)
     fd, tmp = tempfile.mkstemp(dir=str(AUDIT.parent), prefix=".boxweave-uninstall-")
     try:
         os.fchmod(fd, 0o600)
