@@ -65,6 +65,8 @@ The following **historical RC.3** release CI passed exact-source quality, native
 
 ## Develop and contribute
 
+**Reviewed host removal (unmerged Draft PR #153):** [`uninstall.sh` scope / plan / apply documentation](docs/development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md) covers `service`, `controller`, and `full`. With no arguments it only shows help; even `full` requires exact owner/host/Box/native inventory review and retains shared Incus resources. The destructive apply has **not** been tested on the real physical host and is not authorized by this documentation.
+
 **Local MCP test automation (unmerged Draft PR #153):** [Python loopback MCP test kit](docs/development/V1_PYTHON_LOOPBACK_MCP_TESTKIT_2026-11-19.md) provides a reusable standard-library client, CLI, guarded Tool calls, operation/Activity recovery helpers and disposable localhost test scenarios. Run `make test-mcp-python` for its offline mock suite. It does **not** test browser OAuth, a real ChatGPT Agent or native host effects, and never replaces the existing installed v4 controller.
 
 [Contributing](CONTRIBUTING.md) · [quality gates / docs-only CI policy](docs/process/QUALITY_GATES.md) · [implementation phases](docs/process/IMPLEMENTATION_PLAN.md) · [product boundary](docs/decisions/PRODUCT_BOUNDARY.md) · [decisions](docs/decisions/DECISIONS.md) · [development checkpoint](docs/development/EXECUTION_LOG.md).
