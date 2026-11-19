@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"database/sql"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 )
@@ -29,71 +28,71 @@ type ActivityQuery struct {
 }
 
 type ActivityIssue struct {
-	OperationID string
-	BoxUUID     string
-	ResourceRef string
-	Reason      string
-	State       string
-	AtNS        int64
+	OperationID string `json:"operation_id,omitempty"`
+	BoxUUID     string `json:"box_id,omitempty"`
+	ResourceRef string `json:"resource_ref,omitempty"`
+	Reason      string `json:"reason"`
+	State       string `json:"state"`
+	AtNS        int64  `json:"at_ns"`
 }
 
 type ActivityEvent struct {
-	Seq    int64
-	AtNS   int64
-	State  string
-	Detail string
+	Seq    int64  `json:"seq"`
+	AtNS   int64  `json:"at_ns"`
+	State  string `json:"state"`
+	Detail string `json:"safe_detail,omitempty"`
 }
 
 type ActivityReview struct {
-	Seq      int64
-	AtNS     int64
-	Decision string
+	Seq      int64  `json:"seq"`
+	AtNS     int64  `json:"at_ns"`
+	Decision string `json:"decision"`
 }
 
 type ActivityPeer struct {
-	SourceUUID string
-	TargetUUID string
-	Status     string
-	Desired    bool
-	PendingID  string
-	VerifiedID string
+	SourceUUID string `json:"source_uuid"`
+	TargetUUID string `json:"target_uuid"`
+	Status     string `json:"status"`
+	Desired    bool   `json:"desired"`
+	PendingID  string `json:"pending_operation_id,omitempty"`
+	VerifiedID string `json:"last_verified_operation_id,omitempty"`
 }
 
 type ActivityGC struct {
-	Stream string
-	State  string
-	AtNS   int64
+	Stream string `json:"stream"`
+	State  string `json:"state"`
+	AtNS   int64  `json:"at_ns"`
 }
 
 type ActivityExec struct {
-	ObservedAtNS int64
-	ExitCode     *int64
-	Truncated    bool
+	ObservedAtNS int64  `json:"observed_at_ns"`
+	ExitCode     *int64 `json:"exit_code,omitempty"`
+	Truncated    bool   `json:"truncated"`
 }
 
 type ActivityEvidence struct {
-	Original      Receipt
-	Events        []ActivityEvent
-	Reviews       []ActivityReview
-	ResourceKeys  []string
-	Exec          *ActivityExec
-	GC            []ActivityGC
-	Peers         []ActivityPeer
-	OwnedBoxState string
-	Limitations   []string
+	Original      Receipt          `json:"original"`
+	Events        []ActivityEvent  `json:"events"`
+	Reviews       []ActivityReview `json:"reviews"`
+	ResourceKeys  []string         `json:"resource_keys"`
+	Exec          *ActivityExec    `json:"exec,omitempty"`
+	GC            []ActivityGC     `json:"gc"`
+	Peers         []ActivityPeer   `json:"peers"`
+	OwnedBoxState string           `json:"owned_box_state,omitempty"`
+	Limitations   []string         `json:"limitations"`
 }
 
 type ActivityResult struct {
-	Source            string
-	Scope             string
-	AsOfNS            int64
-	Coverage          string
-	Truncated         bool
-	AttentionComplete bool
-	NextCursor        string
-	Operations        []Receipt
-	Issues            []ActivityIssue
-	Evidence          *ActivityEvidence
+	Source            string            `json:"source"`
+	Scope             string            `json:"scope"`
+	AsOfNS            int64             `json:"as_of_ns"`
+	Coverage          string            `json:"coverage"`
+	Truncated         bool              `json:"truncated"`
+	AttentionComplete bool              `json:"attention_complete"`
+	NextCursor        string            `json:"next_cursor,omitempty"`
+	Operations        []Receipt         `json:"operations,omitempty"`
+	Issues            []ActivityIssue   `json:"issues,omitempty"`
+	Evidence          *ActivityEvidence `json:"evidence,omitempty"`
 }
 
 func (q ActivityQuery) normalize() (ActivityQuery, error) {
