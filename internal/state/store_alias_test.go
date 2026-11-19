@@ -111,7 +111,7 @@ func TestS2SQLiteTwoLocalWritersSerializeWithoutJournalDamage(t *testing.T) {
 				errs <- err
 				return
 			}
-			if got.ID != issued.ID || got.Role != "viewer" {
+			if got.ID != issued.ID || got.ActorID != issued.ActorID {
 				errs <- ErrState
 			}
 		}(i)

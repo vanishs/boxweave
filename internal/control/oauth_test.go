@@ -201,8 +201,8 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 		}
 		res.Body.Close()
 	}
-	f := completeOAuth(t, ts, pwd, "mcp:viewer mcp:admin")
-	if tok, err := st.VerifyToken(context.Background(), f.access); err != nil || tok.Role != "admin" {
+	f := completeOAuth(t, ts, pwd, "")
+	if tok, err := st.VerifyToken(context.Background(), f.access); err != nil || tok.ActorID == "" {
 		t.Fatalf("token not verified: %v", err)
 	}
 	sessctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

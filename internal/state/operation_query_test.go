@@ -118,9 +118,9 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	if err != nil || len(all.Operations) != 3 {
 		t.Fatalf("admin own-controller catalog: %+v %v", all, err)
 	}
-	own, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, Role: "viewer"})
+	own, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, ActorID: a.ID})
 	if err != nil || len(own.Operations) != 2 {
-		t.Fatalf("viewer cross-actor leak: %+v %v", own, err)
+		t.Fatalf("actor-filtered history mismatch: %+v %v", own, err)
 	}
 	if _, err := s.GetScopedOperation(ctx, "L0", a.ID,foreign.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("guessed foreign ID leaked: %v", err)
@@ -128,8 +128,8 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	if _, err := s.GetScopedOperation(ctx, "L1", a.ID,first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-layer operation leaked: %v", err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID,second.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("different viewer accessed output owner: %v", err)
+	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID,second.ID); err != nil {
+		t.Fatalf("independent authorized actor cannot take over same-layer history: %v", err)
 	}
 }
 
