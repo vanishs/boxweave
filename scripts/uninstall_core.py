@@ -200,7 +200,16 @@ def native_instances(project):
     return sorted(result, key=lambda x: x["uuid"])
 
 
+def require_root_journal(path):
+    info = checked_file(path, "file", 1024 * 1024)
+    if info is not None:
+        require_root_owned(path)
+        if stat.S_IMODE(info.st_mode) != 0o600:
+            raise UninstallError("untrusted root journal permission: " + str(path))
+
+
 def prepare_record():
+    require_root_journal(NATIVE)
     record = read_json(NATIVE)
     if record is None:
         return {"status": "ABSENT", "sha256": None, "review_sha256": None}
@@ -300,6 +309,7 @@ def inspect(scope, project, box_uuids, native_sha):
     if any(x["project"] != project for x in snapshot["boxes"]):
         raise UninstallError("foreign Layer in owned Box inventory")
     native = prepare_record()
+    require_root_journal(SCRIPTLET)
     scriptlet = read_json(SCRIPTLET)
     if scriptlet is not None and str(scriptlet.get("Status", scriptlet.get("status", ""))) != "ROLLED_BACK":
         # Scriptlet has its own root-local journal; never hand-edit global ACL.
