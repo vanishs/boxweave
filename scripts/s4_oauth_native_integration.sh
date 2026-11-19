@@ -68,7 +68,7 @@ if ! sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
   exit 7
 fi
 grep -Fxq 'S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS' "$S4_A_WORK/s4-oauth-native.redacted.log"
-grep -Fxq 'S4_A_INSTALLED_OAUTH_FOREIGN_VIEWER_MANUAL_REVOKED_NO_ADMISSION=PASS' "$S4_A_WORK/s4-oauth-native.redacted.log"
+grep -Fxq 'S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION=PASS' "$S4_A_WORK/s4-oauth-native.redacted.log"
 grep -Fxq 'S4_A_INDEPENDENT_GUEST_ONE_EFFECT=PASS' "$S4_A_WORK/s4-oauth-native.redacted.log"
 grep '^S4_A_' "$S4_A_WORK/s4-oauth-native.redacted.log"
 
