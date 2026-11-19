@@ -18,7 +18,7 @@ import (
 
 // Auth routes are a credential front-end, not a second MCP implementation.
 // All successful /mcp calls still traverse the SDK's bearer middleware and
-// the original request-scoped admin/viewer/owned-UUID checks.
+// the original request-scoped authenticated Actor and owned-UUID checks.
 func oauthValidator() *oauthserver.Server {
 	cfg := oauthserver.NewConfig()
 	cfg.AllowedResponseTypes = []oauth2.ResponseType{oauth2.Code}
@@ -58,7 +58,6 @@ func (s *Service) oauthRoute(w http.ResponseWriter, r *http.Request, cfg state.O
 	case "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp":
 		meta := &oauthex.ProtectedResourceMetadata{
 			Resource: cfg.Origin + "/mcp", AuthorizationServers: []string{cfg.Origin},
-			ScopesSupported:        []string{"mcp:viewer", "mcp:admin"},
 			BearerMethodsSupported: []string{"header"},
 			ResourceName:           "BoxWeave MCP",
 		}
@@ -75,7 +74,6 @@ func (s *Service) oauthRoute(w http.ResponseWriter, r *http.Request, cfg state.O
 			"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 			"code_challenge_methods_supported":      []string{"S256"},
 			"token_endpoint_auth_methods_supported": []string{"none"},
-			"scopes_supported":                      []string{"mcp:viewer", "mcp:admin"},
 		})
 	case "/register":
 		s.oauthRegister(w, r)
@@ -144,11 +142,11 @@ func (s *Service) oauthRegister(w http.ResponseWriter, r *http.Request) {
 var oauthConsentPage = template.Must(template.New("consent").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><title>BoxWeave MCP authorization</title><body>
 <h1>Authorize MCP client</h1><p>This client will be allowed to use your BoxWeave MCP tools.</p>
 <p>Client: <strong>{{.ClientName}}</strong></p><p>Callback: <strong>{{.RedirectURI}}</strong></p>
-<p>Requested access: <strong>{{.Role}}</strong> (admin permits Box mutations and Exec; viewer is read-only).</p>
+<p><strong>Full BoxWeave management access:</strong> this client can read, create, modify, execute commands inside managed Boxes (including guest-root commands), and delete managed Boxes in this Layer. Approve trusted clients only.</p>
 <form action="/authorize" method="post">
 <input type="hidden" name="pending" value="{{.Pending}}">
 <label>Local BoxWeave OAuth approval password <input type="password" name="password" required autocomplete="current-password"></label>
-<label><input type="checkbox" name="approve" value="yes" required> I approve this client and its requested role.</label>
+<label><input type="checkbox" name="approve" value="yes" required> I explicitly approve this client for full BoxWeave management access.</label>
 <button type="submit">Authorize</button></form></body></html>`))
 
 func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request, cfg state.OAuthSettings) {
@@ -156,7 +154,7 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request, cfg sta
 	case http.MethodGet:
 		// Use the upstream OAuth library for request/PKCE S256/response_type
 		// validation; the durable store checks registered exact redirects,
-		// resource, scopes and session. Do not use the library's non-atomic Manager.
+		// resource and session. Do not use the library's non-atomic Manager.
 		req, err := oauthValidator().ValidationAuthorizeRequest(r)
 		if err != nil {
 			oauthError(w, err)
@@ -173,10 +171,6 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request, cfg sta
 			oauthError(w, err)
 			return
 		}
-		role := "viewer"
-		if strings.Contains(" "+intent.Scope+" ", " mcp:admin ") {
-			role = "admin"
-		}
 		callback, err := url.Parse(intent.RedirectURI)
 		if err != nil {
 			oauthError(w, err)
@@ -188,7 +182,7 @@ func (s *Service) oauthAuthorize(w http.ResponseWriter, r *http.Request, cfg sta
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+origin+"; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = oauthConsentPage.Execute(w, struct{ ClientName, RedirectURI, Role, Pending string }{intent.ClientName, intent.RedirectURI, role, pending})
+		_ = oauthConsentPage.Execute(w, struct{ ClientName, RedirectURI, Pending string }{intent.ClientName, intent.RedirectURI, pending})
 	case http.MethodPost:
 		if r.Host != strings.TrimPrefix(cfg.Origin, "https://") || r.Header.Get("Origin") != cfg.Origin {
 			http.Error(w, "invalid origin", http.StatusForbidden)
@@ -255,6 +249,10 @@ func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request, cfg state.O
 		return
 	}
 	client, resource := req.ClientID, r.Form.Get("resource")
+	if r.Form.Get("scope") != "" {
+		oauthJSON(w, 400, map[string]string{"error": "invalid_scope"})
+		return
+	}
 	if resource != cfg.Origin+"/mcp" {
 		oauthJSON(w, 400, map[string]string{"error": "invalid_target"})
 		return
@@ -273,7 +271,7 @@ func (s *Service) oauthToken(w http.ResponseWriter, r *http.Request, cfg state.O
 		return
 	}
 	oauthJSON(w, 200, map[string]any{"access_token": pair.Access, "token_type": "Bearer", "expires_in": pair.ExpiresIn,
-		"refresh_token": pair.Refresh, "scope": pair.Scope})
+		"refresh_token": pair.Refresh})
 }
 func oauthMetadataURL(origin string) string {
 	return origin + "/.well-known/oauth-protected-resource/mcp"
