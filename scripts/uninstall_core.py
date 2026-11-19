@@ -497,7 +497,7 @@ def apply(plan):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="BoxWeave exact-owned host uninstall (no implicit deletion)")
+    parser = argparse.ArgumentParser(prog="uninstall.sh", description="BoxWeave exact-owned host uninstall (no implicit deletion)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
