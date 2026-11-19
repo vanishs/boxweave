@@ -141,7 +141,7 @@ func main() {
 	verifier := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._~"
 	d := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(d[:])
-	pending, err := store.BeginOAuth(ctx, clientID, redirect, "mcp:admin", challenge,
+	pending, err := store.BeginOAuth(ctx, clientID, redirect, "", challenge,
 		origin+"/mcp", "s4-a-native-once-only")
 	must(err == nil, "OAUTH_BEGIN_FAILED")
 	code, _, _, err := store.ApproveOAuth(ctx, pending, password)
@@ -216,7 +216,7 @@ func main() {
 		must(err == nil, "NEGATIVE_GRANT_EXCHANGE_FAILED")
 		return pair
 	}
-	other := issueGrant("mcp:admin", "independent")
+	other := issueGrant("", "independent")
 	must(other.GrantID != first.GrantID, "INDEPENDENT_GRANT_REUSED_ACTOR")
 	otherActor, err := store.VerifyToken(ctx, other.Access)
 	must(err == nil && otherActor.ActorID == other.GrantID, "INDEPENDENT_GRANT_ACTOR_INVALID")
@@ -246,15 +246,13 @@ func main() {
 			label, id, value(terminal, "native_operation_id"))
 	}
 	separateActor(otherSession, otherActor, "INDEPENDENT_GRANT")
-	viewer := issueGrant("mcp:viewer", "viewer")
-	viewerSession := connect(ctx, *endpoint, viewer.Access)
-	defer viewerSession.Close()
-	refused(ctx, viewerSession, "operation_get", map[string]any{"operation_id": originalID},
-		"VIEWER_GRANT_BORROWED_ORIGINAL")
-	refused(ctx, viewerSession, "box_exec", map[string]any{
-		"box_id": *boxID, "argv": argv, "idempotency_key": "s4-oauth-viewer-must-not-dispatch-001",
-	}, "VIEWER_GUEST_EXEC_ACCEPTED")
-	manualAccess, manual, err := store.IssueToken(ctx, "admin", time.Minute)
+	// Separate authorized Actor history is visible; revoked grants are not.
+	recovered := call(ctx, otherSession, "operation_get", map[string]any{"operation_id": originalID})
+	must(recovered["operation"] != nil, "OTHER_ACTOR_CANNOT_TAKE_OVER_ORIGINAL")
+	revoked := issueGrant("", "revoked-independent")
+	must(store.RevokeOAuthGrant(ctx, revoked.GrantID) == nil, "INDEPENDENT_GRANT_REVOKE_FAILED")
+	unauthorized(ctx, *endpoint, revoked.Access, "REVOKED_INDEPENDENT_GRANT_HTTP_ACCEPTED")
+	manualAccess, manual, err := store.IssueToken(ctx, time.Minute)
 	must(err == nil && manual.ActorID == manual.ID, "MANUAL_TOKEN_ACTOR_INVALID")
 	manualSession := connect(ctx, *endpoint, manualAccess)
 	defer manualSession.Close()
@@ -275,6 +273,6 @@ func main() {
 	fmt.Printf("S4_A_OAUTH_NATIVE_ORIGINAL_BW_ID=%s NATIVE_ID=%s BOX_UUID=%s\n",
 		originalID, nativeID, *boxID)
 	fmt.Println("S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS")
-	fmt.Println("S4_A_INSTALLED_OAUTH_FOREIGN_VIEWER_MANUAL_REVOKED_NO_ADMISSION=PASS")
+	fmt.Println("S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION=PASS")
 	fmt.Println("S4_A_INDEPENDENT_GUEST_ONE_EFFECT=PASS")
 }
