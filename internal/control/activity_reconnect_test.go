@@ -159,6 +159,30 @@ func TestActivityRealHTTPReplyLossReopenControllerFreshActorFindsExactUnknown(t 
 	if err != nil || receipt.State != "UNKNOWN" || receipt.ID != rec.ID {
 		t.Fatalf("restart created/replayed wrong original: %+v, %v", receipt, err)
 	}
+	if receipt.NextAction.Kind != "HOST_LOCAL_REVIEW" {
+		t.Fatalf("uncertain native original advertised unsafe automated retry: %+v", receipt.NextAction)
+	}
+	// A different Actor cannot bypass an UNKNOWN original by minting a new
+	// idempotency key for the same Box. Do not dispatch another native effect.
+	_, replayErr := reopened.Admit(ctx, state.Admission{
+		Layer: "bw-test", ActorID: second.ActorID, TokenID: second.ID,
+		Key: "a2-forbidden-new-key-after-unknown-001", RequestID: "second-agent-replay",
+		Action: "box_exec", SafeIntent: []byte("{}"),
+		BoxUUID: rec.BoxUUID, Incarnation: rec.Incarnation,
+		ResourceKey: "box:interrupted", WorkRef: work, AgentRef: "second-client",
+	})
+	if !errors.Is(replayErr, state.ErrResourceLocked) {
+		t.Fatalf("second Actor bypassed UNKNOWN resource barrier: %v", replayErr)
+	}
+	got, readErr := nextClient.CallTool(ctx, &mcp.CallToolParams{Name: "operation_get",
+		Arguments: map[string]any{"operation_id": rec.ID}})
+	if readErr != nil || got == nil || got.IsError {
+		t.Fatalf("second Actor cannot read exact old original over MCP: %+v, %v", got, readErr)
+	}
+	receiptPayload, readErr := json.Marshal(got.StructuredContent)
+	if readErr != nil || !strings.Contains(string(receiptPayload), "HOST_LOCAL_REVIEW") {
+		t.Fatalf("second Actor MCP did not reveal safe next action: %s, %v", receiptPayload, readErr)
+	}
 	page, err := reopened.ListOperations(ctx, state.OperationQuery{
 		Layer: "bw-test", Requester: second.ActorID, WorkRef: work,
 	})
