@@ -34,4 +34,10 @@ The second client **recovers the exact original Operation ID**, reads it indepen
 - No current native kernel ACL state, host-root journal, guest command outcome, external Git or Agent conversation plan is inferred by Activity. SQLite `attention_complete=false` remains mandatory.
 - Real ChatGPT-connected Schema v5 Activity use, real **native mutation** ACK loss/reconciliation, full S4-B3 Root reacceptance and S5 two-model TC-015/016 require separate evidence and/or explicit user connector authorization. A clean Box-level P1 does not silently certify these.
 
+
+## Disposable Box lifecycle cleanup
+
+Only one development Box was created for this P1 run: `5fe30b43-5ba8-4669-ac35-31a2c0aeac1c` under `work_ref=p1-activity-qa-20261119`. Its `box_stop` original `8d1552361e25618527e74061dfc9b9d5` reached **SUCCEEDED**, then `box_delete` original `310d21b807c04a579f94a9e57fe661a1` reached **SUCCEEDED**. An authenticated post-cleanup `box_list` returned `boxes: []`. No shared physical Host, L0 v4 SQLite, installed OAuth configuration, native Project, Root/PRS or other Boxes were modified by these tests.
+
+
 [Public Activity P0 contract and prior CI](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md) · [prior A2 and S4-A native run](V1_ACTIVITY_A2_LOCAL_RECONNECT_AND_S4A_CI_2026-11-19.md) · [mandatory Schema v5 adoption warning](../development/V1_ACTIVITY_LINEAGE_IMPLEMENTATION_AND_REBUILD_NOTICE_2026-11-19.md).
