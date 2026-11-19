@@ -17,6 +17,14 @@
 
 **速度原则：** 不单独实施旧 DB 迁移、兼容 API、双权限版本或不相关 SDK 升级；不重验尚未开发的 S4-B4–B6。若发现清理目标涉及原生宿主安全和历史 UNKNOWN，立即从本次重构范围剔除，保留证据，绝不为删代码降低安全检查。工作结束更新 README/AGENTS/产品与 MCP 契约、执行记录并给出准确 source SHA 与测试结果。
 
+### 0.1 阶段 1 执行回执与尚未收敛的原生脚本（2026-11-18）
+
+- **核心 Go 重构已落地：** OAuth 授权/刷新与 Scope-free HTTP metadata、MCP Token/Actor 准入、手动 `token-create`、SchemaVersion=4、Operation 和网络 Root 原生授权入口已移除角色分支；两个独立 Actor 能读取同 Layer 历史，但不能共用原始幂等身份。没有升级 SDK、迁移旧 DB 或改动共享宿主。
+- **已有证据：** 新增 Scope 缺省/metadata、拒绝旧 Scope 和 SQLite 版本负例；隔离 L0 disposable Box `auth-b-impl-1118` 在 Go 源码及现行文档 SHA `a1e4fceda6c1757c7484a683d8f40396dc04b527` 通过 `gofmt -l` 无输出、`go test ./... -count=1` 全部五个包 PASS，未修改测试环境中的原始工作区。后续脚本单独提交必须继续验证自己的源码版本。
+- **原生探针进展：** S4-A OAuth 安装探针已换成无 Scope/撤销 Grant 负例，B3 六个 native 工作流及 SDK 客户端已换成撤销 Token 的 401 负例（隔离 Go 单文件编译通过）；S1 和多份单用途 S2 脚本已去掉失效 `-role admin`。
+- **遗留原生测试接口，仍未签收：** `scripts/accept_s2_native.sh`、`scripts/s2_native_probe.go`、`scripts/s3_file_installed_probe.go`、`scripts/s25_bridgehead_lab.sh`、`scripts/s25_inner_setup.sh`、`scripts/s25_lab_agent.go` 仍包含旧 viewer 语义。**禁止**直接把这些 viewer 凭据换成合法管理 Token 后保留“写入必须被拒绝”的断言——那可能让测试本身执行真实的 Guest 变更。必须分开改成有效独立 Actor 的同 Layer 读取/接手正例，以及无效/过期/撤销 Token 的 HTTP 401 负例，接着才准许在可销毁原生测试环境重新执行。旧脚本目前不能作为新源码的 PASS 证据。
+- **准确结论：** `CORE_GO_SCOPE_FREE_REFACTOR=PASS (isolated test)`，`ALL_NATIVE_ACCEPTANCE_SCRIPTS_CONVERGED=NO`，`REAL_CHATGPT_SCOPE_FREE_CONNECT_REFRESH=NOT_TESTED`，`INDEPENDENT_NATIVE_AND_CI_SIGNOFF=PENDING`。因此方案 B 的**代码主链已成形**，但这轮全量整改**尚未正式签收**。原生脚本改造是阶段 1 的剩余事项，不能被阶段 2 的执行测试所掩盖。
+
 ## 1. 目标结构：一个授权级别，多个独立 Actor
 
 建议删除**整个** `admin/viewer` 产品角色模型，而不是仅隐藏 `viewer`：
