@@ -10,7 +10,7 @@ import (
 func TestCreateNativeFailureRetainedOwnedStoppedBoxRequiresExplicitDelete(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
-	_, token, err := store.IssueToken(ctx,time.Hour)
+	_, token, err := store.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestCreateVerifiedTerminalFailureVersusAmbiguousOutcome(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			store := newStore(t)
-			_, token, err := store.IssueToken(ctx,time.Hour)
+			_, token, err := store.IssueToken(ctx, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}

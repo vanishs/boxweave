@@ -24,7 +24,7 @@ func TestS2NativeAckEventRollbackRetainsOriginalUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, token, err := s.IssueToken(ctx,time.Hour)
+	_, token, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestS2SQLiteKilledDuringUncommittedNativeAck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, token, err := s.IssueToken(ctx,time.Hour)
+	_, token, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

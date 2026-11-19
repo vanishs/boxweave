@@ -25,7 +25,7 @@ func newStore(t *testing.T) *Store {
 func TestAdmissionIdempotencyAndRevocation(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	raw, token, err := s.IssueToken(ctx,time.Hour)
+	raw, token, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestAdmissionIdempotencyAndRevocation(t *testing.T) {
 func TestCrashRecoveryNeverRedispatches(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, token, err := s.IssueToken(ctx,time.Hour)
+	_, token, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func TestBH018ExactTerminalSpecialExitPersistsAndReleasesClaimWithoutReplay(t *t
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			store := newStore(t)
-			_, token, err := store.IssueToken(ctx,time.Hour)
+			_, token, err := store.IssueToken(ctx, time.Hour)
 			if err != nil {
 				t.Fatal(err)
 			}
