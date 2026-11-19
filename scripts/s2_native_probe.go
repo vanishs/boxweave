@@ -359,7 +359,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	check(ok && len(items) == 0,
 		"unsupported root_pool attempted a native Create despite schema refusal")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_SIXTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
-	fmt.Println("S4_B3_REAL_OFFICIAL_SDK_ALL_17_CLOSED_SCHEMAS=PASS")
+	fmt.Println("S4_ACTIVITY_REAL_OFFICIAL_SDK_ALL_18_CLOSED_SCHEMAS=PASS")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
 }
 
@@ -418,16 +418,16 @@ func main() {
 		"box_exec": true, "operation_get": true, "operation_list": true,
 		"operation_output_get": true, "operation_cancel": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
-		"box_peer_set": true,
+		"box_peer_set": true, "box_activity_get": true,
 	}
-	check(len(inv.Tools) == len(expected), "16 legacy S1+S2+S3 plus one B3 peer tool discovery")
+	check(len(inv.Tools) == len(expected), "exact 18 public MCP Tools including Activity discovery")
 	for _, t := range inv.Tools {
 		check(expected[t.Name], "unexpected Tool "+t.Name)
 		// A real SDK ListTools over HTTP must advertise safety/caching
 		// annotations, not just tool names in local registration code.
 		read := map[string]bool{
 			"host_status": true, "box_list": true, "box_get": true,
-			"operation_get": true, "operation_list": true,
+			"operation_get": true, "operation_list": true, "box_activity_get": true,
 			"operation_output_get": true, "box_file_list": true,
 			"box_file_read": true,
 		}[t.Name]
@@ -441,7 +441,7 @@ func main() {
 				"read-only MCP Tool advertised destructive action: "+t.Name)
 		}
 	}
-	fmt.Println("S4_B3_NATIVE_MCP_DISCOVERY_17_OF_17=PASS")
+	fmt.Println("S4_ACTIVITY_NATIVE_MCP_DISCOVERY_18_OF_18=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
 	hostileProtocolMatrix(ctx, admin, peerSession)
 	hostileTypedToolMatrix(ctx, admin)
