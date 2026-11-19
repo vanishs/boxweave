@@ -67,8 +67,7 @@ func NativePeerRootReconcileCompletedUnknownGrant(ctx context.Context, s *state.
 		return zero, err
 	}
 	current, _, err := root.GetNetworkACL(acl)
-	if err != nil || current == nil || !reflect.DeepEqual(current.Ingress, expected.Ingress) ||
-		!reflect.DeepEqual(current.Egress, expected.Egress) {
+	if err != nil || current == nil || !nativePeerACLMatches(current, expected) {
 		return zero, errors.New("grant recovery current whole native ACL differs from reviewed durable policy")
 	}
 	owned := root.UseProject(project)

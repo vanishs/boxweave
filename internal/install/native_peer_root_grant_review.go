@@ -96,9 +96,7 @@ func nativePeerRootGrantReview(ctx context.Context, s *state.Store,
 	if err != nil {
 		return zero, err
 	}
-	if !reflect.DeepEqual(current.Ingress, before.Ingress) ||
-		!reflect.DeepEqual(current.Egress, before.Egress) ||
-		(reflect.DeepEqual(before.Ingress, after.Ingress) && reflect.DeepEqual(before.Egress, after.Egress)) {
+	if !nativePeerACLMatches(current, before) || !nativePeerACLPolicyChanges(before, after) {
 		return zero, errors.New("pre-grant native ACL must match exact confirmed-only allowlist")
 	}
 	owned := root.UseProject(project)

@@ -119,9 +119,7 @@ func nativePeerIntegratedReview(ctx context.Context, s *state.Store,
 	if err != nil {
 		return zero, err
 	}
-	if !reflect.DeepEqual(current.Ingress, before.Ingress) ||
-		!reflect.DeepEqual(current.Egress, before.Egress) ||
-		(reflect.DeepEqual(before.Ingress, after.Ingress) && reflect.DeepEqual(before.Egress, after.Egress)) {
+	if !nativePeerACLMatches(current, before) || !nativePeerACLPolicyChanges(before, after) {
 		return zero, errors.New("native ACL is not exact durable pre-revoke full allowlist")
 	}
 	owned := root.UseProject(project)
@@ -432,8 +430,7 @@ func nativePeerRootIntegratedApplyWithCompletionFault(ctx context.Context, s *st
 			}
 			current, tag, err := root.GetNetworkACL(acl)
 			if err != nil || current == nil || tag != pre.ACLTag ||
-				!reflect.DeepEqual(current.Ingress, pre.Before.Ingress) ||
-				!reflect.DeepEqual(current.Egress, pre.Before.Egress) {
+				!nativePeerACLMatches(current, pre.Before) {
 				return NativePeerConntrackReport{}, errors.New("native full ACL changed across stop barrier")
 			}
 			if err := check(ctx); err != nil {
@@ -443,8 +440,7 @@ func nativePeerRootIntegratedApplyWithCompletionFault(ctx context.Context, s *st
 				return NativePeerConntrackReport{}, fmt.Errorf("native ACL ETag DROP update uncertain: %w", err)
 			}
 			got, _, err := root.GetNetworkACL(acl)
-			if err != nil || got == nil || !reflect.DeepEqual(got.Ingress, pre.After.Ingress) ||
-				!reflect.DeepEqual(got.Egress, pre.After.Egress) {
+			if err != nil || got == nil || !nativePeerACLMatches(got, pre.After) {
 				return NativePeerConntrackReport{}, errors.New("native dual-stack DROP ACL readback incomplete")
 			}
 			var a, b native.PeerACLBox
@@ -489,8 +485,7 @@ func nativePeerRootIntegratedApplyWithCompletionFault(ctx context.Context, s *st
 				}
 				applied, _, err := root.GetNetworkACL(acl)
 				if err != nil || applied == nil ||
-					!reflect.DeepEqual(applied.Ingress, pre.After.Ingress) ||
-					!reflect.DeepEqual(applied.Egress, pre.After.Egress) {
+					!nativePeerACLMatches(applied, pre.After) {
 					return errors.New("final resumed revoke ACL drift")
 				}
 				rules, err := nativePeerRootKernelRules(ctx)

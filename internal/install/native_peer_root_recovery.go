@@ -103,8 +103,7 @@ func NativePeerRootReconcileCompletedUnknown(ctx context.Context, s *state.Store
 		return zero, err
 	}
 	got, _, err := root.GetNetworkACL(acl)
-	if err != nil || got == nil || !reflect.DeepEqual(got.Ingress, denied.Ingress) ||
-		!reflect.DeepEqual(got.Egress, denied.Egress) {
+	if err != nil || got == nil || !nativePeerACLMatches(got, denied) {
 		return zero, errors.New("current native ACL not the exact revoked dual-stack DROP")
 	}
 	if err := nativePeerACLDropCovered(got, a, b); err != nil {

@@ -104,8 +104,7 @@ func nativePeerRootGrantApplyWithContentionFault(ctx context.Context, s *state.S
 			}
 			current, etag, err := root.GetNetworkACL(acl)
 			if err != nil || current == nil || etag != pre.ACLTag ||
-				!reflect.DeepEqual(current.Ingress, pre.Before.Ingress) ||
-				!reflect.DeepEqual(current.Egress, pre.Before.Egress) {
+				!nativePeerACLMatches(current, pre.Before) {
 				return NativePeerConntrackReport{}, errors.New("grant ACL baseline drifted across stop barrier")
 			}
 			nw, _, err := root.GetNetwork(bridge)
@@ -129,8 +128,7 @@ func nativePeerRootGrantApplyWithContentionFault(ctx context.Context, s *state.S
 				return NativePeerConntrackReport{}, fmt.Errorf("native grant ETag fanout uncertain: %w", err)
 			}
 			updated, _, err := root.GetNetworkACL(acl)
-			if err != nil || updated == nil || !reflect.DeepEqual(updated.Ingress, pre.After.Ingress) ||
-				!reflect.DeepEqual(updated.Egress, pre.After.Egress) {
+			if err != nil || updated == nil || !nativePeerACLMatches(updated, pre.After) {
 				return NativePeerConntrackReport{}, errors.New("native grant ACL whole-policy readback mismatch")
 			}
 			if err := check(ctx); err != nil {
@@ -172,8 +170,7 @@ func nativePeerRootGrantApplyWithContentionFault(ctx context.Context, s *state.S
 				}
 				applied, _, err := root.GetNetworkACL(acl)
 				if err != nil || applied == nil ||
-					!reflect.DeepEqual(applied.Ingress, pre.After.Ingress) ||
-					!reflect.DeepEqual(applied.Egress, pre.After.Egress) {
+					!nativePeerACLMatches(applied, pre.After) {
 					return errors.New("grant final resumed ACL readback mismatch")
 				}
 				rules, err := nativePeerRootKernelRules(ctx)
