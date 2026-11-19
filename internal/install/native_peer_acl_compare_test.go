@@ -9,15 +9,15 @@ import (
 func TestNativePeerACLWholePolicyComparison(t *testing.T) {
 	before := api.NetworkACLsPost{NetworkACLPut: api.NetworkACLPut{
 		Ingress: []api.NetworkACLRule{{Action: "drop"}},
-		Egress: []api.NetworkACLRule{{Action: "allow"}},
+		Egress:  []api.NetworkACLRule{{Action: "allow"}},
 	}}
 	same := api.NetworkACLsPost{NetworkACLPut: api.NetworkACLPut{
 		Ingress: []api.NetworkACLRule{{Action: "drop"}},
-		Egress: []api.NetworkACLRule{{Action: "allow"}},
+		Egress:  []api.NetworkACLRule{{Action: "allow"}},
 	}}
 	changed := api.NetworkACLsPost{NetworkACLPut: api.NetworkACLPut{
 		Ingress: []api.NetworkACLRule{{Action: "allow"}},
-		Egress: []api.NetworkACLRule{{Action: "allow"}},
+		Egress:  []api.NetworkACLRule{{Action: "allow"}},
 	}}
 	if !nativePeerACLMatches(&api.NetworkACL{NetworkACLPut: before.NetworkACLPut}, before) ||
 		nativePeerACLMatches(nil, before) ||
