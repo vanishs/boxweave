@@ -6,6 +6,14 @@
 
 **RC.3 publication addendum (2026-11-13):** [v1.0.0-rc.3](https://github.com/vanishs/boxweave/releases/tag/v1.0.0-rc.3) **is** now a published immutable prerelease with dual-arch release assets and green release CI. It does **not** set the stable pointer (`UNPUBLISHED`) or complete S5. The [manual installation guide](../getting-started/MANUAL_INSTALL.md) always pins an explicit prerelease tag and separates install from Box creation. Older planning language below reflects its historical pre-RC publication time.
 
+## Owner directive — pre-release compatibility and environment recreation (2026-11-18)
+
+Until the first **formally supported release**, or a separate explicit Owner promise for compatibility/retained state, **no backward compatibility is required**. This includes API/MCP Tools, CLI flags, roles/scopes, OAuth grants, SQLite schema, SDK-facing contracts and disposable developer environments/tests/CI. When obsolete design adds maintenance debt, remove it directly across source, tests and current docs. Do not create migration layers, deprecated aliases or parallel authorization branches just to support pre-release fixtures.
+
+**Before adopting an incompatible candidate, notify the Owner/users precisely what must be recreated.** Identify old controller install/config, SQLite database and original UNKNOWN receipts, tokens, OAuth clients/grants, ChatGPT/custom MCP connections and test fixtures. Safe sequence: (1) stop the old development controller; inspect and preserve any native original/UNKNOWN evidence; (2) obtain separate approval before clearing any real environment; (3) install the candidate in a fresh isolated controller and empty DB; (4) issue fresh role-free credentials and register/approve OAuth; (5) reconnect clients and repeat installed/negative tests; (6) retire the old environment only after native resource reconciliation and explicit authorization. Do **not** silently wipe, migrate, adopt or downgrade old data or host resources.
+
+**PR #153 breaking change:** Schema v4 rejects old v3 databases, the CLI flag -role has been removed, and OAuth permission scopes mcp:viewer/mcp:admin are unsupported. Old credentials and grants cannot upgrade into management authority. This is an unmerged source candidate and does not change the published RC in place. Exact-SHA independent native/real-ChatGPT acceptance is a separate gate.
+
 ## Owner-defined scheme
 
 Use `1.X.Y` where:
