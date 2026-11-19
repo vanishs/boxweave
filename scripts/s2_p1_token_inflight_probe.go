@@ -51,8 +51,8 @@ func one(ctx context.Context, st *state.Store, project, mode string) {
 	if mode == "expire" {
 		ttl = 3 * time.Second
 	}
-	raw, actor, err := st.IssueToken(ctx, "viewer", ttl)
-	check(err == nil && len(raw) == 68 && actor.ID != "", "test viewer not created")
+	raw, actor, err := st.IssueToken(ctx, ttl)
+	check(err == nil && len(raw) == 68 && actor.ID != "", "fresh test credential not created")
 	original, err := st.Admit(ctx, state.Admission{
 		Layer: project, ActorID: actor.ID, TokenID: actor.ID,
 		Key: "s2-p1-inflight-" + mode + "-original-key", RequestID: "initial-private-poll",
@@ -107,7 +107,7 @@ func one(ctx context.Context, st *state.Store, project, mode string) {
 // while the state filter must reflect real durable changes on later pages.
 // The real installed HTTP handler is called using the official Go MCP SDK.
 func statusChangeDuringInstalledPaging(ctx context.Context, st *state.Store, project string) {
-	raw, actor, err := st.IssueToken(ctx, "viewer", time.Hour)
+	raw, actor, err := st.IssueToken(ctx, time.Hour)
 	check(err == nil && actor.ID != "", "cannot create isolated query actor")
 	ids := make([]string, 0, 5)
 	for i := 0; i < 5; i++ {

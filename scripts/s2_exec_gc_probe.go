@@ -162,8 +162,8 @@ func main() {
 	}
 	defer s.Close()
 	actor, err := s.VerifyToken(ctx, token)
-	require(err == nil && actor.Role == "admin", "exact authenticated admin required")
-	op, err := s.GetScopedOperation(ctx, project, actor.ID, "admin", opID)
+	require(err == nil && actor.ActorID != "" && actor.ID != "", "exact authenticated Actor and live credential required")
+	op, err := s.GetScopedOperation(ctx, project, actor.ActorID, opID)
 	require(err == nil && op.State == "SUCCEEDED" && op.Action == "box_exec" &&
 		op.BoxUUID == uuid && op.NativeOperationID == nativeID, "unsafe GC original identity")
 	box, err := s.OwnedBox(ctx, project, uuid)

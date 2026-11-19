@@ -57,7 +57,7 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 	if mode == "expire" {
 		ttl = 6 * time.Second
 	}
-	raw, token, e := st.IssueToken(ctx, "viewer", ttl)
+	raw, token, e := st.IssueToken(ctx, ttl)
 	must(e == nil && len(raw) > 0 && token.ID != "", "fresh credential issuance")
 	rec, e := st.Admit(ctx, state.Admission{
 		Layer: project, ActorID: token.ID, TokenID: token.ID,

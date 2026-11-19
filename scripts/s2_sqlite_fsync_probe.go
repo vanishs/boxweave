@@ -58,8 +58,8 @@ func main() {
 	}
 	defer s.Close()
 	principal, err := s.VerifyToken(ctx, token)
-	if err != nil || principal.Role != "admin" {
-		panic("one-use exact admin token required")
+	if err != nil || principal.ID == "" || principal.ActorID == "" {
+		panic("one-use exact authenticated credential and Actor required")
 	}
 	a := admission(project, principal.ID)
 	switch os.Args[1] {

@@ -120,7 +120,7 @@ func invalidate(ctx context.Context, st *state.Store, dir, method string, args m
 	if expire {
 		ttl = 7 * time.Second
 	}
-	raw, t, e := st.IssueToken(ctx, "admin", ttl)
+	raw, t, e := st.IssueToken(ctx, ttl)
 	check(e == nil && t.ID != "" && raw != "", "cannot create fresh per-read credential")
 	s := connected(ctx, raw)
 	defer s.Close()
