@@ -51,10 +51,28 @@ jobs:
           # the SAME source checkout that is installed below. Native safety
           # and actual ChatGPT OAuth still require independent evidence.
           go test -count=1 ./internal/control ./internal/install -run 'TestS2RequestPrincipalRequiresExplicitSDKCredential|TestNativePeerACLWholePolicyComparison'
-          if grep -R -n -E 'operationCredentialID|operationPrincipal\\(' internal/control --include='*.go'; then
+          if grep -R -F -n -e 'operationCredentialID' -e 'operationPrincipal(' --include='*.go' internal/control; then
             echo S4_A_STAGE2_OLD_AUTH_ENTRYPOINT_FOUND; exit 1
           fi
           echo S4_A_STAGE2_ROLE_FREE_SDK_SOURCE_SHA=$GITHUB_SHA
+      - name: Precompile every installed S2 native probe before provisioning Incus
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The standalone sources use //go:build ignore and are omitted by
+          # go test ./...; catch stale SDK signatures before costly native setup.
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          src = pathlib.Path("scripts/accept_s2_native.sh").read_text()
+          names = sorted(set(re.findall(r'\./scripts/([A-Za-z0-9_]+\.go)', src)))
+          assert len(names) >= 20, "native probe manifest unexpectedly empty"
+          for name in names:
+              print("S4_A_STAGE2_PRECOMPILE=" + name, flush=True)
+              subprocess.run(["go", "build", "-trimpath",
+                              "-o", os.path.join(os.environ["RUNNER_TEMP"], "compiled-" + name[:-3]),
+                              "./scripts/" + name], check=True)
+          print("S4_A_STAGE2_NATIVE_PROBE_SOURCE_SIGNATURES=PASS")
+          PY
       - name: Confirm one-use host, independent native witness and local regressions
         shell: bash
         run: |
