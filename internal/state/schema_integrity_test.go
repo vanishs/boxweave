@@ -50,6 +50,9 @@ func TestSameVersionSQLiteDDLDriftAndTriggersFailClosed(t *testing.T) {
 				_ = existing.Close()
 				t.Fatalf("refused neither version drift nor foreign schema: %s", tc.name)
 			}
+			if tc.name == "unsupported-old-version" && !strings.Contains(err.Error(), "recreate") {
+				t.Fatalf("old development database refusal omitted rebuild notice: %v", err)
+			}
 			if !strings.Contains(err.Error(), "schema") && !strings.Contains(err.Error(), "trigger") &&
 				!strings.Contains(err.Error(), "migration") {
 				t.Fatalf("missing actionable schema refusal: %v", err)
