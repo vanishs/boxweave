@@ -11,26 +11,21 @@ import (
 
 // The SQLite ledger is local to this controller. The installed restricted
 // native Project supplies the local layer scope; work/agent labels never do.
-func (s *Service) operationPrincipal(req *mcp.CallToolRequest) (actor, role, layer string, err error) {
+func (s *Service) operationPrincipal(req *mcp.CallToolRequest) (actor, layer string, err error) {
 	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-		return "", "", "", errors.New("UNAUTHENTICATED")
+		return "", "", errors.New("UNAUTHENTICATED")
 	}
 	info := req.Extra.TokenInfo
 	if info.UserID == "" {
-		return "", "", "", errors.New("UNAUTHENTICATED")
+		return "", "", errors.New("UNAUTHENTICATED")
 	}
-	switch {
-	case contains(info.Scopes, "admin"):
-		role = "admin"
-	case contains(info.Scopes, "viewer"):
-		role = "viewer"
-	default:
-		return "", "", "", errors.New("PERMISSION_DENIED")
+	if operationCredentialID(req) == "" {
+		return "", "", errors.New("UNAUTHENTICATED")
 	}
 	if s.Native.Project == "" || s.Store == nil {
-		return "", "", "", errors.New("CONTROLLER_NOT_CONFIGURED")
+		return "", "", errors.New("CONTROLLER_NOT_CONFIGURED")
 	}
-	return info.UserID, role, s.Native.Project, nil
+	return info.UserID, s.Native.Project, nil
 }
 
 // operationCredentialID obtains the revocable per-request access credential,
@@ -96,7 +91,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		Description: "Read an authorized original operation_id after a timeout/reconnect; compare durable state and next_action before any further mutation. UNKNOWN may have dispatched native work: do not retry with a new key; require independent read-only post-state/host review. wait_ms 0..20000 only polls, never cancels or retries.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		actor, layer, err := s.operationPrincipal(req)
 		if err != nil {
 			return nil, operationGetResult{}, err
 		}
@@ -110,7 +105,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		var result state.Receipt
 		deadline := time.Now().Add(time.Duration(in.WaitMS) * time.Millisecond)
 		for {
-			result, err = s.Store.GetScopedOperation(ctx, layer, actor, role, in.OperationID)
+			result, err = s.Store.GetScopedOperation(ctx, layer, actor, in.OperationID)
 			if err != nil {
 				return nil, operationGetResult{}, err
 			}
@@ -149,7 +144,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		Description: "After agent interruption/reconnect, search original Operations by known work_ref, or bounded action/time pages and cursor; follow exact operation_id with operation_get. Empty results do not prove no native effect or that work finished. Client work/Agent labels never grant visibility.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationListInput) (*mcp.CallToolResult, operationListResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		actor, layer, err := s.operationPrincipal(req)
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
@@ -158,7 +153,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationListResult{}, errors.New("TRACKING_UNAVAILABLE")
 		}
 		page, err := s.Store.ListOperations(ctx, state.OperationQuery{
-			Layer: layer, Requester: actor, Role: role, ActorID: in.ActorID,
+			Layer: layer, Requester: actor, ActorID: in.ActorID,
 			WorkRef: in.WorkRef, AgentRef: in.AgentRef,
 			Action: in.Action, State: in.State, SinceNS: in.SinceNS,
 			UntilNS: in.UntilNS, Limit: in.Limit, Cursor: in.Cursor,
