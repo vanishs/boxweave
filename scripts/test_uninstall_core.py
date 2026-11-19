@@ -243,6 +243,7 @@ class FakeHost(unittest.TestCase):
         digest = "c" * 64
         u.NATIVE.write_text(json.dumps({"Schema": 1, "Status": "APPLIED",
                                          "Plan": {"ReviewSHA256": digest}}))
+        u.NATIVE.chmod(0o600)
         self.assertFalse(self.plan("service")["ready"])
         self.assertFalse(self.plan("full")["ready"])
         p = self.plan("full", [], digest)
@@ -297,12 +298,25 @@ class FakeHost(unittest.TestCase):
             with self.assertRaisesRegex(u.UninstallError, "effective systemd unit"):
                 self.plan()
 
+    def test_untrusted_root_journal_permissions_fail_closed(self):
+        u.NATIVE.write_text(json.dumps({"Schema": 1, "Status": "APPLIED",
+                                         "Plan": {"ReviewSHA256": "b" * 64}}))
+        u.NATIVE.chmod(0o644)
+        with self.assertRaisesRegex(u.UninstallError, "untrusted root journal permission"):
+            self.plan()
+        u.NATIVE.unlink()
+        u.SCRIPTLET.write_text(json.dumps({"Status": "ROLLED_BACK"}))
+        u.SCRIPTLET.chmod(0o644)
+        with self.assertRaisesRegex(u.UninstallError, "untrusted root journal permission"):
+            self.plan("full")
+
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
         u.ROOT_UNIT.write_text("peer root helper")
         with self.assertRaisesRegex(u.UninstallError, "separate root"):
             self.plan()
         u.ROOT_UNIT.unlink()
         u.SCRIPTLET.write_text(json.dumps({"Status": "APPLIED"}))
+        u.SCRIPTLET.chmod(0o600)
         with self.assertRaisesRegex(u.UninstallError, "global Scriptlet"):
             self.plan("full")
 
