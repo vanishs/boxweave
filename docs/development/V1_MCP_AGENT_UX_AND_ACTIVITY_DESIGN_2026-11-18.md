@@ -1,15 +1,15 @@
 # BoxWeave v1 — MCP Agent 使用体验与 Activity/Evidence 概览设计（2026-11-18）
 
-**2026-11-19 当前方向更新（规划，非新 Tool 实施审批）：** PR #153 在核查 HEAD `85161941` 已移除 `admin/viewer` 和应用 OAuth Scope，SQLite 使用 Schema v4，独立 Actor 与资源/凭据边界仍保留。S3/S4-A/B2/B3 具 source-equivalent 原生回归证据，但不是最终 exact-HEAD 或真实 ChatGPT PASS。**先复现 TC-015/016 的真实双 Agent 接手与外部 Checkpoint 冲突，用现有 Tools 测量误判、Tool 调用量与证据缺口；再调整 MCP Description/Instructions；若发现有界证据检索做不到，再提最小数据库查询/索引整改。** `box_activity_get` 依旧独立、尚未获得 Owner 开发授权。参见 [更新后的连续性验收矩阵](../verification/CONTINUITY_ACCEPTANCE.md)。下面有些 2026-11-18 的历史 Scope/版本描述不代表当前源码。
+**2026-11-19 Owner clarified development priority — ACTIVE TARGET, NOT YET IMPLEMENTED:** This document is the **next workstream**: **A. optimize MCP Tool Descriptions and Server Instructions for ordinary use and recovery of original Operations; B. improve program-side authorized Activity/evidence discovery**, with `box_activity_get` as the existing three-view design candidate. This is **not** the S5 two-Agent handoff/Checkpoint-conflict campaign, which remains later formal TC-015/016. Do **not** make full Agent A → B takeover a prerequisite for A or B. Validate recovery here using one authenticated client/Actor reconnecting after reply loss, timeout, server restart and retained UNKNOWN, plus separate negative auth/native witnesses. A and B have independent implementation/acceptance decisions; adding public `box_activity_get` still requires explicit Tool-inventory/scope approval. Source checked at PR #153 `85161941` is already role-free OAuth + Schema v4; Stage-2 source-equivalent native regression exists, but not exact-final-HEAD S5 signoff. Earlier dated implementation-order text below is superseded where inconsistent.
 
 **状态：OWNER-ACCEPTED DESIGN / NOT IMPLEMENTED。** 本文记录已讨论的设计方向，不表示 `box_activity_get`、Server Instructions 或实际客户端行为已经实现/验收。开发仍限定 [Draft PR #153](https://github.com/vanishs/boxweave/pull/153)；2026-11-18 复核源码参考 `10cb73d11cb9f538bf525078a77b293c693a8d4d`，实施前必须重新读取远程 HEAD。**本次文档修订不是新增 Tool 的产品审批**；未经另行批准，不合并、不发布、不扩展 S4-B 验收范围。
 
 ## 1. 目标、范围与实施顺序
 
-- **A — 近期：MCP 使用说明优化。** 让 Agent 在正常操作时先看懂 Tool 的实际职责；收到超时、丢失回复或中断后，知道找回原始 Operation、查看证据并避免重复执行。
-- **B — 独立后续：`box_activity_get`。** 为**多 Agent 可靠接手与安全并发**提供一条只读的授权操作、资源阻塞、历史异常及原始证据概览；第一版目标包含 `overview`、`issues`、`evidence` 三种真实实现的视图，不以只做一个列表代替证据贯通。
-- 两者分别评估、测试、授权、实现和签收。A 不依赖 B；B **不是** Agent 任务数据库、工作流引擎、自动分工/调度、实时 Agent 存活监控、持续上报系统、进度百分比或完整 MCP 调用轨迹。可信 Agent 可协调，但不能以共享标签绕过认证、原始幂等、Box 资源锁或 Git/Checkpoint 并发控制。
-- S4-B3–B6 继续按原独立验收推进；S4-C 既定 `box_get(detail=true)` 和 `box_wait_ready` 仍优先。B 优先考虑作为 **S4-C 后、S5 最终冻结/全面多 Agent 验收前的独立候选工作**，使 S5 能真实复核新能力；仍须单独批准第 22 个公开 Tool、开发范围与新增验收，未批准时 S5 继续采用现有 Operation + 外部 Checkpoint。
+- **A — 第一项：MCP 使用说明优化。** 先核实 pinned SDK 对 `ServerOptions.Instructions` 的支持与实际初始化返回，再调整工具功能优先描述、变更类轻量幂等提示与服务级共同规则。独立验证 Agent 在连接中断、响应丢失、重连后能正确调用原始 `operation_list/get/output_get`；无需两个 Agent 的完整任务接力。
+- **B — 紧随 A 的独立产品改进：Activity/Evidence 快速找回。** 目标是让**当前 Agent 在自己中断、重连或进入新会话时**，用少量调用看到当前 Layer 的持久化 Operation、历史 UNKNOWN、阻塞资源和原始证据引用；`box_activity_get` 是待单独授权的候选入口，第一版完整提供 `overview/issues/evidence`，不以只做一个列表代替证据贯通。未来跨 Agent 接手可以复用，但不是本阶段前置条件。
+- A、B 独立评估、测试、实施和签收；**本工作优化的是 BoxWeave 原始 Operation/证据的找回，不是凭空恢复 Agent 私有目标、对话、计划或 Git 工作树**。后者仍由外部 Checkpoint/Git/Agent 自己负责。B 不是任务数据库、工作流引擎、调度、心跳、任务进度或完整 MCP 调用日志；身份标签不扩权。
+- 此工作从**说明/单 Agent 中断恢复**切入，随后推进 Activity 功能方案与必要的授权查询；无需等待 TC-015/016 通过，也不能取代 S4-B4–B6/S4-C 独立验收。是否将 `box_activity_get` 前移进入当前 PR 的公开 Tool 清单以及它与已批准 S4-C 的具体合并/测试顺序，须明确 Owner 决定。未批准新 Tool 时先完成 A 与不扩展接口的 Activity 查询可行性实验。完整两 Agent 接力和 Checkpoint 冲突留在 S5。
 
 ## 2. A — MCP Description 与 Server Instructions
 
@@ -186,15 +186,15 @@
 
 **阶段关系：** 已批准的 TC-015/016、TC-019/020 原始 S5 验收门槛继续生效；若 Activity 获独立批准且进入 S5 最终候选，再把上述新增用例纳入该候选逐 Tool 验收。Activity 不能替代外部 Checkpoint/Git 并发控制、#151 原生确证、物理网络/IPv6 或独立 verifier。
 
-## 4. 开发安排与不干扰当前验收
+## 4. 当前工作安排：MCP 描述 → 中断证据找回 → Activity → S5 接力
 
-1. **先验收基线，再进行 A：** 在 disposable 已安装环境用现有 Tool 完整执行 TC-015/016，记录真实接手成功/失败、调用次数、Token、延迟、误重试与证据缺口。随后仅针对可重复的发现/理解问题优化 Tool Description 与 Server Instructions，用相同场景 A/B 对照；不新增 Tool、不修改原生执行语义。
-2. **S4-B：** 继续 S4-B3～B6 独立验收；Activity 研究/文档不替代网络安全、Peer/Forward/Delete、恢复与证据签收。
-3. **S4-C：** 先实现已批准的 `box_get(detail=true)`、`box_wait_ready`，正常准备 21-Tool 矩阵。
-4. **独立 Activity 候选（倾向 S4-C 后、S5 最终验收前）：** 用户另行批准第 22 个 Tool、三视图完整契约、查询性能/权限/证据关联的实施成本与具体签收后再开发。未批准时不阻碍原 S5 多 Agent 目标，继续用 `operation_list/get` + 外部 Checkpoint。
-5. **S5：** 核验**多 Agent 可靠接手与安全并发**，而不是自动分工/任务编排。TC-015 要求真实 B 读取外部 Checkpoint/Git 和 A 的原始证据、在已确认原始结果后继续；TC-016 要求两个 Checkpoint 写者使用外部版本/修订控制，不丢失冲突。最终候选包含哪些 Tool 就完整验收哪些 Tool；历史写死的 20/20 不能掩盖已批准的 21 或待批准的 22。S5 #151、完整嵌套和最终独立原生验收不放宽。
+1. **A1 — 源码核对与描述草案。** 对照 `server.go`、`strict_tool.go`、公开 Tool 描述和 pinned MCP Go SDK `ServerOptions.Instructions`，让 Agent 明白当前操作、异步结果、原始幂等键、UNKNOWN 安全处理、Exec 退出码；不改工具行为、数量或权限。
+2. **A2 — 单 Agent 中断/重连小闭环。** 只使用一个受授权 Actor/客户端，模拟 Tool 回复丢失、HTTP 断线、服务重启、旧 UNKNOWN 和已撤销 Token；核对是否找到**同一原始 Operation、Native ID 和真实完成/未完成证据**，无新的原生副作用。SDK 初始化字段返回和 ChatGPT 模型实际遵循分别记录。比较原描述与改良描述的误判、工具调用数、延迟、Token 成本。
+3. **B1 — 已有持久化证据模型评估。** 调查当前 **Schema v4** 与 `operation_list/get/output_get`，用正常、失败、超过近期窗口的 UNKNOWN、资源锁/网络屏障案例评估“新会话一眼发现问题”是否可用。区分能从数据库证明的 Operation 状态、当前 Native 状态和外部 Agent 计划；没有关联时如实标记 `NOT_LINKED/NOT_OBSERVED`。
+4. **B2 — Activity 的实际设计与实施（另行批准公开 Tool）。** 若 Owner 确认加入 `box_activity_get`，完整实现 `overview/issues/evidence`，所有查询按授权 Layer/Actor 过滤、单事务快照、有界索引扫描、历史未解决风险覆盖、返回前 Token 撤销复核、输出脱敏和真实证据引用。**仅当当前查询/索引缺口有数据证据**时修改 SQLite 索引/DDL；预发布不兼容改版可用新 disposable DB，但不丢失未知原生副作用。
+5. **独立验收和后续衔接。** A 单独报告 Instructions/描述与单 Agent 原始 Operation 找回的真实效果；B 若获批准则单独报告三视图正确性、性能、负面案例和 native witness。S4-B4–B6/S4-C 另行完成原门槛。**TC-015/016 真正的第二 Agent 接手、Git/Checkpoint 双写冲突保留在后续 S5**，届时使用本阶段成熟的 UX/Activity 能力参与验收，不反过来作为其开发起点。
 
-**最终工程判断（以 Schema v4 重新核验）：** 现有 Schema 已提供构建初步授权活动和证据关联的基础；但要把**跨默认 24 小时的真实阻塞、三视图、有界查询性能和安全状态语义贯通**作为第一版承诺，不能先验认定完全不需索引/DDL 或其他有限代码调整。只读 Activity 不能证明 Agent 的任务完成、外部 Git/CI、Guest 实时进程和 Root 当前内核效果；这些边界由覆盖信息和独立核验明确表达。
+**最小下一交付物：** A1 的逐 Tool 说明修订与 Server Instructions 实施/测试（在不增加公开 Tool 的前提下）。B 在随后独立推进，不先写 Agent 接力平台或任务数据库。
 
 ## 5. 源码入口与关联设计
 
