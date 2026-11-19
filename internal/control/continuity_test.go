@@ -62,3 +62,40 @@ func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
 		t.Fatal("unauthenticated request acquired management via self-declared metadata")
 	}
 }
+
+func TestS2RequestPrincipalRequiresExplicitSDKCredential(t *testing.T) {
+	st, _, _, _ := fixture(t)
+	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
+	actor := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	credential := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	tests := []struct {
+		name string
+		token any
+		want bool
+	}{
+		{"missing", nil, false},
+		{"numeric", 7, false},
+		{"empty", "", false},
+		{"malformed", "not-an-id", false},
+		{"valid distinct OAuth access ID", credential, true},
+		{"valid manual credential", actor, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{
+				TokenInfo: &auth.TokenInfo{UserID: actor, Extra: map[string]any{}},
+			}}
+			if tc.token != nil {
+				req.Extra.TokenInfo.Extra["token_id"] = tc.token
+			}
+			principal, err := svc.requestPrincipal(req)
+			if tc.want && (err != nil || principal.ActorID != actor || principal.Layer != "bw-test" ||
+				principal.TokenID != tc.token) {
+				t.Fatalf("valid SDK principal was not retained: %+v, %v", principal, err)
+			}
+			if !tc.want && (err == nil || principal != (RequestPrincipal{})) {
+				t.Fatalf("missing/invalid independent token ID borrowed actor identity: %+v, %v", principal, err)
+			}
+		})
+	}
+}
