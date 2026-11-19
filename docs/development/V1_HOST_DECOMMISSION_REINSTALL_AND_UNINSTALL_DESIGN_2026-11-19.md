@@ -1,6 +1,6 @@
 # Physical Host RC.7 → exact-source RC8 candidate teardown/reinstall lessons and future uninstall.sh design
 
-**2026-11-19 PT; status: observed manual reset + installer evidence / `uninstall.sh` NOT IMPLEMENTED.**
+**Historical design checkpoint (2026-11-19 PT):** observed manual reset + installer evidence; `uninstall.sh` was not yet implemented **at the time of this analysis**. **Later on 2026-11-19, a restricted, new `uninstall.sh` and `scripts/uninstall_core.py` were implemented in the unmerged Draft PR #153.** They expose no-argument help, read-only `--plan`, digest-pinned `--apply`, and scoped `service/controller/full` removal with exact Box UUID allowlist, approved Native rollback, and original audit. [Current executable contract, safety limits and tests](V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md). The proposal below remains its source rationale; **real physical-host destructive `apply` is still NOT_TESTED/NOT_AUTHORIZED**.
 Read with [actual Host/MCP/nested verification ledger](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md) and [current manual installation guide](../getting-started/MANUAL_INSTALL.md). This is not permission to delete an unreviewed environment or a promise to migrate a supported deployment.
 
 ## 1. Why a dedicated uninstaller is needed
