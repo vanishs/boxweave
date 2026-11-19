@@ -43,6 +43,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Stage 2 role-free SDK/actor and exact ACL source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This proves the new principal/Token ID and ACL tests come from
+          # the SAME source checkout that is installed below. Native safety
+          # and actual ChatGPT OAuth still require independent evidence.
+          go test -count=1 ./internal/control ./internal/install -run 'TestS2RequestPrincipalRequiresExplicitSDKCredential|TestNativePeerACLWholePolicyComparison'
+          if grep -R -n -E 'operationCredentialID|operationPrincipal\\(' internal/control --include='*.go'; then
+            echo S4_A_STAGE2_OLD_AUTH_ENTRYPOINT_FOUND; exit 1
+          fi
+          echo S4_A_STAGE2_ROLE_FREE_SDK_SOURCE_SHA=$GITHUB_SHA
       - name: Confirm one-use host, independent native witness and local regressions
         shell: bash
         run: |

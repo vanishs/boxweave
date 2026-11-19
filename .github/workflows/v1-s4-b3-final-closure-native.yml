@@ -6,6 +6,17 @@ on:
     paths:
       - .github/workflows/v1-s4-b3-final-closure-native.yml
       - internal/install/native_peer_root_grant_installed_native_test.go
+      # Stage 2 SDK refactor and shared B2/B3 pure ACL proof (previously
+      # missing from B3 path filters, leaving new security code untested).
+      - internal/install/native_peer_acl_compare.go
+      - internal/install/native_peer_acl_compare_test.go
+      - internal/native/box.go
+      - internal/control/operation_tools.go
+      - internal/control/box_tools.go
+      - internal/control/file_tools.go
+      - internal/control/operation_output_cancel.go
+      - internal/control/server.go
+      - internal/control/continuity_test.go
       - internal/install/native_peer_root_multi_installed_native_test.go
       - internal/install/native_peer_root_integrated.go
       - internal/install/network_peer_revocation.go
