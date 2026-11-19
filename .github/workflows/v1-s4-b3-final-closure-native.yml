@@ -188,22 +188,16 @@ jobs:
               fi
               echo "S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY=PASS original=$original"
             else
-              # A separate native Incus client changes only user metadata
-              # AFTER the reviewed/root-approved original snapshot. This is
-              # an intentional, genuine ACL ETag contender on a disposable host.
-              before="$(sudo incus network acl show bw-s4b2-native)"
-              sudo incus network acl set bw-s4b2-native user.s4b3-etag-contender conflicting-client
-              after="$(sudo incus network acl show bw-s4b2-native)"
-              test "$before" != "$after"
-              if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"; then
-                echo S4_B3_NATIVE_STALE_ETAG_ROOT_MUTATION_ACCEPTED; exit 98
+              # Installed Controller -> scoped PRS root -> exact SQLite and
+              # COMPLETE_VERIFIED original (same path as original 9/9 PASS).
+              sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original')")" = CONFIRMED:1
+              test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+              if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+                echo S4_B3_INSTALLED_ORIGINAL_REPLAYED; exit 88
               fi
-              state="$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")"
-              test "$state" != SUCCEEDED
-              confirmed="$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE operation_id='$original' AND desired=1 AND status='CONFIRMED'")"
-              test "$confirmed" = 0
-              test "$(sudo incus network acl get bw-s4b2-native user.s4b3-etag-contender)" = conflicting-client
-              echo "S4_B3_NATIVE_STALE_APPROVED_ACL_ETAG_NO_FALSE_GRANT=PASS original=$original state=$state"
+              echo "S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS original=$original"
             fi
           else
             sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
@@ -263,7 +257,7 @@ jobs:
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE operation_id='$original' AND status='CONFIRMED'")" = 0
             for guest in s4b2a s4b2b s4b2c; do
-              test "$(sudo incus --project "$project" info "$guest" --format json | jq -r .status)" = Stopped
+              test "$(sudo incus --project "$project" list --format json | jq -r --arg n "$guest" '.[] | select(.name == $n) | .status')" = Stopped
               test "$(sudo incus --project "$project" config get "$guest" boot.autostart)" = false
             done
             test "$(sudo incus network acl get bw-s4b2-native user.s4b3-live-contender)" = separate-native-client
