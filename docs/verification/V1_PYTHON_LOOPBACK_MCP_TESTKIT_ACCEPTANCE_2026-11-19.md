@@ -26,6 +26,12 @@ Owned disposable `bw-python-mcp-kit-1119`, Box UUID `dccc0b00-6b85-4f19-840f-609
 3. The local service process and temporary Bearer-secret file were removed by the shell EXIT trap. This is **real HTTP MCP/protocol wiring**, not a native Incus guest/Root mutation or browser OAuth exercise.
 4. [Source quality gate #44611911319](https://github.com/vanishs/boxweave/actions/runs/44611911319) and [amd64/arm64 builds #44611911435](https://github.com/vanishs/boxweave/actions/runs/44611911435) both **PASS** on code `ef3cc969`. CI integration of Python unittest runner was added afterward; check its own exact SHA CI record rather than projecting previous PASS.
 
+## CI and disposable resource cleanup addendum
+
+- [Required quality gate #44611911319](https://github.com/vanishs/boxweave/actions/runs/44611911319) and [dual-arch build #44611911435](https://github.com/vanishs/boxweave/actions/runs/44611911435): **SUCCESS** on tested Python source `ef3cc969`.
+- The later `ba661485` source/workflow integration attempt [#44612811899](https://github.com/vanishs/boxweave/actions/runs/44612811899) was **cancelled by subsequent documentation commits**, but its actual job step **“Python MCP loopback client and protocol negative tests” completed SUCCESS** before cancellation. Do not present the entire cancelled workflow as a successful complete full Go Race run. [Documentation-only HEAD quality #44613224053](https://github.com/vanishs/boxweave/actions/runs/44613224053) **SUCCESS** with expensive Go/Python steps intentionally **SKIPPED**, not misreported as fresh full-source acceptance.
+- The sole owned test Box `dccc0b00-6b85-4f19-840f-60998354a183` was stopped (original `ba18b40fcde0b90487b0656d03c41640`, **SUCCEEDED**) and deleted (original `d03326b767d7fc64b8221d3a87bab0f3`, **SUCCEEDED**). A subsequent authenticated `box_list` returned **zero Boxes**. No other L0/Incus Project/physical Host resources were intentionally touched.
+
 ## Mandatory limitations / security
 
 An MCP response is **not native operation completion**. The Python harness does not implement OAuth DCR/refresh/revoke, host-visible Incus packet verification, a real ChatGPT/Agent plan or full MCP SDK compliance. UNKNOWN never becomes a safe retry decision. `recover_work` is a bounded read-only SQLite/Operation summary; it cannot restore an Agent conversation or prove absent unjournaled effects. Fault injection deliberately applies only to **read** replies. The official MCP Go SDK probes, production authorization and native acceptance remain independent mandatory evidence.
