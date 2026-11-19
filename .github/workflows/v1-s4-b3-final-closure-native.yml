@@ -221,7 +221,7 @@ jobs:
           if test "${{ matrix.scenario }}" = installed_normal; then
             test "$status" = COMPLETE_VERIFIED
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
-            test "$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE operation_id='$original' AND status='CONFIRMED'")" = 1
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original') AND status='CONFIRMED' AND desired=1")" = 1
             sudo systemctl stop boxweave-native-peer-root.service
           else
             test "$status" = DISPATCH_UNKNOWN
@@ -248,7 +248,7 @@ jobs:
             done
             test "$ready" = 1
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
-            test "$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE operation_id='$original' AND status='CONFIRMED'")" = 1
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT count(*) FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original') AND status='CONFIRMED' AND desired=1")" = 1
             if sudo -u boxweave /usr/local/bin/boxweave native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
               echo S4_B3_SERVICE_CYCLE_REPLAYED_ORIGINAL; exit 93
             fi
