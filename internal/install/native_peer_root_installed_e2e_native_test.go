@@ -177,7 +177,7 @@ func TestS4B2NativeInstalledNonrootSeedOriginal(t *testing.T) {
 			}
 		}
 	}
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestS4B2NativeInstalledPartialUnknownProjectLock(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT status,desired FROM peer_grants WHERE operation_id=?", original).Scan(&status, &desired); err != nil || status != "PENDING" || desired != 0 {
 		t.Fatalf("partial root released or lost grant: %s %d %v", status, desired, err)
 	}
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

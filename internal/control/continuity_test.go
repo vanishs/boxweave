@@ -65,7 +65,7 @@ func TestS2PrivateCorrelationDoesNotAuthorizeViewerMutation(t *testing.T) {
 			"io.boxweave.agent_ref": "admin-agent",
 		}},
 	}
-	if _, _, err := requireAdmin(req, svc); err == nil {
+	if _, _, err := requireAuthenticated(req, svc); err == nil {
 		t.Fatal("viewer borrowed admin authority using self-declared metadata")
 	}
 }

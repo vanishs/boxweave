@@ -20,7 +20,7 @@ import (
 // It does not claim a real Incus effect.
 func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 	st, server, password := newOAuthServerTest(t)
-	issued := completeOAuth(t, server, password, "mcp:admin")
+	issued := completeOAuth(t, server, password, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	oldToken, err := st.VerifyToken(ctx, issued.access)
@@ -124,7 +124,7 @@ func TestS4OAuthRefreshHTTPMCPOriginalReceiptNotRedispatched(t *testing.T) {
 
 func TestS4OAuthViewerHistoryAfterRefreshHTTPMCP(t *testing.T) {
 	st, server, password := newOAuthServerTest(t)
-	issued := completeOAuth(t, server, password, "mcp:viewer")
+	issued := completeOAuth(t, server, password, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	old, err := st.VerifyToken(ctx, issued.access)

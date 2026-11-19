@@ -36,11 +36,11 @@ func fixture(t *testing.T) (*state.Store, *httptest.Server, string, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	admin, a, err := st.IssueToken(context.Background(), "admin", time.Hour)
+	admin, a, err := st.IssueToken(context.Background(),time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	viewer, _, err := st.IssueToken(context.Background(), "viewer", time.Hour)
+	viewer, _, err := st.IssueToken(context.Background(),time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestHTTPAuthorizationHostOriginAndRevocation(t *testing.T) {
 			}
 		})
 	}
-	tok, _, err := st.IssueToken(context.Background(), "viewer", time.Hour)
+	tok, _, err := st.IssueToken(context.Background(),time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

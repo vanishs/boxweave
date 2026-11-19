@@ -96,7 +96,7 @@ func s1NativeObserved(project, name, uuid, marker string) error {
 func s1Admit(t *testing.T, s *state.Store, uuid, key string) state.Receipt {
 	t.Helper()
 	ctx := context.Background()
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

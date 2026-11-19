@@ -157,7 +157,7 @@ func TestS2ViewerCannotMutateAnyNativeTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	ops, err := st.ListOperations(ctx, state.OperationQuery{
-		Layer: "bw-test", Role: "admin", Requester: tok.ID,
+		Layer: "bw-test", Requester: tok.ID,
 	})
 	if err != nil || len(ops.Operations) != 0 {
 		t.Fatalf("viewer denial created a durable native admission: %+v %v", ops, err)
@@ -325,7 +325,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 			st, server, _, _ := fixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
-			raw, actor, err := st.IssueToken(ctx, "viewer", test.ttl)
+			raw, actor, err := st.IssueToken(ctx,test.ttl)
 			if err != nil {
 				t.Fatal(err)
 			}

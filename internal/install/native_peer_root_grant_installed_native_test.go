@@ -148,7 +148,7 @@ func TestS4B3NativeNonrootSeedClaimedGrantOriginal(t *testing.T) {
 			}
 		}
 	}
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
