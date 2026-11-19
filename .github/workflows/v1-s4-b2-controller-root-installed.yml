@@ -6,6 +6,13 @@ on:
     paths:
       - .github/workflows/v1-s4-b2-controller-root-installed.yml
       - internal/install/native_peer_root_recovery.go
+      # Reverify the role-free SDK principal and pure ACL comparison when
+      # the network executor and native SDK wrapper change.
+      - internal/install/native_peer_acl_compare.go
+      - internal/install/native_peer_acl_compare_test.go
+      - internal/native/box.go
+      - internal/control/operation_tools.go
+      - internal/control/server.go
       - internal/state/network_peer_root_recovery.go
       - internal/state/network_peer_root_recovery_test.go
       - internal/state/network_peer_root_handoff.go

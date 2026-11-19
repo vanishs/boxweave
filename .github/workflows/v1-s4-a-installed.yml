@@ -54,6 +54,7 @@ jobs:
           if grep -R -F -n -e 'operationCredentialID' -e 'operationPrincipal(' --include='*.go' internal/control; then
             echo S4_A_STAGE2_OLD_AUTH_ENTRYPOINT_FOUND; exit 1
           fi
+          go test -count=1 ./internal/state -run 'TestSameVersionSQLiteDDLDriftAndTriggersFailClosed'
           echo S4_A_STAGE2_ROLE_FREE_SDK_SOURCE_SHA=$GITHUB_SHA
       - name: Precompile every installed S2 native probe before provisioning Incus
         shell: bash

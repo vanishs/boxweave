@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - feat/v1-s3-agent-files-20261115
+      - feat/v1-s4-runtime-integration-20261116
+    paths:
+      - .github/workflows/v1-s3-file-installed.yml
+      - internal/native/box.go
+      - internal/native/file.go
+      - internal/control/file_tools.go
+      - internal/control/operation_tools.go
+      - internal/control/server.go
+      - scripts/s3_file_installed_probe.go
+      - scripts/s25_bridgehead_lab.sh
+      - scripts/s25_inner_setup.sh
   workflow_dispatch:
 
 permissions:
@@ -16,7 +27,7 @@ concurrency:
 jobs:
   installed-file-mcp:
     name: s3-installed-file-tools-and-supervised-git-verifier
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'))
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115' || github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116')
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:
