@@ -15,15 +15,15 @@ import (
 func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, a, err := s.IssueToken(ctx,time.Hour)
+	_, a, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, b, err := s.IssueToken(ctx,time.Hour)
+	_, b, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, viewer, err := s.IssueToken(ctx,time.Hour)
+	_, viewer, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,13 +122,13 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	if err != nil || len(own.Operations) != 2 {
 		t.Fatalf("actor-filtered history mismatch: %+v %v", own, err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", a.ID,foreign.ID); err != nil {
+	if _, err := s.GetScopedOperation(ctx, "L0", a.ID, foreign.ID); err != nil {
 		t.Fatalf("same-layer peer Actor history missing: %v", err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L1", a.ID,first.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.GetScopedOperation(ctx, "L1", a.ID, first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-layer operation leaked: %v", err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID,second.ID); err != nil {
+	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID, second.ID); err != nil {
 		t.Fatalf("independent authorized actor cannot take over same-layer history: %v", err)
 	}
 }
@@ -144,7 +144,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, actor, err := s.IssueToken(ctx,time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	if n, err := reopened.Recover(ctx); err != nil || n != 1 {
 		t.Fatalf("crash recovery: count=%d err=%v", n, err)
 	}
-	got, err := reopened.GetScopedOperation(ctx, "L1", actor.ID,r.ID)
+	got, err := reopened.GetScopedOperation(ctx, "L1", actor.ID, r.ID)
 	if err != nil || got.State != "UNKNOWN" || got.NativeOperationID != "original-native-op-id" ||
 		got.WorkRef != a.WorkRef || got.AgentRef != a.AgentRef ||
 		got.NextAction.Kind != "HOST_LOCAL_REVIEW" {
@@ -197,7 +197,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	raw, actor, err := s.IssueToken(ctx,time.Hour)
+	raw, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil || raw == "" {
 		t.Fatal("missing durable test identity", err)
 	}
@@ -314,7 +314,7 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, actor, err := s.IssueToken(ctx,time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	}
 	// An unrelated actor may have an identical untrusted work_ref, but must
 	// never borrow the original row or signed cursor.
-	_, other, err := s.IssueToken(ctx,time.Hour)
+	_, other, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

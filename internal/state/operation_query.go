@@ -261,9 +261,9 @@ func (s *Store) GetScopedOperation(ctx context.Context, layer, requester, id str
 	err := s.db.QueryRowContext(ctx, `SELECT id,tracking_id,state,native_operation_id,
 			work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at
 			FROM operations WHERE id=? AND layer=?`, id, layer).Scan(
-			&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID,
-			&r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation,
-			&r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
+		&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID,
+		&r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation,
+		&r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, ErrNotFound
 	}

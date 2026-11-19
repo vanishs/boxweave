@@ -252,6 +252,7 @@ func (s *Store) oauthClient(ctx context.Context, id, redirect string) (string, e
 	}
 	return "", ErrOAuthInvalid
 }
+
 // Application-permission scopes are deliberately unsupported. Never
 // interpret a legacy requested scope as implicit full-management approval.
 func rejectOAuthScopes(scope string) error {

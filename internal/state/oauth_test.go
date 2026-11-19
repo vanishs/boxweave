@@ -42,7 +42,7 @@ func oauthFixture(t *testing.T) (*Store, string, string, string, string, string,
 func TestOAuthAtomicPKCERefreshAndOriginRevocation(t *testing.T) {
 	ctx := context.Background()
 	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
-	manual, manualInfo, err := s.IssueToken(ctx,time.Hour)
+	manual, manualInfo, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestOAuthCredentialAndTunnelOriginResetInvalidatesPendingAndGrants(t *testi
 func TestOAuthAccessIDRevokeAlsoRevokesRefreshFamily(t *testing.T) {
 	ctx := context.Background()
 	s, client, pending, verifier, _, redirect, password := oauthFixture(t)
-	manual, manualInfo, err := s.IssueToken(ctx,time.Hour)
+	manual, manualInfo, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -134,7 +134,7 @@ func TestS4OAuthRefreshQueuedClaimAndForeignActor(t *testing.T) {
 	if _, err := s.Replay(ctx, queued); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other grant borrowed operation: %v", err)
 	}
-	manualRaw, manual, err := s.IssueToken(ctx,time.Hour)
+	manualRaw, manual, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
