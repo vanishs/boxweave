@@ -40,6 +40,10 @@ class FakeHost(unittest.TestCase):
         self.owner_check = mock.patch.object(u, "require_root_owned")
         self.owner_check.start()
         self.addCleanup(self.owner_check.stop)
+        self.host_state_check = mock.patch.object(u, "validate_state_dir",
+                                                  side_effect=lambda path, uid: u.checked_file(path, "dir"))
+        self.host_state_check.start()
+        self.addCleanup(self.host_state_check.stop)
         self.host = mock.patch.object(u, "machine_sha", return_value="a" * 64)
         self.host.start()
         self.addCleanup(self.host.stop)
@@ -74,6 +78,7 @@ class FakeHost(unittest.TestCase):
         """)
         db.commit()
         db.close()
+        self.db.chmod(0o600)
         self.paths["STATE"].joinpath("install-manifest.json").write_text(json.dumps({
             "schema": 2,
             "native_project": "user-1001",
@@ -84,6 +89,7 @@ class FakeHost(unittest.TestCase):
             "binary_sha256": u.file_fingerprint(u.BINARY)["sha256"],
             "unit_sha256": u.file_fingerprint(u.UNIT)["sha256"],
         }))
+        self.paths["STATE"].joinpath("install-manifest.json").chmod(0o600)
         self.box = "11111111-2222-3333-4444-555555555555"
 
     def fake_command(self, args, **kwargs):
