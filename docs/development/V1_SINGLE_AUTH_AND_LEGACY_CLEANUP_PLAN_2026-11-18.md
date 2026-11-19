@@ -1,6 +1,6 @@
 # BoxWeave v1 — 单一授权能力与历史包袱整改方案（2026-11-18）
 
-**状态：阶段 1 的角色/Scope 全链源码改造已写入 Draft PR #153，独立 Box 的 Go 全量单测已经通过；尚未取得真实 ChatGPT 无 Scope 端到端 PASS，未完成独立 Native/CI 签收。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
+**状态：阶段 1 核心源码、活跃测试与现行文档整改已完成并通过隔离 Go 质量/单测；完整 Race、原生安装和真实 ChatGPT 无 Scope OAuth 尚未正式签收。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
 
 - **开发位置**：唯一 Draft PR [#153](https://github.com/vanishs/boxweave/pull/153)，分支 `feat/v1-s4-runtime-integration-20261116`；源码调查参考 HEAD `36b6662627050b81b946a7b9eedf922fb2e5b271`，实施前重新确认远程 HEAD。
 - **当前交付**：Owner 已明确授权阶段 1，一次性修改 Go/新 Schema/测试和现行文档；**不**迁移旧 DB、不部署共享宿主、不改旧发布产物。阶段 2/3 独立 Native 和真实 ChatGPT 验收仍需继续。
@@ -17,13 +17,18 @@
 
 **速度原则：** 不单独实施旧 DB 迁移、兼容 API、双权限版本或不相关 SDK 升级；不重验尚未开发的 S4-B4–B6。若发现清理目标涉及原生宿主安全和历史 UNKNOWN，立即从本次重构范围剔除，保留证据，绝不为删代码降低安全检查。工作结束更新 README/AGENTS/产品与 MCP 契约、执行记录并给出准确 source SHA 与测试结果。
 
-### 0.1 阶段 1 执行回执与尚未收敛的原生脚本（2026-11-18）
+### 0.1 阶段 1 源码与活跃测试/文档整改 — 完成（非原生正式签收）
 
-- **核心 Go 重构已落地：** OAuth 授权/刷新与 Scope-free HTTP metadata、MCP Token/Actor 准入、手动 `token-create`、SchemaVersion=4、Operation 和网络 Root 原生授权入口已移除角色分支；两个独立 Actor 能读取同 Layer 历史，但不能共用原始幂等身份。没有升级 SDK、迁移旧 DB 或改动共享宿主。
-- **已有证据：** 新增 Scope 缺省/metadata、拒绝旧 Scope 和 SQLite 版本负例；隔离 L0 disposable Box `auth-b-impl-1118` 在 Go 源码及现行文档 SHA `a1e4fceda6c1757c7484a683d8f40396dc04b527` 通过 `gofmt -l` 无输出、`go test ./... -count=1` 全部五个包 PASS，未修改测试环境中的原始工作区。后续脚本单独提交必须继续验证自己的源码版本。
-- **原生探针进展：** S4-A OAuth 安装探针已换成无 Scope/撤销 Grant 负例，B3 六个 native 工作流及 SDK 客户端已换成撤销 Token 的 401 负例（隔离 Go 单文件编译通过）；S1 和多份单用途 S2 脚本已去掉失效 `-role admin`。
-- **遗留原生测试接口，仍未签收：** `scripts/accept_s2_native.sh`、`scripts/s2_native_probe.go`、`scripts/s3_file_installed_probe.go`、`scripts/s25_bridgehead_lab.sh`、`scripts/s25_inner_setup.sh`、`scripts/s25_lab_agent.go` 仍包含旧 viewer 语义。**禁止**直接把这些 viewer 凭据换成合法管理 Token 后保留“写入必须被拒绝”的断言——那可能让测试本身执行真实的 Guest 变更。必须分开改成有效独立 Actor 的同 Layer 读取/接手正例，以及无效/过期/撤销 Token 的 HTTP 401 负例，接着才准许在可销毁原生测试环境重新执行。旧脚本目前不能作为新源码的 PASS 证据。
-- **准确结论：** `CORE_GO_SCOPE_FREE_REFACTOR=PASS (isolated test)`，`ALL_NATIVE_ACCEPTANCE_SCRIPTS_CONVERGED=NO`，`REAL_CHATGPT_SCOPE_FREE_CONNECT_REFRESH=NOT_TESTED`，`INDEPENDENT_NATIVE_AND_CI_SIGNOFF=PENDING`。因此方案 B 的**代码主链已成形**，但这轮全量整改**尚未正式签收**。原生脚本改造是阶段 1 的剩余事项，不能被阶段 2 的执行测试所掩盖。
+**当前基线源码 SHA：`e551976210cc4a0d4c1f19cef39b07bcd6efdf09`（2026-11-18）。** 当前仍为 Draft PR #153；不得混同已发布 RC.7 或旧 B2/B3 原生证据。
+
+- **已完成：** 统一 OAuth 无 Scope（discovery/consent/PKCE/code/token/refresh/revoke）、MCP Bearer/Token 活性校验、手动 `token-create` 无 `-role`、Actor/Operation、网络 Root 安全链及 SQLite v4 的整链代码；保留 Layer/Project/UUID、独立 Actor 幂等、UNKNOWN 防重放。旧 v3 Schema 拒绝且给出“保留原始/UNKNOWN 证据并经批准重建环境”的诊断。
+- **原生测试源也已适配：** `accept_s2_native.sh`、S2 SDK、S3 文件、S25 嵌套/LAB、S4-A OAuth 与六个 S4-B3 CI 工作流已删除过时角色签发；原 viewer 禁止修改的危险负例改为**真实撤销凭据 HTTP 401**或**已认证独立 Actor 的同 Layer 可读/可操作正例**与类型/幂等拒绝。相关脚本的 Go 单文件编译、Shell 语法解析通过；不再依赖已移除 `-role` 接口。历史签收文本保留为旧 SHA 的证据。
+- **现行文档已统一：** 精简 `AGENTS.md`，并修改 `VERSIONING.md`、README、产品范围/需求、架构、安全、MCP 契约和安装说明。Owner 规则：**正式支持版本发布前或另有明确兼容承诺前，不做历史兼容；必要时明确告知用户重建 DB、Token、OAuth Client、MCP 连接/测试环境。禁止自动删旧宿主资源。**
+- **实际在隔离 L0 Box 中验证：** 对精确 SHA `e551976`，`make lint` PASS（格式/UTF-8/YAML、`go mod tidy -diff`、`go vet`、模块验证）；`go test ./... -count=1` 五个 Go 包 PASS；`TestSameVersionSQLiteDDLDriftAndTriggersFailClosed` 包括 v3 旧版拒绝与重建提示 PASS；四个独立 Go 原生客户端文件和 B3 Go 客户端编译、S2/S25 Shell `bash -n` PASS。原始验收 Operation `b2ed64736284a0dc59aacb3f606f1db4`。
+- **针对性 Race 证据：** SHA `5eea923b5a103b27bb53e4c35b5633b46d5274b8` 的 `go test -race` 指定 OAuth/S2 Operation/S4B3 Grant/Revoke 测试在 `internal/state`、`internal/control` PASS（Operation `932d1f0cc03470f49e8f79ec58b303e9`）。后续源码仅增加 v3 错误信息和测试断言，仍**不能**把较早 Race 结果宣称为新 HEAD 的全量 Race。
+- **限制未隐瞒：** 2 vCPU 隔离 Box 中一次 `make verify` 的全量 Race 在 `internal/state` 完成前触及执行 240 秒上限；已通过的 Quality/Vet/其他包不能代替 `FULL_RACE_PASS`。未在新候选 SHA 完成真实安装/Incus Root/网络回归，也没有真实 ChatGPT 无 Scope 连接、Token 刷新与撤销的独立 E2E 证据；也没有该最终 SHA 的完整 Actions 正式签收。
+
+**本节状态：** `STAGE1_SOURCE_AND_ACTIVE_PROBE_REFACTOR=COMPLETE`，`ISOLATED_SOURCE_UNIT_AND_LINT=PASS`；`FULL_RACE=TIMED_OUT`，`NEW_SHA_NATIVE_INSTALLED=NOT_TESTED`，`REAL_CHATGPT_SCOPE_FREE=NOT_TESTED`，`FINAL_SIGNOFF=PENDING`。进入阶段 2 时只须在全新、可销毁、明确授权的原生 Project/DB 中运行已修改脚本并修复发现的实际问题，避免重复整链重构。
 
 ### Environment reconstruction notice for this breaking change
 
