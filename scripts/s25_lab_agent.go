@@ -444,8 +444,8 @@ func doubleAgent(ctx context.Context) {
 	defer first.Close()
 	second := connectActor(ctx, "b")
 	defer second.Close()
-	peer := connectActor(ctx, "peer")
-	defer peer.Close()
+	observer := connectActor(ctx, "peer")
+	defer observer.Close()
 	work := "lab/s25/two-agents"
 	// Independent agents need separate native resources for the positive
 	// parallel-work proof. Competing Execs against one Box may safely refuse
@@ -521,9 +521,9 @@ func doubleAgent(ctx context.Context) {
 	}
 	must(len(ops) == 2 && ops["agent-s25-alpha"] != ops["agent-s25-beta"], "Agent Operations collapsed")
 	// A separately authorized Actor may recover earlier same-Layer evidence.
-	_ = request(ctx, peer, "operation_get", map[string]any{"operation_id": ops["agent-s25-alpha"]})
+	_ = request(ctx, observer, "operation_get", map[string]any{"operation_id": ops["agent-s25-alpha"]})
 	// A forged agent label and malformed mutation cannot bypass typed validation.
-	must(denied(ctx, peer, "box_create", map[string]any{
+	must(denied(ctx, observer, "box_create", map[string]any{
 		"name":"bw-s25-malformed", "cpu":"not-a-number",
 		"work_ref":work, "agent_ref":"agent-s25-alpha",
 	}), "malformed Create accepted under forged agent label")
