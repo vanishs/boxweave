@@ -48,7 +48,7 @@ type cancelOperationResult struct {
 func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_output_get",
-		Description: "Recover original box_exec stdout/stderr by operation_id, at most 65536 bytes per page; advance next_offset until ended. Retain observed nonzero exit; truncated/unavailable output never proves command success.",
+		Description: "Read recorded box_exec stdout/stderr and guest exit status by original operation_id, at most 65536 bytes/page; advance next_offset. Check exit_code/command_success: Operation SUCCEEDED does not imply guest exit 0, and unavailable/truncated output cannot prove success.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
 		principal, err := s.requestPrincipal(req)

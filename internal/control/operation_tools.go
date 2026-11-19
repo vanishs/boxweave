@@ -88,7 +88,7 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
-		Description: "Read an authorized original operation_id after a timeout/reconnect; compare durable state and next_action before any further mutation. UNKNOWN may have dispatched native work: do not retry with a new key; require independent read-only post-state/host review. wait_ms 0..20000 only polls, never cancels or retries.",
+		Description: "Read an authorized original Operation by operation_id: durable state, native ID and next_action. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
 		principal, err := s.requestPrincipal(req)
@@ -141,7 +141,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_list",
-		Description: "After agent interruption/reconnect, search original Operations by known work_ref, or bounded action/time pages and cursor; follow exact operation_id with operation_get. Empty results do not prove no native effect or that work finished. Client work/Agent labels never grant visibility.",
+		Description: "List authorized durable Operations by work_ref, agent_ref, actor, action, state or bounded time/cursor filters. Use after reconnect to find an original operation_id, then call operation_get. Empty results never prove an effect did not occur; client labels do not grant access.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationListInput) (*mcp.CallToolResult, operationListResult, error) {
 		principal, err := s.requestPrincipal(req)

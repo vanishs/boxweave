@@ -122,7 +122,7 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 }
 func (s *Service) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
-		&mcp.ServerOptions{SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
+		&mcp.ServerOptions{Instructions: serverContinuityInstructions, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
 			// Every resource and Operation is project/actor-private and
 			// status changes while work is in flight. Never cache publicly.
 			c.CacheScope = "private"

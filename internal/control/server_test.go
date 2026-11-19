@@ -124,13 +124,40 @@ func TestOfficialMCPHandshakeAndS2ReadTools(t *testing.T) {
 			cancel()
 			t.Fatalf("official MCP client connect: %v", err)
 		}
+		init := sess.InitializeResult()
+		if init == nil || init.Instructions != serverContinuityInstructions {
+			t.Fatalf("official MCP initialize did not deliver current recovery instructions: %+v", init)
+		}
+		firstParagraph, _, _ := strings.Cut(init.Instructions, "\n")
+		if len(firstParagraph) > 512 || !strings.Contains(firstParagraph, "UNKNOWN or missing records") {
+			t.Fatalf("MCP first-paragraph recovery hint is not compact and self-contained: %q", firstParagraph)
+		}
 		tools, err := sess.ListTools(ctx, nil)
 		if err != nil {
 			t.Fatalf("tools/list: %v", err)
 		}
 		gotNames := make(map[string]bool, len(tools.Tools))
+		mutations := map[string]bool{
+			"box_create": true, "box_start": true, "box_stop": true,
+			"box_update": true, "box_delete": true, "box_exec": true,
+			"box_file_apply": true, "box_peer_set": true, "operation_cancel": true,
+		}
+		hinted := 0
 		for _, tool := range tools.Tools {
 			gotNames[tool.Name] = true
+			if strings.TrimSpace(tool.Description) == "" {
+				t.Fatalf("empty public MCP description: %q", tool.Name)
+			}
+			hasHint := strings.HasSuffix(tool.Description, mutationContinuityHint)
+			if hasHint != mutations[tool.Name] {
+				t.Fatalf("wrong mutating-tool reconnect hint: %q, hint=%t", tool.Name, hasHint)
+			}
+			if hasHint {
+				hinted++
+			}
+		}
+		if hinted != 9 {
+			t.Fatalf("want 9 mutating tools with compact hints, got %d", hinted)
 		}
 		expected := []string{
 			"host_status", "box_create", "box_list", "box_get", "box_update",

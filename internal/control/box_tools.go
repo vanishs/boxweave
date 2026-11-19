@@ -346,7 +346,7 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 
 func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_create",
-		Description: "Admit one owned container with typed dotted Incus/LXC options; omitted booleans preserve defaults. Low-level AppArmor requires an independently reviewed trusted Project adapter. Never disable host AppArmor: after installing inner incusd by box_exec, configure INCUS_SECURITY_APPARMOR on that inner service only, check inherited enforce and UID/GID budgets. Asynchronous durable receipt.",
+		Description: "Admit creation of one owned container with typed Incus/LXC options; omitted booleans preserve defaults. Returns an asynchronous Operation, not guest readiness. Never disable host AppArmor; nested Incus requires independently verified Project/AppArmor/UID/GID constraints.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if !validBoxName.MatchString(in.Name) || !native.ValidImageChoice(in.Image) {
@@ -481,7 +481,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Inspect exact owned Box UUID/native state after reconnect before further effects; Running is not guest Exec-ready or proof an interrupted operation succeeded. Check original operation_get as well.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
 			principal, err := s.requestPrincipal(req)
@@ -698,7 +698,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_exec",
-		Description: "Durable asynchronous argv execution INSIDE an exact owned guest, guest UID/GID typed; original stdout/stderr through operation_output_get.",
+		Description: "Execute argv asynchronously INSIDE an exact owned guest with typed guest UID/GID; read original stdout/stderr and observed exit_code via operation_output_get. Operation SUCCEEDED is not proof of guest exit 0.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in execBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, err := s.requestPrincipal(req); err != nil {

@@ -8,8 +8,23 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// All mutations publish one compact, consistent reconnect protocol.
-const mutationContinuityHint = " Before a mutation, save its idempotency_key and optional stable work_ref outside BoxWeave. After a lost reply/reconnect, find the original via operation_list or operation_get before another effect; reuse a key only with identical intent. UNKNOWN or an empty list never permits a new-key retry."
+// serverContinuityInstructions appears in the official MCP initialize result.
+// Keep the first paragraph independently useful if a client truncates hints.
+const serverContinuityInstructions = "BoxWeave manages only registered Boxes in its configured Incus Project. " +
+	"Mutations are durable asynchronous Operations; a receipt is not completion. " +
+	"Use a distinct idempotency_key per logical mutation, and reuse the same key for exact retries. " +
+	"After interruption, use operation_list and operation_get to check originals before any new effect. " +
+	"UNKNOWN or missing records do not justify new-key retries. " +
+	"Operation records track admitted actions and observed outcomes, not Agent task completion.\n" +
+	"work_ref and agent_ref are untrusted correlation labels, not authorization or reliable Agent identities. " +
+	"Separate authenticated Actors may inspect authorized same-Layer originals but cannot borrow another Actor's idempotency identity. " +
+	"Use operation_output_get for guest Exec output and exit_code; Operation SUCCEEDED does not guarantee a zero guest exit. " +
+	"Use box_get for observed native Box state; Running does not prove guest readiness. " +
+	"BoxWeave does not store Agent plans, conversation history, external Git checkpoints or unrecorded activity."
+
+// Each mutating tool still includes a short reminder for clients that omit
+// initialize instructions; the server enforces original-key/UNKNOWN safety.
+const mutationContinuityHint = " One key per logical mutation; reuse only for exact retries. After an uncertain response, inspect the original Operation first."
 
 // addStrictTool derives the public schema from the same typed Go input used by
 // the official MCP SDK. Its default object schema otherwise permits extra
