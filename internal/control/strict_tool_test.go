@@ -30,8 +30,8 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 	}
 	defer s.Close()
 	tools, err := s.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 17 {
-		t.Fatalf("all 17 typed MCP tools must be discoverable: %v", err)
+	if err != nil || len(tools.Tools) != 18 {
+		t.Fatalf("all 18 typed MCP tools must be discoverable: %v", err)
 	}
 	for _, tool := range tools.Tools {
 		raw, err := json.Marshal(tool.InputSchema)
