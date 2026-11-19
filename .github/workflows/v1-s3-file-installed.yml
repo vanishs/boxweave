@@ -43,6 +43,42 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Stage 2 role-free SDK principal and owned native source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Same exact checkout as installed MCP and native SFTP matrix.
+          go test -count=1 ./internal/control \
+            -run '^TestS2RequestPrincipalRequiresExplicitSDKCredential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          sh -n scripts/s25_bridgehead_lab.sh
+          gofmt -d scripts/s3_file_installed_probe.go
+          test -z "$(gofmt -l scripts/s3_file_installed_probe.go)"
+          go build -o "$RUNNER_TEMP/s3-file-agent-check" ./scripts/s3_file_installed_probe.go
+          printf 'S3_INSTALLED_EXACT_COMMIT=%s\n' "$GITHUB_SHA"
+          echo S3_INSTALLED_DISPOSABLE_SOURCE_PRECHECK=PASS
+      - name: Run exact-source restricted nonroot installed MCP in one-use real Incus 7.6
+        shell: bash
+        run: |
+          set -o pipefail
+          sh scripts/s25_bridgehead_lab.sh 2>&1 | tee "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          grep -Fxq 'S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          echo S3_INSTALLED_FILE_TOOLS_AND_PHASE3_SUPERVISED_GIT_REAL_NATIVE_VERIFIER=PASS
+
+          test -z "$(gofmt -l internal/control/operation_tools.go internal/native/box.go)"
+          echo STAGE2_S3_SOURCE_EXACT_ROLE_FREE_NATIVE_PREFLIGHT=PASS
       - name: Verify runner and exact source before native installation
         shell: bash
         run: |
