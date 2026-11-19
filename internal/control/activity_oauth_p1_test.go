@@ -18,8 +18,8 @@ func activityOAuthSession(t *testing.T, ctx context.Context, endpoint, token str
 	t.Helper()
 	client := mcp.NewClient(&mcp.Implementation{Name: "activity-p1-oauth", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint: endpoint + "/mcp",
-		HTTPClient: &http.Client{Transport: hostOAuthTransport{rawToken: token}},
+		Endpoint:             endpoint + "/mcp",
+		HTTPClient:           &http.Client{Transport: hostOAuthTransport{rawToken: token}},
 		DisableStandaloneSSE: true, MaxRetries: -1,
 	}, nil)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestActivityOAuthRefreshRotationRevokedGrantAndForeignLayer(t *testing.T) {
 		Action: "box_exec", SafeIntent: []byte("{}"),
 		ResourceKey: "box:owned", BoxUUID: "bcfe32e0-3acf-4f21-8a66-332a84d741a4",
 		Incarnation: "bcfe32e0-3acf-4f21-8a66-332a84d741a4",
-		WorkRef: "p1/oauth-evidence",
+		WorkRef:     "p1/oauth-evidence",
 	})
 	if err != nil {
 		t.Fatal(err)
