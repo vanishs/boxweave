@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check lint test test-race verify hooks
+.PHONY: fmt fmt-check lint test test-race test-mcp-python verify hooks
 
 GO ?= go
 PYTHON ?= python3
@@ -21,7 +21,10 @@ test:
 test-race:
 	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
 
-verify: lint test-race
+test-mcp-python:
+	$(PYTHON) -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
+
+verify: lint test-race test-mcp-python
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
 
 hooks:
