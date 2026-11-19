@@ -151,3 +151,7 @@ Before replacing any existing development installation, create a fresh role-free
 **B. 清理边界不变。** 执行**角色整链清理**和现行文档瘦身，再按静态引用与安全证据删旧 Helper/脚本。其他旧 S4 网络、恢复和 Installer 代码不得凭文件名批量删掉；需要先证明未被当前安全契约和原生验收引用。
 
 **本文件同时是整改方案和阶段 1 的源码进度记录。** PR #153 已实现无 Role/Scope 的 Go 候选并通过隔离 Box 单元测试（首个完整 Go 通过的格式化源码提交 `a46d168d`）；新增明确缺省 Scope/旧 Schema 负例后仍须最终同 SHA 复验、CI 与独立 Native/真实 ChatGPT 签收。所有此前静态源码表格与旧角色锚点记录的是整改**之前**的状态，不应再作为当前代码判定。
+
+## 0.3 Stage-3 RC8 candidate and public Quick Tunnel handoff (2026-11-19 UTC)
+
+The Owner requested a **fresh nested L0 Box** and Cloudflare **Quick Tunnel** to test real ChatGPT OAuth before publishing `v1.0.0-rc.8`. An exact-source **`1.0.0-rc.8-candidate`** binary was built from `bc1e844703cdfb7ea3813cc614176d35e8883018`, installed under a separate non-root Controller and SQLite v4 inside only that disposable nested Box. Inner Incus 7.6 has an approved private Project/Profile/ACL; `doctor.ready=true`, public discovery/PKCE and anonymous 401, and a real authenticated public HTTPS MCP initialize/tools/list/host_status all **PASS**. Quick Tunnel uses a temporary host and can change on restart. The generated OAuth approval password is **not** logged or committed. **Real ChatGPT OAuth login/refresh/revoke and actual nested Guest operations remain NOT_TESTED; RC8 is NOT PUBLISHED.** Full exact results, verified binary digest and cleanup boundary: [RC8 nested Quick Tunnel handoff](V1_RC8_STAGE3_NESTED_QUICK_TUNNEL_2026-11-19.md).
