@@ -1,5 +1,7 @@
 # Documentation index
 
+**Uninstall/reinstall development update (2026-11-19):** [Implemented scoped `uninstall.sh` exact-digest review contract, service/controller/full scopes, Native journal/Box UUID blockers, irreversible-state warnings and 15 isolated offline tests](development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md) supplements the [historical RC.7→RC8 physical reset and original proposal](development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md). No real host uninstall `--apply` has been run; existing installed L0 remains intact. Never mistake a `full` scope for deleting shared Incus pool, bridge, images, external OAuth/Tunnel registrations or a foreign Project.
+
 **Reusable Python MCP loopback testkit (2026-11-19):** [Library/CLI usage and safety](development/V1_PYTHON_LOOPBACK_MCP_TESTKIT_2026-11-19.md) · [15 Python tests + real fresh Schema v5 localhost HTTP MCP (18-tool discovery, Activity, recovery, fault injection) verification](verification/V1_PYTHON_LOOPBACK_MCP_TESTKIT_ACCEPTANCE_2026-11-19.md). Source-only developer tooling for an isolated loopback server, never a replacement for browser OAuth, true Agent behavior, native ACK-loss/Root proof or a production v4→v5 migration. Test with `make test-mcp-python`; full CI quality gate runs it automatically.
 
 **Activity P1 security, 100k-row history and safe Agent take-over (2026-11-19):** [Detailed Box-level OAuth DCR/refresh/grant-revocation/replay, 100,000-row SQLite signed pagination and 64 concurrent readers, real HTTP lost-response → fresh Actor/SQLite reopen recovery and no-new-key UNKNOWN replay tests](verification/V1_ACTIVITY_P1_SECURITY_HISTORY_RECOVERY_2026-11-19.md). Exact test code `24395a52` passed [full Go Race/quality](https://github.com/vanishs/boxweave/actions/runs/44605656941) and [two-arch builds](https://github.com/vanishs/boxweave/actions/runs/44605657152). The scratch Box is deleted; L0's live Schema v4 controller is preserved. **NOT_SIGNED:** real ChatGPT independent-Agent handoff, v5 connector, physical native mutation ACK loss and S5.
@@ -26,6 +28,7 @@
 
 | Development question | One entrypoint |
 |---|---|
+| How to plan, scope, audit and safely apply an explicit BoxWeave host uninstall (no default deletion)? | [Uninstaller contract, scopes and negative tests](development/V1_UNINSTALL_SH_OPERATOR_CONTRACT_2026-11-19.md) |
 | What source formatting, staged commit hooks, PR checks and required merge rules apply? | [Contributing](../CONTRIBUTING.md) · [quality / GitHub gate](process/QUALITY_GATES.md) |
 | Which old Incus migration, rollback and crash windows were really accepted? | [S1 Issue #116 native acceptance](verification/S1_ISSUE116_NATIVE_MIGRATION_2026-11-09.md) |
 | What big stages and which MCP tool ownership? | [Five feature phases + S2.5 acceptance/deployment checkpoint](process/IMPLEMENTATION_PLAN.md) |
