@@ -93,7 +93,8 @@ class FakeHost(unittest.TestCase):
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
         if args[:2] == ["incus", "delete"]:
-            self.native = [b for b in self.native if b["name"] != args[2]]
+            self.assertTrue(args[2].startswith("local:"))
+            self.native = [b for b in self.native if b["name"] != args[2][6:]]
         if "native-prepare-rollback" in args:
             rec = json.loads(u.NATIVE.read_text())
             rec["Status"] = "ROLLED_BACK"
