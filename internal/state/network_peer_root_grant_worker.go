@@ -38,8 +38,8 @@ func (s *Store) FinalizeRootPeerGrant(ctx context.Context, original string) erro
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE operation_id=?", original).Scan(&n); err != nil || n != 1 {
 		return ErrResourceLocked
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id=''
- WHERE operation_id=? AND desired=1 AND status='PENDING'`, original)
+	result, err := tx.ExecContext(ctx, `UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id='',last_verified_operation_id=?
+ WHERE operation_id=? AND desired=1 AND status='PENDING'`, original, original)
 	if err != nil {
 		return err
 	}
@@ -92,8 +92,8 @@ func (s *Store) FinalizeCompletedUnknownRootPeerGrant(ctx context.Context, origi
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM peer_grants WHERE operation_id=?", original).Scan(&n); err != nil || n != 1 {
 		return ErrResourceLocked
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id=''
- WHERE operation_id=? AND desired=1 AND status='PENDING'`, original)
+	result, err := tx.ExecContext(ctx, `UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id='',last_verified_operation_id=?
+ WHERE operation_id=? AND desired=1 AND status='PENDING'`, original, original)
 	if err != nil {
 		return err
 	}
