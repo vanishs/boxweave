@@ -4,6 +4,20 @@
 
 **Recovery first:** [L0 worktree inventory and source preservation](S4_B3_RECOVERED_WORKTREE_LEDGER_2026-11-18.md). This audit does not import stale worktrees. The unrelated archive test is not used as native evidence.
 
+
+## New focused B3 native evidence — foreign live-flow preservation and installed PRS SIGKILL restart
+
+**Accepted source-scoped sub-gates (2026-11-18 PT), NOT yet full `S4_B3_PASS`:**
+
+- **`B3_NATIVE_FOREIGN_PROJECT_LIVE_FLOWS_PASS`** — [focused disposable-native run 44432962230, job 135254661846](https://github.com/vanishs/boxweave/actions/runs/44432962230/job/135254661846) **SUCCESS** on exact workflow/head `ac68231b79896be202156948653e9b6d70e922ab`. Installed nonroot B3 Controller→operator-approved PRS root grant, original `80a7fa920bb8e4683d1b5ec15990332b`, ran while an independently isolated `bwforeign` Project on bridge `bwforeign` maintained four established echo loops. Raw POST-effect counts increased without any client error-file: TCP4 **9→77**, TCP6 **9→89**, UDP4 **9→103**, UDP6 **11→114**. Mandatory runner marker `S4_B3_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_IPV4_IPV6_SURVIVED_GRANT=PASS` occurred **after** the original Root operation and native grant readback. The foreign connections were established BEFORE grant dispatch, and the persistent client would flag an interrupted session; this is B3-specific evidence and not a relabeled B2 result.
+- **`B3_INSTALLED_ROOT_CRASH_RESTART_NO_REPLAY_PASS`** — same original and SUCCESS job: real installed `boxweave-native-peer-root.service` main process received SIGKILL, systemd socket/service returned, an attempted identical Root request was rejected, `COMPLETE_VERIFIED` journal SHA256 remained unchanged, and original SQLite operation remained `SUCCEEDED`. Raw marker `S4_B3_INSTALLED_ROOT_SIGKILL_RESTART_COMPLETED_GRANT_NO_REPLAY=PASS`. This specifically signs SIGKILL restart of a **completed** grant, **not** host reboot, installer upgrade, or an incomplete UNKNOWN replay scenario.
+- Native grant packet recheck in this same job: `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY=PASS`. Existing 9/9 matrix remains the independently accepted original B3 packet evidence; it was not re-run in this focused workflow.
+- Disposable evidence [artifact 14486484748](https://github.com/vanishs/boxweave/actions/runs/44432962230/artifacts/14486484748), uploaded before cleanup. Raw cleanup logs explicitly show foreign Project and its bridge deleted, protected ACL and bridge deleted, and empty final all-Project instance listing. The CI's generic `CLEANUP_ATTEMPTED` marker is not itself an independent deletion proof.
+- Test approach: a **new one-scenario workflow** `.github/workflows/v1-s4-b3-final-gates-native.yml` reused the previously accepted B2 sustained-flow probe but executed it around an actual B3 installed grant, instead of rerunning the accepted nine-scenario matrix. Compared to executable B3 baseline `cd3b2b95`, product and Go test code was unchanged; only verification workflows/docs were committed. These two new verdicts derive from original CI completion logs read after the run, not from a separate unaffiliated verifier.
+
+**Remaining:** actual native simultaneous B3 contender / ETag adversarial result, any mandatory incomplete-journal reboot/upgrade mode not already covered by B2's common PRS path, final adversarial audit and formal stage verdict. `S4_B3_PARTIAL` remains until the required gaps are resolved.
+
+
 ## Scope, reviewer and fixed source
 
 - Verified native candidate: **`cd3b2b95b857fe3dcc055090b2d8c7dc1a635a40`**, [B3 full matrix run 44418327692](https://github.com/vanishs/boxweave/actions/runs/44418327692), run conclusion `success`, **9/9 jobs completed SUCCESS**.
