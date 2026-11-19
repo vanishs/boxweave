@@ -12,11 +12,11 @@ import (
 func TestS2NameResourceLockBeforeNativeUUID(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, one, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, one, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, two, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, two, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestS2NameResourceLockBeforeNativeUUID(t *testing.T) {
 func TestS2QueuedCancelIsAtomicAndNoNativeEffect(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestS2QueuedCancelIsAtomicAndNoNativeEffect(t *testing.T) {
 func TestS2CreatedNativeUUIDAndOriginalOperationBindAtomically(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)
-	_, token, err := st.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := st.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestS2CreatedNativeUUIDAndOriginalOperationBindAtomically(t *testing.T) {
 func TestS2NativeRecordedOutputNeverDefaultsGuestExit(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)
-	_, token, err := st.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := st.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestS2NativeRecordedOutputNeverDefaultsGuestExit(t *testing.T) {
 func TestS2RecoverUndispatchedDoesNotReplay(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)
-	_, token, err := st.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := st.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,11 +195,11 @@ func TestS2RecoverUndispatchedDoesNotReplay(t *testing.T) {
 func TestS2BoundCreateBeforeCompletionRejectsDifferentKeyDeleteAdmits(t *testing.T) {
 	ctx := context.Background()
 	st := newStore(t)
-	_, owner, err := st.IssueToken(ctx, "admin", time.Hour)
+	_, owner, err := st.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, other, err := st.IssueToken(ctx, "admin", time.Hour)
+	_, other, err := st.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

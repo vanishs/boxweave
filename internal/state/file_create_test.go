@@ -11,7 +11,7 @@ func s3OwnedFileFixture(t *testing.T) (*Store, Token, OwnedBox) {
 	t.Helper()
 	s := newStore(t)
 	ctx := context.Background()
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 func TestS4B2NativeNetworkDependenciesBlockAllRecyclingLifecycle(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

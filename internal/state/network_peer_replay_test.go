@@ -21,7 +21,7 @@ func TestS4B3PeerIdempotencyRestoresOriginalWithoutNativeLease(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
