@@ -118,7 +118,7 @@ func TestActivityEvidenceReadsOrderedSanitizedEventsAndClaims(t *testing.T) {
 	res, err := s.ReadActivity(ctx, ActivityQuery{Layer: "user-1001",
 		Requester: tok.ID, View: "evidence", OperationID: rec.ID})
 	if err != nil || res.Evidence == nil || res.Evidence.Original.ID != rec.ID ||
-		len(res.Evidence.Events) < 3 || len(res.Evidence.ResourceKeys) != 1 ||
+		len(res.Evidence.Events) < 3 || len(res.Evidence.ResourceKeys) != 2 ||
 		res.Evidence.ResourceKeys[0] != "box:"+strings.Repeat("b", 32) {
 		t.Fatalf("Activity evidence lost original/events/claims: %+v %v", res, err)
 	}
