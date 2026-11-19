@@ -1,8 +1,8 @@
 # BoxWeave v1 — Stage 2 installed/native reacceptance (scope-free authorization and three-SDK refactor)
 
-**Status: PARTIAL / new-source native execution in progress. Not S4 final signoff.**  
-**Source baseline:** `2c7181aaea61f899d8bf6faebe0b6526cf61c03c` (2026-11-18 PT).  
-**Later focused test-only fix:** `be599aece10f908037edc5599167609ec1288d36`; changes one S2 native SDK probe's no-role PASS marker, not controller/SDK/Incus production Go source. Native results from `2c7181a` are **source-specific** and are not silently labeled as the later commit's exact-head signoff.  
+**Status: PARTIAL / new-source native execution in progress. Not S4 final signoff.**
+**Source baseline:** `2c7181aaea61f899d8bf6faebe0b6526cf61c03c` (2026-11-18 PT).
+**Later focused test-only fix:** `be599aece10f908037edc5599167609ec1288d36`; changes one S2 native SDK probe's no-role PASS marker, not controller/SDK/Incus production Go source. Native results from `2c7181a` are **source-specific** and are not silently labeled as the later commit's exact-head signoff.
 **Only development location:** [Draft PR #153](https://github.com/vanishs/boxweave/pull/153); never merged/deployed/published.
 
 ## Real fresh Incus 7.6 evidence (GitHub-hosted disposable Ubuntu 24.04)
