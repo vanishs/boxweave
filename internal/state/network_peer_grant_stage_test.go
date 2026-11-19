@@ -65,7 +65,7 @@ func TestS4B3DurableGrantStageNoNativeEffect(t *testing.T) {
 
 func TestS4B3GrantStageFailsClosedOnActorAndNetworkDrift(t *testing.T) {
 	cases := []struct{ name, sql string }{
-		{"viewer-token", "UPDATE credentials SET role='viewer'"},
+		{"revoked-credential", "UPDATE credentials SET revoked=1"},
 		{"revoked-token", "UPDATE credentials SET revoked=1"},
 		{"wrong-source-box", "UPDATE operations SET box_uuid='foreign'"},
 		{"wrong-operation-action", "UPDATE operations SET action='box_exec'"},

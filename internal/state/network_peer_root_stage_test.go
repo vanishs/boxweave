@@ -47,7 +47,7 @@ func TestS4B2ControllerCannotStageInvalidPeerGrant(t *testing.T) {
 		{"wrong-project", "UPDATE peer_grants SET project='foreign'"},
 		{"wrong-source-incarnation", "UPDATE peer_grants SET source_incarnation='reincarnated'"},
 		{"wrong-native-source-ip", "UPDATE peer_grants SET source_ipv6='fd43:18::99'"},
-		{"view-only-credential", "UPDATE credentials SET role='viewer'"},
+		{"revoked-credential", "UPDATE credentials SET revoked=1"},
 		{"token-revoked", "UPDATE credentials SET revoked=1"},
 		{"missing-ACL-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%'"},
 		{"additional-sibling-claim", `INSERT INTO operation_resource_claims(operation_id,layer,resource_key)

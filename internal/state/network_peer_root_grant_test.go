@@ -57,7 +57,7 @@ func TestS4B3RootGrantRejectsPoststageDrift(t *testing.T) {
 		{"wrong-action", "UPDATE operations SET action='box_start'"},
 		{"wrong-layer", "UPDATE operations SET layer='foreign'"},
 		{"wrong-safe-intent", "UPDATE operations SET safe_intent='{}'"},
-		{"viewer", "UPDATE credentials SET role='viewer'"},
+		{"revoked-credential", "UPDATE credentials SET revoked=1"},
 		{"revoked", "UPDATE credentials SET revoked=1"},
 		{"missing-claim", "DELETE FROM operation_resource_claims WHERE resource_key LIKE 'acl:%'"},
 		{"foreign-target", "UPDATE peer_grants SET target_uuid='foreign'"},

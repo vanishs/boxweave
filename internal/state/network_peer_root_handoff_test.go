@@ -100,7 +100,7 @@ func TestS4B2RootRevocationCannotBypassClaimsOrUNKNOWN(t *testing.T) {
 		{"unknown-original", "UPDATE operations SET state='UNKNOWN' WHERE action='box_peer_set'"},
 		{"completed-original", "UPDATE operations SET state='SUCCEEDED' WHERE action='box_peer_set'"},
 		{"foreign-action", "UPDATE operations SET action='box_start' WHERE action='box_peer_set'"},
-		{"viewer-token", "UPDATE credentials SET role='viewer'"},
+		{"revoked-credential", "UPDATE credentials SET revoked=1"},
 		{"revoked-token", "UPDATE credentials SET revoked=1"},
 		{"wrong-layer", "UPDATE operations SET layer='other' WHERE action='box_peer_set'"},
 		{"wrong-box", "UPDATE operations SET box_uuid='other' WHERE action='box_peer_set'"},

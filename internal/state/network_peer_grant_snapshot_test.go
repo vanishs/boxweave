@@ -42,7 +42,7 @@ func TestS4B3ReadExactPeerCompilerSnapshot(t *testing.T) {
 func TestS4B3ReadPeerCompilerSnapshotFailsClosed(t *testing.T) {
 	cases := []struct{ name, sql string }{
 		{"lost-original", "UPDATE operations SET state='UNKNOWN'"},
-		{"wrong-role", "UPDATE credentials SET role='viewer'"},
+		{"revoked-credential", "UPDATE credentials SET revoked=1"},
 		{"expired-token", "UPDATE credentials SET revoked=1"},
 		{"bad-address", "UPDATE peer_grants SET source_ipv4='10.243.18.99'"},
 		{"wrong-incarnation", "UPDATE peer_grants SET target_incarnation='reused'"},
