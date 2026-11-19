@@ -4,6 +4,14 @@
 
 **Pinned last production/test code source:** `378bd4d6d74058c27b081e939ce9744aeaf84bff`. Documentation-only commits after this SHA do not constitute new native-code evidence. [Approved product exception](../decisions/PRODUCT_BOUNDARY.md) · [Source lineage audit](V1_MCP_TO_DB_LOG_LINEAGE_SOURCE_AUDIT_AND_IMPLEMENTATION_DESIGN_2026-11-19.md).
 
+## Later A2 / native acceptance addendum (2026-11-19)
+
+The historical source-only gate below is **superseded for isolated HTTP reconnect and S4-A native proof** by the newly verified [A2 reconnect + native CI regression record](../verification/V1_ACTIVITY_A2_LOCAL_RECONNECT_AND_S4A_CI_2026-11-19.md). Latest tested **Go/test source SHA `8f1715bbcbabdedc237fbd579bb93756e133cb28`** includes fixes for the 18-Tool inventory in both the old SDK and the native MCP probe. Its [required quality/Go Race #44600149658](https://github.com/vanishs/boxweave/actions/runs/44600149658), [amd64/arm64 candidate build #44600149610](https://github.com/vanishs/boxweave/actions/runs/44600149610) and [S4-A installed real Incus 7.6 native/OAuth/original-event #44600149557](https://github.com/vanishs/boxweave/actions/runs/44600149557) all **PASS**. S4-A includes the exact source-line GDB `operation_list` revocation/expiry gates that previously failed in an older run.
+
+Isolated official MCP client HTTP lost-reply, controller process restart/SQLite reopen and a new same-Layer Actor recovered the **same** historical UNKNOWN original and did not create a new Operation (**PASS**). An independent nonroot CLI `serve` against fresh Schema v5 locally advertised 18 Tools and served `overview/issues` over authenticated HTTP (**PASS**); it had no native Incus socket, so this is **not** a native-Guest test. The owned scratch Box was stopped and deleted with both original receipts SUCCEEDED and a clean follow-up Box list.
+
+**Still not signed:** real ChatGPT model's use of the new Activity Tool, because the actual connected L0 is **old Schema v4** at commit `bc1e8447` and cannot be silently reused for Schema v5; no v4 migration or destructive host reset has been approved. Real Client OAuth refresh/revoke specifically for Activity, full Root/B3 native signoff at this code revision, native lost-mutation-ACK without replay and later S5 two-Agent acceptance remain separate.
+
 ## Delivered
 
 1. **One new public read-only `box_activity_get` Tool** — registered by `internal/control/server.go`, typed handler in `internal/control/activity_tools.go`, closed JSON Schema with the three valid `view` values, read-only annotation and short recovery guidance in MCP Instructions. Current official SDK Tool list contains **18**, including the unchanged previous 17. The full planned catalog, after S4-B4–B6 and the approved S4-C readiness Tool, is **22**, **not** 22 implemented.
