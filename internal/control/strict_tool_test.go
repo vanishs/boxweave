@@ -43,14 +43,23 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 			t.Fatalf("public tool %s is open to silently discarded intent: %s", tool.Name, schema)
 		}
 	}
-	// Tools/list is what a reconnecting Agent actually sees; test the
-	// operational hints here rather than merely checking source comments.
+	// Common recovery safeguards now live in the initialize instructions;
+	// tools/list retains a compact fallback for clients that do not use them.
+	init := s.InitializeResult()
+	if init == nil {
+		t.Fatal("missing official MCP initialize result")
+	}
+	for _, word := range []string{"idempotency_key", "work_ref", "operation_list", "operation_get", "UNKNOWN", "new-key"} {
+		if !strings.Contains(init.Instructions, word) {
+			t.Fatalf("server instructions missing recovery safety rule %q", word)
+		}
+	}
 	for _, tool := range tools.Tools {
 		if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
-			for _, word := range []string{"idempotency_key", "work_ref", "operation_list", "operation_get", "UNKNOWN", "new-key"} {
-				if !strings.Contains(tool.Description, word) {
-					t.Fatalf("mutation tool %s missing recovery hint %q", tool.Name, word)
-				}
+			if !strings.HasSuffix(tool.Description, mutationContinuityHint) ||
+				!strings.Contains(tool.Description, "exact retries") ||
+				!strings.Contains(tool.Description, "original Operation") {
+				t.Fatalf("mutation tool %s missing compact reconnect fallback", tool.Name)
 			}
 		}
 		switch tool.Name {
