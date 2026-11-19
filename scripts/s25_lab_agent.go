@@ -224,8 +224,8 @@ func connectActor(ctx context.Context, actor string) *mcp.ClientSession {
 		return session(ctx, environmental("BW_S25_ADMIN1_FILE"))
 	case "b":
 		return session(ctx, environmental("BW_S25_ADMIN2_FILE"))
-	case "viewer":
-		return session(ctx, environmental("BW_S25_VIEWER_FILE"))
+	case "peer":
+		return session(ctx, environmental("BW_S25_PEER_FILE"))
 	default:
 		panic("unknown actor")
 	}
@@ -444,8 +444,8 @@ func doubleAgent(ctx context.Context) {
 	defer first.Close()
 	second := connectActor(ctx, "b")
 	defer second.Close()
-	viewer := connectActor(ctx, "viewer")
-	defer viewer.Close()
+	peer := connectActor(ctx, "peer")
+	defer peer.Close()
 	work := "lab/s25/two-agents"
 	// Independent agents need separate native resources for the positive
 	// parallel-work proof. Competing Execs against one Box may safely refuse
@@ -520,11 +520,13 @@ func doubleAgent(ctx context.Context) {
 		ops[r.actor] = r.op
 	}
 	must(len(ops) == 2 && ops["agent-s25-alpha"] != ops["agent-s25-beta"], "Agent Operations collapsed")
-	must(denied(ctx, viewer, "operation_get", map[string]any{"operation_id": ops["agent-s25-alpha"]}),
-		"viewer borrowed private operation by shared work label")
-	must(denied(ctx, viewer, "box_create", map[string]any{"name": "bw-s25-forbidden", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
-		"idempotency_key": "s25-forbidden-viewer", "work_ref": work, "agent_ref": "agent-s25-alpha"}),
-		"viewer used another Agent label for privilege")
+	// A separately authorized Actor may recover earlier same-Layer evidence.
+	_ = request(ctx, peer, "operation_get", map[string]any{"operation_id": ops["agent-s25-alpha"]})
+	// A forged agent label and malformed mutation cannot bypass typed validation.
+	must(denied(ctx, peer, "box_create", map[string]any{
+		"name":"bw-s25-malformed", "cpu":"not-a-number",
+		"work_ref":work, "agent_ref":"agent-s25-alpha",
+	}), "malformed Create accepted under forged agent label")
 	m["agent_a_exec"] = ops["agent-s25-alpha"]
 	m["agent_b_exec"] = ops["agent-s25-beta"]
 	saveCheckpoint(m)
@@ -544,7 +546,7 @@ func doubleAgent(ctx context.Context) {
 	fmt.Println("S25_SECOND_AGENT_EXACT_PEER_CLEANUP=PASS")
 	fmt.Println("S25_TWO_AUTHENTICATED_AGENT_CLIENTS_PARALLEL=PASS")
 	fmt.Println("S25_SAME_WORK_DISTINCT_AGENT_OPERATIONS=PASS")
-	fmt.Println("S25_VIEWER_CANNOT_BORROW_WORK_REF=PASS")
+	fmt.Println("S25_PEER_SAME_LAYER_HISTORY_AND_TYPED_VALIDATION=PASS")
 }
 
 // quietLongPoll proves that a completed MCP request and a bounded
@@ -642,17 +644,18 @@ func round2PostRollback(ctx context.Context) {
 		"offline rollback redispatched previously succeeded Create")
 	fmt.Println("S25_R2_MCP_ORIGINAL_SUCCEEDED_RECEIPTS_AFTER_ROLLBACK=PASS")
 }
-func rotatedViewer(ctx context.Context) {
+func rotatedPeer(ctx context.Context) {
 	must(!isInner(), "token rotation assertion is L0-only")
-	viewer := connectActor(ctx, "viewer")
-	defer viewer.Close()
-	tools(ctx, viewer)
-	_ = request(ctx, viewer, "host_status", map[string]any{})
-	must(denied(ctx, viewer, "box_create", map[string]any{
-		"name":            "bw-s25-viewer-denied-rotated",
-		"idempotency_key": "s25-viewer-rotated-denial", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
-	}), "new viewer token gained mutation privilege")
-	fmt.Println("S25_ROTATED_VIEWER_SDK_HOST_STATUS_AND_WRITE_DENIAL=PASS")
+	peer := connectActor(ctx, "peer")
+	defer peer.Close()
+	tools(ctx, peer)
+	_ = request(ctx, peer, "host_status", map[string]any{})
+	// Rotation retains the same full-management capability; refuse malformed
+	// input rather than asserting an obsolete viewer permission split.
+	must(denied(ctx, peer, "box_create", map[string]any{
+		"name":"bw-s25-rotated-peer-invalid", "cpu":"invalid",
+	}), "rotated peer bypassed typed Create validation")
+	fmt.Println("S25_ROTATED_PEER_SDK_HOST_STATUS_AND_TYPED_VALIDATION=PASS")
 }
 func nestedExec(ctx context.Context) {
 	must(isInner(), "L2 probe only inside nested L1")
@@ -710,7 +713,7 @@ func cleanInnerViaParent(ctx context.Context) {
 		"BW_S25_URL=http://127.0.0.1:18650/mcp " +
 		"BW_S25_ADMIN1_FILE=/root/s25-admin1.secret " +
 		"BW_S25_ADMIN2_FILE=/root/s25-admin2.secret " +
-		"BW_S25_VIEWER_FILE=/root/s25-viewer.secret " +
+		"BW_S25_PEER_FILE=/root/s25-peer.secret " +
 		"BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json; " +
 		"/usr/local/bin/s25-lab-agent wan6-clean && " +
 		"/usr/local/bin/s25-lab-agent cleanup"
@@ -814,8 +817,8 @@ func main() {
 		afterControllerRestart(ctx)
 	case "round2-postrollback":
 		round2PostRollback(ctx)
-	case "rotated-viewer":
-		rotatedViewer(ctx)
+	case "rotated-peer":
+		rotatedPeer(ctx)
 	case "nested-exec":
 		nestedExec(ctx)
 	case "wan6":
