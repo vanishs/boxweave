@@ -27,6 +27,12 @@ This was an explicitly approved development-only reset. The historical **unresol
 | Exposure and client | New OAuth secret and current `oauth-set-origin`; public Cloudflare Quick Tunnel and new ChatGPT `boxweave L0` MCP connection. Do not reuse old OAuth Grants or keep the temporary Tunnel hostname in scripts |
 | Final independent cleanup | After test, L0 51 journaled operations were 50 SUCCEEDED + one **expected** exclusive-file-create FAILED, 0 UNKNOWN; its two new test Boxes and L1's child were deleted. Host `box_list=[]`, healthy |
 
+### Exact historical disposable inventory (one host, not a reusable deletion list)
+
+The original 14 user-approved Box names were: `bw-rc8-live-1119`, `rc3-l1-nested-1113`, `rc6-dev-l1-1115`, `s4b2-scriptlet-dev-1117`, `s4b2-worker-proof-1117`, `s4b3-final-isolated-1118`, `s4b3-p0-root-1118-x`, `s4b3-p01-audit-1118-0731`, `s4b3-p01-isolated-1118-a`, `s4b3-secure-fix-1118-02`, `s25-bh018-atomic-mcp-e-1114`, `s25-bh019-bpf-ab-d-1114`, `s25-bh01819-native-c-1114`, and `stage2-pr153-native-1118`. **Names are archival evidence only**; a future cleanup must verify Project, native immutable UUID, ownership, full state and unresolved receipts afresh before deletion, never replay this list.
+
+Two image fingerprints still appeared as references under that Project after Box cleanup: `990054afd62769257b8d386635a09182191ec230480bcf99267574d186209bf5` and `d0d7a11ddd2bd37705d805d2c34ffd6904bf4c06937adb4c31fb297b1685a468`. **No evidence of image deletion** was supplied. This illustrates why a future uninstaller must inventory image objects separately from instances and must not erase a shared image cache merely because a Project's Box list is empty.
+
 **The ordering matters:** the observed physical run used a **staged RC8 executable** for Native rollback even after the old installed RC.7 binary was removed. An uninstaller must not render rollback impossible by deleting the **only usable verified rollback implementation** before the root-local journal has been reconciled.
 
 ## 3. Future `uninstall.sh` product contract (proposal, not implemented)
