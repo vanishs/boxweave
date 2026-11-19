@@ -64,7 +64,7 @@ func (s *Service) registerFileTools(server *mcp.Server) {
 		Description: "List an owned Guest directory using bounded Incus SFTP metadata, lexical cursor and honest non-snapshot pagination. No host paths or symlink traversal.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in fileListInput) (*mcp.CallToolResult, fileListResult, error) {
-		_, _, _, err := s.operationPrincipal(req)
+		_, _, err := s.operationPrincipal(req)
 		if err != nil {
 			return nil, fileListResult{}, err
 		}
@@ -96,7 +96,7 @@ func (s *Service) registerFileTools(server *mcp.Server) {
 		Description: "Read at most 64KiB per page from an exact owned Guest regular file; base64 bytes and page SHA256, never an invented full-file hash for partial data.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in fileReadInput) (*mcp.CallToolResult, fileReadResult, error) {
-		_, _, _, err := s.operationPrincipal(req)
+		_, _, err := s.operationPrincipal(req)
 		if err != nil {
 			return nil, fileReadResult{}, err
 		}
@@ -132,7 +132,7 @@ func (s *Service) registerFileTools(server *mcp.Server) {
 		Description: "Durable owned-Guest file create with exclusive SFTP O_EXCL and verified byte readback. Modes create|replace|delete; unsafe conditional replace/delete explicitly UNSUPPORTED. No host paths, guest patch agent, raw file data in SQLite or fictitious native Operation ID.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in fileApplyInput) (*mcp.CallToolResult, state.Receipt, error) {
-		if _, _, err := requireAdmin(req, s); err != nil {
+		if _, _, err := requireAuthenticated(req, s); err != nil {
 			return nil, state.Receipt{}, err
 		}
 		if in.BoxID == "" || !native.SafeGuestFilePath(in.Path) ||
