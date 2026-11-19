@@ -1,5 +1,7 @@
 # BoxWeave v1 — MCP Tool → 数据库 / 事件 / 日志关键信息贯穿审计与实施准备（2026-11-19）
 
+> **2026-11-19 SOURCE_ONLY investigation completed:** the pinned-HEAD 17-Tool matrix, SQLite/events/Root association graph, prioritized broken links, conditional Schema/index proposal and next-agent staged implementation plan are in [the completed lineage audit](V1_MCP_TO_DB_LOG_LINEAGE_SOURCE_AUDIT_AND_IMPLEMENTATION_DESIGN_2026-11-19.md). No Go/DDL/public Tool implementation or new runtime/native acceptance was performed. The original requirements below remain the investigation contract, not an unfinished next task.
+
 **状态：Owner 明确指定的下一轮源码调查与开发方案任务；尚未完成逐 Tool 审计、尚未实现 Activity。** 起始代码参照 [Draft PR #153](https://github.com/vanishs/boxweave/pull/153) `dfb393d9715be0755583de60182f41ad2bab38bd`（执行者必须重新获取最新 HEAD）。唯一开发分支 `feat/v1-s4-runtime-integration-20261116`。本轮**只调查、必要的隔离只读实验、写实施设计**，不修改 Go/DDL、不中断其他开发、不合并/发布/部署。
 
 **核心问题不是“能否把多张表 JOIN 起来”，而是：每一个 MCP Tool 产生、携带、持久化和返回的关键事实，最终能否被一个后续 Agent 通过已有凭据与只读接口准确找回？** 若字段在入口已缺失，Activity 再聪明也无法重建。调查必须先自 MCP 入口向下追踪，再从数据库/事件/日志向上逆查；同时区分可知事实、缺失、不应记录的秘密和本来不承诺持久化的访问。
