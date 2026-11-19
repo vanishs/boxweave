@@ -2,7 +2,21 @@
 
 **Date:** 2026-11-18 PT  
 **Scope:** pre-release Draft PR #153, source SHA `42e68f09cef407022df428ba5f76e91345e005e4` (before this documentation audit).  
-**Status:** **SOURCE/SDK DESIGN AUDIT ONLY; NO PRODUCTION CODE CHANGES OR NEW NATIVE ACCEPTANCE.** Continue to obtain current HEAD before any implementation. This is a recommendation for the Owner to review, not a signoff or automatic authority to alter shared resources.
+**Status:** **Three-SDK design audit followed by OWNER-AUTHORIZED SOURCE REFACTOR; native/CI/real-ChatGPT acceptance remains pending.** Original audit baseline is preserved below; implementation evidence is in section 0.
+
+## 0. Owner-authorized all-at-once source remediation — implemented 2026-11-18
+
+**New refactored SOURCE SHA: `5d7cc876ee0535544134e011de600dea346858d7`.** This implements the MCP and Incus changes plus the limited pure ACL comparison refactor in Draft PR #153. The original sections below remain the upstream SDK/source findings that motivated the change; `M1`, `M2`, `I1` and the bounded pure part of `I2` are now **implemented**, not open design requests.
+
+**Implementation:**
+- **MCP** `internal/control/operation_tools.go`: the only Tool-facing principal is `RequestPrincipal{ActorID, TokenID, Layer}`, parsed from SDK-verified `CallToolRequest.Extra.TokenInfo`. Missing/malformed `Extra["token_id"]` fails closed; **no** `UserID`-as-Token-ID fallback or historical direct-handler role fixture. Box, File, Peer, Operation and `host_status` callers pass the typed Token ID to admission and private-read liveness. A focused negative fixture `TestS2RequestPrincipalRequiresExplicitSDKCredential` covers missing/typed/invalid tokens and distinct OAuth Actor versus access Token ID.
+- **Incus** `internal/native/box.go`: new **operation-local** `Reader.confinedExactBox` reuses an official restricted `incus.InstanceServer` and the exact native UUID/project/ETag observation. `GetExactBox`, private NIC check, `SetPower`, `UpdateBox`, `DeleteBox`, `Exec` consume that SDK handle rather than repeatedly connecting and redoing the same host preflight. **Pre-dispatch second native observation remains in Power/Delete, and Update retains its double-GET ETag proof;** unsafe NIC/start, foreign Project, name reuse, stopped/delete dependents and async native Operation ID checks remain intact. No global connection cache or authority reuse.
+- **Root B2/B3** `internal/install/native_peer_acl_compare.go`: a small shared **pure** ordered ingress/egress policy equality and before/after-change predicate replaces repeated equality expressions in grant, revoke and UNKNOWN reconciliation paths. No service merge, new Root authority, relaxation of ETags, stop barrier, whole-ACL policy, route/conntrack journaling or UNKNOWN safety; native Root tests remain necessary for this changed SHA.
+- **SDK choices unchanged:** go-oauth2 v4.6.0 keeps atomic BoxWeave SQLite Grant/refresh ledger; MCP v1.8.0 keeps SDK Bearer/typed tools; Incus v7.6.0 keeps typed SDK APIs, Original native Operation IDs and ETags.
+
+**Source tests:** isolated disposable L0 Box at exact `5d7cc876`: `make lint` **PASS**, including code formatting, go vet and module verification; `go test ./... -count=1` **PASS** across five packages (operation `51dc2b43fb8594eb95fe8b90b0a63f1e`). New explicit SDK-token and pure ACL tests pass. Source-only checks do not verify installed privileged Incus ACL, real network packets or public ChatGPT OAuth connection/refresh/revocation. **Final/independent native+CI PASS remains pending.** Targeted race testing was requested separately; record its actual result below when available.
+
+**Environment / compatibility:** no additional SQLite schema migration beyond the previously documented incompatible v3→v4 redesign; this refactor introduces **no new DB version**. Any controller still on the previous role-bearing schema must **recreate its DB, credentials, OAuth clients/Grants and ChatGPT/custom MCP connections** under the [Owner pre-release reset notice](../process/VERSIONING.md); preserve original UNKNOWN/native evidence first, no auto-wipe of Incus/host resources. The isolated implementation Box is test-only and may be deleted after evidence capture.
 
 ## 1. Method and precise dependency baseline
 
