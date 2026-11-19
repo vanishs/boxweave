@@ -1,6 +1,37 @@
 # BoxWeave v1 — Stage 2 installed/native reacceptance (scope-free authorization and three-SDK refactor)
 
-**Status: PARTIAL / new-source native execution in progress. Not S4 final signoff.**
+## Current authoritative closure — independent GitHub native jobs, 2026-11-19 UTC
+
+**Verdict: `STAGE2_NATIVE_SOURCE_EQUIVALENT_PASS` for the approved role-free SDK/Incus/Root regression scope.** This replaces the older PARTIAL status entries *below*, which are preserved as time-stamped in-progress/history, **not** as today's gates. It does **not** mean final exact-HEAD S4/S5 release or real ChatGPT connector acceptance. PR #153 stays Draft, unmerged and unreleased.
+
+**Reviewed HEAD:** `399a5a7641119b8af42adc12a60eacf9a135facf`. Independent comparison `2c7181aaea61f899d8bf6faebe0b6526cf61c03c` → reviewed HEAD reports **no production Go, go.mod or go.sum changes**; only verification workflow, documentation and narrowly scoped S2 test-probe corrections. Comparison `917c02965f1f4d2d92aecf3498fcbfdac540d37d` → reviewed HEAD is **documentation only**. Thus these actual successful checks exercise the same production SDK/auth/Incus/Root implementation, although the separate workflows report their own **actual run SHAs**. **Do not mislabel them exact-HEAD runs.** Future production source changes invalidate this equivalence.
+
+| Checked native / quality gate | Exact successful source and run | Result |
+| --- | --- | --- |
+| S4-A official installed HTTP MCP, independently observed S2 durable/UNKNOWN, GDB in-flight private-read boundary, SDK OAuth no-Scope refresh/revoke, raw Incus guest terminal evidence | `9c2a11e` [#44479992641](https://github.com/vanishs/boxweave/actions/runs/44479992641) | **PASS** after fixing stale `operationCredentialID(req)` test-only breakpoint to `principal.TokenID` |
+| S4-B2 Controller → PRS/Root revoke: normal, lost ACK/read-only reconciliation and after-ACL fault/UNKNOWN stop barrier, foreign Project packets unaffected | `917c029` [#44480369027](https://github.com/vanishs/boxweave/actions/runs/44480369027) | **3/3 PASS**; every matrix job completed successfully |
+| S4-B3 true grant and ETag contention: dual-stack IPv4/IPv6 TCP/UDP directional allow/reverse deny/unrelated deny; service cycle, no replay, contested ETag with isolated NICs | `917c029` [#44480369108](https://github.com/vanishs/boxweave/actions/runs/44480369108) | **2/2 PASS**; `installed_normal` individually retried successfully after its first canceled attempt |
+| S3 native SFTP symlink/hardlink/FIFO refusal, 12 simultaneous writers, exact native file poststate | `3c941284` [#44482299522](https://github.com/vanishs/boxweave/actions/runs/44482299522) | **PASS** |
+| S3 installed HTTP MCP File Tools, second Actor writes, Guest Git fail→fix→PASS, restart/idempotency and independent cleanup | `3c941284` [#44482299562](https://github.com/vanishs/boxweave/actions/runs/44482299562) | **PASS** |
+| Required quality / repository full Go Race at production-equivalent source | `917c029` [#44480369029](https://github.com/vanishs/boxweave/actions/runs/44480369029); later document-only `ca267145` [#44482630272](https://github.com/vanishs/boxweave/actions/runs/44482630272) | **PASS** |
+| amd64, arm64 and release-tool quality/manifest, **without publishing** | `917c029` [#44480369078](https://github.com/vanishs/boxweave/actions/runs/44480369078) | **PASS** for both architecture builds and manifest. Later docs-only [#44482630283](https://github.com/vanishs/boxweave/actions/runs/44482630283) **SKIPPED** build jobs by CI fast-path; must **not** be called a new two-arch PASS |
+
+### Root cause investigation: suspected Incus 7.6 installation hang
+
+Inspected **actual terminal GitHub job logs**, not just workflow names, including successful B2 normal/lost-ACK/ACL-fault, B3 normal/race, S3 native/installed, and S4-A. Both `Client version: 7.6` and `Server version: 7.6` appear in native B2/B3 logs, followed by actual kernel/packet/Guest evidence and successful completion.
+
+- B2 installation/provisioning step began approximately **07:32:44 UTC**, confirmed Incus **7.6 client/server** at **07:34:49** and finished native setup about **07:36:11**. B2 normal/lost ACK/ACL-fault subsequently completed successfully.
+- B3 `installed_normal` provisioning began **07:48:59 UTC** and verified native client/server **7.6** at **07:55:45** (about **6 min 46 s**); three owned dual-stack NICs were ready by **07:56:36**; actual directional TCP/UDP native packet matrix completed **07:57:09**. Installation/provisioning was **slow but not stuck** in this successful attempt.
+- S3 installed HTTP MCP workflow ran roughly **07:47:35–07:57:03 UTC** and passed; its fresh pinned Incus package was recorded around **07:54:39**. S4-A's full black-box and fault matrix took roughly **13 minutes**; this is substantive testing, not evidence of an installation deadlock.
+- An earlier B2 run [#44474489103](https://github.com/vanishs/boxweave/actions/runs/44474489103) was **CANCELED** in provisioning on some jobs, and B3 `installed_normal` was **CANCELED on the first attempt**, then the *same SHA, single job* rerun passed. The logs **do not establish that the installer hung** or why the user stopped two separate ChatGPT Agent sessions; GitHub job cancellation, Agent/UI interruption and actual Incus deadlock are different events.
+- The workflow redirects much package-install output to `/dev/null` and may remain silent while fetching pinned packages or Guest images. Its own high job timeout (55–125 minutes depending on the job) can make unstructured synchronous polling appear frozen. **Operational fix:** always use job status/step summaries, inspect a single failing job log, preserve passing matrices, and avoid rerunning Incus setup for documentation-only commits. A later CI ergonomics change may add bounded stage-specific timeouts and timestamps, **but should not reset successful evidence or re-run all expensive matrices solely for a cosmetic log change.**
+
+**Stage boundary:** complete the **stage-2 native source-equivalent regression** here. Stage 3 still requires a **real ChatGPT no-Scope connector** authorization/refresh/revoke witness, Owner-approved independent final review and final **exact candidate HEAD** CI/native evidence if its signoff contract demands it. **S4-B4–B6 and S4-C are not implemented/signed by this closure; neither S5 nor release is signed.** Existing Schema v3 development installations need explicit fresh v4 DB, Tokens, OAuth grants/clients, MCP reconnection; preserve native UNKNOWN evidence and never auto-reset the shared host.
+
+---
+
+
+**Historical initial status: PARTIAL while source-native jobs ran. ** The authoritative outcome as of 2026-11-19 UTC is in the closure section above; no full S4 release signoff.
 **Source baseline:** `2c7181aaea61f899d8bf6faebe0b6526cf61c03c` (2026-11-18 PT).
 **Later focused test-only fix:** `be599aece10f908037edc5599167609ec1288d36`; changes one S2 native SDK probe's no-role PASS marker, not controller/SDK/Incus production Go source. Native results from `2c7181a` are **source-specific** and are not silently labeled as the later commit's exact-head signoff.
 **Only development location:** [Draft PR #153](https://github.com/vanishs/boxweave/pull/153); never merged/deployed/published.

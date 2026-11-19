@@ -1,13 +1,13 @@
 # BoxWeave v1 — 单一授权能力与历史包袱整改方案（2026-11-18）
 
-**状态：阶段 1 核心源码、活跃测试与现行文档整改已完成并通过隔离 Go 质量/单测；完整 Race、原生安装和真实 ChatGPT 无 Scope OAuth 尚未正式签收。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
+**状态更新（2026-11-19 UTC）：阶段 1 源码整改完成；阶段 2 的 S2/S3/S4-A/B2/B3 范围内原生回归与完整 Race 已取得跨运行 SHA 的生产源码等价 PASS。最终同 HEAD 独立签收和真实 ChatGPT 无 Scope OAuth 尚未完成。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
 
 - **开发位置**：唯一 Draft PR [#153](https://github.com/vanishs/boxweave/pull/153)，分支 `feat/v1-s4-runtime-integration-20261116`；源码调查参考 HEAD `36b6662627050b81b946a7b9eedf922fb2e5b271`，实施前重新确认远程 HEAD。
 - **当前交付**：Owner 已明确授权阶段 1，一次性修改 Go/新 Schema/测试和现行文档；**不**迁移旧 DB、不部署共享宿主、不改旧发布产物。阶段 2/3 独立 Native 和真实 ChatGPT 验收仍需继续。
 - **产品定位**：**人 + 多个可信 Agent，可靠接手、安全并发**。不做 Agent 主从/调度、身份注册、通用 RBAC、工作流引擎。彼此信任是协作假设，不取代有效凭据、Project/Box 所有权、幂等或内核隔离。
 - **优先级**：清理双角色基础负担属于当前 v1 架构收敛，可在新增 S4-C/Activity 接口之前做完；不得将它宣称为 S4-B3～B6 已通过，或绕过旧安全目标。
 
-**阶段 2 原生环境回归状态：部分通过、尚未完成完整签收。** [独立回归回执](V1_STAGE2_NATIVE_REACCEPTANCE_2026-11-18.md) 记录本轮原生 GitHub Actions 新源码 SHA、已通过的 S3/B2/B3 和未完成的 S4-A/故障注入；真实 ChatGPT 无 Scope OAuth 仍未测试。旧环境 v3→v4 需新建 SQLite/Token/OAuth/客户端配置，禁止静默删原生资源。
+**阶段 2 原生环境回归状态：`STAGE2_NATIVE_SOURCE_EQUIVALENT_PASS`（2026-11-19 UTC）。** [独立原生回执与 Incus 7.6 安装耗时核查](V1_STAGE2_NATIVE_REACCEPTANCE_2026-11-18.md)：S4-A 完整安装版 SDK/OAuth、B2 正常/故障 3/3、B3 授权/并发 2/2、S3 文件/Git 原生矩阵、完整 Race 和 amd64/arm64 均有实际成功 job。运行 SHA 彼此不同，但到最新 HEAD 无生产 Go/依赖变更；这**不是**最终同 SHA、真实 ChatGPT 或 S4/S5 发布签收。旧 v3→v4 环境仍需重建 SQLite/Token/OAuth/客户端，禁止自动删除 Incus 宿主原生资源。
 
 ## 0. 执行决定（2026-11-18，Owner 授权开始第 1 阶段）
 
