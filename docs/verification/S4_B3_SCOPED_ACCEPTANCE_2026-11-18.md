@@ -1,0 +1,59 @@
+# S4-B3 — independent source-exact scoped acceptance (2026-11-18 PT)
+
+**VERDICT: `S4_B3_SCOPED_ACCEPTED` for the evidence-backed sub-gates below; overall `S4_B3_PARTIAL`. This is NOT `S4_B3_PASS`, `S4_B_PASS`, release approval, or a waiver of remaining mandatory negative tests.**
+
+**Recovery first:** [L0 worktree inventory and source preservation](S4_B3_RECOVERED_WORKTREE_LEDGER_2026-11-18.md). This audit does not import stale worktrees. The unrelated archive test is not used as native evidence.
+
+## Scope, reviewer and fixed source
+
+- Verified native candidate: **`cd3b2b95b857fe3dcc055090b2d8c7dc1a635a40`**, [B3 full matrix run 44418327692](https://github.com/vanishs/boxweave/actions/runs/44418327692), run conclusion `success`, **9/9 jobs completed SUCCESS**.
+- Later source `97a528347db69585759f5ba3f3185c4bf4eec6c1` adds **development documentation only**; `60859d70c839da13e25ace40448493ac73a046c3` adds **recovery documentation/archive only**. Peer Product/Go/CI executable source is unchanged by these two later commits. All claims below attach to the original exact runnable source, not to arbitrary future HEADs.
+- This acceptance is a new **read-only audit of actual GitHub job metadata and original job logs**, performed independently of B3 source edits; it is NOT a claim that an external verifier made a separate native run. No root/native/host mutation in L0, no PR merge, no RC, and no cleanup of prior dirty worktrees.
+- Additional code quality: [required quality run 44418327771](https://github.com/vanishs/boxweave/actions/runs/44418327771) **SUCCESS**; [amd64/arm64 run 44418327813](https://github.com/vanishs/boxweave/actions/runs/44418327813) **SUCCESS**; [S4-A regression 44418327809](https://github.com/vanishs/boxweave/actions/runs/44418327809) **SUCCESS**. Subsequent docs-only SHA `97a5283` quality/build/S4-A also SUCCESS; any newer HEAD requires independently rechecking its workflow results.
+
+## Explicitly accepted B3 sub-gates
+
+| Scoped verdict | Original evidence | Independent observations |
+|---|---|---|
+| **`B3_NATIVE_DIRECTIONAL_PACKET_PASS`** | [normal job 135204384397](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384397) | Native Incus 7.6 protected three-Box fixture; root grant ACL/nft exact readback; *real* A→B IPv4/IPv6 TCP and UDP accepted, B→A and unrelated C→B rejected; source logs show `S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY=PASS`. |
+| **`B3_INSTALLED_ROOT_CHAIN_PASS`** | [installed_normal job 135204384346](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384346) | Restricted nonroot Controller → approved PRS systemd/socket → original SQLite journal → no-replay root completion; native packets pass in both families and protocols. Verified `S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS`. |
+| **`B3_PUBLIC_MCP_ROLE_AND_EXECUTION_PASS`** | [installed_mcp job 135204384533](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384533) | Installed official MCP Client, OAuth admin/viewer access, schema and original idempotency replay, viewer scoped `operation_get`; public `box_peer_set` original proceeds through Controller/PRS/SQLite; real A→B and added B→C IPv4/IPv6 TCP/UDP paths. `S4_B3_NATIVE_OFFICIAL_MCP_ADMIN_OAUTH_TOKEN_REPLAY_SCHEMA_VIEWER_OPERATION_GET=PASS` and `S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE=PASS`. |
+| **`B3_MULTI_DIRECTION_REVOKE_PASS`** | [multi_revoke job 135204384351](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384351) | Installed confirmed A→B/B→C directions, revoked only A→B, preserved B→C. Real IPv4/v6 TCP/UDP previously authorized direction remains working and revoked A→B stops working: `S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS=PASS`. |
+| **`B3_REGRANT_AND_THIRD_DIRECTION_PASS`** | [multi_regrant job 135204384425](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384425) | Installed grant B→C, revoke A→B, grant C→B and regrant A→B through distinct originals and PRS. Three allowed directions A→B, B→C, C→B tested with real IPv4/IPv6 TCP/UDP traffic; B→A denied. `S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP=PASS`. |
+| **`B3_POST_ACL_FAULT_ISOLATION_PASS`** | [after_acl_fault job 135204384079](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384079) | Fault after native ACL PUT keeps UNKNOWN root journal and all protected NICs stopped: `S4_B3_REAL_ACL_PUT_UNKNOWN_ROOT_JOURNAL_ALL_OWNED_NICS_STOPPED=PASS`. |
+| **`B3_POST_RESUME_REISOLATION_PASS`** | [after_resume_fault job 135204384567](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384567) and [before_completion_fault job 135204384563](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384563) | Last recheck/final journal failure paths prove UNKNOWN with all protected NICs re-isolated, not false success: `S4_B3_REAL_POST_RESUME_FINAL_CHECK_UNKNOWN_ALL_NICS_REISOLATED=PASS`, `S4_B3_REAL_POST_RESUME_COMPLETION_JOURNAL_FAILURE_UNKNOWN_ALL_NICS_REISOLATED=PASS`. |
+| **`B3_ACK_LOSS_READONLY_RECOVERY_PASS`** | [grant_ack_lost job 135204384556](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384556) | Original Root COMPLETE receipt but Controller acknowledgement lost: SQLite original UNKNOWN, separately read-only reconciliation with no second native dispatch, independent packet matrix: `S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY=PASS`. |
+
+**Acceptance interpretation:** These are **scoped verdicts only**, tied to the exact named checks. They are not proof of all possible kernel interleavings, full cross-Project flow invariance, all startup/reboot paths, or an unrestricted production deployment.
+
+## Original evidence retained by GitHub Actions
+
+The run has **nine successfully uploaded disposable-native artifacts**, currently available through the run's Actions artifact list; these may expire (GitHub metadata expiry **2026-12-02 UTC**). The run logs independently contain actual packet PASS lines and exact original IDs; the GitHub artifact archive holds disposable provenance, native ACL, nft, sealed original Root journal and SQLite summaries. Do not reproduce confidential operator tokens, raw guest data or host-root private journals in this public document.
+
+| Scenario | Artifact ID |
+|---|---:|
+| normal | 14480606648 |
+| installed_normal | 14481361076 |
+| installed_mcp | 14479988717 |
+| multi_revoke | 14480368205 |
+| multi_regrant | 14480263451 |
+| after_acl_fault | 14480293079 |
+| after_resume_fault | 14480996691 |
+| before_completion_fault | 14479893824 |
+| grant_ack_lost | 14480936075 |
+
+For every job, Action status is **success**, and raw job logs contain the above explicitly generated PASS markers **after execution**, not merely echoed shell script text. Original evidence must be re-fetched before artifact expiry if independently checking specific private/native bytes.
+
+## Outstanding before full `S4_B3_PASS` — do NOT block the scoped verdicts above
+
+1. **B3 foreign Project while grant/revoke is actually running:** Existing B2 shared ACL/other-Project tests are accepted but **do not substitute** for a B3-specific simultaneous foreign Project TCP/UDP survivor readback. The nine-scenario B3 workflow does not clearly provide this witness.
+2. **Concurrent/ETag/fanout edge:** B3 source has many scoped negative/unit checks, but an independently documented B3-specific real native overlapping admission/ETag contender and any uncovered fail-closed race needs source-exact classification. Do not call native conflict PASS based solely on the normal/fault matrix.
+3. **Installed restart/upgrade and reboot gap:** normal installed systemd/socket and completed ACK loss are validated, but a separately defined service restart/reboot/reinstall recovery gate is not evidenced by these nine B3 job names. Reuse B2 evidence only where identical paths and unchanged code are confirmed, otherwise mark narrower coverage.
+4. **Independent final adversarial review & worktree leftovers:** reconcile remaining 25 historical divergent candidates with current HEAD only if the hunk adds a *missing* safe behavior, never wholesale merge. The single absent historical native test source is archived, not inserted into current native workflow.
+5. **Formal stage verdict, PR description, and current-head stability:** consolidate a single final B3 matrix only after the remaining mandatory B3-specific checks are either observed or explicitly scoped out by the owner. No automatic `S4_B3_PASS` from 9/9 CI alone.
+
+## Next action recommendation
+
+Run one **focused, disposable, source-exact B3 foreign Project traffic + concurrent ETag/fault audit** if necessary, using the existing native workflow/runner, without touching L0 shared ACL/Scriptlet. Preserve full source SHA, original IDs, host/packet observations and clean-up readback. Only the missing independent cases should delay *full* B3 signoff; the eight scoped PASS items above are complete and should not be repeated unnecessarily.
+
+**Reference:** [B3 live development history](../development/S4_B3_PROGRESS_2026-11-18.md), [S4-B phase gates](../development/S4_B_SIX_STAGE_PLAN_2026-11-16.md), [B2 scoped full signoff](S4_B2_FINAL_INDEPENDENT_AUDIT_2026-11-17.md).
