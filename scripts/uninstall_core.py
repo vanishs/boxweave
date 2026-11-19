@@ -60,6 +60,15 @@ def require_root_owned(path):
         raise UninstallError("installer-owned root path has foreign owner: " + str(path))
 
 
+def validate_state_dir(path, service_uid):
+    info = checked_file(path, "dir")
+    if info is None:
+        raise UninstallError("verified controller state directory missing")
+    if info.st_uid != service_uid or stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("state directory owner/mode no longer matches installer policy")
+    return info
+
+
 def file_fingerprint(path):
     info = checked_file(path, "file", 120 * 1024 * 1024 if path == BINARY else None)
     if info is None:
@@ -250,9 +259,9 @@ def inspect(scope, project, box_uuids, native_sha):
     owner = pwd.getpwnam("boxweave")
     if owner.pw_uid == 0 or project != "user-" + str(owner.pw_uid):
         raise UninstallError("Project is not exact restricted service UID Project")
-    state_info = checked_file(STATE, "dir")
+    state_info = validate_state_dir(STATE, owner.pw_uid)
     manifest = read_json(STATE / "install-manifest.json")
-    if state_info is None or manifest is None:
+    if manifest is None:
         raise UninstallError("no verified BoxWeave installer manifest (legacy/unmanaged removal blocked)")
     if manifest.get("schema") != 2 or manifest.get("native_project") != project or \
             manifest.get("service_user") != "boxweave" or \
@@ -283,6 +292,9 @@ def inspect(scope, project, box_uuids, native_sha):
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
         if entry.name not in STATE_FILES:
             raise UninstallError("unrecognized owned state file: " + entry.name)
+        info = checked_file(entry, "file")
+        if stat.S_IMODE(info.st_mode) & 0o077:
+            raise UninstallError("controller state file has unsafe permissions: " + entry.name)
         files.append({"name": entry.name, "info": file_fingerprint(entry)})
     snapshot = inspect_sqlite(STATE / "ledger.sqlite")
     if any(x["project"] != project for x in snapshot["boxes"]):
