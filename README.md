@@ -62,3 +62,5 @@ The following **historical RC.3** release CI passed exact-source quality, native
 ## Develop and contribute
 
 [Contributing](CONTRIBUTING.md) · [quality gates / docs-only CI policy](docs/process/QUALITY_GATES.md) · [implementation phases](docs/process/IMPLEMENTATION_PLAN.md) · [product boundary](docs/decisions/PRODUCT_BOUNDARY.md) · [decisions](docs/decisions/DECISIONS.md) · [development checkpoint](docs/development/EXECUTION_LOG.md).
+
+**CI note:** Documentation-only development commits keep the required `quality-gate` format/whitespace check but skip redundant Go/Race builds and installed-native regression. Source, workflow, protected-branch and release changes still receive full verification; see the [CI scope policy](docs/process/QUALITY_GATES.md).
