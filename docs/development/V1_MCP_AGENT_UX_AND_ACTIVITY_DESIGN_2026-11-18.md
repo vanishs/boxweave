@@ -1,5 +1,7 @@
 # BoxWeave v1 — MCP Agent 使用体验与 Activity/Evidence 概览设计（2026-11-18）
 
+**2026-11-19 当前方向更新（规划，非新 Tool 实施审批）：** PR #153 在核查 HEAD `85161941` 已移除 `admin/viewer` 和应用 OAuth Scope，SQLite 使用 Schema v4，独立 Actor 与资源/凭据边界仍保留。S3/S4-A/B2/B3 具 source-equivalent 原生回归证据，但不是最终 exact-HEAD 或真实 ChatGPT PASS。**先复现 TC-015/016 的真实双 Agent 接手与外部 Checkpoint 冲突，用现有 Tools 测量误判、Tool 调用量与证据缺口；再调整 MCP Description/Instructions；若发现有界证据检索做不到，再提最小数据库查询/索引整改。** `box_activity_get` 依旧独立、尚未获得 Owner 开发授权。参见 [更新后的连续性验收矩阵](../verification/CONTINUITY_ACCEPTANCE.md)。下面有些 2026-11-18 的历史 Scope/版本描述不代表当前源码。
+
 **状态：OWNER-ACCEPTED DESIGN / NOT IMPLEMENTED。** 本文记录已讨论的设计方向，不表示 `box_activity_get`、Server Instructions 或实际客户端行为已经实现/验收。开发仍限定 [Draft PR #153](https://github.com/vanishs/boxweave/pull/153)；2026-11-18 复核源码参考 `10cb73d11cb9f538bf525078a77b293c693a8d4d`，实施前必须重新读取远程 HEAD。**本次文档修订不是新增 Tool 的产品审批**；未经另行批准，不合并、不发布、不扩展 S4-B 验收范围。
 
 ## 1. 目标、范围与实施顺序
@@ -63,13 +65,12 @@
 - 不得因 Agent 没遵守说明就静默弱化服务端权限、幂等或原生执行安全约束。
 - `MCP Resource` 不作为本阶段必需能力：其存在也不保证 ChatGPT 自动读取，可留作未来长篇参考指南。
 
-### 2.5 admin/viewer、OAuth 与 Agent 协作身份（现有代码边界）
+### 2.5 当前无角色 OAuth、独立 Actor 与 Agent 接手
 
-- **`admin` / `viewer` 是 BoxWeave 的两个权限角色，不是 Agent 身份、主从关系或 OAuth 独有概念。** OAuth 通过 `mcp:admin` / `mcp:viewer` Scope 授权，手动签发的 Bearer Token 也有同样两种角色；`admin` 可管理当前 Layer 内的 BoxWeave-owned 资源、Exec 和读取授权 Operation，`viewer` 只读，通常只能查询自己 Actor 的 Operation。两种角色都必须遵守 Project/Layer 和敏感信息权限边界。
-- **Actor ≠ Access Token ≠ Agent 标签。** OAuth Grant 对应稳定 Actor，刷新 Access Token 保持该 Actor 与原始幂等作用域；新的独立 OAuth Grant 或手动 Token 是不同 Actor。服务端可信的是已认证 Actor/凭据，`agent_ref` 和 `work_ref` 只用于关联，不能授权。不能因为多个 Agent 被视为可信，就共享 Token 或取消访问核验。
-- **Agent A → Agent B 接手示例：** A 持独立 admin 授权创建 Box/执行测试后中断；B 持另一个 admin 授权，可以查询同一 Layer 的 A 原始 Operation、检验原生 Box/Exec 结果并继续**未完成的后续任务**。B 不能冒充 A 的 Actor 对其原始 `idempotency_key` 执行同一次幂等重试；B 必须先查原始证据，再决定新的授权变更。若 B 是不同 Actor 的 viewer，其 Operation 可见范围仍受限制；不能为了接手放宽 viewer 权限。
-- **独立只读核验**可以用 viewer；若核验本身需要 `box_exec` 或修改 Box，则仍需要 admin。viewer 能读取 Guest 文件/输出，可能接触敏感内容，不能被理解为匿名或无风险账号。
-- **不新增 Agent 注册、主从/RBAC、授权委派或调度服务。** 多 Agent 共同工作依赖独立认证、已有原生资源锁、共享外部 Git/Checkpoint 与核验后的只读证据，而不是把 admin 当成团队主操作者。
+- **认证**：OAuth 无应用权限 Scope、无 `admin/viewer` 等角色；有效且明确审批的每个独立 Actor 均可按同一受管 Layer/Project/Box 边界执行管理操作。有效凭据及撤销/过期复查、外来 Box 拒绝继续强制。
+- **身份不等于标签**：OAuth Grant 在 Access Token 刷新后维持稳定 Actor，Access Token ID 改变；手动凭据和不同 OAuth Grant 是独立 Actor。 `work_ref` 与 `agent_ref` 均可伪造，只做检索关联。
+- **Agent A → B**：B 使用自己的独立凭据，结合外部 Git/Checkpoint、A 的同 Layer 原始 Operation/native evidence 接手未完成的**后续任务**；不能继承 A 的幂等身份、绕过 UNKNOWN 或跨 Layer/foreign 对象访问。
+- **核验者**也必须使用独立有效凭据，优先调用只读 Tools；**不恢复 viewer 角色**。不新增 Agent 注册、任务编排、MCP Tasks 或 BoxWeave Checkpoint 存储。
 
 ## 3. B — `box_activity_get` 只读 Activity & Evidence Overview（独立构想）
 
@@ -81,7 +82,7 @@
 
 不得把 `ADMITTED` 误认为底层 effect 已发生、把 `SUCCEEDED` 误认为 Exec 退出码 0、把 `RUNNING` 误认为当前有活着的进程、把 `peer_grants.CONFIRMED` 误认为当前内核连通性得到实时证明。
 
-### 3.2 HEAD 所证实的 Schema v3 数据及可信度
+### 3.2 当前 Schema v4 数据及可信度
 
 | 数据 | 可提供事实 | 不可推出 |
 |---|---|---|
@@ -158,11 +159,11 @@
 
 **有效锁与依赖不能由历史 claim 直接推出：** 读取/解释要与 `Store.Admit()` 中的事务准入语义一致，包括 `ADMITTED/DISPATCHING/RUNNING/VERIFYING/UNKNOWN`、`recovery_audit.RELEASED`、`box_peer_set` Project-wide 屏障、Box 名/UUID/incarnation、有效 Peer/Forward/地址栅栏，以及 `exec_output_gc` 的待清理状态。建议提取/复用**只读的安全状态判定函数/SQL 语义**，并以正反回归测试防止与真实准入检查发生漂移；Activity **绝不**取代 `Admit()` 的事务授权/资源锁。
 
-- 复用 `operationPrincipal()` 和授权范围：**admin 只看当前 Layer 已授权记录；viewer 限自身 Actor 的记录**。`work_ref`、`agent_ref` 和不同 Actor 共用的工作名都不扩权。若要显示发起者，优先采用限定范围的非敏感 `actor_ref`（稳定不透明引用）加不可信的 `agent_ref`；不暴露原始 Token/Grant 凭据、不声称 Agent 身份已获认证。
+- 复用当前 **`requestPrincipal()` 的 ActorID、TokenID、Layer** 和 Store 受管范围：同 Layer 的独立有效 Actor 可查看授权原始 Operation，不能跨 Layer/foreign 资源。`work_ref`、`agent_ref` 与共享工作名不扩权；显示发起者时仅用限域不透明 Actor 引用，不泄漏 Token/Grant 或冒充可信 Agent 身份。
 - **所有视图均在返回前重新检查可撤销凭据**：沿用 `privateReadReply()` / `RequireActiveTokenID()` 的安全路径，特别覆盖查询期间 OAuth 撤销、过期或轮换。授权必须在聚合、统计、异常筛选之前生效，不能通过总数、游标或资源摘要推断隐藏记录。
 - `summary`、`recent_activity`、`unresolved_attention` 和同一调用选取的证据来自**同一已授权 SQLite 只读事务快照**；不使用 unbounded N+1 JOIN、全历史无界排序或宿主范围扫描。最近创建记录按可测量索引有界倒序查，持久未解决风险另外用索引和明确上限查；若结果不完整，给出 `attention_complete=false` / `truncated=true`，不能默默漏报。
 - 默认**不**执行 Guest Exec、Guest 文件或宿主原生实时探测。若日后增加 Native GET，必须独立记录时间和授权，不得冒充 SQLite 原子快照；Root/PRS 审计仅允许暴露已有经批准的安全摘要或返回 `HOST_LOCAL_REVIEW`。
-- 优先复用 **Schema v3** 与现有 Go 类型/查询；若跨窗口未解决风险、最新变化或资源关联需要新索引/最小字段，**允许在独立批准与签收下调整 DDL**，但必须同步 Schema 指纹、升级/兼容性评估、故障回滚及原生副作用保护。此前“无需变更 DDL”只是第一版可行性预估，不应成为掩盖查询遗漏的硬限制。
+- 优先复用 **Schema v4**、现有 Go 查询和索引；TC-015/016 基线证实有界证据检索不足时再提出最小索引/DDL 变更，并在一次性新 DB 中重新通过 DDL 指纹、UNKNOWN、防重放和原生验收。预发布环境无旧 SQLite 兼容义务，但不能将原生未知副作用视为可丢弃。
 - 代码入口候选：`internal/state/activity_query.go` / `activity_query_test.go`、`internal/control/activity_tools.go` / `activity_tools_test.go`、`internal/control/server.go`；若提炼真实资源阻塞判断，需同步补充原有 Store admission 回归，不擅自改 Worker、Root PRS、外部 Checkpoint 存储。
 
 ### 3.5 新 Tool vs `operation_list` 扩展
@@ -178,7 +179,7 @@
 
 1. **三视图实测**：`overview/issues/evidence` 均能通过真实已认证 MCP Schema 调用，返回正确有界结构；Description 与实际实现完全一致。比较多次 `operation_list/get/output_get` 和一次 Activity 调用的调用次数、真实 tokenizer Tokens、延迟、错误判断率及缺证处理。
 2. **历史阻塞**：建立早于 24 小时、仍为 UNKNOWN/有效锁/Project-wide Barrier 的原始案例；无同工作标签的新 Agent 仍能在**权限允许的 Layer** 发现相关阻塞。已审核 RELEASED 与仍受保护的 Root UNKNOWN 要区别呈现；大历史数据的索引性能、有界响应、截断/覆盖信息均须证明。
-3. **身份与跨 Agent 接手**（TC-011～015）：A 独立 admin OAuth Grant 发起 Box/Exec/Peer，丢失回复/中断；B 另一个 admin Actor 查询 A 的原始 Operation、核对原生事实后安全继续；**B 不得借同 Key 跨 Actor 重放**。同 OAuth Grant 刷新 Access Token 保持 Actor 不变；Viewer 不可凭同 `work_ref` 读取其他 Actor 私有历史。
+3. **身份与跨 Agent 接手**（TC-011～015）：A 用独立 Actor 创建 Box/Exec/Peer，B 用不同 Actor 查询同 Layer 的原始 Operation、核验 native/Git 后安全继续；**不能借同 Key 冒充 A 的原始幂等身份**。Token 刷新保持 Grant Actor，撤销和跨 Layer/foreign 拒绝仍有效；共享 `work_ref` 不授予超出当前受管范围的权限。
 4. **安全并发**（TC-016～018）：A/B 相同或不同 `work_ref` 并发 Box/网络/删除，真实资源准入仍负责冲突拒绝；Activity 只观察，不成为分布式任务锁。外部 Git/Checkpoint 两个写入者的 CAS/版本冲突由其外部存储正确拒绝，Activity 不虚构 Git HEAD/dirty 状态或检查点写入成功。跨 L0/L1 同名标签和受限 Token 不泄漏。
 5. **证据真假和异常**（TC-019～020）：原始 `box_exec SUCCEEDED`、Guest 非零退出码 => `command_success=false`；退出码缺失则未知；原生 Root/网络/地址状态无直接 witness 时标证据缺口。以已知坏实现（例如把旧 UNKNOWN 错写成成功、错误继承其他 Actor 的幂等作用域、因时间窗口漏报阻塞）校准测试先红后绿。
 6. **权限/一致性/容量**：撤销/过期/刷新 Token 的返还前复查；所有统计在鉴权过滤后同一 SQLite 快照；并发写、分页、水位与长时记录不得越权或产生误导性全局统计。严格禁止原始命令/环境变量/输出全文、host 私有路径、Root Journal 和未经审查的修复建议泄漏。
@@ -187,17 +188,17 @@
 
 ## 4. 开发安排与不干扰当前验收
 
-1. **近期 A：** 精简 Tool Description 与 Server Instructions，单独验证真实 ChatGPT/Codex 客户端发现、身份/幂等恢复行为和 Token 成本；不新增 Tool、不修改真实执行机制。
+1. **先验收基线，再进行 A：** 在 disposable 已安装环境用现有 Tool 完整执行 TC-015/016，记录真实接手成功/失败、调用次数、Token、延迟、误重试与证据缺口。随后仅针对可重复的发现/理解问题优化 Tool Description 与 Server Instructions，用相同场景 A/B 对照；不新增 Tool、不修改原生执行语义。
 2. **S4-B：** 继续 S4-B3～B6 独立验收；Activity 研究/文档不替代网络安全、Peer/Forward/Delete、恢复与证据签收。
 3. **S4-C：** 先实现已批准的 `box_get(detail=true)`、`box_wait_ready`，正常准备 21-Tool 矩阵。
 4. **独立 Activity 候选（倾向 S4-C 后、S5 最终验收前）：** 用户另行批准第 22 个 Tool、三视图完整契约、查询性能/权限/证据关联的实施成本与具体签收后再开发。未批准时不阻碍原 S5 多 Agent 目标，继续用 `operation_list/get` + 外部 Checkpoint。
 5. **S5：** 核验**多 Agent 可靠接手与安全并发**，而不是自动分工/任务编排。TC-015 要求真实 B 读取外部 Checkpoint/Git 和 A 的原始证据、在已确认原始结果后继续；TC-016 要求两个 Checkpoint 写者使用外部版本/修订控制，不丢失冲突。最终候选包含哪些 Tool 就完整验收哪些 Tool；历史写死的 20/20 不能掩盖已批准的 21 或待批准的 22。S5 #151、完整嵌套和最终独立原生验收不放宽。
 
-**最终工程判断：** Schema v3 已提供足以构建初步授权活动和证据关联的基础；但要把**跨默认 24 小时的真实阻塞、三视图、有界查询性能和安全状态语义贯通**作为第一版承诺，不能先验认定完全不需索引/DDL 或其他有限代码调整。只读 Activity 不能证明 Agent 的任务完成、外部 Git/CI、Guest 实时进程和 Root 当前内核效果；这些边界由覆盖信息和独立核验明确表达。
+**最终工程判断（以 Schema v4 重新核验）：** 现有 Schema 已提供构建初步授权活动和证据关联的基础；但要把**跨默认 24 小时的真实阻塞、三视图、有界查询性能和安全状态语义贯通**作为第一版承诺，不能先验认定完全不需索引/DDL 或其他有限代码调整。只读 Activity 不能证明 Agent 的任务完成、外部 Git/CI、Guest 实时进程和 Root 当前内核效果；这些边界由覆盖信息和独立核验明确表达。
 
 ## 5. 源码入口与关联设计
 
 - Tool/路由：`internal/control/server.go`、`strict_tool.go`、`operation_tools.go`、`operation_output_cancel.go`、`box_tools.go`、`file_tools.go`、`peer_tools.go`。
-- 数据/状态：`internal/state/store.go`（`SchemaVersion=3`、DDL/索引）、`operation_query.go`（授权与升序游标）、`worker.go`、`recovery.go`、`network_peer_*`、`network_audit_ledger.go`。
+- 数据/状态：`internal/state/store.go`（当前 `SchemaVersion=4`、DDL/索引）、`operation_query.go`（授权与升序游标）、`worker.go`、`recovery.go`、`network_peer_*`、`network_audit_ledger.go`。
 - Root 边界：`internal/control/peer_root.go`、`internal/install/native_peer_root_*`；不可将审计接口变成额外 Root API。
 - 既有文档：[Agent Operation Continuity](../design/AGENT_OPERATION_CONTINUITY.md)、[MCP Tool Contracts](../design/MCP_TOOL_CONTRACTS.md)、[MCP Tool Catalog](../design/MCP_TOOLS.md)、[S4-B six-stage plan](S4_B_SIX_STAGE_PLAN_2026-11-16.md)、[S4-C readiness plan](S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md)、[external Task Checkpoint](TASK_CHECKPOINT_CONTRACT.md)、[TC-011～020 S2.5/S4/S5 Continuity Acceptance](../verification/CONTINUITY_ACCEPTANCE.md)、[S5 release card](phases/05_RELEASE_ACCEPTANCE.md)。
