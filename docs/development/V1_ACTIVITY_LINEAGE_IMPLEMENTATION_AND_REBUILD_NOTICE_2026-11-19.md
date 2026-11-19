@@ -1,5 +1,7 @@
 # BoxWeave v1 — Peer provenance and internal Activity implementation (2026-11-19)
 
+**Later 2026-11-19 status supersession:** The Owner subsequently approved public `box_activity_get` as an 18th Tool, with three views, signed pages and expanded issues coverage. The historical Stage-2 statements below that `box_activity_get` is unapproved/unregistered describe this document's earlier source checkpoint **only**. Read the [new authoritative public P0 implementation and Go/SDK/CI acceptance](V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md). The **Schema v5 fresh-rebuild warning in this document still applies unchanged**; no installed v4 data is migrated by this decision.
+
 Status: **development implementation / verification in progress** on the sole Draft [PR #153](https://github.com/vanishs/boxweave/pull/153). This is not an RC, public MCP Activity launch, production migration, or a re-signoff of S4-B3. Read the [source lineage investigation](V1_MCP_TO_DB_LOG_LINEAGE_SOURCE_AUDIT_AND_IMPLEMENTATION_DESIGN_2026-11-19.md) first.
 
 ## Delivered source boundaries
