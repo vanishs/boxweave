@@ -55,3 +55,15 @@ All six original Operations `SUCCEEDED`, `operation_output_get` returned `exit_c
 4. **B3 acceptance**: use the separate source-exact GitHub Actions evidence; B3 remains partial until independently accepted remaining requirements are resolved or strictly scoped.
 
 No Box Stop/Delete or host-root/ACL changes were made during this recovery inspection.
+
+## Follow-up semantic hunk classification: older B3 workflow candidates
+
+After preserving this ledger, the original **working-tree patches** for the B3 workflow in the final, p0root, audit and secure Boxes were retrieved via further read-only L0 `box_exec`/original output. This is narrower than a full line-by-line audit of every historical source candidate; it resolves the most time-consuming workflow uncertainty.
+
+- `final:/root/boxweave`: positive dual-stack packet retries and fail diagnostics are present in current [B3 workflow](../../.github/workflows/v1-s4-b3-grant-native.yml), backed by 9/9 PASS.
+- `p0root:/root/boxweave`: guest IPv6 route readiness and bounded surviving B→C packet retries are present in current workflow.
+- `audit:/root/work`: originally missing installed public MCP scenario, OAuth Admin/Viewer, no-replay PRS handoff and B→C packets are now in the current `installed_mcp` job, independently passed in [job 135204384533](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384533).
+- `audit:/root/work-b3-mcp-group-fix` and `audit:/root/work-b3-revoke-fault`: restricted Incus `incus` versus admin group handling and installed nonroot `doctor` preflight are present in current workflow and its successful public MCP log.
+- `secure:/root/boxweave`: the historical direct-SQL/native fixture multi-revoke case was superseded in the current workflow by separately admitted, PRS-approved `grant_bc → revoke_ab` and `grant_cb → regrant_ab` sequences and real native packet tests, accepted in [multi_revoke](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384351) and [multi_regrant](https://github.com/vanishs/boxweave/actions/runs/44418327692/job/135204384425). Original unique test bytes remain archived above for traceability.
+
+**Conclusion for these B3 workflow candidate changes:** no new workflow changes should be cherry-picked from these old worktrees; current remote covers their intended tested behaviors. **Not a claim** that every one of the 25 different local Go/B2 code blobs has undergone full semantic review; those remain preserved in place and indexed above. No old tree was reset, rebased, cleaned, or merged.
