@@ -99,7 +99,7 @@ func TestPeerGrantRevokeRegrantVerifiedOriginalNeverAliasesPreviousOriginal(t *t
 	if pending, verified, desired := verifiedPeerLineage(t, s); pending != "" || verified != first || desired != 1 {
 		t.Fatalf("confirmed grant lost verified original: pending=%q verified=%q desired=%d", pending, verified, desired)
 	}
-	revoke := admitPeerLineageOriginal(t, s, false, "lineage-revoke")
+	revoke := admitPeerLineageOriginal(t, s, false, "lineage-revoke-0001")
 	if err := s.StageRootPeerRevocation(ctx, revoke); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestPeerGrantRevokeRegrantVerifiedOriginalNeverAliasesPreviousOriginal(t *t
 	if pending, verified, desired := verifiedPeerLineage(t, s); pending != revoke || verified != revoke || desired != 0 {
 		t.Fatalf("revoke did not link its own verified original: pending=%s verified=%s desired=%d", pending, verified, desired)
 	}
-	regrant := admitPeerLineageOriginal(t, s, true, "lineage-regrant")
+	regrant := admitPeerLineageOriginal(t, s, true, "lineage-regrant-0002")
 	if err := s.StagePeerGrant(ctx, regrant); err != nil {
 		t.Fatal(err)
 	}
