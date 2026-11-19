@@ -23,6 +23,6 @@
 
 ## Final owned scratch cleanup
 
-After the exact-source A2/CI/installed local MCP tests, the sole owned scratch Box `44b7862a-c266-4651-925b-b752f7ed83b6` was stopped by original Operation `f3942cdbaa02a92b7d6d2783f010c2dd` (**SUCCEEDED**) and deleted by original `0bc500899dc73555b724bb1d5b6d0690` (**SUCCEEDED**). Fresh authorized `box_list` returned **zero Boxes**. The temporary nonroot local server and bearer secret were already terminated/removed by the isolated installed-protocol test's EXIT trap. No shared physical L0 controller Schema v4 or native Host/Root/PRS data were altered. 
+After the exact-source A2/CI/installed local MCP tests, the sole owned scratch Box `44b7862a-c266-4651-925b-b752f7ed83b6` was stopped by original Operation `f3942cdbaa02a92b7d6d2783f010c2dd` (**SUCCEEDED**) and deleted by original `0bc500899dc73555b724bb1d5b6d0690` (**SUCCEEDED**). Fresh authorized `box_list` returned **zero Boxes**. The temporary nonroot local server and bearer secret were already terminated/removed by the isolated installed-protocol test's EXIT trap. No shared physical L0 controller Schema v4 or native Host/Root/PRS data were altered.
 
 [Public Activity P0 implementation](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md) · [Schema v5 rebuild warning](../development/V1_ACTIVITY_LINEAGE_IMPLEMENTATION_AND_REBUILD_NOTICE_2026-11-19.md).
