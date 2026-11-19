@@ -62,6 +62,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Stage 2 source-exact principal and ACL regression preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail BEFORE expensive native host setup on SDK principal or
+          # whole-ACL policy regression. Full native matrix remains required.
+          go test -count=1 ./internal/control ./internal/install \
+            -run 'TestS2RequestPrincipalRequiresExplicitSDKCredential|TestNativePeerACLWholePolicyComparison'
+          test -z "$(gofmt -l internal/control/operation_tools.go internal/install/native_peer_acl_compare.go)"
+          echo STAGE2_SOURCE_EXACT_MCP_PRINCIPAL_AND_WHOLE_ACL=PASS
       - name: Provision one-use fresh Incus 7.6 and protected native Project
         shell: bash
         run: |
