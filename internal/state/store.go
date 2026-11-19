@@ -19,16 +19,16 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
-// Pre-release schema v3: fresh pilots only; older v1/v2 SQLite is refused.
+// Pre-release schema v4: fresh pilots only; older v1/v2 SQLite is refused.
 // The OAuth slice must be independently staged with a clean pilot database.
 // Both tables and indexes are exact-fingerprinted; old S1 test DBs are refused,
 // never silently migrated, adopted or deleted. Once deployed, schema changes
 // will require reviewed migration and rollback.
 var schemaDDL = []string{
 	"CREATE TABLE schema_version (version INTEGER NOT NULL)",
-	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
 	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_by_operation_id TEXT NOT NULL DEFAULT '', deleted_at INTEGER NOT NULL DEFAULT 0, UNIQUE(project,name,incarnation))",
 	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, work_ref TEXT NOT NULL DEFAULT '', agent_ref TEXT NOT NULL DEFAULT '', resource_key TEXT NOT NULL DEFAULT '', box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
 	"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
@@ -39,9 +39,9 @@ var schemaDDL = []string{
 	"CREATE TABLE exec_output_gc_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, stream TEXT NOT NULL, at INTEGER NOT NULL, event TEXT NOT NULL CHECK(event IN ('BEFORE_DELETE','EXPIRED','REVIEW_REQUIRED','RECOVERED_UNCERTAIN','CHALLENGE_ISSUED','REVIEWED_RELEASED')), reviewer TEXT NOT NULL DEFAULT '', evidence_digest TEXT NOT NULL DEFAULT '', FOREIGN KEY(operation_id,stream) REFERENCES exec_output_gc(operation_id,stream))",
 	"CREATE TABLE oauth_config (id INTEGER PRIMARY KEY CHECK(id=1), public_origin TEXT NOT NULL DEFAULT '', password_hash TEXT NOT NULL DEFAULT '', epoch INTEGER NOT NULL DEFAULT 1)",
 	"CREATE TABLE oauth_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, redirects TEXT NOT NULL, created_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_pending (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, scope TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL, expires_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_codes (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, expires_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_grants (id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, epoch INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_pending (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_codes (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_grants (id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), resource TEXT NOT NULL, epoch INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
 	"CREATE TABLE oauth_access (token_id TEXT PRIMARY KEY REFERENCES credentials(id), grant_id TEXT NOT NULL REFERENCES oauth_grants(id))",
 	"CREATE TABLE oauth_refresh (digest TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES oauth_grants(id), expires_at INTEGER NOT NULL)",
 	"CREATE TABLE oauth_attempts (at INTEGER NOT NULL, kind TEXT NOT NULL)",
@@ -102,7 +102,6 @@ type Token struct {
 	// ActorID is stable for an OAuth grant; ID is the individual access credential.
 	// A manual Bearer token remains its own actor.
 	ActorID string
-	Role    string
 	Expires time.Time
 	Revoked bool
 }
@@ -387,8 +386,8 @@ func (s *Store) Schema(ctx context.Context) (int, error) {
 	return v, err
 }
 
-func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) (string, Token, error) {
-	if role != "admin" && role != "viewer" || ttl <= 0 || ttl > 365*24*time.Hour {
+func (s *Store) IssueToken(ctx context.Context, ttl time.Duration) (string, Token, error) {
+	if ttl <= 0 || ttl > 365*24*time.Hour {
 		return "", Token{}, ErrInvalid
 	}
 	b := make([]byte, 32)
@@ -400,8 +399,8 @@ func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) 
 	if err != nil {
 		return "", Token{}, err
 	}
-	t := Token{ID: id, ActorID: id, Role: role, Expires: time.Now().UTC().Add(ttl)}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO credentials (id,token_digest,role,expires_at,created_at) VALUES (?,?,?,?,?)", id, DigestToken(raw), role, t.Expires.Unix(), time.Now().Unix())
+	t := Token{ID: id, ActorID: id, Expires: time.Now().UTC().Add(ttl)}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO credentials (id,token_digest,expires_at,created_at) VALUES (?,?,?,?)", id, DigestToken(raw), t.Expires.Unix(), time.Now().Unix())
 	if err != nil {
 		return "", Token{}, err
 	}
@@ -417,7 +416,7 @@ func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
 	var t Token
 	var expires int64
 	var revoked int
-	err := s.db.QueryRowContext(ctx, "SELECT id,role,expires_at,revoked FROM credentials WHERE token_digest=?", DigestToken(raw)).Scan(&t.ID, &t.Role, &expires, &revoked)
+	err := s.db.QueryRowContext(ctx, "SELECT id,expires_at,revoked FROM credentials WHERE token_digest=?", DigestToken(raw)).Scan(&t.ID, &expires, &revoked)
 	if err != nil {
 		return Token{}, ErrRevoked
 	}
@@ -484,7 +483,7 @@ func (s *Store) RequireActiveTokenID(ctx context.Context, tokenID string) error 
 }
 
 // activeCredentialForActor verifies BOTH identities at the durable SQLite boundary.
-// OAuth grants are stable actors but only a currently live, correctly scoped access
+// OAuth grants are stable actors but only a currently live, resource-bound access
 // credential may read or admit work. A manual token is scoped to its own ID.
 // Use the SAME transaction as admission/claim to prevent refresh/revoke races.
 type credentialRowQuery interface {
@@ -502,8 +501,7 @@ func activeCredentialForActor(ctx context.Context, q credentialRowQuery, actorID
 		LEFT JOIN oauth_config cfg ON cfg.id=1
 		WHERE c.id=? AND COALESCE(a.grant_id,c.id)=?
 		  AND c.revoked=0 AND c.expires_at>?
-		  AND (a.grant_id IS NULL OR (g.revoked=0 AND g.role=c.role
-		       AND g.epoch=cfg.epoch AND g.resource=cfg.public_origin||'/mcp'
+		  AND (a.grant_id IS NULL OR (g.revoked=0 AND g.epoch=cfg.epoch AND g.resource=cfg.public_origin||'/mcp'
 		       AND cfg.public_origin!=''))`,
 		tokenID, actorID, time.Now().Unix()).Scan(&count)
 	return count == 1, err
