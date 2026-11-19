@@ -1,5 +1,7 @@
 # S4-B3 — focused native closure audit and remaining formal gate (2026-11-18 PT)
 
+> **FINAL 2026-11-18 PT — `S4_B3_PASS` supersedes all historical PARTIAL sections below:** formal native signoff is in [S4_B3_FINAL_SIGNOFF_2026-11-18.md](S4_B3_FINAL_SIGNOFF_2026-11-18.md). Owner-approved real Incus/PRS service restart substitute passed with exact ETag PUT-window contention, original journal + SQLite persistence, frozen NICs and real dual-stack packet readback. Physical host power/reboot remains **S4-B6/S5**; no S4-B overall PASS, merge or RC. The historical below-gate language is preserved as dated earlier observations, not today's B3 status.
+
 > **2026-11-18 PT owner scope correction:** physical whole-host reboot evidence is **explicitly deferred to S4-B6/S5**; B3 accepts *real Incus and PRS service-level outage* with original journal/SQLite/ACL/native packet readback if the focused independent run passes. The precise Root ETag GET→PUT native contender and independent final evidence audit remain **open until actually verified**. See [approval and acceptance boundaries](../decisions/S4_B3_REBOOT_SCOPE_AND_CLOSURE_2026-11-18.md). This does not retroactively turn a SIGKILL test into a full host reboot or assert `S4_B3_PASS`.
 
 **Decision: `S4_B3_PARTIAL`. Fourteen evidence-backed scoped PASS verdicts are now retained. Do NOT issue `S4_B3_PASS` until the last mandatory evidence boundary is resolved.** This audit extends the [eight original scoped verdicts](S4_B3_SCOPED_ACCEPTANCE_2026-11-18.md), not a re-run or a change to those original receipts.

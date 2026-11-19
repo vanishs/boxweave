@@ -1,5 +1,7 @@
 # S4-B six-stage implementation and acceptance plan (2026-11-16)
 
+> **CURRENT 2026-11-18 PT:** **`S4_B3_PASS`** formally accepted only under [owner-approved B3 service outage scope](../decisions/S4_B3_REBOOT_SCOPE_AND_CLOSURE_2026-11-18.md) and [native independent evidence review](../verification/S4_B3_FINAL_SIGNOFF_2026-11-18.md). Physical whole-host reboot is deferred to B6/S5. B4–B6 remain unsigned; **S4_B_PASS is not issued**. All prior PARTIAL/not-started text in the original dated plan below is historical.
+
 > **ARCHIVED original planning status (superseded by 2026-11-18 B2 independent signoff): B1 investigation completed as S4_B1_PARTIAL (2026-11-16 PT); B2 IN PROGRESS — S4_B2_PARTIAL (not accepted); B3–B6 NOT STARTED.** B1 original evidence and implementation contract: [B1 report](../verification/S4_B1_INVESTIGATION_2026-11-16.md) and [B2 handoff](S4_B1_B2_HANDOFF_2026-11-16.md). This document records the owner's requested six-stage decomposition, not permission to begin implementation, to mutate a shared host, or to sign off S4-B. Use only existing [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`; do not open another PR, merge or publish a release in S4-B.
 >
 > **Owner B3 PRS execution decision:** [Controller vs PRS boundary](../decisions/S4_B3_PRS_EXECUTION_BOUNDARY_2026-11-18.md): retain B2's root-owned stop → Incus ACL mutation → kernel verification → resume transaction-like effect; extend for grants without widening arbitrary root permissions. **B3 remains PARTIAL.**

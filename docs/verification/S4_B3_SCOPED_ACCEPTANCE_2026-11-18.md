@@ -1,5 +1,7 @@
 # S4-B3 — independent source-exact scoped acceptance (2026-11-18 PT)
 
+> **FINAL SUPERSESSION:** This original 14-scoped PASS ledger was a valid pre-closure PARTIAL snapshot. The additional Root GET→PUT contender and native Incus/installed PRS service-cycle receipts are formally signed in [B3 final signoff](S4_B3_FINAL_SIGNOFF_2026-11-18.md). B3 is now **`S4_B3_PASS`** under the owner's explicitly reduced B3 reboot scope; S4-B overall is still not signed. Do not relabel the old partial test receipts.
+
 **VERDICT: `S4_B3_SCOPED_ACCEPTED` for the evidence-backed sub-gates below; overall `S4_B3_PARTIAL`. This is NOT `S4_B3_PASS`, `S4_B_PASS`, release approval, or a waiver of remaining mandatory negative tests.**
 
 **Recovery first:** [L0 worktree inventory and source preservation](S4_B3_RECOVERED_WORKTREE_LEDGER_2026-11-18.md). This audit does not import stale worktrees. The unrelated archive test is not used as native evidence.
