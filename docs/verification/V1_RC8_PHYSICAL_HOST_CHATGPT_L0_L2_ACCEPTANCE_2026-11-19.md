@@ -49,6 +49,8 @@ Work reference: **`rc8-l0-full-20261119`**. Created only two fresh, test-owned c
 | Physical Host root Incus socket | **PASS (limited)**: did not appear inside the unprivileged sibling Guest; no claim of exhaustive mount/credential escape proof |
 | L0 `box_stop`, `box_delete`, readback | **PASS** for two owned Boxes, followed by `box_list=[]` |
 
+**First L0 short smoke (separate earlier work reference):** Box `bw-l0-smoke-1119-a`, UUID `95c6a0c4-4e1f-4908-a911-9068d4e7fc20`, owner project `user-1001`; initial empty `box_list` and `operation_list`; Create `7d4484253a3cfd240ba6cb4b039ee094`, Start `7cba59665999d2ef91663d721f2d5b65`, Exec `73c47a0f8830316590a0ee905f2d20c9`, File Apply `7ef24ae8d9be7f5af47f99e190094ae5`, Stop `262c47df144a3778c8a6d20f3e50111e`, Delete `ac06a3babf641e89cba6e62bc3a1b26a` — **6/6 SUCCEEDED**, with Exec text `L0_SMOKE_OK` / UID `0` / `Linux`, file readback `Hello L0`, final `box_list=[]`. Those six Operations **are not included** in the later 51-entry `rc8-l0-full-20261119` tally, which is scoped by its separate work reference.
+
 Final pagination of **all** L0 Operations with the work reference returned **51 durable entries: 50 `SUCCEEDED`, 1 expected `FAILED` above, 0 `UNKNOWN` or nonterminal**. Last two Delete receipts: nested `9982c6952af3f021ea582b6d97c384a4`, peer `0c8ddd80fc9d396fae6a96af8baa8bb9`, each `SUCCEEDED`. Final `host_status.ready=true`, `mcp_ready=true`, `native.ready=true`, Schema v4, 0 Boxes. A separate earlier simple smoke was also cleaned with `box_list=[]`.
 
 ## 5. Actual independent L1 BoxWeave → L2 lifecycle
