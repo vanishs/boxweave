@@ -5,7 +5,6 @@ on:
     branches: [v1, "feat/v1-*", "release/v1.*-rc.*"]
   pull_request:
     branches: [v1]
-  workflow_dispatch:
 permissions:
   contents: read
 
