@@ -269,23 +269,23 @@ sudo incus storage delete bw-s2-noquota-pool
 sudo umount "$work/noquota-mounted"
 sudo losetup -d "$noquota_loop"
 
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin2.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer -ttl 1s > "$work/expired-viewer.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/revoked-viewer.secret"
-chmod 0600 "$work/admin.secret" "$work/viewer.secret" "$work/admin2.secret" "$work/expired-viewer.secret" "$work/revoked-viewer.secret"
-revoked_viewer_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/revoked-viewer.secret")"
-echo "$revoked_viewer_id" | grep -Eq '^[0-9a-f]{32}$'
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-revoke -db "$db" -id "$revoked_viewer_id" > "$work/revoked-viewer-result.txt"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/admin.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/peer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/admin2.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -ttl 1s > "$work/expired-peer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/revoked-peer.secret"
+chmod 0600 "$work/admin.secret" "$work/peer.secret" "$work/admin2.secret" "$work/expired-peer.secret" "$work/revoked-peer.secret"
+revoked_peer_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/revoked-peer.secret")"
+echo "$revoked_peer_id" | grep -Eq '^[0-9a-f]{32}$'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-revoke -db "$db" -id "$revoked_peer_id" > "$work/revoked-peer-result.txt"
 admin="$(sed -n 's/^token=//p' "$work/admin.secret")"
-viewer="$(sed -n 's/^token=//p' "$work/viewer.secret")"
+peer="$(sed -n 's/^token=//p' "$work/peer.secret")"
 admin2="$(sed -n 's/^token=//p' "$work/admin2.secret")"
-expired_viewer="$(sed -n 's/^token=//p' "$work/expired-viewer.secret")"
-revoked_viewer="$(sed -n 's/^token=//p' "$work/revoked-viewer.secret")"
+expired_peer="$(sed -n 's/^token=//p' "$work/expired-peer.secret")"
+revoked_peer="$(sed -n 's/^token=//p' "$work/revoked-peer.secret")"
 admin_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin.secret")"
 admin2_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin2.secret")"
-test -n "$admin" && test -n "$viewer" && test -n "$admin2" && test -n "$expired_viewer" && test -n "$revoked_viewer"
+test -n "$admin" && test -n "$peer" && test -n "$admin2" && test -n "$expired_peer" && test -n "$revoked_peer"
 echo "$admin_id" | grep -Eq '^[0-9a-f]{32}$'
 echo "$admin2_id" | grep -Eq '^[0-9a-f]{32}$'
 test "$admin_id" != "$admin2_id"
@@ -403,10 +403,10 @@ test -n "$simulated_wan_ca_b64"
 # ACTUAL native spool files. This is read-only and never deletes native logs.
 # A failure is not an excuse to retry an original native mutation.
 ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
-  BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_PEER_TOKEN="$peer" \
   BW_S2_ADMIN2_TOKEN="$admin2" BW_S2_ADMIN1_ID="$admin_id" \
   BW_S2_ADMIN2_ID="$admin2_id" BW_S2_OUTPUT_WITNESS_DIR="$work" \
-  BW_S2_EXPIRED_TOKEN="$expired_viewer" BW_S2_REVOKED_TOKEN="$revoked_viewer" \
+  BW_S2_EXPIRED_TOKEN="$expired_peer" BW_S2_REVOKED_TOKEN="$revoked_peer" \
   BW_S2_FOREIGN_LAYER_OPID="$foreign_layer_id" \
   BW_S2_HISTORY_CURSOR_WITNESS_DIR="$work" \
   BW_S2_SIMULATED_WAN_CA_CERT_B64="$simulated_wan_ca_b64" \
@@ -559,7 +559,7 @@ if grep -Fq "S2_P1_META_REDACTION_SENTINEL_110" "$work/service.redacted.log"; th
   echo "S2_P1_FAIL: untrusted _meta content appeared in service logs" >&2
   exit 119
 fi
-grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
+grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
 grep -Fqx "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS" "$work/native-probe.log"
 echo "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES=PASS"
 
@@ -1505,7 +1505,7 @@ until sudo test -S "$ack_proxy" || [ "$attempt" -ge 30 ]; do
 done
 sudo test -S "$ack_proxy"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PROXY_SOCKET_READY"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" -role admin > "$work/ack-admin.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" > "$work/ack-admin.secret"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_ONE_USE_CREDENTIAL_READY"
 chmod 0600 "$work/ack-admin.secret"
 ack_admin="$(sed -n 's/^token=//p' "$work/ack-admin.secret")"
@@ -2126,7 +2126,7 @@ mkdir -m 0700 "$work/mcp-quota-ledger"
 sudo chown boxweave:incus "$work/mcp-quota-ledger"
 mcp_quota_db="$work/mcp-quota-ledger/ledger.sqlite"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  "$work/boxweave" token-create -db "$mcp_quota_db" -role admin > "$work/mcp-quota-admin.secret"
+  "$work/boxweave" token-create -db "$mcp_quota_db" > "$work/mcp-quota-admin.secret"
 chmod 0600 "$work/mcp-quota-admin.secret"
 mcp_quota_token="$(sed -n 's/^token=//p' "$work/mcp-quota-admin.secret")"
 test -n "$mcp_quota_token"
@@ -2410,7 +2410,7 @@ for phase in before after; do
   fsync_witness="$fsync_dir/sync-triggered"
   sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
     HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    "$work/boxweave" token-create -db "$fsync_db" \
     > "$work/fsync-$phase-admin.secret"
   chmod 0600 "$work/fsync-$phase-admin.secret"
   fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
@@ -2470,7 +2470,7 @@ test "$(sudo stat -Lc '%d' "$sqlite_full_dir")" != "$(stat -Lc '%d' /)"
 sqlite_full_db="$sqlite_full_dir/ledger.sqlite"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  "$work/boxweave" token-create -db "$sqlite_full_db" -role admin \
+  "$work/boxweave" token-create -db "$sqlite_full_db" \
   > "$work/sqlite-full-admin.secret"
 chmod 0600 "$work/sqlite-full-admin.secret"
 sqlite_full_token="$(sed -n 's/^token=//p' "$work/sqlite-full-admin.secret")"

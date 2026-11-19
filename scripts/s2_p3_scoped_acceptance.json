@@ -15,7 +15,7 @@
     "required_markers": [
       "S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED",
       "S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH",
-      "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT"
+      "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT"
     ],
     "limits": "User-supplied work/agent labels are correlation only; bearer is the trusted actor."
   },
@@ -202,7 +202,7 @@
     "required_markers": [
       "S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS",
       "S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT",
-      "S2_NATIVE_VIEWER_CREATE_REFUSED"
+      "S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED"
     ],
     "limits": "Finite negative contract for 13 Tools; unbounded nested model fuzz outside accepted support boundary."
   }
