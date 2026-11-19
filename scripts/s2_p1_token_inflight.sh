@@ -20,7 +20,7 @@ actor() {
     GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-token-bootstrap.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-token-bootstrap.secret"
 chmod 0600 "$work/p1-token-bootstrap.secret"
 service_pid=""
 cleanup() {

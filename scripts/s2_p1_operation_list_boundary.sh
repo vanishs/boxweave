@@ -74,7 +74,7 @@ PY_LIST_PC
 )"
 echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_PC=$boundary_pc"
 # Populate exactly this test's private ledger; zero native mutation.
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-list-debugger-admin.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-admin.secret"
 chmod 0600 "$work/p1-list-debugger-admin.secret"
 cat > "$work/p1-list-boundary.gdb" <<EOF
 set pagination off

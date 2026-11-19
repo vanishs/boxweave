@@ -38,8 +38,8 @@ actor() {
    BW_S2_TEST_UID="$(id -u boxweave)" \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-overlap-seed.secret"
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-overlap-peer.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-overlap-seed.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-overlap-peer.secret"
 chmod 0600 "$work/p1-overlap-seed.secret" "$work/p1-overlap-peer.secret"
 token="$(sed -n 's/^token=//p' "$work/p1-overlap-seed.secret")"
 other="$(sed -n 's/^token=//p' "$work/p1-overlap-peer.secret")"

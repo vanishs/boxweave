@@ -52,7 +52,7 @@ for phase in before after; do
   lab="$work/p0-$phase"
   mkdir -m 0700 "$lab"; sudo chown boxweave:incus "$lab"
   db="$lab/ledger.sqlite"
-  actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p0-$phase-token.secret"
+  actor "$work/boxweave" token-create -db "$db" > "$work/p0-$phase-token.secret"
   token="$(sed -n 's/^token=//p' "$work/p0-$phase-token.secret")"; test -n "$token"
   p0_probe() {
     actor BW_S2_P0_DIR="$lab" BW_S2_P0_TOKEN="$token" BW_S2_P0_PROJECT="$project" \

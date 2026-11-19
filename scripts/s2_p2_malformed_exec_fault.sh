@@ -19,7 +19,7 @@ actor() {
    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p2-malformed-admin.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p2-malformed-admin.secret"
 chmod 0600 "$work/p2-malformed-admin.secret"
 token="$(sed -n 's/^token=//p' "$work/p2-malformed-admin.secret")"
 test -n "$token"

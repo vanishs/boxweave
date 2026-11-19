@@ -47,7 +47,7 @@ for phase in stop delete; do
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   lab="$work/p1-$phase"; mkdir -m 0700 "$lab"; sudo chown boxweave:incus "$lab"
   db="$lab/ledger.sqlite"
-  actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-$phase-token.secret"
+  actor "$work/boxweave" token-create -db "$db" > "$work/p1-$phase-token.secret"
   chmod 0600 "$work/p1-$phase-token.secret"
   token="$(sed -n 's/^token=//p' "$work/p1-$phase-token.secret")"; test -n "$token"
   p1_probe() {
