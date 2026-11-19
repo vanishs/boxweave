@@ -524,8 +524,8 @@ func doubleAgent(ctx context.Context) {
 	_ = request(ctx, observer, "operation_get", map[string]any{"operation_id": ops["agent-s25-alpha"]})
 	// A forged agent label and malformed mutation cannot bypass typed validation.
 	must(denied(ctx, observer, "box_create", map[string]any{
-		"name":"bw-s25-malformed", "cpu":"not-a-number",
-		"work_ref":work, "agent_ref":"agent-s25-alpha",
+		"name": "bw-s25-malformed", "cpu": "not-a-number",
+		"work_ref": work, "agent_ref": "agent-s25-alpha",
 	}), "malformed Create accepted under forged agent label")
 	m["agent_a_exec"] = ops["agent-s25-alpha"]
 	m["agent_b_exec"] = ops["agent-s25-beta"]
@@ -653,7 +653,7 @@ func rotatedPeer(ctx context.Context) {
 	// Rotation retains the same full-management capability; refuse malformed
 	// input rather than asserting an obsolete viewer permission split.
 	must(denied(ctx, peer, "box_create", map[string]any{
-		"name":"bw-s25-rotated-peer-invalid", "cpu":"invalid",
+		"name": "bw-s25-rotated-peer-invalid", "cpu": "invalid",
 	}), "rotated peer bypassed typed Create validation")
 	fmt.Println("S25_ROTATED_PEER_SDK_HOST_STATUS_AND_TYPED_VALIDATION=PASS")
 }

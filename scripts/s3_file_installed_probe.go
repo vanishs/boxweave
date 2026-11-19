@@ -655,7 +655,7 @@ func main() {
 	peerBytes := []byte("S3_INDEPENDENT_ACTOR_CREATE_OK")
 	peerCreate := call(ctx, peer, "box_file_apply", map[string]any{
 		"box_id": uuid, "path": base + "/peer-created", "mode": "create",
-		"content_base64": base64.StdEncoding.EncodeToString(peerBytes),
+		"content_base64":  base64.StdEncoding.EncodeToString(peerBytes),
 		"idempotency_key": "s3-peer-file-create-verified-01",
 	})
 	await(ctx, peer, originalID(peerCreate), "SUCCEEDED")

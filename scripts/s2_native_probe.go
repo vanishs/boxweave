@@ -203,13 +203,13 @@ func hostileProtocolMatrix(ctx context.Context, admin, peer *mcp.ClientSession) 
 	// A valid second Actor is not read-only. Reject conflicting metadata,
 	// not the Actor's management privileges; no native effect is possible.
 	forged, err := peer.CallTool(ctx, &mcp.CallToolParams{
-		Meta: mcp.Meta{"io.boxweave.work_ref":"lab/spoofed-metadata"},
-		Name:"box_create",
-		Arguments:map[string]any{
-			"name":"bw-s2-meta-invalid", "cpu":1,"memory_mib":512,"disk_gib":2,
-			"start":false,"internet":false,
-			"idempotency_key":"s2-peer-conflicting-meta-01",
-			"work_ref":"lab/conflicting-argument",
+		Meta: mcp.Meta{"io.boxweave.work_ref": "lab/spoofed-metadata"},
+		Name: "box_create",
+		Arguments: map[string]any{
+			"name": "bw-s2-meta-invalid", "cpu": 1, "memory_mib": 512, "disk_gib": 2,
+			"start": false, "internet": false,
+			"idempotency_key": "s2-peer-conflicting-meta-01",
+			"work_ref":        "lab/conflicting-argument",
 		},
 	})
 	check(err != nil || (forged != nil && forged.IsError),
@@ -448,8 +448,8 @@ func main() {
 
 	// An authorized peer must still fail validation of malformed typed inputs.
 	denied, err := peerSession.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
-		Arguments: map[string]any{"name":"s2-invalid-schema", "cpu":"invalid",
-			"idempotency_key":"native-peer-invalid-schema-01"}})
+		Arguments: map[string]any{"name": "s2-invalid-schema", "cpu": "invalid",
+			"idempotency_key": "native-peer-invalid-schema-01"}})
 	check(err != nil || (denied != nil && denied.IsError), "invalid typed Create admitted")
 	fmt.Println("S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED=PASS")
 
