@@ -1,0 +1,194 @@
+package install
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"os"
+	"reflect"
+	"testing"
+	"time"
+
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/vanishs/boxweave/internal/state"
+)
+
+func s4b3MultiScope(t *testing.T) s4b2InstalledScope {
+	t.Helper()
+	raw, err := os.ReadFile(os.Getenv("BOXWEAVE_S4B3_SCOPE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scope s4b2InstalledScope
+	if err := json.Unmarshal(raw, &scope); err != nil || len(scope.Boxes) != 3 {
+		t.Fatal("invalid native multi scope", err)
+	}
+	return scope
+}
+
+func s4b3MultiBindings(scope s4b2InstalledScope) []state.PeerGrantBinding {
+	makePair := func(i, j int) state.PeerGrantBinding {
+		a, b := scope.Boxes[i], scope.Boxes[j]
+		return state.PeerGrantBinding{SourceUUID: a.UUID, SourceIncarnation: a.UUID,
+			TargetUUID: b.UUID, TargetIncarnation: b.UUID, SourceIPv4: a.IPv4, TargetIPv4: b.IPv4,
+			SourceIPv6: a.IPv6, TargetIPv6: b.IPv6}
+	}
+	return []state.PeerGrantBinding{makePair(0, 1), makePair(1, 0), makePair(1, 2)}
+}
+
+func TestS4B3NativeRootSeedMultiACL(t *testing.T) {
+	s4b3InstalledOneUse(t, true)
+	scope := s4b3MultiScope(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nw, _, err := root.GetNetwork(scope.Bridge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, tag, err := root.GetNetworkACL(scope.ACL)
+	if err != nil || acl == nil {
+		t.Fatal(err)
+	}
+	before, err := NativePeerACLFromGrantSnapshot(NativePrepareTarget{Project: scope.Project, ACL: scope.ACL},
+		nw, s4b3MultiBindings(scope))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := root.UpdateNetworkACL(scope.ACL, before.NetworkACLPut, tag); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := root.GetNetworkACL(scope.ACL)
+	if err != nil || !reflect.DeepEqual(got.Ingress, before.Ingress) ||
+		!reflect.DeepEqual(got.Egress, before.Egress) {
+		t.Fatal("fixture whole ACL mismatch", err)
+	}
+	t.Log("S4_B3_MULTI_REVOKE_FIXTURE_THREE_DIRECTIONAL_NATIVE_ACL=PASS")
+}
+
+func TestS4B3NativeNonrootSeedMultiRevokeOriginal(t *testing.T) {
+	s4b3InstalledOneUse(t, false)
+	scope := s4b3MultiScope(t)
+	ctx := context.Background()
+	s, err := state.Open(os.Getenv("BOXWEAVE_S4B3_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	seedOriginal := os.Getenv("BOXWEAVE_S4B3_SEED_ORIGINAL")
+	if len(seedOriginal) != 32 {
+		t.Fatal("missing fixture original")
+	}
+	// This is intentionally a native multi-revoke FIXTURE, not fabricated
+	// evidence that these three prior grants ran through the PRS journal.
+	if err := s.AckSynchronousACL(ctx, seedOriginal); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinalizeRootPeerGrant(ctx, seedOriginal); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", os.Getenv("BOXWEAVE_S4B3_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, p := range s4b3MultiBindings(scope)[1:] {
+		_, err = db.ExecContext(ctx, `INSERT INTO peer_grants
+ (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
+  desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
+ VALUES(?,?,?,?,?,1,'CONFIRMED',?,?,?,?,'')`,
+			scope.Project, p.SourceUUID, p.SourceIncarnation, p.TargetUUID, p.TargetIncarnation,
+			p.SourceIPv4, p.TargetIPv4, p.SourceIPv6, p.TargetIPv6)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var actor, token string
+	if err := db.QueryRowContext(ctx, "SELECT actor_id,token_id FROM operations WHERE id=?", seedOriginal).
+		Scan(&actor, &token); err != nil {
+		t.Fatal(err)
+	}
+	a, b := scope.Boxes[0], scope.Boxes[1]
+	intent := state.RootPeerRevokeSafeIntent{
+		Project: scope.Project, Bridge: scope.Bridge, ACL: scope.ACL,
+		SourceUUID: a.UUID, SourceIncarnation: a.UUID, TargetUUID: b.UUID, TargetIncarnation: b.UUID,
+		Allow: false}
+	raw, err := json.Marshal(intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.Admit(ctx, state.Admission{
+		Layer: scope.Project, ActorID: actor, TokenID: token,
+		Key: "s4b3-native-multi-revoke-1118-unique", RequestID: "s4b3-multi-revoke",
+		Action: "box_peer_set", BoxUUID: a.UUID, Incarnation: a.UUID, SafeIntent: raw,
+		ResourceKey:  "acl:default/" + scope.ACL,
+		ResourceKeys: []string{"box:" + a.UUID, "box:" + b.UUID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StageRootPeerRevocation(ctx, op.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Claim(ctx, op.ID); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("S4_B3_NATIVE_MULTI_REVOKE_ORIGINAL=%s\n", op.ID)
+	t.Log("S4_B3_NONROOT_MULTI_DIRECTIONAL_REVOKE_PRESERVES_TWO_GRANTS=PASS")
+}
+
+func TestS4B3NativeInstalledRootMultiRevokeActualEffect(t *testing.T) {
+	s4b3InstalledOneUse(t, true)
+	scope := s4b3MultiScope(t)
+	original := os.Getenv("BOXWEAVE_S4B3_ORIGINAL")
+	if len(original) != 32 {
+		t.Fatal("missing native revoke original")
+	}
+	s, err := state.OpenNetworkAuditReadOnly(os.Getenv("BOXWEAVE_S4B3_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	proof, err := s.ReadRootPeerRevocation(ctx, original, scope.Project, scope.Bridge, scope.ACL)
+	if err != nil || len(proof.Before) != 3 || len(proof.After) != 2 {
+		t.Fatalf("native original did not preserve two independent grants: %+v %v", proof, err)
+	}
+	plan, err := NativePeerRootIntegratedReviewOperation(ctx, s, scope.Project, scope.Bridge, scope.ACL, original)
+	if err != nil || len(plan.PlanSHA256) != 64 {
+		t.Fatal("root multi review", err)
+	}
+	receipt, err := NativePeerRootIntegratedApplyOperation(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+		original, plan.PlanSHA256, true)
+	if err != nil || receipt.Status != "COMPLETE_VERIFIED" || !receipt.KernelVerified ||
+		!receipt.MutationComplete || receipt.VerifiedNICs != 3 {
+		t.Fatalf("multi-revoke root native effect: %+v %v", receipt, err)
+	}
+	root, err := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nw, _, err := root.GetNetwork(scope.Bridge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := NativePeerACLFromGrantSnapshot(NativePrepareTarget{Project: scope.Project, ACL: scope.ACL},
+		nw, proof.After)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, _, err := root.GetNetworkACL(scope.ACL)
+	if err != nil || acl == nil ||
+		!reflect.DeepEqual(acl.Ingress, want.Ingress) || !reflect.DeepEqual(acl.Egress, want.Egress) {
+		t.Fatalf("native multi revoke ACL did not retain both granted directions: %v", err)
+	}
+	if _, err := NativePeerRootIntegratedApplyOperation(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+		original, plan.PlanSHA256, true); err == nil {
+		t.Fatal("root replayed a completed multi revoke")
+	}
+	t.Log("S4_B3_NATIVE_MULTI_REVOKE_PRESERVES_REVERSE_AND_SIBLING_NFT=PASS")
+}
