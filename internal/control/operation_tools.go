@@ -9,43 +9,43 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
-// The SQLite ledger is local to this controller. The installed restricted
-// native Project supplies the local layer scope; work/agent labels never do.
-func (s *Service) operationPrincipal(req *mcp.CallToolRequest) (actor, layer string, err error) {
-	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-		return "", "", errors.New("UNAUTHENTICATED")
-	}
-	info := req.Extra.TokenInfo
-	if info.UserID == "" {
-		return "", "", errors.New("UNAUTHENTICATED")
-	}
-	if operationCredentialID(req) == "" {
-		return "", "", errors.New("UNAUTHENTICATED")
-	}
-	if s.Native.Project == "" || s.Store == nil {
-		return "", "", errors.New("CONTROLLER_NOT_CONFIGURED")
-	}
-	return info.UserID, s.Native.Project, nil
+// RequestPrincipal is the only handler-facing identity, derived from the
+// SDK-verified Bearer request. Never use client labels or stable OAuth Grant
+// IDs as independently revocable access credentials.
+type RequestPrincipal struct {
+	ActorID string
+	TokenID string
+	Layer   string
 }
 
-// operationCredentialID obtains the revocable per-request access credential,
-// never the stable OAuth grant actor. SDK authorization constructs TokenInfo;
-// client-controlled tool parameters cannot supply this field.
-func operationCredentialID(req *mcp.CallToolRequest) string {
+// requestPrincipal deliberately has no historical UserID-only fallback.
+// OAuth refresh keeps ActorID stable while issuing a new TokenID.
+func (s *Service) requestPrincipal(req *mcp.CallToolRequest) (RequestPrincipal, error) {
 	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-		return ""
+		return RequestPrincipal{}, errors.New("UNAUTHENTICATED")
 	}
 	info := req.Extra.TokenInfo
-	if raw, exists := info.Extra["token_id"]; exists {
-		id, ok := raw.(string)
-		if !ok {
-			return ""
-		}
-		return id
+	raw, present := info.Extra["token_id"]
+	tokenID, ok := raw.(string)
+	if !present || !ok || !validPrincipalID(info.UserID) || !validPrincipalID(tokenID) {
+		return RequestPrincipal{}, errors.New("UNAUTHENTICATED")
 	}
-	// Existing direct-handler manual-token test fixtures have no Extra map.
-	// An OAuth grant ID has no credential row and therefore fails closed.
-	return info.UserID
+	if s == nil || s.Native.Project == "" || s.Store == nil {
+		return RequestPrincipal{}, errors.New("CONTROLLER_NOT_CONFIGURED")
+	}
+	return RequestPrincipal{ActorID: info.UserID, TokenID: tokenID, Layer: s.Native.Project}, nil
+}
+
+func validPrincipalID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, c := range id {
+		if c < '0' || c > '9' && c < 'a' || c > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 type operationGetInput struct {
@@ -91,7 +91,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		Description: "Read an authorized original operation_id after a timeout/reconnect; compare durable state and next_action before any further mutation. UNKNOWN may have dispatched native work: do not retry with a new key; require independent read-only post-state/host review. wait_ms 0..20000 only polls, never cancels or retries.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
-		actor, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationGetResult{}, err
 		}
@@ -105,7 +105,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		var result state.Receipt
 		deadline := time.Now().Add(time.Duration(in.WaitMS) * time.Millisecond)
 		for {
-			result, err = s.Store.GetScopedOperation(ctx, layer, actor, in.OperationID)
+			result, err = s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.OperationID)
 			if err != nil {
 				return nil, operationGetResult{}, err
 			}
@@ -132,7 +132,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
 		// cancel/retry the durable operation as a side-effect.
-		if err := s.Store.RequireActiveTokenID(ctx, operationCredentialID(req)); err != nil {
+		if err := s.Store.RequireActiveTokenID(ctx, principal.TokenID); err != nil {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
@@ -144,7 +144,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		Description: "After agent interruption/reconnect, search original Operations by known work_ref, or bounded action/time pages and cursor; follow exact operation_id with operation_get. Empty results do not prove no native effect or that work finished. Client work/Agent labels never grant visibility.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationListInput) (*mcp.CallToolResult, operationListResult, error) {
-		actor, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
@@ -153,7 +153,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationListResult{}, errors.New("TRACKING_UNAVAILABLE")
 		}
 		page, err := s.Store.ListOperations(ctx, state.OperationQuery{
-			Layer: layer, Requester: actor, ActorID: in.ActorID,
+			Layer: principal.Layer, Requester: principal.ActorID, ActorID: in.ActorID,
 			WorkRef: in.WorkRef, AgentRef: in.AgentRef,
 			Action: in.Action, State: in.State, SinceNS: in.SinceNS,
 			UntilNS: in.UntilNS, Limit: in.Limit, Cursor: in.Cursor,
@@ -161,6 +161,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
-		return privateReadReply(ctx, s, operationCredentialID(req), operationListResult{TrackingID: tracking, Page: page})
+		return privateReadReply(ctx, s, principal.TokenID, operationListResult{TrackingID: tracking, Page: page})
 	})
 }

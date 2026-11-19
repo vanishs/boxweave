@@ -58,7 +58,7 @@ func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
 			"io.boxweave.agent_ref": "admin-agent",
 		}},
 	}
-	if _, _, err := requireAuthenticated(req, svc); err == nil {
+	if _, err := svc.requestPrincipal(req); err == nil {
 		t.Fatal("unauthenticated request acquired management via self-declared metadata")
 	}
 }

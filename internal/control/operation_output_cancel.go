@@ -51,7 +51,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		Description: "Recover original box_exec stdout/stderr by operation_id, at most 65536 bytes per page; advance next_offset until ended. Retain observed nonzero exit; truncated/unavailable output never proves command success.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
-		actor, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -63,7 +63,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if in.Limit == 0 {
 			in.Limit = 16384
 		}
-		original, err := s.Store.GetScopedOperation(ctx, layer, actor, in.OperationID)
+		original, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.OperationID)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -96,9 +96,9 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended, result.NextOffset = true, in.Offset
 			result.Availability = "expired"
 			result.UnavailableReason = "RETENTION_EXPIRED_VERIFIED"
-			return privateReadReply(ctx, s, operationCredentialID(req), result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
-		box, err := s.Store.OwnedBox(ctx, layer, original.BoxUUID)
+		box, err := s.Store.OwnedBox(ctx, principal.Layer, original.BoxUUID)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -109,12 +109,12 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended = true
 			result.Availability = "unavailable"
 			result.UnavailableReason = "NO_NATIVE_RECORDED_STREAM_PATH"
-			return privateReadReply(ctx, s, operationCredentialID(req), result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
 		if in.Offset == native.MaxRecordedOutputBytes {
 			result.Ended, result.Truncated = true, true
 			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, operationCredentialID(req), result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
 		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
 		if errors.Is(err, native.ErrRecordedOutputUnavailable) {
@@ -122,7 +122,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.UnavailableReason = "NATIVE_RECORDED_OUTPUT_MISSING"
 			result.Ended = true
 			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, operationCredentialID(req), result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
 		if err != nil {
 			return nil, operationOutputResult{}, err
@@ -133,7 +133,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
 			result.Ended, result.Truncated = true, true
 		}
-		return privateReadReply(ctx, s, operationCredentialID(req), result)
+		return privateReadReply(ctx, s, principal.TokenID, result)
 	})
 
 	addStrictTool(server, &mcp.Tool{
@@ -141,11 +141,11 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		Description: "Journal a separate cancellation request for a proven queued-undispatched owned Operation. Detached running Exec/native operations are not cancelable with the proved SDK path.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cancelOperationInput) (*mcp.CallToolResult, cancelOperationResult, error) {
-		actor, layer, err := requireAuthenticated(req, s)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
-		target, err := s.Store.GetScopedOperation(ctx, layer, actor, in.TargetOperationID)
+		target, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.TargetOperationID)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
@@ -163,13 +163,13 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			if target.State != "ADMITTED" {
 				return "", state.PreDispatchError{Class: "ORIGINAL_ALREADY_DISPATCHED_CANCEL_UNSUPPORTED"}
 			}
-			if err := s.Store.CancelQueued(ctx, layer, target.ID); err != nil {
+			if err := s.Store.CancelQueued(ctx, principal.Layer, target.ID); err != nil {
 				return "", state.PreDispatchError{Class: "ORIGINAL_NOT_QUEUED_CANCEL_UNSUPPORTED"}
 			}
 			return "", state.ErrNoNativeChange
 		}
 		verify := func(ctx context.Context) error {
-			got, err := s.Store.GetScopedOperation(ctx, layer, actor, target.ID)
+			got, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, target.ID)
 			if err != nil {
 				return err
 			}

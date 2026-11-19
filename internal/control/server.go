@@ -151,12 +151,9 @@ func (s *Service) Handler() http.Handler {
 	})
 	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
-			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")
-			}
-			info := req.Extra.TokenInfo
-			if info.UserID == "" || operationCredentialID(req) == "" {
-				return nil, HostStatus{}, errors.New("PERMISSION_DENIED")
+			principal, err := s.requestPrincipal(req)
+			if err != nil {
+				return nil, HostStatus{}, err
 			}
 			// Request-specific actor comes only from req.Extra.TokenInfo.
 			result := s.Status(ctx)
@@ -166,7 +163,7 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
-			return privateReadReply(ctx, s, operationCredentialID(req), result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)
 	s.registerBoxTools(server)
@@ -221,14 +218,6 @@ func (s *Service) Handler() http.Handler {
 		upstream.Host = s.Listener
 		auth.RequireBearerToken(s.TokenVerifier, opts)(sdk).ServeHTTP(w, upstream)
 	})
-}
-func contains(xs []string, x string) bool {
-	for _, s := range xs {
-		if s == x {
-			return true
-		}
-	}
-	return false
 }
 func (s *Service) ListenAndServe() error {
 	if s.Store == nil || s.Listener == "" {

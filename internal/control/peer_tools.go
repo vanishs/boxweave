@@ -25,7 +25,7 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 		Description: "Admit a directional private-network grant/revoke for two UUID-owned Boxes in an already operator-pinned Project/ACL. Returns an original Operation receipt for operation_get; host-root operator must separately stage, approve the exact digest and run PRS. ADMITTED/PENDING does not mean connectivity changed; this MCP tool never directly changes native network state.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in peerSetInput) (*mcp.CallToolResult, state.Receipt, error) {
-		actor, layer, err := requireAuthenticated(req, s)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
@@ -36,7 +36,7 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
-		previous, already, err := s.Store.ReplayPeerSet(ctx, layer, actor, operationCredentialID(req),
+		previous, already, err := s.Store.ReplayPeerSet(ctx, principal.Layer, principal.ActorID, principal.TokenID,
 			in.IdempotencyKey, in.SourceBoxID, in.TargetBoxID, in.Allow, work, agent)
 		if err != nil {
 			return nil, state.Receipt{}, err
@@ -44,11 +44,11 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 		if already {
 			return &mcp.CallToolResult{}, previous, nil
 		}
-		bridge, acl, err := s.Store.ResolvePeerAuditScope(ctx, layer, in.SourceBoxID, in.TargetBoxID)
+		bridge, acl, err := s.Store.ResolvePeerAuditScope(ctx, principal.Layer, in.SourceBoxID, in.TargetBoxID)
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
-		ledger, err := s.Store.ReadCompleteNetworkAuditLedger(ctx, layer, bridge, acl)
+		ledger, err := s.Store.ReadCompleteNetworkAuditLedger(ctx, principal.Layer, bridge, acl)
 		if err != nil {
 			return nil, state.Receipt{}, state.ErrResourceLocked
 		}
@@ -65,7 +65,7 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 			return nil, state.Receipt{}, state.ErrResourceLocked
 		}
 		intent := state.RootPeerRevokeSafeIntent{
-			Project: layer, Bridge: bridge, ACL: acl,
+			Project: principal.Layer, Bridge: bridge, ACL: acl,
 			SourceUUID: src.UUID, SourceIncarnation: src.Incarnation,
 			TargetUUID: dst.UUID, TargetIncarnation: dst.Incarnation,
 			Allow: in.Allow,
@@ -79,7 +79,7 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 			return nil, state.Receipt{}, errors.New("TRACKING_UNAVAILABLE")
 		}
 		admission := state.Admission{
-			Layer: layer, ActorID: actor, TokenID: operationCredentialID(req),
+			Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID,
 			Key: in.IdempotencyKey, Action: "box_peer_set",
 			BoxUUID: src.UUID, Incarnation: src.Incarnation,
 			ResourceKey:  "acl:default/" + acl,
