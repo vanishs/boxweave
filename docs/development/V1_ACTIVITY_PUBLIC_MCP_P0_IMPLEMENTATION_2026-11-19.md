@@ -34,3 +34,9 @@
 **Current installed Schema v4 SQLite is incompatible with Schema v5 and must fail closed.** There is no automatic migration. Do not attach new binary to existing live controller DB expecting credentials, OAuth grants, connectors, Boxes, unknown originals or Root journal evidence to transfer. Keep the original receipts and native state protected; any fresh Schema v5 controller/credentials/OAuth/ChatGPT connection setup and disposable Project reset require separate approved safe-environment scope. Read [explicit step-by-step rebuild warning](V1_ACTIVITY_LINEAGE_IMPLEMENTATION_AND_REBUILD_NOTICE_2026-11-19.md).
 
 The work was confined to the existing Draft PR #153 and an isolated owned development Box. No PR merge, RC release or shared physical Host/Root/PRS modification is authorized here.
+
+## Disposable resource cleanup and separate native failure
+
+The **only** development Box created for this P0 campaign was `36e79888-4f9e-4afd-a22d-058f95f071c9`, under `work_ref=activity-p0-20261119`. Its stop original `81f8339d48343b43d873a5e12b1359e4` and delete original `c2e97f5d7d0b0449f9f5613bd4caa67f` both reached **SUCCEEDED**. A following authenticated `box_list` returned **zero Boxes**. No other native Host/Root/PRS resources were intentionally modified.
+
+A **separate** [S4-A installed native workflow #44588050791](https://github.com/vanishs/boxweave/actions/runs/44588050791) on the exact code source `378bd4d6` ended **FAIL/NOT_SIGNED** after reporting multiple earlier native PASS checkpoints; the summarized GitHub step ends at `S4_A_INSTALLED_REAL_NATIVE_MCP=FAIL_OR_BLOCKED` without independently identifying the root failure. Its predecessor also failed before Activity P0, so **do not attribute it to Activity or dismiss it as flaky without isolated investigation**. Neither Go/SDK Activity PASS nor S4-B2 prior PASS overrides this separate S4-A signoff gate.
