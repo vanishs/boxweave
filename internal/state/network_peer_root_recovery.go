@@ -37,7 +37,7 @@ func (s *Store) FinalizeCompletedUnknownRootPeerRevocation(ctx context.Context, 
 		return ErrResourceLocked
 	}
 	effect, err := tx.ExecContext(ctx,
-		"UPDATE peer_grants SET status='REVOKED',desired=0 WHERE operation_id=? AND desired=0 AND status='PENDING'", original)
+		"UPDATE peer_grants SET status='REVOKED',desired=0,last_verified_operation_id=? WHERE operation_id=? AND desired=0 AND status='PENDING'", original, original)
 	if err != nil {
 		return err
 	}
