@@ -2,6 +2,11 @@ package state
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"database/sql"
 	"errors"
 	"sort"
@@ -20,6 +25,7 @@ type ActivityQuery struct {
 	WorkRef     string
 	AgentRef    string
 	Limit       int
+	Cursor      string
 }
 
 type ActivityIssue struct {
@@ -84,6 +90,7 @@ type ActivityResult struct {
 	Coverage          string
 	Truncated         bool
 	AttentionComplete bool
+	NextCursor        string
 	Operations        []Receipt
 	Issues            []ActivityIssue
 	Evidence          *ActivityEvidence
@@ -92,9 +99,9 @@ type ActivityResult struct {
 func (q ActivityQuery) normalize() (ActivityQuery, error) {
 	if q.Layer == "" || len(q.Layer) > 64 || !validHexID(q.Requester) ||
 		!validRef(q.WorkRef) || !validRef(q.AgentRef) ||
-		(q.BoxUUID != "" && !validHexID(q.BoxUUID)) ||
+		(q.BoxUUID != "" && !validActivityBoxID(q.BoxUUID)) ||
 		(q.OperationID != "" && !validHexID(q.OperationID)) ||
-		q.Limit < 0 || q.Limit > 50 {
+		q.Limit < 0 || q.Limit > 50 || len(q.Cursor) > 1024 {
 		return q, ErrInvalid
 	}
 	if q.View != "overview" && q.View != "issues" && q.View != "evidence" {
@@ -107,6 +114,78 @@ func (q ActivityQuery) normalize() (ActivityQuery, error) {
 		q.Limit = 20
 	}
 	return q, nil
+}
+
+
+func validActivityBoxID(id string) bool {
+	if len(id) == 0 || len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// The Activity cursor carries an authenticated scope, admission watermark and
+// keyset. Its pages are bounded live snapshots, not an immutable historical
+// database transaction spanning multiple requests.
+type activityCursor struct {
+	Scope      string `json:"s"`
+	MaxRowID   int64  `json:"r"`
+	AtNS       int64  `json:"t"`
+	Reason     string `json:"q"`
+	OriginalID string `json:"o"`
+	Resource   string `json:"k"`
+	MAC        string `json:"m"`
+}
+
+func activityScope(q ActivityQuery) string {
+	q.Cursor = ""
+	raw, _ := json.Marshal(q)
+	h := sha256.Sum256(raw)
+	return hex.EncodeToString(h[:])
+}
+
+func activityCursorMAC(secret []byte, cursor activityCursor) string {
+	cursor.MAC = ""
+	raw, _ := json.Marshal(cursor)
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write(raw)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func readActivityCursor(ctx context.Context, tx *sql.Tx, q ActivityQuery) ([]byte, activityCursor, error) {
+	var secret []byte
+	if err := tx.QueryRowContext(ctx, "SELECT secret FROM cursor_secrets WHERE id=1").Scan(&secret); err != nil {
+		return nil, activityCursor{}, err
+	}
+	if len(secret) != 32 {
+		return nil, activityCursor{}, ErrInvalid
+	}
+	cursor := activityCursor{Scope: activityScope(q)}
+	if q.Cursor == "" {
+		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(rowid),0) FROM operations WHERE layer=?", q.Layer).Scan(&cursor.MaxRowID); err != nil {
+			return nil, activityCursor{}, err
+		}
+		return secret, cursor, nil
+	}
+	encoded, err := base64.RawURLEncoding.DecodeString(q.Cursor)
+	if err != nil || len(encoded) > 512 || json.Unmarshal(encoded, &cursor) != nil ||
+		cursor.Scope != activityScope(q) || cursor.MaxRowID < 0 ||
+		!hmac.Equal([]byte(cursor.MAC), []byte(activityCursorMAC(secret, cursor))) {
+		return nil, activityCursor{}, ErrInvalid
+	}
+	return secret, cursor, nil
+}
+
+func activityNextCursor(secret []byte, cursor activityCursor) string {
+	cursor.MAC = activityCursorMAC(secret, cursor)
+	data, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(data)
 }
 
 func (q ActivityQuery) where() (string, []any) {
@@ -184,51 +263,34 @@ func (s *Store) ReadActivity(ctx context.Context, input ActivityQuery) (Activity
 }
 
 func readActivityOverview(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *ActivityResult) error {
+	secret, cursor, err := readActivityCursor(ctx, tx, q)
+	if err != nil {
+		return err
+	}
 	where, args := q.where()
+	where += " AND o.rowid<=?"
+	args = append(args, cursor.MaxRowID)
+	if q.Cursor != "" {
+		where += " AND (o.created_at<? OR (o.created_at=? AND o.id<?))"
+		args = append(args, cursor.AtNS, cursor.AtNS, cursor.OriginalID)
+	}
 	rows, err := tx.QueryContext(ctx, "SELECT "+activityColumns+" FROM operations o WHERE "+where+
 		" ORDER BY o.created_at DESC,o.id DESC LIMIT ?", append(args, q.Limit+1)...)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 	out.Operations = []Receipt{}
 	for rows.Next() {
 		rec, e := scanActivityOperation(rows)
 		if e != nil {
-			return e
+			err = e
+			break
 		}
 		if len(out.Operations) >= q.Limit {
 			out.Truncated = true
 			break
 		}
 		out.Operations = append(out.Operations, rec)
-	}
-	return rows.Err()
-}
-
-func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *ActivityResult) error {
-	where, args := q.where()
-	stmt := "SELECT o.id,o.box_uuid,o.resource_key,o.state,o.created_at,o.action FROM operations o WHERE " + where +
-		" AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')" +
-		" AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))" +
-		" ORDER BY o.created_at ASC,o.id ASC LIMIT ?"
-	rows, err := tx.QueryContext(ctx, stmt, append(args, q.Limit+1)...)
-	if err != nil {
-		return err
-	}
-	issues := []ActivityIssue{}
-	for rows.Next() {
-		var id, box, resource, state, action string
-		var at int64
-		if err = rows.Scan(&id, &box, &resource, &state, &at, &action); err != nil {
-			break
-		}
-		reason := "UNRESOLVED_OPERATION"
-		if action == "box_peer_set" {
-			reason = "PROJECT_PEER_BARRIER"
-		}
-		issues = append(issues, ActivityIssue{OperationID: id, BoxUUID: box,
-			ResourceRef: resource, State: state, Reason: reason, AtNS: at})
 	}
 	if e := rows.Err(); err == nil {
 		err = e
@@ -239,81 +301,136 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	if err != nil {
 		return err
 	}
-	// Terminal operations can still block native Box reuse while original
-	// stdout/stderr deletion is in flight or awaits separate human review.
-	gcStmt := "SELECT g.operation_id,g.box_uuid,g.name,g.state,g.claimed_at FROM exec_output_gc g " +
-		" JOIN operations o ON o.id=g.operation_id WHERE " + where +
-		" AND g.project=o.layer AND g.state IN ('DELETE_SENT','REVIEW_REQUIRED')" +
-		" ORDER BY g.claimed_at ASC,g.operation_id ASC LIMIT ?"
-	gcRows, err := tx.QueryContext(ctx, gcStmt, append(args, q.Limit+1)...)
+	if out.Truncated {
+		last := out.Operations[len(out.Operations)-1]
+		cursor.AtNS, cursor.OriginalID = last.CreatedAt, last.ID
+		out.NextCursor = activityNextCursor(secret, cursor)
+	}
+	return nil
+}
+
+// The live issues projection includes all *SQLite-visible* effective admission
+// blockers, not just recent Operations or primary Box claims. A current
+// CONFIRMED Peer or RESERVED address fence is a dependency, not a failure.
+// Unlike original events, network ledger rows are mutable: multiple cursor
+// pages are independent bounded snapshots. Never promise an all-clear.
+func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *ActivityResult) error {
+	secret, cursor, err := readActivityCursor(ctx, tx, q)
 	if err != nil {
 		return err
 	}
-	for gcRows.Next() {
-		var id, box, name, state string
-		var at int64
-		if err = gcRows.Scan(&id, &box, &name, &state, &at); err != nil {
-			break
-		}
-		issues = append(issues, ActivityIssue{OperationID: id, BoxUUID: box,
-			ResourceRef: "box:" + name, State: state, Reason: "EXEC_OUTPUT_GC_BLOCKER", AtNS: at})
+	opWhere, opArgs := q.where()
+	opWhere += " AND o.rowid<=?"
+	opArgs = append(opArgs, cursor.MaxRowID)
+	branches := []string{
+		"SELECT CASE WHEN o.action='box_peer_set' THEN 'PROJECT_PEER_BARRIER' ELSE 'UNRESOLVED_OPERATION' END AS reason," +
+			"o.id AS original,o.box_uuid AS box_uuid,o.resource_key AS resource,o.state AS state,o.created_at AS at_ns" +
+			" FROM operations o WHERE " + opWhere +
+			" AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')" +
+			" AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))",
+		"SELECT 'EXEC_OUTPUT_GC_BLOCKER',o.id,g.box_uuid,'gc:'||g.name||'/'||g.stream,g.state,g.claimed_at" +
+			" FROM exec_output_gc g JOIN operations o ON o.id=g.operation_id WHERE " + opWhere +
+			" AND g.project=o.layer AND g.state IN ('DELETE_SENT','REVIEW_REQUIRED')",
 	}
-	if e := gcRows.Err(); err == nil {
-		err = e
+	args := append([]any{}, opArgs...)
+	args = append(args, opArgs...)
+
+	// Exact network sources are constrained to the authenticated Project.
+	// Labels only narrow rows with a genuine original; they never invent
+	// attribution from identical names, IPs or timestamps.
+	labelWhere := ""
+	labelArgs := []any{}
+	if q.WorkRef != "" {
+		labelWhere += " AND o.work_ref=?"
+		labelArgs = append(labelArgs, q.WorkRef)
 	}
-	if e := gcRows.Close(); err == nil {
-		err = e
+	if q.AgentRef != "" {
+		labelWhere += " AND o.agent_ref=?"
+		labelArgs = append(labelArgs, q.AgentRef)
 	}
-	if err != nil {
-		return err
-	}
-	// Read the Peer ledger independently of operation timestamps; do not
-	// guess an original ID from network names or a previous completed grant.
-	peerSQL := "SELECT p.operation_id,p.source_uuid,p.target_uuid,p.status FROM peer_grants p " +
-		" WHERE p.project=? AND p.status IN ('PENDING','UNKNOWN')"
-	peerArgs := []any{q.Layer}
+	peer := "SELECT CASE WHEN p.status='CONFIRMED' THEN 'PEER_ACTIVE_DEPENDENCY' ELSE 'PEER_LEDGER_UNRESOLVED' END," +
+		"COALESCE(o.id,''),p.source_uuid," +
+		"'peer:'||p.source_uuid||'/'||p.source_incarnation||'/'||p.target_uuid||'/'||p.target_incarnation," +
+		"p.status,0 FROM peer_grants p LEFT JOIN operations o ON o.id=CASE WHEN p.operation_id!='' THEN p.operation_id ELSE p.last_verified_operation_id END" +
+		" AND o.layer=p.project AND o.rowid<=? WHERE p.project=? AND p.status IN ('PENDING','UNKNOWN','CONFIRMED')"
+	peerArgs := []any{cursor.MaxRowID, q.Layer}
 	if q.BoxUUID != "" {
-		peerSQL += " AND (p.source_uuid=? OR p.target_uuid=?)"
+		peer += " AND (p.source_uuid=? OR p.target_uuid=?)"
 		peerArgs = append(peerArgs, q.BoxUUID, q.BoxUUID)
 	}
-	peerSQL += " ORDER BY p.source_uuid,p.target_uuid LIMIT ?"
-	peerRows, err := tx.QueryContext(ctx, peerSQL, append(peerArgs, q.Limit+1)...)
+	branches = append(branches, peer+labelWhere)
+	args = append(args, peerArgs...)
+	args = append(args, labelArgs...)
+
+	fences := "SELECT 'ADDRESS_FENCE_DEPENDENCY',COALESCE(o.id,''),f.box_uuid," +
+		"'address:'||f.bridge||'/'||f.family||'/'||f.address,f.state,f.observed_at" +
+		" FROM network_address_fences f LEFT JOIN operations o ON o.id=f.operation_id" +
+		" AND o.layer=f.project AND o.rowid<=? WHERE f.project=? AND f.state!='RELEASED'"
+	fenceArgs := []any{cursor.MaxRowID, q.Layer}
+	if q.BoxUUID != "" {
+		fences += " AND f.box_uuid=?"
+		fenceArgs = append(fenceArgs, q.BoxUUID)
+	}
+	branches = append(branches, fences+labelWhere)
+	args = append(args, fenceArgs...)
+	args = append(args, labelArgs...)
+
+	forward := "SELECT 'FORWARD_DEPENDENCY',COALESCE(o.id,''),f.box_uuid,'forward:'||f.forward_id," +
+		"f.state,0 FROM forward_claims f LEFT JOIN operations o ON o.id=f.operation_id" +
+		" AND o.layer=f.project AND o.rowid<=? WHERE f.project=? AND f.state!='REVOKED'"
+	forwardArgs := []any{cursor.MaxRowID, q.Layer}
+	if q.BoxUUID != "" {
+		forward += " AND f.box_uuid=?"
+		forwardArgs = append(forwardArgs, q.BoxUUID)
+	}
+	branches = append(branches, forward+labelWhere)
+	args = append(args, forwardArgs...)
+	args = append(args, labelArgs...)
+
+	stmt := "WITH candidates(reason,original,box_uuid,resource,state,at_ns) AS (" +
+		strings.Join(branches, " UNION ALL ") +
+		") SELECT reason,original,box_uuid,resource,state,at_ns FROM candidates"
+	if q.Cursor != "" {
+		stmt += " WHERE (at_ns>? OR (at_ns=? AND (reason>? OR (reason=? AND (original>? OR (original=? AND resource>?))))))"
+		args = append(args, cursor.AtNS, cursor.AtNS, cursor.Reason, cursor.Reason,
+			cursor.OriginalID, cursor.OriginalID, cursor.Resource)
+	}
+	stmt += " ORDER BY at_ns ASC,reason ASC,original ASC,resource ASC LIMIT ?"
+	args = append(args, q.Limit+1)
+	rows, err := tx.QueryContext(ctx, stmt, args...)
 	if err != nil {
 		return err
 	}
-	for peerRows.Next() {
-		var id, source, target, state string
-		if err = peerRows.Scan(&id, &source, &target, &state); err != nil {
+	out.Issues = []ActivityIssue{}
+	for rows.Next() {
+		var issue ActivityIssue
+		if err = rows.Scan(&issue.Reason, &issue.OperationID, &issue.BoxUUID,
+			&issue.ResourceRef, &issue.State, &issue.AtNS); err != nil {
 			break
 		}
-		// Pending-ID is not a proof of completed kernel state; ledger
-		// issues expose the direction without expanding actor visibility.
-		issues = append(issues, ActivityIssue{BoxUUID: source,
-			ResourceRef: "peer:" + source + "/" + target,
-			Reason:      "PEER_LEDGER_UNRESOLVED", State: state})
+		if len(out.Issues) >= q.Limit {
+			out.Truncated = true
+			break
+		}
+		out.Issues = append(out.Issues, issue)
 	}
-	if e := peerRows.Err(); err == nil {
+	if e := rows.Err(); err == nil {
 		err = e
 	}
-	if e := peerRows.Close(); err == nil {
+	if e := rows.Close(); err == nil {
 		err = e
 	}
 	if err != nil {
 		return err
 	}
-	sort.SliceStable(issues, func(i, j int) bool {
-		if issues[i].AtNS == issues[j].AtNS {
-			return issues[i].OperationID < issues[j].OperationID
-		}
-		return issues[i].AtNS < issues[j].AtNS
-	})
-	if len(issues) > q.Limit {
-		out.Truncated = true
-		issues = issues[:q.Limit]
+	if out.Truncated {
+		last := out.Issues[len(out.Issues)-1]
+		cursor.AtNS, cursor.Reason, cursor.OriginalID, cursor.Resource =
+			last.AtNS, last.Reason, last.OperationID, last.ResourceRef
+		out.NextCursor = activityNextCursor(secret, cursor)
 	}
-	out.Issues = issues
-	// Not yet complete for all live fences/proxies and historical filter
-	// combinations; never promise a negative proof of no blockers.
+	// A bounded scan cannot certify a physical network or the absence of an
+	// unjournaled native effect. Also page transitions can change a ledger.
 	out.AttentionComplete = false
 	return nil
 }
