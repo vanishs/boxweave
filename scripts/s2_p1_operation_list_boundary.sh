@@ -33,7 +33,7 @@ boundary_line="$(python3 - internal/control/operation_tools.go <<'PY_LIST_BOUNDA
 from pathlib import Path
 import sys
 lines=Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-anchor="return privateReadReply(ctx, s, operationCredentialID(req), operationListResult{TrackingID: tracking, Page: page})"
+anchor="return privateReadReply(ctx, s, principal.TokenID, operationListResult{TrackingID: tracking, Page: page})"
 matches=[i for i,line in enumerate(lines) if line.strip()==anchor]
 assert len(matches)==1, "unique final operation_list response boundary missing"
 at=matches[0]
@@ -47,8 +47,8 @@ print(at+1)
 PY_LIST_BOUNDARY
 )"
 echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_LINE=$boundary_line"
-# Optimized Go inlines credential extraction into the return expression.
-# Its first source-line PC can belong only to an invalid-credential branch.
+# The source now passes the SDK-derived principal.TokenID directly.
+# Source-line PCs may still be ambiguous under Go optimization.
 # Stop at the unique actual privateReadReply CALL in the installed bytes,
 # after successful ListOperations, before the final credential recheck.
 go tool objdump -s 'registerOperationReadTools\.func2$' "$work/boxweave" \
