@@ -33,6 +33,7 @@
 |---|---|
 | What is BoxWeave? | [Product](product/PRODUCT.md) · [README](../README.md) · [Glossary](GLOSSARY.md) |
 | Which permanent boundaries override superseded v1 plans? | [Permanent product boundary](decisions/PRODUCT_BOUNDARY.md) |
+| How must **every MCP Tool** carry key evidence through Control/SQLite/events/logs and back to a recovering Agent before Activity is designed? | [MCP → DB / logs full Tool lineage audit and implementation-design task](development/V1_MCP_TO_DB_LOG_LINEAGE_AUDIT_PLAN_2026-11-19.md) · [UX/Activity parent design](development/V1_MCP_AGENT_UX_AND_ACTIVITY_DESIGN_2026-11-18.md) |
 | What supports multiple Agents, attributed native operations and safe restart? | [Agent Operation Continuity contract](design/AGENT_OPERATION_CONTINUITY.md) · [TC-001–TC-020 acceptance](verification/CONTINUITY_ACCEPTANCE.md) |
 | How is an Agent's broader goal/Git state checkpointed without new BoxWeave Tools? | [Lightweight client-owned Task Checkpoint](development/TASK_CHECKPOINT_CONTRACT.md) |
 | What is the primary P0 Agent workflow? | [Sustainable development loop](product/DEVELOPMENT_LOOP.md) |
