@@ -41,7 +41,24 @@
 
 以上受保护资源示意**没有 `scopes_supported`**；Client 在授权请求中不提供 `scope`，人仍在浏览器确认完整管理范围。Token 响应返回 `access_token` 和适用的 `refresh_token`，`scope` 无须存在。示意 URL 非可用服务器地址。
 
-### 2.2 主要源码锚点（已核实）
+### 2.2 实际已锁定 SDK 的无 Scope 能力核查（2026-11-18，静态源码 PASS）
+
+这不是升级依赖或替换 OAuth 库的理由。PR #153 当前 `go.mod` 固定：
+
+| SDK | 当前版本 | 源码核查结果 | 精确依据 |
+|---|---|---|---|
+| `github.com/go-oauth2/oauth2/v4` | `v4.6.0` | **支持空 Scope 的授权请求、Token 请求、响应生成** | [`server/server.go` 授权校验 L174–214](https://github.com/go-oauth2/oauth2/blob/v4.6.0/server/server.go#L174-L214)；[Token 校验 L326–393](https://github.com/go-oauth2/oauth2/blob/v4.6.0/server/server.go#L326-L393)；[响应 L548–563](https://github.com/go-oauth2/oauth2/blob/v4.6.0/server/server.go#L548-L563) |
+| `github.com/modelcontextprotocol/go-sdk` | `v1.8.0` | **允许没有请求/声明的 Scope，仍要求有效 Bearer Token** | [`auth/auth.go` L97–158](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/auth/auth.go#L97-L158)；[`oauthex/resource_meta.go` L43–46](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/oauthex/resource_meta.go#L43-L46)；[`oauthex/auth_meta.go` L46–48](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/oauthex/auth_meta.go#L46-L48) |
+
+**具体核查事实：**
+
+1. `go-oauth2` 的 `ValidationAuthorizeRequest` 使用 `r.FormValue("scope")`（缺省即空字符串），并未将空值判为无效；`ValidationTokenRequest` 在授权码交换时不强制 `scope`，刷新流程可以传空值。
+2. 上游 `GetTokenData` **只在 `ti.GetScope() != ""` 时添加 JSON `scope`**。BoxWeave 当前 Token JSON 是自己手工拼装的（`internal/control/oauth.go`），整改时**仍需主动删除它无条件返回 `scope` 的代码**，不能以“SDK 支持”代替应用整改。
+3. `MCP Go SDK` 的 `ScopesSupported` 字段为 `json:"scopes_supported,omitempty"`；`RequireBearerToken` 仅在 `opts.Scopes` 非空时要求 Scope，并且缺少 Bearer Header 时仍返回 HTTP 401。**Scope-free ≠ authentication-free**。
+4. BoxWeave 当前 `internal/control/server.go` `TokenVerifier` 仍用 `t.Role` 填入 `TokenInfo.Scopes`，`operationPrincipal` 也要求 `admin/viewer`，`parseOAuthScope("")` 仍返回 `viewer`。**所以 HEAD 仍是双角色实现，不是 B**。
+5. **验收分层：** `SDK_STATIC_SOURCE_COMPATIBLE=YES`；`BOXWEAVE_SCOPE_FREE_IMPLEMENTED=NO`；`SDK_E2E_TESTED=NO`；`REAL_CHATGPT_CONNECT_REFRESH_PASS=NOT_TESTED`。当前不需要切换 OAuth/MCP SDK 版本；完成代码修改后增加无 Scope SDK HTTP 测试，随后再用真实 ChatGPT 验证发现、同意、授权码、Token、刷新、撤销。
+
+### 2.3 主要源码锚点（已核实）
 
 | 范围 | 当前历史包袱 | 整改方向 |
 |---|---|---|
@@ -94,7 +111,7 @@
 
 ## 7. 已做决策与剩余风险
 
-**A. OAuth：Owner 已选 B。** 当前目标是**无应用权限 Scope** 的 OAuth，非 `mcp:manage` 单 Scope；内部没有 `admin/viewer` 角色。OpenAI 官方文档和 MCP 规范提供合法协议依据，但真实 ChatGPT 端到端授权/刷新尚未测试。必须先用 disposable server + ChatGPT 客户端对 `discovery → consent → code/PKCE → token → Tool → refresh → revoke` 给出独立证据，才能标记完全通过。
+**A. OAuth：Owner 已选 B。** 当前目标是**无应用权限 Scope** 的 OAuth，非 `mcp:manage` 单 Scope；最终实现不再有 `admin/viewer` 角色。已经核对锁定的 `go-oauth2 v4.6.0` 与 `MCP Go SDK v1.8.0` 上游源码，都允许无 Scope；现有 BoxWeave 实现仍需修改，真实 ChatGPT 端到端授权/刷新尚未测试。必须先用 disposable server + ChatGPT 客户端对 `discovery → consent → code/PKCE → token → Tool → refresh → revoke` 给出独立证据，才能标记完全通过。
 
 **B. 清理边界不变。** 执行**角色整链清理**和现行文档瘦身，再按静态引用与安全证据删旧 Helper/脚本。其他旧 S4 网络、恢复和 Installer 代码不得凭文件名批量删掉；需要先证明未被当前安全契约和原生验收引用。
 
