@@ -1,0 +1,37 @@
+# BoxWeave v1 — Activity P1 OAuth, history and interrupted-Agent recovery verification (2026-11-19)
+
+**Development scope:** sole Draft PR [#153](https://github.com/vanishs/boxweave/pull/153), `feat/v1-s4-runtime-integration-20261116`. **Tested code source:** `24395a525ded5bbee7598520196c5a9c56563b86`. This is a disposable isolated Box verification, **not** a live physical Host controller migration, ChatGPT model-run or RC release.
+
+## P1 security and history verdict — source / SDK / isolated Box PASS
+
+| Gate | Exact witness | Result |
+|---|---|---|
+| OAuth DCR/PKCE, refresh token rotation; prior OAuth access denied | `TestActivityOAuthRefreshRotationRevokedGrantAndForeignLayer` in `internal/control/activity_oauth_p1_test.go` uses the actual `/register`, browser `/authorize`, `/token` and authenticated MCP SDK `box_activity_get`; refreshed access preserves the original Grant Actor and changes Token ID. | **PASS** |
+| Grant revocation; no Activity readback or refresh after revoke | Same test revokes the active Grant, verifies `overview/issues/evidence` failure, rejects further refresh, while independently issued OAuth Grant continues to read the same-Layer Operation. | **PASS** |
+| OAuth refresh replay detection / successor invalidation | `TestActivityOAuthRefreshReplayInvalidatesSuccessor`: reusing the consumed refresh credential returns HTTP 400, revokes its successor access to Activity, and leaves an independently authorized Grant usable. | **PASS** |
+| Foreign Project/Layer isolation and separate Actors | `TestActivityOAuthRefreshRotationRevokedGrantAndForeignLayer`: a foreign-Layer original ID cannot be read even with a valid same-Layer access Token; another independent OAuth Grant can inspect the authorized original. Existing `activity_query_test.go` and `activity_query_pagination_test.go` also check label/signed-cursor Layer binding. | **PASS** |
+| OAuth concurrent readers and post-revocation refusal | `TestActivityOAuthConcurrentReadersRevokedGrantNoPostRevokeLeak`: twenty simultaneous readers during revocation, followed by fifteen forbidden calls covering `overview/issues/evidence` on the invalidated session. Reads completed before revocation commit are not counted as violations. | **PASS** |
+| Long historical operations and 100k SQLite rows | Opt-in `TestActivityP1History100kOptIn`, executed **only** with `BOXWEAVE_ACTIVITY_P1_STRESS=1` inside the disposable Box: 100,000 synthetic operations, half from a foreign Layer, all ~350 days old. | **PASS** |
+| Older UNKNOWN exhaustive paging | 151 old authorized UNKNOWN originals found in four `issues` keyset pages (50 max), with no duplicates or missing `next_cursor`; `attention_complete=false` remains conservative. | **PASS** |
+| Overview 2,000-record cursor walk and HMAC scope | Forty `overview` pages × 50 rows without duplicate originals; copied cursor replay with different Layer/Token ID refused. Earlier tests cover tampered cursor, changed labels and admission watermark. | **PASS** |
+| 64 concurrent 100k-row Activity scans | Eight goroutines × eight authorized `overview/issues` calls; no SQLite errors or Layer drift. | **PASS** |
+| Exact-source full State/Control Go Race | In the isolated Box: `CGO_ENABLED=1 go test -race ./internal/state ./internal/control -count=1` at code `24395a52`: both packages PASS. [Required GitHub quality + Go Race #44605656941](https://github.com/vanishs/boxweave/actions/runs/44605656941): **SUCCESS**. [amd64/arm64 candidate builds #44605657152](https://github.com/vanishs/boxweave/actions/runs/44605657152): **SUCCESS**. | **PASS** |
+
+**Disposable Box benchmark, not production SLO:** 100k-row seed ~3,007 ms; full 151-issue paging ~187 ms; first 2,000 historical records via signed cursor ~25 ms; 64 concurrent scans ~375 ms. These measurements are from a single isolated environment, do not establish tail latency or throughput on arbitrary production hosts, and should not be converted into fixed universal performance guarantees. The 100k-row test is intentionally opt-in so ordinary CI and small developer machines do not repeatedly run a high-cost SQLite load.
+
+## P1 simulated independent Agent recovery verdict — PASS for scoped MCP/SQLite protocol
+
+`TestActivityRealHTTPReplyLossReopenControllerFreshActorFindsExactUnknown` in `internal/control/activity_reconnect_test.go` executes the **official MCP SDK over real HTTP** in two independently authenticated sessions. It seeds an exact durable original `box_exec` with `UNKNOWN` after `DISPATCHING`, then deliberately discards the result of `box_activity_get(issues)` **after the HTTP service processes the call**. The first client disconnects, the server closes, the SQLite store closes and reopens from the same Schema v5 controller database, and a new independently credentialed Actor calls `issues/evidence/overview`.
+
+The second client **recovers the exact original Operation ID**, reads it independently through `operation_get`, sees `next_action.kind=HOST_LOCAL_REVIEW`, and verifies that a newly minted idempotency key against the same unresolved Box resource is blocked with `ErrResourceLocked`. The scoped work-history list has **exactly one** original Operation; no new native mutation is attempted. The test ran PASS together with OAuth P1 and full Go Race on source `24395a52`.
+
+**Important distinction:** the original native `UNKNOWN` was seeded as a controlled SQLite **simulated lost ACK**. The lost HTTP message was an Activity **read** response. This is valid evidence for the Agent's read-only evidence recovery and no-blind-retry guard, but **not** evidence that a real Incus/Root change lost its native ACK and was later independently reconciled. The test uses two official MCP clients, **not** two real ChatGPT model sessions evaluating a natural-language task. The latter full autonomous TC-015/016 handoff still belongs to S5.
+
+## Remaining boundaries / explicit nonclaims
+
+- The actual connected `boxweave L0` controller is **Schema v4 / commit `bc1e8447`**, not the unmerged Schema v5 branch. Do **not** replace its SQLite/credentials/OAuth connection/Host state without separate approval; the P1 Box is not a migration tool.
+- The OAuth tests prove refresh, revocation, post-revocation denial and concurrent requests. They do **not** set an instruction-level breakpoint inside a long-running `box_activity_get` SQL query to force revocation at the exact final read-to-write boundary; the code has pre/post-transaction Token-ID checks and a controller return-time recheck. Exact source-level GDB revocation/expiry cuts for **`operation_list`**, not Activity, passed the independent earlier [S4-A run #44600149557](https://github.com/vanishs/boxweave/actions/runs/44600149557).
+- No current native kernel ACL state, host-root journal, guest command outcome, external Git or Agent conversation plan is inferred by Activity. SQLite `attention_complete=false` remains mandatory.
+- Real ChatGPT-connected Schema v5 Activity use, real **native mutation** ACK loss/reconciliation, full S4-B3 Root reacceptance and S5 two-model TC-015/016 require separate evidence and/or explicit user connector authorization. A clean Box-level P1 does not silently certify these.
+
+[Public Activity P0 contract and prior CI](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md) · [prior A2 and S4-A native run](V1_ACTIVITY_A2_LOCAL_RECONNECT_AND_S4A_CI_2026-11-19.md) · [mandatory Schema v5 adoption warning](../development/V1_ACTIVITY_LINEAGE_IMPLEMENTATION_AND_REBUILD_NOTICE_2026-11-19.md).
