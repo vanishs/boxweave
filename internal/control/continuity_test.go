@@ -1,7 +1,6 @@
 package control
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -49,23 +48,17 @@ func TestS2SDKNativeCorrelationMetadataAndFallback(t *testing.T) {
 	}
 }
 
-func TestS2PrivateCorrelationDoesNotAuthorizeViewerMutation(t *testing.T) {
-	st, _, _, viewer := fixture(t)
-	verified, err := st.VerifyToken(context.Background(), viewer)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
+	st, _, _, _ := fixture(t)
 	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
 	req := &mcp.CallToolRequest{
-		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{
-			UserID: verified.ID, Scopes: []string{"viewer"},
-		}},
+		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID:""}},
 		Params: &mcp.CallToolParamsRaw{Meta: mcp.Meta{
-			"io.boxweave.work_ref":  "spoofed/admin-work",
-			"io.boxweave.agent_ref": "admin-agent",
+			"io.boxweave.work_ref":"spoofed/admin-work",
+			"io.boxweave.agent_ref":"admin-agent",
 		}},
 	}
 	if _, _, err := requireAuthenticated(req, svc); err == nil {
-		t.Fatal("viewer borrowed admin authority using self-declared metadata")
+		t.Fatal("unauthenticated request acquired management via self-declared metadata")
 	}
 }

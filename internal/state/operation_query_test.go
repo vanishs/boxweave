@@ -122,8 +122,8 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	if err != nil || len(own.Operations) != 2 {
 		t.Fatalf("actor-filtered history mismatch: %+v %v", own, err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", a.ID,foreign.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("guessed foreign ID leaked: %v", err)
+	if _, err := s.GetScopedOperation(ctx, "L0", a.ID,foreign.ID); err != nil {
+		t.Fatalf("same-layer peer Actor history missing: %v", err)
 	}
 	if _, err := s.GetScopedOperation(ctx, "L1", a.ID,first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-layer operation leaked: %v", err)

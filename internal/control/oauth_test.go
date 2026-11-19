@@ -287,18 +287,10 @@ func TestEmbeddedOAuthJSONResponsesNoSSE(t *testing.T) {
 	}
 }
 
-func expectedOAuthRole(scope string) string {
-	for _, name := range strings.Fields(scope) {
-		if name == "mcp:admin" {
-			return "admin"
-		}
-	}
-	return "viewer"
-}
-func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) {
+func TestEmbeddedOAuthOwnedBoxChecksAndToolRefreshWithoutParams(t *testing.T) {
 	_, ts, pwd := newOAuthServerTest(t)
 	f := completeOAuth(t, ts, pwd, "")
-	client := mcp.NewClient(&mcp.Implementation{Name: "viewer-negative", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "ownership-negative", Version: "1"}, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp", HTTPClient: &http.Client{Transport: hostOAuthTransport{rawToken: f.access}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
@@ -308,7 +300,7 @@ func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) 
 	defer sess.Close()
 	result, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "box_exec", Arguments: map[string]any{"box_id": "nonexistent-owned-id", "idempotency_key": "viewer-denied-intent", "argv": []string{"true"}}})
 	if err == nil && (result == nil || !result.IsError) {
-		t.Fatalf("viewer executed write: %+v", result)
+		t.Fatalf("foreign Box executed write: %+v", result)
 	}
 	payload := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
 	req, err := http.NewRequest("POST", ts.URL+"/mcp", strings.NewReader(payload))

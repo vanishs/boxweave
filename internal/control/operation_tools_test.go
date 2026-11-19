@@ -84,8 +84,7 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	if err != nil || !strings.Contains(string(encoded), receipt.ID) {
 		t.Fatalf("MCP operation_list lost original receipt: %s %v", encoded, err)
 	}
-	// A different authenticated token cannot borrow authority using the same
-	// self-declared work or Agent label.
+	// A different authenticated Actor may recover the same-Layer original; work_ref is only a filter, never permission.
 	viewSession, viewCancel := connect(viewer)
 	defer viewCancel()
 	defer viewSession.Close()
@@ -93,20 +92,20 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 		Name: "operation_list", Arguments: map[string]any{"work_ref": "acceptance/session-1"},
 	})
 	if err != nil || hidden.IsError {
-		t.Fatalf("scoped viewer list should return empty page: %+v %v", hidden, err)
+		t.Fatalf("independent actor operation_list rejected: %+v %v", hidden, err)
 	}
 	encoded, err = json.Marshal(hidden.StructuredContent)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), receipt.ID) {
-		t.Fatalf("work_ref leaked original operation across actors: %s", encoded)
+	if !strings.Contains(string(encoded), receipt.ID) {
+		t.Fatalf("independent actor could not recover same-layer original: %s", encoded)
 	}
 	denied, err := viewSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_get", Arguments: map[string]any{"operation_id": receipt.ID},
 	})
-	if err == nil && denied != nil && !denied.IsError {
-		t.Fatalf("viewer guessed original operation id successfully: %+v", denied)
+	if err != nil || denied == nil || denied.IsError {
+		t.Fatalf("independent actor cannot inspect same-layer original: %+v %v", denied, err)
 	}
 	invalidWait, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_get", Arguments: map[string]any{"operation_id": receipt.ID, "wait_ms": 20001},
@@ -121,47 +120,29 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	}
 }
 
-func TestS2ViewerCannotMutateAnyNativeTool(t *testing.T) {
-	st, ts, admin, viewer := fixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	client := mcp.NewClient(&mcp.Implementation{Name: "s2-negative-viewer", Version: "1"}, nil)
-	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:             ts.URL + "/mcp",
-		HTTPClient:           &http.Client{Transport: bearerTransport{base: http.DefaultTransport, token: viewer}},
-		DisableStandaloneSSE: true, MaxRetries: -1,
-	}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer session.Close()
-	for _, tc := range []struct {
-		name string
-		args map[string]any
-	}{
-		{"box_create", map[string]any{"name": "negative-box", "idempotency_key": "viewer-unauthorized-create-1"}},
-		{"box_update", map[string]any{"box_id": "forged", "cpu": 2, "idempotency_key": "viewer-unauthorized-update-1"}},
-		{"box_start", map[string]any{"box_id": "forged", "idempotency_key": "viewer-unauthorized-start-1"}},
-		{"box_stop", map[string]any{"box_id": "forged", "idempotency_key": "viewer-unauthorized-stop-01"}},
-		{"box_delete", map[string]any{"box_id": "forged", "idempotency_key": "viewer-unauthorized-delete1"}},
-		{"box_exec", map[string]any{"box_id": "forged", "argv": []string{"true"}, "idempotency_key": "viewer-unauthorized-exec-01"}},
-		{"operation_cancel", map[string]any{"target_operation_id": "forged", "idempotency_key": "viewer-unauthorized-cancel"}},
-	} {
-		r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-		if err == nil && r != nil && !r.IsError {
-			t.Fatalf("viewer mutation succeeded: %s %+v", tc.name, r)
-		}
+// No role downgrade exists; invalid credentials may not reach any mutation.
+func TestS2InvalidCredentialCannotMutateAnyNativeTool(t *testing.T) {
+	st, ts, admin, _ := fixture(t)
+	ctx := context.Background()
+	for _, name := range []string{"box_create", "box_update", "box_start",
+		"box_stop", "box_delete", "box_exec", "operation_cancel", "box_peer_set"} {
+		payload, err := json.Marshal(map[string]any{"jsonrpc":"2.0", "id":1, "method":"tools/call",
+			"params":map[string]any{"name":name,"arguments":map[string]any{"name":"unauthorized", "idempotency_key":"invalid-auth-no-effect"}}})
+		if err != nil { t.Fatal(err) }
+		req, err := http.NewRequestWithContext(ctx, "POST", ts.URL+"/mcp", strings.NewReader(string(payload)))
+		if err != nil { t.Fatal(err) }
+		req.Header.Set("Authorization","Bearer bw1_invalid")
+		req.Header.Set("Content-Type","application/json")
+		req.Header.Set("Accept","application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil { t.Fatal(err) }
+		res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized { t.Fatalf("%s invalid bearer HTTP %d",name,res.StatusCode) }
 	}
 	tok, err := st.VerifyToken(ctx, admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ops, err := st.ListOperations(ctx, state.OperationQuery{
-		Layer: "bw-test", Requester: tok.ID,
-	})
-	if err != nil || len(ops.Operations) != 0 {
-		t.Fatalf("viewer denial created a durable native admission: %+v %v", ops, err)
-	}
+	if err != nil { t.Fatal(err) }
+	ops, err := st.ListOperations(ctx,state.OperationQuery{Layer:"bw-test",Requester:tok.ID})
+	if err != nil || len(ops.Operations)!=0 { t.Fatalf("unauthorized admission recorded: %+v %v",ops,err) }
 }
 
 func TestS2MCPQueuedCancelOriginalReceiptNeverIssuesNativeID(t *testing.T) {
