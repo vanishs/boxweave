@@ -5,6 +5,20 @@
 **Later focused test-only fix:** `be599aece10f908037edc5599167609ec1288d36`; changes one S2 native SDK probe's no-role PASS marker, not controller/SDK/Incus production Go source. Native results from `2c7181a` are **source-specific** and are not silently labeled as the later commit's exact-head signoff.
 **Only development location:** [Draft PR #153](https://github.com/vanishs/boxweave/pull/153); never merged/deployed/published.
 
+## Latest independent GH Actions native matrix (2026-11-19 UTC; newer than the snapshot below)
+
+**Exact source and CI SHA:** `917c02965f1f4d2d92aecf3498fcbfdac540d37d`, still Draft PR #153. Native jobs use fresh one-use GitHub-hosted Ubuntu 24.04 / Incus 7.6; no shared BoxWeave L0 host is modified.
+
+- **Quality gate:** [run #44480369029](https://github.com/vanishs/boxweave/actions/runs/44480369029) **PASS**; exact-head build manifest [#44480369078](https://github.com/vanishs/boxweave/actions/runs/44480369078) quality, amd64 and arm64 build jobs **PASS** (pre-release publish job skipped).
+- **S4-B2 Controller→Root revoke:** [run #44480369027](https://github.com/vanishs/boxweave/actions/runs/44480369027), all three native jobs **PASS**: `normal`, `lost_ack`, `after_acl_fault`. The independent job logs contain `S4_B2_INSTALLED_ROOT_ACK_LOST_COMPLETED_JOURNAL_READONLY_RECOVERED_NO_REPLAY=PASS`, `S4_B2_INSTALLED_ROOT_REAL_ACL_PUT_THEN_UNKNOWN_JOURNAL_ALL_NICS_STOPPED=PASS`, and `S4_B2_INSTALLED_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_DUALSTACK_SURVIVED_REVOKE=PASS`. Host-root service restart, restricted socket and original-journal reuse refusal were checked. **B2 stage-2 selected native matrix = 3/3 PASS**.
+- **S4-B3 Root grant/ETag:** [run #44480369108](https://github.com/vanishs/boxweave/actions/runs/44480369108): **`inside_etag_race` PASS**, real stop barrier with contender PUT rejected, UNKNOWN NIC isolation and Incus/PRS service-cycle evidence verified. **`installed_normal` IN_PROGRESS at this checkpoint**, not signed.
+- **S4-A full installed S2/Operation/OAuth/native end-to-end:** [run #44479992641](https://github.com/vanishs/boxweave/actions/runs/44479992641) on source SHA `9c2a11e8484842bc3995a1c4e2d0bcdd1da843bc` **IN_PROGRESS at this checkpoint**. The earlier failed S4-A probe had a stale GDB compiled-source boundary anchor referring to the deleted `operationCredentialID(req)` function, not a demonstrated native ACL or Box effect regression. Corrected `scripts/s2_p1_operation_list_boundary.sh` to match `principal.TokenID` in `9c2a11e`; the S4-A workflow is now exercising that exact-source correction. Until it actually finishes, S4-A is **NOT PASS**. SHA differs only by the later B2/B3 CI preflight changes.
+- **B2/B3 preflight on same SHA:** added source-exact Go tests of strict `RequestPrincipal` and full ACL comparison to B2/B3 workflows *before* costly native provisioning, commit `917c029`.
+- **S3 native File Tools:** previously established on source `2c7181a` via runs [#44474489120](https://github.com/vanishs/boxweave/actions/runs/44474489120), [#44474489157](https://github.com/vanishs/boxweave/actions/runs/44474489157), both **PASS**. These earlier source-specific results cannot be silently relabeled exact-HEAD PASS. Later code changes from `2c7181a` through `917c029` only affect probe/workflow/doc source; re-acceptance of every S3 fixture remains an independently chosen Stage-2/Stage-3 gate.
+- **Safety/limitations:** old signoffs, the exact-source S4-A job still running, the B3 normal branch still running, and actual ChatGPT scope-free OAuth connection/refresh/revoke **do not** constitute a final 100% native/E2E signoff. Other B3 matrix variants are not claimed reexecuted on `917c029`; preserve unexecuted cases as `NOT_TESTED`. No automatic v3→v4 migration or host reset is permitted.
+
+**Current verdict: `STAGE2_NATIVE_PARTIAL`**, with **B2 3/3 PASS** at `917c029` and confirmed B3 ETag competition PASS; awaiting the distinct final outcomes of B3 normal and S4-A.
+
 ## Real fresh Incus 7.6 evidence (GitHub-hosted disposable Ubuntu 24.04)
 
 | Gate | Source SHA | Workflow run | Observation |
