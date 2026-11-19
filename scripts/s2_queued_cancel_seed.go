@@ -32,8 +32,8 @@ func main() {
 	}
 	defer store.Close()
 	actor, err := store.VerifyToken(ctx, token)
-	if err != nil || actor.Role != "admin" {
-		panic("one-use seed requires original authenticated administrator")
+	if err != nil || actor.ID == "" || actor.ActorID == "" {
+		panic("one-use seed requires independently verified authenticated Actor and live credential")
 	}
 	if len(os.Args) == 2 && os.Args[1] == "append" {
 		// Real second SQLite connection during an official SDK paginated read.
@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// Entirely controller-local history, never an Incus native effect. These
-	// records belong to the same disposable authenticated admin actor but do
+	// records belong to the same disposable authenticated Actor but do
 	// not claim/lock an owned Box. Exercise real SDK indexed pagination,
 	// actor/label filters and bounds with >2 full 50-row pages.
 	for i := 0; i < 120; i++ {
@@ -96,7 +96,7 @@ func main() {
 	}
 	// A foreign layer ledger row with the SAME real admin actor credential is
 	// a purely synthetic authorization negative, not a foreign Incus Box.
-	// It must be hidden even from an admin of this server's configured Project.
+	// It must be hidden even from an authenticated Actor of this server's configured Project.
 	foreignLayer := project + "-foreign"
 	foreign, err := store.Admit(ctx, state.Admission{
 		Layer: foreignLayer, ActorID: actor.ID, TokenID: actor.ID,
