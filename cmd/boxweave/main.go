@@ -47,7 +47,6 @@ func run() error {
 	socket := f.String("incus-socket", "/var/lib/incus/unix.socket.user", "restricted Incus Unix socket")
 	project := f.String("project", "", "installer-verified confined project; mandatory for native reads")
 	listener := f.String("listen", "127.0.0.1:18650", "loopback management HTTP listen address")
-	role := f.String("role", "viewer", "token role")
 	ttl := f.Duration("ttl", 30*24*time.Hour, "token validity")
 	tokenID := f.String("id", "", "exact local credential or OAuth grant ID")
 	publicOrigin := f.String("public-origin", "", "exact operator-reviewed public HTTPS origin (without /mcp)")
@@ -561,12 +560,12 @@ func run() error {
 		if os.Geteuid() == 0 {
 			return errors.New("token creation must use the dedicated local service identity")
 		}
-		raw, t, err := s.IssueToken(ctx, *role, *ttl)
+		raw, t, err := s.IssueToken(ctx, *ttl)
 		if err != nil {
 			return err
 		}
 		// Printed once, only following an explicit host-local invocation.
-		fmt.Fprintf(os.Stdout, "id=%s role=%s expires=%s\ntoken=%s\n", t.ID, t.Role, t.Expires.Format(time.RFC3339), raw)
+		fmt.Fprintf(os.Stdout, "id=%s expires=%s\ntoken=%s\n", t.ID, t.Expires.Format(time.RFC3339), raw)
 		return nil
 	case "token-revoke":
 		if os.Geteuid() == 0 {
