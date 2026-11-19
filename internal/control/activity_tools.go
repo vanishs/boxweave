@@ -28,7 +28,7 @@ type activityGetResult struct {
 
 func (s *Service) registerActivityTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
-		Name: "box_activity_get",
+		Name:        "box_activity_get",
 		Description: "Read BoxWeave's durable same-Project SQLite activity after reconnect. view=overview (default) lists recent originals; issues finds old UNKNOWN, active operations, peer/network/forward and output-GC dependencies; evidence requires operation_id and returns original events, resource claims and safe proof references. Optional box_id/work_ref/agent_ref narrow scope; limit 1..50 and signed next_cursor paginate overview/issues. This does not prove native or guest completion, and UNKNOWN must never be blindly retried.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in activityGetInput) (*mcp.CallToolResult, activityGetResult, error) {
