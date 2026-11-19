@@ -118,7 +118,7 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 	if err != nil {
 		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{UserID: t.ActorID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
+	return &auth.TokenInfo{UserID: t.ActorID, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
 }
 func (s *Service) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
@@ -155,7 +155,7 @@ func (s *Service) Handler() http.Handler {
 				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")
 			}
 			info := req.Extra.TokenInfo
-			if info.UserID == "" || (!contains(info.Scopes, "admin") && !contains(info.Scopes, "viewer")) {
+			if info.UserID == "" || operationCredentialID(req) == "" {
 				return nil, HostStatus{}, errors.New("PERMISSION_DENIED")
 			}
 			// Request-specific actor comes only from req.Extra.TokenInfo.
