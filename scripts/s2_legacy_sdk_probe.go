@@ -205,15 +205,15 @@ func main() {
 		"box_exec": true, "operation_get": true, "operation_list": true,
 		"operation_output_get": true, "operation_cancel": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
-		"box_peer_set": true,
+		"box_peer_set": true, "box_activity_get": true,
 	}
-	verify(len(list.Tools) == len(known), "old SDK did not discover all 16 legacy plus B3 peer tools")
+	verify(len(list.Tools) == len(known), "old SDK did not discover the current exact public MCP catalog")
 	for _, tool := range list.Tools {
 		verify(known[tool.Name], "unknown tool disclosed by old SDK: "+tool.Name)
 		delete(known, tool.Name)
 	}
 	verify(len(known) == 0, "missing one or more public tools in legacy discovery")
-	for _, name := range []string{"host_status", "operation_list"} {
+	for _, name := range []string{"host_status", "operation_list", "box_activity_get"} {
 		result, callErr := invoke(ctx, session, name, map[string]any{})
 		verify(callErr == nil && result != nil && !result.IsError,
 			"valid legacy read failed: "+name)
@@ -252,6 +252,7 @@ func main() {
 	}
 	readBoxes(ctx, session)
 	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS")
-	fmt.Println("S4_B3_PREVIOUS_OFFICIAL_SDK_17_TOOLS_DISCOVERY=PASS")
+	// The prior 17-Tool baseline is intentionally superseded by Activity.
+	fmt.Println("S4_ACTIVITY_PREVIOUS_OFFICIAL_SDK_18_TOOLS_DISCOVERY=PASS")
 	legacyLifecycle(ctx, session)
 }
