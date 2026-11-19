@@ -40,7 +40,7 @@ func admitPeerLineageOriginal(t *testing.T, s *Store, allow bool, key string) st
 		Layer: "user-1001", ActorID: tok.ID, TokenID: tok.ID,
 		Key: key, RequestID: key, Action: "box_peer_set",
 		SafeIntent: raw, BoxUUID: s4b2RootSrc, Incarnation: s4b2RootSrc,
-		ResourceKey: "acl:default/bw-s4b2",
+		ResourceKey:  "acl:default/bw-s4b2",
 		ResourceKeys: []string{"box:" + s4b2RootSrc, "box:" + s4b2RootDst},
 	})
 	if err != nil {
