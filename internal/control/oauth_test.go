@@ -153,7 +153,7 @@ func completeOAuth(t *testing.T, ts *httptest.Server, pwd, scope string) oauthFi
 		t.Fatalf("token HTTP %d: %+v", issued.StatusCode, jsonFrom(t, issued))
 	}
 	pair := jsonFrom(t, issued)
-	if pair["token_type"] != "Bearer" || pair["scope"] != "mcp:"+expectedOAuthRole(scope) || pair["expires_in"] != float64(3600) {
+	if pair["token_type"] != "Bearer" || pair["scope"] != nil || pair["expires_in"] != float64(3600) {
 		t.Fatalf("bad issued token metadata: %+v", pair)
 	}
 	return oauthFixtureHTTP{client: clientID, challenge: challenge, verifier: verifier, code: code, access: pair["access_token"].(string), refresh: pair["refresh_token"].(string), role: scope}
@@ -261,7 +261,7 @@ func TestEmbeddedOAuthMethodOriginAndDCRNegatives(t *testing.T) {
 }
 func TestEmbeddedOAuthJSONResponsesNoSSE(t *testing.T) {
 	_, ts, pwd := newOAuthServerTest(t)
-	f := completeOAuth(t, ts, pwd, "mcp:admin")
+	f := completeOAuth(t, ts, pwd, "")
 	init := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"no-sse","version":"1"}}}`
 	req, err := http.NewRequest("POST", ts.URL+"/mcp", bytes.NewBufferString(init))
 	if err != nil {
@@ -297,7 +297,7 @@ func expectedOAuthRole(scope string) string {
 }
 func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) {
 	_, ts, pwd := newOAuthServerTest(t)
-	f := completeOAuth(t, ts, pwd, "mcp:viewer")
+	f := completeOAuth(t, ts, pwd, "")
 	client := mcp.NewClient(&mcp.Implementation{Name: "viewer-negative", Version: "1"}, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

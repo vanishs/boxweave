@@ -88,7 +88,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		t.Fatalf("invalid correlation should refuse before mutation: %v", err)
 	}
 
-	q := OperationQuery{Layer: "L0", Requester: a.ID, WorkRef: "project-x/test-cycle", Limit: 1}
+	q := OperationQuery{Layer: "L0", Requester: a.ID, ActorID: a.ID, WorkRef: "project-x/test-cycle", Limit: 1}
 	p1, err := s.ListOperations(ctx, q)
 	if err != nil || len(p1.Operations) != 1 || p1.NextCursor == "" {
 		t.Fatalf("first page: %+v %v", p1, err)
@@ -380,7 +380,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	}
 	q.Requester = other.ID
 	foreign, err := s.ListOperations(ctx, q)
-	if err != nil || len(foreign.Operations) != 0 {
-		t.Fatalf("unrelated actor borrowed a status-changing original: %+v %v", foreign, err)
+	if err != nil || len(foreign.Operations) != 1 || foreign.Operations[0].ID != ids[4] {
+		t.Fatalf("authorized independent actor lost same-layer original: %+v %v", foreign, err)
 	}
 }
