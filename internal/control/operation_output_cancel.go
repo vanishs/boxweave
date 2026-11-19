@@ -51,7 +51,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		Description: "Recover original box_exec stdout/stderr by operation_id, at most 65536 bytes per page; advance next_offset until ended. Retain observed nonzero exit; truncated/unavailable output never proves command success.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		actor, layer, err := s.operationPrincipal(req)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -63,7 +63,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if in.Limit == 0 {
 			in.Limit = 16384
 		}
-		original, err := s.Store.GetScopedOperation(ctx, layer, actor, role, in.OperationID)
+		original, err := s.Store.GetScopedOperation(ctx, layer, actor, in.OperationID)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -141,11 +141,11 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		Description: "Journal a separate cancellation request for a proven queued-undispatched owned Operation. Detached running Exec/native operations are not cancelable with the proved SDK path.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cancelOperationInput) (*mcp.CallToolResult, cancelOperationResult, error) {
-		actor, layer, err := requireAdmin(req, s)
+		actor, layer, err := requireAuthenticated(req, s)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
-		target, err := s.Store.GetScopedOperation(ctx, layer, actor, "admin", in.TargetOperationID)
+		target, err := s.Store.GetScopedOperation(ctx, layer, actor, in.TargetOperationID)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
@@ -169,7 +169,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return "", state.ErrNoNativeChange
 		}
 		verify := func(ctx context.Context) error {
-			got, err := s.Store.GetScopedOperation(ctx, layer, actor, "admin", target.ID)
+			got, err := s.Store.GetScopedOperation(ctx, layer, actor, target.ID)
 			if err != nil {
 				return err
 			}
