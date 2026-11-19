@@ -11,7 +11,7 @@ import (
 func TestUnknownCreateReviewedNativeIdentityBindAndNoReplay(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
-	_, token, err := store.IssueToken(ctx,time.Hour)
+	_, token, err := store.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestUnknownCreateReviewedNativeIdentityBindAndNoReplay(t *testing.T) {
 func TestUnknownCreateMalformedIntentFailsClosed(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
-	_, token, err := store.IssueToken(ctx,time.Hour)
+	_, token, err := store.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestUnknownCreatePostCrashNoNativeAckStillReviewable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, token, err := store.IssueToken(ctx,time.Hour)
+	_, token, err := store.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestUnknownCreatePostCrashNoNativeAckStillReviewable(t *testing.T) {
 func TestUnknownCreateBindingAuditFailureIsAtomic(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
-	_, token, err := store.IssueToken(ctx,time.Hour)
+	_, token, err := store.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

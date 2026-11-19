@@ -39,7 +39,7 @@ func TestS4B3NativeNonrootAdmitFollowupPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	_, tok, err := s.IssueToken(context.Background(),time.Hour)
+	_, tok, err := s.IssueToken(context.Background(), time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

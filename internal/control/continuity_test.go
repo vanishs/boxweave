@@ -52,10 +52,10 @@ func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
 	st, _, _, _ := fixture(t)
 	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
 	req := &mcp.CallToolRequest{
-		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID:""}},
+		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: ""}},
 		Params: &mcp.CallToolParamsRaw{Meta: mcp.Meta{
-			"io.boxweave.work_ref":"spoofed/admin-work",
-			"io.boxweave.agent_ref":"admin-agent",
+			"io.boxweave.work_ref":  "spoofed/admin-work",
+			"io.boxweave.agent_ref": "admin-agent",
 		}},
 	}
 	if _, _, err := requireAuthenticated(req, svc); err == nil {

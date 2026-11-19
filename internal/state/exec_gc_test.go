@@ -12,7 +12,7 @@ func setupS2ExecGCTest(t *testing.T) (*Store, string, string, string, string) {
 	t.Helper()
 	ctx := context.Background()
 	s := newStore(t)
-	_, actor, err := s.IssueToken(ctx,time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

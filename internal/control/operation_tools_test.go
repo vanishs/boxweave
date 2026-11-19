@@ -126,23 +126,35 @@ func TestS2InvalidCredentialCannotMutateAnyNativeTool(t *testing.T) {
 	ctx := context.Background()
 	for _, name := range []string{"box_create", "box_update", "box_start",
 		"box_stop", "box_delete", "box_exec", "operation_cancel", "box_peer_set"} {
-		payload, err := json.Marshal(map[string]any{"jsonrpc":"2.0", "id":1, "method":"tools/call",
-			"params":map[string]any{"name":name,"arguments":map[string]any{"name":"unauthorized", "idempotency_key":"invalid-auth-no-effect"}}})
-		if err != nil { t.Fatal(err) }
+		payload, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+			"params": map[string]any{"name": name, "arguments": map[string]any{"name": "unauthorized", "idempotency_key": "invalid-auth-no-effect"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
 		req, err := http.NewRequestWithContext(ctx, "POST", ts.URL+"/mcp", strings.NewReader(string(payload)))
-		if err != nil { t.Fatal(err) }
-		req.Header.Set("Authorization","Bearer bw1_invalid")
-		req.Header.Set("Content-Type","application/json")
-		req.Header.Set("Accept","application/json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer bw1_invalid")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
 		res, err := http.DefaultClient.Do(req)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		res.Body.Close()
-		if res.StatusCode != http.StatusUnauthorized { t.Fatalf("%s invalid bearer HTTP %d",name,res.StatusCode) }
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%s invalid bearer HTTP %d", name, res.StatusCode)
+		}
 	}
 	tok, err := st.VerifyToken(ctx, admin)
-	if err != nil { t.Fatal(err) }
-	ops, err := st.ListOperations(ctx,state.OperationQuery{Layer:"bw-test",Requester:tok.ID})
-	if err != nil || len(ops.Operations)!=0 { t.Fatalf("unauthorized admission recorded: %+v %v",ops,err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops, err := st.ListOperations(ctx, state.OperationQuery{Layer: "bw-test", Requester: tok.ID})
+	if err != nil || len(ops.Operations) != 0 {
+		t.Fatalf("unauthorized admission recorded: %+v %v", ops, err)
+	}
 }
 
 func TestS2MCPQueuedCancelOriginalReceiptNeverIssuesNativeID(t *testing.T) {
@@ -306,7 +318,7 @@ func TestS2InFlightMCPReadRechecksCredentialBeforePrivateResponse(t *testing.T) 
 			st, server, _, _ := fixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
-			raw, actor, err := st.IssueToken(ctx,test.ttl)
+			raw, actor, err := st.IssueToken(ctx, test.ttl)
 			if err != nil {
 				t.Fatal(err)
 			}

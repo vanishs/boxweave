@@ -23,7 +23,7 @@ func s4b2AdmitACL(t *testing.T, s *Store, token Token, key string) Receipt {
 func TestS4B2SynchronousACLTypedSuccessNoInventedNativeID(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestS4B2SynchronousACLTypedSuccessNoInventedNativeID(t *testing.T) {
 func TestS4B2SynchronousACLUnknownPreservesLockAndNoRetry(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestS4B2SynchronousACLUnknownPreservesLockAndNoRetry(t *testing.T) {
 func TestS4B2SynchronousACLFailedPostreadNeverClaimsSuccess(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func s4b2UnitIsolation(context.Context) error { return nil }
 func TestS4B2SynchronousACLNoIsolationRefusesSubmission(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestS4B2SynchronousACLNoIsolationRefusesSubmission(t *testing.T) {
 func TestS4B2SynchronousACLFailedBarrierQuarantinesWithoutPUT(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestS4B2SynchronousACLFailedBarrierQuarantinesWithoutPUT(t *testing.T) {
 func TestS4B2SynchronousACLIsolationRunsBeforePUT(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, tok, err := s.IssueToken(ctx,time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
