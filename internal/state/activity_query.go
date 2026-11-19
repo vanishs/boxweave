@@ -281,7 +281,7 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 		// issues expose the direction without expanding actor visibility.
 		issues = append(issues, ActivityIssue{BoxUUID: source,
 			ResourceRef: "peer:" + source + "/" + target,
-			Reason: "PEER_LEDGER_UNRESOLVED", State: state})
+			Reason:      "PEER_LEDGER_UNRESOLVED", State: state})
 	}
 	if e := peerRows.Err(); err == nil {
 		err = e
