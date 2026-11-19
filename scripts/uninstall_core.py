@@ -56,7 +56,7 @@ def checked_file(path, kind, max_size=None):
 
 
 def file_fingerprint(path):
-    info = checked_file(path, "file", 120 * 1024 * 1024)
+    info = checked_file(path, "file", 120 * 1024 * 1024 if path == BINARY else None)
     if info is None:
         return None
     fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -122,15 +122,23 @@ def inspect_sqlite(dbpath):
         version = [x[0] for x in conn.execute("SELECT version FROM schema_version")]
         if len(version) != 1 or version[0] not in (4, 5):
             raise UninstallError("unrecognized controller database schema")
-        operations = list(conn.execute(
-            "SELECT id,layer,box_uuid,state,native_operation_id FROM operations ORDER BY id"))
+        operation_hash = hashlib.sha256()
+        operation_count = 0
+        blockers = []
+        unresolved = 0
+        for op, layer, box, state, native in conn.execute(
+                "SELECT id,layer,box_uuid,state,native_operation_id FROM operations ORDER BY id"):
+            operation_hash.update(canonical([op, layer, box, state, native]) + b"\n")
+            operation_count += 1
+            if state not in TERMINAL:
+                unresolved += 1
+                if unresolved <= 24:
+                    blockers.append("OPERATION_" + state + ":" + op + ":native=" + (native or "unverified"))
+        if unresolved > 24:
+            blockers.append("MORE_NONTERMINAL_OPERATIONS:" + str(unresolved - 24))
         boxes = [dict(uuid=u, project=p, name=n, state=s)
                  for u, p, n, s in conn.execute(
                      "SELECT uuid,project,name,state FROM owned_boxes WHERE deleted_at=0 ORDER BY uuid")]
-        blockers = []
-        for op, layer, box, state, native in operations:
-            if state not in TERMINAL:
-                blockers.append("OPERATION_" + state + ":" + op + ":native=" + (native or "unverified"))
         for table, condition in (
             ("peer_grants", "status NOT IN ('REVOKED')"),
             ("forward_claims", "state NOT IN ('REVOKED')"),
@@ -142,9 +150,9 @@ def inspect_sqlite(dbpath):
                 blockers.append(table + "_NOT_RELEASED:" + str(count))
         # Exact operation IDs/state/native refs bind the human review to the
         # current durable originals, including terminal operations.
-        operation_digest = sha(canonical(operations))
-        return {"version": version[0], "operations": len(operations),
-                "operations_sha256": operation_digest, "boxes": boxes, "blockers": blockers}
+        return {"version": version[0], "operations": operation_count,
+                "operations_sha256": operation_hash.hexdigest(), "boxes": boxes,
+                "unresolved_operations": unresolved, "blockers": blockers}
     except sqlite3.Error as exc:
         raise UninstallError("SQLite snapshot cannot be verified: " + str(exc)) from exc
     finally:
@@ -198,6 +206,26 @@ def systemd_status():
     return state
 
 
+def effective_unit():
+    raw, _ = command(["systemctl", "show", "boxweave.service",
+                      "-p", "FragmentPath", "-p", "DropInPaths", "--no-pager"])
+    pairs = dict(x.split("=", 1) for x in raw.splitlines() if "=" in x)
+    if "FragmentPath" not in pairs or "DropInPaths" not in pairs:
+        raise UninstallError("effective systemd unit cannot be verified")
+    if pairs["DropInPaths"]:
+        raise UninstallError("unreviewed systemd drop-ins present")
+    return pairs["FragmentPath"]
+
+
+def audit_status():
+    record = read_json(AUDIT)
+    if record is None:
+        return {"status": "ABSENT", "sha256": None}
+    if record.get("status") not in ("STARTED", "COMPLETE"):
+        raise UninstallError("unrecognized interrupted uninstall audit")
+    return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
+
+
 def inspect(scope, project, box_uuids, native_sha):
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact valid --project required")
@@ -227,7 +255,12 @@ def inspect(scope, project, box_uuids, native_sha):
     if binary and (binary["sha256"] != manifest.get("binary_sha256") or
                    unit["sha256"] != manifest.get("unit_sha256")):
         raise UninstallError("owned binary or systemd unit modified after install")
+    if binary and (BINARY.lstat().st_uid != 0 or UNIT.lstat().st_uid != 0):
+        raise UninstallError("installer binary/unit must be root-owned")
     service = systemd_status()
+    fragment = effective_unit()
+    if (unit and fragment != str(UNIT)) or (not unit and fragment not in ("", str(UNIT))):
+        raise UninstallError("effective systemd unit is foreign or unexpectedly replaced")
     if binary is None and service == "active":
         raise UninstallError("unit is absent but service still active")
     if checked_file(ROOT_UNIT, "file") is not None:
@@ -242,11 +275,13 @@ def inspect(scope, project, box_uuids, native_sha):
         raise UninstallError("foreign Layer in owned Box inventory")
     native = prepare_record()
     scriptlet = read_json(SCRIPTLET)
-    if scriptlet is not None and str(scriptlet.get("Status", scriptlet.get("status", ""))) not in (
-            "ROLLED_BACK", "ARCHIVED", "RECONCILED"):
+    if scriptlet is not None and str(scriptlet.get("Status", scriptlet.get("status", ""))) != "ROLLED_BACK":
         # Scriptlet has its own root-local journal; never hand-edit global ACL.
         raise UninstallError("active/unknown global Scriptlet journal: rollback separately")
     blockers = list(snapshot["blockers"])
+    audit = audit_status()
+    if audit["status"] == "STARTED":
+        blockers.append("PRIOR_UNINSTALL_INTERRUPTED_REVIEW_ORIGINAL_AUDIT")
     if scope in ("controller", "full") and snapshot["boxes"] and scope != "full":
         blockers.append("OWNED_BOXES_REMAIN:" + str(len(snapshot["boxes"])))
     if scope != "full" and native["status"] == "APPLIED":
@@ -272,6 +307,7 @@ def inspect(scope, project, box_uuids, native_sha):
         "format": 1, "scope": scope, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
         "unit": unit, "binary": binary, "state_files": files,
+        "effective_unit": fragment, "uninstall_audit": audit,
         "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
         "incus_instances": incus, "allowlist": expected if scope == "full" else [],
         "native_approval": native_sha or "", "blockers": sorted(set(blockers)),
