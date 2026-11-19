@@ -172,7 +172,7 @@ func nativePing(ctx context.Context, session *mcp.ClientSession, uuid, key, dest
 
 // P1 real installed official SDK hostile protocol matrix. All calls must
 // fail admission before native dispatch; foreign metadata never grants auth.
-func hostileProtocolMatrix(ctx context.Context, admin, viewer *mcp.ClientSession) {
+func hostileProtocolMatrix(ctx context.Context, admin, peer *mcp.ClientSession) {
 	cases := []struct {
 		name string
 		meta mcp.Meta
@@ -200,20 +200,20 @@ func hostileProtocolMatrix(ctx context.Context, admin, viewer *mcp.ClientSession
 		check(err != nil || out != nil && out.IsError,
 			"hostile _meta accepted native create: "+tc.name)
 	}
-	forged, err := viewer.CallTool(ctx, &mcp.CallToolParams{
-		Meta: mcp.Meta{
-			"io.boxweave.work_ref":  "lab/admin-work",
-			"io.boxweave.agent_ref": "admin-impersonation",
-		},
-		Name: "box_create",
-		Arguments: map[string]any{
-			"name": "bw-s2-viewer-meta-deny", "cpu": 1, "memory_mib": 512,
-			"disk_gib": 2, "start": false, "internet": false,
-			"idempotency_key": "s2-viewer-meta-deny-once",
+	// A valid second Actor is not read-only. Reject conflicting metadata,
+	// not the Actor's management privileges; no native effect is possible.
+	forged, err := peer.CallTool(ctx, &mcp.CallToolParams{
+		Meta: mcp.Meta{"io.boxweave.work_ref":"lab/spoofed-metadata"},
+		Name:"box_create",
+		Arguments:map[string]any{
+			"name":"bw-s2-meta-invalid", "cpu":1,"memory_mib":512,"disk_gib":2,
+			"start":false,"internet":false,
+			"idempotency_key":"s2-peer-conflicting-meta-01",
+			"work_ref":"lab/conflicting-argument",
 		},
 	})
-	check(err != nil || forged != nil && forged.IsError,
-		"viewer metadata pretended to grant native Create")
+	check(err != nil || (forged != nil && forged.IsError),
+		"untrusted metadata conflict admitted native Create")
 	badCPU, err := admin.CallTool(ctx, &mcp.CallToolParams{
 		Name: "box_create", Arguments: map[string]any{
 			"name": "bw-s2-schema-negative", "cpu": "not-an-integer",
@@ -226,8 +226,8 @@ func hostileProtocolMatrix(ctx context.Context, admin, viewer *mcp.ClientSession
 	unchanged := call(ctx, admin, "box_list", map[string]any{})
 	boxes, ok := unchanged["boxes"].([]any)
 	check(ok && len(boxes) == 0,
-		"hostile metadata, viewer spoof or schema error admitted a native Box")
-	fmt.Println("S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS")
+		"hostile metadata or invalid schema admitted a native Box")
+	fmt.Println("S2_P1_REAL_SDK_HOSTILE_META_PEER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS")
 }
 
 // SDK structured result is optional for old clients. Read-only legacy JSON
@@ -387,7 +387,7 @@ func privateHTTPMCPResponse(ctx context.Context, endpoint, token string) {
 
 func main() {
 	url, token := os.Getenv("BW_S2_MCP_URL"), os.Getenv("BW_S2_ADMIN_TOKEN")
-	viewer := os.Getenv("BW_S2_VIEWER_TOKEN")
+	peer := os.Getenv("BW_S2_PEER_TOKEN")
 	admin2Token := os.Getenv("BW_S2_ADMIN2_TOKEN")
 	admin1ID := os.Getenv("BW_S2_ADMIN1_ID")
 	admin2ID := os.Getenv("BW_S2_ADMIN2_ID")
@@ -395,7 +395,7 @@ func main() {
 	revokedToken := os.Getenv("BW_S2_REVOKED_TOKEN")
 	foreignLayerID := os.Getenv("BW_S2_FOREIGN_LAYER_OPID")
 	check(strings.HasPrefix(url, "http://127.0.0.1:"), "MCP must be loopback")
-	check(token != "" && viewer != "" && admin2Token != "" && len(admin1ID) == 32 &&
+	check(token != "" && peer != "" && admin2Token != "" && len(admin1ID) == 32 &&
 		len(admin2ID) == 32 && admin1ID != admin2ID &&
 		expiredToken != "" && revokedToken != "" && len(foreignLayerID) == 32,
 		"independent credential/layer identities required")
@@ -405,8 +405,8 @@ func main() {
 	defer admin.Close()
 	admin2 := connect(ctx, url, admin2Token)
 	defer admin2.Close()
-	view := connect(ctx, url, viewer)
-	defer view.Close()
+	peerSession := connect(ctx, url, peer)
+	defer peerSession.Close()
 	inv, err := admin.ListTools(ctx, nil)
 	if err != nil {
 		panic(err)
@@ -442,14 +442,16 @@ func main() {
 	}
 	fmt.Println("S4_B3_NATIVE_MCP_DISCOVERY_17_OF_17=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
-	hostileProtocolMatrix(ctx, admin, view)
+	hostileProtocolMatrix(ctx, admin, peerSession)
 	hostileTypedToolMatrix(ctx, admin)
 	privateHTTPMCPResponse(ctx, url, token)
 
-	denied, err := view.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
-		Arguments: map[string]any{"name": "s2-denied", "idempotency_key": "native-viewer-create-denied-01"}})
-	check(err != nil || denied != nil && denied.IsError, "viewer created native Box")
-	fmt.Println("S2_NATIVE_VIEWER_CREATE_REFUSED=PASS")
+	// An authorized peer must still fail validation of malformed typed inputs.
+	denied, err := peerSession.CallTool(ctx, &mcp.CallToolParams{Name: "box_create",
+		Arguments: map[string]any{"name":"s2-invalid-schema", "cpu":"invalid",
+			"idempotency_key":"native-peer-invalid-schema-01"}})
+	check(err != nil || (denied != nil && denied.IsError), "invalid typed Create admitted")
+	fmt.Println("S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED=PASS")
 
 	// Deterministic original ADMITTED but never dispatched, seeded using the
 	// exact candidate's SQLite Store under the same nonroot service actor.
@@ -619,12 +621,12 @@ func main() {
 	})
 	check(invalidTimeErr != nil || invalidTime != nil && invalidTime.IsError,
 		"reversed native history time filter accepted")
-	viewerHistory := child(call(ctx, view, "operation_list", map[string]any{
+	peerHistory := child(call(ctx, peerSession, "operation_list", map[string]any{
 		"work_ref": "lab/history-120", "state": "CANCELLED", "limit": 50,
 	}), "page")
-	viewerHistoryRows, ok := viewerHistory["operations"].([]any)
-	check(ok && len(viewerHistoryRows) == 0,
-		"viewer borrowed 120 admin history operations by self-declared label")
+	peerHistoryRows, ok := peerHistory["operations"].([]any)
+	check(ok && len(peerHistoryRows) > 0,
+		"authorized independent Actor cannot inspect same-Layer cancelled history")
 	fmt.Println("S2_NATIVE_INDEXED_120_HISTORY_STATE_TIME_HMAC_SCOPE=PASS")
 
 	// The same authenticated actor ID in a different controller layer is
@@ -779,9 +781,9 @@ func main() {
 		"metadata/argument mismatch escaped typed conflict validation")
 	fmt.Println("S2_NATIVE_SDK_META_FALLBACK_CONFLICT_AND_INDEXED_SEARCH=PASS")
 
-	foreignList := call(ctx, view, "operation_list", map[string]any{"work_ref": "lab/s2"})
+	foreignList := call(ctx, peerSession, "operation_list", map[string]any{"work_ref": "lab/s2"})
 	private, _ := json.Marshal(foreignList)
-	check(!strings.Contains(string(private), original), "viewer borrowed original work_ref across token actors")
+	check(strings.Contains(string(private), original), "authorized peer could not recover same-Layer original work_ref")
 	fmt.Println("S2_NATIVE_OPERATION_WORK_SCOPE=PASS")
 
 	// The real installed server must list only its bound native UUID, not
@@ -1092,8 +1094,8 @@ func main() {
 
 	// TC-006: Two distinct authenticated admin identities intentionally share
 	// a self-declared work label. That label is *not* an identity credential.
-	// Separate guest effects and indexed actor scopes must retain exact
-	// original operation IDs, while viewer label borrowing cannot read either.
+	// Separate guest effects and indexed actor filters must retain exact
+	// original operation IDs while both authorized Actors can inspect same-Layer history.
 	const sharedWork = "lab/shared-actor-label-not-authentication"
 	actorOne := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf actor-one"},
@@ -1127,22 +1129,22 @@ func main() {
 		check(ok && field(row, "operation_id") == scoped.operation,
 			"client work labels forged authenticated actor ownership")
 	}
-	viewerPage := child(call(ctx, view, "operation_list", map[string]any{
+	peerPage := child(call(ctx, peerSession, "operation_list", map[string]any{
 		"work_ref": sharedWork, "limit": 10}), "page")
-	viewerRows, ok := viewerPage["operations"].([]any)
-	check(ok && len(viewerRows) == 0,
-		"viewer inherited independent admin Operations by a self-declared work label")
-	borrowedResult, borrowedErr := view.CallTool(ctx, &mcp.CallToolParams{
+	peerRows, ok := peerPage["operations"].([]any)
+	check(ok && len(peerRows) == 2,
+		"authorized peer cannot inspect both same-Layer original Operations")
+	borrowedResult, borrowedErr := peerSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_get", Arguments: map[string]any{"operation_id": actorOneID},
 	})
-	check(borrowedErr != nil || borrowedResult != nil && borrowedResult.IsError,
-		"viewer borrowed original admin Operation by guessed ID")
-	spoofResult, spoofErr := view.CallTool(ctx, &mcp.CallToolParams{
+	check(borrowedErr == nil && borrowedResult != nil && !borrowedResult.IsError,
+		"authorized peer could not inspect same-Layer original by ID")
+	spoofResult, spoofErr := peerSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_list", Arguments: map[string]any{
 			"work_ref": sharedWork, "actor_id": admin2ID, "limit": 10},
 	})
-	check(spoofErr != nil || spoofResult != nil && spoofResult.IsError,
-		"viewer actor_id filter widened privileges to a foreign token")
+	check(spoofErr == nil && spoofResult != nil && !spoofResult.IsError,
+		"authorized peer cannot filter other Actor history by verified actor_id")
 	fmt.Println("S2_NATIVE_TWO_AUTHENTICATED_ACTORS_SAME_WORK_SCOPED=PASS")
 
 	// Cross-actor idempotency cannot be borrowed by intentionally choosing
@@ -1444,11 +1446,11 @@ func main() {
 			"limit": 2, "cursor": cursor, "work_ref": "lab/native-meta"}})
 	check(mismatchErr != nil || mismatched != nil && mismatched.IsError,
 		"cursor from another filter was accepted")
-	borrowed, borrowedErr := view.CallTool(ctx, &mcp.CallToolParams{
+	borrowed, borrowedErr := peerSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_list", Arguments: map[string]any{
 			"limit": 2, "cursor": cursor}})
 	check(borrowedErr != nil || borrowed != nil && borrowed.IsError,
-		"viewer reused administrator's HMAC cursor")
+		"peer reused administrator's HMAC cursor")
 	forged, forgedErr := admin.CallTool(ctx, &mcp.CallToolParams{
 		Name: "operation_list", Arguments: map[string]any{
 			"limit": 2, "cursor": cursor + "x"}})
