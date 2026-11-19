@@ -25,6 +25,10 @@
 - **遗留原生测试接口，仍未签收：** `scripts/accept_s2_native.sh`、`scripts/s2_native_probe.go`、`scripts/s3_file_installed_probe.go`、`scripts/s25_bridgehead_lab.sh`、`scripts/s25_inner_setup.sh`、`scripts/s25_lab_agent.go` 仍包含旧 viewer 语义。**禁止**直接把这些 viewer 凭据换成合法管理 Token 后保留“写入必须被拒绝”的断言——那可能让测试本身执行真实的 Guest 变更。必须分开改成有效独立 Actor 的同 Layer 读取/接手正例，以及无效/过期/撤销 Token 的 HTTP 401 负例，接着才准许在可销毁原生测试环境重新执行。旧脚本目前不能作为新源码的 PASS 证据。
 - **准确结论：** `CORE_GO_SCOPE_FREE_REFACTOR=PASS (isolated test)`，`ALL_NATIVE_ACCEPTANCE_SCRIPTS_CONVERGED=NO`，`REAL_CHATGPT_SCOPE_FREE_CONNECT_REFRESH=NOT_TESTED`，`INDEPENDENT_NATIVE_AND_CI_SIGNOFF=PENDING`。因此方案 B 的**代码主链已成形**，但这轮全量整改**尚未正式签收**。原生脚本改造是阶段 1 的剩余事项，不能被阶段 2 的执行测试所掩盖。
 
+### Environment reconstruction notice for this breaking change
+
+Before replacing any existing development installation, create a fresh role-free Schema v4 SQLite database. Previous v3 files and signed tokens are rejected, not migrated; the CLI -role flag no longer exists; old OAuth clients/Grants and ChatGPT MCP connections need fresh registration, explicit management approval and reconnection. Use separately authorized disposable installations and native fixtures with independent Actor credentials. Do not overwrite the old DB or delete Boxes/Projects/ACLs. First stop the controller, independently reconcile any UNKNOWN/unresolved native operation, preserve evidence and obtain separate approval for destruction or reprovisioning. No compatibility aliases, automatic migration or downgrade are promised. [Canonical development policy](../process/VERSIONING.md#owner-directive--pre-release-compatibility-and-environment-recreation-2026-11-18).
+
 ## 1. 目标结构：一个授权级别，多个独立 Actor
 
 建议删除**整个** `admin/viewer` 产品角色模型，而不是仅隐藏 `viewer`：
