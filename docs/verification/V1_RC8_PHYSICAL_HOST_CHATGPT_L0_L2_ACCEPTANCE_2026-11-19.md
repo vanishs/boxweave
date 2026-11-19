@@ -1,0 +1,86 @@
+# RC8 candidate physical Host + real ChatGPT L0 + independently installed L1/L2 acceptance (2026-11-19 PT)
+
+**Verdict: `HOST_RC8_CHATGPT_MCP_AND_NESTED_FUNCTIONAL_PASS / STAGE3_PARTIAL / RC8_UNPUBLISHED`.**
+This is an **operator-authorized physical host reset and installed candidate test**, not a signed release, a full Stage-3 acceptance, a production upgrade recommendation, or a new S4-B3 native Root/packet signoff. It supersedes neither the historical nested-only [Stage-3 Quick Tunnel/UNKNOWN report](../development/V1_RC8_STAGE3_NESTED_QUICK_TUNNEL_2026-11-19.md) nor the source-specific [Stage-2 independent native CI matrix](../development/V1_STAGE2_NATIVE_REACCEPTANCE_2026-11-18.md).
+
+## 1. Provenance and source boundaries
+
+- Repository [Draft PR #153](https://github.com/vanishs/boxweave/pull/153), development branch `feat/v1-s4-runtime-integration-20261116`; **tested production source commit** `bc1e844703cdfb7ea3813cc614176d35e8883018`, version `1.0.0-rc.8-candidate` (not a published `v1.0.0-rc.8` tag).
+- **Physical L0 exact binary** SHA256 `06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386`; local staged binary `/var/tmp/bw-rc8-staging/boxweave-rc8`. `build-info`, `install-status`, `host_status` all confirmed version, full commit and SHA256; service `boxweave` active; schema v4; Incus server 7.6.
+- **Independent L1** built inside owned Ubuntu 24.04 Box from exactly that checked-out source commit, using Go 1.26.9 and CGO; its **different local binary** SHA256 is `40dca7fbb79008eab231adc8515b5410bfa980d09031c72f756078dfc5aed15a`. Identical embedded commit/version does **not** mean byte-for-byte identical L0 and L1 binaries.
+- The physical Host owns `user-1001` through restricted `/var/lib/incus/unix.socket.user`, dedicated non-root `boxweave` service. L1 has its **own** independently initialized Incus 7.6, per-user Project `user-1001`, SQLite v4, service, ACL, and independently issued/revoked temporary credential. Same Project name across layers does not mean shared ownership.
+- Operator consent for destroying the earlier development-only host environment was explicit in the accompanying chat. **Do not treat this record as approval to reset other users' hosts or Projects.**
+
+## 2. Physical Host reset → exact-candidate reinstall (observed, not a generic uninstall recipe)
+
+1. Initial inventory: old RC.7 `boxweave` service, `/usr/local/bin/boxweave`, `/etc/systemd/system/boxweave.service`, SQLite/state `/var/lib/boxweave`; one restricted Incus `user-1001` Project containing **14 old development Boxes** (including prior S4, S2.5 and RC8 experiment instances). Parent Incus **7.6**, global `default` Btrfs pool and project-managed `incusbr-1001` must be preserved.
+2. After explicit scope approval, remove only the 14 identified old development instances; original deletion batch initially failed due to locale-dependent `sort` versus Python ordering, then was corrected using **`LC_ALL=C sort`**. Verified owned Project instances empty before native reconfiguration. Avoid `incus delete --all-projects` or unscoped glob deletion. **Two old local Incus images remained** and were not proved removed; do not report a completely wiped image cache.
+3. Stop the old RC.7 service; remove its exact owned systemd unit/binary/state and recheck `systemctl is-active boxweave=inactive`, expected old paths absent. This was **a manually authorized destructive development reset**, not a tested `uninstall.sh`. The operator-selected removal of old v3 DB/OAuth state intentionally invalidated old Tokens, Grants, clients and MCP connections; there was no database migration.
+4. First resolve the previous native-preparation journal rather than bluntly deleting Project/Profile/ACL. The original root-local journal had `review_sha256=04a6ce6d9d2aab647e624cafbad176c1af997874e39300c855ba35a2b00b19f7`, status `APPLIED`. On the **same approved host and owned scope**, `native-prepare-rollback -native-prepare-sha256 <exact old digest> -approve-local` returned **`ROLLED_BACK`**, restoring its prior Project/Profile and removing the previous exclusive ACL. `native-prepare-archive` with the same digest and approval returned archive `/var/lib/boxweave-native-prereq-v1.json.closed.04a6ce6d9d2aab64.01`. **Archive evidence; do not delete an active root journal merely to make preparation pass.**
+5. Preserve the exact RC8 candidate binary on Host before removing the disposable former test Box. Download the **same pinned commit** `install.sh` from `raw.githubusercontent.com/vanishs/boxweave/bc1e844703cdfb7ea3813cc614176d35e8883018/install.sh`. Verify shell syntax, binary digest, and installer `--plan --local-binary ... --sha256 ... --project user-1001`. Review the **host-specific** `host_machine_id_sha256` printed in that plan; never use a digest from a different machine.
+6. `install.sh --apply --local-binary ... --sha256 ... --project user-1001 --confirm-host-sha256 <plan digest>` completed. Physical `install-status`: `service_active=true`, `restart_required=false`, binary and unit checksums match, schema v4; `build-info` gives full source commit. The installer's `host_machine_id_sha256` is **not interchangeable** with `native-prepare-plan.host_sha256` (separately calculated).
+7. On the **empty** owned Project, `native-prepare-plan -project user-1001 -pool default -network incusbr-1001 -acl bw-user-1001-acl` returned `review_sha256=cc6419f9af56f7248ad607e863b4478bb937c73a965d68f0fbac8f5ffffaa4b3`; approved `native-prepare-apply` returned **`APPLIED`**. Exclusive ACL and Profile now contain default-reject/private-network egress restrictions, IPv4/IPv6 source anti-spoofing, managed disk and restricted Project settings; the shared bridge and storage pool were not rebuilt.
+8. Fresh `native-prereq-plan` returned **8/8 true**, `config_ready=true`, `review_sha256=c68b3cde36b61eb57e36ac478fcb202e86e7be732698e66e1d9fc08a81960d88`. Owner-executed `native-prereq-verify` succeeded; as the non-root service identity, `doctor` returned **`ready=true`, `mcp_ready=true`, `native.ready=true`, `schema_version=4`**. `selected_storage_quota_verified=false` and first-image-on-demand remained explicit warnings.
+
+**Reset boundary:** delete only the approved old controller data and exactly inventoried Boxes; **preserve** shared Host Incus, global Btrfs pool, private managed bridge, unrelated Projects/instances and recoverable root-journal evidence. Restore owned native Project/Profile/ACL with the attested rollback, not guessed inverse `incus config set` commands. See [uninstall/reinstall design record](../development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md).
+
+## 3. Real ChatGPT → public Quick Tunnel → physical L0 MCP
+
+The operator provisioned a fresh local OAuth approval secret and configured `oauth-set-origin` to the current temporary Cloudflare Quick Tunnel HTTPS origin. A GET to the server root was observed to return HTTP 404 and is **not** an MCP failure; MCP uses `/mcp`. Initial external hostname DNS resolution was transiently unavailable; subsequent `invalid Host` was resolved by setting the exact public Origin (without `/mcp`). Never commit the ephemeral tunnel hostname, secret, access token, callback data or browser state.
+
+The Owner added a **new actual ChatGPT connector named `boxweave L0`**. Using its real authenticated MCP calls (not an inner L1 connector), independent `host_status`, `box_list`, `operation_list` worked. The initial Host inventory was **0 Boxes / 0 Operations**. This demonstrates **real ChatGPT authenticated connector use and Tool dispatch under the role-free candidate**, a major Stage-3 improvement over static SDK/HTTP-only compatibility. It does **not independently show** the browser's exact `scope` parameters, consent/PKCE code exchange or any ChatGPT-triggered **refresh/reauth/revocation**: classify those separate gates **NOT_TESTED** until trace/observations are collected.
+
+## 4. Physical L0 real MCP functional/negative matrix
+
+Work reference: **`rc8-l0-full-20261119`**. Created only two fresh, test-owned containers: `bw-rc8-l0-nest-1119` (UUID `ab19841d-a7fa-4c78-8917-356b56f97912`, 2 CPU/2048 MiB/16 GiB, `security.nesting=true`, internet=true) and `bw-rc8-l0-peer-1119` (UUID `bf456f96-7416-47c9-a9af-dd9fddbf5723`, 1 CPU initially then 2, 512 MiB/4 GiB, internet=false).
+
+| Evidence | Physical L0 outcome |
+| --- | --- |
+| Fresh Create / Start / native `box_get` Running | **PASS** for both owned Boxes; separate initial 1-CPU/512-MiB smoke Box had already passed Create → Start → Exec → File → Stop → Delete, and been removed |
+| Authenticated `box_exec` + durable stdout/stderr | **PASS**. Native `SUCCEEDED` with Guest exit `19` correctly returned `command_success=false`, `exit_code=19` and preserved both streams; Guest exit 0 and standard output readback also passed |
+| `box_update(cpu=2)`, `box_get` readback | **PASS**, on the 512-MiB sibling |
+| File `create`, exact `read`, directory `list`, partial read, cursor pagination | **PASS**. Partial read at offset 4 returned the requested bytes; the original file content remained intact |
+| Reissue same Create or File Create with identical idempotency key and intent | **PASS**, original UUID/Operation, `duplicate=true` |
+| Reissue same key with changed CPU or file content | **PASS (rejection)**, `idempotency key conflicts with original intent` |
+| Attempt second **new-key** exclusive file Create at an existing path | **PASS (negative)**: original `box_file_apply` `d65171470604a303a34d7be9170b498f` ended **`FAILED / SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS`**; verified file unchanged. Do **not** count it as an unexpected product failure |
+| Nonexistent UUID/Operation, foreign update/exec/file-read, invalid `../../etc/passwd` path | **PASS (rejection)**; error surface sometimes says generic `operation not found` or `invalid admission`; precise diagnostics not established |
+| Sibling TCP IPv4 and IPv6 | **PASS for this bounded negative**: peer HTTP servers self-checked HTTP 200 on ports 18088/18089; from nesting Box, connections to sibling `10.249.1.3:18088` and `[fd42:13bd:c9f1:24a3:1266:6aff:feaf:166]:18089` both timed out. This is **not** IPv4/IPv6 UDP or adversarial packet/conntrack acceptance |
+| internet=false versus internet=true | **PASS for bounded behavior**: sibling external HTTPS timed out; nested Box successfully received HTTP 200 from GitHub |
+| Physical Host root Incus socket | **PASS (limited)**: did not appear inside the unprivileged sibling Guest; no claim of exhaustive mount/credential escape proof |
+| L0 `box_stop`, `box_delete`, readback | **PASS** for two owned Boxes, followed by `box_list=[]` |
+
+Final pagination of **all** L0 Operations with the work reference returned **51 durable entries: 50 `SUCCEEDED`, 1 expected `FAILED` above, 0 `UNKNOWN` or nonterminal**. Last two Delete receipts: nested `9982c6952af3f021ea582b6d97c384a4`, peer `0c8ddd80fc9d396fae6a96af8baa8bb9`, each `SUCCEEDED`. Final `host_status.ready=true`, `mcp_ready=true`, `native.ready=true`, Schema v4, 0 Boxes. A separate earlier simple smoke was also cleaned with `box_list=[]`.
+
+## 5. Actual independent L1 BoxWeave → L2 lifecycle
+
+Inside **only** L0-owned nested Box `ab19841d-a7fa-4c78-8917-356b56f97912`:
+
+1. Ubuntu 24.04.5; verified signed Zabbly key fingerprint `4EFC590696CB15B87C73A3AD82CC8797C838DCFD`; installed **Incus client/server 7.6**, pinned `1:7.6-ubuntu24.04-202611072126`. Native `incus admin init --auto --storage-backend=dir` created L1's own `default` dir pool and managed `incusbr0`; no physical Host Incus daemon/AppArmor change.
+2. Cloned the GitHub branch and checked out **exact commit `bc1e844...`**; Go toolchain `1.26.9`, compiled the independent `/opt/boxweave-nested-rc8`, verified version/commit and separate SHA above. The L1 Guest's observed AppArmor label was `unconfined`; therefore do **not** claim strong parent AppArmor confinement simply because L2 later reported `(enforce)`.
+3. Independently initialized L1 non-root `boxweave` UID1001/Incus group, fresh per-user restricted `user-1001` Project; pinned `install.sh` local-binary plan (own local Host digest), exact `--apply`; active `boxweave` systemd, new SQLite v4.
+4. L1 native `native-prepare-plan` → approved `native-prepare-apply` on exclusive `bw-rc8-nest-1119-acl` returned `APPLIED`; `native-prereq-plan` and `native-prereq-verify` **8/8 PASS**; `doctor.ready=true`, `native.ready=true`, `mcp_ready=true`.
+5. Minted a short-lived L1-only manual Token into a mode 0600 file under a mode 0700 guest-local directory; never exposed it in MCP argv, Tool output or docs. Guest-local test client used **official MCP Go SDK v1.8.0** over L1 loopback `/mcp` and an independently authenticated Bearer. `tools/list` returned **17 expected Tools**, then `host_status` and `box_list` passed. Anonymous `POST /mcp` **401**; malicious Host **403**.
+6. From L1's **own MCP**, created L2 Box `bw-rc8-l2-smoke-1119`, UUID `98e37245-f75b-42f7-9468-1c45ca5b0ee4`. L1 original Operations: Create `49d369d44ddd8d75050c0139f7e940f8`, Start `34909cf33c56eb37bc5ccbc089b20fdb`, Exec `19084b490afd3752ab520cecebe9c390`, File Create `fda84986799c08b34e41237afd4dfeb0`, Stop `b4b5c5986c0eb54d9ec1edd983316404`, Delete `e1c98b53887a1f4bcecdef8d8975b459`: **six SUCCEEDED**.
+7. L2 Guest Exec output `L2_INNER_MCP_EXEC_PASS`, Guest UID 0, exit 0, `command_success=true`; observed L2 `incus-user-1001_bw-rc8-l2-smoke-1119_</var/lib/incus> (enforce)` and independent UID/GID maps. Guest file written and read back `L2_FILE_OK\n`; L1 exact original Create replay returned `duplicate=true` and **same original operation**.
+8. `systemctl restart boxweave` inside L1 returned active, but an **immediate** SDK connection hit transient `connection refused`; a later independent read showed the service again active, HTTP anonymous 401, authenticated `ready=true`, and **all four earlier operation receipts still SUCCEEDED** with L2 still Running. This is an observed restart/reconnect timing window, **not proven a persistent service failure**.
+9. L1 Stop and Delete L2 succeeded, final L1 `box_list=[]`, **six original SUCCEEDED operation receipts retained**. Revoked its temporary manual Token with local `token-revoke`; the client then failed to authenticate as expected. **This is NOT evidence of ChatGPT OAuth Refresh Token revocation**. Afterwards L0 stopped/deleted the containing L1 Box and sibling; physical Host inventory remained empty.
+
+**Caution:** Prior disposable **`boxweave L1 noviewer`** Stage-3 nested test contained an unresolved Start `UNKNOWN / POSTCONDITION_UNVERIFIED` and was not repaired in that session; that earlier evidence remains historical. A fresh successful physical-Host L0→L1→L2 campaign is **not a retroactive resolution** or proof of root cause for the older nested-only UNKNOWN.
+
+## 6. Stage-3 / solution-B acceptance classification
+
+| Stage-3 criterion | Classification and what is actually witnessed |
+| --- | --- |
+| Fresh v3 → v4 destructive adoption on explicitly approved Host | **PASS for this physical dev Host**, including real old controller teardown and fresh install; *not* a generic unattended migration/uninstaller |
+| Real ChatGPT connector with no product role path, authenticated MCP reads/writes | **PASS**, actual new `boxweave L0` connector and real mutating Tools reached the candidate |
+| ChatGPT OAuth full discovery → explicit consent → PKCE → token, with request-level evidence that no application `scope` was sent | **PARTIAL**: functional authenticated connector established, but no browser/HTTP grant trace was collected; cannot independently certify exact scope parameter behavior |
+| Real ChatGPT Access Token refresh, reauthorization, grant revocation, post-revocation denial | **NOT_TESTED** via ChatGPT; separate **L1 manual Token revoke + denial PASS**, which does not replace this criterion |
+| L0 ordinary lifecycle/Exec/File/Update, idempotency and safety negatives | **PASS** for scoped tests above |
+| L0→L1 installed controller → L2 native Create/Start/Exec/File/Stop/Delete | **PASS** with six recorded L1 original operations |
+| Service restart and persisted Operation receipts | **PASS after reconnect**; short immediate reconnect refusal recorded; no Host whole-reboot test |
+| IPv4/IPv6 sibling TCP deny / internet toggle | **SCOPED PASS**, **UDP and native controlled grant/revoke NOT_TESTED** |
+| Dedicated Root/PRS S4-B3 production Host grant/revoke/ETag/UNKNOWN | **NOT_TESTED on this Host**; Stage-2 isolated native CI evidence is separate |
+| Independent layered AppArmor policy authority, cgroup BPF, collision-free UID/GID reservations, native quota/spool limits | **NOT_TESTED / quota reported UNVERIFIED** |
+| Final exact-HEAD independent reviewer, same-SHA full CI/S5, RC8 tag/release | **NOT_SIGNED / NOT_PUBLISHED** |
+
+**Operator guidance:** keep PR #153 Draft; do not merge, publish RC8, declare `STAGE3_PASS`, or reuse previous historical UNKNOWN as resolved. When Stage-3 refresh/revoke and the requested S4/S5 security/native gates complete with their own source/identity evidence, record **a separate final signoff**. Future actions must continue to preserve original Operation/Unknown safety and must not infer permission to wipe foreign native resources.
