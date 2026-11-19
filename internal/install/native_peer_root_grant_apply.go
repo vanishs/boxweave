@@ -36,6 +36,16 @@ func nativePeerRootGrantApplyWithTestFault(ctx context.Context, s *state.Store,
 func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.Store,
 	project, bridge, acl, original, approvedSHA string, approved bool,
 	afterACL, afterResume, beforeComplete func() error) (NativePeerConntrackJournalReceipt, error) {
+	return nativePeerRootGrantApplyWithContentionFault(ctx, s, project, bridge, acl,
+		original, approvedSHA, approved, afterACL, afterResume, beforeComplete, nil)
+}
+
+// The last hook runs ONLY in a package-private native test, after the entire
+// Project is isolated and native ACL preimage is read, but before the ETag PUT.
+// Production and the root IPC invoke the wrapper above with nil.
+func nativePeerRootGrantApplyWithContentionFault(ctx context.Context, s *state.Store,
+	project, bridge, acl, original, approvedSHA string, approved bool,
+	afterACL, afterResume, beforeComplete, beforePUT func() error) (NativePeerConntrackJournalReceipt, error) {
 	var zero NativePeerConntrackJournalReceipt
 	if !approved || os.Geteuid() != 0 || s == nil || !s.IsNetworkAuditReadOnly() {
 		return zero, errors.New("grant root requires operator approval and read-only state")
@@ -109,6 +119,11 @@ func nativePeerRootGrantApplyWithCompletionFault(ctx context.Context, s *state.S
 			}
 			if err := check(ctx); err != nil {
 				return NativePeerConntrackReport{}, err
+			}
+			if beforePUT != nil {
+				if err := beforePUT(); err != nil {
+					return NativePeerConntrackReport{}, fmt.Errorf("native grant private pre-PUT contender: %w", err)
+				}
 			}
 			if err := root.UpdateNetworkACL(acl, pre.After.NetworkACLPut, etag); err != nil {
 				return NativePeerConntrackReport{}, fmt.Errorf("native grant ETag fanout uncertain: %w", err)

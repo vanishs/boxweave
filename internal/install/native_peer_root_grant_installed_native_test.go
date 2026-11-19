@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -185,7 +186,7 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 	scopePath, dbPath := os.Getenv("BOXWEAVE_S4B3_SCOPE"), os.Getenv("BOXWEAVE_S4B3_DB")
 	original, scenario := os.Getenv("BOXWEAVE_S4B3_ORIGINAL"), os.Getenv("BOXWEAVE_S4B3_SCENARIO")
 	if scopePath == "" || dbPath == "" || len(original) != 32 ||
-		(scenario != "normal" && scenario != "after_acl_fault" && scenario != "after_resume_fault" && scenario != "before_completion_fault") {
+		(scenario != "normal" && scenario != "after_acl_fault" && scenario != "after_resume_fault" && scenario != "before_completion_fault" && scenario != "inside_etag_race") {
 		t.Fatal("missing exact disposable native grant original or scenario")
 	}
 	raw, err := os.ReadFile(scopePath)
@@ -208,9 +209,41 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 		t.Fatalf("native root review did not seal claimed original: %+v %v", plan, err)
 	}
 	var receipt NativePeerConntrackJournalReceipt
-	if scenario == "after_acl_fault" || scenario == "after_resume_fault" || scenario == "before_completion_fault" {
+	if scenario == "after_acl_fault" || scenario == "after_resume_fault" || scenario == "before_completion_fault" || scenario == "inside_etag_race" {
 		faults := 0
-		if scenario == "after_acl_fault" {
+		if scenario == "inside_etag_race" {
+			pre, reviewErr := nativePeerRootGrantReview(ctx, s, scope.Project, scope.Bridge, scope.ACL, original)
+			if reviewErr != nil {
+				t.Fatal(reviewErr)
+			}
+			receipt, err = nativePeerRootGrantApplyWithContentionFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
+				original, plan.PlanSHA256, true, nil, nil, nil, func() error {
+					faults++
+					// Independent Incus CLI process changes only user metadata
+					// AFTER Root's last protected stop-barrier check and GET ETag.
+					// Its real conditional ACL PUT must invalidate Root's ETag.
+					cmd := exec.CommandContext(ctx, "incus", "network", "acl", "set", scope.ACL,
+						"user.s4b3-live-contender", "separate-native-client")
+					out, e := cmd.CombinedOutput()
+					if e != nil {
+						return fmt.Errorf("independent live native ACL PUT: %w (%s)", e, strings.TrimSpace(string(out)))
+					}
+					return nil
+				})
+			if faults != 1 {
+				t.Fatalf("native Root PUT-window contender invoked %d times", faults)
+			}
+			root, connectErr := incus.ConnectIncusUnixWithContext(ctx, "/var/lib/incus/unix.socket", nil)
+			if connectErr != nil {
+				t.Fatal(connectErr)
+			}
+			finalACL, _, getErr := root.GetNetworkACL(scope.ACL)
+			if getErr != nil || finalACL == nil || finalACL.Config["user.s4b3-live-contender"] != "separate-native-client" ||
+				!reflect.DeepEqual(finalACL.Ingress, pre.Before.Ingress) ||
+				!reflect.DeepEqual(finalACL.Egress, pre.Before.Egress) {
+				t.Fatalf("live contender lost or Root accidentally granted after stale ETag: %v", getErr)
+			}
+		} else if scenario == "after_acl_fault" {
 			receipt, err = nativePeerRootGrantApplyWithTestFault(ctx, s, scope.Project, scope.Bridge, scope.ACL,
 				original, plan.PlanSHA256, true, func() error { faults++; return errors.New("injected after REAL ACL PUT") }, nil)
 		} else if scenario == "after_resume_fault" {
@@ -265,6 +298,8 @@ func TestS4B3NativeInstalledRootGrantActualEffect(t *testing.T) {
 			t.Fatal("UNKNOWN journal original was redispatched")
 		}
 		switch scenario {
+		case "inside_etag_race":
+			t.Log("S4_B3_NATIVE_ROOT_STOP_BARRIER_LIVE_ETAG_CONTENDER_PUT_REFUSED_UNKNOWN_ISOLATED=PASS")
 		case "after_resume_fault":
 			t.Log("S4_B3_REAL_POST_RESUME_FINAL_CHECK_UNKNOWN_ALL_NICS_REISOLATED=PASS")
 		case "before_completion_fault":
