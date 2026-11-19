@@ -78,7 +78,7 @@ func TestActivityRealHTTPReplyLossReopenControllerFreshActorFindsExactUnknown(t 
 		Layer: "bw-test", ActorID: first.ActorID, TokenID: first.ID,
 		Key: "a2-reconnect-lost-native-reply-001", RequestID: "lost-reply-first-client",
 		Action: "box_exec", SafeIntent: []byte("{}"),
-		BoxUUID: "c118c9a0-2f03-4a2f-a63e-3982247e359e",
+		BoxUUID:     "c118c9a0-2f03-4a2f-a63e-3982247e359e",
 		Incarnation: "c118c9a0-2f03-4a2f-a63e-3982247e359e",
 		ResourceKey: "box:interrupted", WorkRef: work, AgentRef: "first-client",
 	})
