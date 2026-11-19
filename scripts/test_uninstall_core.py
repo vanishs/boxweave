@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline negative controls for host uninstaller: never touch a real host."""
 import contextlib
+import io
 import json
 from pathlib import Path
 import sqlite3
@@ -137,24 +138,43 @@ class FakeHost(unittest.TestCase):
 
     def test_service_apply_requires_fresh_approval_and_keeps_state(self):
         self.service = "active"
-        plan = self.plan()
-        with self.assertRaisesRegex(u.UninstallError, "host/scope/inventory drift"):
-            # a change in service state between plan/apply invalidates review.
-            self.service = "inactive"
-            changed = self.plan()
-            self.assertNotEqual(plan["review_sha256"], changed["review_sha256"])
-            if changed["review_sha256"] != plan["review_sha256"]:
-                raise u.UninstallError("host/scope/inventory drift")
-        plan = self.plan()
-        u.audited_write({"status": "STARTED", "review": plan["review_sha256"]})
-        out = u.apply(plan)
-        self.assertEqual(out["outcome"], "COMPLETE")
+        earlier = self.plan()
+        self.service = "inactive"
+        changed = self.plan()
+        self.assertNotEqual(earlier["review_sha256"], changed["review_sha256"])
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(u.UninstallError, "host/scope/inventory drift"):
+                u.main(["--apply", "--scope", "service", "--project", "user-1001",
+                        "--confirm-host-sha256", earlier["host_machine_id_sha256"],
+                        "--confirm-review-sha256", earlier["review_sha256"]])
+            self.assertFalse(u.AUDIT.exists())
+            self.assertEqual(u.main([
+                "--apply", "--scope", "service", "--project", "user-1001",
+                "--confirm-host-sha256", changed["host_machine_id_sha256"],
+                "--confirm-review-sha256", changed["review_sha256"],
+            ]), 0)
+        self.assertEqual(u.audit_status()["status"], "COMPLETE")
         self.assertFalse(u.UNIT.exists())
         self.assertFalse(u.BINARY.exists())
         self.assertTrue(self.db.exists())
         self.assertTrue((u.STATE / "install-manifest.json").exists())
         self.assertTrue(u.AUDIT.exists())
         self.assertFalse(any(a[0] == "incus" for a in self.cmds))
+
+    def test_apply_wrong_hash_and_nonroot_refused_before_audit(self):
+        p = self.plan()
+        args = ["--apply", "--scope", "service", "--project", "user-1001",
+                "--confirm-host-sha256", p["host_machine_id_sha256"],
+                "--confirm-review-sha256", "f" * 64]
+        with mock.patch.object(u.os, "geteuid", return_value=0):
+            with self.assertRaisesRegex(u.UninstallError, "drift"):
+                u.main(args)
+        with mock.patch.object(u.os, "geteuid", return_value=1001):
+            with self.assertRaisesRegex(u.UninstallError, "root on"):
+                u.main(args)
+        self.assertFalse(u.AUDIT.exists())
+        self.assertTrue(u.BINARY.exists())
 
     def test_controller_purge_removes_only_known_state(self):
         p = self.plan("controller")
