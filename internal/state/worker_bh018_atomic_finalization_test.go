@@ -15,7 +15,7 @@ import (
 func bh018AtomicFixture(t *testing.T, s *Store) (Admission, OwnedBox, string, string) {
 	t.Helper()
 	ctx := context.Background()
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestBH018WorkerRejectsForgedAtomicExecCompletionSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create a separate admitted original because only ADMITTED may Claim.
-	_, token, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, token, err := s.IssueToken(ctx,time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
