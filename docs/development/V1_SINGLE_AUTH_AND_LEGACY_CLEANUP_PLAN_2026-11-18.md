@@ -1,5 +1,25 @@
 # BoxWeave v1 — 单一授权能力与历史包袱整改方案（2026-11-18）
 
+## Stage-3 newest physical-Host evidence — 2026-11-19 PT (authoritative status)
+
+**Status: `STAGE3_PARTIAL`; the real ChatGPT connector, physical Host deployment, L0 lifecycle and L0→L1→L2 functional chain have now passed. Final no-Scope OAuth refresh/reauthorization/revocation, all S4/S5 security gates and exact-HEAD release signoff have NOT.** This updates the older **`REAL_CHATGPT_OAUTH_PENDING`** and nested-only blocked/UNKNOWN milestones below **without rewriting their original evidence**.
+
+The Owner explicitly authorized teardown of an RC.7-only physical development controller and 14 formerly owned experimental Boxes, with fresh v4 DB/OAuth instead of migration. The old native preparation journal was safely **ROLLED_BACK** to its saved Project/Profile before-state, then **ARCHIVED**; the shared Incus 7.6 daemon, Btrfs `default` pool and managed `incusbr-1001` bridge were retained. After preserving an exact RC8 candidate binary, a pinned `install.sh` local-binary plan/apply installed **source `bc1e844703cdfb7ea3813cc614176d35e8883018`**, binary `06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386`; native plan/apply/verify achieved **8/8 checks**, `doctor.ready=true`, `mcp_ready=true`, `native.ready=true`, SQLite v4. Neither a tested general-purpose uninstaller nor a supported in-place upgrade is implied.
+
+A newly approved real **ChatGPT `boxweave L0`** connector invoked the actual role-free candidate over Cloudflare Quick Tunnel. L0 Create/Start/Exec/Output/Update/File/Stop/Delete and idempotency/invalid-input tests passed; **51 final work-ref Operations: 50 `SUCCEEDED`, one expected `FAILED / SFTP_EXCLUSIVE_FILE_ALREADY_EXISTS`, zero `UNKNOWN`**. Both disposable L0 test Boxes were deleted; final `box_list=[]`, Host remains ready.
+
+Inside a 2-CPU/2-GiB L0 owned Ubuntu Box, an **independent** signed Incus 7.6, restricted Project/ACL, SQLite v4 and exact-commit **L1 BoxWeave** were installed. An independent guest-local official MCP Go SDK client authenticated to L1 (17 Tools); L1 independently performed **L2 Create → Start → Exec → File → Stop → Delete: 6/6 `SUCCEEDED`**, then read back 0 L1 Boxes and persisted Operations. L1 service restart caused one immediate transient connection refusal, followed by recovery; original Operations survived. L1 local Bearer token revocation correctly prevented further SDK calls. This is **manual Token revocation**, NOT actual ChatGPT OAuth Refresh Token grant revocation. Physical L0 cross-sibling TCP IPv4/IPv6 denies were observed, but not UDP/PRS packet grant/revoke.
+
+**Still open for Stage-3 final signoff:** capture real ChatGPT OAuth authorization request to verify no product Scope and exact consent/PKCE metadata exchange (functional OAuth connection alone does not prove individual wire parameters); observe actual ChatGPT Access/Refresh Token rotation, reauth, Grant revocation and subsequent denial; original Host PRS `box_peer_set` grant/revoke, complete network UDP/ACL and Root barriers, layered AppArmor/BPF/UID-map security, Incus storage/Exec spool quotas, whole-host reboot/fault evidence, and independently reviewed exact-HEAD CI/S5. Preserve the previous independent nested-only Start `UNKNOWN` as historical and unresolved; the clean new run does not retroactively reconcile it. **PR #153 remains Draft and RC8 unpublished.**
+
+- [Physical Host, real ChatGPT L0, exact-source L1→L2 acceptance matrix and original operation IDs](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md)
+- [RC.7 teardown/reinstall evidence and proposed safe `uninstall.sh` contract](V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md)
+- [Earlier nested-only Quick Tunnel stage and its original `UNKNOWN` (historical, not silently cleared)](V1_RC8_STAGE3_NESTED_QUICK_TUNNEL_2026-11-19.md)
+- [Stage-2 native source-equivalent independent tests](V1_STAGE2_NATIVE_REACCEPTANCE_2026-11-18.md)
+
+---
+
+
 **状态更新（2026-11-19 UTC）：阶段 1 源码整改完成；阶段 2 的 S2/S3/S4-A/B2/B3 范围内原生回归与完整 Race 已取得跨运行 SHA 的生产源码等价 PASS。最终同 HEAD 独立签收和真实 ChatGPT 无 Scope OAuth 尚未完成。** Owner 已确认：当前仍处于 v1 开发期、没有需要兼容的正式用户，测试数据、API、授权和 SQLite 允许不兼容重建；目标是尽早移除无实际需求的 `viewer` 及其他**已确认**的历史包袱，避免把其维护成本带到 S5 和正式发布。此授权不等于允许删除未经核验的宿主原生资源或直接修改共享 L0–L5。
 
 - **开发位置**：唯一 Draft PR [#153](https://github.com/vanishs/boxweave/pull/153)，分支 `feat/v1-s4-runtime-integration-20261116`；源码调查参考 HEAD `36b6662627050b81b946a7b9eedf922fb2e5b271`，实施前重新确认远程 HEAD。
