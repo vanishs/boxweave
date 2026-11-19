@@ -76,10 +76,6 @@ func (s *Store) StagePeerGrant(ctx context.Context, original string) error {
 		original, actor, token, layer, boxUUID, incarnation, raw).Scan(&still); err != nil || still != 1 {
 		return ErrResourceLocked
 	}
-	var role string
-	if err := tx.QueryRowContext(ctx, "SELECT role FROM credentials WHERE id=?", token).Scan(&role); err != nil || role != "admin" {
-		return ErrRevoked
-	}
 	active, err := activeCredentialForActor(ctx, tx, actor, token)
 	if err != nil || !active {
 		return ErrRevoked

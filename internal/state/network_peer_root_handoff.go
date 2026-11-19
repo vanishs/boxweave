@@ -157,8 +157,8 @@ func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, br
 	if !slices.Equal(claims, expected) {
 		return zero, ErrResourceLocked
 	}
-	var role string
-	if err := tx.QueryRowContext(ctx, "SELECT role FROM credentials WHERE id=?", token).Scan(&role); err != nil || role != "admin" {
+	active, e := activeCredentialForActor(ctx, tx, actor, token)
+	if e != nil || !active {
 		return zero, ErrResourceLocked
 	}
 	if err := tx.Commit(); err != nil {

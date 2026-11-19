@@ -45,10 +45,6 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 		boxUUID != intent.SourceUUID || incarnation != intent.SourceIncarnation {
 		return ErrInvalid
 	}
-	var role string
-	if err := tx.QueryRowContext(ctx, "SELECT role FROM credentials WHERE id=?", token).Scan(&role); err != nil || role != "admin" {
-		return ErrRevoked
-	}
 	active, err := activeCredentialForActor(ctx, tx, actor, token)
 	if err != nil || !active {
 		return ErrRevoked

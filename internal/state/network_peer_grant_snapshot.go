@@ -152,11 +152,7 @@ func (s *Store) readPeerGrantSnapshot(ctx context.Context, project, bridge, acl,
 		if !slices.Equal(claims, expected) {
 			return nil, ErrResourceLocked
 		}
-		var role string
-		if tx.QueryRowContext(ctx, "SELECT role FROM credentials WHERE id=?", token).Scan(&role) != nil || role != "admin" {
-			return nil, ErrRevoked
-		}
-		active, e := activeCredentialForActor(ctx, tx, actor, token)
+			active, e := activeCredentialForActor(ctx, tx, actor, token)
 		if e != nil || !active {
 			return nil, ErrRevoked
 		}
