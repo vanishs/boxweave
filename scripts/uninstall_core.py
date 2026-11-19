@@ -221,6 +221,9 @@ def audit_status():
     record = read_json(AUDIT)
     if record is None:
         return {"status": "ABSENT", "sha256": None}
+    info = AUDIT.lstat()
+    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+        raise UninstallError("unsafe owner or permissions on uninstall audit")
     if record.get("status") not in ("STARTED", "COMPLETE"):
         raise UninstallError("unrecognized interrupted uninstall audit")
     return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
@@ -369,13 +372,15 @@ def audited_write(event):
     payload = canonical(record) + b"\n"
     fd = os.open(str(AUDIT), os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "wb") as dst:
+        dst.write(payload)
+        dst.flush()
+        os.fsync(dst.fileno())
+    rootdir = os.open(str(AUDIT.parent), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
-        with os.fdopen(fd, "wb") as dst:
-            dst.write(payload)
-            dst.flush()
-            os.fsync(dst.fileno())
+        os.fsync(rootdir)
     finally:
-        pass
+        os.close(rootdir)
 
 
 def audited_complete(review, result):
