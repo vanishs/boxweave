@@ -7,6 +7,16 @@
 - **产品定位**：**人 + 多个可信 Agent，可靠接手、安全并发**。不做 Agent 主从/调度、身份注册、通用 RBAC、工作流引擎。彼此信任是协作假设，不取代有效凭据、Project/Box 所有权、幂等或内核隔离。
 - **优先级**：清理双角色基础负担属于当前 v1 架构收敛，可在新增 S4-C/Activity 接口之前做完；不得将它宣称为 S4-B3～B6 已通过，或绕过旧安全目标。
 
+## 0. 执行决定（2026-11-18，Owner 授权开始第 1 阶段）
+
+**当前执行：一口气完成角色全链重构，不引入旧/新并行的认证架构。** 唯一开发位置为 PR #153 的现有分支；先读取远程 HEAD 后实现，PR 保持 Draft，不合并、不发布 RC。
+
+1. **阶段 1 — 一次性重构（现在执行）：** 将 OAuth discovery / consent / authorization / token / refresh，MCP Bearer admission，手动 CLI credential，Operation actor/query，SQLite schema、所有上层 Tool 与调用方按方案 B 同步变更。彻底移除应用权限 `admin/viewer`、`mcp:admin/viewer` 与 `-role`；只承认经过明确批准的全管理凭据。新建 SchemaVersion=4 干净基线，不实施 v3→v4 自动迁移，不接受旧 Token/Grant。保留资源隔离、Token 二次校验、OAuth PKCE/refresh/revoke、original actor 幂等及 UNKNOWN 防重放。实施前静态引用清单和改后零旧角色引用扫描均须留痕。
+2. **阶段 2 — 集中测试：** 每次修改优先在隔离 Box 运行格式化、编译、针对性 Go/SDK HTTP、撤销/跨 Actor/跨 Layer/负例测试；修复直到通过。原 viewer 专用测试替换为真实身份/安全拒绝测试，不以跳过测试作为完成。此阶段不改变共享 L0–L5 与宿主 ACL。
+3. **阶段 3 — 最终签收：** 在可销毁全新 Project/DB 中验证完整相关 S2/S3/S4 Native 回归，并用真实 ChatGPT 验证 OAuth 发现、明确同意、授权码、工具访问、刷新和撤销；同一最终 SHA CI PASS，独立审计后签收。SDK 源码静态兼容不能替代 E2E。任何未跑通项目应标 BLOCKED/NOT_TESTED，禁止假报 PASS。
+
+**速度原则：** 不单独实施旧 DB 迁移、兼容 API、双权限版本或不相关 SDK 升级；不重验尚未开发的 S4-B4–B6。若发现清理目标涉及原生宿主安全和历史 UNKNOWN，立即从本次重构范围剔除，保留证据，绝不为删代码降低安全检查。工作结束更新 README/AGENTS/产品与 MCP 契约、执行记录并给出准确 source SHA 与测试结果。
+
 ## 1. 目标结构：一个授权级别，多个独立 Actor
 
 建议删除**整个** `admin/viewer` 产品角色模型，而不是仅隐藏 `viewer`：
