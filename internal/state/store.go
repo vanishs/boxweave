@@ -58,6 +58,8 @@ var schemaIndexes = []string{
 	"CREATE INDEX operations_work_time ON operations(layer,work_ref,created_at,id)",
 	"CREATE INDEX operations_agent_time ON operations(layer,agent_ref,created_at,id)",
 	"CREATE INDEX operations_state_time ON operations(layer,state,created_at,id)",
+	"CREATE INDEX operation_events_op_seq ON operation_events(operation_id,seq)",
+	"CREATE INDEX recovery_audit_op_seq ON recovery_audit(operation_id,seq)",
 	"CREATE INDEX operations_resource_claim ON operations(layer,resource_key,state)",
 	"CREATE UNIQUE INDEX owned_active_name ON owned_boxes(project,name) WHERE state='OWNED'",
 	"CREATE INDEX exec_output_gc_box_status ON exec_output_gc(project,box_uuid,state)",
