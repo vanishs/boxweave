@@ -15,8 +15,8 @@ func TestSameVersionSQLiteDDLDriftAndTriggersFailClosed(t *testing.T) {
 		{"same-version-extra-column", "ALTER TABLE credentials ADD COLUMN silent_extra TEXT"},
 		{"same-version-renamed-column", "ALTER TABLE operations RENAME COLUMN tracking_id TO broken_tracking_id"},
 		{"same-version-trigger", "CREATE TRIGGER foreign_insert AFTER INSERT ON credentials BEGIN DELETE FROM operations; END"},
-		{"unsupported-newer-version", "UPDATE schema_version SET version=5"},
-		{"unsupported-old-version", "UPDATE schema_version SET version=3"},
+		{"unsupported-newer-version", "UPDATE schema_version SET version=6"},
+		{"unsupported-old-version", "UPDATE schema_version SET version=4"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
