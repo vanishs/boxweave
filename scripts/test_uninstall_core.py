@@ -83,6 +83,8 @@ class FakeHost(unittest.TestCase):
 
     def fake_command(self, args, **kwargs):
         self.cmds.append(args)
+        if args[:2] == ["systemctl", "show"]:
+            return ("FragmentPath=" + str(u.UNIT) + "\nDropInPaths=", 0)
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
         if args[:2] == ["incus", "delete"]:
@@ -229,6 +231,39 @@ class FakeHost(unittest.TestCase):
         u.UNIT.write_text("malicious unit")
         with self.assertRaisesRegex(u.UninstallError, "modified"):
             self.plan()
+
+    def test_staged_service_then_controller_requires_new_plan_and_retains_history(self):
+        first = self.plan("service")
+        u.audited_write({"status": "STARTED", "review_sha256": first["review_sha256"]})
+        out = u.apply(first)
+        u.audited_complete(first["review_sha256"], out)
+        self.assertEqual(u.audit_status()["status"], "COMPLETE")
+        next_plan = self.plan("controller")
+        self.assertTrue(next_plan["ready"])
+        self.assertNotEqual(first["review_sha256"], next_plan["review_sha256"])
+        u.audited_write({"status": "STARTED", "review_sha256": next_plan["review_sha256"]})
+        self.assertEqual(len(u.read_json(u.AUDIT)["history"]), 1)
+        out2 = u.apply(next_plan)
+        u.audited_complete(next_plan["review_sha256"], out2)
+        self.assertFalse(u.STATE.exists())
+        audit = u.read_json(u.AUDIT)
+        self.assertEqual(audit["status"], "COMPLETE")
+        self.assertEqual(audit["result"]["scope"], "controller")
+        self.assertEqual(audit["history"][0]["result"]["scope"], "service")
+
+    def test_interrupted_audit_blocks_plan_and_apply(self):
+        first = self.plan()
+        u.audited_write({"review_sha256": first["review_sha256"]})
+        blocked = self.plan()
+        self.assertFalse(blocked["ready"])
+        self.assertIn("PRIOR_UNINSTALL_INTERRUPTED_REVIEW_ORIGINAL_AUDIT", blocked["blockers"])
+        with self.assertRaisesRegex(u.UninstallError, "interrupted"):
+            u.audited_write({"review_sha256": first["review_sha256"]})
+
+    def test_overridden_effective_systemd_unit_refused(self):
+        with mock.patch.object(u, "effective_unit", return_value="/run/systemd/system/boxweave.service"):
+            with self.assertRaisesRegex(u.UninstallError, "effective systemd unit"):
+                self.plan()
 
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
         u.ROOT_UNIT.write_text("peer root helper")
