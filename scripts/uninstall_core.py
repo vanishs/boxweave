@@ -331,17 +331,60 @@ def inspect(scope, project, box_uuids, native_sha):
             ]}
 
 
+def _replace_audit(record):
+    old = checked_file(AUDIT, "file", 1024 * 1024)
+    if old is None or old.st_uid != 0 or stat.S_IMODE(old.st_mode) != 0o600:
+        raise UninstallError("untrusted existing root uninstall audit")
+    fd, tmp = tempfile.mkstemp(dir=str(AUDIT.parent), prefix=".boxweave-uninstall-")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as dst:
+            dst.write(canonical(record) + b"\n")
+            dst.flush()
+            os.fsync(dst.fileno())
+        os.replace(tmp, AUDIT)
+        rootdir = os.open(str(AUDIT.parent), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(rootdir)
+        finally:
+            os.close(rootdir)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
 def audited_write(event):
-    if AUDIT.exists():
-        raise UninstallError("previous uninstall audit exists; inspect/reconcile manually, never replay")
-    payload = canonical(event) + b"\n"
+    previous = read_json(AUDIT)
+    if previous is not None:
+        if previous.get("status") != "COMPLETE":
+            raise UninstallError("previous uninstall interrupted; review original audit, never replay")
+        if len(previous.get("history", [])) > 100:
+            raise UninstallError("audit retention requires manual archiving")
+        history = list(previous.get("history", []))
+        history.append({k: v for k, v in previous.items() if k != "history"})
+        record = {**event, "history": history, "status": "STARTED"}
+        _replace_audit(record)
+        return
+    record = {**event, "status": "STARTED", "history": []}
+    payload = canonical(record) + b"\n"
     fd = os.open(str(AUDIT), os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        os.write(fd, payload)
-        os.fsync(fd)
+        with os.fdopen(fd, "wb") as dst:
+            dst.write(payload)
+            dst.flush()
+            os.fsync(dst.fileno())
     finally:
-        os.close(fd)
+        pass
+
+
+def audited_complete(review, result):
+    record = read_json(AUDIT)
+    if record is None or record.get("status") != "STARTED" or record.get("review_sha256") != review:
+        raise UninstallError("original uninstall audit changed before completion")
+    record["status"] = "COMPLETE"
+    record["result"] = result
+    _replace_audit(record)
 
 
 def exact_unlink(path, fingerprint):
@@ -458,8 +501,9 @@ def main(argv=None):
                    "review_sha256": plan["review_sha256"],
                    "actions": plan["actions"]})
     result = apply(plan)
-    # Keep original durable audit outside deletable controller state. The
-    # STARTED record remains on interruptions so an operator cannot replay.
+    # Completion is a separate fsynced audit transition; interruptions keep
+    # the original STARTED receipt and require deliberate manual reconciliation.
+    audited_complete(plan["review_sha256"], result)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
