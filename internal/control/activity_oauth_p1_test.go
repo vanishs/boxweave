@@ -205,3 +205,39 @@ func TestActivityOAuthConcurrentReadersRevokedGrantNoPostRevokeLeak(t *testing.T
 		}
 	}
 }
+
+func TestActivityOAuthRefreshReplayInvalidatesSuccessor(t *testing.T) {
+	st, ts, pwd := newOAuthServerTest(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	first := completeOAuth(t, ts, pwd, "")
+	form := url.Values{"grant_type": {"refresh_token"}, "client_id": {first.client},
+		"refresh_token": {first.refresh}, "resource": {oauthPublicOrigin + "/mcp"}}
+	r := oauthReq(t, ts, "POST", "/token", form.Encode(), "application/x-www-form-urlencoded", "", oauthPublicHost)
+	if r.StatusCode != 200 {
+		t.Fatalf("first refresh HTTP %d", r.StatusCode)
+	}
+	pair := jsonFrom(t, r)
+	refreshed := pair["access_token"].(string)
+	session := activityOAuthSession(t, ctx, ts.URL, refreshed)
+	activityOAuthRead(t, ctx, session, "overview", nil, "SQLITE_SNAPSHOT")
+
+	// RFC9700 reuse detection must invalidate *successor* access, rather
+	// than only returning invalid_grant for the consumed refresh secret.
+	replayed := oauthReq(t, ts, "POST", "/token", form.Encode(), "application/x-www-form-urlencoded", "", oauthPublicHost)
+	if replayed.StatusCode != 400 {
+		t.Fatalf("replayed refresh accepted: HTTP %d", replayed.StatusCode)
+	}
+	replayed.Body.Close()
+	if _, err := st.VerifyOAuthAccess(ctx, refreshed); err == nil {
+		t.Fatal("refresh token replay did not revoke the successor's grant")
+	}
+	for _, view := range []string{"overview", "issues"} {
+		activityOAuthMustDeny(t, ctx, session, view, nil)
+	}
+	// Independent OAuth Grants remain valid even after a sibling Grant's
+	// replay is detected; revocation scope must be exact.
+	independent := completeOAuth(t, ts, pwd, "")
+	other := activityOAuthSession(t, ctx, ts.URL, independent.access)
+	activityOAuthRead(t, ctx, other, "issues", nil, "SQLITE_SNAPSHOT")
+}
