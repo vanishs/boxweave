@@ -123,12 +123,16 @@ func main() {
 	negativeRequest, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		"http://127.0.0.1:18650/mcp",
 		strings.NewReader(`{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"box_peer_set","arguments":{}}}`))
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	negativeRequest.Header.Set("Authorization", "Bearer "+revoked)
 	negativeRequest.Header.Set("Content-Type", "application/json")
 	negativeRequest.Header.Set("Accept", "application/json")
 	negativeReply, err := http.DefaultClient.Do(negativeRequest)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	negativeReply.Body.Close()
 	if negativeReply.StatusCode != http.StatusUnauthorized {
 		panic("revoked credential reached directional network grant")
