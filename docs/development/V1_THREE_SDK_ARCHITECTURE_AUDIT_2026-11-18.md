@@ -1,0 +1,79 @@
+# BoxWeave v1 — Three pinned SDKs vs current architecture: pre-S4 native reacceptance audit
+
+**Date:** 2026-11-18 PT  
+**Scope:** pre-release Draft PR #153, source SHA `42e68f09cef407022df428ba5f76e91345e005e4` (before this documentation audit).  
+**Status:** **SOURCE/SDK DESIGN AUDIT ONLY; NO PRODUCTION CODE CHANGES OR NEW NATIVE ACCEPTANCE.** Continue to obtain current HEAD before any implementation. This is a recommendation for the Owner to review, not a signoff or automatic authority to alter shared resources.
+
+## 1. Method and precise dependency baseline
+
+Reviewed current `go.mod`, inventoried imports and call sites across **98 production Go files / approximately 19,163 lines** in `cmd` and `internal`, cross-checked the security-facing implementation and SDK interactions against **the exact downloaded tagged module sources**, plus applicable S4-B4/B5/B6 and S4-C plans. About **15,939 lines of Go tests** exist and need focused adaptations wherever an interface is changed. This is a targeted audit of the three SDK **surfaces the application actually uses**, not a claim of reading every unrelated API of their repositories. No live ChatGPT login, native host ACL/Incus mutation, or independent installed acceptance was performed.
+
+| SDK in source | Exact version | Used contract and alignment |
+| --- | --- | --- |
+| [go-oauth2/oauth2](https://github.com/go-oauth2/oauth2/tree/v4.6.0) | `github.com/go-oauth2/oauth2/v4 v4.6.0` | [`Server.ValidationAuthorizeRequest`](https://github.com/go-oauth2/oauth2/blob/v4.6.0/server/server.go), `Server.ValidationTokenRequest`, `CodeChallengeS256.Validate`; **protocol validation only**, not the SDK Manager or token storage |
+| [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk/tree/v1.8.0) | `github.com/modelcontextprotocol/go-sdk v1.8.0` | [`auth.RequireBearerToken`](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/auth/auth.go), `mcp.NewStreamableHTTPHandler`, typed `mcp.AddTool`, `ServerOptions.SetCacheable`, protected-resource metadata |
+| [Incus Go SDK](https://github.com/lxc/incus/tree/v7.6.0/client) | `github.com/lxc/incus/v7 v7.6.0` | [`ConnectIncusUnixWithContext`](https://github.com/lxc/incus/blob/v7.6.0/client/incus.go), `UseProject`, `GetInstance`/ETag, native asynchronous `Operation` ID/`WaitContext`, ACL Get/Update ETags, SFTP/Exec and `GetInstanceFull` |
+
+**Do not upgrade or replace any SDK simply as a cleanup measure.** First preserve the currently pinned safety semantics, then test a version change as an explicit separate task. Newer upstream defaults or protocol versions may differ.
+
+## 2. OAuth — keep the SDK validator / atomic SQLite ledger split
+
+**Confirmed alignment:** `internal/control/oauth.go` configures go-oauth2 for authorization code, refresh and PKCE S256 and calls only the SDK's request validation entrypoints. `internal/state/oauth.go` performs exact client/redirect/resource/issuer validation, Argon2 approval, a single-use authorization code exchange and **transactionally atomic** grant/access/refresh rotation and reuse-family invalidation. Delegating the latter to the SDK's default Manager would lose the deliberate SQLite transaction/UNKNOWN-style safety boundary and needs proof before any change.
+
+**Important SDK detail:** tagged `Server.ValidationTokenRequest` parses grant types and fields, but `CheckGrantType` is enforced in its **separate** `GetAccessToken` path. BoxWeave does not use `GetAccessToken` and therefore **must retain** the explicit authorization_code/refresh_token `switch` at `internal/control/oauth.go`. A generic unsupported grant must never pass merely because the validator returned a request.
+
+**Worth tightening before native testing:**
+- Treat OAuth as two explicit adapters: *SDK HTTP/protocol validator* in `control`, *durable atomic grant/credential ledger* in `state`. Document the no-SDK-Manager invariant in code and a small conformance test. Keep the SDK's S256-only validation and the local exact-client/redirect/resource checks; do not write a second OAuth server/parser.
+- Preserve the no-permission-Scope contract. `BeginOAuth(..., scope, ...)` still accepts a parameter only to reject it. Once protocol tests confirm error behavior, decide whether to make this rejection exclusively the HTTP boundary and remove the vestigial state argument, or leave a *single* explicit rejection guard; never permit an old `mcp:viewer` request to become full management implicitly.
+- Test exact no-Scope discovery, authorization, code exchange, refresh rotation/replay, user-denied consent, revoked/expired token, wrong issuer/resource/redirect, and unsupported grant. **Real ChatGPT connect/refresh remains NOT_TESTED.**
+
+**Do not:** discard persisted refresh reuse tombstones, replace the SQLite Store with the SDK default Manager, add roles/`mcp:manage`, assume a successful static SDK validation equals end-to-end ChatGPT interoperability.
+
+## 3. MCP — one per-request principal, built on the official SDK
+
+**Confirmed alignment:** `internal/control/server.go` uses the SDK's Bearer middleware (with a real token expiration) and stateless Streamable HTTP; `TokenInfo.UserID` is the durable **Actor ID** and `TokenInfo.Extra["token_id"]` is the current independently revocable **credential ID**. The SDK's `UserID` is intentionally not the raw Token. `SetCacheable` and `privateMCPWriter` protect sensitive responses, while `addStrictTool` applies `additionalProperties=false` before the SDK's typed dispatch so unsupported `project`/`root_pool` keys cannot be silently ignored. Both safeguards serve real contracts; **keep them and their negative tests**. Do not set `DisableLocalhostProtection` simply to remove the carefully constrained local/public Host mediation.
+
+**Finding M1 — HIGH, small bounded cleanup:** `internal/control/operation_tools.go:operationCredentialID` returns `TokenInfo.UserID` when `Extra["token_id"]` is absent, expressly for historical direct-handler fixtures. Under OAuth, Actor ID and access credential ID are different. Production `TokenVerifier` always fills the explicit Token ID. **Delete this fallback; reject missing/malformed Token IDs.** Write negative tests for forged `UserID` without `token_id` and positive tests proving a refreshed OAuth Actor retains its Actor ID while the actual Token ID rotates. Avoid a compatibility case in newly added Tools.
+
+**Finding M2 — HIGH, improves every upcoming Tool:** `operationPrincipal(req)` plus separate `operationCredentialID(req)` calls are repeated by Box, File, Peer and Operation handlers (`internal/control/box_tools.go`, `file_tools.go`, `peer_tools.go`, `operation_output_cancel.go`, `server.go`). Introduce a **single internal typed `RequestPrincipal{ActorID, TokenID, Layer}`** derived once from `CallToolRequest.Extra.TokenInfo`. Use it for admission, full-management authorization and pre-return liveness checks; preserve State's transactional `activeCredentialForActor` before native writes. Explicitly keep untrusted `work_ref` and `agent_ref` separate from identity. This is an internal implementation type, **not** a new public auth/RBAC abstraction.
+
+**Finding M3 — LOW:** `internal/control/server.go:contains` appears to be a leftover unused role-era helper. Delete after reference and test verification. No value in preserving unused old-version helpers.
+
+**Keep:** stateless MCP (no unnecessary session persistence), SDK tool registration, strict typed schema, Bearer resource metadata and the liveness recheck for slow reads; no custom transport, proxy authorizer, or generic permission framework.
+
+## 4. Incus — retain safety fences, reduce repeated SDK lifecycle plumbing
+
+**Confirmed alignment:** `internal/native/box.go` and `internal/native/status.go` use Incus's official Unix client, typed Instance APIs, exact `volatile.uuid` and restricted Project proof. `UseProject` is explicitly **not treated as the OS authorization boundary**; `Reader.Strict` verifies service identity/project confinement. `UpdateInstance` uses SDK ETag and the root ACL paths (`internal/install/native_peer_root_grant_apply.go`, `native_peer_root_integrated.go`) use `GetNetworkACL` then `UpdateNetworkACL(..., etag)`, followed by readback and verified kernel/conntrack isolation.
+
+The SDK's `Operation.Get().ID` is intentionally persisted before observing completion: HTTP disconnect or `WaitContext` cancellation does **not** authorize redispatch of an uncertain native effect. Do not replace original durable asynchronous operations with a synchronous `Wait` and blind retry. Host-root `nft`/conntrack operations and special Scriptlet/host privilege boundaries are **outside** the SDK; they are not needless reimplementations of native Incus APIs.
+
+**Finding I1 — MEDIUM, useful for B4/C:** `Reader.confined(ctx)` calls `Reader.Strict(ctx)` and opens an Incus client; `Create`, `SetPower`, `UpdateBox`, `Exec` also issue explicit `Strict` checks and commonly perform additional `GetExactBox` and `GetInstance` passes. The current code has **many repeated preflights and client constructions**, with deliberate rechecks for identity changes. Add a small **request/operation-local confined Incus handle** that exposes the current `Strict` + `UseProject` + exact Box UUID/ETag proof, reused across *one authorized operation*. Keep revalidation just before mutating and final readback. Do **not** globally cache OS restrictions, authorization, ETags, Instance identity or Root privileges. Profile/measure before changing these security-sensitive calls.
+
+**Finding I2 — MEDIUM, targeted guard reuse only:** B2 revoke and B3 grant native Root paths each contain substantial ACL/ETag/inventory/stop/recheck/conntrack-journal logic. Extract only **purely checkable shared proof/ETag/whole-policy comparison and a single stop-barrier contract**, after source-exact native tests demonstrate equivalence. Keep distinct grant/revoke effects and **do not** collapse the protected Root dispatcher and SQLite/UNKNOWN journals into an all-purpose Incus admin service. The former stage-level `S4_B2_PASS`/`S4_B3_PASS` receipts do not automatically re-sign a rewritten shared executor.
+
+**Finding I3 — planned S4-C path:** The pinned SDK exposes `GetInstanceFull(name)`. With the `instance_get_full` extension it performs the native recursive GET; without it the **SDK itself** performs separate Instance/State/Snapshots/Backups reads. No home-grown REST aggregator is warranted. Use the exact owned UUID/project handle and an **explicit `detail=true`** path. Never label a multi-request fallback snapshot atomic; native config may contain secrets, so do not log/raw-echo it unintentionally. Incus's Guest `Ready` flag does not imply Guest Exec/IP readiness. Implement the fixed Exec-readiness probe as typed, bounded **observed evidence**, preserving native ID/UNKNOWN, not as a new generic Agent daemon.
+
+**Finding I4 — not old BoxWeave API baggage:** `internal/install/native_migration_*.go` (multiple explicit `native-migrate-*` CLI commands) handles **host-global Incus package upgrades with safety checks and original journal**, not old SQLite schema migration. Do not remove it solely under the no-pre-release-compatibility rule: confirm the Owner's supported host installation/upgrade path and the required host-native safety first. Likewise do not remove Scriptlet rollback, root guards or foreign Project/UNKNOWN checks to reduce line count.
+
+## 5. Cross-SDK seams and priority / change budget
+
+| Priority | Candidate | Boundary & acceptance | Recommendation |
+| --- | --- | --- | --- |
+| **P0, before Stage 2** | **M1 + M2**: strict Token ID plus one typed request principal | HTTP Bearer (SDK) → Tool Actor/Token → SQLite admission/private read; forged missing Token ID negative, OAuth refresh Actor separation, same-Layer takeover, cross-Layer/expired/revoked tests | **Do together as a small source-only cleanup**; prevents copying the legacy fallback into B4/C |
+| **P0, already fixed in docs** | S4-C's stale `viewer/admin` requirements | `docs/development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md` previously required `admin-only detail=true`, `admin exec`, `viewer` tests, inconsistent with 2026-11-18 single management capability | Current plan updated in this audit to approved independent Actor/Token boundaries. **Do not reintroduce roles.** |
+| **P1, future feature seam** | I1 per-operation confined Incus handle | Native Reader/SDK; benchmark/recheck ETag/UUID/Project and negative races | Implement when B4/C needs the shared path; avoid gratuitously rewriting accepted Root/B3 code now |
+| **P1, guarded** | I2 shared pure ACL proof | Grant/revoke/forward may share whole-ACL/ETag/route and exact owner checks | Extract small pure functions after new source-exact native proof, **not** an all-purpose root executor |
+| **P1, at S4-C** | I3 direct `GetInstanceFull` + readiness observation | opt-in sensitive full output, fixed native Exec, async durable original/UNKNOWN | Follow the pinned Incus SDK. Do not implement S4-C early |
+| **P2** | Dead role helper and stale active comments | no behavior change | Remove when touching the related files; historical signoff docs remain source-specific |
+| **NO** | Broad SDK upgrades, default OAuth Manager swap, DIY transport/Incus REST, deletion of Root/UNKNOWN or host-native upgrade safeguards | would create extra protocol/state/safety architecture | Do **not** bundle with this cleanup |
+
+**Preferred fastest route:** one narrowly scoped M1/M2 change + focused Go/SDK HTTP and OAuth/Actor/Operation regression, then resume Stage 2 installed/native/ChatGPT no-Scope testing. Keep the Incus Root code behavior unchanged for that acceptance run; only refactor its shared pieces later with their own native evidence. One rewrite across all three SDK boundaries now would **increase** rework and invalidate previous trust evidence.
+
+## 6. Verification requirements and scope honesty
+
+1. **Go/SDK contract tests** for M1/M2: no missing/forged `token_id`; Actor ID remains stable across OAuth refresh while Token ID rotates; valid manual token; private read revoked while waiting; foreign Layer/Box and malformed Tool params refused; same-layer other-Actor Operation get/list permitted, original-key replay isolated.
+2. OAuth S256 public-client requests, unsupported grant, no Scope discovery/token/refresh/reuse/revoke, resource and redirect match, and explicit full-access consent. The real ChatGPT connection/refresh still requires live confirmation.
+3. Run `gofmt`, `make lint`, `go test ./...`, affected `-race`, and the same final SHA native/CI gates. Do not turn a local timeout into `FULL_RACE_PASS`, or reuse earlier B2/B3 installed receipts after changing auth safety code.
+4. Only an Owner-authorized fresh disposable Project/DB is reset. The Schema v3→v4 break requires new credentials/OAuth Grants/reconnected MCP; do not auto-wipe native Boxes, root ACL/Scriptlet or UNKNOWN history. [Reconstruction policy](../process/VERSIONING.md).
+
+**Conclusion:** The current SDK choices and **major safety architecture are directionally sound**. The best immediate architectural cleanup is the **MCP request principal/Token ID boundary**, not rewriting OAuth storage, introducing a new native Root service, or upgrading SDKs. Prioritize the smallest safe change that will simplify every future Tool; keep the expensive native behavior stable until it can be independently reaccepted.
