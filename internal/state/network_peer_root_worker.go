@@ -50,8 +50,8 @@ func (s *Store) FinalizeRootPeerRevocation(ctx context.Context, original string)
 		return ErrState
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE peer_grants
-		SET status='REVOKED',desired=0
-		WHERE operation_id=? AND desired=0 AND status='PENDING'`, original)
+		SET status='REVOKED',desired=0,last_verified_operation_id=?
+		WHERE operation_id=? AND desired=0 AND status='PENDING'`, original, original)
 	if err != nil {
 		return err
 	}
