@@ -19,6 +19,17 @@
 
 **Current verdict: `STAGE2_NATIVE_PARTIAL`**, with **B2 3/3 PASS** at `917c029` and confirmed B3 ETag competition PASS; awaiting the distinct final outcomes of B3 normal and S4-A.
 
+### Progress after S4-A finish and one-use workflow corrections
+
+- **S4-A FULL installed-native PASS:** [run #44479992641](https://github.com/vanishs/boxweave/actions/runs/44479992641), SHA `9c2a11e`. Independent logs verify `S4_A_OPERATION_LIST_COMPILED_CALL_TWO_INDEPENDENT_AUTH_CUTS=PASS`, `S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS`, `S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS`, `S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION=PASS` and `S4_A_INSTALLED_INCUS_76_RESTRICTED_HTTP_MCP_AND_INDEPENDENT_RAW_TERMINAL=PASS`. This is actual installed Go SDK OAuth/native evidence, **not** a real ChatGPT client.
+- **B3 installed normal first attempt CANCELED** in fresh Incus provisioning **before** original Root grant dispatch; no grant result, no PASS claim. [Run #44480369108](https://github.com/vanishs/boxweave/actions/runs/44480369108) already has successful `inside_etag_race`; the canceled `installed_normal` job alone was retried via GitHub Actions (latest attempt **IN_PROGRESS** at this checkpoint), preserving the same SHA and without re-running the successful ETag branch. Full per-job cancellation/cleanup evidence stays with the original Actions attempt.
+- **S3 exact-current native rerun:** source refactor's installed S3 SFTP fixtures previously passed at `2c7181a`. During an attempted explicit rerun on `7fa612b`, an added workflow-only preflight had a **YAML duplicate `shell` key**; [quality #44481924048](https://github.com/vanishs/boxweave/actions/runs/44481924048) failed and no S3 native job ran. The two S3 workflow YAMLs were restored from the last known good source verbatim in `3c94128468559433a2eed487b4c385beafb203c7` (no production code change). The valid [installed #44482299562](https://github.com/vanishs/boxweave/actions/runs/44482299562) and [native SFTP #44482299522](https://github.com/vanishs/boxweave/actions/runs/44482299522) jobs are **RUNNING**; [required quality #44482299594](https://github.com/vanishs/boxweave/actions/runs/44482299594) also RUNNING.
+- Both the failure and retry are source-specific evidence. Do not silently rewrite failure into a PASS or treat in-progress jobs as successful.
+
+**Latest overall label remains `STAGE2_NATIVE_PARTIAL`**, pending B3 installed grant and final S3/quality results; no actual ChatGPT client OAuth signoff yet.
+
+
+
 ## Real fresh Incus 7.6 evidence (GitHub-hosted disposable Ubuntu 24.04)
 
 | Gate | Source SHA | Workflow run | Observation |
