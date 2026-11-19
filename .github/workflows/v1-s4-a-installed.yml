@@ -4,6 +4,18 @@ on:
   push:
     branches:
       - feat/v1-s4-runtime-integration-20261116
+    paths:
+      - '.github/workflows/v1-s4-a-installed.yml'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'scripts/**'
+      - '!scripts/ci_change_scope.py'
+      - '!scripts/test_ci_change_scope.py'
+      - 'go.mod'
+      - 'go.sum'
+      - 'install.sh'
+      - 'Makefile'
+      - 'VERSION'
   workflow_dispatch:
 
 permissions:

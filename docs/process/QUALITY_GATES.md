@@ -34,6 +34,18 @@ A **non-Draft** [temporary PR #118](https://github.com/vanishs/boxweave/pull/118
 
 A configuration reference is stored at [`v1-required-quality.example.json`](../../.github/rulesets/v1-required-quality.example.json). This reference is not an executable GitHub settings change and its name/review-toggle defaults may differ from the owner's live rule. GitHub's live rule is authoritative.
 
+## Documentation-only CI fast path (2026-11-18)
+
+**The protected `v1` branch still requires the same `quality-gate` status.** To avoid repeated Go/Race, two-architecture candidate builds and real Incus installation from a pure documentation commit, the development workflows use a conservative changed-file classifier (`scripts/ci_change_scope.py`, with temporary-Git regression tests).
+
+- On `feat/v1-*` **pushes**, compare exactly the previous push SHA to the new HEAD; on **pull requests**, compare the entire PR against the `v1` merge base rather than only its last commit. Documentation means `docs/**` or Markdown files outside `.github/**`.
+- For **docs-only** changes, the required **`quality-gate` job still runs and must succeed**, checking repository text formatting, changed-line whitespace and CI scope unit tests. Go setup, YAML Go parser, vet, module checks, Race and builds are skipped. The candidate workflow keeps a tiny scope job but skips expensive source validation, both Linux builds, candidate manifest and artifact upload. No release is produced.
+- S4-A installed Incus native regression is **push-path filtered** for its workflow, application/source and installer inputs. Docs-only updates no longer start it; `workflow_dispatch` still permits an exact-source manual run. Independently scoped B3 native matrices already use source-path triggers/manual dispatch.
+- **Fail closed:** unknown/missing push bases, unavailable diffs, non-documentation changes, and manual dispatch use full CI. Protected `v1` and `release/*` branches always run full checks. A change to any `.github/**` workflow/config or `scripts/**` is full, not docs-only.
+- The release workflow's existing non-cancelling concurrency and exact-tag publication safeguards remain unchanged; a fast docs-only run does not authorize merge, RC publishing or replacing missing stage-specific native evidence. Changing code after a scoped PASS still requires relevant native and independent revalidation.
+
+**Proof requirement for this optimization:** after the workflow/script changes themselves receive full CI, use an additional **README-only commit**. Confirm `CI_CHANGE_SCOPE=DOCS_ONLY full=false` and `CI_DOCS_ONLY_FAST_PATH=PASS` in the required quality job, `CI_DOCS_ONLY_CANDIDATE_SKIP=PASS` with build jobs skipped, and absence of a new S4-A native run for that commit. A green workflow name without its raw step evidence does not prove the fast path worked.
+
 ## Phase / publication gate beyond syntax
 
 - S1 merge **satisfied**: exact source identity, installed native candidate, root-confined capability, signed native daemon transition/rollback, unchanged UNKNOWN journal without blind replay, independent real selected virtual block device acceptance, final stage audit, and append-only execution ledger. [Merge PR #115](https://github.com/vanishs/boxweave/pull/115), `d29be2561b233ff250630719fcf7244217e0b384`.

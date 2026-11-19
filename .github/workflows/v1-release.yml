@@ -5,6 +5,7 @@ on:
     branches: [v1, "feat/v1-*", "release/v1.*-rc.*"]
   pull_request:
     branches: [v1]
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -13,7 +14,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  scope:
+    name: v1-candidate-change-scope
+    runs-on: ubuntu-24.04
+    outputs:
+      full: ${{ steps.classify.outputs.full }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Determine documentation-only vs full candidate
+        id: classify
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_REF: ${{ github.ref }}
+          CI_BEFORE_SHA: ${{ github.event.before }}
+          CI_BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/ci_change_scope.py
+      - name: Document-only candidate build intentionally skipped
+        if: steps.classify.outputs.full == 'false'
+        run: echo "CI_DOCS_ONLY_CANDIDATE_SKIP=PASS (no candidate binary or release artifact)"
+
   source:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: v1-source-quality-release-tooling
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -37,6 +62,8 @@ jobs:
           test "$(cat V1_PUBLISHED_RELEASE)" = UNPUBLISHED || grep -Eq '^v1\.[0-9]+\.[0-9]+$' V1_PUBLISHED_RELEASE
 
   linux:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     name: v1-linux-${{ matrix.goarch }}-cgobuild
     strategy:
       fail-fast: false
@@ -182,7 +209,8 @@ jobs:
 
   candidate:
     name: v1-exact-source-two-arch-manifest
-    needs: [source, linux]
+    needs: [scope, source, linux]
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

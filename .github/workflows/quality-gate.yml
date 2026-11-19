@@ -28,7 +28,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Determine documentation-only vs full CI scope
+        id: scope
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_REF: ${{ github.ref }}
+          CI_BEFORE_SHA: ${{ github.event.before }}
+          CI_BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/ci_change_scope.py
+      - name: Test CI change-scope fail-closed behavior
+        run: python3 scripts/test_ci_change_scope.py
       - name: Set up pinned Go
+        if: steps.scope.outputs.full == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -36,6 +47,7 @@ jobs:
       - name: Check whole repository formatting (gofmt, UTF-8, LF, Markdown, YAML, JSON)
         run: python3 scripts/check_format.py
       - name: Parse tracked YAML and refuse duplicate keys
+        if: steps.scope.outputs.full == 'true'
         run: go run scripts/check_yaml.go
       - name: Reject newly introduced trailing whitespace
         shell: bash
@@ -44,6 +56,7 @@ jobs:
           base="$(git merge-base HEAD origin/v1)"
           git diff --check "$base" HEAD
       - name: Check tracked shell script syntax
+        if: steps.scope.outputs.full == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -51,21 +64,29 @@ jobs:
             sh -n "$path"
           done < <(git ls-files '*.sh' '.githooks/pre-*')
       - name: Ensure precise Go module formatting and verified checksums
+        if: steps.scope.outputs.full == 'true'
         run: |
           go mod verify
           go mod tidy -diff
       - name: Static Go vet
+        if: steps.scope.outputs.full == 'true'
         run: go vet ./...
       - name: Full Go race regression tests
+        if: steps.scope.outputs.full == 'true'
         env:
           CGO_ENABLED: "1"
         run: |
           go test -race -count=1 ./...
           go test -tags=s1lab -count=1 ./internal/install
       - name: Verify Go source builds
+        if: steps.scope.outputs.full == 'true'
         env:
           CGO_ENABLED: "1"
         run: go build ./...
+
+      - name: Documentation-only fast-path verdict
+        if: steps.scope.outputs.full == 'false'
+        run: echo "CI_DOCS_ONLY_FAST_PATH=PASS (format, whitespace and classifier tests)"
 
 # Required check name: "quality-gate" (this job).
 # To actually block merges configure a GitHub ruleset on v1, requiring this
