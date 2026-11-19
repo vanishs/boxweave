@@ -99,8 +99,12 @@ def read_json(path, cap=1024 * 1024):
 
 def command(argv, acceptable=(0,), timeout=30):
     try:
+        # Never inherit an arbitrary CLI remote, shell PATH, user config or
+        # proxy into an operator-root native cleanup invocation.
+        safe_env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+                    "HOME": "/root", "LC_ALL": "C", "LANG": "C"}
         run = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
-                             env={**os.environ, "LC_ALL": "C"}, check=False)
+                             env=safe_env, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise UninstallError("local command unavailable: " + argv[0]) from exc
     if run.returncode not in acceptable:
@@ -165,7 +169,7 @@ def inspect_sqlite(dbpath):
 
 
 def native_instances(project):
-    raw, _ = command(["incus", "list", "--project", project, "--format", "json"], timeout=25)
+    raw, _ = command(["incus", "list", "local:", "--project", project, "--format", "json"], timeout=25)
     try:
         data = json.loads(raw)
     except ValueError as exc:
@@ -430,7 +434,7 @@ def apply(plan):
             exact = [x for x in current if x["uuid"] == box["uuid"]]
             if len(exact) != 1 or exact[0] != box:
                 raise UninstallError("Incus target changed before deletion")
-            command(["incus", "delete", box["name"], "--project", plan["project"]], timeout=90)
+            command(["incus", "delete", "local:" + box["name"], "--project", plan["project"]], timeout=90)
             if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"])):
                 raise UninstallError("native deletion not verified")
         native = plan["native_prepare"]
