@@ -49,7 +49,7 @@ type cancelOperationResult struct {
 func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_output_get",
-		Description: "Read bounded 7-day private archived box_exec stdout/stderr by original operation_id even after Box Delete; fall back to original native recording if no archive exists. Expiration, missing output and truncation are explicit; command_success uses the separately recorded exit_code. Advance next_offset for pagination. Each stream is capped at 1MiB in the private archive.",
+		Description: "Read the original native box_exec stream up to 16MiB while the exact Box exists; recover a separately bounded 7-day private archive after Box Delete. Expiration, missing output and truncation are explicit; command_success uses the separately recorded exit_code. Advance next_offset for pagination. Each stream is capped at 1MiB in the private archive.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
 		principal, err := s.requestPrincipal(req)
@@ -108,10 +108,46 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.UnavailableReason = "RETENTION_WINDOW_ELAPSED"
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
+		// Preserve the 16MiB native pagination contract while the exact
+		// admitted Box exists. The private 1MiB archive is a separate
+		// recovery prefix, not a replacement for live native evidence.
+		box, ownedErr := s.Store.OwnedBox(ctx, principal.Layer, original.BoxUUID)
+		missingReason := "BOX_REMOVED_OUTPUT_NOT_ARCHIVED"
+		if ownedErr == nil {
+			if _, _, nativeErr := s.Native.GetExactBox(ctx, box.Name, box.UUID); nativeErr == nil {
+				missingReason = "NATIVE_RECORDED_OUTPUT_MISSING"
+				if path == "" {
+					missingReason = "NO_NATIVE_RECORDED_STREAM_PATH"
+				} else {
+					if in.Offset == native.MaxRecordedOutputBytes {
+						result.Ended, result.Truncated = true, true
+						result.NextOffset = in.Offset
+						return privateReadReply(ctx, s, principal.TokenID, result)
+					}
+					data, ended, readErr := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
+					if readErr == nil {
+						result.ContentBase64 = base64.StdEncoding.EncodeToString(data)
+						result.NextOffset = in.Offset + int64(len(data))
+						result.Ended = ended
+						if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
+							result.Ended, result.Truncated = true, true
+						}
+						return privateReadReply(ctx, s, principal.TokenID, result)
+					}
+					if !errors.Is(readErr, native.ErrRecordedOutputUnavailable) {
+						return nil, operationOutputResult{}, readErr
+					}
+				}
+			} else {
+				missingReason = "EXACT_NATIVE_BOX_NOT_AVAILABLE"
+			}
+		} else if !errors.Is(ownedErr, state.ErrNotFound) {
+			return nil, operationOutputResult{}, ownedErr
+		}
+		// With no readable native stream, use only the original authorized
+		// private archive. Do not resolve caller-selected or guest paths.
 		archive, ended, truncated, found, archiveErr := s.readExecArchive(original.ID, in.Stream, in.Offset, in.Limit)
 		if archiveErr != nil {
-			// A corrupt/private archive is a security failure, never a cue
-			// to switch to a less-controlled arbitrary path.
 			return nil, operationOutputResult{}, archiveErr
 		}
 		if found {
@@ -121,49 +157,10 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Truncated = result.Truncated || truncated
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
-		box, err := s.Store.OwnedBox(ctx, principal.Layer, original.BoxUUID)
-		if errors.Is(err, state.ErrNotFound) {
-			result.Availability, result.UnavailableReason, result.Ended = "unavailable", "BOX_REMOVED_OUTPUT_NOT_ARCHIVED", true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, principal.TokenID, result)
-		}
-		if err != nil {
-			return nil, operationOutputResult{}, err
-		}
-		if _, _, err = s.Native.GetExactBox(ctx, box.Name, box.UUID); err != nil {
-			result.Availability, result.UnavailableReason, result.Ended = "unavailable", "EXACT_NATIVE_BOX_NOT_AVAILABLE", true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, principal.TokenID, result)
-		}
-		if path == "" {
-			result.Ended = true
-			result.Availability = "unavailable"
-			result.UnavailableReason = "NO_NATIVE_RECORDED_STREAM_PATH"
-			return privateReadReply(ctx, s, principal.TokenID, result)
-		}
-		if in.Offset == native.MaxRecordedOutputBytes {
-			result.Ended, result.Truncated = true, true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, principal.TokenID, result)
-		}
-		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
-		if errors.Is(err, native.ErrRecordedOutputUnavailable) {
-			result.Availability = "unavailable"
-			result.UnavailableReason = "NATIVE_RECORDED_OUTPUT_MISSING"
-			result.Ended = true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, principal.TokenID, result)
-		}
-		if err != nil {
-			return nil, operationOutputResult{}, err
-		}
-		result.ContentBase64 = base64.StdEncoding.EncodeToString(data)
-		result.NextOffset = in.Offset + int64(len(data))
-		result.Ended = ended
-		if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
-			result.Ended, result.Truncated = true, true
-		}
+		result.Availability, result.UnavailableReason, result.Ended = "unavailable", missingReason, true
+		result.NextOffset = in.Offset
 		return privateReadReply(ctx, s, principal.TokenID, result)
+
 	})
 
 	addStrictTool(server, &mcp.Tool{

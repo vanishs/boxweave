@@ -24,3 +24,11 @@
 - Already-deleted historical Boxes are not retroactively recoverable. File content remains private and is never inserted into Activity, general logs or immutable Operation events.
 - Scoped uninstall/controller replacement must explicitly handle adjacent private archive files, preserving ownership and requiring authorization for destructive cleanup.
 - Before release: verify installed exact-source Create/Exec/Delete/output, free-space/aggregate-cap exhaustion, Crash/GC, OAuth revocation, and physical independent Host quota/qgroup witness; root-network and S5 multi-Agent gates remain separate.
+
+## S4-A original native output regression — 2026-11-19 PT
+
+**Root cause confirmed:** [S4-A installed-native run #44674010605](https://github.com/vanishs/boxweave/actions/runs/44674010605) at source `cf8c080` failed the baseline original recorded-output probe with `real recorded stdout breached 16MiB public read cap or hid truncation`, then did not reach the independent native spool `output-witness.ready` rendezvous. The new controller-private 1 MiB archive was preferred even while the exact original Box still existed, incorrectly shortening the original native 16 MiB pagination contract. The second failure is downstream, not an independent absent-native-output finding.
+
+**Repair:** `operation_output_get` now checks the authorized original and TTL, then reads the **original native recorded stream first** if the exact owned native Box still exists, honoring the original 16 MiB offset and truncation semantics. Only after a missing/unavailable original native stream or Box deletion does it use the private bounded 1 MiB archive. It never replays Exec, widens the allowed native path, exposes a foreign Layer, or mistakes successful transport for Guest exit 0. This retains both 16 MiB live-Box original evidence and seven-day bounded post-Delete recovery.
+
+**Local isolated acceptance:** Dedicated new L0 Box `217c7b3b-c80b-4848-a8a0-fd7bd72a2150` at `work_ref=rc8-s4a-native-output-regression-20261119`; focused state/control/native tests PASS and full `make verify` PASS with CGO Go Race, lint, scripted MCP and unittest regressions. This is **not** a substitute for rerunning exact-source S4-A native/Incus 7.6 CI; no installed shared L0 host was changed.
