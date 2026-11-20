@@ -57,6 +57,31 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		}
 		view.Enum = []any{"overview", "issues", "evidence"}
 	}
+	if tool.Name == "box_file_apply" {
+		mode := schema.Properties["mode"]
+		if mode == nil {
+			panic("file apply requires typed mode field")
+		}
+		// Only atomic exclusive create is implemented. Advertise only safe
+		// executable intents instead of accepting unsupported replacement.
+		mode.Enum = []any{"create"}
+	}
+	if tool.Name == "operation_output_get" {
+		stream := schema.Properties["stream"]
+		if stream == nil {
+			panic("output requires typed stream field")
+		}
+		stream.Enum = []any{"stdout", "stderr"}
+	}
+	if tool.Name == "box_exec" {
+		argv := schema.Properties["argv"]
+		if argv == nil {
+			panic("exec requires typed argv field")
+		}
+		// Prevent a nullable or empty command from reaching a mutation tool.
+		one := 1
+		argv.Type, argv.Types, argv.MinItems = "array", nil, &one
+	}
 	tool.InputSchema = schema
 	if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
 		tool.Description += mutationContinuityHint
