@@ -94,7 +94,7 @@ func wait(ctx context.Context, s *mcp.ClientSession, opID string) map[string]any
 
 func main() {
 	if len(os.Args) != 2 || (os.Args[1] != "create" && os.Args[1] != "seed" &&
-		os.Args[1] != "flood" && os.Args[1] != "missing" && os.Args[1] != "cleanup") ||
+		os.Args[1] != "flood" && os.Args[1] != "archive" && os.Args[1] != "missing" && os.Args[1] != "cleanup") ||
 		os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
 		panic("MCP quota test only on disposable GitHub runner")
@@ -174,6 +174,20 @@ func main() {
 		fmt.Println("S2_MCP_QUOTA_OPERATION_ID=" + originalID)
 		fmt.Println("S2_MCP_QUOTA_NATIVE_ID=" + nativeID)
 		fmt.Println("S2_MCP_QUOTA_GUEST_EXIT_ONE_PUBLIC_OUTPUT=PASS")
+	case "archive":
+		check(len(uuid) == 36, "missing quota box UUID")
+		originalID := os.Getenv("BW_S2_MCP_QUOTA_ORIGINAL_ID")
+		check(len(originalID) == 32, "exact original Exec ID required")
+		out := call(ctx, s, "operation_output_get", map[string]any{"operation_id": originalID, "stream": "stdout", "limit": 4096})
+		data, err := base64.StdEncoding.DecodeString(field(out, "content_base64"))
+		check(err == nil && len(data) == 4096 && field(out, "availability") == "available" && out["exit_code"] == float64(1) && out["command_success"] == false, "private archive prefix did not preserve original output and exit")
+		for _, b := range data {
+			check(b == 0, "archive did not preserve original zero payload")
+		}
+		tail := call(ctx, s, "operation_output_get", map[string]any{"operation_id": originalID, "stream": "stdout", "offset": 1048560, "limit": 65536})
+		tailBytes, err := base64.StdEncoding.DecodeString(field(tail, "content_base64"))
+		check(err == nil && len(tailBytes) == 16 && tail["truncated"] == true && tail["ended"] == true && tail["next_offset"] == float64(1048576) && tail["command_success"] == false, "private archive bound or original exit was lost")
+		fmt.Println("S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX=PASS")
 	case "missing":
 		check(len(uuid) == 36, "missing quota box UUID")
 		originalID := os.Getenv("BW_S2_MCP_QUOTA_ORIGINAL_ID")

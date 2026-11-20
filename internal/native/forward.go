@@ -35,13 +35,11 @@ func (f ForwardSpec) Validate() error {
 		return ErrNativeUnsupported
 	}
 	ip := net.ParseIP(f.HostBind)
-	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() {
+	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.Equal(net.IPv4bcast) {
 		return ErrNativeUnsupported
 	}
-	// The public actor confirmation flag alone is NOT a trusted host-local
-	// approval for binding an external interface. Keep B4 loopback-only until
-	// a separate exact-address host approval mechanism is independently accepted.
-	if !ip.IsLoopback() {
+	// Structural and caller-intent check only. Reader separately enforces host policy before create.
+	if !ip.IsLoopback() && !f.ExternalAcknowledged {
 		return ErrNativeUnsupported
 	}
 	if f.HostBind != ip.String() {
@@ -119,6 +117,11 @@ func forwardDeviceChange(original api.DevicesMap, f ForwardSpec, create bool) (a
 func (r Reader) UpdateOwnedForward(ctx context.Context, name, uuid string, f ForwardSpec, create bool) (string, error) {
 	if err := f.Validate(); err != nil {
 		return "", err
+	}
+	if create {
+		if err := r.AuthorizeForwardCreate(f); err != nil {
+			return "", err
+		}
 	}
 	c, _, _, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {

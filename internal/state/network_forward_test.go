@@ -135,3 +135,91 @@ func TestB4ForwardAtomicAdmissionConfirmDeleteAndUnknownFence(t *testing.T) {
 		t.Fatalf("unknown was blindly released %v", err)
 	}
 }
+
+func TestB4ForwardQueuedCancellationAndRestartRelease(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const project = "user-1001"
+	const uuid = "33333333-3333-4333-8333-333333333333"
+	b4OwnedFixture(t, s, project, "forward-recovery", uuid)
+	a := Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Action: "port_forward_create", Key: "b4-cancel-before-dispatch-01", RequestID: "r-1", BoxUUID: uuid, Incarnation: uuid, ResourceKey: "box:forward-recovery", ResourceKeys: []string{"box:" + uuid, "listener:tcp:127.0.0.1:23051"}, SafeIntent: []byte("b4-recover"), ForwardCreate: &ForwardCreateAdmission{Protocol: "tcp", HostBind: "127.0.0.1", HostPort: 23051, GuestPort: 8080}}
+	makeClaim := func(key string) Receipt {
+		t.Helper()
+		a.Key = key
+		a.RequestID = key
+		r, e := s.Admit(ctx, a)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return r
+	}
+	verifyRelease := func(r Receipt, want string) {
+		t.Helper()
+		got, e := s.Get(ctx, r.ID)
+		if e != nil || got.State != want {
+			t.Fatalf("original %+v %v", got, e)
+		}
+		f, e := s.GetForward(ctx, project, r.ID)
+		if e != nil || f.State != "REVOKED" {
+			t.Fatalf("reservation not released atomically: %+v %v", f, e)
+		}
+	}
+	first := makeClaim("b4-cancel-before-dispatch-01")
+	if err = s.CancelQueued(ctx, project, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	verifyRelease(first, "CANCELLED")
+	second := makeClaim("b4-recover-before-dispatch-02")
+	if n, e := s.Recover(ctx); e != nil || n != 1 {
+		t.Fatalf("recover %d %v", n, e)
+	}
+	verifyRelease(second, "FAILED")
+	third := makeClaim("b4-preflight-before-dispatch-03")
+	if err = s.Claim(ctx, third.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.FailPreDispatch(ctx, third.ID, "PROVED_NO_EFFECT"); err != nil {
+		t.Fatal(err)
+	}
+	verifyRelease(third, "FAILED")
+	fourth := makeClaim("b4-forward-for-delete-restart-04")
+	if err = s.Claim(ctx, fourth.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.NativeAck(ctx, fourth.ID, "native-proxy-4"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.FinalizeVerifiedForward(ctx, fourth.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	del := a
+	del.Action = "port_forward_delete"
+	del.Key = "b4-delete-queued-restart-05"
+	del.RequestID = del.Key
+	del.ForwardCreate = nil
+	del.ForwardDeleteID = fourth.ID
+	d, err := s.Admit(ctx, del)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, e := s.Recover(ctx); e != nil || n != 1 {
+		t.Fatalf("recover delete %d %v", n, e)
+	}
+	op, err := s.Get(ctx, d.ID)
+	if err != nil || op.State != "FAILED" {
+		t.Fatalf("delete %+v %v", op, err)
+	}
+	f, err := s.GetForward(ctx, project, fourth.ID)
+	if err != nil || f.State != "CONFIRMED" {
+		t.Fatalf("old forward not restored %+v %v", f, err)
+	}
+	del.Key = "b4-delete-retry-fresh-06"
+	del.RequestID = del.Key
+	if _, err = s.Admit(ctx, del); err != nil {
+		t.Fatal(err)
+	}
+}

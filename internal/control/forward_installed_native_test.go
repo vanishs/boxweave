@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -56,9 +58,9 @@ func b4MCPWait(t *testing.T, sess *mcp.ClientSession, id string) {
 	}
 	t.Fatalf("original %s did not settle within test budget", id)
 }
-func b4MCPHostEcho(t *testing.T, protocol string, port int, want bool) {
+func b4MCPHostEcho(t *testing.T, protocol, host string, port int, want bool) {
 	t.Helper()
-	conn, err := net.DialTimeout(protocol, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+	conn, err := net.DialTimeout(protocol, net.JoinHostPort(host, strconv.Itoa(port)), time.Second)
 	if err != nil {
 		if want {
 			t.Fatal(err)
@@ -132,7 +134,7 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := &Service{Store: st, Native: native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: project}, BuildVersion: "b4-native-mcp-test", BuildCommit: "source-exact"}
+	svc := &Service{Store: st, Native: native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: project, ExternalForwardAllow: "bwbr0/tcp/10.248.83.1:23095,bwbr0/udp/10.248.83.1:23096,bwbr0/tcp/[fd83:248::1]:23097,bwbr0/udp/[fd83:248::1]:23098"}, BuildVersion: "b4-native-mcp-test", BuildCommit: "source-exact"}
 	srv := httptest.NewUnstartedServer(svc.Handler())
 	svc.Listener = srv.Listener.Addr().String()
 	srv.Start()
@@ -150,17 +152,37 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 	if err != nil || len(inventory.Tools) != 21 {
 		t.Fatalf("expected exact 21 live MCP tools: %v / %d", err, len(inventory.Tools))
 	}
+	// Refuse missing acknowledgment, unmatched port, wildcard, and unapproved addresses.
+	for i, tc := range []struct {
+		bind string
+		port int
+		ack  bool
+	}{
+		{"10.248.83.1", 23095, false}, {"10.248.83.1", 23099, true}, {"10.248.83.2", 23095, true}, {"0.0.0.0", 23095, true},
+	} {
+		args := map[string]any{"box_id": uuid, "protocol": "tcp", "host_bind": tc.bind, "host_port": tc.port, "guest_port": 19091, "confirm_external_exposure": tc.ack, "idempotency_key": fmt.Sprintf("b4-exposure-negative-%03d", i)}
+		result, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: args})
+		if e == nil && (result == nil || !result.IsError) {
+			t.Fatalf("unapproved external admission %v", args)
+		}
+	}
+	fmt.Println("S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS")
 	for _, tc := range []struct {
-		proto               string
+		name, proto, bind   string
 		hostPort, guestPort int
 	}{
-		{"tcp", 23093, 19091}, {"udp", 23094, 19092},
+		{"tcp", "tcp", "127.0.0.1", 23093, 19091},
+		{"udp", "udp", "127.0.0.1", 23094, 19092},
+		{"external-v4-tcp", "tcp", "10.248.83.1", 23095, 19091},
+		{"external-v4-udp", "udp", "10.248.83.1", 23096, 19092},
+		{"external-v6-tcp", "tcp", "fd83:248::1", 23097, 19091},
+		{"external-v6-udp", "udp", "fd83:248::1", 23098, 19092},
 	} {
-		t.Run(tc.proto, func(t *testing.T) {
-			args := map[string]any{"box_id": uuid, "protocol": tc.proto, "host_port": tc.hostPort,
-				"guest_port": tc.guestPort, "idempotency_key": "s4b4-native-mcp-create-" + tc.proto + "-001"}
-			first, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: args})
-			original := b4MCPData(t, first, e)
+		t.Run(tc.name, func(t *testing.T) {
+			args := map[string]any{"box_id": uuid, "protocol": tc.proto, "host_bind": tc.bind, "host_port": tc.hostPort, "guest_port": tc.guestPort, "confirm_external_exposure": tc.bind != "127.0.0.1", "idempotency_key": "b4-mcp-create-" + tc.name + "-001"}
+			other := cloneB4Args(args)
+			other["idempotency_key"] = "b4-mcp-create-" + tc.name + "-002"
+			original, args := b4CompetingMCPCalls(t, ctx, sess, "port_forward_create", args, other)
 			opID, ok := original["operation_id"].(string)
 			if !ok || len(opID) != 32 {
 				t.Fatalf("no original forward receipt: %+v", original)
@@ -181,31 +203,189 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 			if !ok || item["forward_id"] != opID || item["state"] != "CONFIRMED" || item["native_verified"] != true {
 				t.Fatalf("not native verified: %+v", items[0])
 			}
-			b4MCPHostEcho(t, tc.proto, tc.hostPort, true)
+			b4MCPHostEcho(t, tc.proto, tc.bind, tc.hostPort, true)
+			alternate := "10.248.83.1"
+			if tc.bind != "127.0.0.1" {
+				alternate = "127.0.0.1"
+			}
+			b4MCPHostEcho(t, tc.proto, alternate, tc.hostPort, false)
 			conflicting := map[string]any{"box_id": uuid, "protocol": tc.proto, "host_port": tc.hostPort,
-				"guest_port": tc.guestPort, "idempotency_key": "s4b4-native-mcp-collision-" + tc.proto + "-002"}
+				"guest_port": tc.guestPort, "host_bind": tc.bind, "confirm_external_exposure": tc.bind != "127.0.0.1", "idempotency_key": "s4b4-native-mcp-collision-" + tc.name + "-003"}
 			denied, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: conflicting})
 			if e == nil && (denied == nil || !denied.IsError) {
 				t.Fatal("listener collision was accepted")
 			}
-			deleted, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_delete", Arguments: map[string]any{
-				"forward_id": opID, "idempotency_key": "s4b4-native-mcp-delete-" + tc.proto + "-003",
-			}})
-			remove := b4MCPData(t, deleted, e)
+			delArgs := map[string]any{"forward_id": opID, "idempotency_key": "b4-mcp-delete-" + tc.name + "-004"}
+			rival := cloneB4Args(delArgs)
+			rival["idempotency_key"] = "b4-mcp-delete-" + tc.name + "-005"
+			remove, delArgs := b4CompetingMCPCalls(t, ctx, sess, "port_forward_delete", delArgs, rival)
 			removeID, ok := remove["operation_id"].(string)
 			if !ok {
 				t.Fatalf("no delete original %+v", remove)
 			}
 			b4MCPWait(t, sess, removeID)
-			b4MCPHostEcho(t, tc.proto, tc.hostPort, false)
+			againDelete, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_delete", Arguments: delArgs})
+			deleteReplay := b4MCPData(t, againDelete, e)
+			if deleteReplay["operation_id"] != removeID || deleteReplay["duplicate"] != true {
+				t.Fatalf("delete replay %+v", deleteReplay)
+			}
+			b4MCPHostEcho(t, tc.proto, tc.bind, tc.hostPort, false)
 			listed, e = sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_list", Arguments: map[string]any{"box_id": uuid}})
 			data = b4MCPData(t, listed, e)
 			items, ok = data["forwards"].([]any)
 			if !ok || len(items) != 0 {
 				t.Fatalf("revoked forward remains listed: %+v", data)
 			}
-			t.Logf("S4_B4_MCP_%s_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS", tc.proto)
+			t.Logf("S4_B4_MCP_%s_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS", tc.name)
 		})
 	}
+	// A real foreign host listener occupies a TCP endpoint. Incus must not
+	// replace it, and an incomplete native apply cannot become CONFIRMED.
+	t.Run("occupied-host-listener", func(t *testing.T) {
+		const port = 23105
+		guard, e := net.Listen("tcp", "127.0.0.1:23105")
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer guard.Close()
+		args := map[string]any{"box_id": uuid, "protocol": "tcp", "host_port": port, "guest_port": 19091, "idempotency_key": "b4-occupied-real-listener-001"}
+		result, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: args})
+		original := b4MCPData(t, result, e)
+		id, ok := original["operation_id"].(string)
+		if !ok {
+			t.Fatal("missing occupied-listener original")
+		}
+		var op state.Receipt
+		until := time.Now().Add(40 * time.Second)
+		for time.Now().Before(until) {
+			op, e = st.Get(ctx, id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if op.State == "UNKNOWN" || op.State == "FAILED" || op.State == "SUCCEEDED" {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if op.State != "UNKNOWN" && op.State != "FAILED" {
+			t.Fatalf("native occupied listener misreported %+v", op)
+		}
+		claim, e := st.GetForward(ctx, project, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if op.State == "UNKNOWN" {
+			if claim.State != "PENDING" {
+				t.Fatalf("uncertain residual claim released %+v", claim)
+			}
+			next := cloneB4Args(args)
+			next["idempotency_key"] = "b4-occupied-real-listener-002"
+			denied, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: next})
+			if e == nil && (denied == nil || !denied.IsError) {
+				t.Fatal("fresh occupied listener original admitted")
+			}
+		} else if claim.State != "REVOKED" {
+			t.Fatalf("proved no dispatch not released %+v", claim)
+		}
+		sentinel := "original-host-listener"
+		accepted := make(chan error, 1)
+		go func() {
+			cn, e := guard.Accept()
+			if e != nil {
+				accepted <- e
+				return
+			}
+			defer cn.Close()
+			_, e = cn.Write([]byte(sentinel))
+			accepted <- e
+		}()
+		cn, e := net.DialTimeout("tcp", "127.0.0.1:23105", time.Second)
+		if e != nil {
+			t.Fatal(e)
+		}
+		_ = cn.SetDeadline(time.Now().Add(time.Second))
+		buf := make([]byte, len(sentinel))
+		_, e = io.ReadFull(cn, buf)
+		_ = cn.Close()
+		if e != nil || string(buf) != sentinel {
+			t.Fatalf("foreign host listener was replaced: %q %v", buf, e)
+		}
+		if e = <-accepted; e != nil {
+			t.Fatal(e)
+		}
+		_ = guard.Close()
+		// One-use host teardown, not a production UNKNOWN retry. If Incus retained
+		// exact residual metadata, explicitly verify and remove only that test proxy.
+		after, _, e := c.UseProject(project).GetInstance("s4b4native")
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, exists := after.Devices[claim.NativeDevice]; exists {
+			if op.State != "UNKNOWN" {
+				t.Fatal("failed receipt released a residual native device")
+			}
+			spec := specForClaim(claim)
+			if e = svc.Native.ObserveOwnedForward(ctx, "s4b4native", uuid, spec, true); e != nil {
+				t.Fatal(e)
+			}
+			nativeID, e := svc.Native.UpdateOwnedForward(ctx, "s4b4native", uuid, spec, false)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = nativeDone(ctx, svc.Native, nativeID); e != nil {
+				t.Fatal(e)
+			}
+		}
+		after, _, e = c.UseProject(project).GetInstance("s4b4native")
+		if e != nil {
+			t.Fatal(e)
+		}
+		if !reflect.DeepEqual(inst.Devices, after.Devices) {
+			t.Fatalf("unrelated native devices changed: %v", after.Devices)
+		}
+		b4MCPHostEcho(t, "tcp", "127.0.0.1", port, false)
+		fmt.Println("S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS")
+	})
 	fmt.Println("S4_B4_INSTALLED_AUTHENTICATED_21_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS")
+}
+
+// Two different keys simultaneously contend for the same native resource.
+// Exactly one may receive an original; the losing call may not dispatch.
+func cloneB4Args(in map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+func b4CompetingMCPCalls(t *testing.T, ctx context.Context, sess *mcp.ClientSession, name string, first, second map[string]any) (map[string]any, map[string]any) {
+	t.Helper()
+	type response struct {
+		result *mcp.CallToolResult
+		err    error
+		args   map[string]any
+	}
+	start := make(chan struct{})
+	results := make(chan response, 2)
+	for _, a := range []map[string]any{first, second} {
+		go func(a map[string]any) {
+			<-start
+			r, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: a})
+			results <- response{r, e, a}
+		}(a)
+	}
+	close(start)
+	var winner response
+	count := 0
+	for i := 0; i < 2; i++ {
+		r := <-results
+		if r.err == nil && r.result != nil && !r.result.IsError {
+			winner = r
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("%s competing distinct idempotency keys accepted %d", name, count)
+	}
+	return b4MCPData(t, winner.result, winner.err), winner.args
 }

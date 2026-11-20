@@ -141,6 +141,9 @@ func (s *Store) CancelQueued(ctx context.Context, layer, id string) error {
 		id, now, "CANCELLED", "CANCELLED_BEFORE_DISPATCH"); err != nil {
 		return err
 	}
+	if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

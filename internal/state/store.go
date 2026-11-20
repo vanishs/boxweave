@@ -757,6 +757,11 @@ func (s *Store) transition(ctx context.Context, id, expected, next, nativeID, er
 	if n != 1 {
 		return ErrState
 	}
+	if next == "FAILED" {
+		if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, time.Now().UnixNano(), next, errClass); err != nil {
 		return err
 	}
@@ -789,6 +794,11 @@ func (s *Store) Claim(ctx context.Context, id string) error {
 	now := time.Now().UnixNano()
 	if _, err = tx.ExecContext(ctx, "UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state='ADMITTED'", next, reason, now, id); err != nil {
 		return err
+	}
+	if !active {
+		if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
+			return err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, now, next, reason); err != nil {
 		return err
@@ -882,6 +892,11 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 			"UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state=?",
 			next, reason, now, item.id, item.state); err != nil {
 			return 0, err
+		}
+		if next == "FAILED" {
+			if err := settleForwardNoEffectTx(ctx, tx, item.id); err != nil {
+				return 0, err
+			}
 		}
 		if _, err = tx.ExecContext(ctx,
 			"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",

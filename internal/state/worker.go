@@ -76,9 +76,7 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		}
 		var pre PreDispatchError
 		if errors.As(err, &pre) {
-			if w.Store.FailPreDispatch(context.Background(), operationID, pre.Class) == nil {
-				_ = w.Store.MarkForwardNoDispatch(context.Background(), operationID)
-			}
+			_ = w.Store.FailPreDispatch(context.Background(), operationID, pre.Class)
 			return
 		}
 		if errors.Is(err, ErrNoNativeChange) {
@@ -144,7 +142,6 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		var proved VerifiedEffectFailure
 		if errors.As(err, &proved) && proved.Class != "" {
 			if w.Store.VerifiedFailed(context.Background(), operationID, proved.Class) == nil {
-				_ = w.Store.MarkForwardNoDispatch(context.Background(), operationID)
 				return
 			}
 		}

@@ -34,8 +34,9 @@ type Status struct {
 }
 
 type Reader struct {
-	Socket  string
-	Project string
+	Socket               string
+	Project              string
+	ExternalForwardAllow string // Host-local startup policy, never an MCP argument.
 }
 
 // Incus advertises projects_restrictions, not a generic "restricted" extension.

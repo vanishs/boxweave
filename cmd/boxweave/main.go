@@ -544,6 +544,11 @@ func run() error {
 	svc := control.Service{Store: s, Native: native.Reader{Socket: *socket, Project: *project}, BuildVersion: version, BuildCommit: commit, Listener: *listener}
 	switch command {
 	case "serve":
+		external := os.Getenv("BOXWEAVE_FORWARD_EXTERNAL_ALLOW")
+		if _, err := native.ParseExternalForwardAllow(external); err != nil {
+			return errors.New("invalid host-local BOXWEAVE_FORWARD_EXTERNAL_ALLOW")
+		}
+		svc.Native.ExternalForwardAllow = external
 		return svc.ListenAndServe()
 	case "status", "doctor":
 		status := svc.Status(ctx)

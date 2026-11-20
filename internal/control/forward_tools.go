@@ -87,7 +87,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 
 	addStrictTool(server, &mcp.Tool{
 		Name:        "port_forward_create",
-		Description: "Admit one exact owned Box TCP/UDP instance-native proxy to guest 127.0.0.1:guest_port. Host bind defaults to 127.0.0.1 loopback. External host binds are currently UNSUPPORTED even with client confirmation until an independent exact-host approval contract is available. Wildcard/foreign targets are forbidden. An async receipt is NOT proof of listener reachability; use operation_get, port_forward_list and separate packet checks. Never blindly retry UNKNOWN.",
+		Description: "Admit one exact owned Box TCP/UDP instance-native proxy to guest 127.0.0.1:guest_port. Host bind defaults to 127.0.0.1 loopback. External host binds require explicit confirm_external_exposure AND a host-local exact interface/address/protocol/port allowlist; denied by default. Wildcard/foreign targets are forbidden. An async receipt is NOT proof of listener reachability; use operation_get, port_forward_list and separate packet checks. Never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in forwardCreateInput) (*mcp.CallToolResult, state.Receipt, error) {
 		principal, err := s.requestPrincipal(req)
@@ -119,7 +119,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
-		box, err := s.Store.OwnedBox(ctx, principal.Layer, in.BoxID)
+		box, err := s.Store.ForwardReplayBox(ctx, principal.Layer, in.BoxID)
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
@@ -139,6 +139,9 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 			return &mcp.CallToolResult{}, previous, nil
 		}
 		if !errors.Is(err, state.ErrNotFound) {
+			return nil, state.Receipt{}, err
+		}
+		if err = s.Native.AuthorizeForwardCreate(spec); err != nil {
 			return nil, state.Receipt{}, err
 		}
 		if _, err = s.readOwned(ctx, req, box.UUID); err != nil {
@@ -196,7 +199,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}
-		box, err := s.Store.OwnedBox(ctx, principal.Layer, claim.BoxID)
+		box, err := s.Store.ForwardReplayBox(ctx, principal.Layer, claim.BoxID)
 		if err != nil {
 			return nil, state.Receipt{}, err
 		}

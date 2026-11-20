@@ -2249,6 +2249,17 @@ echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
 # This is an independent deliberate log-loss negative, NOT automatic GC.
 sudo incus query -X DELETE "/1.0/instances/$mcp_quota_name/logs/exec-output/exec_$mcp_native.stdout?project=$project"   > "$work/mcp-quota-native-log-delete.json"
 sudo test ! -f "$mcp_output_file"
+# Native log loss alone now has a private 1 MiB archive fallback; verify it.
+s2_mcp_quota archive > "$work/mcp-quota-native-archived.txt"
+grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX=PASS' "$work/mcp-quota-native-archived.txt"
+echo "S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX=PASS"
+# Deliberately remove ONLY the exact disposable original archive, to retain
+# the old real no-native/no-archive typed-unavailable negative.
+mcp_archive_file="$mcp_quota_db.exec-archive/$mcp_original.stdout"
+sudo test -f "$mcp_archive_file"
+test "$(sudo stat -c '%s' "$mcp_archive_file")" -eq 1048576
+sudo -u boxweave rm -- "$mcp_archive_file"
+sudo test ! -e "$mcp_archive_file"
 s2_mcp_quota missing > "$work/mcp-quota-native-missing.txt"
 grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_TYPED_UNAVAILABLE=PASS'   "$work/mcp-quota-native-missing.txt"
 echo "S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY=PASS"

@@ -15,7 +15,7 @@ func TestB4ForwardSpecAndExactProxyDevice(t *testing.T) {
 	}{
 		{"127.0.0.1", "tcp", 22001, 80, false, true},
 		{"::1", "udp", 22002, 53, false, true},
-		{"192.0.2.8", "tcp", 80, 8080, true, false},
+		{"192.0.2.8", "tcp", 80, 8080, true, true},
 		{"192.0.2.8", "tcp", 80, 8080, false, false},
 		{"0.0.0.0", "tcp", 80, 80, true, false},
 		{"::", "udp", 53, 53, true, false},
@@ -61,5 +61,28 @@ func TestB4ForwardSpecAndExactProxyDevice(t *testing.T) {
 		if len(removed) != len(original) {
 			t.Fatalf("unrelated devices removed %+v", removed)
 		}
+	}
+}
+
+func TestB4HostLocalForwardPolicy(t *testing.T) {
+	f := ForwardSpec{Device: "bwpf-0123456789abcdef", Protocol: "tcp", HostBind: "192.0.2.8", HostPort: 23099, GuestPort: 8080, ExternalAcknowledged: true}
+	if (Reader{}).AuthorizeForwardCreate(f) == nil {
+		t.Fatal("caller acknowledgment bypassed host policy")
+	}
+	for _, bad := range []string{"eth0/tcp/0.0.0.0:80", "eth0/tcp/192.0.2.8:80-90", "eth0/tcp/192.0.2.8:080", "*/tcp/192.0.2.8:80", "eth0/udp/[::]:53", "eth0/tcp/127.0.0.1:80", "eth0/tcp/192.0.2.8:80,eth1/tcp/192.0.2.8:80"} {
+		if _, err := ParseExternalForwardAllow(bad); err == nil {
+			t.Fatalf("unsafe policy %q accepted", bad)
+		}
+	}
+	if p, err := ParseExternalForwardAllow("eth0/tcp/192.0.2.8:23099,eth1/udp/[2001:db8::1]:53"); err != nil || len(p) != 2 {
+		t.Fatalf("valid exact policy: %v %v", p, err)
+	}
+	if (Reader{ExternalForwardAllow: "notreal/tcp/192.0.2.8:23099"}).AuthorizeForwardCreate(f) == nil {
+		t.Fatal("unassigned address accepted")
+	}
+	f.HostBind = "127.0.0.1"
+	f.ExternalAcknowledged = false
+	if (Reader{}).AuthorizeForwardCreate(f) != nil {
+		t.Fatal("loopback default denied")
 	}
 }

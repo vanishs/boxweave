@@ -4,9 +4,14 @@ on:
     branches: [feat/v1-s4-runtime-integration-20261116]
     paths:
       - .github/workflows/v1-s4-b4-forward-native.yml
+      - internal/native/forward_policy.go
+      - cmd/boxweave/main.go
+      - internal/state/lifecycle.go
+      - internal/state/network_forward_test.go
       - internal/native/forward.go
       - internal/native/forward_native_test.go
       - internal/control/forward_installed_native_test.go
+      - internal/control/forward_crash_native_test.go
       - internal/native/forward_test.go
       - internal/control/forward_tools.go
       - internal/state/network_forward.go
@@ -121,6 +126,13 @@ jobs:
           grep -Fq 'S4_B4_MCP_tcp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_udp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_21_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          for binding in external-v4-tcp external-v4-udp external-v6-tcp external-v6-udp; do
+            grep -Fq "S4_B4_MCP_${binding}_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS" "$RUNNER_TEMP/s4b4-mcp.log"
+          done
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4NativeOriginalCrashRecovery$' | tee "$RUNNER_TEMP/s4b4-crash.log"
+          grep -Fq 'S4_B4_NATIVE_REAL_PROCESS_KILL_ACK_AND_POSTREAD_MATRIX=PASS' "$RUNNER_TEMP/s4b4-crash.log"
           sudo incus --project "$S4_B4_PROJECT" config device show s4b4native | tee "$RUNNER_TEMP/s4b4-device-readback.txt"
           if grep -q 'bwpf-' "$RUNNER_TEMP/s4b4-device-readback.txt"; then
             echo S4_B4_NATIVE_PROXY_LEAK; exit 70

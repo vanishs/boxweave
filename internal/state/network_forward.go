@@ -38,7 +38,7 @@ func validForwardCreate(f ForwardCreateAdmission) bool {
 	return (f.Protocol == "tcp" || f.Protocol == "udp") &&
 		f.HostPort >= 1 && f.HostPort <= 65535 && f.GuestPort >= 1 && f.GuestPort <= 65535 &&
 		ip != nil && f.HostBind == ip.String() && !ip.IsUnspecified() && !ip.IsMulticast() &&
-		!ip.IsLinkLocalUnicast()
+		!ip.IsLinkLocalUnicast() && !ip.Equal(net.IPv4bcast) && (!ip.IsLoopback() || f.HostBind == "127.0.0.1" || f.HostBind == "::1")
 }
 
 // stageForwardAdmission is invoked only inside Store.Admit's transaction.
@@ -206,22 +206,29 @@ func (s *Store) FinalizeVerifiedForward(ctx context.Context, operationID string,
 	return tx.Commit()
 }
 
-// Cleanup only follows an already persisted FAILED original, never an
-// uncertain ACK. A failure leaves the claim PENDING for host review.
-func (s *Store) MarkForwardNoDispatch(ctx context.Context, operationID string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+// ForwardReplayBox is used only to reconstruct authenticated original
+// receipts. A subsequent new admission still requires a live OWNED row.
+func (s *Store) ForwardReplayBox(ctx context.Context, layer, uuid string) (OwnedBox, error) {
+	var b OwnedBox
+	err := s.db.QueryRowContext(ctx, "SELECT uuid,project,name,incarnation,state FROM owned_boxes WHERE project=? AND uuid=?", layer, uuid).Scan(&b.UUID, &b.Project, &b.Name, &b.Incarnation, &b.State)
+	if errors.Is(err, sql.ErrNoRows) {
+		return b, ErrNotFound
 	}
-	defer tx.Rollback()
+	return b, err
+}
+
+// Atomically settle the reservation only on a proved no-effect transition.
+// Never run this for an uncertain/dispatched original.
+func settleForwardNoEffectTx(ctx context.Context, tx *sql.Tx, operationID string) error {
 	var action, st string
-	if err = tx.QueryRowContext(ctx, "SELECT action,state FROM operations WHERE id=?", operationID).Scan(&action, &st); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT action,state FROM operations WHERE id=?", operationID).Scan(&action, &st); err != nil {
 		return err
 	}
-	if st != "FAILED" {
+	if st != "FAILED" && st != "CANCELLED" {
 		return ErrState
 	}
 	var res sql.Result
+	var err error
 	switch action {
 	case "port_forward_create":
 		res, err = tx.ExecContext(ctx, "UPDATE forward_claims SET state='REVOKED' WHERE operation_id=? AND state='PENDING'", operationID)
@@ -240,5 +247,5 @@ func (s *Store) MarkForwardNoDispatch(ctx context.Context, operationID string) e
 	if n != 1 {
 		return fmt.Errorf("forward original %s not staged: %w", operationID, ErrState)
 	}
-	return tx.Commit()
+	return nil
 }
