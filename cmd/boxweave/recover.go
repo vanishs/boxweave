@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -54,6 +56,17 @@ func recoverLocal(a recoverArgs) error {
 	if err != nil {
 		return err
 	}
+	// Preserve only the already authorized restricted Incus group. The
+	// dedicated account's primary group does not necessarily own the socket.
+	incusGroup, err := user.LookupGroup("incus")
+	if err != nil {
+		return err
+	}
+	incusGID, err := strconv.ParseUint(incusGroup.Gid, 10, 32)
+	if err != nil || incusGID == 0 {
+		return errors.New("invalid restricted incus group")
+	}
+	groups := recoveryGroups(uint32(gid), uint32(incusGID))
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -70,7 +83,7 @@ func recoverLocal(a recoverArgs) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, "recover-worker")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{
-		Uid: uint32(uid), Gid: uint32(gid), Groups: []uint32{uint32(gid)},
+		Uid: uint32(uid), Gid: uint32(gid), Groups: groups,
 	}}
 	cmd.ExtraFiles = []*os.File{childSide}
 	cmd.Stdout = os.Stdout
@@ -268,4 +281,12 @@ func performGCRecovery(ctx context.Context, store *state.Store, a recoverArgs) e
 		}{r.OperationID, r.Stream, "REVIEWED_RELEASED", true, false, false})
 	}
 	return errors.New("invalid native GC review operation")
+}
+
+// Do not inherit root or unrelated supplemental groups across the worker exec.
+func recoveryGroups(primary, restricted uint32) []uint32 {
+	if primary == restricted {
+		return []uint32{primary}
+	}
+	return []uint32{primary, restricted}
 }
