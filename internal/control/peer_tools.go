@@ -3,10 +3,21 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/state"
 )
+
+// peerScopeRefusal deliberately does not distinguish a foreign UUID, missing
+// PINNED NIC, incomplete global audit ledger or an unresolved resource claim.
+// Exposing one cause would leak inventory or invite unsafe retry/bypass.
+func peerScopeRefusal(err error) error {
+	if errors.Is(err, state.ErrResourceLocked) {
+		return fmt.Errorf("PEER_SCOPE_UNVERIFIED_OR_LOCKED: verify both owned UUIDs with box_list, inspect operation_list/activity issues, then obtain host-local review if needed; no peer operation was admitted: %w", err)
+	}
+	return err
+}
 
 // A public request has no authority to select an ACL, IP, route, shell,
 // host path or PRS digest. It creates only a durable, operator-gated original.
@@ -22,7 +33,7 @@ type peerSetInput struct {
 func (s *Service) registerPeerTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "box_peer_set",
-		Description: "Admit a directional private-network grant/revoke for two UUID-owned Boxes in an already operator-pinned Project/ACL. Returns an original Operation receipt for operation_get; host-root operator must separately stage, approve the exact digest and run PRS. ADMITTED/PENDING does not mean connectivity changed; this MCP tool never directly changes native network state.",
+		Description: "Admit a directional private-network grant/revoke for two exact UUID-owned Boxes in one operator-pinned Project/ACL. UUIDs must come from box_list. Missing/foreign IDs, unpinned native bindings, incomplete network audit or unresolved claims deliberately give the same PEER_SCOPE_UNVERIFIED_OR_LOCKED refusal; inspect operation_list and activity issues, never bypass or blindly retry. An admitted original Operation still needs host-root staging, exact digest approval and PRS; this tool never directly changes ACL/connectivity.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in peerSetInput) (*mcp.CallToolResult, state.Receipt, error) {
 		principal, err := s.requestPrincipal(req)
@@ -46,11 +57,11 @@ func (s *Service) registerPeerTools(server *mcp.Server) {
 		}
 		bridge, acl, err := s.Store.ResolvePeerAuditScope(ctx, principal.Layer, in.SourceBoxID, in.TargetBoxID)
 		if err != nil {
-			return nil, state.Receipt{}, err
+			return nil, state.Receipt{}, peerScopeRefusal(err)
 		}
 		ledger, err := s.Store.ReadCompleteNetworkAuditLedger(ctx, principal.Layer, bridge, acl)
 		if err != nil {
-			return nil, state.Receipt{}, state.ErrResourceLocked
+			return nil, state.Receipt{}, peerScopeRefusal(state.ErrResourceLocked)
 		}
 		var src, dst state.NetworkAuditBinding
 		for _, b := range ledger.Boxes {
