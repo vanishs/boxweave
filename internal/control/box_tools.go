@@ -225,6 +225,11 @@ func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid 
 		return state.OwnedBox{}, err
 	}
 	box, err := s.Store.OwnedBox(ctx, principal.Layer, uuid)
+	if errors.Is(err, state.ErrNotFound) {
+		// A missing/foreign UUID is deliberately indistinguishable. Do not
+		// expose the backing Operation-store error as the user-facing Box type.
+		return state.OwnedBox{}, fmt.Errorf("BOX_NOT_FOUND_OR_NOT_OWNED: %w", err)
+	}
 	if err != nil {
 		return box, err
 	}
@@ -481,7 +486,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
 			principal, err := s.requestPrincipal(req)
@@ -576,7 +581,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 	}
 
 	addStrictTool(server, &mcp.Tool{Name: "box_update",
-		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
+		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. CPU 1..64, memory_mib 128..262144 and disk_gib 2..2048; invalid bounds are rejected before admission unless an original key is replayed. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, err := s.requestPrincipal(req); err != nil {
@@ -599,6 +604,14 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			if already {
 				return &mcp.CallToolResult{}, original, nil
+			}
+			// Reject impossible native dimensions before admitting a durable
+			// operation. Replay precedes this check so historical originals
+			// (including failed ones) retain their exact idempotency receipt.
+			if in.CPU != nil && (*in.CPU < 1 || *in.CPU > 64) ||
+				in.MemoryMiB != nil && (*in.MemoryMiB < 128 || *in.MemoryMiB > 262144) ||
+				in.DiskGiB != nil && (*in.DiskGiB < 2 || *in.DiskGiB > 2048) {
+				return nil, state.Receipt{}, state.ErrInvalid
 			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
@@ -698,7 +711,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_exec",
-		Description: "Execute argv asynchronously INSIDE an exact owned guest with typed guest UID/GID; read original stdout/stderr and observed exit_code via operation_output_get. Operation SUCCEEDED is not proof of guest exit 0.",
+		Description: "Execute a nonempty argv array asynchronously INSIDE an exact owned guest with typed guest UID/GID; read original stdout/stderr and observed exit_code via operation_output_get. Operation SUCCEEDED is not proof of guest exit 0.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in execBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, err := s.requestPrincipal(req); err != nil {
