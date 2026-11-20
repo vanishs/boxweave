@@ -58,11 +58,21 @@ func getMap(m map[string]any, key string) map[string]any {
 }
 func invoke(ctx context.Context, s *mcp.ClientSession, name string, args map[string]any) map[string]any {
 	r, err := s.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		fmt.Printf("BH018_MCP_TYPED_CLIENT_FAILURE=CALL_ERROR TOOL=%s\n", name)
+	} else if r == nil {
+		fmt.Printf("BH018_MCP_TYPED_CLIENT_FAILURE=NO_RESPONSE TOOL=%s\n", name)
+	} else if r.IsError {
+		fmt.Printf("BH018_MCP_TYPED_CLIENT_FAILURE=TOOL_REJECTED TOOL=%s\n", name)
+	}
 	require(err == nil && r != nil && !r.IsError, "MCP %s rejected: %v", name, err)
 	raw, err := json.Marshal(r.StructuredContent)
 	require(err == nil, "cannot marshal %s: %v", name, err)
 	var out map[string]any
-	require(json.Unmarshal(raw, &out) == nil && out != nil, "malformed %s response", name)
+	if json.Unmarshal(raw, &out) != nil || out == nil {
+		fmt.Printf("BH018_MCP_TYPED_CLIENT_FAILURE=MALFORMED_RESPONSE TOOL=%s\n", name)
+		panic("BH018_MCP_FAIL: malformed structured response")
+	}
 	return out
 }
 func originalID(m map[string]any) string {
@@ -73,14 +83,24 @@ func originalID(m map[string]any) string {
 func poll(ctx context.Context, s *mcp.ClientSession, id string) map[string]any {
 	deadline := time.Now().Add(220 * time.Second)
 	for time.Now().Before(deadline) {
-		r := getMap(invoke(ctx, s, "operation_get", map[string]any{
+		reply := invoke(ctx, s, "operation_get", map[string]any{
 			"operation_id": id, "wait_ms": 5000,
-		}), "operation")
+		})
+		r := getMap(reply, "operation")
+		d := getMap(reply, "diagnostic")
+		require(getString(d, "evidence_source") == "SQLITE_DURABLE", "diagnostic evidence source drift")
 		require(getString(r, "operation_id") == id, "original receipt ID drift")
 		switch getString(r, "state") {
 		case "SUCCEEDED":
+			require(getString(d, "wait_outcome") == "TERMINAL", "terminal diagnostic drift")
+			if getString(r, "action") == "box_exec" {
+				require(getString(d, "output_metadata") == "RECORDED_NOT_LIVE_VERIFIED", "Exec diagnostic metadata unavailable")
+				_, ok := d["guest_exit_code"].(float64)
+				require(ok, "Exec diagnostic guest exit missing")
+			}
 			return r
-		case "UNKNOWN", "FAILED", "CANCELLED":
+		case "UNKNOWN", "FAILED", "CANCELLED", "TIMED_OUT":
+			fmt.Printf("BH018_MCP_TYPED_ORIGINAL_FAILURE=%s BW_ID=%s NATIVE_ID_PRESENT=%t\n", getString(r, "state"), id, getString(r, "native_operation_id") != "")
 			panic(fmt.Sprintf("BH018_MCP_FAIL: original %s stopped in %s", id, getString(r, "state")))
 		}
 	}

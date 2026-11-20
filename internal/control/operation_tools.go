@@ -59,6 +59,7 @@ type operationGetResult struct {
 	Version    string                 `json:"version"`
 	Commit     string                 `json:"commit"`
 	Readiness  *state.ReadinessResult `json:"readiness,omitempty"`
+	Diagnostic operationDiagnostic    `json:"diagnostic"`
 }
 
 type operationListInput struct {
@@ -89,7 +90,7 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
-		Description: "Read an authorized original Operation by operation_id: durable state, native ID and next_action. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
+		Description: "Read an authorized original Operation by operation_id: durable state, native ID, next_action and typed durable diagnostic; recorded output metadata is not live output availability. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
 		principal, err := s.requestPrincipal(req)
@@ -110,8 +111,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			if err != nil {
 				return nil, operationGetResult{}, err
 			}
-			if in.WaitMS == 0 || result.State == "SUCCEEDED" || result.State == "FAILED" ||
-				result.State == "UNKNOWN" || result.State == "CANCELLED" || result.State == "TIMED_OUT" {
+			if in.WaitMS == 0 || operationTerminal(result.State) {
 				break
 			}
 			remaining := time.Until(deadline)
@@ -133,6 +133,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationGetResult{}, err
 		}
+		diagnostic := s.readOperationDiagnostic(ctx, result, in.WaitMS > 0)
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
@@ -141,7 +142,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
-			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness}, nil
+			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness, Diagnostic: diagnostic}, nil
 	})
 
 	addStrictTool(server, &mcp.Tool{

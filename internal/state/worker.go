@@ -157,6 +157,12 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 			!strings.ContainsAny(uncertain.Class, "\x00\n\r") {
 			reason = uncertain.Class
 		}
+		if errors.As(err, &uncertain) {
+			switch uncertain.Class {
+			case "EXEC_NATIVE_RECEIPT_MISSING", "EXEC_NATIVE_OBSERVATION_DEADLINE", "EXEC_NATIVE_READ_UNVERIFIED", "EXEC_NATIVE_IDENTITY_UNVERIFIED", "EXEC_TERMINAL_EVIDENCE_UNVERIFIED", "EXEC_SQLITE_FINALIZATION_UNVERIFIED":
+				reason = uncertain.Class
+			}
+		}
 		_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", reason)
 		return
 	}

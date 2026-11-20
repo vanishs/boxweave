@@ -789,12 +789,18 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			verify := func(ctx context.Context) error {
 				final, err := s.Native.ObserveUntilFinal(ctx, nativeID)
 				if err != nil {
-					return err
+					class := "EXEC_NATIVE_READ_UNVERIFIED"
+					if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+						class = "EXEC_NATIVE_OBSERVATION_DEADLINE"
+					} else if api.StatusErrorCheck(err, http.StatusNotFound) {
+						class = "EXEC_NATIVE_RECEIPT_MISSING"
+					}
+					return state.VerificationUncertain{Class: class}
 				}
 				// The original Incus terminal result and its recorded log
 				// paths must belong to this exact admitted guest/Operation.
 				if final == nil || final.ID != nativeID {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_NATIVE_IDENTITY_UNVERIFIED"}
 				}
 				// Incus 7.6 creates recorded logs BEFORE it calls Guest
 				// Exec. An exact failed log-open with no Guest metadata is
@@ -805,13 +811,13 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
-					return err
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				if !native.ExecEvidenceMatchesOriginal(out, box.Name, nativeID) {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				if out.Exit == nil {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				// Capture bounded private output while the original Exec claim still
 				// protects the Box from concurrent Delete. A spool failure must
@@ -822,7 +828,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				// leave a separate output-row / final-state crash gap.
 				if err := s.Store.FinalizeVerifiedExec(ctx, r.ID, box,
 					nativeID, out.StdoutPath, out.StderrPath, *out.Exit); err != nil {
-					return err
+					return state.VerificationUncertain{Class: "EXEC_SQLITE_FINALIZATION_UNVERIFIED"}
 				}
 				return state.ErrVerifiedExecCommitted
 			}

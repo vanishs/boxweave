@@ -71,6 +71,9 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(string(encoded), "\"evidence_source\":\"SQLITE_DURABLE\"") || !strings.Contains(string(encoded), "\"wait_outcome\":\"SNAPSHOT\"") {
+		t.Fatalf("operation_get missing diagnostic: %s", encoded)
+	}
 	if !strings.Contains(string(encoded), receipt.ID) || !strings.Contains(string(encoded), receipt.TrackingID) {
 		t.Fatalf("MCP operation_get lost original IDs: %s", encoded)
 	}
