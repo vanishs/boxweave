@@ -211,7 +211,7 @@ Retain S5's original mandatory acceptance and release framework. Adjust ordering
 - Accept the owner's narrow recursive-security boundary; preserve flat and all supported assurances. Keep #150 strong research open without blocking a narrowed stable release, and correct the documented advertised feature and refusal contract before signing.
 - Finish stable distribution provenance only after all mandatory gates for the actual scope pass. The current RC branch workflow is development-prerelease only; design/review a separate protected stable publication gate, exact source/artifact identities, compatibility baseline and post-publication readback. No implicit stable promotion or automatic installation.
 
-This is not a new numbered rollout plan and does not assign implementation dates. The existing S5 card owns execution. A future agent should first inspect only the relevant section of this reference and the named source/tests, then record any actual code changes and independent evidence in the normal phase log.
+The owner subsequently specified two steps: S5A development + immediate acceptance, then S5B full feature-frozen acceptance. The canonical [S5A1–A6 / S5B1–B6 sequence](../development/phases/05_RELEASE_ACCEPTANCE.md#canonical-execution-order--s5a-development-then-s5b-integrated-acceptance-2026-11-20) is maintained only in the existing S5 card. Use this research as technical support, not a competing rollout plan. A future agent should first inspect only the relevant section of this reference and the named source/tests, then record any actual code changes and independent evidence in the normal phase log.
 
 ## 13. Limitations of this review
 
