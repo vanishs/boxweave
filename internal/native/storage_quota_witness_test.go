@@ -12,7 +12,7 @@ func TestRC8HostRootQuotaWitnessFailClosed(t *testing.T) {
 		Schema: 1, Project: "user-1001", Pool: "default", Driver: "btrfs",
 		BootID: "boot-a", MountDev: 23, MountIno: 456,
 		ObservedUnix: now.Add(-time.Minute).Unix(),
-		BoxUUID: id, QuotaBytes: 2 << 30, Referenced: 2 << 30, QgroupMax: 2 << 30,
+		BoxUUID:      id, QuotaBytes: 2 << 30, Referenced: 2 << 30, QgroupMax: 2 << 30,
 	}
 	valid := func(w storageQuotaWitness, project, pool, driver, boot string, dev, ino uint64, when time.Time) bool {
 		return quotaWitnessValid(w, project, pool, driver, boot, dev, ino, when)
@@ -47,7 +47,10 @@ func TestRC8HostRootQuotaWitnessFailClosed(t *testing.T) {
 			}
 		})
 	}
-	for _, tc := range []struct{ project, pool, driver, boot string; dev, ino uint64 }{
+	for _, tc := range []struct {
+		project, pool, driver, boot string
+		dev, ino                    uint64
+	}{
 		{"user-1002", "default", "btrfs", "boot-a", 23, 456},
 		{"user-1001", "other", "btrfs", "boot-a", 23, 456},
 		{"user-1001", "default", "dir", "boot-a", 23, 456},
