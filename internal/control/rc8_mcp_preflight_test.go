@@ -101,7 +101,14 @@ func TestRC8AgentVisibleSchemasAndSafePreflight(t *testing.T) {
 	got, err := sess.CallTool(ctx, &mcp.CallToolParams{
 		Name: "box_get", Arguments: map[string]any{"box_id": "00000000-0000-4000-8000-000000000001"},
 	})
-	message := fmt.Sprint(got, err)
+	message := fmt.Sprint(err)
+	if got != nil {
+		for _, c := range got.Content {
+			if text, ok := c.(*mcp.TextContent); ok {
+				message += text.Text
+			}
+		}
+	}
 	if !strings.Contains(message, "BOX_NOT_FOUND_OR_NOT_OWNED") {
 		t.Fatalf("missing Box ID still presented as an Operation error: %s", message)
 	}
