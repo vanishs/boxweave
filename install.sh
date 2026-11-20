@@ -257,6 +257,12 @@ def main():
         raise InstallError("no verified installation to upgrade")
     if not installed and (Path("/usr/local/bin/boxweave").exists() or Path("/etc/systemd/system/boxweave.service").exists() or Path("/var/lib/boxweave").exists()):
         raise InstallError("unmanaged or legacy main installation detected: refuse adoption/co-installation")
+    if guided:
+        if os.path.lexists("/var/lib/boxweave-native-prereq-v1.json"):
+            raise InstallError("existing Native journal; review and reconcile before guided install")
+        previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
+        if previous.exists() and json.loads(previous.read_text()).get("status") != "COMPLETE":
+            raise InstallError("previous retirement incomplete; inspect original audit")
     # The downloaded executable is public but Go installer verifies it under
     # the restricted service account. Use an accessible temporary directory.
     with tempfile.TemporaryDirectory(prefix="boxweave-v1-reviewed-") as folder:
@@ -321,6 +327,8 @@ def main():
             identity = ["runuser", "-u", args.service_user, "--", installed]
             doctor = json.loads(subprocess.check_output(identity + ["doctor", "-project", args.project], text=True))
             print("Doctor:", json.dumps(doctor), flush=True)
+            if not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source):
+                raise InstallError("installed doctor build identity differs from reviewed release")
             if not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready")):
                 raise InstallError("doctor not ready; inspect installed service")
             with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:

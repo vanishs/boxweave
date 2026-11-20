@@ -96,6 +96,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
 
+    def test_embedded_guided_installer_keeps_explicit_plan_and_approvals(self):
+        source = (ROOT / "install.sh").read_text()
+        self.assertIn("--interactive", source)
+        self.assertIn('open("/dev/tty", "r")', source)
+        self.assertIn('native plan changed after approval; review again', source)
+        self.assertIn('existing Native journal', source)
+        self.assertLess(source.index('"native-prepare-apply"'), source.index('"install-activate"'))
+        self.assertLess(source.index('"native-prereq-verify"'), source.index('"install-activate"'))
+
     def test_rc_flag_not_required_and_removed(self):
         script = (ROOT / "install.sh").read_text()
         self.assertNotIn("allow-prerelease", script)

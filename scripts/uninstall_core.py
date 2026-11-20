@@ -30,6 +30,8 @@ VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
 TERMINAL = {"SUCCEEDED", "FAILED", "CANCELLED"}
 SERVE_LOCK_NAME = "ledger.sqlite.serve.lock"
+EXEC_ARCHIVE_NAME = "ledger.sqlite.exec-archive"
+EXEC_ARCHIVE_RE = re.compile(r"[a-f0-9]{32}\.(stdout|stderr)\Z")
 STATE_FILES = {"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm",
                "install-manifest.json", SERVE_LOCK_NAME}
 SCOPES = ("service", "controller", "full")
@@ -304,6 +306,28 @@ def audit_status():
     return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
 
 
+def inspect_exec_archive(uid):
+    root = STATE / EXEC_ARCHIVE_NAME
+    info = checked_file(root, "dir")
+    if info is None:
+        return None
+    if info.st_uid != uid or stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("unsafe exec archive directory")
+    records = []
+    total = 0
+    for entry in sorted(root.iterdir(), key=lambda x: x.name):
+        if len(records) >= 4096 or not EXEC_ARCHIVE_RE.fullmatch(entry.name):
+            raise UninstallError("unrecognized or oversized exec archive inventory")
+        st = checked_file(entry, "file", 1024 * 1024)
+        if st is None or st.st_uid != uid or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) & 0o077:
+            raise UninstallError("unsafe exec archive entry")
+        total += st.st_size
+        if total > 256 * 1024 * 1024:
+            raise UninstallError("exec archive exceeds verified retention bound")
+        records.append({"name": entry.name, "info": file_fingerprint(entry)})
+    return {"device": info.st_dev, "inode": info.st_ino, "files": records}
+
+
 def inspect(scope, project, box_uuids, native_sha, guided=False):
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact valid --project required")
@@ -342,10 +366,17 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         raise UninstallError("effective systemd unit is foreign or unexpectedly replaced")
     if binary is None and service == "active":
         raise UninstallError("unit is absent but service still active")
+    if guided and os.path.lexists("/run/boxweave-native-peer-root.sock"):
+        raise UninstallError("Root peer socket present: reconcile exact original before retirement")
     if checked_file(ROOT_UNIT, "file") is not None:
         raise UninstallError("separate root peer service exists: manual original audit required")
     files = []
+    exec_archive = inspect_exec_archive(owner.pw_uid) if guided else None
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
+        if guided and entry.name == EXEC_ARCHIVE_NAME:
+            if exec_archive is None:
+                raise UninstallError("exec archive changed during planning")
+            continue
         if entry.name not in STATE_FILES:
             raise UninstallError("unrecognized owned state file: " + entry.name)
         info = (verified_serve_lock(entry, owner.pw_uid)
@@ -380,6 +411,9 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         db_current = sorted(x["uuid"] for x in snapshot["boxes"])
         if current != db_current or expected != current:
             blockers.append("INCUS_DB_ALLOWLIST_MISMATCH")
+        if guided and ({(x["uuid"], x["name"]) for x in incus} !=
+                       {(x["uuid"], x["name"]) for x in snapshot["boxes"] if x["state"] == "OWNED"}):
+            blockers.append("INCUS_DB_NAME_OR_STATE_MISMATCH")
         if any(x["state"] not in (("Stopped", "Running") if guided else ("Stopped",)) for x in incus):
             blockers.append("NATIVE_BOX_NOT_STOPPED")
         if guided and native_sha is None and native["status"] in ("APPLIED", "ROLLED_BACK"):
@@ -394,7 +428,7 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
     inputs = {
         "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
-        "unit": unit, "binary": binary, "state_files": files,
+        "unit": unit, "binary": binary, "state_files": files, "exec_archive": exec_archive,
         "effective_unit": fragment, "uninstall_audit": audit,
         "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
         "incus_instances": incus, "allowlist": expected if scope == "full" else [],
@@ -546,6 +580,9 @@ def archive_controller(plan):
         raise UninstallError("unsafe retirement archive directory")
     dest = Path(tempfile.mkdtemp(prefix="retired-", dir=RETIRED))
     items = [(STATE / x["name"], dest / ("state-" + x["name"])) for x in plan["state_files"]]
+    if plan.get("exec_archive"):
+        items += [(STATE / EXEC_ARCHIVE_NAME / x["name"], dest / ("exec-" + x["name"]))
+                  for x in plan["exec_archive"]["files"]]
     items += [(BINARY, dest / "boxweave.bin"), (UNIT, dest / "boxweave.service"),
               (NATIVE, dest / "native-prepare.json")]
     for src, dst in items:
@@ -584,6 +621,8 @@ def apply_with_serve_lock(plan):
     if after["operations_sha256"] != plan["sqlite"]["operations_sha256"] or \
             after["boxes"] != plan["sqlite"]["boxes"] or after["blockers"]:
         raise UninstallError("SQLite ledger changed during stop; preserve evidence")
+    if plan.get("guided") and inspect_exec_archive(plan["service_user_uid"]) != plan.get("exec_archive"):
+        raise UninstallError("exec archive changed after approval")
     archive = archive_controller(plan) if plan.get("guided") else None
     if plan["scope"] == "full":
         if native_instances(plan["project"]) != plan["incus_instances"]:
@@ -643,6 +682,12 @@ def apply_with_serve_lock(plan):
                     exact_unlink(path, current)
             else:
                 exact_unlink(path, item["info"])
+        if plan.get("exec_archive"):
+            if inspect_exec_archive(plan["service_user_uid"]) != plan["exec_archive"]:
+                raise UninstallError("exec archive changed before retirement")
+            for item in plan["exec_archive"]["files"]:
+                exact_unlink(STATE / EXEC_ARCHIVE_NAME / item["name"], item["info"])
+            (STATE / EXEC_ARCHIVE_NAME).rmdir()
         lock = next((x for x in plan["state_files"]
                      if x["name"] == SERVE_LOCK_NAME), None)
         if lock is not None:
@@ -710,7 +755,8 @@ def main(argv=None):
     audited_write({"status": "STARTED", "scope": plan["scope"],
                    "host_sha256": plan["host_machine_id_sha256"],
                    "review_sha256": plan["review_sha256"],
-                   "actions": plan["actions"]})
+                   "actions": plan["actions"],
+                   "historical_released_exec": plan["sqlite"]["historical_released_exec"]})
     result = apply(plan)
     # Completion is a separate fsynced audit transition; interruptions keep
     # the original STARTED receipt and require deliberate manual reconciliation.
