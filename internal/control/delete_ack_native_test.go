@@ -6,10 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
+
+	"github.com/lxc/incus/v7/shared/api"
 	"testing"
 	"time"
 
@@ -21,7 +26,42 @@ import (
 type b5AckCut struct{ Path, Project, Name, UUID, Original, Cut string }
 
 func b5AckFixtureAllowed() bool {
-	return os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("BOXWEAVE_B4_MCP_ONE_USE") == "s4b4-disposable-only-20261119" && os.Getuid() != 0
+	if os.Getuid() == 0 {
+		return false
+	}
+	if os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("BOXWEAVE_B4_MCP_ONE_USE") == "s4b4-disposable-only-20261119" {
+		return true
+	}
+	// Explicit local disposable Box fixture. The marker is root-owned, and
+	// binds the one exact restricted Project and fixture UUID; no CI impersonation.
+	if os.Getenv("BOXWEAVE_B5_BOX_LAB") != "b5-disposable-box-v1" {
+		return false
+	}
+	info, e := os.Lstat("/run/boxweave-b5-disposable-lab")
+	if e != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
+		return false
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || st.Uid != 0 {
+		return false
+	}
+	raw, e := os.ReadFile("/run/boxweave-b5-disposable-lab")
+	if e != nil {
+		return false
+	}
+	lines := strings.Fields(string(raw))
+	return len(lines) == 2 && lines[0] == "user-"+strconv.Itoa(os.Getuid()) && len(lines[1]) == 36
+}
+
+func b5CheckLabUUID(t *testing.T, project, uuid string) {
+	t.Helper()
+	if os.Getenv("BOXWEAVE_B5_BOX_LAB") == "" {
+		return
+	}
+	b, e := os.ReadFile("/run/boxweave-b5-disposable-lab")
+	if e != nil || strings.TrimSpace(string(b)) != project+" "+uuid {
+		t.Fatal("one-use lab UUID mismatch")
+	}
 }
 
 func TestB5DeleteAckChild(t *testing.T) {
@@ -36,7 +76,7 @@ func TestB5DeleteAckChild(t *testing.T) {
 	if err := json.Unmarshal([]byte(wire), &f); err != nil {
 		t.Fatal(err)
 	}
-	if f.Project != "user-"+strconv.Itoa(os.Getuid()) || f.Name != "s4b5ack" || (f.Cut != "before-ack" && f.Cut != "after-ack") {
+	if f.Project != "user-"+strconv.Itoa(os.Getuid()) || f.Name != "s4b5ack" || (f.Cut != "before-ack" && f.Cut != "after-ack" && f.Cut != "receipt-unavailable" && f.Cut != "protected-partial") {
 		t.Fatal("invalid fixture identity")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -48,6 +88,52 @@ func TestB5DeleteAckChild(t *testing.T) {
 	box, err := s.OwnedBox(ctx, f.Project, f.UUID)
 	if err != nil || box.Name != f.Name {
 		t.Fatal("wrong fixture ownership", err)
+	}
+	b5CheckLabUUID(t, f.Project, f.UUID)
+	if f.Cut == "protected-partial" {
+		svc := Service{Store: s, Native: native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: f.Project}}
+		c, e := incus.ConnectIncusUnixWithContext(ctx, svc.Native.Socket, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		scope := c.UseProject(f.Project)
+		var finalNativeID string
+		state.Worker{Store: s}.Execute(f.Original, func(ctx context.Context) (string, error) {
+			n, e := svc.executeDependentDeleteWithWitness(ctx, f.Original, box, func(ctx context.Context) error {
+				current, etag, e := scope.GetInstance(f.Name)
+				if e != nil {
+					return e
+				}
+				if current.Config["volatile.uuid"] != f.UUID {
+					return native.ErrNotOwned
+				}
+				put := current.Writable()
+				put.Config["security.protection.delete"] = "true"
+				op, e := scope.UpdateInstance(f.Name, put, etag)
+				if e != nil {
+					return e
+				}
+				if e = nativeDone(ctx, svc.Native, op.Get().ID); e != nil {
+					return e
+				}
+				fmt.Println("S4_B5_PARTIAL_PROTECTION_AFTER_CHILDREN=PASS")
+				return nil
+			})
+			finalNativeID = n
+			return n, e
+		}, func(ctx context.Context) error {
+			op, e := svc.Native.ObserveUntilFinal(ctx, finalNativeID)
+			if e != nil || op.StatusCode == api.Success {
+				t.Fatalf("expected actual native terminal refusal: %+v %v", op, e)
+			}
+			fmt.Println("S4_B5_ACTUAL_FINAL_NATIVE_DELETE_FAILED=PASS")
+			return native.ErrUnverified
+		})
+		rec, e := s.Get(ctx, f.Original)
+		if e != nil || rec.State != "UNKNOWN" {
+			t.Fatalf("partial final refusal misclassified %+v %v", rec, e)
+		}
+		os.Exit(73)
 	}
 	if err = s.Claim(ctx, f.Original); err != nil {
 		t.Fatal(err)
@@ -63,12 +149,25 @@ func TestB5DeleteAckChild(t *testing.T) {
 	if err = svc.Native.ConfirmDeleteAbsence(ctx, f.Name); err != nil {
 		t.Fatal(err)
 	}
-	if f.Cut == "after-ack" {
+	if f.Cut != "before-ack" {
 		if err = s.NativeAck(ctx, f.Original, id); err != nil {
 			t.Fatal(err)
 		}
 	}
 	fmt.Printf("S4_B5_FINAL_NATIVE_DELETE_OBSERVED original=%s native=%s cut=%s\n", f.Original, id, f.Cut)
+	if f.Cut == "receipt-unavailable" {
+		deadline := time.Now().Add(45 * time.Second)
+		for {
+			_, e := svc.Native.NativeOperation(ctx, id)
+			if api.StatusErrorCheck(e, http.StatusNotFound) {
+				break
+			}
+			if e != nil || time.Now().After(deadline) {
+				t.Fatalf("native receipt did not become unavailable: %v", e)
+			}
+			time.Sleep(400 * time.Millisecond)
+		}
+	}
 	// Abrupt process exit, without deferred SQLite close/final commit.
 	os.Exit(73)
 }
@@ -78,7 +177,7 @@ func TestB5NativeDeleteAckLoss(t *testing.T) {
 		t.Skip("one-use fixture only")
 	}
 	cut := os.Getenv("BW_B5_ACK_CUT")
-	if cut != "before-ack" && cut != "after-ack" {
+	if cut != "before-ack" && cut != "after-ack" && cut != "receipt-unavailable" && cut != "protected-partial" {
 		t.Fatal("exact cut required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -94,6 +193,7 @@ func TestB5NativeDeleteAckLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	uuid := inst.Config["volatile.uuid"]
+	b5CheckLabUUID(t, project, uuid)
 	if uuid == "" || inst.Status != "Running" {
 		t.Fatal("incorrect native fixture")
 	}
@@ -176,14 +276,23 @@ func TestB5NativeDeleteAckLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if n, e := s.Recover(ctx); e != nil || n != 1 {
+	wantRecovered := int64(1)
+	if cut == "protected-partial" {
+		wantRecovered = 0
+	}
+	if n, e := s.Recover(ctx); e != nil || n != wantRecovered {
 		t.Fatalf("recovery %d %v", n, e)
 	}
 	original, err := s.Get(ctx, parent.ID)
 	if err != nil || original.State != "UNKNOWN" || (original.NativeOperationID == "") != (cut == "before-ack") {
 		t.Fatalf("original %+v %v", original, err)
 	}
-	if err = r.ConfirmDeleteAbsence(ctx, "s4b5ack"); err != nil {
+	if cut == "protected-partial" {
+		current, _, e := c.UseProject(project).GetInstance("s4b5ack")
+		if e != nil || current.Config["volatile.uuid"] != uuid || current.Status != "Stopped" || current.Config["security.protection.delete"] != "true" {
+			t.Fatalf("partial native poststate wrong %v", e)
+		}
+	} else if err = r.ConfirmDeleteAbsence(ctx, "s4b5ack"); err != nil {
 		t.Fatal(err)
 	}
 	b4MCPHostEcho(t, "tcp", "127.0.0.1", 24118, false)
@@ -203,5 +312,61 @@ func TestB5NativeDeleteAckLoss(t *testing.T) {
 	if _, err = s.Admit(ctx, a); !errors.Is(err, state.ErrResourceLocked) {
 		t.Fatal("fresh mutation not fenced", err)
 	}
+	if cut == "protected-partial" {
+		if !strings.Contains(string(output), "S4_B5_ACTUAL_FINAL_NATIVE_DELETE_FAILED=PASS") {
+			t.Fatal("missing native terminal refusal witness")
+		}
+		fmt.Println("S4_B5_REAL_PARTIAL_CLEANUP_FINAL_DELETE_REFUSED_UNKNOWN=PASS")
+		return
+	}
 	fmt.Printf("S4_B5_FINAL_DELETE_ACK_RECOVER_UNKNOWN_NO_REPLAY=PASS cut=%s\n", cut)
+	snapshot, e := s.RecoveryInspect(ctx, parent.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	obs, e := r.ObserveUnknownDelete(ctx, snapshot.Name, snapshot.BoxUUID, snapshot.NativeOperationID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	switch cut {
+	case "before-ack":
+		if obs.Class != "NATIVE_ACK_MISSING" {
+			t.Fatal(obs)
+		}
+		fmt.Println("S4_B5_MISSING_ACK_NOT_INFERRED_SUCCESS=PASS")
+	case "receipt-unavailable":
+		if obs.Class != "NATIVE_RECEIPT_UNAVAILABLE" {
+			t.Fatal(obs)
+		}
+		fmt.Println("S4_B5_EXPIRED_OR_MISSING_NATIVE_RECEIPT_UNKNOWN=PASS")
+	case "after-ack":
+		if obs.Class != "ORIGINAL_TERMINAL_DELETE_VERIFIED" {
+			t.Fatal(obs)
+		}
+		challenge, e := s.IssueRecoveryChallenge(ctx, snapshot, "b5-native-review", obs.Fingerprint)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = s.FinalizeReviewedUnknownDelete(ctx, snapshot, "wrong-review", challenge, uuid, "native receipt and exact absence reviewed", obs.Fingerprint, true); e == nil {
+			t.Fatal("wrong reviewer settled")
+		}
+		second, e := r.ObserveUnknownDelete(ctx, snapshot.Name, snapshot.BoxUUID, snapshot.NativeOperationID)
+		if e != nil || second.Class != "ORIGINAL_TERMINAL_DELETE_VERIFIED" || second.Fingerprint != obs.Fingerprint {
+			t.Fatalf("second exact proof %+v %v", second, e)
+		}
+		if e = s.FinalizeReviewedUnknownDelete(ctx, snapshot, "b5-native-review", challenge, uuid, "native receipt and exact absence reviewed", second.Fingerprint, true); e != nil {
+			t.Fatal(e)
+		}
+		settled, e := s.Get(ctx, parent.ID)
+		if e != nil || settled.State != "SUCCEEDED" {
+			t.Fatalf("settled %+v %v", settled, e)
+		}
+		if _, e = s.OwnedBox(ctx, project, uuid); !errors.Is(e, state.ErrNotFound) {
+			t.Fatal("missing settled tombstone", e)
+		}
+		if e = s.FinalizeReviewedUnknownDelete(ctx, snapshot, "b5-native-review", challenge, uuid, "native receipt and exact absence reviewed", second.Fingerprint, true); e == nil {
+			t.Fatal("reused challenge settled")
+		}
+		fmt.Println("S4_B5_KNOWN_TERMINAL_DELETE_REVIEWED_ATOMIC_SETTLEMENT=PASS")
+	}
 }

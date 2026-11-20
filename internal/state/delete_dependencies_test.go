@@ -289,3 +289,81 @@ func TestB5DeleteRestartPartialCleanupUnknownFences(t *testing.T) {
 		t.Fatalf("generic release unsafe %v", e)
 	}
 }
+
+func TestB5ReviewKnownTerminalDeleteAtomicPinnedTombstone(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	s4b2InsertAuditFixture(t, s)
+	a := b5DeleteAdmission(t, s, s4b2RootSrc, "a")
+	parent, e := s.Admit(ctx, a)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Claim(ctx, parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.AuthorizeCascadeFinal(ctx, parent.ID); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.NativeAck(ctx, parent.ID, "known-terminal-native-id"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Recover(ctx); e != nil {
+		t.Fatal(e)
+	}
+	orig, e := s.RecoveryInspect(ctx, parent.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	observed := "DELETE_SUCCESS:unit-fixture"
+	challenge, e := s.IssueRecoveryChallenge(ctx, orig, "b5-reviewer", observed)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, test := range []struct {
+		who, uuid, proof string
+		ack              bool
+	}{
+		{"wrong-reviewer", a.BoxUUID, observed, true},
+		{"b5-reviewer", "other-uuid", observed, true},
+		{"b5-reviewer", a.BoxUUID, "DELETE_SUCCESS:changed", true},
+		{"b5-reviewer", a.BoxUUID, observed, false},
+	} {
+		if e = s.FinalizeReviewedUnknownDelete(ctx, orig, test.who, challenge, test.uuid, "unit fixture independently verified", test.proof, test.ack); e == nil {
+			t.Fatalf("unsafe review accepted %+v", test)
+		}
+	}
+	if _, e = s.db.Exec("CREATE TRIGGER b5_inject_audit_failure BEFORE INSERT ON recovery_audit WHEN NEW.decision='DELETE_CONFIRMED' BEGIN SELECT RAISE(ABORT,'test audit failure'); END"); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.FinalizeReviewedUnknownDelete(ctx, orig, "b5-reviewer", challenge, a.BoxUUID, "unit fixture independently verified", observed, true); e == nil {
+		t.Fatal("audit failure committed")
+	}
+	r, e := s.Get(ctx, parent.ID)
+	if e != nil || r.State != "UNKNOWN" {
+		t.Fatalf("non-atomic settlement %+v %v", r, e)
+	}
+	if _, e = s.OwnedBox(ctx, a.Layer, a.BoxUUID); e != nil {
+		t.Fatal("tombstone not rolled back", e)
+	}
+	if _, e = s.db.Exec("DROP TRIGGER b5_inject_audit_failure"); e != nil {
+		t.Fatal(e)
+	}
+	root := b5RootReader(t, s)
+	if _, e = root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2"); e != nil {
+		t.Fatal("fences not rolled back", e)
+	}
+	if e = s.FinalizeReviewedUnknownDelete(ctx, orig, "b5-reviewer", challenge, a.BoxUUID, "unit fixture independently verified", observed, true); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.OwnedBox(ctx, a.Layer, a.BoxUUID); !errors.Is(e, ErrNotFound) {
+		t.Fatal("no tombstone", e)
+	}
+	if ledger, e := root.ReadCompleteNetworkAuditLedger(ctx, a.Layer, "bwbr0", "bw-s4b2"); e != nil || len(ledger.Boxes) != 2 {
+		t.Fatalf("postreview history %+v %v", ledger, e)
+	}
+	replay, e := s.Replay(ctx, a)
+	if e != nil || !replay.Duplicate || replay.ID != parent.ID || replay.State != "SUCCEEDED" {
+		t.Fatalf("replay %+v %v", replay, e)
+	}
+}

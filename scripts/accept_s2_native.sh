@@ -2394,7 +2394,7 @@ until [ "$attempt" -ge 40 ]; do
 done
 test "$attempt" -lt 40
 s2_gc loss-check > "$work/s2-gc-loss-public.txt"
-grep -Fqx "S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS" "$work/s2-gc-loss-public.txt"
+grep -Fqx "S2_GC_PUBLIC_LOST_ACK_TTL_ELAPSED_NOT_PHYSICAL_EXPIRY=PASS" "$work/s2-gc-loss-public.txt"
 echo "S2_GC_LOST_NATIVE_DELETE_ACK_SAME_SQLITE_RESTART_NO_FALSE_EXPIRY=PASS"
 
 s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"

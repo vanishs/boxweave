@@ -23,6 +23,31 @@ If the original native marker is missing/mismatched, the project or UUID differs
 
 The local CLI remains restricted to the exact installed state path `/var/lib/boxweave/ledger.sqlite`, a separately reviewed root invocation and the existing service UID downgrade, Project confinement and maintenance lock. The candidate adds **no public MCP tools, remote recovery endpoint, background reconciliation or automatic retry**.
 
+## Dependent Delete: confirmed original native terminal outcome
+
+The root-reviewed local `recover` flow now has `delete-inspect`,
+`delete-challenge` and `delete-confirm`, with literal original UUID, reviewer,
+reason, acknowledgement and a fresh challenge. It issues no native mutation.
+
+- If the original durable native ID is absent, report NATIVE_ACK_MISSING.
+  If its receipt can no longer be queried and original inactivity is
+  independently confirmed, report NATIVE_RECEIPT_UNAVAILABLE; do not infer
+  successful deletion merely from absence or claim physical receipt expiry.
+- If the exact original native Operation reports terminal SUCCESS and two
+  confined absence reads succeed, issue the distinct success-bound challenge.
+  Reobserve the same proof on confirmation; stale or lost proof refuses.
+- In one SQLite transaction, verify all linked child Operations succeeded and
+  no peer/forward dependency remains, settle the exact ownership tombstone
+  and historical address fences, update the same original to SUCCEEDED, and
+  append the reviewed audit. Failed audit rolls the entire settlement back.
+- For a dependent Delete whose target is absent, generic claim release is
+  refused. Partial failure with an exact present identity remains eligible
+  for the separate existing reviewed release only when no unresolved children
+  or pending dependency remain. No automatic compensation or replay.
+
+The challenge can outlive a native receipt but never substitutes for it.
+A missing receipt remains UNKNOWN until adequate independent evidence exists.
+
 ## Plain-language contract
 
 An Agent asked BoxWeave to delete a Box. BoxWeave may have sent the request to Incus, but lost the reply. It is **not known** whether the Box was actually deleted. To prevent an overlapping create or delete from making the situation worse, BoxWeave retains a resource claim and the original `UNKNOWN` receipt.

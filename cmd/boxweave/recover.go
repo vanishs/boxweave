@@ -43,8 +43,9 @@ func recoverLocal(a recoverArgs) error {
 	}
 	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
 		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" &&
-		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" {
-		return errors.New("recovery action must be inspect/challenge/release, create-inspect/create-challenge/create-bind or gc-*")
+		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" &&
+		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
+		return errors.New("recovery action must be inspect/challenge/release, create-*, delete-* or gc-*")
 	}
 	if _, err := install.Status(p); err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
@@ -146,6 +147,9 @@ func performRecovery(a recoverArgs) error {
 	if strings.HasPrefix(a.Action, "create-") {
 		return performUnknownCreateBinding(ctx, store, a)
 	}
+	if strings.HasPrefix(a.Action, "delete-") {
+		return performDeleteRecovery(ctx, store, a)
+	}
 	r, err := store.RecoveryInspect(ctx, a.Operation)
 	if err != nil {
 		return err
@@ -156,6 +160,15 @@ func performRecovery(a recoverArgs) error {
 	observed, err := (native.Reader{Socket: a.Socket, Project: a.Project}).ObserveOwnedBox(ctx, r.Name, r.BoxUUID)
 	if err != nil {
 		return fmt.Errorf("native re-observation refused: %w", err)
+	}
+	if r.Action == "box_delete" && a.Action != "inspect" {
+		cascade, err := store.IsDependentDelete(ctx, r.OperationID)
+		if err != nil {
+			return err
+		}
+		if cascade && observed.State != "PRESENT_UUID_CONFIRMED" {
+			return errors.New("dependent Delete absence requires separate delete reconciliation; generic release refused")
+		}
 	}
 	out := json.NewEncoder(os.Stdout)
 	switch a.Action {

@@ -12,6 +12,12 @@ import (
 // journaled child performs one exact native effect. No permission-restoring
 // compensation (regrant/recreate proxy) is allowed after partial cleanup.
 func (s *Service) executeDependentDelete(ctx context.Context, original string, box state.OwnedBox) (string, error) {
+	return s.executeDependentDeleteWithWitness(ctx, original, box, nil)
+}
+
+// The optional witness is internal/test-only, never a production setting,
+// API flag or source of approval. Normal dispatch passes nil.
+func (s *Service) executeDependentDeleteWithWitness(ctx context.Context, original string, box state.OwnedBox, witness func(context.Context) error) (string, error) {
 	cascade, forwards, e := s.Store.DeleteCascadePlan(ctx, original)
 	if e != nil {
 		return "", state.PreDispatchError{Class: "DELETE_DEPENDENCY_PREFLIGHT_DENIED"}
@@ -70,6 +76,11 @@ func (s *Service) executeDependentDelete(ctx context.Context, original string, b
 			}
 			if e = s.Native.PreflightDependentDelete(ctx, box.Name, box.UUID, nil); e != nil {
 				return uncertain()
+			}
+			if witness != nil {
+				if e = witness(ctx); e != nil {
+					return uncertain()
+				}
 			}
 			// Only the final native delete ID is recorded on the parent. Child
 			// native IDs retain their own original receipts.

@@ -386,13 +386,21 @@ func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box Own
 		return err
 	}
 	defer tx.Rollback()
+	if err := finishVerifiedDeleteTx(ctx, tx, opID, box, "VERIFYING", "ORIGINAL_DELETE_TOMBSTONE_ATOMIC"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func finishVerifiedDeleteTx(ctx context.Context, tx *sql.Tx, opID string, box OwnedBox, expectedPhase, detail string) error {
+	var err error
 	var action, phase, layer, uuid, incarnation, resource, nativeID string
 	if err = tx.QueryRowContext(ctx, `SELECT action,state,layer,box_uuid,
 		incarnation,resource_key,native_operation_id FROM operations WHERE id=?`,
 		opID).Scan(&action, &phase, &layer, &uuid, &incarnation, &resource, &nativeID); err != nil {
 		return err
 	}
-	if action != "box_delete" || phase != "VERIFYING" || nativeID == "" ||
+	if action != "box_delete" || phase != expectedPhase || nativeID == "" ||
 		layer != box.Project || uuid != box.UUID ||
 		incarnation != box.Incarnation || resource != "box:"+box.Name {
 		return ErrState
@@ -412,7 +420,7 @@ func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box Own
 		return ErrState
 	}
 	result, err = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',
-		error_class='',updated_at=? WHERE id=? AND state='VERIFYING'`, now, opID)
+		error_class='',updated_at=? WHERE id=? AND state=?`, now, opID, expectedPhase)
 	if err != nil {
 		return err
 	}
@@ -421,10 +429,10 @@ func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box Own
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events
 		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
-		opID, now, "SUCCEEDED", "ORIGINAL_DELETE_TOMBSTONE_ATOMIC"); err != nil {
+		opID, now, "SUCCEEDED", detail); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // CompleteWithoutNative requires separate postcondition proof before an

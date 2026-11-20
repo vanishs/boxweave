@@ -339,6 +339,10 @@ func checkCascadeRelease(ctx context.Context, tx *sql.Tx, id string) error {
 }
 
 func finalizeDeleteDependencies(ctx context.Context, tx *sql.Tx, id string, b OwnedBox) error {
+	var unfinished int
+	if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.resource_key=? AND o.state!='SUCCEEDED'", deleteParentKey(id)).Scan(&unfinished); e != nil || unfinished != 0 {
+		return ErrResourceLocked
+	}
 	peer, fwd, _, _, e := countDeleteDependencies(ctx, tx, b.Project, b.UUID)
 	if e != nil || peer+fwd != 0 {
 		return ErrResourceLocked

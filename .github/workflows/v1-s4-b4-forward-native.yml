@@ -20,6 +20,10 @@ on:
       - internal/control/delete_dependencies.go
       - internal/control/delete_dependencies_native_test.go
       - internal/control/delete_ack_native_test.go
+      - internal/state/delete_recovery.go
+      - internal/native/delete_recovery.go
+      - cmd/boxweave/recover_delete.go
+      - cmd/boxweave/recover.go
       - internal/state/delete_dependencies.go
       - internal/state/delete_dependencies_test.go
       - internal/state/network_deleted_binding.go
@@ -146,7 +150,7 @@ jobs:
           fi
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeMCPForwardDependentDelete$' | tee "$RUNNER_TEMP/s4b5-native.log"
           grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
-          for cut in before-ack after-ack; do
+          for cut in before-ack after-ack receipt-unavailable protected-partial; do
             sudo incus --project "$S4_B4_PROJECT" init images:ubuntu/24.04 s4b5ack -c limits.cpu=1 -c limits.memory=512MiB
             sudo incus --project "$S4_B4_PROJECT" config device override s4b5ack eth0 ipv4.address=10.248.83.22 ipv6.address=fd83:248::22
             sudo incus --project "$S4_B4_PROJECT" start s4b5ack
@@ -159,7 +163,20 @@ jobs:
             done
             sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- test -f /tmp/s4b2-flow-server-ready
             sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 BW_B5_ACK_CUT="$cut" /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeDeleteAckLoss$' | tee "$RUNNER_TEMP/b5-$cut.log"
-            grep -Fq "S4_B5_FINAL_DELETE_ACK_RECOVER_UNKNOWN_NO_REPLAY=PASS cut=$cut" "$RUNNER_TEMP/b5-$cut.log"
+            case "$cut" in
+              before-ack)
+                grep -Fq 'S4_B5_MISSING_ACK_NOT_INFERRED_SUCCESS=PASS' "$RUNNER_TEMP/b5-$cut.log" ;;
+              after-ack)
+                grep -Fq 'S4_B5_KNOWN_TERMINAL_DELETE_REVIEWED_ATOMIC_SETTLEMENT=PASS' "$RUNNER_TEMP/b5-$cut.log" ;;
+              receipt-unavailable)
+                grep -Fq 'S4_B5_EXPIRED_OR_MISSING_NATIVE_RECEIPT_UNKNOWN=PASS' "$RUNNER_TEMP/b5-$cut.log" ;;
+              protected-partial)
+                grep -Fq 'S4_B5_ACTUAL_FINAL_NATIVE_DELETE_FAILED=PASS' "$RUNNER_TEMP/b5-$cut.log"
+                grep -Fq 'S4_B5_REAL_PARTIAL_CLEANUP_FINAL_DELETE_REFUSED_UNKNOWN=PASS' "$RUNNER_TEMP/b5-$cut.log"
+                test "$(sudo incus --project "$S4_B4_PROJECT" config get s4b5ack security.protection.delete)" = true
+                sudo incus --project "$S4_B4_PROJECT" config set s4b5ack security.protection.delete=false
+                sudo incus --project "$S4_B4_PROJECT" delete s4b5ack ;;
+            esac
           done
           sudo incus project delete "$S4_B4_PROJECT"
           sudo incus network acl delete bw-s4b4-native
