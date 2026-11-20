@@ -6,6 +6,7 @@ on:
       - .github/workflows/v1-s4-b4-forward-native.yml
       - internal/native/forward.go
       - internal/native/forward_native_test.go
+      - internal/control/forward_installed_native_test.go
       - internal/native/forward_test.go
       - internal/control/forward_tools.go
       - internal/state/network_forward.go
@@ -39,6 +40,7 @@ jobs:
           test -z "$(gofmt -l internal/native/forward.go internal/native/forward_test.go internal/native/forward_native_test.go)"
           go test -count=1 ./internal/native -run '^TestB4ForwardSpecAndExactProxyDevice$'
           go test -c -o "$RUNNER_TEMP/s4b4-native-test" ./internal/native
+          go test -c -o "$RUNNER_TEMP/s4b4-control-test" ./internal/control
           CGO_ENABLED=0 go build -tags s4b2_native_ci -o "$RUNNER_TEMP/s4b4-echo" ./scripts/s4_b2_native_flow_probe.go
           echo "S4_B4_EXACT_SOURCE=$GITHUB_SHA"
       - name: Fresh signed Incus 7.6 and dedicated restricted one-use Project
@@ -95,6 +97,7 @@ jobs:
           done
           sudo incus --project "$project" exec s4b4native -- test -f /tmp/s4b2-flow-server-ready
           sudo install -m 0755 "$RUNNER_TEMP/s4b4-native-test" /usr/local/bin/s4b4-native-test
+          sudo install -m 0755 "$RUNNER_TEMP/s4b4-control-test" /usr/local/bin/s4b4-control-test
           echo S4_B4_DISPOSABLE_NATIVE_FIXTURE_READY=PASS
       - name: Real nonroot SDK ETag proxy TCP UDP packets and exact deletion
         shell: bash
@@ -108,6 +111,16 @@ jobs:
           grep -Fq 'S4_B4_NATIVE_udp_ORIGINAL_ETAG_PROXY_PACKET=PASS' "$RUNNER_TEMP/s4b4-native.log"
           grep -Fq 'S4_B4_NATIVE_tcp_REMOVAL_PACKET_REFUSED=PASS' "$RUNNER_TEMP/s4b4-native.log"
           grep -Fq 'S4_B4_NATIVE_udp_REMOVAL_PACKET_REFUSED=PASS' "$RUNNER_TEMP/s4b4-native.log"
+          echo S4_B4_NATIVE_NONROOT_SDK_TCP_UDP_PACKET_PASS
+      - name: Installed authenticated HTTP MCP create list delete and packet evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$S4_B4_PROJECT" = "user-$(id -u boxweave)"
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119             /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4InstalledMCPNativeCreateListDelete$' | tee "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_MCP_tcp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_MCP_udp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_21_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           sudo incus --project "$S4_B4_PROJECT" config device show s4b4native | tee "$RUNNER_TEMP/s4b4-device-readback.txt"
           if grep -q 'bwpf-' "$RUNNER_TEMP/s4b4-device-readback.txt"; then
             echo S4_B4_NATIVE_PROXY_LEAK; exit 70
