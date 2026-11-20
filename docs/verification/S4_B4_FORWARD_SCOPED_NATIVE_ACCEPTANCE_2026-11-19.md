@@ -1,6 +1,8 @@
 # S4-B4 — owned native TCP/UDP proxy: scoped implementation and acceptance (2026-11-19 PT)
 
-**Current decision: `S4_B4_CORE_NATIVE_MCP_PASS`, formal `S4_B4_PARTIAL` until the remaining B4-specific adversarial/restart and external-exposure contract gates are resolved.** This is not `S4_B_PASS`, `S4_B6_PASS`, an approved physical-host deployment, a merged PR or a release.
+> Historical initial acceptance, superseded by [S4_B4_PASS](S4_B4_FORWARD_FINAL_ACCEPTANCE_2026-11-19.md).
+
+**Initial decision: `S4_B4_CORE_NATIVE_MCP_PASS`, formal `S4_B4_PARTIAL` until the remaining B4-specific adversarial/restart and external-exposure contract gates are resolved.** This is not `S4_B_PASS`, `S4_B6_PASS`, an approved physical-host deployment, a merged PR or a release.
 
 - Sole development PR: [#153](https://github.com/vanishs/boxweave/pull/153), branch `feat/v1-s4-runtime-integration-20261116`.
 - **Last exact B4 production/test source**: [`58013601a14f17f31949aeebb0ce298b9fb3cd4c`](https://github.com/vanishs/boxweave/commit/58013601a14f17f31949aeebb0ce298b9fb3cd4c). Earlier implementation [`86049064`](https://github.com/vanishs/boxweave/commit/860490646e5013b5a4da9dd3f278d544eba8833d); CI & 21-tool catalog [`f3d00109`](https://github.com/vanishs/boxweave/commit/f3d00109c1d2354ecd1f71983bd6a69f16e51d93); native public MCP fixture [`197180ac`](https://github.com/vanishs/boxweave/commit/197180acb577036a878e5709033da1ae7308e6ff).

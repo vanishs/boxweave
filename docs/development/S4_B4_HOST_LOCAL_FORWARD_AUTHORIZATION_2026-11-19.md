@@ -1,6 +1,6 @@
 # S4-B4 host-local forwarding authorization and fault closure
 
-Status: implementation and Box tests passed; exact-source disposable native CI required before formal S4_B4_PASS. This supersedes the temporary loopback-only implementation boundary in the initial B4 report. No shared host change is authorized.
+Status: S4_B4_PASS. Exact-source disposable native CI passed; see [final acceptance](../verification/S4_B4_FORWARD_FINAL_ACCEPTANCE_2026-11-19.md). This supersedes the temporary loopback-only implementation boundary in the initial B4 report. No shared host change is authorized.
 
 ## Authorization boundary
 
