@@ -96,6 +96,48 @@ func TestRC8AgentVisibleSchemasAndSafePreflight(t *testing.T) {
 			t.Fatalf("%s accepted invalid typed args: %+v", tc.name, r)
 		}
 	}
+	// Out-of-range resources fail before Admit, without a new Operation.
+	invalidUpdate, invalidErr := sess.CallTool(ctx, &mcp.CallToolParams{
+		Name: "box_update", Arguments: map[string]any{
+			"box_id": "00000000-0000-4000-8000-000000000001",
+			"idempotency_key": "rc8-bounds-pre-admit",
+			"work_ref": "rc8-bounds-not-admitted", "cpu": -1,
+		},
+	})
+	if invalidErr == nil && (invalidUpdate == nil || !invalidUpdate.IsError) {
+		t.Fatalf("invalid resource update reached admission: %+v", invalidUpdate)
+	}
+	query, queryErr := sess.CallTool(ctx, &mcp.CallToolParams{
+		Name: "operation_list", Arguments: map[string]any{"work_ref": "rc8-bounds-not-admitted"},
+	})
+	if queryErr != nil || query == nil || query.IsError {
+		t.Fatalf("cannot inspect rejected update audit: %+v, %v", query, queryErr)
+	}
+	for _, part := range query.Content {
+		if v, ok := part.(*mcp.TextContent); ok && strings.Contains(v.Text, "box_update") {
+			t.Fatalf("invalid dimensions produced a durable mutation: %s", v.Text)
+		}
+	}
+	// Unknown peer IDs and incomplete PINNED network audit stay fail-closed,
+	// but the public error must give an Agent the correct preflight category.
+	peer, peerErr := sess.CallTool(ctx, &mcp.CallToolParams{
+		Name: "box_peer_set", Arguments: map[string]any{
+			"source_box_id": "00000000-0000-4000-8000-000000000001",
+			"target_box_id": "00000000-0000-4000-8000-000000000002",
+			"allow": false, "idempotency_key": "rc8-peer-unknown-scope",
+		},
+	})
+	peerMessage := fmt.Sprint(peerErr)
+	if peer != nil {
+		for _, part := range peer.Content {
+			if v, ok := part.(*mcp.TextContent); ok {
+				peerMessage += v.Text
+			}
+		}
+	}
+	if !strings.Contains(peerMessage, "PEER_SCOPE_UNVERIFIED_OR_LOCKED") {
+		t.Fatalf("unsafe peer preflight not classified: %s", peerMessage)
+	}
 	// The caller sees the target type, without revealing whether a foreign
 	// Box exists in a different layer.
 	got, err := sess.CallTool(ctx, &mcp.CallToolParams{
