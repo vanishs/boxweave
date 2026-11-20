@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline negative controls for host uninstaller: never touch a real host."""
 import contextlib
+import fcntl
 import io
 import json
 from pathlib import Path
@@ -45,6 +46,12 @@ class FakeHost(unittest.TestCase):
                                                   side_effect=lambda path, uid: u.checked_file(path, "dir"))
         self.host_state_check.start()
         self.addCleanup(self.host_state_check.stop)
+        self.lock_owner_check = mock.patch.object(u, "require_service_lock_owner")
+        self.lock_owner_check.start()
+        self.addCleanup(self.lock_owner_check.stop)
+        self.lock_fd_owner_check = mock.patch.object(u, "require_serve_lock_fd_owner")
+        self.lock_fd_owner_check.start()
+        self.addCleanup(self.lock_fd_owner_check.stop)
         self.host = mock.patch.object(u, "machine_sha", return_value="a" * 64)
         self.host.start()
         self.addCleanup(self.host.stop)
@@ -308,6 +315,95 @@ class FakeHost(unittest.TestCase):
         u.SCRIPTLET.write_text(json.dumps({"Status": "ROLLED_BACK"}))
         u.SCRIPTLET.chmod(0o644)
         with self.assertRaisesRegex(u.UninstallError, "untrusted root journal permission"):
+            self.plan("full")
+
+    def make_serve_lock(self):
+        path = u.STATE / u.SERVE_LOCK_NAME
+        path.write_bytes(b"")
+        path.chmod(0o600)
+        return path
+
+    def test_persistent_serve_lock_is_recognized_in_read_only_plan(self):
+        lock = self.make_serve_lock()
+        self.service = "active"
+        original = lock.stat()
+        plan = self.plan("full")
+        self.assertTrue(plan["ready"])
+        self.assertIn(u.SERVE_LOCK_NAME, [x["name"] for x in plan["state_files"]])
+        self.assertEqual(lock.stat().st_ino, original.st_ino)
+        self.assertEqual(self.cmds, [])
+        self.assertEqual(u.STATE.joinpath("ledger.sqlite").stat().st_size > 0, True)
+
+    def test_service_only_keeps_permanent_serve_lock_and_sqlite(self):
+        lock = self.make_serve_lock()
+        self.service = "active"
+        p = self.plan("service")
+        self.assertTrue(p["ready"])
+        u.apply(p)
+        self.assertTrue(lock.exists())
+        self.assertTrue(self.db.exists())
+        self.assertEqual(self.service, "inactive")
+        self.assertFalse(u.BINARY.exists())
+
+    def test_controller_removes_serve_lock_last_after_sqlite(self):
+        lock = self.make_serve_lock()
+        plan = self.plan("controller")
+        seen = []
+        original = u.exact_unlink
+        def observe(path, proof):
+            seen.append(path.name)
+            return original(path, proof)
+        with mock.patch.object(u, "exact_unlink", side_effect=observe):
+            out = u.apply(plan)
+        self.assertEqual(out["outcome"], "COMPLETE")
+        self.assertFalse(lock.exists())
+        self.assertFalse(u.STATE.exists())
+        self.assertLess(seen.index("ledger.sqlite"), seen.index(u.SERVE_LOCK_NAME))
+        self.assertEqual(seen[-1], u.SERVE_LOCK_NAME)
+
+    def test_held_serve_lock_blocks_destructive_apply(self):
+        lock = self.make_serve_lock()
+        plan = self.plan("full")
+        with lock.open("r+b") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(u.UninstallError, "serve lock held"):
+                u.apply(plan)
+        self.assertTrue(lock.exists())
+        self.assertTrue(u.BINARY.exists())
+        self.assertTrue(self.db.exists())
+        self.assertFalse(any(x[:2] == ["systemctl", "disable"] for x in self.cmds))
+
+    def test_replaced_or_new_serve_lock_refuses_apply(self):
+        lock = self.make_serve_lock()
+        planned = self.plan("controller")
+        lock.unlink()
+        lock = self.make_serve_lock()
+        # Ensure inode drift even on filesystems that quickly recycle.
+        lock.write_bytes(b"changed inode or content")
+        with self.assertRaisesRegex(u.UninstallError, "serve lock inode changed"):
+            u.apply(planned)
+        lock.unlink()
+        planned = self.plan("controller")
+        self.make_serve_lock()
+        with self.assertRaisesRegex(u.UninstallError, "serve lock appeared"):
+            u.apply(planned)
+        self.assertTrue(u.BINARY.exists())
+        self.assertTrue(self.db.exists())
+
+    def test_unsafe_serve_lock_symlink_hardlink_and_mode_refused(self):
+        lock = self.make_serve_lock()
+        lock.chmod(0o644)
+        with self.assertRaisesRegex(u.UninstallError, "unsafe serve lock"):
+            self.plan("full")
+        lock.chmod(0o600)
+        hardlink = u.STATE.parent / "another-serve-lock-reference"
+        hardlink.hardlink_to(lock)
+        with self.assertRaisesRegex(u.UninstallError, "unsafe serve lock"):
+            self.plan("full")
+        hardlink.unlink()
+        lock.unlink()
+        lock.symlink_to(self.db)
+        with self.assertRaisesRegex(u.UninstallError, "unsafe path"):
             self.plan("full")
 
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
