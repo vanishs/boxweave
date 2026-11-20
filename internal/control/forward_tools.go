@@ -74,7 +74,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 			v := forwardView{ForwardClaim: claim}
 			box, e := s.Store.OwnedBox(ctx, principal.Layer, claim.BoxID)
 			if e == nil && box.Incarnation == claim.Incarnation {
-				v.NativeVerified = s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, specForClaim(claim), claim.State == "CONFIRMED") == nil
+				v.NativeVerified = claim.State == "CONFIRMED" && s.Native.ObserveOwnedForward(ctx, box.Name, box.UUID, specForClaim(claim), true) == nil
 			}
 			views = append(views, v)
 		}

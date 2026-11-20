@@ -328,7 +328,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	// argument object for every public tool, not silently ignore an
 	// unsupported native Project or root-pool selection.
 	list, err := admin.ListTools(ctx, nil)
-	check(err == nil && len(list.Tools) == 18, "strict schema discovery unavailable")
+	check(err == nil && len(list.Tools) == 21, "strict schema discovery unavailable")
 	for _, tool := range list.Tools {
 		schema, marshalErr := json.Marshal(tool.InputSchema)
 		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\":false")),
@@ -359,7 +359,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	check(ok && len(items) == 0,
 		"unsupported root_pool attempted a native Create despite schema refusal")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_SIXTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
-	fmt.Println("S4_ACTIVITY_REAL_OFFICIAL_SDK_ALL_18_CLOSED_SCHEMAS=PASS")
+	fmt.Println("S4_B4_REAL_OFFICIAL_SDK_ALL_21_CLOSED_SCHEMAS=PASS")
 	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
 }
 
@@ -419,8 +419,9 @@ func main() {
 		"operation_output_get": true, "operation_cancel": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 		"box_peer_set": true, "box_activity_get": true,
+		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true,
 	}
-	check(len(inv.Tools) == len(expected), "exact 18 public MCP Tools including Activity discovery")
+	check(len(inv.Tools) == len(expected), "exact 21 public MCP Tools including Activity and native forwards discovery")
 	for _, t := range inv.Tools {
 		check(expected[t.Name], "unexpected Tool "+t.Name)
 		// A real SDK ListTools over HTTP must advertise safety/caching
@@ -429,7 +430,7 @@ func main() {
 			"host_status": true, "box_list": true, "box_get": true,
 			"operation_get": true, "operation_list": true, "box_activity_get": true,
 			"operation_output_get": true, "box_file_list": true,
-			"box_file_read": true,
+			"box_file_read": true, "port_forward_list": true,
 		}[t.Name]
 		check(t.Annotations != nil && t.Annotations.ReadOnlyHint == read &&
 			t.Annotations.IdempotentHint == read &&

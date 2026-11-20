@@ -2,7 +2,6 @@ package native
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -193,7 +192,3 @@ func (r Reader) ObserveOwnedForward(ctx context.Context, name, uuid string, f Fo
 	}
 	return nil
 }
-
-// ForwardNoEffect is reserved for proven pre-dispatch states, and must never
-// infer the final outcome of a failed conditional UpdateInstance call.
-var ErrForwardNoEffect = errors.New("forward did not dispatch")

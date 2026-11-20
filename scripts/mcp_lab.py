@@ -22,7 +22,7 @@ def cli_parser() -> argparse.ArgumentParser:
     ap.add_argument("--allow-mutations", action="store_true", help="opt in for disposable test fixtures only")
     ap.add_argument("--ack-disposable", action="store_true", help="acknowledge safe isolated environment for mutation")
     subs = ap.add_subparsers(dest="action", required=True)
-    subs.add_parser("inspect", help="get 18-tool catalog, read-only annotations and negotiated protocol")
+    subs.add_parser("inspect", help="get current tool catalog, read-only annotations and negotiated protocol")
     p = subs.add_parser("smoke", help="read-only metadata, tool catalog, history and optional Activity tests")
     p.add_argument("--expected-tools", type=int)
     p.add_argument("--expected-schema", type=int)
