@@ -1,8 +1,8 @@
 # RC8 Host Btrfs quota verification and Exec quota-full recovery
 
-Date: 2026-11-19  
-Repository: `vanishs/boxweave`  
-Target: Draft PR #153 / `feat/v1-s4-runtime-integration-20261116`  
+Date: 2026-11-19
+Repository: `vanishs/boxweave`
+Target: Draft PR #153 / `feat/v1-s4-runtime-integration-20261116`
 Scope: native read-only status evidence; narrow Exec pre-dispatch and finalization; tests. No installed host binary, ACL, Root/PRS, or existing Box is modified by these source changes.
 
 ## Independent host evidence already collected
