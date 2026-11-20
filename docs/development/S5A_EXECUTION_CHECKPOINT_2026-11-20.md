@@ -8,7 +8,7 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | --- | --- |
 | S5A1 — incident provenance and typed diagnostics | PARTIAL |
 | S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
-| S5A3 — independently verifiable user approval | INERT_PROBE_READY / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
+| S5A3 — independently verifiable user approval | SYNTHETIC_SIGNED_LAB_PASS / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
 | S5A4 — network and dependent Delete recovery | NOT_STARTED |
 | S5A5 — diagnostic and recovery evidence integration | NOT_STARTED |
 | S5A6 — compatibility, release engineering and feature freeze | NOT_STARTED |
@@ -26,3 +26,5 @@ A2 scoped independent native and staged root CLI/MCP parity passed at `bd712407e
 Owner subsequently selected MCP-client-signed operation approval (not the browser-password proposal). The [A3 decision](S5A3_APPROVAL_DECISION_2026-11-20.md) records the selected mechanism, official documentation check and inert actual-client feasibility gate. ChatGPT mTLS and OAuth client assertion identify the client, not exact human approval; no supported operation-specific signed assertion established. Remote approval-dependent effects remain blocked; existing Host fallback and A2 scoped PASS unchanged. No runtime/schema change, new client implementation or public deployment.
 
 A3 development started. Standalone official-SDK inert probe built and tested in owned Box; see [A3 checkpoint](S5A3_APPROVAL_DECISION_2026-11-20.md#development-checkpoint-independent-inert-probe). Actual ChatGPT user-approved request evidence still needed; no new production tool, native release or schema change. Do not sign A3 PASS.
+
+A3 owner-directed Box simulation, pinned Ed25519 test signer, isolated durable consumption/receipt and official SDK HTTP simulation PASS, 32 negatives and five race repetitions, including DB reopen and atomic rollback; [evidence](S5A3_APPROVAL_DECISION_2026-11-20.md#signed-client-simulation-in-box--scoped-pass-2026-11-20). Actual platform-signed approval and production integration remain unverified; no actual release or schema migration. S5A3 not formally signed.
