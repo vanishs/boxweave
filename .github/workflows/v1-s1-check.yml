@@ -74,6 +74,12 @@ jobs:
             head -c 400 "$tmp/list-response" || :
             exit 1
           fi
+          # Check the exact same strict SDK catalog used by the S2.5 release gate
+          # before merging a change that might alter the MCP Tool inventory.
+          go build -o "$tmp/s25-agent" ./scripts/s25_lab_agent.go
+          (umask 077; printf '%s\n' "$credentials" > "$tmp/s25-actor.secret")
+          BW_S25_URL=http://127.0.0.1:18650/mcp BW_S25_ADMIN1_FILE="$tmp/s25-actor.secret" "$tmp/s25-agent" catalog-only
+          rm -f "$tmp/s25-actor.secret"
           "$tmp/boxweave" token-revoke -db "$tmp/ledger.sqlite" -id "$token_id"
           response_code="$(curl --silent --max-time 2 -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18650/mcp -H "Authorization: Bearer $token" --data '{}')"
           test "$response_code" = 401
