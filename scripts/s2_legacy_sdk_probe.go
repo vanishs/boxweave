@@ -206,7 +206,7 @@ func main() {
 		"operation_output_get": true, "operation_cancel": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 		"box_peer_set": true, "box_activity_get": true,
-		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true,
+		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true, "box_wait_ready": true,
 	}
 	verify(len(list.Tools) == len(known), "old SDK did not discover the current exact public MCP catalog")
 	for _, tool := range list.Tools {
@@ -254,6 +254,6 @@ func main() {
 	readBoxes(ctx, session)
 	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS")
 	// The prior 17-Tool baseline is intentionally superseded by Activity.
-	fmt.Println("S4_B4_PREVIOUS_OFFICIAL_SDK_21_TOOLS_DISCOVERY=PASS")
+	fmt.Println("S4_B4_PREVIOUS_OFFICIAL_SDK_22_TOOLS_DISCOVERY=PASS")
 	legacyLifecycle(ctx, session)
 }

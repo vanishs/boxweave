@@ -229,7 +229,7 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(sessctx, nil)
-	if err != nil || len(tools.Tools) != 21 {
+	if err != nil || len(tools.Tools) != 22 {
 		t.Fatalf("authenticated official SDK tools/list: %v tools=%d", err, len(tools.Tools))
 	}
 	status, err := session.CallTool(sessctx, &mcp.CallToolParams{Name: "host_status", Arguments: map[string]any{}})

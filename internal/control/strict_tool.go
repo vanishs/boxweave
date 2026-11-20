@@ -73,6 +73,12 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		}
 		stream.Enum = []any{"stdout", "stderr"}
 	}
+	if tool.Name == "box_wait_ready" {
+		checks := schema.Properties["checks"]
+		if checks != nil && checks.Items != nil {
+			checks.Items.Enum = []any{"running", "exec", "ipv4", "ipv6"}
+		}
+	}
 	if tool.Name == "box_exec" {
 		argv := schema.Properties["argv"]
 		if argv == nil {

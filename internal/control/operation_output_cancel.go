@@ -187,7 +187,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return nil, cancelOperationResult{}, err
 		}
 		effect := func(ctx context.Context) (string, error) {
-			if target.State != "ADMITTED" {
+			if target.State != "ADMITTED" && !(target.Action == state.ReadinessAction && target.State == "OBSERVING") {
 				return "", state.PreDispatchError{Class: "ORIGINAL_ALREADY_DISPATCHED_CANCEL_UNSUPPORTED"}
 			}
 			if err := s.Store.CancelQueued(ctx, principal.Layer, target.ID); err != nil {

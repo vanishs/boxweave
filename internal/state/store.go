@@ -567,6 +567,9 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
 	}
+	if a.Action == ReadinessAction {
+		return s.admitReadinessTx(ctx, tx, a, keyHash, intentHash)
+	}
 	// A dependency-aware delete owns the whole Project for the duration of
 	// its exact child cleanup. Only private, linked children can bypass this
 	// admission barrier; a caller-supplied idempotency key never can.
@@ -881,7 +884,7 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING')")
+	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','OBSERVING')")
 	if err != nil {
 		return 0, err
 	}
@@ -908,7 +911,7 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 	for _, item := range ids {
 		now := time.Now().UnixNano()
 		next, reason := "UNKNOWN", "PROCESS_RESTART_OR_LOST_ACK"
-		if item.state == "ADMITTED" {
+		if item.state == "ADMITTED" || item.state == "OBSERVING" {
 			// No Claim was committed and therefore the process was forbidden
 			// from dispatching native work. The in-memory handler is gone:
 			// do not silently replay an arbitrary old guest command.

@@ -22,6 +22,8 @@ Implementation decision (2026-11-20): require the single-request `instance_get_f
 
 ## 2. `box_wait_ready`: an asynchronous, bounded verification Tool
 
+Current source (2026-11-20): existing operations/events, OBSERVING and TIMED_OUT; no Schema5 DDL change. Waiting does not block ordinary mutation; short final verification/Exec uses existing dispatch fences. At most one fixed no-recorded-output native probe, verified nonzero exit FAILED, interrupted observation before probe FAILED, possibly dispatched probe UNKNOWN. Initialized unsupported and not advertised. See implementation checkpoint for acceptance limits. Heavy metadata stress deferred to S5.
+
 Purpose: allow an Agent to wait for **specified observed conditions**, rather than repeatedly guessing readiness from native `Running` or an assigned IP. **Do not call it native Incus `guest_ready`**: that existing nullable field means Guest explicitly reported Incus Ready, and remains separate.
 
 **Proposed typed input** (freeze after native/schema verification):

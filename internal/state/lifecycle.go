@@ -125,7 +125,7 @@ func (s *Store) CancelQueued(ctx context.Context, layer, id string) error {
 	now := time.Now().UnixNano()
 	res, err := tx.ExecContext(ctx, `UPDATE operations SET state='CANCELLED',
 		error_class='CANCELLED_BEFORE_DISPATCH',updated_at=?
-		WHERE layer=? AND id=? AND state='ADMITTED'`, now, layer, id)
+		WHERE layer=? AND id=? AND (state='ADMITTED' OR (action='box_wait_ready' AND state='OBSERVING' AND native_operation_id=''))`, now, layer, id)
 	if err != nil {
 		return err
 	}

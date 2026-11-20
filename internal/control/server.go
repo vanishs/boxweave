@@ -169,6 +169,7 @@ func (s *Service) Handler() http.Handler {
 	s.registerActivityTools(server)
 	s.registerForwardTools(server)
 	s.registerBoxTools(server)
+	s.registerReadinessTool(server)
 	s.registerPeerTools(server)
 	s.registerFileTools(server)
 	s.registerOperationOutputCancel(server)

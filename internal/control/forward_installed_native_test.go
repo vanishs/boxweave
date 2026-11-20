@@ -149,8 +149,8 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 	}
 	defer sess.Close()
 	inventory, err := sess.ListTools(ctx, nil)
-	if err != nil || len(inventory.Tools) != 21 {
-		t.Fatalf("expected exact 21 live MCP tools: %v / %d", err, len(inventory.Tools))
+	if err != nil || len(inventory.Tools) != 22 {
+		t.Fatalf("expected exact 22 live MCP tools: %v / %d", err, len(inventory.Tools))
 	}
 	// Refuse missing acknowledgment, unmatched port, wildcard, and unapproved addresses.
 	for i, tc := range []struct {
@@ -346,7 +346,7 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 		b4MCPHostEcho(t, "tcp", "127.0.0.1", port, false)
 		fmt.Println("S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS")
 	})
-	fmt.Println("S4_B4_INSTALLED_AUTHENTICATED_21_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS")
+	fmt.Println("S4_B4_INSTALLED_AUTHENTICATED_22_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS")
 }
 
 // Two different keys simultaneously contend for the same native resource.

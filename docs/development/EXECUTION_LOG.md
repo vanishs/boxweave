@@ -1337,3 +1337,7 @@ Owner explicitly requested S4-C. B6 remains PARTIAL and final gate; no merge/rel
 ### S4-C actual native detailed read smoke — 2026-11-20 PT
 
 Exact code 3fd6b76, separate candidate on retained nested B6 Box, original read-only MCP smoke 3adf623560dedf83d3366dc13dbb390c exit 0, both authorized Actors default/detail and foreign refusal, 5844 bytes / 234–236ms, postcheck 945550115de359e0f5f7cee2a05f03ba exit 0 confirmed zero Operations, test credentials revoked and no new listener / B6 originals unchanged. Quality CI failed old patch blank context whitespace; lossless base64 evidence storage fixes formatting without changing raw SHA. [S4-C checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). Native smoke scoped PASS, broader metadata/readiness/independent B6/S4-C gates open. Both development Boxes retained.
+
+### S4-C durable readiness source/local Race PASS — 2026-11-20 PT
+
+Owner continued S4-C. Existing Schema5 operations/events, OBSERVING, 22 catalog, bounded 1..600s, fixed no-output Exec, short fence and original replay. Full make verify 72a55a6db945fd43899c4cf746900132 exit 0. [Implementation checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). Installed native/wider acceptance and B6 remaining gates open. Prior B4/B5 combined CI failure remains unresolved; normalize old composite transcript EOF blank without changing evidence content. Retain development Boxes.

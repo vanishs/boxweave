@@ -54,10 +54,11 @@ type operationGetInput struct {
 }
 
 type operationGetResult struct {
-	TrackingID string        `json:"tracking_id"`
-	Operation  state.Receipt `json:"operation"`
-	Version    string        `json:"version"`
-	Commit     string        `json:"commit"`
+	TrackingID string                 `json:"tracking_id"`
+	Operation  state.Receipt          `json:"operation"`
+	Version    string                 `json:"version"`
+	Commit     string                 `json:"commit"`
+	Readiness  *state.ReadinessResult `json:"readiness,omitempty"`
 }
 
 type operationListInput struct {
@@ -110,7 +111,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 				return nil, operationGetResult{}, err
 			}
 			if in.WaitMS == 0 || result.State == "SUCCEEDED" || result.State == "FAILED" ||
-				result.State == "UNKNOWN" || result.State == "CANCELLED" {
+				result.State == "UNKNOWN" || result.State == "CANCELLED" || result.State == "TIMED_OUT" {
 				break
 			}
 			remaining := time.Until(deadline)
@@ -128,6 +129,10 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			case <-timer.C:
 			}
 		}
+		readiness, err := s.Store.Readiness(ctx, result)
+		if err != nil {
+			return nil, operationGetResult{}, err
+		}
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
@@ -136,7 +141,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
-			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit}, nil
+			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness}, nil
 	})
 
 	addStrictTool(server, &mcp.Tool{

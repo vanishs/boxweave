@@ -1,6 +1,6 @@
 # Minimal P0 MCP tool contracts
 
-**2026-11-20 PT S4-C implementation start:** Owner initiated independent implementation. `box_get(detail:boolean=false)` is implemented in source (`true`: live authenticated management Actor; native `InstanceFull` includes State/Snapshots/Backups and potentially sensitive configuration with `observed_at`). Only the exact owned UUID in the restricted Project, with ledger incarnation and credential revalidation, may be returned. Default output unchanged; older SDK multi-read fallback is refused. One `box_wait_ready` async observation Tool remains planned (real `exec_ready`, optional IP, maximum 600 seconds), giving **22** Tools including Activity. B6 completion remains mandatory before final acceptance. See [S4-C implementation and evidence contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). The older 20-only overview below remains the S4-B baseline until implemented.
+**2026-11-20 PT S4-C implementation start:** Owner initiated independent implementation. `box_get(detail:boolean=false)` is implemented in source (`true`: live authenticated management Actor; native `InstanceFull` includes State/Snapshots/Backups and potentially sensitive configuration with `observed_at`). Only the exact owned UUID in the restricted Project, with ledger incarnation and credential revalidation, may be returned. Default output unchanged; older SDK multi-read fallback is refused. One `box_wait_ready` async observation Tool is implemented in source (real `exec_ready`, optional IP, maximum 600 seconds), giving **22** Tools including Activity. B6 completion remains mandatory before final acceptance. See [S4-C implementation and evidence contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). Historical 20/21 counts predate this registration and Activity.
 
 **Status:** design, not frozen wire schemas. See [20-tool catalog](MCP_TOOLS.md) and [permanent scope](../decisions/PRODUCT_BOUNDARY.md). Freeze exact JSON Schema after official SDK/native tests. Every mutation requires a nonempty, caller-generated, reusable idempotency key.
 
@@ -76,3 +76,8 @@ Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not prov
 ## Required native black-box checks
 
 Verify the whole Agent create/read/file/async recovery/fix/retest cycle, file race/symlink/hardlink refusals, anonymous/expired/revoked or forged Token denial, authenticated peer-Actor positive takeover plus distinct idempotency, A-to-B directional peer grant/revoke, TCP/UDP port behavior, foreign Project/Box refusal, UNKNOWN no-replay, nested L1/L2 boundaries and exact native proof.
+
+
+### Readiness source contract (2026-11-20)
+
+`box_wait_ready(box_id,idempotency_key,checks?,timeout_seconds?,work_ref?,agent_ref?)` admits a bounded OBSERVING original without holding the ordinary Box lock; checks running/exec/ipv4/ipv6, default running+exec, 1..600 seconds (default 300). Poll `operation_get.readiness`. Per-check status, deadline, observed guest exit and explicit ready only after proof. Fixed native timeout-bounded Exec, no recorded streams/user argv. UNKNOWN if probe receipt uncertain, TIMED_OUT on elapsed deadline without uncertain effect. No automatic replay. See current S4-C checkpoint.

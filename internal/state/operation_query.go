@@ -43,7 +43,7 @@ type NextAction struct {
 
 func nextAction(status, action, id string) NextAction {
 	switch status {
-	case "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING":
+	case "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "OBSERVING":
 		return NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: id}
 	case "UNKNOWN":
 		return NextAction{Kind: "HOST_LOCAL_REVIEW"}
@@ -97,7 +97,7 @@ func validHexID(id string) bool {
 
 func validOperationState(s string) bool {
 	switch s {
-	case "", "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED":
+	case "", "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED", "OBSERVING", "TIMED_OUT":
 		return true
 	default:
 		return false

@@ -350,7 +350,7 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 		"SELECT CASE WHEN o.action='box_peer_set' THEN 'PROJECT_PEER_BARRIER' ELSE 'UNRESOLVED_OPERATION' END AS reason," +
 			"o.id AS original,o.box_uuid AS box_uuid,o.resource_key AS resource,o.state AS state,o.created_at AS at_ns" +
 			" FROM operations o WHERE " + opWhere +
-			" AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')" +
+			" AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING')" +
 			" AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))",
 		"SELECT 'EXEC_OUTPUT_GC_BLOCKER',o.id,g.box_uuid,'gc:'||g.name||'/'||g.stream,g.state,g.claimed_at" +
 			" FROM exec_output_gc g JOIN operations o ON o.id=g.operation_id WHERE " + opWhere +

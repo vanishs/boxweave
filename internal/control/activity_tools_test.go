@@ -67,7 +67,7 @@ func TestActivityOfficialMCPThreeViewsAndSameLayerTakeover(t *testing.T) {
 			}
 		}
 	}
-	if !found || len(tools.Tools) != 21 {
+	if !found || len(tools.Tools) != 22 {
 		t.Fatalf("wrong SDK tool inventory: %d", len(tools.Tools))
 	}
 	for _, tc := range []struct {

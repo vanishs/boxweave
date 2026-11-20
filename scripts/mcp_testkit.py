@@ -22,9 +22,9 @@ PROTOCOL = "2025-11-25"
 MUTATIONS = frozenset({
     "box_create", "box_start", "box_stop", "box_update", "box_delete",
     "box_exec", "box_file_apply", "box_peer_set", "operation_cancel",
-    "port_forward_create", "port_forward_delete",
+    "port_forward_create", "port_forward_delete", "box_wait_ready",
 })
-FINAL_STATES = frozenset({"SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN"})
+FINAL_STATES = frozenset({"SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "TIMED_OUT"})
 
 
 class MCPError(RuntimeError):
