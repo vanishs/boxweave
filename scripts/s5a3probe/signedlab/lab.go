@@ -55,14 +55,15 @@ type Assertion struct {
 	Signature string    `json:"signature"`
 }
 type Receipt struct {
-	ID            string `json:"receipt_id"`
-	ApprovalID    string `json:"approval_id"`
-	Original      string `json:"original"`
-	Decision      string `json:"decision"`
-	Duplicate     bool   `json:"duplicate"`
-	OriginalState string `json:"original_state"`
-	ClaimReleased bool   `json:"synthetic_claim_released"`
-	NativeEffect  bool   `json:"native_effect"`
+	ID             string `json:"receipt_id"`
+	ApprovalID     string `json:"approval_id"`
+	Original       string `json:"original"`
+	Decision       string `json:"decision"`
+	Duplicate      bool   `json:"duplicate"`
+	OriginalState  string `json:"original_state"`
+	ClaimReleased  bool   `json:"synthetic_claim_released"`
+	NativeEffect   bool   `json:"native_effect"`
+	CompensationID string `json:"synthetic_compensation_id,omitempty"`
 }
 type verifier struct {
 	issuer, audience, keyID string
@@ -119,7 +120,11 @@ func openLab(path string, v verifier, now func() time.Time) (*Lab, error) {
  CREATE TABLE IF NOT EXISTS lab_targets(layer TEXT NOT NULL,original TEXT NOT NULL,action TEXT NOT NULL,intent TEXT NOT NULL,uuid TEXT NOT NULL,incarnation TEXT NOT NULL,evidence TEXT NOT NULL,revision INTEGER NOT NULL,state TEXT NOT NULL,released INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(layer,original));
  CREATE TABLE IF NOT EXISTS lab_approvals(id TEXT PRIMARY KEY, layer TEXT NOT NULL,actor TEXT NOT NULL,recovery_key TEXT NOT NULL,challenge BLOB NOT NULL,status TEXT NOT NULL, UNIQUE(layer,actor,recovery_key));
  CREATE TABLE IF NOT EXISTS lab_receipts(id TEXT PRIMARY KEY, approval TEXT NOT NULL UNIQUE REFERENCES lab_approvals(id), assertion_digest TEXT NOT NULL, result BLOB NOT NULL);
- CREATE TABLE IF NOT EXISTS lab_audit(approval TEXT NOT NULL REFERENCES lab_approvals(id), event TEXT NOT NULL, UNIQUE(approval,event));`)
+ CREATE TABLE IF NOT EXISTS lab_audit(approval TEXT NOT NULL REFERENCES lab_approvals(id), event TEXT NOT NULL, UNIQUE(approval,event));
+ CREATE TABLE IF NOT EXISTS lab_a4_plan(layer TEXT NOT NULL,original TEXT NOT NULL,snapshot BLOB NOT NULL,PRIMARY KEY(layer,original));
+ CREATE TABLE IF NOT EXISTS lab_a4_comp(id TEXT PRIMARY KEY,approval TEXT NOT NULL UNIQUE REFERENCES lab_approvals(id),layer TEXT NOT NULL,original TEXT NOT NULL UNIQUE,action TEXT NOT NULL,binding BLOB NOT NULL,state TEXT NOT NULL,dispatches INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS lab_a4_witness(comp TEXT PRIMARY KEY REFERENCES lab_a4_comp(id),observation BLOB NOT NULL);
+ CREATE TABLE IF NOT EXISTS lab_a4_events(comp TEXT NOT NULL REFERENCES lab_a4_comp(id),event TEXT NOT NULL,UNIQUE(comp,event));`)
 	if e != nil {
 		db.Close()
 		return nil, e
@@ -136,8 +141,18 @@ func readBinding(ctx context.Context, tx *sql.Tx, layer, actor, original, key st
 		return b, ErrDenied
 	}
 	e = tx.QueryRowContext(ctx, "SELECT action,intent,uuid,incarnation,evidence,revision,state,released FROM lab_targets WHERE layer=? AND original=?", layer, original).Scan(&b.Action, &b.Intent, &b.UUID, &b.Incarnation, &b.Evidence, &b.Revision, &state, &released)
-	if e != nil || state != "UNKNOWN" || released != 0 || b.Action != "REVIEWED_RELEASE" || b.UUID == "" || b.Incarnation == "" {
+	if e != nil || state != "UNKNOWN" || released != 0 || b.UUID == "" || b.Incarnation == "" {
 		return b, ErrDenied
+	}
+	if b.Action != "REVIEWED_RELEASE" {
+		if _, e = readA4Plan(ctx, tx, b); e != nil {
+			return b, e
+		}
+	} else {
+		var n int
+		if e = tx.QueryRowContext(ctx, "SELECT count(*) FROM lab_a4_plan WHERE layer=? AND original=?", layer, original).Scan(&n); e != nil || n != 0 {
+			return b, ErrDenied
+		}
 	}
 	return b, nil
 }
@@ -232,7 +247,13 @@ func (l *Lab) consume(ctx context.Context, layer, actor, original, key string, a
 	if e != nil {
 		return r, e
 	}
-	r = Receipt{ID: rid, ApprovalID: c.ID, Original: original, Decision: a.Decision, OriginalState: "UNKNOWN", ClaimReleased: a.Decision == "approve"}
+	r = Receipt{ID: rid, ApprovalID: c.ID, Original: original, Decision: a.Decision, OriginalState: "UNKNOWN", ClaimReleased: a.Decision == "approve" && b.Action == "REVIEWED_RELEASE"}
+	if a.Decision == "approve" && b.Action != "REVIEWED_RELEASE" {
+		r.CompensationID, e = admitA4(ctx, tx, c)
+		if e != nil {
+			return Receipt{}, e
+		}
+	}
 	if r.ClaimReleased {
 		res, e := tx.ExecContext(ctx, "UPDATE lab_targets SET released=1 WHERE layer=? AND original=? AND revision=? AND state='UNKNOWN' AND released=0", layer, original, b.Revision)
 		if e != nil {

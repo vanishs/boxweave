@@ -136,3 +136,17 @@ func TestS5A2DomainProofMatrix(t *testing.T) {
 		})
 	}
 }
+
+func TestS5A4GenericReleaseAuditDoesNotOverrideNetworkBarrier(t *testing.T) {
+	for _, action := range []string{"box_peer_set", "port_forward_create", "port_forward_delete", "box_delete"} {
+		t.Run(action, func(t *testing.T) {
+			target := original(action)
+			target.Released = true
+			target.DependentDelete = action == "box_delete"
+			v, p := (Service{}).observe(context.Background(), target, "")
+			if v.ClaimProtection != "RETAINED" || v.Disposition != "BLOCKED" || p.Kind != state.RecoveryBlocked || p.Reason != "NETWORK_LEGACY_RELEASE_REVIEW_REQUIRED" {
+				t.Fatalf("misleading release diagnosis %+v %+v", v, p)
+			}
+		})
+	}
+}

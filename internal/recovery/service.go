@@ -58,11 +58,17 @@ type Result struct {
 	NativeRetried bool                  `json:"native_retried"`
 }
 
+// Network and dependent Delete barriers cannot be retired by a generic
+// legacy RELEASED audit row. Preserve the row as history but report the
+// retained protection and require explicit review; never infer settlement.
+func protectedNetworkRecovery(t state.RecoveryTarget) bool {
+	return t.DependentDelete || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete"
+}
 func base(t state.RecoveryTarget, stream string) View {
 	v := View{OriginalID: t.ID, OriginalAction: t.Action, OriginalState: t.State, BoxID: t.UUID, Incarnation: t.Incarnation, OriginalNativeID: t.NativeID, ClaimProtection: "NOT_UNKNOWN", NativeObservation: "NOT_CHECKED", EvidenceSource: "SQLITE_DURABLE", GCStream: stream}
 	if t.State == "UNKNOWN" {
 		v.ClaimProtection = "RETAINED"
-		if t.Released {
+		if t.Released && !protectedNetworkRecovery(t) {
 			v.ClaimProtection = "REVIEWED_RELEASED"
 		}
 	}
@@ -207,6 +213,9 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 		}
 	}
 	if t.Released {
+		if protectedNetworkRecovery(t) {
+			return finish(state.RecoveryBlocked, "NETWORK_LEGACY_RELEASE_REVIEW_REQUIRED")
+		}
 		return finish(state.RecoveryNotNeeded, "ORIGINAL_ALREADY_REVIEWED_RELEASED")
 	}
 	if t.Action == "box_peer_set" {
