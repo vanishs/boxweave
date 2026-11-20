@@ -47,6 +47,9 @@ def assemble(directory, tag, source, installer):
         assets[name] = {"sha256": sha256(data), "size": len(data), "goarch": arch}
         files[name] = data
     files["install.sh"] = installer.read_bytes()
+    core = Path(__file__).resolve().parent / "uninstall_core.py"
+    files["uninstall.sh"] = (b"#!/bin/sh\nset -eu\nexec python3 - \"$@\" <<'PY_BOXWEAVE_UNINSTALL'\n" +
+                             core.read_bytes() + b"\nPY_BOXWEAVE_UNINSTALL\n")
     go_mod = Path("go.mod").read_text(encoding="utf-8")
     def pinned(expression):
         match = re.search(expression, go_mod, re.MULTILINE)
@@ -78,6 +81,7 @@ def assemble(directory, tag, source, installer):
     (directory / "release.json").write_bytes(manifest_bytes)
     (directory / "SHA256SUMS").write_bytes(sums)
     (directory / "install.sh").write_bytes(files["install.sh"])
+    (directory / "uninstall.sh").write_bytes(files["uninstall.sh"])
     return manifest
 
 

@@ -275,10 +275,10 @@ def main():
                 raise InstallError("native plan identity missing or mismatched")
             print("Reviewed native preparation:", plan, flush=True)
             print("Will install, prepare Native, verify and check doctor; no shared Incus rebuild.", flush=True)
-            with open("/dev/tty", "r+") as tty:
-                tty.write("Type INSTALL " + args.project + " to approve this exact plan: ")
-                tty.flush()
-                if tty.readline().strip() != "INSTALL " + args.project:
+            with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+                out.write("Type INSTALL " + args.project + " to approve this exact plan: ")
+                out.flush()
+                if inp.readline().strip() != "INSTALL " + args.project:
                     raise InstallError("installation not approved")
             if current_host_digest() != host_digest:
                 raise InstallError("host changed after approval")
@@ -323,17 +323,17 @@ def main():
             print("Doctor:", json.dumps(doctor), flush=True)
             if not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready")):
                 raise InstallError("doctor not ready; inspect installed service")
-            with open("/dev/tty", "r+") as tty:
-                tty.write("Configure a new OAuth approval password? [y/N] ")
-                tty.flush()
-                if tty.readline().strip().lower() == "y":
+            with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+                out.write("Configure a new OAuth approval password? [y/N] ")
+                out.flush()
+                if inp.readline().strip().lower() == "y":
                     subprocess.run(identity + ["oauth-setup", "-project", args.project],
-                                   stdin=tty, stdout=tty, stderr=tty, check=True)
+                                   stdin=inp, stdout=out, stderr=out, check=True)
                     origin = args.public_origin
                     if not origin:
-                        tty.write("Existing HTTPS tunnel origin (empty for later): ")
-                        tty.flush()
-                        origin = tty.readline().strip()
+                        out.write("Existing HTTPS tunnel origin (empty for later): ")
+                        out.flush()
+                        origin = inp.readline().strip()
                     if origin:
                         subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
                                                    "-public-origin", origin], check=True)

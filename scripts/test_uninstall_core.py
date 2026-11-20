@@ -28,6 +28,7 @@ class FakeHost(unittest.TestCase):
             "ROOT_UNIT": root / "units" / "boxweave-native-peer-root.service",
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
+            "RETIRED": root / "retired",
         }
         for name, p in self.paths.items():
             patcher = mock.patch.object(u, name, p)
@@ -77,8 +78,11 @@ class FakeHost(unittest.TestCase):
         db.executescript("""
         CREATE TABLE schema_version(version INTEGER NOT NULL);
         INSERT INTO schema_version VALUES(5);
-        CREATE TABLE operations(id TEXT,layer TEXT,box_uuid TEXT,state TEXT,native_operation_id TEXT);
-        CREATE TABLE owned_boxes(uuid TEXT,project TEXT,name TEXT,state TEXT,deleted_at INTEGER);
+        CREATE TABLE operations(id TEXT,layer TEXT,box_uuid TEXT,state TEXT,native_operation_id TEXT,
+                                action TEXT DEFAULT '', incarnation TEXT DEFAULT '');
+        CREATE TABLE owned_boxes(uuid TEXT,project TEXT,name TEXT,state TEXT,deleted_at INTEGER,
+                                 incarnation TEXT DEFAULT '', deleted_by_operation_id TEXT DEFAULT '');
+        CREATE TABLE recovery_audit(seq INTEGER PRIMARY KEY, operation_id TEXT, decision TEXT, at INTEGER, evidence_digest TEXT);
         CREATE TABLE peer_grants(status TEXT);
         CREATE TABLE forward_claims(state TEXT);
         CREATE TABLE network_address_fences(state TEXT);
@@ -106,6 +110,9 @@ class FakeHost(unittest.TestCase):
         self.cmds.append(args)
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
+        if args[:2] == ["incus", "stop"]:
+            self.native = [{**b, "state": "Stopped"} if b["name"] == args[2][6:] else b
+                           for b in self.native]
         if args[:2] == ["incus", "delete"]:
             self.assertTrue(args[2].startswith("local:"))
             self.native = [b for b in self.native if b["name"] != args[2][6:]]
@@ -194,7 +201,7 @@ class FakeHost(unittest.TestCase):
         self.assertEqual(self.native, [])
 
     def test_unknown_operation_fails_closed_all_scopes(self):
-        self.insert("INSERT INTO operations VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO operations(id,layer,box_uuid,state,native_operation_id) VALUES(?,?,?,?,?)",
                     ("b" * 32, "user-1001", self.box, "UNKNOWN", "native1"))
         for scope in ("service", "controller", "full"):
             p = self.plan(scope)
@@ -225,7 +232,7 @@ class FakeHost(unittest.TestCase):
             self.plan()
 
     def test_full_exact_box_uuid_allowlist_and_stopped_only(self):
-        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
                     (self.box, "user-1001", "bw-example", "Stopped", 0))
         self.native = [{"uuid": self.box, "name": "bw-example", "state": "Stopped"}]
         self.assertFalse(self.plan("full")["ready"])
@@ -238,7 +245,7 @@ class FakeHost(unittest.TestCase):
         self.assertTrue(any(cmd[:2] == ["incus", "delete"] for cmd in self.cmds))
 
     def test_full_running_box_never_autostopped_or_forced(self):
-        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
                     (self.box, "user-1001", "bw-example", "Running", 0))
         self.native = [{"uuid": self.box, "name": "bw-example", "state": "Running"}]
         plan = self.plan("full", [self.box])
@@ -405,6 +412,38 @@ class FakeHost(unittest.TestCase):
         lock.symlink_to(self.db)
         with self.assertRaisesRegex(u.UninstallError, "unsafe path"):
             self.plan("full")
+
+    def test_guided_retires_exact_running_box_and_archives(self):
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
+                    (self.box, "user-1001", "bw-example", "OWNED", 0))
+        self.native = [{"uuid": self.box, "name": "bw-example", "state": "Running"}]
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"])
+        self.assertEqual(plan["allowlist"], [self.box])
+        result = u.apply(plan)
+        dest = Path(result["retirement_archive"])
+        self.assertTrue((dest / "state-ledger.sqlite").is_file())
+        self.assertTrue((dest / "boxweave.bin").is_file())
+        self.assertFalse(self.native)
+        self.assertLess(next(i for i,a in enumerate(self.cmds) if a[:2] == ["incus","stop"]),
+                        next(i for i,a in enumerate(self.cmds) if a[:2] == ["incus","delete"]))
+
+    def test_guided_history_requires_exact_released_exec_and_successful_delete(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("e"*32, "user-1001", self.box, "UNKNOWN", "native1", "box_exec", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native2", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "old", "DELETED", 20, self.box, "d"*32))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "e"*32, "RELEASED", 10, "a"*64))
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"])
+        self.assertEqual(len(plan["sqlite"]["historical_released_exec"]), 1)
+        self.assertFalse(self.plan("full")["ready"])
+        self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
 
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
         u.ROOT_UNIT.write_text("peer root helper")

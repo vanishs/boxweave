@@ -32,7 +32,11 @@ class ReleaseTests(unittest.TestCase):
         m = module.assemble(self.dir, "v1.0.0-rc.1", "a" * 40, self.installer)
         self.assertEqual(m["product"], "boxweave-v1")
         lines = (self.dir / "SHA256SUMS").read_text().splitlines()
-        self.assertEqual(len(lines), 4)
+        self.assertEqual(len(lines), 5)
+        output = subprocess.run(["sh", str(self.dir / "uninstall.sh"), "--help"],
+                                text=True, capture_output=True)
+        self.assertEqual(output.returncode, 0, output.stderr)
+        self.assertIn("--full", output.stdout)
         self.assertEqual(len(m["assets"]), 2)
         self.assertEqual(m["dependencies"]["go_toolchain"], "1.26.9")
         self.assertTrue(m["dependencies"]["incus_go_sdk"].startswith("v7."))
