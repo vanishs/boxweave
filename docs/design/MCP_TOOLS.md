@@ -2,7 +2,7 @@
 
 **2026-11-19 additive decision:** Draft PR #153 now registers the Owner-approved read-only `box_activity_get` as its **18th current Tool**, over bounded, authenticated SQLite Operation/Peer/network/Exec-GC evidence; it does not change the previous 17 public Tool contracts. Long-term planned count is **22** (20 baseline + S4-C readiness + Activity), not a claim that S4-B4–B6/S4-C are implemented. [Approval](../decisions/PRODUCT_BOUNDARY.md) · [implementation and test gates](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md).
 
-**S4-C owner-approved plan (not implemented):** Add only `box_wait_ready` after S4-B acceptance and extend `box_get(detail)`; this changes the planned inventory from **20 to 21 Tools** without adding a new service, host API, Agent daemon or role. See [the precise S4-C contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). Existing S4-B implementation and acceptance remain based on the first 20 Tools.
+**S4-C owner-requested start (2026-11-20):** `box_get(detail=true)` is implemented in source; installed native proof pending. `box_wait_ready` remains planned, bringing the current 21 registered Tools including Activity to **22**. B6 completion remains a final S4-C gate. No new service, host API, Agent daemon or role. See [the precise S4-C contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). Existing S4-B implementation and acceptance remain based on the first 20 Tools.
 
 **Status (2026-11-16):** accepted 20-tool P0 target; protected `v1` has 16 accepted S1–S3 Tools, while four S4 network Tools remain under development in [Draft PR #153](https://github.com/vanishs/boxweave/pull/153). No completed 20/20 acceptance or supported v1 release is implied. Go with official MCP and Incus SDKs. All authenticated calls receive safe Tracking ID correlation. All mutating calls require caller-reusable idempotency keys, produce durable async operation receipts and independently verified native results.
 
@@ -16,13 +16,13 @@
 |---|---|---|
 | `box_create` | Mutation | Create owned Ubuntu-LTS-default agentless Linux Box, configurable CPU/RAM/disk, start=true by default, start=false opt-out, opt-in nesting, readiness check. |
 | `box_list` | Read | Paginated owned Box identities and current states. |
-| `box_get` | Read | One exact owned Box's state/readiness/resources and effective directional private-peer grants; optional admin-only `detail=true` adds full native `InstanceFull` (State/Snapshots/Backups). |
+| `box_get` | Read | One exact owned Box's state/readiness/resources and effective directional private-peer grants; optional `detail=true` for a live authenticated management Actor returns native `InstanceFull` (State/Snapshots/Backups, potentially sensitive config) and `observed_at`; requires single-request native extension. |
 | `box_update` | Mutation | Allowlisted CPU, RAM, safe disk growth, opt-in nesting and per-Box internet toggle only. Never raw Incus configs or disk shrink. |
 | `box_start` | Mutation | Start exact owned Box, verify actual running/readiness. |
 | `box_stop` | Mutation | Stop exact owned Box, verify native state. |
 | `box_delete` | Mutation | Delete exact owned Box with normal confirmation **covering owned dependent port forwards/peer grants**; journal per-step cleanup, preserve PARTIAL/UNKNOWN and verify no orphan exposure; no inner-controller discovery. |
 | `box_exec` | Mutation | Durable async guest Exec, guest root by default, typed argv/cwd/bounded env, timeout and output; no host shell. |
-| `box_wait_ready` | Observation (admin; S4-C planned) | Asynchronous bounded wait for verified Running, fixed native Guest Exec and optional owned-NIC IPv4/IPv6; durable result through existing `operation_get`, not a guest-ready guess. |
+| `box_wait_ready` | Observation (authenticated management Actor; S4-C planned) | Asynchronous bounded wait for verified Running, fixed native Guest Exec and optional owned-NIC IPv4/IPv6; durable result through existing `operation_get`, not a guest-ready guess. |
 | `box_file_list` | Read | Bounded/paginated list of regular guest directory entries. |
 | `box_file_read` | Read | Bounded guest file bytes/pages with truthful metadata/observed hash. |
 | `box_file_apply` | Mutation | Single owned guest regular file `create|replace|delete`; **native SFTP `O_EXCL` exclusive create PASSED**, but **conditional `replace/delete` must return `UNSUPPORTED` until atomic point-of-use hash/inode safeguards are actually established**. Never silently substitute ordinary overwrite/delete; no patch engine or recursive delete. |

@@ -1,0 +1,22 @@
+# S4-C implementation checkpoint — 2026-11-20 PT
+
+**S4_C_IN_PROGRESS / S4_C_PARTIAL.** Owner explicitly initiated S4-C independent development while [B6 remains PARTIAL](S4_B6_INTEGRATION_ACCEPTANCE_2026-11-20.md). Final signoff still requires B6 closure, full flat-network integration, independent verification and exact-source required checks. Sole Draft PR #153; no merge, release, shared L0 change or deletion.
+
+## Environment and exact baseline
+
+- Start HEAD `560ee22a918dc1fdb4c302f34eac8d5dec94fe09`. Reuse nonnested development Box `s4b5-dependency-lab`, UUID `1dc9a7f9-3f12-4d2f-b07b-f81c9edd838f`. New detached worktree `/root/s4c-inspection`, work_ref `s4c-inspection-readiness-20261120`, agent_ref `s4c-dev`. Original preflight `6034ab50606bb16b689c971ccb2f6580`, worktree creation `c6d738e436e71d92dd6014c9f7da9535`, both guest exit 0. Existing dirty B5 worktree untouched; other nested B6 lab retained. Go1.26.9, Incus SDK v7.6.0, MCP SDK v1.8.0.
+- 21 current registered Tools; with `box_wait_ready`, target 22 including Activity. No change to Schema5 or tool count in first increment.
+
+## Increment 1: box_get(detail=true) source and local tests PASS
+
+- Optional strict Boolean, default existing basic read shape. Native lookup occurs after authorized SQLite ownership resolution with restricted Project SDK, exact name/UUID and Project check. Normalize from the same full observation, no extra native basic lookup in detail path; revalidate SQLite UUID/name/incarnation before result and actual live credential immediately before output. Native guest-declared Ready semantics unchanged. Opt-in native SDK InstanceFull JSON, including State/Snapshots/Backups, expanded/native configuration, and observed_at. Potentially sensitive fields allowed only to authenticated management Actor; no logging of native data. No generic host API or mutation.
+- Deliberate non-atomic fallback refusal: older SDK without instance_get_full reads four separate name-based endpoints. Returning those as one exact-incarnation full observation is not safe; return native unsupported instead. Native SDK 7.6 supported extension still requires installed native proof. No fabricated nil/zero runtime values.
+- Real SDK wire test initially failed on legitimate null native map, original `f864a547c77c1a7ed20e0e45c642947b` guest exit 1. Correct serialization to native JSON object with UseNumber (no synthesized values) and opaque map for native payload. Targeted full-shape SDK and exact-owner fake native tests then passed `7129d4eb6d6e11f7699650bc53767749` exit 0. Unit/SDK, not live Incus effects. Basic shape unchanged; full fields and native nil State round-trip; replacement/foreign/nil/native error/unsupported fallback negatives. Actual SDK v7.6.0 inspection `f9a2dbbe25992ce8049b1115a66c542b` exit 0.
+- Full `make verify` original `505ce0f09b9ca602ae300915fd64dfb6`, native `3962bc9b-31c9-4aad-88db-13983954c2ed`, guest exit 0: format/YAML/module/vet, all 5 Go race suites, Python 16+23+7 tests. Commit contains exact six tested Go blobs; local hook executable mode differences excluded. Two overlong Exec admissions rejected before operation creation, then normal bounded edits applied; not runtime failures.
+- Installed authenticated detailed native read, snapshot/backup metadata and response-size/log hygiene still pending; no deployment of RC8 or S4-C acceptance claim.
+
+## Increment 2: readiness next implementation seam
+
+Keep it a separate observation job path alongside existing Operation receipts. Existing Schema5 `operations`, `operation_events`, `operation_resource_claims` and `exec_outputs` are not a blanket right to reuse mutation finalization. Inspect exact transitions, cancellation/recovery and safe-intent action filter first. Use bounded typed checks/deadline, one wait/probe per Box, exact actor/key replay, no long Box mutation lock, fixed low-impact native Exec with terminal exit proof, and explicit uncertainty if native receipt missing. Any schema evolution must be explicit and preserve old original evidence; do not reset installed ledgers. `operation_get` is the result channel. Use current [owner contract](S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md), keep native guest_ready distinct, unsupported initialized opt-in, flat integration and S5 security boundary. No new scheduler/daemon, credentials, public Tool beyond the one planned readiness Tool.
+
+No development Box deletion. Resume same workspace, retain code and evidence durably; B5/B6 checkpoint remains separately valid.

@@ -61,9 +61,16 @@ type listBoxesResult struct {
 	NextCursor string            `json:"next_cursor,omitempty"`
 }
 
+type getBoxInput struct {
+	BoxID  string `json:"box_id"`
+	Detail bool   `json:"detail,omitempty" jsonschema:"Set true to include runtime State, Snapshots, and Backups; otherwise return basic instance information."`
+}
+
 type getBoxResult struct {
-	TrackingID string          `json:"tracking_id"`
-	Box        native.BoxState `json:"box"`
+	TrackingID   string          `json:"tracking_id"`
+	Box          native.BoxState `json:"box"`
+	InstanceFull map[string]any  `json:"instance_full,omitempty"`
+	ObservedAt   *time.Time      `json:"observed_at,omitempty"`
 }
 
 type operateBoxInput struct {
@@ -222,7 +229,7 @@ func preflightNative(err error) error {
 	return err
 }
 
-func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
+func (s *Service) readOwnedLedger(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
 	principal, err := s.requestPrincipal(req)
 	if err != nil {
 		return state.OwnedBox{}, err
@@ -233,6 +240,14 @@ func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid 
 		// expose the backing Operation-store error as the user-facing Box type.
 		return state.OwnedBox{}, fmt.Errorf("BOX_NOT_FOUND_OR_NOT_OWNED: %w", err)
 	}
+	if err != nil {
+		return box, err
+	}
+	return box, nil
+}
+
+func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
+	box, err := s.readOwnedLedger(ctx, req, uuid)
 	if err != nil {
 		return box, err
 	}
@@ -489,12 +504,15 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
 		Annotations: readToolAnnotations()},
-		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
+		func(ctx context.Context, req *mcp.CallToolRequest, in getBoxInput) (*mcp.CallToolResult, getBoxResult, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {
 				return nil, getBoxResult{}, err
+			}
+			if in.Detail {
+				return s.readDetailedBox(ctx, req, principal, in.BoxID)
 			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {

@@ -258,12 +258,15 @@ func nativeGuestReadiness(status string, config api.ConfigMap) *bool {
 }
 
 func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, string, error) {
-	out := BoxState{Project: r.Project, Name: name}
 	_, inst, etag, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
-		return out, "", err
+		return BoxState{Project: r.Project, Name: name}, "", err
 	}
-	out.UUID = uuid
+	return observedBoxState(r.Project, name, uuid, inst), etag, nil
+}
+
+func observedBoxState(project, name, uuid string, inst *api.Instance) BoxState {
+	out := BoxState{Project: project, Name: name, UUID: uuid}
 	// Incus's instance_ready_state extension is a *guest-originated*
 	// readiness signal (PATCH via /dev/incus), not a Controller guess from
 	// Running. The volatile.last_state.ready flag is maintained and cleared
@@ -281,7 +284,7 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
 	out.NativeOptions = observedNativeOptions(inst.ExpandedConfig)
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
-	return out, etag, nil
+	return out
 }
 
 func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) error {
