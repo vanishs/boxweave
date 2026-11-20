@@ -86,7 +86,7 @@
 - [x] 新版 Peer 预检错误语义保留 fail-closed，不创建 ACL/Root 副作用
 - [x] 新版 Schema 枚举、Exec argv 非空和 Box 类型化错误修改已提交 PR #153
 - [x] 新版 Update 数值范围预校验，放在 replayNative 之后、admitNative 之前
-- [ ] 新源码在**独立 Box** 内 Go 单测/官方 MCP SDK 验收
+- [x] 新源码在**独立 Box** 内 Go 单测/官方 MCP SDK 验收（精确源 `d32ae049`，下文第 7 节）
 - [ ] 新源码的真实 Guest L0 已安装替换后重新验证（本轮**不**更改现有 L0）
 - [ ] 宿主存储/Quota 原生物理证据（P1，**未关闭**）
 - [ ] 真实同 Project 合法 Peer/PRS/ACL + TCP/UDP/IPv6，须专项批准和独立验收
@@ -97,3 +97,17 @@
 原始两盒的 Stop/Delete Operation 均为 SUCCEEDED，最终 `box_list=[]`；原始 `box_activity_get(issues)` 查询空但 `attention_complete=false`。**旧版阶段判断：可有条件进入下一阶段专项验收，不可发布 RC8 或声称全部 18 Tool PASS。**
 
 本修复只应通过未合并 [开发 PR #153](https://github.com/vanishs/boxweave/pull/153) 继续；未经明确授权不更新物理 L0 的二进制、不改 Root/PRS、ACL、宿主池或 OAuth 密钥。
+
+## 7. P1/P2 源码修复后的独立 Box 实测签收（2026-11-19 PT）
+
+**源码测试结论：`P2_SOURCE_AND_BOX_TEST_PASS / P1_PEER_SAFE_ERROR_PASS / HOST_QUOTA_BLOCKED / NO_HOST_DEPLOYMENT`。** 对此前明确的 Peer 非法 UUID 安全拒绝语义已修复并在 SDK 测试中验证；**没有**把缺 PINNED、无 ACL 或跨 Project 的请求改为允许。P1 物理存储容量/Quota 与真实 Root/PRS 网络改动仍未验证，不得在本轮签署完全 P1 PASS。
+
+- **被测最新源码**：`d32ae049f87823e7475d2c22b63cc05157188d91`（Draft PR #153，未合并、未发布）。
+- **独立真实 L0 MCP Box**：`rc8-fix-test-1119`，UUID `98e49de3-177b-4b74-b142-472af288d950`，Ubuntu 24.04.5 / 2 CPU / 2048 MiB / 10 GiB，具有一次性 internet=true；`work_ref=rc8-p1p2-fix-20261119`，`agent_ref=chatgpt-rc8-fix`。所用原始 `box_create` Operation `eacef60178938a727e5731be3f76d15b` 为 SUCCEEDED。宿主仍运行**旧安装** `cf577ee67`，没有升级/替换服务。
+- **Box 内 Go 1.26.9 / CGO / gcc / libc6-dev 原生编译环境**；在 Box 内 `git pull --ff-only` 到精确 `d32ae049...`，随后 `gofmt -l` 关键修改文件无差异 **PASS**，`go test -p 2 -count=1 ./internal/control ./internal/state ./internal/native` **三包 PASS**（分别约 15.660s、38.545s、0.010s）。`go build -o /tmp/bw-rc8-p1p2-build ./cmd/boxweave` **PASS**；旧 S3 SDK 客户端 probe 已可单独编译。**原始 Exec Operation** `c6974161837c56127f989b84bdbddb2c` 为 SUCCEEDED 且 Guest `exit_code=0`，stdout 同时保留测试源码 HEAD、GOFMT_PASS、TARGETED_GO_TEST_PASS、CANDIDATE_BUILD_PASS。这个构建只是 Guest 内编译，不构成已安装物理 L0 实测新二进制。
+- **错误/模式最小修复**：`box_file_apply.mode=create` 枚举；`operation_output_get.stream=stdout|stderr`；`box_exec.argv` 非空数组；无效 Box 拒绝标记 `BOX_NOT_FOUND_OR_NOT_OWNED`；`box_update` 数值范围在历史 replay 之后、新 admission 之前拒绝；`box_peer_set` 对未 PINNED、未知 UUID、账本不完整和锁冲突都返回不泄露身份信息的 `PEER_SCOPE_UNVERIFIED_OR_LOCKED`；SFTP symlink/nonregular 错误保留原安全类别并添加可操作类型提示。
+- **CI 已完成**：`d32ae049` 的 [required quality gate #44661569100](https://github.com/vanishs/boxweave/actions/runs/44661569100) **SUCCESS**；上一个生产代码 SHA `845d465f` 的 [S3 installed MCP + Git 原生 CI #44661285183](https://github.com/vanishs/boxweave/actions/runs/44661285183) **SUCCESS**，以及 [S3 native SFTP negative #44661285216](https://github.com/vanishs/boxweave/actions/runs/44661285216) **SUCCESS**。修正的是过时的 17 Tool 断言，现在校验 18 Tool 含 Activity。**这两个 S3 CI 并非针对最终 d32 的完整 native acceptance**；本节记录时最新 d32 的 amd64/arm64 artifacts 和 S4-A CI 尚未确认完成，不得提前记 PASS。
+- **环境警告持续**：最新已知 `selected_storage_quota_verified=false`、`selected_storage_separate_mount=false`、`selected_storage_space_checked=false`；任何 Guest 磁盘容量或编译成功不能代替 Host pool/Exec spool/Project quota 物理证据。应另行独立只读验收（必要时获得明确主机配置授权）。
+- **测试 Box 清理：PASS。** 原始 Stop `b5baf6f9cb883d9af44d2f6ec1109cba`、Delete `ba7fc83c723ea9b254232a010e61b26a` **均 `SUCCEEDED`**；最终 `box_list=[]`。Activity `issues` 在本轮 work_ref 下未列出任何条目，但 `attention_complete=false`，不应扩大成全局不存在未知状态的证明。
+
+**后续验收门槛：** 在可控 Host/独立原生 runner 上做新二进制已安装的相同 MCP 请求对照；真实授权端点及 PRS/ACL 只能在专门授权的原生测试场景完成；独立核对物理池容量/有效 Quota 后才能关闭剩余 P1。不得把已签的 Guest/源码测试写成物理 Host 已修复。
