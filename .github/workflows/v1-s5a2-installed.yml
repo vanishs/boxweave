@@ -7,6 +7,7 @@ on:
       - 'internal/state/operation_recover*.go'
       - 'internal/control/operation_recover*.go'
       - 'scripts/s5a2_recovery_probe.go'
+      - 'scripts/s5a2_installed_cli_review.sh'
       - '.github/workflows/v1-s5a2-installed.yml'
   workflow_dispatch:
 permissions:
@@ -39,7 +40,7 @@ jobs:
             echo S5A2_INSTALLED_NATIVE=BLOCKED_OR_FAILED
             exit 1
           fi
-          for marker in EXEC_ORIGINAL_SQLITE_OUTPUT_AND_ONE_EFFECT POWER_UPDATE_ORIGINAL_TERMINAL_AND_POSTSTATE DELETE_TERMINAL_EXACT_ABSENCE_TOMBSTONE CREATE_BIND_IDENTITY_ONLY_LOCK_RETAINED INSTALLED_RECOVERY; do
+          for marker in EXEC_ORIGINAL_SQLITE_OUTPUT_AND_ONE_EFFECT POWER_UPDATE_ORIGINAL_TERMINAL_AND_POSTSTATE DELETE_TERMINAL_EXACT_ABSENCE_TOMBSTONE CREATE_BIND_IDENTITY_ONLY_LOCK_RETAINED INSTALLED_RECOVERY STAGED_ROOT_CLI_MCP_PARITY_NO_REPLAY; do
             grep -Fxq "S5A2_NATIVE_${marker}=PASS" "$logfile"
           done
           grep -E '^(S5A2_|S2_NATIVE_CANDIDATE_SOURCE_SHA=)' "$logfile"

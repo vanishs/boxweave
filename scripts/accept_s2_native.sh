@@ -313,6 +313,20 @@ if [ "${S5A2_RECOVERY_NATIVE_ONLY:-}" = true ]; then
     HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
     GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted S5A2_RECOVERY_NATIVE_ONLY=true \
     S5A2_DB="$db" S5A2_TOKEN="$admin" "$work/s5a2-recovery-probe"
+  # Stop only the exact process spawned by this one-use fixture before the
+  # installed CLI observes the offline clone. Never run a second controller.
+  sudo kill -TERM "$service_pid"
+  wait "$service_pid" 2>/dev/null || :
+  stopped=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ! curl --max-time 1 -sS -o /dev/null http://127.0.0.1:18650/mcp 2>/dev/null; then
+      stopped=1
+      break
+    fi
+    sleep 1
+  done
+  test "$stopped" = 1
+  sh scripts/s5a2_installed_cli_review.sh "$work" "$db" "$project" "$socket"
   exit 0
 fi
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"

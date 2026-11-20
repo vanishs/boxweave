@@ -231,7 +231,21 @@ func main() {
 	check(e == nil && inst.Config["user.boxweave.create_operation"] == str(unbound, "operation_id"), "exact marker unverified")
 	uuid = inst.Config["volatile.uuid"]
 	check(len(uuid) == 36, "native identity missing")
+	// Preserve an offline, exact pre-bind ledger for a separate canonical
+	// CLI test on the same disposable VM. No new native Create or replay.
+	_, e = db.Exec("DROP TRIGGER s5a2_only_ci_fault")
+	check(e == nil, "drop test-only fault before snapshot")
+	snapshot := filepath.Join(filepath.Dir(path), "s5a2-cli-prebind.sqlite")
+	_, e = os.Stat(snapshot)
+	check(os.IsNotExist(e), "CLI snapshot already exists")
+	_, e = db.Exec("VACUUM INTO ?", snapshot)
+	check(e == nil, "offline CLI snapshot failed")
+	check(os.Chmod(snapshot, 0600) == nil, "private snapshot permissions")
 	result := l.recover(unbound, "bind-create", "IDENTITY_BOUND")
+	expected, e := json.Marshal(result)
+	check(e == nil, "encode MCP parity result")
+	check(os.WriteFile(filepath.Join(filepath.Dir(path), "s5a2-cli-expected.json"), expected, 0600) == nil, "store expected MCP parity result")
+
 	diagnosis := obj(result["diagnosis"])
 	check(diagnosis["box_id"] == uuid && diagnosis["claim_protection"] == "RETAINED", "binding unlocked original")
 	l.deny("box_start", map[string]any{"box_id": uuid, "idempotency_key": "s5a2-must-refuse-after-binding"})
