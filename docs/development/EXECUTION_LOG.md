@@ -1333,3 +1333,7 @@ Same original development Box Stop ca68dd78e84b46c567c527a88b8db63b and Start 47
 ### S4-C independent development start — 2026-11-20 PT
 
 Owner explicitly requested S4-C. B6 remains PARTIAL and final gate; no merge/release. Reused s4b5-dependency-lab UUID 1dc9a7f9-3f12-4d2f-b07b-f81c9edd838f, separate /root/s4c-inspection worktree at 560ee22; old dirty B5 worktree unchanged. Optional detailed box_get implemented and local Go/MCP plus full make verify PASS, operation 505ce0f09b9ca602ae300915fd64dfb6 exit 0. [Checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). 21 registered / 22 planned; native installed detail proof and readiness pending. Retain all development Boxes.
+
+### S4-C actual native detailed read smoke — 2026-11-20 PT
+
+Exact code 3fd6b76, separate candidate on retained nested B6 Box, original read-only MCP smoke 3adf623560dedf83d3366dc13dbb390c exit 0, both authorized Actors default/detail and foreign refusal, 5844 bytes / 234–236ms, postcheck 945550115de359e0f5f7cee2a05f03ba exit 0 confirmed zero Operations, test credentials revoked and no new listener / B6 originals unchanged. Quality CI failed old patch blank context whitespace; lossless base64 evidence storage fixes formatting without changing raw SHA. [S4-C checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). Native smoke scoped PASS, broader metadata/readiness/independent B6/S4-C gates open. Both development Boxes retained.
