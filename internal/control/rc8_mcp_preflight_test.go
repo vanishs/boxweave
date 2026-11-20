@@ -99,9 +99,9 @@ func TestRC8AgentVisibleSchemasAndSafePreflight(t *testing.T) {
 	// Out-of-range resources fail before Admit, without a new Operation.
 	invalidUpdate, invalidErr := sess.CallTool(ctx, &mcp.CallToolParams{
 		Name: "box_update", Arguments: map[string]any{
-			"box_id": "00000000-0000-4000-8000-000000000001",
+			"box_id":          "00000000-0000-4000-8000-000000000001",
 			"idempotency_key": "rc8-bounds-pre-admit",
-			"work_ref": "rc8-bounds-not-admitted", "cpu": -1,
+			"work_ref":        "rc8-bounds-not-admitted", "cpu": -1,
 		},
 	})
 	if invalidErr == nil && (invalidUpdate == nil || !invalidUpdate.IsError) {
@@ -124,7 +124,7 @@ func TestRC8AgentVisibleSchemasAndSafePreflight(t *testing.T) {
 		Name: "box_peer_set", Arguments: map[string]any{
 			"source_box_id": "00000000-0000-4000-8000-000000000001",
 			"target_box_id": "00000000-0000-4000-8000-000000000002",
-			"allow": false, "idempotency_key": "rc8-peer-unknown-scope",
+			"allow":         false, "idempotency_key": "rc8-peer-unknown-scope",
 		},
 	})
 	peerMessage := fmt.Sprint(peerErr)
