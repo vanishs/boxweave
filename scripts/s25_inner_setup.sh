@@ -150,12 +150,10 @@ import json
 s=json.load(open("/root/s25-doctor.json"))
 assert s["ready"] and s["native"]["ready"],s
 S25_INNER_DOCTOR_ASSERT
-for spec in "admin1:admin" "admin2:admin" "viewer:viewer"; do
- name="$(printf '%s\n' "$spec" | cut -d: -f1)"
- role="$(printf '%s\n' "$spec" | cut -d: -f2)"
+for name in admin1 admin2 peer; do
  runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  /usr/local/bin/boxweave token-create -role "$role" > "/root/s25-$name.secret"
+  /usr/local/bin/boxweave token-create > "/root/s25-$name.secret"
  chmod 0600 "/root/s25-$name.secret"
 done
 "$candidate" install-activate -project "$project" -approve-local > /root/s25-activate.json
@@ -175,7 +173,7 @@ export BW_S25_ALLOWED_NESTED=1 BW_S25_INNER=1
 export BW_S25_URL=http://127.0.0.1:18650/mcp
 export BW_S25_ADMIN1_FILE=/root/s25-admin1.secret
 export BW_S25_ADMIN2_FILE=/root/s25-admin2.secret
-export BW_S25_VIEWER_FILE=/root/s25-viewer.secret
+export BW_S25_PEER_FILE=/root/s25-peer.secret
 export BW_S25_CHECKPOINT=/root/s25-inner-checkpoint.json
 /usr/local/bin/s25-lab-agent admit
 /usr/local/bin/s25-lab-agent recover

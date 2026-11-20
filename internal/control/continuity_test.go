@@ -1,7 +1,6 @@
 package control
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -49,23 +48,54 @@ func TestS2SDKNativeCorrelationMetadataAndFallback(t *testing.T) {
 	}
 }
 
-func TestS2PrivateCorrelationDoesNotAuthorizeViewerMutation(t *testing.T) {
-	st, _, _, viewer := fixture(t)
-	verified, err := st.VerifyToken(context.Background(), viewer)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestS2PrivateCorrelationDoesNotAuthenticate(t *testing.T) {
+	st, _, _, _ := fixture(t)
 	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
 	req := &mcp.CallToolRequest{
-		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{
-			UserID: verified.ID, Scopes: []string{"viewer"},
-		}},
+		Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: ""}},
 		Params: &mcp.CallToolParamsRaw{Meta: mcp.Meta{
 			"io.boxweave.work_ref":  "spoofed/admin-work",
 			"io.boxweave.agent_ref": "admin-agent",
 		}},
 	}
-	if _, _, err := requireAdmin(req, svc); err == nil {
-		t.Fatal("viewer borrowed admin authority using self-declared metadata")
+	if _, err := svc.requestPrincipal(req); err == nil {
+		t.Fatal("unauthenticated request acquired management via self-declared metadata")
+	}
+}
+
+func TestS2RequestPrincipalRequiresExplicitSDKCredential(t *testing.T) {
+	st, _, _, _ := fixture(t)
+	svc := &Service{Store: st, Native: native.Reader{Project: "bw-test"}}
+	actor := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	credential := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	tests := []struct {
+		name  string
+		token any
+		want  bool
+	}{
+		{"missing", nil, false},
+		{"numeric", 7, false},
+		{"empty", "", false},
+		{"malformed", "not-an-id", false},
+		{"valid distinct OAuth access ID", credential, true},
+		{"valid manual credential", actor, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{
+				TokenInfo: &auth.TokenInfo{UserID: actor, Extra: map[string]any{}},
+			}}
+			if tc.token != nil {
+				req.Extra.TokenInfo.Extra["token_id"] = tc.token
+			}
+			principal, err := svc.requestPrincipal(req)
+			if tc.want && (err != nil || principal.ActorID != actor || principal.Layer != "bw-test" ||
+				principal.TokenID != tc.token) {
+				t.Fatalf("valid SDK principal was not retained: %+v, %v", principal, err)
+			}
+			if !tc.want && (err == nil || principal != (RequestPrincipal{})) {
+				t.Fatalf("missing/invalid independent token ID borrowed actor identity: %+v, %v", principal, err)
+			}
+		})
 	}
 }

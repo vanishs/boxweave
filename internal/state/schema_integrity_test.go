@@ -15,7 +15,8 @@ func TestSameVersionSQLiteDDLDriftAndTriggersFailClosed(t *testing.T) {
 		{"same-version-extra-column", "ALTER TABLE credentials ADD COLUMN silent_extra TEXT"},
 		{"same-version-renamed-column", "ALTER TABLE operations RENAME COLUMN tracking_id TO broken_tracking_id"},
 		{"same-version-trigger", "CREATE TRIGGER foreign_insert AFTER INSERT ON credentials BEGIN DELETE FROM operations; END"},
-		{"unsupported-newer-version", "UPDATE schema_version SET version=3"},
+		{"unsupported-newer-version", "UPDATE schema_version SET version=6"},
+		{"unsupported-old-version", "UPDATE schema_version SET version=4"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -48,6 +49,9 @@ func TestSameVersionSQLiteDDLDriftAndTriggersFailClosed(t *testing.T) {
 			if err == nil {
 				_ = existing.Close()
 				t.Fatalf("refused neither version drift nor foreign schema: %s", tc.name)
+			}
+			if tc.name == "unsupported-old-version" && !strings.Contains(err.Error(), "recreate") {
+				t.Fatalf("old development database refusal omitted rebuild notice: %v", err)
 			}
 			if !strings.Contains(err.Error(), "schema") && !strings.Contains(err.Error(), "trigger") &&
 				!strings.Contains(err.Error(), "migration") {

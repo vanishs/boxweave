@@ -5,11 +5,6 @@ on:
     branches:
       - v1
       - "feat/v1-*"
-    # Do not launch push checks just because Markdown documentation changed.
-    paths-ignore:
-      - "**/*.md"
-      - "**/*.mdx"
-      - "**/*.rst"
   pull_request:
     branches:
       - v1
@@ -33,71 +28,73 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Keep this required job on EVERY v1 PR: a path-filtered required
-      # workflow can leave an expected status permanently Pending.
-      - name: Classify docs-only changes (fail closed on uncertainty)
+      - name: Determine documentation-only vs full CI scope
         id: scope
-        run: python3 scripts/ci_change_scope.py >> "$GITHUB_OUTPUT"
-      - name: Unit-test change classification
-        run: python3 -m unittest -v scripts/test_ci_change_scope.py
-      - name: Test local docs-only hook classification
-        run: python3 -m unittest -v scripts/test_local_hook_scope.py
-      - name: Docs-only PR — check changed text format only
-        if: steps.scope.outputs.docs_only == 'true'
-        shell: bash
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_REF: ${{ github.ref }}
+          CI_BEFORE_SHA: ${{ github.event.before }}
+          CI_BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/ci_change_scope.py
+      - name: Test CI change-scope fail-closed behavior
         run: |
-          set -euo pipefail
-          base="$(git merge-base HEAD origin/v1)"
-          git diff --check "$base" HEAD
-          git diff --no-renames --name-only --diff-filter=ACM -z "$base" HEAD -- |
-            python3 scripts/check_format.py --paths0
+          python3 scripts/test_ci_change_scope.py
+          python3 scripts/test_local_hook_scope.py
       - name: Set up pinned Go
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
       - name: Check whole repository formatting (gofmt, UTF-8, LF, Markdown, YAML, JSON)
-        if: steps.scope.outputs.docs_only != 'true'
         run: python3 scripts/check_format.py
       - name: Parse tracked YAML and refuse duplicate keys
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         run: go run scripts/check_yaml.go
       - name: Reject newly introduced trailing whitespace
-        if: steps.scope.outputs.docs_only != 'true'
         shell: bash
         run: |
           set -euo pipefail
           base="$(git merge-base HEAD origin/v1)"
           git diff --check "$base" HEAD
       - name: Check tracked shell script syntax
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         shell: bash
         run: |
           set -euo pipefail
           while IFS= read -r path; do
             sh -n "$path"
           done < <(git ls-files '*.sh' '.githooks/pre-*')
+      - name: Python MCP loopback client and protocol negative tests
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
+      - name: Offline scoped uninstall planner/approval/negative tests
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_uninstall_core.py' -q
       - name: Ensure precise Go module formatting and verified checksums
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         run: |
           go mod verify
           go mod tidy -diff
       - name: Static Go vet
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         run: go vet ./...
       - name: Full Go race regression tests
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         env:
           CGO_ENABLED: "1"
         run: |
           go test -race -count=1 ./...
           go test -tags=s1lab -count=1 ./internal/install
       - name: Verify Go source builds
-        if: steps.scope.outputs.docs_only != 'true'
+        if: steps.scope.outputs.full == 'true'
         env:
           CGO_ENABLED: "1"
         run: go build ./...
+
+      - name: Documentation-only fast-path verdict
+        if: steps.scope.outputs.full == 'false'
+        run: echo "CI_DOCS_ONLY_FAST_PATH=PASS (format, whitespace and classifier tests)"
 
 # Required check name: "quality-gate" (this job).
 # To actually block merges configure a GitHub ruleset on v1, requiring this

@@ -1,72 +1,68 @@
 #!/usr/bin/env python3
-"""Conservatively identify documentation-only GitHub Actions changes.
-
-This is a CI cost optimization, NOT a way to bypass the required quality-gate
-status. Missing/uncertain comparison data falls back to the full checks.
-The release branch always receives the full artifact/native release workflow.
-"""
+"""Safe docs-only GitHub Actions classification. Unverifiable changes run full CI."""
 from __future__ import annotations
 
-import json
 import os
 import pathlib
 import re
 import subprocess
-import sys
-
-DOC_SUFFIXES = (".md", ".mdx", ".rst")
-FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
-
-
-def docs_only(paths: list[str]) -> bool:
-    """Return true only when every changed path is a non-executable document."""
-    return bool(paths) and all(path.lower().endswith(DOC_SUFFIXES) for path in paths)
 
 
 def git(*args: str) -> bytes:
-    return subprocess.check_output(["git", *args], stderr=subprocess.PIPE)
+    return subprocess.check_output(("git", *args), stderr=subprocess.DEVNULL)
 
 
-def comparison_base() -> str | None:
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name == "pull_request":
-        base_ref = os.environ.get("GITHUB_BASE_REF", "")
-        if not base_ref or base_ref.startswith("-"):
-            return None
-        return git("merge-base", "HEAD", "origin/" + base_ref).decode().strip()
-    if event_name == "push":
-        # Release branches must run their entire publish and provenance pipeline.
-        if os.environ.get("GITHUB_REF", "").startswith("refs/heads/release/"):
-            return None
-        event_file = os.environ.get("GITHUB_EVENT_PATH", "")
-        if not event_file:
-            return None
-        payload = json.loads(pathlib.Path(event_file).read_text(encoding="utf-8"))
-        before = payload.get("before", "")
-        if not isinstance(before, str) or not FULL_SHA.fullmatch(before):
-            return None
-        if before == "0" * 40:
-            return None  # New branch: no safe comparison baseline.
-        return before
-    return None  # workflow_dispatch: always run the full check.
+def is_documentation(path: str) -> bool:
+    # Workflow, source, installer and policy/config changes are ALWAYS full.
+    if path.startswith(".github/"):
+        return False
+    return path.lower().endswith((".md", ".markdown", ".mdx", ".rst"))
 
 
-def main() -> int:
-    only_docs = False
+def docs_only(paths: list[str]) -> bool:
+    return bool(paths) and all(is_documentation(path) for path in paths)
+
+
+def classify() -> tuple[bool, str]:
+    event = os.environ.get("CI_EVENT_NAME", "")
+    ref = os.environ.get("CI_REF", "")
+    if event == "workflow_dispatch":
+        return True, "MANUAL_FULL"
+    if ref == "refs/heads/v1" or ref.startswith("refs/heads/release/"):
+        return True, "PROTECTED_OR_RELEASE_FULL"
     try:
-        base = comparison_base()
-        if base and FULL_SHA.fullmatch(base):
-            # Disable rename detection: a source -> .md rename must still show
-            # the removed source filename and must NOT be treated as docs-only.
-            changed = git("diff", "--no-renames", "--name-only", "-z", base, "HEAD", "--")
-            paths = [p.decode("utf-8") for p in changed.split(b"\x00") if p]
-            only_docs = docs_only(paths)
-    except (OSError, ValueError, UnicodeError, subprocess.CalledProcessError) as exc:
-        # Never silently mark a code change docs-only on a comparison failure.
-        print(f"Change scope uncertain ({exc}); running full CI", file=sys.stderr)
-    print(f"docs_only={'true' if only_docs else 'false'}")
-    return 0
+        if event == "push":
+            base = os.environ.get("CI_BEFORE_SHA", "")
+            if not re.fullmatch(r"[a-fA-F0-9]{40}", base) or base == "0" * 40:
+                return True, "MISSING_PUSH_BASE"
+            git("cat-file", "-e", base + "^{commit}")
+        elif event == "pull_request":
+            target = os.environ.get("CI_BASE_REF", "")
+            if not target or not re.fullmatch(r"[a-zA-Z0-9._/-]+", target) or ".." in target:
+                return True, "MISSING_PR_BASE"
+            base = git("merge-base", "HEAD", "origin/" + target).decode().strip()
+        else:
+            return True, "UNSUPPORTED_EVENT"
+        paths = [item.decode("utf-8", "surrogateescape") for item in
+                 git("diff", "--no-renames", "--name-only", "-z", "--no-ext-diff", base, "HEAD", "--").split(b"\0") if item]
+        if not paths:
+            return True, "EMPTY_OR_UNVERIFIABLE_DIFF"
+        if docs_only(paths):
+            return False, "DOCS_ONLY"
+        return True, "SOURCE_OR_WORKFLOW_CHANGED"
+    except (OSError, subprocess.CalledProcessError, UnicodeError):
+        return True, "UNVERIFIABLE_DIFF"
+
+
+def main() -> None:
+    full, reason = classify()
+    value = "true" if full else "false"
+    print(f"CI_CHANGE_SCOPE={reason} full={value}")
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        with pathlib.Path(output).open("a", encoding="utf-8") as handle:
+            handle.write(f"full={value}\nreason={reason}\n")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

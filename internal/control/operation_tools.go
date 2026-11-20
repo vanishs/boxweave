@@ -9,28 +9,43 @@ import (
 	"github.com/vanishs/boxweave/internal/state"
 )
 
-// The SQLite ledger is local to this controller. The installed restricted
-// native Project supplies the local layer scope; work/agent labels never do.
-func (s *Service) operationPrincipal(req *mcp.CallToolRequest) (actor, role, layer string, err error) {
+// RequestPrincipal is the only handler-facing identity, derived from the
+// SDK-verified Bearer request. Never use client labels or stable OAuth Grant
+// IDs as independently revocable access credentials.
+type RequestPrincipal struct {
+	ActorID string
+	TokenID string
+	Layer   string
+}
+
+// requestPrincipal deliberately has no historical UserID-only fallback.
+// OAuth refresh keeps ActorID stable while issuing a new TokenID.
+func (s *Service) requestPrincipal(req *mcp.CallToolRequest) (RequestPrincipal, error) {
 	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-		return "", "", "", errors.New("UNAUTHENTICATED")
+		return RequestPrincipal{}, errors.New("UNAUTHENTICATED")
 	}
 	info := req.Extra.TokenInfo
-	if info.UserID == "" {
-		return "", "", "", errors.New("UNAUTHENTICATED")
+	raw, present := info.Extra["token_id"]
+	tokenID, ok := raw.(string)
+	if !present || !ok || !validPrincipalID(info.UserID) || !validPrincipalID(tokenID) {
+		return RequestPrincipal{}, errors.New("UNAUTHENTICATED")
 	}
-	switch {
-	case contains(info.Scopes, "admin"):
-		role = "admin"
-	case contains(info.Scopes, "viewer"):
-		role = "viewer"
-	default:
-		return "", "", "", errors.New("PERMISSION_DENIED")
+	if s == nil || s.Native.Project == "" || s.Store == nil {
+		return RequestPrincipal{}, errors.New("CONTROLLER_NOT_CONFIGURED")
 	}
-	if s.Native.Project == "" || s.Store == nil {
-		return "", "", "", errors.New("CONTROLLER_NOT_CONFIGURED")
+	return RequestPrincipal{ActorID: info.UserID, TokenID: tokenID, Layer: s.Native.Project}, nil
+}
+
+func validPrincipalID(id string) bool {
+	if len(id) != 32 {
+		return false
 	}
-	return info.UserID, role, s.Native.Project, nil
+	for _, c := range id {
+		if c < '0' || c > '9' && c < 'a' || c > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 type operationGetInput struct {
@@ -39,10 +54,11 @@ type operationGetInput struct {
 }
 
 type operationGetResult struct {
-	TrackingID string        `json:"tracking_id"`
-	Operation  state.Receipt `json:"operation"`
-	Version    string        `json:"version"`
-	Commit     string        `json:"commit"`
+	TrackingID string                 `json:"tracking_id"`
+	Operation  state.Receipt          `json:"operation"`
+	Version    string                 `json:"version"`
+	Commit     string                 `json:"commit"`
+	Readiness  *state.ReadinessResult `json:"readiness,omitempty"`
 }
 
 type operationListInput struct {
@@ -73,10 +89,10 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
-		Description: "Read an original authorized durable Operation. wait_ms <= 20000 never cancels or retries native work.",
+		Description: "Read an authorized original Operation by operation_id: durable state, native ID and next_action. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationGetResult{}, err
 		}
@@ -90,12 +106,12 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		var result state.Receipt
 		deadline := time.Now().Add(time.Duration(in.WaitMS) * time.Millisecond)
 		for {
-			result, err = s.Store.GetScopedOperation(ctx, layer, actor, role, in.OperationID)
+			result, err = s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.OperationID)
 			if err != nil {
 				return nil, operationGetResult{}, err
 			}
 			if in.WaitMS == 0 || result.State == "SUCCEEDED" || result.State == "FAILED" ||
-				result.State == "UNKNOWN" || result.State == "CANCELLED" {
+				result.State == "UNKNOWN" || result.State == "CANCELLED" || result.State == "TIMED_OUT" {
 				break
 			}
 			remaining := time.Until(deadline)
@@ -113,23 +129,27 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			case <-timer.C:
 			}
 		}
+		readiness, err := s.Store.Readiness(ctx, result)
+		if err != nil {
+			return nil, operationGetResult{}, err
+		}
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
 		// cancel/retry the durable operation as a side-effect.
-		if err := s.Store.RequireActiveTokenID(ctx, actor); err != nil {
+		if err := s.Store.RequireActiveTokenID(ctx, principal.TokenID); err != nil {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
-			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit}, nil
+			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness}, nil
 	})
 
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_list",
-		Description: "Read a bounded, authenticated, indexed page of controller-local Operations. Client work/Agent labels never grant visibility.",
+		Description: "List authorized durable Operations by work_ref, agent_ref, actor, action, state or bounded time/cursor filters. Use after reconnect to find an original operation_id, then call operation_get. Empty results never prove an effect did not occur; client labels do not grant access.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationListInput) (*mcp.CallToolResult, operationListResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
@@ -138,7 +158,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationListResult{}, errors.New("TRACKING_UNAVAILABLE")
 		}
 		page, err := s.Store.ListOperations(ctx, state.OperationQuery{
-			Layer: layer, Requester: actor, Role: role, ActorID: in.ActorID,
+			Layer: principal.Layer, Requester: principal.ActorID, ActorID: in.ActorID,
 			WorkRef: in.WorkRef, AgentRef: in.AgentRef,
 			Action: in.Action, State: in.State, SinceNS: in.SinceNS,
 			UntilNS: in.UntilNS, Limit: in.Limit, Cursor: in.Cursor,
@@ -146,6 +166,6 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationListResult{}, err
 		}
-		return privateReadReply(ctx, s, actor, operationListResult{TrackingID: tracking, Page: page})
+		return privateReadReply(ctx, s, principal.TokenID, operationListResult{TrackingID: tracking, Page: page})
 	})
 }

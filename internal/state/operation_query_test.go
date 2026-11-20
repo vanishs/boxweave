@@ -15,15 +15,15 @@ import (
 func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, a, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, a, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, b, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, b, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, viewer, err := s.IssueToken(ctx, "viewer", time.Hour)
+	_, viewer, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +88,7 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 		t.Fatalf("invalid correlation should refuse before mutation: %v", err)
 	}
 
-	q := OperationQuery{Layer: "L0", Requester: a.ID, Role: "viewer",
-		WorkRef: "project-x/test-cycle", Limit: 1}
+	q := OperationQuery{Layer: "L0", Requester: a.ID, ActorID: a.ID, WorkRef: "project-x/test-cycle", Limit: 1}
 	p1, err := s.ListOperations(ctx, q)
 	if err != nil || len(p1.Operations) != 1 || p1.NextCursor == "" {
 		t.Fatalf("first page: %+v %v", p1, err)
@@ -115,22 +114,22 @@ func TestS2CorrelationOriginalReceiptAndPrivateCursor(t *testing.T) {
 	if _, err := s.ListOperations(ctx, q); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("forged cursor: %v", err)
 	}
-	all, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, Role: "admin", Limit: 20})
+	all, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, Limit: 20})
 	if err != nil || len(all.Operations) != 3 {
 		t.Fatalf("admin own-controller catalog: %+v %v", all, err)
 	}
-	own, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, Role: "viewer"})
+	own, err := s.ListOperations(ctx, OperationQuery{Layer: "L0", Requester: a.ID, ActorID: a.ID})
 	if err != nil || len(own.Operations) != 2 {
-		t.Fatalf("viewer cross-actor leak: %+v %v", own, err)
+		t.Fatalf("actor-filtered history mismatch: %+v %v", own, err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", a.ID, "viewer", foreign.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("guessed foreign ID leaked: %v", err)
+	if _, err := s.GetScopedOperation(ctx, "L0", a.ID, foreign.ID); err != nil {
+		t.Fatalf("same-layer peer Actor history missing: %v", err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L1", a.ID, "admin", first.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.GetScopedOperation(ctx, "L1", a.ID, first.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cross-layer operation leaked: %v", err)
 	}
-	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID, "viewer", second.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("different viewer accessed output owner: %v", err)
+	if _, err := s.GetScopedOperation(ctx, "L0", viewer.ID, second.ID); err != nil {
+		t.Fatalf("independent authorized actor cannot take over same-layer history: %v", err)
 	}
 }
 
@@ -145,7 +144,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +174,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 	if n, err := reopened.Recover(ctx); err != nil || n != 1 {
 		t.Fatalf("crash recovery: count=%d err=%v", n, err)
 	}
-	got, err := reopened.GetScopedOperation(ctx, "L1", actor.ID, "viewer", r.ID)
+	got, err := reopened.GetScopedOperation(ctx, "L1", actor.ID, r.ID)
 	if err != nil || got.State != "UNKNOWN" || got.NativeOperationID != "original-native-op-id" ||
 		got.WorkRef != a.WorkRef || got.AgentRef != a.AgentRef ||
 		got.NextAction.Kind != "HOST_LOCAL_REVIEW" {
@@ -188,7 +187,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 		t.Fatalf("retransmitted native create risk: %+v %v", again, err)
 	}
 	page, err := reopened.ListOperations(ctx, OperationQuery{
-		Layer: "L1", Role: "viewer", Requester: actor.ID, WorkRef: a.WorkRef,
+		Layer: "L1", Requester: actor.ID, WorkRef: a.WorkRef,
 	})
 	if err != nil || len(page.Operations) != 1 || page.Operations[0].State != "UNKNOWN" {
 		t.Fatalf("recovered indexed history lost: %+v %v", page, err)
@@ -198,7 +197,7 @@ func TestS2FreshSchemaCrashUnknownAndLabelsPersist(t *testing.T) {
 func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	raw, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	raw, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil || raw == "" {
 		t.Fatal("missing durable test identity", err)
 	}
@@ -221,8 +220,7 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 		originals[admit(i)] = true
 	}
 	q := OperationQuery{
-		Layer: "L0", Requester: actor.ID, Role: "viewer",
-		WorkRef: "lab/stable-cursor", Limit: 2,
+		Layer: "L0", Requester: actor.ID, WorkRef: "lab/stable-cursor", Limit: 2,
 	}
 	first, err := s.ListOperations(ctx, q)
 	if err != nil || len(first.Operations) != 2 || first.NextCursor == "" {
@@ -316,7 +314,7 @@ func TestS2OperationCursorPreservesFirstPageAdmissionWatermarkAcrossWriter(t *te
 func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,8 +333,7 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 		ids = append(ids, rec.ID)
 	}
 	q := OperationQuery{
-		Layer: "L0", Requester: actor.ID, Role: "viewer",
-		WorkRef: "lab/live-state-pagination", State: "ADMITTED", Limit: 2,
+		Layer: "L0", Requester: actor.ID, WorkRef: "lab/live-state-pagination", State: "ADMITTED", Limit: 2,
 	}
 	first, err := s.ListOperations(ctx, q)
 	if err != nil || len(first.Operations) != 2 || first.NextCursor == "" {
@@ -377,13 +374,13 @@ func TestS2CursorStatusChangeDuringPagingKeepsIdentityAndFilter(t *testing.T) {
 	}
 	// An unrelated actor may have an identical untrusted work_ref, but must
 	// never borrow the original row or signed cursor.
-	_, other, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, other, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
 	q.Requester = other.ID
 	foreign, err := s.ListOperations(ctx, q)
-	if err != nil || len(foreign.Operations) != 0 {
-		t.Fatalf("unrelated actor borrowed a status-changing original: %+v %v", foreign, err)
+	if err != nil || len(foreign.Operations) != 1 || foreign.Operations[0].ID != ids[4] {
+		t.Fatalf("authorized independent actor lost same-layer original: %+v %v", foreign, err)
 	}
 }

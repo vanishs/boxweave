@@ -1,0 +1,292 @@
+name: S4-B2 disposable native exact-peer / lease investigation (non-product)
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-native.yml
+      - internal/install/network_peer_policy.go
+      - internal/install/native_s4_b2_policy_test.go
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fresh one-use runner and syntax checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          test -z "$(gofmt -l internal/install/network_peer_policy.go internal/install/native_s4_b2_policy_test.go)"
+          go test -c -o "$RUNNER_TEMP/s4b2-policy-test" ./internal/install
+          echo "S4_B2_SOURCE=$GITHUB_SHA"
+          echo S4_B2_FRESH_HOST_AND_SDK_BUILD=PASS
+      - name: Install signed Incus 7.6 on fresh temporary VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b1-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          echo "S4_B2_SIGNED_NATIVE_76_NO_SCRIPTLET_GLOBAL_CHANGE=PASS"
+      - name: Native exact S1 ACL, directional peer and revoke-before-reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          a4=''; b4=''; c4=''; a6=''; b6=''; c6=''
+          probe() {
+            sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+              S4B2_A4="$a4" S4B2_B4="$b4" S4B2_A6="$a6" S4B2_B6="$b6" \
+              "$RUNNER_TEMP/s4b2-policy-test" -test.v -test.run "^$1$"
+          }
+          probe TestS4B1ExactS1ACLNativeFixture
+          sudo incus profile device set default eth0 \
+            security.acls=bw-s4b1-native \
+            security.acls.default.ingress.action=reject \
+            security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true \
+            security.ipv6_filtering=true \
+            security.mac_filtering=true
+          for box in s4b2a s4b2b s4b2c; do
+            sudo incus init images:ubuntu/24.04 "$box" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus start "$box"
+          done
+          guest4() { sudo incus exec "$1" -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :; }
+          guest6() { sudo incus exec "$1" -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :; }
+          for i in $(seq 1 65); do
+            a4="$(guest4 s4b2a)"; b4="$(guest4 s4b2b)"; c4="$(guest4 s4b2c)"
+            a6="$(guest6 s4b2a)"; b6="$(guest6 s4b2b)"; c6="$(guest6 s4b2c)"
+            if [[ -n "$a4" && -n "$b4" && -n "$c4" && -n "$a6" && -n "$b6" && -n "$c6" ]]; then break; fi
+            sleep 2
+          done
+          test -n "$a4" && test -n "$b4" && test -n "$c4"
+          test -n "$a6" && test -n "$b6" && test -n "$c6"
+          echo "S4_B2_NATIVE_ADDRESSES_A4=$a4 B4=$b4 C4=$c4 A6=$a6 B6=$b6 C6=$c6"
+          echo "S4_B2_A_UUID=$(sudo incus config get s4b2a volatile.uuid)"
+          echo "S4_B2_B_UUID=$(sudo incus config get s4b2b volatile.uuid)"
+          echo "S4_B2_C_UUID=$(sudo incus config get s4b2c volatile.uuid)"
+          # Needed even when exact source+target exceptions repair native NDP
+          # and the test-only static neighbor fallback never runs.
+          amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+          bmac="$(sudo incus exec s4b2b -- cat /sys/class/net/eth0/address)"
+          test -n "$amac" && test -n "$bmac"
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 60; fi
+          if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 61; fi
+          echo "S4_B2_S1_DEFAULT_DENIAL_V4V6=PASS"
+          probe TestS4B2NativeExactTargetEgressAndIngress
+          sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$b4"
+          echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV4=PASS"
+          if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+            echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_INITIAL=PASS"
+          else
+            echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_INITIAL=DENIED"
+            sudo incus exec s4b2a -- ip -6 neigh show || :
+            sudo incus exec s4b2b -- ip -6 neigh show || :
+            sudo incus exec s4b2a -- ip -6 route show || :
+            # Disposable native experiment: does rejecting ICMPv6 NDP
+            # prevent address discovery despite an exact unicast pair?
+            sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=135
+            sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=136
+            sudo incus network acl show bw-s4b1-native
+            if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+              echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_EGRESS=PASS"
+            else
+              echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_EGRESS=DENIED"
+              sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=135
+              sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=136
+              if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH=PASS"
+              else
+                echo "S4_B2_INTERNET_FALSE_EXACT_PEER_IPV6_WITH_NDP_BOTH=DENIED"
+                sudo incus exec s4b2a -- ip -6 neigh show || :
+                sudo incus exec s4b2b -- ip -6 neigh show || :
+                echo "S4_B2_V6_NDP_ALLOW_IS_NOT_ENOUGH=OBSERVED"
+                # Native-only differential: if static neighbor entries
+                # restore exact IPv6 traffic, the kernel ACL unicast path
+                # works but dynamic NDP is still missing.
+                amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+                bmac="$(sudo incus exec s4b2b -- cat /sys/class/net/eth0/address)"
+                sudo incus exec s4b2a -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+                sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$amac" nud permanent dev eth0
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6=PASS"
+                else
+                  echo "S4_B2_TEST_ONLY_STATIC_NEIGHBOR_EXACT_V6=DENIED"
+                fi
+                # Diagnostic pinned neighbors are deliberately kept
+                # through all later negative packet tests, then discarded
+                # with the fresh disposable Incus runner. Never productize.
+                cmac="$(sudo incus exec s4b2c -- cat /sys/class/net/eth0/address)"
+                sudo incus exec s4b2a -- ip -6 neigh replace "$c6" lladdr "$cmac" nud permanent dev eth0
+                sudo incus exec s4b2c -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+                sudo incus exec s4b2b -- ip -6 neigh replace "$c6" lladdr "$cmac" nud permanent dev eth0
+                echo "S4_B2_NEGATIVE_IPV6_TRAFFIC_NEIGHBOR_PREFLIGHT=TEST_ONLY"
+                # Preserve internet=false until after its egress negative
+                # check, then compare which endpoint egress switch affects NDP.
+                gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
+                if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$gw4" >/dev/null 2>&1; then
+                  echo "S4_B2_INTERNET_FALSE_GATEWAY=UNEXPECTED_REACHABLE"; exit 64
+                fi
+                echo "S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED=PASS"
+                sudo incus config device override s4b2b eth0 security.acls.default.egress.action=allow
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_B_ONLY_EGRESS_ALLOW_IPV6=PASS"
+                else
+                  echo "S4_B2_B_ONLY_EGRESS_ALLOW_IPV6=DENIED"
+                fi
+                sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+                if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6_WITH_STATIC_NEIGHBOR=PASS"
+                else
+                  echo "S4_B2_BOTH_EGRESS_ALLOW_IPV6_WITH_STATIC_NEIGHBOR=DENIED"
+                  exit 74
+                fi
+              fi
+            fi
+          fi
+          for spec in "s4b2b $a4 $a6" "s4b2c $b4 $b6" "s4b2a $c4 $c6"; do
+            read -r src dst4 dst6 <<<"$spec"
+            if sudo incus exec "$src" -- ping -n -c 1 -W 2 "$dst4" >/dev/null 2>&1; then exit 62; fi
+            if sudo incus exec "$src" -- ping -n -6 -c 1 -W 2 "$dst6" >/dev/null 2>&1; then exit 63; fi
+          done
+          echo "S4_B2_REVERSE_AND_THIRD_PARTY_V4V6_DENY=PASS"
+          gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
+          # If the NDP differential changed A's egress action, use existing
+          # local NIC override; otherwise validate the false gateway here.
+          if sudo incus config device get s4b2a eth0 security.acls.default.egress.action | grep -Fqx allow; then
+            echo "S4_B2_INTERNET_FALSE_GATEWAY_PREVIOUSLY_PROBED=YES"
+          else
+            if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$gw4" >/dev/null 2>&1; then exit 64; fi
+            echo "S4_B2_INTERNET_FALSE_GENERAL_EGRESS_BLOCKED=PASS"
+            sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+          fi
+          sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$b4"
+          sudo incus exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 4 "$gw4"; then
+            echo "S4_B2_INTERNET_TRUE_GATEWAY_ICMP=PASS"
+          else
+            echo "S4_B2_INTERNET_TRUE_GATEWAY_ICMP=UNREACHABLE_NOT_EGRESS_PROOF"
+          fi
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$c4" >/dev/null 2>&1; then exit 65; fi
+          echo "S4_B2_INTERNET_TRUE_PEER_AND_UNGRANTED_TARGET_DENY=PASS"
+          sudo incus project create s4b2foreign -c features.images=false -c features.networks=false -c features.profiles=true
+          sudo incus --project s4b2foreign profile device add default root disk path=/ pool=default
+          sudo incus --project s4b2foreign profile device add default eth0 nic name=eth0 network=incusbr0
+          sudo incus --project s4b2foreign init images:ubuntu/24.04 s4b2d -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus --project s4b2foreign start s4b2d
+          d4=''; d6=''
+          for i in $(seq 1 50); do
+            d4="$(sudo incus --project s4b2foreign exec s4b2d -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            d6="$(sudo incus --project s4b2foreign exec s4b2d -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            if [[ -n "$d4" && -n "$d6" ]]; then break; fi
+            sleep 2
+          done
+          test -n "$d4" && test -n "$d6"
+          echo "S4_B2_FOREIGN_PROJECT_IPV4=$d4 IPV6=$d6"
+          dmac="$(sudo incus --project s4b2foreign exec s4b2d -- cat /sys/class/net/eth0/address)"
+          sudo incus exec s4b2a -- ip -6 neigh replace "$d6" lladdr "$dmac" nud permanent dev eth0
+          sudo incus --project s4b2foreign exec s4b2d -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+          sudo incus exec s4b2b -- ip -6 neigh replace "$d6" lladdr "$dmac" nud permanent dev eth0
+          echo "S4_B2_FOREIGN_NEGATIVE_IPV6_NEIGHBORS_PINNED_FOR_PACKET_PROOF=YES"
+          sudo incus network info incusbr0
+          sudo incus network acl show bw-s4b1-native
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$d4" >/dev/null 2>&1; then exit 66; fi
+          if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 2 "$d6" >/dev/null 2>&1; then exit 67; fi
+          if sudo incus --project s4b2foreign exec s4b2d -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 68; fi
+          if sudo incus --project s4b2foreign exec s4b2d -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 69; fi
+          echo "S4_B2_FOREIGN_PROJECT_NORMAL_ADDRESS_DENY=PASS"
+          # Explicit source-spoof attempt in the isolated, disposable Incus
+          # runner ONLY. Force return-route neighbor A->foreign-D MAC so an
+          # ICMP reply cannot falsely fail merely because B replies to A.
+          # This is a threat-model probe, NOT an accepted network policy.
+          amac="$(sudo incus exec s4b2a -- cat /sys/class/net/eth0/address)"
+          spoof4=BLOCKED
+          if sudo incus --project s4b2foreign exec s4b2d -- ip -4 addr add "$a4/32" dev eth0; then
+            sudo incus exec s4b2b -- ip -4 neigh replace "$a4" lladdr "$dmac" nud permanent dev eth0
+            sudo incus --project s4b2foreign exec s4b2d -- ip -4 neigh replace "$b4" lladdr "$bmac" nud permanent dev eth0
+            if sudo incus --project s4b2foreign exec s4b2d -- ping -n -I "$a4" -c 2 -W 2 "$b4" >/dev/null 2>&1; then
+              spoof4=REACHED_B_SECURITY_BREAK
+            else
+              spoof4=NO_ECHO_REPLY_INCONCLUSIVE
+            fi
+            sudo incus --project s4b2foreign exec s4b2d -- ip -4 addr del "$a4/32" dev eth0
+            sudo incus exec s4b2b -- ip -4 neigh replace "$a4" lladdr "$amac" nud permanent dev eth0
+          fi
+          echo "S4_B2_FOREIGN_UNFILTERED_NIC_FORGED_A_SOURCE_V4=$spoof4"
+          spoof6=BLOCKED
+          if sudo incus --project s4b2foreign exec s4b2d -- ip -6 addr add "$a6/128" dev eth0 nodad; then
+            sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$dmac" nud permanent dev eth0
+            sudo incus --project s4b2foreign exec s4b2d -- ip -6 neigh replace "$b6" lladdr "$bmac" nud permanent dev eth0
+            if sudo incus --project s4b2foreign exec s4b2d -- ping -n -6 -I "$a6" -c 2 -W 2 "$b6" >/dev/null 2>&1; then
+              spoof6=REACHED_B_SECURITY_BREAK
+            else
+              spoof6=NO_ECHO_REPLY_INCONCLUSIVE
+            fi
+            sudo incus --project s4b2foreign exec s4b2d -- ip -6 addr del "$a6/128" dev eth0
+            sudo incus exec s4b2b -- ip -6 neigh replace "$a6" lladdr "$amac" nud permanent dev eth0
+          fi
+          echo "S4_B2_FOREIGN_UNFILTERED_NIC_FORGED_A_SOURCE_V6=$spoof6"
+          echo "S4_B2_FOREIGN_CONCURRENT_ATTACH=NOT_TESTED"
+          sudo incus --project s4b2foreign stop s4b2d
+          sudo incus --project s4b2foreign delete s4b2d
+          sudo incus project delete s4b2foreign
+          probe TestS4B2NativeRevokeBeforeIPRelease
+          if sudo incus exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 70; fi
+          if sudo incus exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 71; fi
+          sudo incus stop s4b2b
+          sudo incus delete s4b2b
+          sudo incus stop s4b2c
+          sudo incus config device override s4b2c eth0 ipv4.address="$b4"
+          sudo incus start s4b2c
+          new_c4=''
+          for i in $(seq 1 40); do
+            new_c4="$(guest4 s4b2c)"
+            if [[ "$new_c4" = "$b4" ]]; then break; fi
+            sleep 2
+          done
+          test "$new_c4" = "$b4"
+          sudo incus exec s4b2a -- ip -4 neigh del "$b4" dev eth0 || :
+          if sudo incus exec s4b2a -- ping -n -c 3 -W 2 "$b4" >/dev/null 2>&1; then exit 72; fi
+          echo "S4_B2_NATIVE_REVOKE_BEFORE_OLD_IPV4_REUSE_DENY=PASS"
+          sudo incus stop s4b2a
+          sudo incus stop s4b2c
+          sudo incus delete s4b2a
+          sudo incus delete s4b2c
+          sudo incus profile device unset default eth0 security.acls
+          sudo incus network acl show bw-s4b1-native | grep -Fqx 'used_by: []'
+          sudo incus network acl delete bw-s4b1-native
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B2_NATIVE_EXACT_CLEANUP=PASS"
+          echo "S4_B2_NATIVE_PROVISIONAL_V6_NDP_NEGATIVE_REMAINS_BLOCKER=PARTIAL"
+          exit 75

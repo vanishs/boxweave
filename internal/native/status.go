@@ -34,8 +34,9 @@ type Status struct {
 }
 
 type Reader struct {
-	Socket  string
-	Project string
+	Socket               string
+	Project              string
+	ExternalForwardAllow string // Host-local startup policy, never an MCP argument.
 }
 
 // Incus advertises projects_restrictions, not a generic "restricted" extension.
@@ -169,10 +170,18 @@ func (r Reader) Read(ctx context.Context) Status {
 		s.ErrorClass = "SELECTED_STORAGE_POOL_UNAVAILABLE"
 		return s
 	}
-	// Incus owns the storage driver and backing filesystem. These legacy
-	// capacity/quota evidence fields remain false unless independently proven;
-	// no driver or mount heuristic may block an otherwise available pool.
-	s.Warnings = append(s.Warnings, "STORAGE_QUOTA_UNVERIFIED: BoxWeave does not verify native pool disk quotas or Exec output spool bounds; review Incus limits and host capacity independently.")
+	// Never infer enforced quotas from driver, mount options, a configured
+	// root disk size, or filesystem-wide free space. Only a recent independent
+	// HOST-ROOT Btrfs qgroup witness for this exact Project/pool/mount/boot may
+	// assert the quota evidence bit. Other drivers remain unverified.
+	s.StorageQuotaVerified = recentHostQuotaWitness(r.Project, selectedPool, pool.Driver)
+	if s.StorageQuotaVerified {
+		s.Warnings = append(s.Warnings,
+			"STORAGE_QUOTA_HOST_WITNESS: recent host-root Btrfs qgroup limit witness; expires after 4 hours or host reboot. This is not a continuous guarantee against later quota reconfiguration.")
+	} else {
+		s.Warnings = append(s.Warnings,
+			"STORAGE_QUOTA_UNVERIFIED: no current host-root native qgroup enforcement witness; run the restricted read-only host quota attestation after an actual disposable Box reaches its quota.")
+	}
 	s.StorageReady = true
 	// Share the exact admission guard with doctor/host_status so a
 	// misconfigured NIC is rejected before any mutation, not only at

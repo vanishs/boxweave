@@ -118,11 +118,11 @@ func (s *Service) TokenVerifier(ctx context.Context, raw string, _ *http.Request
 	if err != nil {
 		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{UserID: t.ID, Scopes: []string{t.Role}, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
+	return &auth.TokenInfo{UserID: t.ActorID, Expiration: t.Expires, Extra: map[string]any{"token_id": t.ID}}, nil
 }
 func (s *Service) Handler() http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{Name: "boxweave", Version: s.BuildVersion},
-		&mcp.ServerOptions{SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
+		&mcp.ServerOptions{Instructions: serverContinuityInstructions, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) {
 			// Every resource and Operation is project/actor-private and
 			// status changes while work is in flight. Never cache publicly.
 			c.CacheScope = "private"
@@ -151,12 +151,9 @@ func (s *Service) Handler() http.Handler {
 	})
 	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
-			if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-				return nil, HostStatus{}, errors.New("UNAUTHENTICATED")
-			}
-			info := req.Extra.TokenInfo
-			if info.UserID == "" || (!contains(info.Scopes, "admin") && !contains(info.Scopes, "viewer")) {
-				return nil, HostStatus{}, errors.New("PERMISSION_DENIED")
+			principal, err := s.requestPrincipal(req)
+			if err != nil {
+				return nil, HostStatus{}, err
 			}
 			// Request-specific actor comes only from req.Extra.TokenInfo.
 			result := s.Status(ctx)
@@ -166,10 +163,14 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
-			return privateReadReply(ctx, s, info.UserID, result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)
+	s.registerActivityTools(server)
+	s.registerForwardTools(server)
 	s.registerBoxTools(server)
+	s.registerReadinessTool(server)
+	s.registerPeerTools(server)
 	s.registerFileTools(server)
 	s.registerOperationOutputCancel(server)
 	sdk := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server },
@@ -220,14 +221,6 @@ func (s *Service) Handler() http.Handler {
 		upstream.Host = s.Listener
 		auth.RequireBearerToken(s.TokenVerifier, opts)(sdk).ServeHTTP(w, upstream)
 	})
-}
-func contains(xs []string, x string) bool {
-	for _, s := range xs {
-		if s == x {
-			return true
-		}
-	}
-	return false
 }
 func (s *Service) ListenAndServe() error {
 	if s.Store == nil || s.Listener == "" {

@@ -80,7 +80,7 @@ func jsonFrom(t *testing.T, r *http.Response) map[string]any {
 	return out
 }
 
-type oauthFixtureHTTP struct{ client, challenge, verifier, code, access, refresh, role string }
+type oauthFixtureHTTP struct{ client, challenge, verifier, code, access, refresh string }
 
 func completeOAuth(t *testing.T, ts *httptest.Server, pwd, scope string) oauthFixtureHTTP {
 	t.Helper()
@@ -95,6 +95,9 @@ func completeOAuth(t *testing.T, ts *httptest.Server, pwd, scope string) oauthFi
 	d := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(d[:])
 	query := url.Values{"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {oauthCallback}, "code_challenge_method": {"S256"}, "code_challenge": {challenge}, "resource": {oauthPublicOrigin + "/mcp"}, "scope": {scope}, "state": {"state-for-browser-123456789"}}
+	if scope == "" {
+		query.Del("scope") // Exercise an authorization request without a scope parameter.
+	}
 	page := oauthReq(t, ts, "GET", "/authorize?"+query.Encode(), "", "", "", oauthPublicHost)
 	if page.StatusCode != 200 {
 		t.Fatalf("authorize GET %d", page.StatusCode)
@@ -153,10 +156,10 @@ func completeOAuth(t *testing.T, ts *httptest.Server, pwd, scope string) oauthFi
 		t.Fatalf("token HTTP %d: %+v", issued.StatusCode, jsonFrom(t, issued))
 	}
 	pair := jsonFrom(t, issued)
-	if pair["token_type"] != "Bearer" || pair["scope"] != "mcp:"+expectedOAuthRole(scope) || pair["expires_in"] != float64(3600) {
+	if pair["token_type"] != "Bearer" || pair["scope"] != nil || pair["expires_in"] != float64(3600) {
 		t.Fatalf("bad issued token metadata: %+v", pair)
 	}
-	return oauthFixtureHTTP{client: clientID, challenge: challenge, verifier: verifier, code: code, access: pair["access_token"].(string), refresh: pair["refresh_token"].(string), role: scope}
+	return oauthFixtureHTTP{client: clientID, challenge: challenge, verifier: verifier, code: code, access: pair["access_token"].(string), refresh: pair["refresh_token"].(string)}
 }
 
 type hostOAuthTransport struct{ rawToken string }
@@ -175,11 +178,17 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 			t.Fatalf("metadata %s: %d", path, res.StatusCode)
 		}
 		data := jsonFrom(t, res)
+		if _, exists := data["scopes_supported"]; exists {
+			t.Fatalf("unexpected application scopes in resource metadata: %+v", data)
+		}
 		if data["resource"] != oauthPublicOrigin+"/mcp" {
 			t.Fatalf("wrong resource %+v", data)
 		}
 	}
 	as := jsonFrom(t, oauthReq(t, ts, "GET", "/.well-known/oauth-authorization-server", "", "", "", oauthPublicHost))
+	if _, exists := as["scopes_supported"]; exists {
+		t.Fatalf("unexpected application scopes in auth-server metadata: %+v", as)
+	}
 	if as["issuer"] != oauthPublicOrigin || as["registration_endpoint"] != oauthPublicOrigin+"/register" || as["authorization_response_iss_parameter_supported"] != true {
 		t.Fatalf("AS metadata %+v", as)
 	}
@@ -196,13 +205,16 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 		if res.StatusCode != tc.want {
 			t.Fatalf("%s returned %d, want %d", tc.name, res.StatusCode, tc.want)
 		}
+		if tc.want == 401 && strings.Contains(res.Header.Get("WWW-Authenticate"), "scope=") {
+			t.Fatal("scope-free MCP challenge advertised permissions")
+		}
 		if tc.want == 401 && !strings.Contains(res.Header.Get("WWW-Authenticate"), oauthPublicOrigin+"/.well-known/oauth-protected-resource/mcp") {
 			t.Fatalf("missing RFC9728 auth challenge")
 		}
 		res.Body.Close()
 	}
-	f := completeOAuth(t, ts, pwd, "mcp:viewer mcp:admin")
-	if tok, err := st.VerifyToken(context.Background(), f.access); err != nil || tok.Role != "admin" {
+	f := completeOAuth(t, ts, pwd, "")
+	if tok, err := st.VerifyToken(context.Background(), f.access); err != nil || tok.ActorID == "" {
 		t.Fatalf("token not verified: %v", err)
 	}
 	sessctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -217,7 +229,7 @@ func TestEmbeddedOAuthMetadataDCRBrowserCallbackAndSDK(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(sessctx, nil)
-	if err != nil || len(tools.Tools) != 16 {
+	if err != nil || len(tools.Tools) != 22 {
 		t.Fatalf("authenticated official SDK tools/list: %v tools=%d", err, len(tools.Tools))
 	}
 	status, err := session.CallTool(sessctx, &mcp.CallToolParams{Name: "host_status", Arguments: map[string]any{}})
@@ -261,7 +273,7 @@ func TestEmbeddedOAuthMethodOriginAndDCRNegatives(t *testing.T) {
 }
 func TestEmbeddedOAuthJSONResponsesNoSSE(t *testing.T) {
 	_, ts, pwd := newOAuthServerTest(t)
-	f := completeOAuth(t, ts, pwd, "mcp:admin")
+	f := completeOAuth(t, ts, pwd, "")
 	init := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"no-sse","version":"1"}}}`
 	req, err := http.NewRequest("POST", ts.URL+"/mcp", bytes.NewBufferString(init))
 	if err != nil {
@@ -287,18 +299,10 @@ func TestEmbeddedOAuthJSONResponsesNoSSE(t *testing.T) {
 	}
 }
 
-func expectedOAuthRole(scope string) string {
-	for _, name := range strings.Fields(scope) {
-		if name == "mcp:admin" {
-			return "admin"
-		}
-	}
-	return "viewer"
-}
-func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) {
+func TestEmbeddedOAuthOwnedBoxChecksAndToolRefreshWithoutParams(t *testing.T) {
 	_, ts, pwd := newOAuthServerTest(t)
-	f := completeOAuth(t, ts, pwd, "mcp:viewer")
-	client := mcp.NewClient(&mcp.Implementation{Name: "viewer-negative", Version: "1"}, nil)
+	f := completeOAuth(t, ts, pwd, "")
+	client := mcp.NewClient(&mcp.Implementation{Name: "ownership-negative", Version: "1"}, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp", HTTPClient: &http.Client{Transport: hostOAuthTransport{rawToken: f.access}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
@@ -308,7 +312,7 @@ func TestEmbeddedOAuthViewerDeniedExecAndToolRefreshWithoutParams(t *testing.T) 
 	defer sess.Close()
 	result, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "box_exec", Arguments: map[string]any{"box_id": "nonexistent-owned-id", "idempotency_key": "viewer-denied-intent", "argv": []string{"true"}}})
 	if err == nil && (result == nil || !result.IsError) {
-		t.Fatalf("viewer executed write: %+v", result)
+		t.Fatalf("foreign Box executed write: %+v", result)
 	}
 	payload := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
 	req, err := http.NewRequest("POST", ts.URL+"/mcp", strings.NewReader(payload))

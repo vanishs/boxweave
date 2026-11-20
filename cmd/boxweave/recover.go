@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -43,8 +45,9 @@ func recoverLocal(a recoverArgs) error {
 	}
 	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
 		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" &&
-		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" {
-		return errors.New("recovery action must be inspect/challenge/release, create-inspect/create-challenge/create-bind or gc-*")
+		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" &&
+		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
+		return errors.New("recovery action must be inspect/challenge/release, create-*, delete-* or gc-*")
 	}
 	if _, err := install.Status(p); err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
@@ -53,6 +56,17 @@ func recoverLocal(a recoverArgs) error {
 	if err != nil {
 		return err
 	}
+	// Preserve only the already authorized restricted Incus group. The
+	// dedicated account's primary group does not necessarily own the socket.
+	incusGroup, err := user.LookupGroup("incus")
+	if err != nil {
+		return err
+	}
+	incusGID, err := strconv.ParseUint(incusGroup.Gid, 10, 32)
+	if err != nil || incusGID == 0 {
+		return errors.New("invalid restricted incus group")
+	}
+	groups := recoveryGroups(uint32(gid), uint32(incusGID))
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -69,7 +83,7 @@ func recoverLocal(a recoverArgs) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, "recover-worker")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{
-		Uid: uint32(uid), Gid: uint32(gid), Groups: []uint32{uint32(gid)},
+		Uid: uint32(uid), Gid: uint32(gid), Groups: groups,
 	}}
 	cmd.ExtraFiles = []*os.File{childSide}
 	cmd.Stdout = os.Stdout
@@ -146,6 +160,9 @@ func performRecovery(a recoverArgs) error {
 	if strings.HasPrefix(a.Action, "create-") {
 		return performUnknownCreateBinding(ctx, store, a)
 	}
+	if strings.HasPrefix(a.Action, "delete-") {
+		return performDeleteRecovery(ctx, store, a)
+	}
 	r, err := store.RecoveryInspect(ctx, a.Operation)
 	if err != nil {
 		return err
@@ -156,6 +173,15 @@ func performRecovery(a recoverArgs) error {
 	observed, err := (native.Reader{Socket: a.Socket, Project: a.Project}).ObserveOwnedBox(ctx, r.Name, r.BoxUUID)
 	if err != nil {
 		return fmt.Errorf("native re-observation refused: %w", err)
+	}
+	if r.Action == "box_delete" && a.Action != "inspect" {
+		cascade, err := store.IsDependentDelete(ctx, r.OperationID)
+		if err != nil {
+			return err
+		}
+		if cascade && observed.State != "PRESENT_UUID_CONFIRMED" {
+			return errors.New("dependent Delete absence requires separate delete reconciliation; generic release refused")
+		}
 	}
 	out := json.NewEncoder(os.Stdout)
 	switch a.Action {
@@ -255,4 +281,12 @@ func performGCRecovery(ctx context.Context, store *state.Store, a recoverArgs) e
 		}{r.OperationID, r.Stream, "REVIEWED_RELEASED", true, false, false})
 	}
 	return errors.New("invalid native GC review operation")
+}
+
+// Do not inherit root or unrelated supplemental groups across the worker exec.
+func recoveryGroups(primary, restricted uint32) []uint32 {
+	if primary == restricted {
+		return []uint32{primary}
+	}
+	return []uint32{primary, restricted}
 }

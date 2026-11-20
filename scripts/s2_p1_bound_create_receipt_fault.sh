@@ -1,6 +1,6 @@
 #!/bin/sh
-# Real disposable native Create; test-only SQLite trigger fails the LAST
-# SUCCEEDED receipt after Incus 202 and exact UUID binding. Do not install any
+# Real disposable native Create; test-only SQLite trigger fails the atomic
+# UUID/ownership/SUCCEEDED commit after Incus 202 and native verification. Do not install any
 # test trigger on retained/shared databases or touch historical UNKNOWNs.
 set -eu
 if [ "${GITHUB_ACTIONS:-}" != true ] ||
@@ -22,7 +22,7 @@ actor() {
     GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/bound-receipt-admin.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/bound-receipt-admin.secret"
 chmod 0600 "$work/bound-receipt-admin.secret"
 token="$(sed -n 's/^token=//p' "$work/bound-receipt-admin.secret")"
 test -n "$token"
@@ -46,10 +46,14 @@ test "$attempt" -lt 40
 actor BW_S2_BOUND_LAB="$lab" BW_S2_BOUND_TOKEN="$token" \
   BW_S2_BOUND_PROJECT="$project" "$work/s2-bound-create-probe" \
   > "$work/bound-receipt-result.txt"
-grep -Fqx S2_P1_REAL_NATIVE_CREATE_BOUND_UUID_FINAL_RECEIPT_UNKNOWN_NO_REDISPATCH=PASS \
+grep -Fqx S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_UNBOUND_UNKNOWN_NO_REDISPATCH=PASS \
   "$work/bound-receipt-result.txt"
-grep -Fqx S2_P1_REAL_BOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS \
+grep -Fqx S4_A_REAL_UNBOUND_UNKNOWN_DIFFERENT_KEY_CREATE_DELETE_REFUSED=PASS \
   "$work/bound-receipt-result.txt"
+
+grep -Fqx S4_A_REAL_NATIVE_CREATE_ATOMIC_ROLLBACK_COPY_ONLY_BIND_ORIGINAL_UNCHANGED=PASS \
+  "$work/bound-receipt-result.txt"
+grep '^S4_A_' "$work/bound-receipt-result.txt"
 
 name=bw-s2-p1-bound-final-110u
 uuid="$(sudo python3 - "$lab/original.json" <<'PY'
@@ -63,7 +67,13 @@ PY
 test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$uuid"
 test "$(sudo incus list "$name" --project "$project" --format csv -c s)" = STOPPED
 test "$(sudo incus list --all-projects --format csv -c n)" = "$name"
-echo "S2_P1_BOUND_UNKNOWN_INDEPENDENT_NATIVE_UUID_AND_STOPPED_STATE=PASS"
+original_id="$(sudo python3 - "$lab/original.json" <<'PY_ORIGINAL'
+import json,sys
+print(json.load(open(sys.argv[1]))["original_id"])
+PY_ORIGINAL
+)"
+test "$(sudo incus config get "$name" user.boxweave.create_operation --project "$project")" = "$original_id"
+echo "S4_A_ATOMIC_ROLLBACK_UNKNOWN_INDEPENDENT_NATIVE_UUID_MARKER_STOPPED=PASS"
 # The separate CI administrator may destroy this exact artificial test-only
 # native Box after proof. Never silently unlock/adopt/retry its UNKNOWN journal.
 sudo incus delete "$name" --project "$project"

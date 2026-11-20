@@ -1,0 +1,457 @@
+name: S4-B2 installed restricted controller to root peer revoke (disposable)
+
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-controller-root-installed.yml
+      - internal/install/native_peer_root_recovery.go
+      # Reverify the role-free SDK principal and pure ACL comparison when
+      # the network executor and native SDK wrapper change.
+      - internal/install/native_peer_acl_compare.go
+      - internal/install/native_peer_acl_compare_test.go
+      - internal/native/box.go
+      - internal/control/operation_tools.go
+      - internal/control/server.go
+      - internal/state/network_peer_root_recovery.go
+      - internal/state/network_peer_root_recovery_test.go
+      - internal/state/network_peer_root_handoff.go
+      # Full-NIC root isolation depends on shared admission and root staging.
+      - internal/state/store.go
+      - internal/state/network_peer_project_barrier_test.go
+      - internal/state/network_peer_root_stage.go
+      - internal/state/network_peer_root_stage_test.go
+      - internal/state/network_peer_root_handoff_test.go
+      - internal/install/native_peer_root_service.go
+      - internal/install/native_peer_root_service_test.go
+      - internal/install/native_peer_root_integrated.go
+      - internal/install/native_peer_root_installed_e2e_native_test.go
+      - internal/install/native_peer_root_socket.go
+      - internal/state/network_peer_root_worker.go
+      - internal/control/peer_root.go
+      - cmd/boxweave/main.go
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  root-installed-native:
+    name: s4-b2-installed-controller-root-original-nft-verifier
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [normal, lost_ack, after_acl_fault]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Stage 2 source-exact principal and ACL regression preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail BEFORE expensive native host setup on SDK principal or
+          # whole-ACL policy regression. Full native matrix remains required.
+          go test -count=1 ./internal/control ./internal/install \
+            -run 'TestS2RequestPrincipalRequiresExplicitSDKCredential|TestNativePeerACLWholePolicyComparison'
+          test -z "$(gofmt -l internal/control/operation_tools.go internal/install/native_peer_acl_compare.go)"
+          echo STAGE2_SOURCE_EXACT_MCP_PRINCIPAL_AND_WHOLE_ACL=PASS
+      - name: Fresh signed Incus 7.6, dedicated restricted Project and original fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus && ! id boxweave >/dev/null 2>&1
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base nftables conntrack sqlite3 jq >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-root-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-root-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b2-root-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo useradd -m -s /bin/sh boxweave
+          uid="$(id -u boxweave)"
+          test "$uid" -ge 1000
+          project="user-$uid"
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          go test -c -o "$RUNNER_TEMP/s4b2-root-fixture" ./internal/install
+          sudo install -m 0755 "$RUNNER_TEMP/s4b2-root-fixture" /usr/local/bin/s4b2-root-fixture
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+          sudo incus project create "$project" \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project "$project" profile device add default root disk path=/ pool=default
+          sudo incus --project "$project" profile device add default eth0 nic name=eth0 \
+            network=bwbr0 security.acls=bw-s4b2-native \
+            security.acls.default.ingress.action=reject security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true security.ipv6_filtering=true security.mac_filtering=true
+          for spec in 's4b2a 10.248.83.11 fd83:248::11' 's4b2b 10.248.83.12 fd83:248::12' 's4b2c 10.248.83.13 fd83:248::13'; do
+            read -r name ipv4 ipv6 <<< "$spec"
+            sudo incus --project "$project" init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project "$project" config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+            sudo incus --project "$project" start "$name"
+          done
+          for attempt in $(seq 1 45); do
+            all_ready=1
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" exec "$name" -- ip -4 addr show eth0 | grep -q '10.248.83.' || all_ready=0
+            done
+            if test "$all_ready" = 1; then break; fi
+            sleep 2
+          done
+          test "$all_ready" = 1
+          sudo install -d -m0700 -o boxweave -g boxweave /var/lib/boxweave
+          go build -o "$RUNNER_TEMP/boxweave-candidate" ./cmd/boxweave
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/bw-s4b2-installed
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/boxweave
+          test "$(sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" = "$(sha256sum /usr/local/bin/bw-s4b2-installed | cut -d' ' -f1)"
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+            BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledRootSeedReviewedGrant$'
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+            BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+            BOXWEAVE_S4B2_INSTALLED_DB=/var/lib/boxweave/ledger.sqlite \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledNonrootSeedOriginal$' \
+            | tee "$RUNNER_TEMP/s4b2-root-seed.log"
+          original="$(sed -n 's/^S4_B2_INSTALLED_ORIGINAL_ID=//p' "$RUNNER_TEMP/s4b2-root-seed.log" | tail -n1)"
+          test "${#original}" -eq 32
+          echo "S4_B2_INSTALLED_SOURCE_SHA=$GITHUB_SHA"
+          echo "S4_B2_INSTALLED_EXACT_ORIGINAL=$original"
+          echo "S4_B2_INSTALLED_SETUP_RESTRICTED_PROJECT_AND_PINNED_ROOT_GRANT=PASS"
+          # Foreign Project uses a DIFFERENT restricted managed bridge.
+          # Its four established TCP/UDP IPv4/IPv6 sessions MUST survive.
+          sudo incus network create bwforeign ipv4.address=10.248.84.1/24 ipv4.nat=true ipv6.address=fd83:249::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          sudo incus project create bwforeign             -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false             -c restricted.devices.nic=managed -c restricted.networks.access=bwforeign
+          sudo incus --project bwforeign profile device add default root disk path=/ pool=default
+          sudo incus --project bwforeign profile device add default eth0 nic name=eth0 network=bwforeign
+          for spec in 'foreign-a 10.248.84.11 fd83:249::11' 'foreign-b 10.248.84.12 fd83:249::12'; do
+            read -r name ipv4 ipv6 <<< "$spec"
+            sudo incus --project bwforeign init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project bwforeign config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+            sudo incus --project bwforeign start "$name"
+          done
+          foreign_ready=0
+          for _ in $(seq 1 50); do
+            if test "$(sudo incus --project bwforeign exec foreign-a -- sh -c 'ip -4 -o addr show eth0 | grep -c 10.248.84.11' 2>/dev/null || :)" = 1 &&
+              test "$(sudo incus --project bwforeign exec foreign-b -- sh -c 'ip -4 -o addr show eth0 | grep -c 10.248.84.12' 2>/dev/null || :)" = 1; then foreign_ready=1; break; fi
+            sleep 2
+          done
+          if test "$foreign_ready" != 1; then
+            echo S4_B2_INSTALLED_FOREIGN_STATIC_ADDRESS_NOT_READY
+            sudo incus --project bwforeign list --format csv -c ns4 || :
+            exit 87
+          fi
+          echo S4_B2_INSTALLED_FOREIGN_STATIC_ADDRESS_READY=PASS
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/s4b2-foreign-flow" ./scripts/s4_b2_native_flow_probe.go
+          for name in foreign-a foreign-b; do
+            sudo incus --project bwforeign file push "$RUNNER_TEMP/s4b2-foreign-flow" "$name/root/s4b2-flow"
+            sudo incus --project bwforeign exec "$name" -- chmod 0755 /root/s4b2-flow
+          done
+          sudo incus --project bwforeign exec foreign-b -- sh -c             'nohup /root/s4b2-flow server >/tmp/foreign-server.log 2>&1 </dev/null &'
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo incus --project bwforeign exec foreign-b -- test -f /tmp/s4b2-flow-server-ready; then ready=1; break; fi
+            sleep 1
+          done
+          if test "$ready" != 1; then
+            echo S4_B2_INSTALLED_FOREIGN_ECHO_SERVER_NOT_READY
+            sudo incus --project bwforeign exec foreign-b -- cat /tmp/foreign-server.log || :
+            exit 87
+          fi
+          # Guest address assignment alone is not proof the network path
+          # is ready to support four established foreign flows.
+          for addr in 10.248.84.12 fd83:249::12; do
+            connected=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project bwforeign exec foreign-a -- ping -n -c 1 -W 2 "$addr" >/dev/null 2>&1; then
+                connected=1; break
+              fi
+              sleep 1
+            done
+            if test "$connected" != 1; then
+              echo "S4_B2_INSTALLED_FOREIGN_GUEST_PATH_NOT_READY_$addr"
+              exit 87
+            fi
+          done
+          echo S4_B2_INSTALLED_FOREIGN_NETWORK_PATH_READY_BOTH_FAMILIES=PASS
+          for item in 'tcp4 tcp 10.248.84.12' 'tcp6 tcp fd83:249::12' 'udp4 udp 10.248.84.12' 'udp6 udp fd83:249::12'; do
+            read -r label protocol dest <<< "$item"
+            sudo incus --project bwforeign exec foreign-a -- sh -c               "nohup /root/s4b2-flow client $protocol $dest $label >/tmp/foreign-$label.log 2>&1 </dev/null &"
+          done
+          for label in tcp4 tcp6 udp4 udp6; do
+            ready=0
+            for _ in $(seq 1 40); do
+              count="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+              if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 4 )); then ready=1; break; fi
+              sleep 1
+            done
+            if test "$ready" != 1; then
+              echo "S4_B2_INSTALLED_FOREIGN_FLOW_NOT_ESTABLISHED_$label"
+              sudo incus --project bwforeign exec foreign-a -- cat "/tmp/foreign-$label.log" || :
+              sudo incus --project bwforeign exec foreign-b -- cat /tmp/foreign-server.log || :
+              exit 87
+            fi
+            echo "S4_B2_INSTALLED_FOREIGN_FLOW_ESTABLISHED_$label"
+            echo "$count" > "$RUNNER_TEMP/s4b2-foreign-$label-baseline"
+          done
+          echo S4_B2_INSTALLED_FOREIGN_PROJECT_FOUR_ESTABLISHED_FLOWS_BEFORE_ROOT=PASS
+
+          echo "$original" > "$RUNNER_TEMP/s4b2-root-original-id"
+          echo "$project" > "$RUNNER_TEMP/s4b2-root-project"
+      - name: Execute actual nonroot controller to operator-approved root socket and verify original
+        shell: bash
+        run: |
+          set -euo pipefail
+          original="$(cat "$RUNNER_TEMP/s4b2-root-original-id")"
+          project="$(cat "$RUNNER_TEMP/s4b2-root-project")"
+          db=/var/lib/boxweave/ledger.sqlite
+          bin=/usr/local/bin/bw-s4b2-installed
+          rootpid=''
+          phase=INIT
+          cleanup_helper() {
+            if test -n "$rootpid"; then sudo kill "$rootpid" 2>/dev/null || :; fi
+          }
+          failure_diagnostics() {
+            local rc=$?
+            echo "S4_B2_INSTALLED_FAILURE_PHASE=$phase EXIT=$rc"
+            echo "S4_B2_INSTALLED_SQLITE_OPERATION_STATE=$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'" 2>/dev/null || echo QUERY_FAILED)"
+            echo "S4_B2_INSTALLED_SQLITE_PEER_STATUS=$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'" 2>/dev/null || echo QUERY_FAILED)"
+            local journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            if sudo test -f "$journal"; then
+              sudo jq -cr '{status:.status,probed:.report.probed_scopes,deleted:.report.deleted_scopes,kernel:.report.kernel_verified,verified_nics:.report.verified_nics}' "$journal" 2>/dev/null || :
+            else
+              echo "S4_B2_INSTALLED_ROOT_JOURNAL=ABSENT"
+            fi
+            if test -f "$RUNNER_TEMP/s4b2-root-helper.log"; then
+              echo S4_B2_INSTALLED_ROOT_HELPER_LOG_BEGIN
+              sed -n '1,20p' "$RUNNER_TEMP/s4b2-root-helper.log" | cut -c 1-240
+              echo S4_B2_INSTALLED_ROOT_HELPER_LOG_END
+            fi
+          }
+          trap failure_diagnostics ERR
+          trap cleanup_helper EXIT
+          phase=STAGE
+          sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+          phase=FOREIGN_HOST_ROUTE_OVERLAP
+          sudo ip -4 route add table 100 10.248.83.11/32 dev lo
+          set +e
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" >/dev/null 2>&1
+          overlap_result=$?
+          set -e
+          sudo ip -4 route del table 100 10.248.83.11/32 dev lo
+          test "$overlap_result" -ne 0
+          echo S4_B2_INSTALLED_ROOT_UNMANAGED_OVERLAPPING_KERNEL_ROUTE_REFUSED=PASS
+          phase=ROOT_PLAN
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native \
+            -operation-id "$original" > "$RUNNER_TEMP/s4b2-root-plan.json"
+          sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b2-root-plan.json")"
+          test "${#sha}" -eq 64
+          echo "S4_B2_INSTALLED_OPERATOR_PREMUTATION_SHA=$sha"
+          phase=UNIT_STAGE
+          sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native             -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+          sudo test -f /etc/systemd/system/boxweave-native-peer-root.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo systemctl is-active --quiet boxweave-native-peer-root.service &&
+              sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          test "$(stat -c '%a:%U:%G' /run/boxweave-native-peer-root.sock)" = '660:root:boxweave'
+          first_pid="$(sudo systemctl show boxweave-native-peer-root.service -p MainPID --value)"
+          test "$first_pid" -gt 1
+          test "$(awk '/^Uid:/ {print $2}' "/proc/$first_pid/status")" = 0
+          echo S4_B2_ROOT_SYSTEMD_PINNED_ROOT_UID_SOCKET_PERMISSION=PASS
+          if sudo "$bin" native-peer-root-request -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UNTRUSTED_UID_AUTHORIZED; exit 82
+          fi
+          echo S4_B2_ROOT_SYSTEMD_SO_PEERCRED_FOREIGN_REJECT=PASS
+          phase=ROOT_SIGKILL_RESTART
+          sudo systemctl kill -s SIGKILL --kill-whom=main boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            new_pid="$(sudo systemctl show boxweave-native-peer-root.service -p MainPID --value)"
+            if test "$new_pid" -gt 1 && test "$new_pid" != "$first_pid" &&
+              sudo systemctl is-active --quiet boxweave-native-peer-root.service &&
+              sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          sudo test ! -e "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          echo S4_B2_ROOT_SYSTEMD_SIGKILL_RESTART_STALE_SOCKET_NO_EFFECT=PASS
+          phase=ROOT_EXECUTE
+          if test "${{ matrix.scenario }}" = after_acl_fault; then
+            # Only a disposable Go test binary can inject this post-ACL error.
+            phase=POST_ACL_NATIVE_PARTIAL_ROOT_JOURNAL
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+              BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+              BOXWEAVE_S4B2_INSTALLED_DB="$db" BOXWEAVE_S4B2_INSTALLED_ORIGINAL="$original" \
+              BOXWEAVE_S4B2_INSTALLED_SHA="$sha" \
+              /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledPostACLRealEffectUnknown$'
+            journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            test "$(sudo jq -r .status "$journal")" = DISPATCH_UNKNOWN
+            before_journal="$(sudo sha256sum "$journal" | cut -d' ' -f1)"
+            phase=POST_ACL_CONTROLLER_UNKNOWN
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_POST_ACL_ORIGINAL_REPLAYED; exit 85
+            fi
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'")" = PENDING
+            echo S4_B2_INSTALLED_ROOT_POST_ACL_NATIVE_PARTIAL_SQLITE_UNKNOWN=PASS
+            phase=POST_ACL_SQLITE_PROJECT_FENCE
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+              BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+              BOXWEAVE_S4B2_INSTALLED_DB="$db" BOXWEAVE_S4B2_INSTALLED_ORIGINAL="$original" \
+              /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledPartialUnknownProjectLock$'
+            phase=POST_ACL_ROOT_READONLY_REFUSAL
+            if sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" \
+              -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_INCOMPLETE_JOURNAL_INCORRECTLY_RECOVERED; exit 85
+            fi
+            if sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+              echo S4_B2_INSTALLED_INCOMPLETE_JOURNAL_REPLAYED; exit 85
+            fi
+            test "$(sudo sha256sum "$journal" | cut -d' ' -f1)" = "$before_journal"
+            test "$(sudo jq -r .status "$journal")" = DISPATCH_UNKNOWN
+            echo S4_B2_INSTALLED_ROOT_INCOMPLETE_JOURNAL_READONLY_REFUSAL_NO_REPLAY=PASS
+            for label in tcp4 tcp6 udp4 udp6; do
+              prior="$(cat "$RUNNER_TEMP/s4b2-foreign-$label-baseline")"
+              current="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count")"
+              test "$current" -gt "$((prior+3))"
+              if sudo incus --project bwforeign exec foreign-a -- test -e "/tmp/s4b2-flow-$label-result"; then
+                echo "S4_B2_POST_ACL_FOREIGN_$label_INTERRUPTED"; exit 86
+              fi
+            done
+            echo S4_B2_INSTALLED_ROOT_POST_ACL_PARTIAL_FOREIGN_FOUR_FLOWS_UNAFFECTED=PASS
+            exit 0
+          fi
+          if test "${{ matrix.scenario }}" = lost_ack; then
+            # Root performs the *real* effect, but the durable controller
+            # never sees this ACK. It must mark the original UNKNOWN.
+            sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" > "$RUNNER_TEMP/s4b2-discarded-root-ack.json"
+            jq -e '.status=="COMPLETE_VERIFIED" and .receipt.kernel_verified==true' "$RUNNER_TEMP/s4b2-discarded-root-ack.json" >/dev/null
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B2_ROOT_ACK_LOSS_ILLEGALLY_REPLAYED; exit 85
+            fi
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+            sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+            before="$(sudo sha256sum "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" | cut -d' ' -f1)"
+            sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project"               -operation-id "$original" -peer-plan-sha256 "$sha"
+            test "$(sudo sha256sum "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" | cut -d' ' -f1)" = "$before"
+            echo S4_B2_INSTALLED_ROOT_ACK_LOST_COMPLETED_JOURNAL_READONLY_RECOVERED_NO_REPLAY=PASS
+          else
+            sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+          fi
+          echo S4_B2_INSTALLED_ROOT_EXECUTE_EXIT_ZERO=PASS
+          phase=SQLITE_FINAL_OPERATION
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+          phase=SQLITE_GRANT
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT status FROM peer_grants WHERE operation_id='$original'")" = REVOKED
+          phase=ROOT_JOURNAL
+          sudo test -f "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B2_INSTALLED_ROOT_REPLAY_UNSAFE; exit 92
+          fi
+          phase=KERNEL_NFT
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root BOXWEAVE_S4B2_NATIVE_ROOT_PROJECT="$project" \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeRootKernelPerNICDropReadback$'
+          phase=RESUMED_GUEST_STATES
+          for name in s4b2a s4b2b; do
+            test "$(sudo incus --project "$project" list "$name" -c s --format csv)" = RUNNING
+            test "$(sudo incus --project "$project" config get "$name" boot.autostart)" = false
+          done
+          if sudo incus --project "$project" exec s4b2a -- ping -n -c 1 -W 2 10.248.83.12 >/dev/null 2>&1; then
+            echo S4_B2_INSTALLED_REVOKE_IPV4_REACHABLE; exit 93
+          fi
+          if sudo incus --project "$project" exec s4b2a -- ping -n -c 1 -W 2 fd83:248::12 >/dev/null 2>&1; then
+            echo S4_B2_INSTALLED_REVOKE_IPV6_REACHABLE; exit 94
+          fi
+          echo "S4_B2_INSTALLED_NONROOT_ROOT_SOCKET_OPERATOR_SHA_ORIGINAL_NFT_SQLITE_REVOKE=PASS"
+          phase=FOREIGN_FLOW_NONINTERFERENCE
+          for label in tcp4 tcp6 udp4 udp6; do
+            prior="$(cat "$RUNNER_TEMP/s4b2-foreign-$label-baseline")"
+            current="$(sudo incus --project bwforeign exec foreign-a -- cat "/tmp/s4b2-flow-$label-count")"
+            test "$current" -gt "$((prior+3))"
+            if sudo incus --project bwforeign exec foreign-a -- test -e "/tmp/s4b2-flow-$label-result"; then
+              echo "S4_B2_FOREIGN_$label_INTERRUPTED"; exit 88
+            fi
+          done
+          echo S4_B2_INSTALLED_FOREIGN_PROJECT_ESTABLISHED_TCP_UDP_DUALSTACK_SURVIVED_REVOKE=PASS
+          phase=ROOT_BINARY_UPGRADE
+          root_journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+          before_journal="$(sudo sha256sum "$root_journal" | cut -d' ' -f1)"
+          before_acl="$(sudo incus network acl show bw-s4b2-native | sha256sum | cut -d' ' -f1)"
+          if sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native             -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UNIT_OVERWRITTEN; exit 83
+          fi
+          go build -ldflags "-X main.version=1.0.0-s4b2-upgrade-probe -X main.commit=$GITHUB_SHA" -o "$RUNNER_TEMP/boxweave-root-upgrade" ./cmd/boxweave
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-root-upgrade" /usr/local/bin/boxweave
+          test "$(sha256sum /usr/local/bin/boxweave | cut -d' ' -f1)" != "$(sha256sum "$RUNNER_TEMP/boxweave-candidate" | cut -d' ' -f1)"
+          sudo systemctl start boxweave-native-peer-root.service
+          sudo systemctl is-active --quiet boxweave-native-peer-root.service
+          sudo test -S /run/boxweave-native-peer-root.sock
+          if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B2_ROOT_SYSTEMD_UPGRADE_REPLAYED_ORIGINAL; exit 84
+          fi
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          test "$(sudo incus network acl show bw-s4b2-native | sha256sum | cut -d' ' -f1)" = "$before_acl"
+          echo S4_B2_ROOT_SYSTEMD_NEW_BINARY_UPGRADE_NO_REPLAY=PASS
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo install -m0755 "$RUNNER_TEMP/boxweave-candidate" /usr/local/bin/boxweave
+          sudo systemctl start boxweave-native-peer-root.service
+          sudo systemctl is-active --quiet boxweave-native-peer-root.service
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          echo S4_B2_ROOT_SYSTEMD_BINARY_ROLLBACK_PRESERVES_ORIGINAL_JOURNAL=PASS
+          # Independent disposable fault: no acknowledged Start may leave
+          # any previously verified sibling running on a partial/ambiguous ACK.
+          phase=AMBIGUOUS_START_ALL_SIBLINGS
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_INSTALLED_ONE_USE=20261117-controller-root \
+            BOXWEAVE_S4B2_INSTALLED_SCOPE=/tmp/s4b2-installed-scope.json \
+            /usr/local/bin/s4b2-root-fixture -test.v -test.run '^TestS4B2NativeInstalledAmbiguousResumeStopsAllSiblings$'
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+          test "$(sudo sha256sum "$root_journal" | cut -d' ' -f1)" = "$before_journal"
+          echo S4_B2_INSTALLED_ROOT_AMBIGUOUS_START_NO_JOURNAL_REPLAY=PASS
+
+      - name: Independent one-use root/Project/ACL cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          if id boxweave >/dev/null 2>&1 && sudo incus version >/dev/null 2>&1; then
+            project="user-$(id -u boxweave)"
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" delete "$name" --force 2>/dev/null || :
+            done
+            sudo incus --project bwforeign delete foreign-a --force 2>/dev/null || :
+            sudo incus --project bwforeign delete foreign-b --force 2>/dev/null || :
+            sudo incus project delete bwforeign 2>/dev/null || :
+            sudo incus network delete bwforeign 2>/dev/null || :
+            sudo incus project delete "$project" 2>/dev/null || :
+            sudo incus network acl delete bw-s4b2-native 2>/dev/null || :
+            sudo incus network delete bwbr0 2>/dev/null || :
+            sudo incus list --all-projects --format csv -c n
+            echo S4_B2_INSTALLED_ROOT_DISPOSABLE_CLEANUP_ATTEMPTED=TRUE
+          fi

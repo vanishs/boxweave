@@ -30,8 +30,8 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 	}
 	defer s.Close()
 	tools, err := s.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 16 {
-		t.Fatalf("all 13 S1+S2 typed tools must be discoverable: %v", err)
+	if err != nil || len(tools.Tools) != 22 {
+		t.Fatalf("all 22 typed MCP tools must be discoverable: %v", err)
 	}
 	for _, tool := range tools.Tools {
 		raw, err := json.Marshal(tool.InputSchema)
@@ -41,6 +41,40 @@ func TestS2AllPublicToolSchemasRejectUnknownArguments(t *testing.T) {
 		schema := string(raw)
 		if !strings.Contains(schema, "\"additionalProperties\":false") {
 			t.Fatalf("public tool %s is open to silently discarded intent: %s", tool.Name, schema)
+		}
+	}
+	// Common recovery safeguards now live in the initialize instructions;
+	// tools/list retains a compact fallback for clients that do not use them.
+	init := s.InitializeResult()
+	if init == nil {
+		t.Fatal("missing official MCP initialize result")
+	}
+	for _, word := range []string{"idempotency_key", "work_ref", "operation_list", "operation_get", "UNKNOWN", "new-key"} {
+		if !strings.Contains(init.Instructions, word) {
+			t.Fatalf("server instructions missing recovery safety rule %q", word)
+		}
+	}
+	for _, tool := range tools.Tools {
+		if tool.Annotations != nil && !tool.Annotations.ReadOnlyHint {
+			if !strings.HasSuffix(tool.Description, mutationContinuityHint) ||
+				!strings.Contains(tool.Description, "exact retries") ||
+				!strings.Contains(tool.Description, "original Operation") {
+				t.Fatalf("mutation tool %s missing compact reconnect fallback", tool.Name)
+			}
+		}
+		switch tool.Name {
+		case "operation_list":
+			if !strings.Contains(tool.Description, "Empty results") {
+				t.Fatal("operation_list must not imply missing original means no native effect")
+			}
+		case "operation_get":
+			if !strings.Contains(tool.Description, "UNKNOWN") || !strings.Contains(tool.Description, "read-only") {
+				t.Fatal("operation_get missing UNKNOWN post-state review boundary")
+			}
+		case "operation_output_get":
+			if !strings.Contains(tool.Description, "next_offset") {
+				t.Fatal("operation_output_get missing original pagination guidance")
+			}
 		}
 	}
 	for _, name := range []string{"host_status", "box_list"} {

@@ -1,5 +1,7 @@
 # S3/S4/S5 work rebalance — minimal S3, integration-heavy S4, independent S5 (2026-11-15)
 
+**Superseded S4/S5 execution order (2026-11-16):** S3 is now signed and merged. The owner-approved **current** S4-A/B/C and S5 field-verifier split, including moving independent *fresh* raw Incus daemon Operation-terminal capture **early into S4-A** while retaining #151's full investigation in S5, is recorded at [S4/S5 execution rebalance](S4_S5_EXECUTION_REBALANCE_2026-11-16.md) and [S4 kickoff](S4_EXECUTION_KICKOFF_2026-11-16.md). This file remains the historical S3 decision/evidence and should not be mistaken for a current S3 Draft PR or the latest S4/S5 ordering.
+
 **Approved direction:** minimize S3 while leaving its three public File Tools safe; move cross-layer runtime integration to S4 and comprehensive adversarial/Release quality to S5. This is a stage **ownership / exit-contract change**, not a reduction of BoxWeave v1's eventual product promises, an S3 PASS, a new Tool, a release, or authorization for more physical host changes. Work is committed solely to existing [S3 Draft PR #152](https://github.com/vanishs/boxweave/pull/152); merge its final *implemented* candidate to protected v1 only after the actual S3 limited exit and required CI.
 
 ## Dependency-based placement

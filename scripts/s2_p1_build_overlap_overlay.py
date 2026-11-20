@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Make a disposable-only Go source overlay at the exact committed post-verify boundary.
+"""Build a disposable overlay at the verified-native, pre-atomic Create boundary.
 
-Production worker.go stays byte-identical. The overlay is compiled ONLY as a
-CI-specific acceptance binary; it is never included in the release build.
+Committed lifecycle.go and candidate bytes stay unchanged. Successful Create no
+longer has a bound-UUID VERIFYING window: UUID/claim/terminal commit atomically.
 """
 import hashlib
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 
 if len(sys.argv) != 3:
-    raise SystemExit("usage: s2_p1_build_overlap_overlay.py <source-worker.go> <lab>")
+    raise SystemExit("usage: s2_p1_build_overlap_overlay.py <lifecycle.go> <lab>")
 source = Path(sys.argv[1]).resolve(strict=True)
 lab = Path(sys.argv[2]).resolve(strict=True)
 if not (
@@ -20,76 +20,77 @@ if not (
     and os.geteuid() != 0
     and str(lab).startswith("/tmp/bw-v1-s2-ghci.")
     and lab.name == "p1-native-overlap"
-    and source.parts[-3:] == ("internal", "state", "worker.go")
+    and source.parts[-3:] == ("internal", "state", "lifecycle.go")
     and lab.is_dir()
 ):
     raise SystemExit("refusing overlay outside single-use GitHub-hosted acceptance")
 
 original = source.read_bytes()
 before = original.decode("utf-8")
-needle = "\tif err = w.Store.Verified(context.Background(), operationID); err != nil {"
-assert before.count(needle) == 1, "post-verify receipt site must be exactly one"
-# The candidate's VerificationUncertain classification now uses strings,
-# so the authorized test overlay must preserve that existing import.
-# Keep this exact-match anchor: any unrelated worker layout still fails closed.
-imports = '\t"errors"\n\t"strings"\n\t"time"'
-assert before.count(imports) == 1, "worker import layout changed; fail closed"
-extra = '''\t"errors"
-\t"os"
-\t"path/filepath"
-\t"strings"
-\t"time"'''
+function = "func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {"
+assert before.count(function) == 1, "atomic Create finalizer must be exactly one"
+prefix, body = before.split(function)
+needle = "\ttx, err := s.db.BeginTx(ctx, nil)"
+assert body.count(needle) >= 1, "atomic Create transaction anchor changed"
+imports = '\t"errors"\n\t"fmt"'
+assert before.count(imports) == 1, "lifecycle import layout changed; fail closed"
+extra = '\t"encoding/json"\n\t"errors"\n\t"fmt"\n\t"os"\n\t"path/filepath"'
 
-# Test pause ONLY after verify(ctx) returned nil: RegisterCreatedBox already
-# committed exact native UUID + owned instance in one SQLite transaction.
-# No exported product hook, no alternate API, no injected fake native result.
-hook = """
-	// TEST-ONLY GO OVERLAY: not in the committed or release worker.go.
-	// Preserve exact native effect and all original DB transitions.
+# Pause before opening the transaction so independently handled HTTP reads
+# and denied Deletes can run on the Store's single connection. The caller
+# already verified native UUID, original marker, shape and finality.
+hook = '''
+	// TEST-ONLY GO OVERLAY: never in committed or release lifecycle.go.
 	if os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
-		os.Geteuid() != 0 &&
+		os.Geteuid() != 0 && name == "bw-s2-p1-overlap-110x" &&
 		os.Getenv("BW_S2_OVERLAP_ACTIVATE") == "one-disposable-original" {
 		lab := os.Getenv("BW_S2_OVERLAP_LAB")
-		if strings.HasPrefix(lab, "/tmp/bw-v1-s2-ghci.") &&
-			filepath.Base(lab) == "p1-native-overlap" {
-			receipt, readErr := w.Store.Get(context.Background(), operationID)
-			if readErr == nil && receipt.Action == "box_create" &&
-				receipt.State == "VERIFYING" && len(receipt.BoxUUID) == 36 &&
-				receipt.NativeOperationID != "" {
-				if err := os.WriteFile(filepath.Join(lab, "held"),
-					[]byte("POST_REGISTER_CREATED_BOX_COMMIT_VERIFIED_EFFECT_RETURNED\\n"), 0600); err != nil {
-					_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING",
-						"S2_TEST_ONLY_HOOK_WITNESS_UNAVAILABLE")
-					return
-				}
-				released := false
-				for i := 0; i < 950; i++ {
-					if _, err := os.Stat(filepath.Join(lab, "release")); err == nil {
-						released = true
-						break
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
-				if !released {
-					_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING",
-						"S2_TEST_ONLY_HOOK_TIMED_OUT")
-					return
-				}
+		if !strings.HasPrefix(lab, "/tmp/bw-v1-s2-ghci.") ||
+			filepath.Base(lab) != "p1-native-overlap" {
+			return errors.New("S4_TEST_ONLY_INVALID_OVERLAY_SCOPE")
+		}
+		receipt, readErr := s.Get(ctx, opID)
+		if readErr != nil || receipt.Action != "box_create" ||
+			receipt.State != "VERIFYING" || receipt.BoxUUID != "" ||
+			receipt.NativeOperationID == "" || len(uuid) != 36 {
+			return errors.New("S4_TEST_ONLY_PREATOMIC_IDENTITY_UNVERIFIED")
+		}
+		evidence, marshalErr := json.Marshal(map[string]string{
+			"phase": "NATIVE_VERIFIED_BEFORE_ATOMIC_CREATE",
+			"uuid": uuid, "original_id": opID,
+			"native_id": receipt.NativeOperationID, "project": project})
+		if marshalErr != nil || os.WriteFile(filepath.Join(lab, "held.tmp"), evidence, 0600) != nil ||
+			os.Rename(filepath.Join(lab, "held.tmp"), filepath.Join(lab, "held")) != nil {
+			return errors.New("S4_TEST_ONLY_PREATOMIC_WITNESS_UNAVAILABLE")
+		}
+		released := false
+		for i := 0; i < 950; i++ {
+			if _, err := os.Stat(filepath.Join(lab, "release")); err == nil {
+				released = true
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(100 * time.Millisecond):
 			}
 		}
+		if !released {
+			return errors.New("S4_TEST_ONLY_PREATOMIC_HOOK_TIMED_OUT")
+		}
 	}
-"""
-modified = before.replace(imports, extra).replace(needle, hook + needle)
+'''
+modified = (prefix + function + body.replace(needle, hook + needle, 1)).replace(imports, extra)
 assert modified.count("TEST-ONLY GO OVERLAY") == 1
-overlay_file = lab / "worker.test-overlay.go"
+overlay_file = lab / "lifecycle.test-overlay.go"
 json_file = lab / "go-overlay.json"
 overlay_file.write_text(modified, encoding="utf-8")
 json_file.write_text(
     json.dumps({"Replace": {str(source): str(overlay_file)}}, sort_keys=True),
     encoding="utf-8",
 )
-assert source.read_bytes() == original, "original worker unexpectedly changed"
-print("S2_P1_OVERLAY_SOURCE_UNMODIFIED_SHA256=" + hashlib.sha256(original).hexdigest())
-print("S2_P1_OVERLAY_TEST_ONLY_WORKER_SHA256=" + hashlib.sha256(modified.encode()).hexdigest())
-print("S2_P1_OVERLAY_POST_BIND_ONLY_EXACT_SINGLE_INSERTION=PASS")
+assert source.read_bytes() == original, "original lifecycle unexpectedly changed"
+print("S4_A_OVERLAY_SOURCE_UNMODIFIED_SHA256=" + hashlib.sha256(original).hexdigest())
+print("S4_A_OVERLAY_TEST_ONLY_LIFECYCLE_SHA256=" + hashlib.sha256(modified.encode()).hexdigest())
+print("S4_A_OVERLAY_PREATOMIC_EXACT_SINGLE_INSERTION=PASS")

@@ -1,5 +1,7 @@
 # Minimal P0 MCP tool contracts
 
+**2026-11-20 PT S4-C implementation start:** Owner initiated independent implementation. `box_get(detail:boolean=false)` is implemented in source (`true`: live authenticated management Actor; native `InstanceFull` includes State/Snapshots/Backups and potentially sensitive configuration with `observed_at`). Only the exact owned UUID in the restricted Project, with ledger incarnation and credential revalidation, may be returned. Default output unchanged; older SDK multi-read fallback is refused. One `box_wait_ready` async observation Tool is implemented in source (real `exec_ready`, optional IP, maximum 600 seconds), giving **22** Tools including Activity. B6 completion remains mandatory before final acceptance. See [S4-C implementation and evidence contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). Historical 20/21 counts predate this registration and Activity.
+
 **Status:** design, not frozen wire schemas. See [20-tool catalog](MCP_TOOLS.md) and [permanent scope](../decisions/PRODUCT_BOUNDARY.md). Freeze exact JSON Schema after official SDK/native tests. Every mutation requires a nonempty, caller-generated, reusable idempotency key.
 
 ## `box_file_apply`
@@ -15,6 +17,18 @@ Input: exact owned `box_id`, safe guest path, `mode=create|replace|delete`. **No
 Report native post-state, observed SHA/hash coverage and errors; do not invent success for a partial write. File list/read are bounded/paginated and must not claim a verified full-file SHA from an inconsistent partial read. Complex code patching is done via an authorized guest Git or shell invocation under `box_exec`, **not** an independent in-controller patch engine.
 
 A staging-file rename by itself only guarantees whole-file visibility, **not** compare-and-swap against a concurrent guest writer. Do not weaken the existing conditional `replace/delete` contract based on an upstream example; return `UNSUPPORTED` when native point-of-use safety cannot be proven. An Incus file response identifying a symlink or directory is not ordinary regular-file bytes.
+
+## `box_activity_get` — approved read-only source evidence in Draft PR #153
+
+Current public Tool count is **18**, consisting of 17 existing Tools plus this separately approved read-only query; planned full count after S4 additions and S4-C readiness is **22**. No other Tool's input/output contract is changed.
+
+Typed input: `box_activity_get(view?: "overview"|"issues"|"evidence", box_id?, operation_id?, work_ref?, agent_ref?, limit?:1..50, cursor?)`. Omitted `view` defaults to `overview`; `operation_id` is mandatory for `evidence` and forbidden on other views. `box_id` filters an exact UUID, including a historical/deleted UUID, without granting access to any foreign Project. Optional correlation labels only narrow the authenticated Layer. `cursor` paginates `overview` and `issues`, and is HMAC-bound to token, Layer, view and filters. A changed filter or forged cursor fails closed; no arbitrary SQL or caller-provided Project.
+
+Public result is `{tracking_id, activity:{source,scope,as_of_ns,coverage,truncated,attention_complete,next_cursor?,operations?,issues?,evidence?}}`. `overview` lists newest authorized originals. `issues` unifies effective unresolved Operations, Project-wide Peer barrier, Exec-output-GC blockers, active and unresolved Peer grants, address fences and forward claims. `evidence` includes the exact authorized original, ordered events, reviewer **decisions only**, resource claims, bounded Exec/GC metadata and current verified Peer backlink; raw review proofs, guest command/streams, host-root journal, native effect and external Git/task state are not exposed. Inspect `operation_get`, `operation_output_get` and, where appropriate, `box_get` for independent follow-up.
+
+**The result is a bounded read-only SQLite snapshot per invocation, never proof of current kernel/network or guest completion.** `attention_complete=false` is intentional; even an empty page cannot certify no unseen native/Host/unknown work. `truncated` with `next_cursor` enables another bounded page; mutable network rows can change between pages, so this cursor is not a long-lived whole-database snapshot. A Token revoked while the query is running must not receive a result; OAuth grant/Actor labels are never substitute credentials. An original UNKNOWN or uncertain native reply must never trigger a new idempotency key or replay.
+
+[Source implementation, official SDK and SQLite acceptance](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md) · [Schema v5 adoption/rebuild warning](../development/V1_ACTIVITY_LINEAGE_IMPLEMENTATION_AND_REBUILD_NOTICE_2026-11-19.md).
 
 ## Additional S2 correlation and recovery results, same 20 Tools
 
@@ -48,7 +62,7 @@ For `box_exec`, report separately: observed zero exit, observed nonzero exit, an
 
 ## Auth and source visibility
 
-Two independently revocable role types: `admin` may manage BoxWeave-owned resources and Exec inside owned guests; `viewer` may inspect owned metadata and guest files/output, but must never mutate or Exec. No per-Box grants, tool-class ACL matrix, tenant roles or inherited parent credentials. Viewer read access may expose confidential guest data; do not describe it as harmless.
+One approved full-management capability per independently revocable Actor credential (manual Bearer or OAuth Grant); **no** admin/viewer roles and **no** application OAuth permission Scope. All reads, mutations and guest-root Exec require live authentication and exact Layer/owned-UUID protection. Same-Layer original Operation evidence is visible to another approved Actor for recovery, but original Actor idempotency and credential liveness cannot be borrowed.
 
 Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not proved-dispatched work. On unsafe/incapable native operation, fail closed with Tracking ID and classified error; logs remain local. No Caddy, HTTP-route, generic ACL or dedicated diagnostic API.
 
@@ -61,4 +75,9 @@ Pre-dispatch Token revocation blocks new/queued-undispatched mutations, not prov
 
 ## Required native black-box checks
 
-Verify whole Agent create/read/create-or-replace/file-delete/async test/recover/fix/retest cycle; file race/symlink/hardlink denial; viewer forbidden Exec and write; Box peer A->B allow/revoke without changing B->A initiation; host loopback/public TCP+UDP mapping; foreign resource denial; repeated idempotency/UNKNOWN; nested L1/L2 matching behavior. No P0 PASS without real Incus evidence.
+Verify the whole Agent create/read/file/async recovery/fix/retest cycle, file race/symlink/hardlink refusals, anonymous/expired/revoked or forged Token denial, authenticated peer-Actor positive takeover plus distinct idempotency, A-to-B directional peer grant/revoke, TCP/UDP port behavior, foreign Project/Box refusal, UNKNOWN no-replay, nested L1/L2 boundaries and exact native proof.
+
+
+### Readiness source contract (2026-11-20)
+
+`box_wait_ready(box_id,idempotency_key,checks?,timeout_seconds?,work_ref?,agent_ref?)` admits a bounded OBSERVING original without holding the ordinary Box lock; checks running/exec/ipv4/ipv6, default running+exec, 1..600 seconds (default 300). Poll `operation_get.readiness`. Per-check status, deadline, observed guest exit and explicit ready only after proof. Fixed native timeout-bounded Exec, no recorded streams/user argv. UNKNOWN if probe receipt uncertain, TIMED_OUT on elapsed deadline without uncertain effect. No automatic replay. See current S4-C checkpoint.

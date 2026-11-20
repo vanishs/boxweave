@@ -1,0 +1,134 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+lab=/var/tmp/s4b6-peer
+bin=/var/tmp/s4b6-integration/boxweave
+project=user-1001
+acl=bw-s4b2-native
+bridge=bwbr0
+test "$(id -u)" = 0
+test "$(sha256sum "$bin" | cut -d' ' -f1)" = 85695931a2f01196b0830986c83b0d44e951636cd8e8ffbbc30f7e584282ff73
+test "$(jq -r .status /var/tmp/s4b6-scriptlet-evidence/product-rollback.json)" = ROLLED_BACK
+test -z "$(incus config get authorization.scriptlet)"
+test -z "$(incus config get core.https_address)"
+test -z "$(incus --project "$project" list -c n -f csv)"
+test ! -e "$lab"
+test ! -e /root/b6-peer-fixture
+test ! -e /run/boxweave-native-peer-root.sock
+test ! -e /etc/systemd/system/s4b6-peer-root.service
+test ! -e /etc/systemd/system/s4b6-controller.service
+test "$(incus --project "$project" profile device get default eth0 security.acls)" = bw-s4b4-native
+install -d -m0755 "$lab"
+install -d -m0700 -o boxweave -g boxweave "$lab/private"
+db="$lab/private/ledger.sqlite"
+# Preserve prior Scriptlet evidence and stop only its exact two disposable children.
+for spec in 'bwlegacy s4b2legacyguest' 'bwother s4b2otherguest'; do
+  read -r p n <<< "$spec"
+  uuid="$(incus --project "$p" config get "$n" volatile.uuid)"
+  test -n "$uuid"
+  printf '%s %s %s\n' "$p" "$n" "$uuid" >> "$lab/scriptlet-fixtures.txt"
+  incus --project "$p" stop "$n"
+done
+# Remove only the three test-owned trust entries, retaining prior trust exactly.
+for n in legacy other writer; do
+  fpr="$(openssl x509 -in "/var/tmp/s4b6-scriptlet-evidence/$n.crt" -outform der | sha256sum | cut -d' ' -f1)"
+  test "${#fpr}" = 64
+  incus config trust remove "$fpr"
+done
+incus config trust list --format json | jq -S 'map({fingerprint,restricted,projects,type})' | cmp - /var/tmp/s4b6-integration/scriptlet-trust-before.json
+# Derive fixture from exact source; only the test-only gate and seed mode change.
+cd /root/b6-candidate
+git worktree add --detach /root/b6-peer-fixture HEAD
+cd /root/b6-peer-fixture
+test "$(git rev-parse HEAD)" = 1f1d1d8011f053a44faa3d4bf7ad7ab931763336
+printf 's4b6-isolated-native-lab-20261120\n' > "$lab/one-use"
+chmod 0644 "$lab/one-use"
+python3 - <<'PY'
+from pathlib import Path
+p=Path("internal/install/native_peer_root_grant_installed_native_test.go")
+s=p.read_text()
+a='if os.Getenv("GITHUB_ACTIONS") != "true" ||\n\t\tos.Getenv("BOXWEAVE_S4B3_ONE_USE") != "20261118-disposable-root-grant" {'
+b='marker, err := os.ReadFile("/var/tmp/s4b6-peer/one-use")\n\tif err != nil || string(marker) != "s4b6-isolated-native-lab-20261120\\n" || os.Getenv("BOXWEAVE_B6_ONE_USE") != "s4b6-isolated-native-lab-20261120" {'
+assert s.count(a)==1
+s=s.replace(a,b)
+a='\t_, tok, err := s.IssueToken(ctx, time.Hour)'
+b='\tif os.Getenv("BOXWEAVE_B6_SEED_ONLY") == "1" {\n\t\tt.Log("S4_B6_TEST_ONLY_PINNED_NATIVE_LEDGER_SEED=PASS")\n\t\treturn\n\t}\n'+a
+assert s.count(a)==1
+p.write_text(s.replace(a,b))
+p=Path("internal/install/native_s4_b1_egress_lease_test.go")
+s=p.read_text()
+a='if os.Getenv("BOXWEAVE_DISPOSABLE_NATIVE_PROBE") != "s4b1-ci-20261116" {'
+b='marker, err := os.ReadFile("/var/tmp/s4b6-peer/one-use")\n\tif err != nil || string(marker) != "s4b6-isolated-native-lab-20261120\\n" || os.Getenv("BOXWEAVE_B6_ONE_USE") != "s4b6-isolated-native-lab-20261120" {'
+assert s.count(a)==1
+p.write_text(s.replace(a,b))
+PY
+gofmt -w internal/install/native_peer_root_grant_installed_native_test.go internal/install/native_s4_b1_egress_lease_test.go
+git diff --check
+git diff > "$lab/test-harness.patch"
+go test -c -o "$lab/root-fixture" ./internal/install
+chmod 0755 "$lab/root-fixture"
+CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$lab/packet" ./scripts/s4_b3_native_packet_probe.go
+chmod 0755 "$lab/packet"
+go build -tags s4b3_native_ci -o "$lab/mcp-client" ./scripts/s4_b3_native_mcp_client.go
+chmod 0755 "$lab/mcp-client"
+export BOXWEAVE_B6_ONE_USE=s4b6-isolated-native-lab-20261120
+"$lab/root-fixture" -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+incus --project "$project" profile device set default eth0 security.acls="$acl"
+for spec in 's4b2a 10.248.83.11 fd83:248::11' 's4b2b 10.248.83.12 fd83:248::12' 's4b2c 10.248.83.13 fd83:248::13'; do
+  read -r name ipv4 ipv6 <<< "$spec"
+  incus --project "$project" init s4b6-fixture-image "$name" -c limits.cpu=1 -c limits.memory=512MiB -c boot.autostart=true
+  incus --project "$project" config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+  incus --project "$project" start "$name"
+  incus --project "$project" file push "$lab/packet" "$name/root/s4b6-packet" --mode 0755
+  cat <<'UNIT' | incus --project "$project" exec "$name" -- sh -c 'cat > /etc/systemd/system/s4b6-packet.service'
+[Unit]
+Description=Disposable B6 echo witness
+After=network.target
+[Service]
+ExecStart=/root/s4b6-packet server
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+  incus --project "$project" exec "$name" -- systemctl enable --now s4b6-packet.service
+done
+ready=0
+for i in $(seq 1 60); do
+ if incus --project "$project" exec s4b2a -- ip -4 -o addr show eth0 | grep -q 10.248.83.11 &&
+    incus --project "$project" exec s4b2b -- ip -4 -o addr show eth0 | grep -q 10.248.83.12 &&
+    incus --project "$project" exec s4b2c -- ip -4 -o addr show eth0 | grep -q 10.248.83.13 &&
+    incus --project "$project" exec s4b2a -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::11 &&
+    incus --project "$project" exec s4b2b -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::12 &&
+    incus --project "$project" exec s4b2c -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::13; then ready=1; break; fi
+ sleep 1
+done
+test "$ready" = 1
+BOXWEAVE_S4B3_SCOPE="$lab/scope.json" "$lab/root-fixture" -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
+chmod 0644 "$lab/scope.json"
+runuser -u boxweave -- env BOXWEAVE_B6_ONE_USE="$BOXWEAVE_B6_ONE_USE" BOXWEAVE_B6_SEED_ONLY=1 BOXWEAVE_S4B3_SCOPE="$lab/scope.json" BOXWEAVE_S4B3_DB="$db" "$lab/root-fixture" -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$'
+test "$(sqlite3 -readonly "$db" 'select count(*) from operations')" = 0
+cat > /etc/systemd/system/s4b6-controller.service <<UNIT
+[Unit]
+Description=Disposable B6 exact candidate controller
+After=incus.service
+Requires=incus.service
+[Service]
+Type=simple
+User=boxweave
+Group=boxweave
+UMask=0077
+ExecStart=$bin serve -db $db -project $project -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now s4b6-controller.service
+for i in $(seq 1 40); do
+ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp || true)
+ test "$code" = 401 && break
+ sleep 1
+done
+test "$code" = 401
+"$bin" build-info
+printf 'S4_B6_PEER_FIXTURE_READY=PASS\n'

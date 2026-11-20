@@ -1,14 +1,15 @@
 //go:build ignore
 
-// Official MCP SDK native Create/Delete overlap: a separate debugger suspends
-// ONLY the Create worker at its final SQLite Verified call, after its actual
-// native UUID has been bound. This file never ships in the product.
+// Official MCP SDK native Create/Delete overlap: a test-only source overlay
+// pauses after native verification, before atomic UUID/terminal finalization.
+// No bound-UUID VERIFYING window is fabricated. This file never ships.
 package main
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -46,13 +47,13 @@ func call(ctx context.Context, s *mcp.ClientSession, n string, args map[string]a
 	r, e := s.CallTool(ctx, &mcp.CallToolParams{Name: n, Arguments: args})
 	must(e == nil && r != nil, "transport failed or stalled (cannot count as native lock refusal) on "+n)
 	if r.IsError {
-		// An HTTP/MCP refusal is not enough to establish a safe lock:
-		// distinguish the expected original-resource lock from generic
-		// internal/server errors and invalid request failures.
+		// An independently known native UUID is not locally owned before
+		// the atomic claim+terminal commit. Require this exact refusal;
+		// transport/internal failures cannot count as ownership safety.
 		encoded, encodeErr := json.Marshal(r.Content)
 		must(encodeErr == nil && strings.Contains(string(encoded),
-			"original unresolved resource claim is still locked"),
-			"unexpected error instead of original bound-UUID resource lock on "+n)
+			state.ErrNotFound.Error()),
+			"unexpected error instead of unbound-UUID refusal on "+n)
 		return nil, false
 	}
 	b, e := json.Marshal(r.StructuredContent)
@@ -94,7 +95,7 @@ func finish(ctx context.Context, s *mcp.ClientSession, id string) map[string]any
 		if state == "SUCCEEDED" {
 			return op
 		}
-		must(state != "FAILED" && state != "UNKNOWN" && state != "CANCELLED", "original Create failed after debugger release: "+state)
+		must(state != "FAILED" && state != "UNKNOWN" && state != "CANCELLED", "original failed after overlay release: "+state)
 	}
 	panic("S2_P1_NATIVE_OVERLAP_FAIL: verification did not finish")
 }
@@ -124,18 +125,25 @@ func main() {
 	id := field(created, "operation_id")
 	awaitMarker(ctx, filepath.Join(dir, "held"))
 	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
-	must(e == nil, "cannot inspect test-only SQLite after native bind")
+	must(e == nil, "cannot inspect test-only pre-atomic SQLite")
 	defer st.Close()
 	original, e := st.Get(ctx, id)
-	must(e == nil && original.State == "VERIFYING" && len(original.BoxUUID) == 36 &&
-		original.NativeOperationID != "", "real CREATE did not bind exact UUID while VERIFYING")
-	uuid := original.BoxUUID
-	owned, e := st.OwnedBox(ctx, project, uuid)
-	must(e == nil && owned.UUID == uuid && owned.Name == name, "original bound UUID not owned atomically")
+	must(e == nil && original.State == "VERIFYING" && original.BoxUUID == "" &&
+		original.Incarnation == "" && original.NativeOperationID != "",
+		"pre-atomic Create leaked UUID or lost original native receipt")
+	heldBytes, e := os.ReadFile(filepath.Join(dir, "held"))
+	must(e == nil, "pre-atomic native witness missing")
+	var held map[string]string
+	must(json.Unmarshal(heldBytes, &held) == nil && held["phase"] == "NATIVE_VERIFIED_BEFORE_ATOMIC_CREATE" &&
+		held["original_id"] == id && held["native_id"] == original.NativeOperationID &&
+		held["project"] == project && len(held["uuid"]) == 36, "original native witness identity mismatch")
+	uuid := held["uuid"]
+	_, e = st.OwnedBox(ctx, project, uuid)
+	must(errors.Is(e, state.ErrNotFound), "uncommitted native UUID became locally owned")
 	evidence, _ := json.Marshal(map[string]string{"uuid": uuid, "original_id": id, "native_id": original.NativeOperationID})
 	newMarker(filepath.Join(dir, "bound.json"), string(evidence))
 	awaitMarker(ctx, filepath.Join(dir, "native-verified"))
-	// Source-line debugger is still holding only Create's worker goroutine,
+	// The source overlay is still holding only Create's worker goroutine,
 	// so these real SDK calls must be genuinely handled by other goroutines.
 	const count = 12
 	var wg sync.WaitGroup
@@ -172,18 +180,31 @@ func main() {
 	e = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations WHERE action='box_delete'").Scan(&deleteCount)
 	must(e == nil && deleteCount == 0, "rejected concurrent Delete inserted durable work")
 	verify, e := st.Get(ctx, id)
-	must(e == nil && verify.State == "VERIFYING" && verify.BoxUUID == uuid,
+	must(e == nil && verify.State == "VERIFYING" && verify.BoxUUID == "" && verify.Incarnation == "",
 		"real concurrent Delete changed still-held original")
-	fmt.Println("S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS")
+	fmt.Println("S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED=PASS")
 	// The test-only Go overlay pauses only box_create; subsequent verified
 	// box_delete does not need any GDB-style disarm marker.
 	newMarker(filepath.Join(dir, "release"), "safe to complete native original\n")
 	final := finish(ctx, mainSession, id)
 	must(field(final, "box_uuid") == uuid, "final Create changed original native UUID")
+	owned, e := st.OwnedBox(ctx, project, uuid)
+	must(e == nil && owned.UUID == uuid && owned.Name == name && owned.Incarnation == uuid,
+		"successful Create omitted atomic owned UUID")
+	var createEvents int
+	e = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED' AND safe_detail='ORIGINAL_CREATE_UUID_ATOMIC'", id).Scan(&createEvents)
+	must(e == nil && createEvents == 1, "successful Create omitted or duplicated atomic terminal event")
 	// Only after the original is VERIFIED may a fresh new-key Delete be admitted.
 	removal, ok := call(ctx, mainSession, "box_delete", map[string]any{
 		"box_id": uuid, "idempotency_key": "s2-overlap-delete-after-verified"})
 	must(ok && len(field(removal, "operation_id")) == 32, "verified original blocked legitimate Delete")
-	finish(ctx, mainSession, field(removal, "operation_id"))
-	fmt.Println("S2_P1_REAL_NATIVE_OVERLAP_RELEASE_VERIFIED_DELETE_SUCCEEDED=PASS")
+	deleteID := field(removal, "operation_id")
+	finish(ctx, mainSession, deleteID)
+	var tombstone, deletedBy string
+	var deletedAt int64
+	e = db.QueryRowContext(ctx, "SELECT state,deleted_by_operation_id,deleted_at FROM owned_boxes WHERE uuid=?", uuid).Scan(&tombstone, &deletedBy, &deletedAt)
+	must(e == nil && tombstone == "DELETED" && deletedBy == deleteID && deletedAt > 0,
+		"successful Delete omitted original-operation tombstone")
+	fmt.Printf("S4_A_OVERLAP_CREATE_BW_ID=%s NATIVE_ID=%s DELETE_BW_ID=%s BOX_UUID=%s PROJECT=%s\n", id, original.NativeOperationID, deleteID, uuid, project)
+	fmt.Println("S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE=PASS")
 }

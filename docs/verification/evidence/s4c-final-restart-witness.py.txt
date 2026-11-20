@@ -1,0 +1,70 @@
+import os,sys,time,json,subprocess
+from pathlib import Path
+sys.path.insert(0,"/root/s4c-ready-native/scripts")
+from mcp_testkit import LoopbackMCP,MCPToolError
+lab=Path("/var/tmp/s4c-ready-native")
+ck=lab/"final-restart-witness.json"
+box="39c49655-f06e-46aa-9137-59e3a17fba51"
+previous="78bcc5ad229e3bc6ea06d8f961473ce0"
+url="http://127.0.0.1:18676/mcp"
+def args(key,seconds=180,checks=None,who=box):
+ return dict(box_id=who,idempotency_key="s4c-final-"+key+"-20261120",timeout_seconds=seconds,checks=checks or ["running","exec"],work_ref="s4c-final-acceptance-20261120")
+def call(m,name,**kw):
+ return m.call(name,kw).structured
+def get(m,oid):
+ return call(m,"operation_get",operation_id=oid)
+def terminal(m,oid,seconds=20):
+ until=time.monotonic()+seconds
+ while time.monotonic()<until:
+  z=call(m,"operation_get",operation_id=oid,wait_ms=2000)
+  if z["operation"]["state"] in ("SUCCEEDED","FAILED","UNKNOWN","TIMED_OUT","CANCELLED"):return z
+ raise AssertionError("nonterminal original "+oid)
+def deny(m,tool,**kw):
+ try:call(m,tool,**kw)
+ except MCPToolError:return
+ raise AssertionError("unexpected allowed "+tool)
+def show(label,z):
+ print(label,json.dumps(z,sort_keys=True),flush=True)
+with LoopbackMCP(url,token=os.environ["BW_TEST_TOKEN"],allow_mutations=True) as m:
+ assert len(m.all_tools())==22
+ if sys.argv[1]=="pre":
+  assert not ck.exists()
+  actual=call(m,"box_get",box_id=box,detail=True)
+  assert actual["box"]["native_state"]=="Stopped"
+  assert actual["instance_full"]["config"]["volatile.uuid"]==box
+  assert "snapshots" in actual["instance_full"] and "backups" in actual["instance_full"]
+  p=get(m,previous)
+  assert p["operation"]["state"]=="FAILED" and p["operation"]["error_class"]=="PROCESS_RESTART_BEFORE_DISPATCH" and not p["readiness"]["ready"]
+  show("PREVIOUS_ORIGINAL",p)
+  deny(m,"box_wait_ready",**args("foreign",who=os.environ["BW_FOREIGN_UUID"]))
+  deny(m,"box_get",box_id=os.environ["BW_FOREIGN_UUID"],detail=True)
+  deny(m,"box_wait_ready",**args("invalid",seconds=601))
+  deny(m,"box_wait_ready",**args("invalid-check",checks=["initialized"]))
+  deny(m,"box_wait_ready",**args("duplicate-check",checks=["exec","exec"]))
+  new=call(m,"box_wait_ready",**args("cancel"))
+  oid=new["operation_id"]
+  assert new["state"]=="OBSERVING"
+  deny(m,"box_wait_ready",**args("parallel"))
+  deny(m,"box_wait_ready",**args("cancel",seconds=200))
+  c=call(m,"operation_cancel",target_operation_id=oid,idempotency_key="s4c-final-cancel-receipt-20261120")
+  o=terminal(m,c["cancel_operation"]["operation_id"])
+  assert o["operation"]["state"]=="SUCCEEDED",o
+  z=terminal(m,oid)
+  assert z["operation"]["state"]=="CANCELLED" and not z["operation"].get("native_operation_id") and not z["readiness"]["ready"]
+  show("CANCEL",z)
+  q=call(m,"box_wait_ready",**args("restart"))
+  assert q["state"]=="OBSERVING"
+  ck.write_text(json.dumps(dict(original=q["operation_id"],box=box))+"\n")
+  print("S4_C_NEGATIVE_CANCEL_AND_PRE_RESTART_PASS",q["operation_id"],flush=True)
+ elif sys.argv[1]=="post":
+  orig=json.loads(ck.read_text())["original"]
+  z=get(m,orig)
+  assert z["operation"]["state"]=="FAILED" and z["operation"]["error_class"]=="PROCESS_RESTART_BEFORE_DISPATCH"
+  assert not z["operation"].get("native_operation_id") and not z["readiness"]["ready"]
+  same=call(m,"box_wait_ready",**args("restart"))
+  assert same["duplicate"] and same["operation_id"]==orig
+  actual=call(m,"box_get",box_id=box,detail=True)
+  assert actual["instance_full"]["config"]["volatile.uuid"]==box and actual["box"]["native_state"]=="Stopped"
+  show("POST_RESTART",z)
+  print("S4_C_REAL_CONTROLLER_RESTART_NO_REPLAY_PASS",flush=True)
+ else:raise ValueError("phase")

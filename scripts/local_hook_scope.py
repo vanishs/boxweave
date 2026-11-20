@@ -53,7 +53,7 @@ def push_docs_only(remote: str, lines: list[str]) -> bool:
                 and remote_ref.startswith("refs/heads/")
                 and SHA.fullmatch(local_sha) and SHA.fullmatch(remote_sha)):
             return False
-        if local_sha == "0" * 40 or remote_ref.startswith("refs/heads/release/"):
+        if local_sha == "0" * 40 or (remote_ref == "refs/heads/v1" or remote_ref.startswith("refs/heads/release/")):
             return False
         if remote_sha != "0" * 40:
             # A force push is never eligible for the fast path.

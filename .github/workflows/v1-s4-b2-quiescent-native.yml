@@ -1,0 +1,645 @@
+name: S4-B2 disposable quiescent peer ACL grant/revoke failure-barrier proof
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-quiescent-native.yml
+      - internal/install/native_s4_b2_dedicated_test.go
+      - internal/install/network_peer_policy.go
+      - internal/install/network_peer_bridge_guard.go
+      - internal/native/peer_acl_isolation.go
+      - internal/native/peer_acl_isolation_native_test.go
+      - internal/native/peer_acl_isolation_test.go
+      - internal/native/peer_acl_binding.go
+      - internal/install/network_peer_root_audit.go
+      - internal/install/network_peer_root_audit_test.go
+      - internal/install/network_peer_root_audit_snapshot_test.go
+      - internal/install/network_peer_state_audit.go
+      - internal/install/network_peer_state_audit_native_test.go
+      - internal/install/network_peer_state_audit_race_test.go
+      - internal/state/network_audit_ledger.go
+      - internal/state/network_audit_ledger_test.go
+      - internal/state/network_audit_read_only.go
+      - internal/state/network_audit_read_only_test.go
+      - cmd/boxweave/main.go
+      - cmd/boxweave/native_peer_audit_test.go
+      - internal/install/network_peer_conntrack.go
+      - internal/install/network_peer_conntrack_store.go
+      - internal/install/network_peer_global_overlap.go
+      - internal/install/network_peer_global_overlap_test.go
+      - internal/install/network_peer_host_routes.go
+      - internal/install/network_peer_host_routes_test.go
+      - internal/install/network_peer_conntrack_operation.go
+      - internal/install/network_peer_conntrack_operation_test.go
+      - internal/install/native_peer_root_socket.go
+      - internal/install/native_peer_root_socket_test.go
+      - internal/state/network_peer_root_handoff.go
+      # Recheck all-Box Project admission whenever its implementation changes.
+      - internal/state/store.go
+      - internal/state/network_peer_project_barrier_test.go
+      - internal/state/network_peer_root_handoff_test.go
+      - internal/state/network_peer_root_stage.go
+      - internal/state/network_peer_root_stage_test.go
+      - internal/state/network_peer_root_worker.go
+      - internal/state/network_peer_root_worker_test.go
+      - internal/control/peer_root.go
+      - internal/install/network_peer_conntrack_test.go
+      - internal/install/network_peer_conntrack_native_test.go
+      - internal/install/network_peer_conntrack_review.go
+      - internal/install/network_peer_conntrack_review_test.go
+      - internal/install/network_peer_conntrack_review_native_test.go
+      - internal/install/network_peer_conntrack_seed_native_test.go
+      - internal/install/network_peer_conntrack_overlap_native_test.go
+      - internal/install/network_peer_conntrack_journal.go
+      - internal/install/network_peer_conntrack_journal_test.go
+      - internal/install/network_peer_kernel_ports.go
+      - internal/install/network_peer_kernel_ports_test.go
+      - internal/install/network_peer_revocation.go
+      - internal/install/network_peer_revocation_test.go
+      - internal/install/network_peer_revocation_native_test.go
+      - internal/install/native_peer_root_integrated.go
+      - internal/install/native_peer_root_integrated_test.go
+      - internal/install/native_peer_root_integrated_native_test.go
+      - internal/state/network_peer_root_installed_test.go
+      - internal/install/network_peer_live_native_test.go
+      - scripts/s4_b2_native_flow_probe.go
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fresh signed Incus 7.6, exact owned bridge and SDK fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test ! -e /var/lib/incus
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base conntrack >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-dedicated-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-dedicated-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b2-dedicated-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          test -z "$(gofmt -l internal/install/native_s4_b2_dedicated_test.go internal/install/network_peer_policy.go internal/install/network_peer_bridge_guard.go)"
+          go test -c -o "$RUNNER_TEMP/s4b2-dedicated-test" ./internal/install
+          go test -c -o "$RUNNER_TEMP/s4b2-native-isolation-test" ./internal/native
+          sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+          sudo incus project create bwowned \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project bwowned profile device add default root disk path=/ pool=default
+          sudo incus --project bwowned profile device add default eth0 nic name=eth0 \
+            network=bwbr0 security.acls=bw-s4b2-native \
+            security.acls.default.ingress.action=reject security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true security.ipv6_filtering=true security.mac_filtering=true
+          echo "S4_B2_DEDICATED_SOURCE=$GITHUB_SHA"
+          echo "S4_B2_NATIVE_DEDICATED_RESTRICTED_BRIDGE_AND_S1_FIXTURE=PASS"
+      - name: Prove stopped endpoints, held lease, failed grant, restart deny and ordered allow/revoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          a4=10.248.83.11; b4=10.248.83.12; c4=10.248.83.13
+          a6=fd83:248::11; b6=fd83:248::12; c6=fd83:248::13
+          probe() {
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+              S4B2_A4="$a4" S4B2_B4="$b4" S4B2_A6="$a6" S4B2_B6="$b6" \
+              "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run "^$1$"
+          }
+          guest4() {
+            sudo incus --project bwowned exec "$1" -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :
+          }
+          guest6() {
+            sudo incus --project bwowned exec "$1" -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :
+          }
+          init_owned() {
+            sudo incus --project bwowned init images:ubuntu/24.04 "$1" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project bwowned config device override "$1" eth0 "ipv4.address=$2" "ipv6.address=$3"
+            sudo incus --project bwowned start "$1"
+          }
+          require_addresses() {
+            for i in $(seq 1 45); do
+              if [[ "$(guest4 s4b2a)" = "$a4" && "$(guest6 s4b2a)" = "$a6" &&
+                    "$(guest4 s4b2b)" = "$b4" && "$(guest6 s4b2b)" = "$b6" ]]; then return 0; fi
+              sleep 2
+            done
+            echo "S4_B2_QUIESCENT_EXPECTED_DUAL_STACK_ADDRESS_NOT_ASSIGNED"; exit 75
+          }
+          init_owned s4b2a "$a4" "$a6"
+          init_owned s4b2b "$b4" "$b6"
+          init_owned s4b2c "$c4" "$c6"
+          require_addresses
+          b_uuid="$(sudo incus --project bwowned config get s4b2b volatile.uuid)"
+          test -n "$b_uuid"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 76; fi
+          echo "S4_B2_QUIESCENT_BASELINE_A_TO_B_DENIED=PASS"
+          # Independently root-observe native bridge UsedBy and the complete
+          # actual NIC UUID/MAC/static IPv4/IPv6 inventory before quiescence.
+          # Read-only retries are allowed for DHCP/native UsedBy churn at
+          # first boot; never weaken the exact snapshot invariant or retry
+          # any ACL PUT. Record every original refusal for inspection.
+          root_audit_stable=0
+          for attempt in 1 2 3 4 5; do
+            if sudo env BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only \
+                "$RUNNER_TEMP/s4b2-dedicated-test" -test.v \
+                -test.run '^TestS4B2NativeRootBridgeAudit$' \
+                > "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt" 2>&1; then
+              cat "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt"
+              root_audit_stable=1
+              echo "S4_B2_NATIVE_ROOT_AUDIT_CONSISTENT_READ_ATTEMPT=$attempt"
+              break
+            fi
+            cat "$RUNNER_TEMP/s4b2-quiescent-root-audit-$attempt.txt"
+            sleep 2
+          done
+          test "$root_audit_stable" = 1
+          echo "S4_B2_NATIVE_ROOT_BRIDGE_AUDIT_AND_REFUSALS=PASS"
+          # Full protected SQLite binding/fence set must be verified again
+          # using the actual root Incus SDK, not merely internally consistent
+          # SQLite claims. A skipped Go test MUST NOT count as native proof.
+          if ! sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B2_DISPOSABLE_ROOT_AUDIT=20261117-read-only             "$RUNNER_TEMP/s4b2-dedicated-test" -test.v             -test.run '^TestS4B2NativeStoreLedgerBridgeAudit$'             > "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt" 2>&1; then
+            cat "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+            echo "S4_B2_SQLITE_ROOT_NATIVE_FAILURE_CAPTURED=TRUE"
+            exit 88
+          fi
+          cat "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_SQLITE_COMPLETE_LEDGER_TO_ROOT_INCUS_AUDIT=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_READ_ONLY_WAL_AUDIT=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_NATIVE_DOUBLE_SNAPSHOT_STABLE=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_SQLITE_MAC_CLAIM_NATIVE_ROOT_MISMATCH_REFUSED=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          grep -Fq 'S4_B2_SQLITE_ADDRESS_QUARANTINE_REFUSED=PASS' "$RUNNER_TEMP/s4b2-sqlite-native-root-audit.txt"
+          echo "S4_B2_DURABLE_LEDGER_NATIVE_ROOT_READONLY_GATE=PASS"
+          # A privileged foreign Project can attach an unfiltered raw-parent
+          # NIC on this dedicated bridge. Root native used_by auditing must
+          # refuse that topology before any guarded ACL mutation.
+          sudo incus project create bwforeign
+          sudo incus --project bwforeign profile device add default spoof0 nic nictype=bridged parent=bwbr0
+          sudo env BOXWEAVE_S4B2_FOREIGN_RAW_NIC=fresh-ci-only GITHUB_ACTIONS=true \
+            "$RUNNER_TEMP/s4b2-dedicated-test" -test.v -test.run '^TestS4B2NativeRootRejectsForeignRawNIC$'
+          sudo incus --project bwforeign profile device remove default spoof0
+          sudo incus project delete bwforeign
+          echo "S4_B2_FOREIGN_RAW_NIC_AUDIT_REFUSED_AND_EXACT_CLEANUP=PASS"
+          # The actual new Incus SDK barrier is tested on all three NICs
+          # before the separate partial-PUT fault setup, on THIS disposable
+          # daemon only. Root is used solely for independent test-side UsedBy.
+          sudo env BOXWEAVE_S4B2_DISPOSABLE_BARRIER=20261117-single-use \
+            "$RUNNER_TEMP/s4b2-native-isolation-test" -test.v -test.run '^TestS4B2NativeSDKSharedACLQuiescence$'
+          # Exercise the actual official SDK ACL PUT/ETag path while ALL
+          # shared-ACL NICs remain isolated by the new native pre-PUT barrier.
+          # This is a disposable native test integration, not the MCP product.
+          probe TestS4B2NativeCompiledDropTombstoneApply
+          # Guarantee the root-only Go test REALLY RAN; a Go SKIP is not
+          # an acceptable native product acceptance signal.
+          if ! sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            "$RUNNER_TEMP/s4b2-dedicated-test" -test.v \
+            -test.run '^TestS4B2NativeRootPairConntrackAfterQuiescence$' \
+            > "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt" 2>&1; then
+            cat "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+            echo "S4_B2_PRODUCT_ROOT_NATIVE_CONNTRACK=FAIL"
+            exit 89
+          fi
+          cat "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_PRODUCT_NATIVE_ROOT_EXACT_PAIR_CONNTRACK_READBACK_PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_FOREIGN_UUID_CONNTRACK_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_FOREIGN_MAC_CONNTRACK_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_UNREGISTERED_HOST_BRIDGE_PORT_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_ZERO_HOST_BRIDGE_PORTS_AFTER_STOP=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_WRITABLE_SQLITE_DENIED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_PROTECTED_LEDGER_AND_STOPPED_NATIVE_DROP=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_FOREIGN_PAIR_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_PEER_REVIEW_MAC_DRIFT_REFUSED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_JOURNALED_FOUR_SCOPES=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_GLOBAL_ROOT_NATIVE_ALL_PROJECTS_NETWORK_SCOPE=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_HOST_KERNEL_ROUTES_EXCLUSIVE=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_SEEDED_TCP_UDP_DUALSTACK_AND_FOREIGN=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_EXACT_PAIR_FOUR_SCOPES_DELETED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_KERNEL_FOREIGN_TCP_UDP_FLOW_UNTOUCHED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_NATIVE_ROOT_IP_ONLY_DELETE_COLLATERAL_SAME_IP_DISTINCT_PORTS=RISK_CONFIRMED' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_REPLAY_DENIED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          grep -Fq 'S4_B2_ROOT_SQLITE_REAL_INCUS_CONNTRACK_WRITER_DENIED=PASS' \
+            "$RUNNER_TEMP/s4b2-native-actual-root-conntrack.txt"
+          probe TestS4B2NativeCompiledDropTombstoneRemove
+          echo "S4_B2_NATIVE_ROOT_BOUNDED_CONNTRACK_AFTER_THREE_BOX_BARRIER=PASS"
+          # This tests the real durable root journal on disposable private
+          # local files, with deterministic mock effects. NO host conntrack
+          # delete or new host-wide ACL permission is attempted here.
+          sudo env GITHUB_ACTIONS=true "$RUNNER_TEMP/s4b2-dedicated-test"             -test.v -test.run '^TestS4B2RootConntrack'             > "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt" 2>&1
+          cat "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_DURABLE_ONE_SHOT=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_CRASH_ORIGINAL_UNKNOWN_NO_REPLAY=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          grep -Fq 'S4_B2_ROOT_CONNTRACK_PARTIAL_SCOPE_OR_DIGEST_REFUSED=PASS'             "$RUNNER_TEMP/s4b2-root-conntrack-journal.txt"
+          echo "S4_B2_ROOT_CONNTRACK_NO_REPLAY_JOURNAL_NATIVE_RUNNER=PASS"
+          probe TestS4B2NativeDedicatedBridgeExactPeer
+          probe TestS4B2NativeDedicatedBridgeRevoke
+          sudo incus network acl show bw-s4b2-native | grep -Fxq 'ingress: []'
+          echo "S4_B2_NATIVE_SDK_BARRIER_BEFORE_ACL_GRANT_REVOKE=PASS"
+          for name in s4b2a s4b2b s4b2c; do
+            test "$(sudo incus --project bwowned list "$name" -c s --format csv)" = STOPPED
+            test "$(sudo incus --project bwowned config get "$name" boot.autostart)" = false
+            sudo incus --project bwowned start "$name"
+          done
+          require_addresses
+          echo "S4_B2_NATIVE_SDK_ALL_THREE_ENDPOINTS_BARRIER_AND_RECOVERED_FIXTURE=PASS"
+          # A crash/restart must not silently reanimate isolated endpoints.
+          # Configure this *before* the Stop calls so it survives a controller
+          # crash between native Stop and the later ACL write.
+          sudo incus --project bwowned config set s4b2a boot.autostart=false
+          sudo incus --project bwowned config set s4b2b boot.autostart=false
+          sudo incus --project bwowned stop s4b2a
+          sudo incus --project bwowned stop s4b2b
+          test "$(sudo incus --project bwowned list s4b2a -c s --format csv)" = STOPPED
+          test "$(sudo incus --project bwowned list s4b2b -c s --format csv)" = STOPPED
+          test "$(sudo incus --project bwowned config get s4b2b volatile.uuid)" = "$b_uuid"
+          echo "S4_B2_QUIESCENT_BOTH_ENDPOINTS_STOPPED_NATIVE_UUID_RETAINED=PASS"
+          sudo incus --project bwowned init images:ubuntu/24.04 s4b2duplicatev4
+          if sudo incus --project bwowned config device override s4b2duplicatev4 eth0 "ipv4.address=$b4" "ipv6.address=fd83:248::14"; then
+            echo "S4_B2_QUIESCENT_STOPPED_B_IPV4_COLLISION_UNEXPECTEDLY_ACCEPTED"; exit 77
+          fi
+          sudo incus --project bwowned delete s4b2duplicatev4
+          echo "S4_B2_QUIESCENT_STOPPED_B_IPV4_COLLISION_REFUSED=PASS"
+          sudo incus --project bwowned init images:ubuntu/24.04 s4b2duplicatev6
+          if sudo incus --project bwowned config device override s4b2duplicatev6 eth0 "ipv4.address=10.248.83.14" "ipv6.address=$b6"; then
+            echo "S4_B2_QUIESCENT_STOPPED_B_IPV6_COLLISION_UNEXPECTEDLY_ACCEPTED"; exit 78
+          fi
+          sudo incus --project bwowned delete s4b2duplicatev6
+          echo "S4_B2_QUIESCENT_STOPPED_B_IPV6_COLLISION_REFUSED=PASS"
+          echo "S4_B2_QUIESCENT_STOPPED_B_BOTH_NATIVE_STATIC_ADDRESSES_HELD=PASS"
+          veth="$(sudo incus --project bwowned config get s4b2c volatile.eth0.host_name)"
+          test -n "$veth" && test -e "/sys/class/net/$veth"
+          sudo ip link del dev "$veth"
+          test ! -e "/sys/class/net/$veth"
+          set +e
+          probe TestS4B2NativeDedicatedBridgeExactPeer > "$RUNNER_TEMP/s4b2-quiescent-failed-put.txt" 2>&1
+          rc=$?
+          set -e
+          echo "S4_B2_QUIESCENT_EXPECTED_FAILED_PUT_EXIT=$rc"
+          test "$rc" -ne 0
+          grep -F 'Unknown or missing host side veth device' "$RUNNER_TEMP/s4b2-quiescent-failed-put.txt"
+          sudo incus network acl show bw-s4b2-native > "$RUNNER_TEMP/s4b2-quiescent-after-error-acl.txt"
+          grep -Fqx 'ingress: []' "$RUNNER_TEMP/s4b2-quiescent-after-error-acl.txt"
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-after-error.nft"
+          test "$(sudo incus --project bwowned list s4b2a -c s --format csv)" = STOPPED
+          test "$(sudo incus --project bwowned list s4b2b -c s --format csv)" = STOPPED
+          echo "S4_B2_QUIESCENT_FAILED_GRANT_NO_RUNNING_ENDPOINTS=PASS"
+          # Exercise the native daemon lifecycle with a failed grant already
+          # recorded and an inconsistent per-NIC kernel ACL fanout. This is a
+          # deliberately disposable host; never restart shared L0 Incus.
+          sudo systemctl restart incus.service
+          # incus 7.6 has no "incus waitready" CLI command.
+          for attempt in $(seq 1 45); do
+            if sudo incus version >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          sudo incus version
+          sudo systemctl is-active --quiet incus.service
+          for name in s4b2a s4b2b; do
+            test "$(sudo incus --project bwowned list "$name" -c s --format csv)" = STOPPED
+            test "$(sudo incus --project bwowned config get "$name" boot.autostart)" = false
+          done
+          test "$(sudo incus --project bwowned config get s4b2b volatile.uuid)" = "$b_uuid"
+          test "$(sudo incus --project bwowned config device get s4b2a eth0 ipv4.address)" = "$a4"
+          test "$(sudo incus --project bwowned config device get s4b2a eth0 ipv6.address)" = "$a6"
+          test "$(sudo incus --project bwowned config device get s4b2b eth0 ipv4.address)" = "$b4"
+          test "$(sudo incus --project bwowned config device get s4b2b eth0 ipv6.address)" = "$b6"
+          echo "S4_B2_QUIESCENT_FAILED_GRANT_DAEMON_RESTART_STILL_STOPPED_AND_PINNED=PASS"
+          sudo incus --project bwowned start s4b2a
+          sudo incus --project bwowned start s4b2b
+          require_addresses
+          test "$(sudo incus --project bwowned config get s4b2b volatile.uuid)" = "$b_uuid"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_POST_FAILURE_RESTART_FAIL_OPEN_IPV4"; exit 78
+          fi
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_POST_FAILURE_RESTART_FAIL_OPEN_IPV6"; exit 79
+          fi
+          echo "S4_B2_QUIESCENT_POST_FAILED_PUT_RESTART_DUAL_STACK_DENIED=PASS"
+          sudo incus --project bwowned stop s4b2a
+          sudo incus --project bwowned stop s4b2b
+          sudo incus --project bwowned stop s4b2c --force
+          sudo incus --project bwowned start s4b2c
+          for i in $(seq 1 45); do
+            if [[ "$(guest4 s4b2c)" = "$c4" && "$(guest6 s4b2c)" = "$c6" ]]; then break; fi
+            sleep 2
+          done
+          test "$(guest4 s4b2c)" = "$c4" && test "$(guest6 s4b2c)" = "$c6"
+          echo "S4_B2_QUIESCENT_REPAIRED_UNRELATED_NIC=PASS"
+          probe TestS4B2NativeDedicatedBridgeExactPeer
+          echo "S4_B2_QUIESCENT_STOPPED_ENDPOINT_GRANT_ETAG_READBACK=PASS"
+          sudo incus --project bwowned start s4b2a
+          sudo incus --project bwowned start s4b2b
+          require_addresses
+          sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
+          v6ok=0
+          for i in 1 2 3 4 5; do
+            if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then v6ok=1; break; fi
+            sleep 2
+          done
+          test "$v6ok" = 1
+          echo "S4_B2_QUIESCENT_AFTER_SUCCESSFUL_GRANT_A_TO_B_DUAL_STACK=PASS"
+          # Disposable-only live-flow mechanics research. Product SDK ACL
+          # changes require the whole-project stop/autostart barrier and
+          # never use this test's live-update path.
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/s4b2-native-flow-probe" \
+            ./scripts/s4_b2_native_flow_probe.go
+          for name in s4b2a s4b2b; do
+            sudo incus --project bwowned file push "$RUNNER_TEMP/s4b2-native-flow-probe" \
+              "$name/root/s4b2-native-flow-probe"
+            sudo incus --project bwowned exec "$name" -- chmod 0755 /root/s4b2-native-flow-probe
+          done
+          sudo incus --project bwowned exec s4b2b -- sh -c \
+            'nohup /root/s4b2-native-flow-probe server >/tmp/s4b2-flow-server.log 2>&1 </dev/null &'
+          server_ready=0
+          for attempt in $(seq 1 30); do
+            if sudo incus --project bwowned exec s4b2b -- test -f /tmp/s4b2-flow-server-ready; then
+              server_ready=1; break
+            fi
+            sleep 1
+          done
+          test "$server_ready" = 1
+          start_disposable_flow() {
+            local label="$1" protocol="$2" destination="$3"
+            sudo incus --project bwowned exec s4b2a -- sh -c \
+              "nohup /root/s4b2-native-flow-probe client $protocol $destination $label >/tmp/s4b2-flow-$label.log 2>&1 </dev/null &"
+          }
+          start_disposable_flow tcp4 tcp "$b4"
+          start_disposable_flow tcp6 tcp "$b6"
+          start_disposable_flow udp4 udp "$b4"
+          start_disposable_flow udp6 udp "$b6"
+          for label in tcp4 tcp6 udp4 udp6; do
+            seen=0; count=""
+            for attempt in $(seq 1 35); do
+              count="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+              if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 4 )); then seen=1; break; fi
+              sleep 1
+            done
+            if [[ "$seen" != 1 ]]; then
+              sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label.log" || :
+              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_ESTABLISHED"; exit 86
+            fi
+            echo "S4_B2_NATIVE_LIVE_TRACKED_$label=ESTABLISHED_COUNT_$count"
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-live-tcp-before.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-before.txt" 2>&1 || :
+          probe TestS4B2NativeCompiledLiveTrackedFlowDrop
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-live-symmetric-drop.nft"
+          # Previous native runner proved Incus places ct established
+          # acceptance BEFORE ACL DROP. Observe old sessions before trying
+          # exact-pair conntrack invalidation; never claim ACL alone works.
+          sleep 3
+          pre_scoped_alive=0
+          for label in tcp4 tcp6 udp4 udp6; do
+            result="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-result" 2>/dev/null || :)"
+            count="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-count" 2>/dev/null || :)"
+            echo "S4_B2_NATIVE_LIVE_ACL_ONLY_$label result=$result count=$count"
+            if [[ "$result" != BLOCKED_AFTER=* ]]; then
+              pre_scoped_alive=$((pre_scoped_alive+1))
+            fi
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-before-tcp.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-before-udp.txt" 2>&1 || :
+          # On THIS disposable host only: delete all four tracked directed
+          # tuples for verified A/B addresses, BOTH families and protocols;
+          # never run conntrack -F and never touch foreign IPs.
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then src="$a4"; dst="$b4"; else src="$a6"; dst="$b6"; fi
+            for protocol in tcp udp; do
+              if [[ "$protocol" = tcp ]]; then port=19091; else port=19092; fi
+              if sudo conntrack -D -f "$family" -p "$protocol" -s "$src" -d "$dst" --dport "$port" \
+                > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-delete-$family-$protocol.txt" 2>&1; then
+                echo "S4_B2_NATIVE_EXACT_CONNTRACK_DELETE_$family-$protocol=OBSERVED"
+              else
+                echo "S4_B2_NATIVE_EXACT_CONNTRACK_DELETE_$family-$protocol=EMPTY_OR_FAILED"
+                cat "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-delete-$family-$protocol.txt"
+              fi
+            done
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-after-tcp.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-ct-scoped-after-udp.txt" 2>&1 || :
+          for label in tcp4 tcp6 udp4 udp6; do
+            blocked=0; result=""
+            for attempt in $(seq 1 15); do
+              result="$(sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label-result" 2>/dev/null || :)"
+              if [[ "$result" == BLOCKED_AFTER=* ]]; then blocked=1; break; fi
+              sleep 1
+            done
+            if [[ "$blocked" != 1 ]]; then
+              sudo incus --project bwowned exec s4b2a -- cat "/tmp/s4b2-flow-$label.log" || :
+              echo "S4_B2_NATIVE_LIVE_TRACKED_$label=NOT_BLOCKED_AFTER_PAIR_SCOPED_CONNTRACK_DELETE"; exit 87
+            fi
+            echo "S4_B2_NATIVE_LIVE_TRACKED_$label=$result"
+          done
+          sudo conntrack -L -p tcp > "$RUNNER_TEMP/s4b2-quiescent-live-tcp-after.txt" 2>&1 || :
+          sudo conntrack -L -p udp > "$RUNNER_TEMP/s4b2-quiescent-live-udp-after.txt" 2>&1 || :
+          echo "S4_B2_NATIVE_COMPILED_DROP_PLUS_EXACT_CONNTRACK_DELETE_TCP_UDP_DUALSTACK_DENIED=PASS"
+          probe TestS4B2NativeCompiledLiveTrackedFlowRestore
+          sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 4 "$b4"
+          restored6=0
+          for attempt in 1 2 3 4 5; do
+            if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 4 "$b6"; then restored6=1; break; fi
+            sleep 2
+          done
+          test "$restored6" = 1
+          echo "S4_B2_NATIVE_DISPOSABLE_LIVE_ACL_GRANT_RESTORED=PASS"
+          sudo incus --project bwowned stop s4b2a
+          sudo incus --project bwowned stop s4b2b
+          probe TestS4B2NativeDedicatedBridgeRevoke
+          sudo incus --project bwowned start s4b2a
+          sudo incus --project bwowned start s4b2b
+          require_addresses
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-after-revoke-restart.nft"
+          sudo incus network acl show bw-s4b2-native > "$RUNNER_TEMP/s4b2-quiescent-after-revoke-restart-acl.txt"
+          grep -Fqx 'ingress: []' "$RUNNER_TEMP/s4b2-quiescent-after-revoke-restart-acl.txt"
+          python3 - "$RUNNER_TEMP/s4b2-quiescent-after-revoke-restart.nft" <<'PY'
+          import re
+          import sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          for box in "abc":
+              chains = re.findall(r"chain (?:in|fwd|out)\.bwowned_s4b2" + box + r"\.eth0 \{(.*?)\n\t\}", text, re.S)
+              if len(chains) != 3:
+                  raise SystemExit("missing native per-NIC nft chains for " + box)
+              grant4 = sum(c.count("ip saddr 10.248.83.11 ip daddr 10.248.83.12 accept") for c in chains)
+              grant6 = sum(c.count("ip6 saddr fd83:248::11 ip6 daddr fd83:248::12 accept") for c in chains)
+              print("S4_B2_QUIESCENT_AFTER_REVOKE_NFT", box, "V4_ALLOW", grant4, "V6_ALLOW", grant6)
+          PY
+          sudo conntrack -L > "$RUNNER_TEMP/s4b2-quiescent-conntrack-before-flush.txt" 2>&1 || :
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=REACHABLE"
+          else
+            echo "S4_B2_QUIESCENT_POST_REVOKE_BEFORE_CONNTRACK_FLUSH_IPV4=DENIED"
+          fi
+          # Run the actual BoxWeave compiler's dual-stack DROP through
+          # official Incus 7.6 SDK ETag PUT/readback, not a CLI-only hand
+          # crafted rule. Verify old tracked flow is DENIED without any
+          # privileged conntrack deletion or NIC-wide lease rotation.
+          probe TestS4B2NativeCompiledDropTombstoneApply
+          probe TestS4B2NativeRootKernelPerNICDropReadback
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 2 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_NATIVE_COMPILED_DROP_OLD_CT_IPV4=REACHABLE_UNSAFE"; exit 84
+          fi
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 2 -W 2 "$b6" >/dev/null 2>&1; then
+            echo "S4_B2_NATIVE_COMPILED_DROP_OLD_CT_IPV6=REACHABLE_UNSAFE"; exit 85
+          fi
+          echo "S4_B2_NATIVE_COMPILED_DROP_STALE_TRACKED_DUALSTACK=DENIED"
+          sudo nft list ruleset > "$RUNNER_TEMP/s4b2-quiescent-compiled-tombstone.nft"
+          probe TestS4B2NativeCompiledDropTombstoneRemove
+          echo "S4_B2_NATIVE_COMPILED_DROP_EXACT_BASELINE_RESTORED=PASS"
+          # Separate native ACL research: test an explicit exact-pair DROP
+          # against an already established IPv4 conntrack entry. This does
+          # NOT prove or authorize a production tombstone policy.
+          if sudo incus network acl rule add bw-s4b2-native ingress \
+              action=drop source="$a4" destination="$b4" \
+              > "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-add.txt" 2>&1; then
+            sudo incus network acl show bw-s4b2-native \
+              > "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-acl.txt"
+            if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+              echo "S4_B2_QUIESCENT_EXPLICIT_DROP_OLD_CONNTRACK_IPV4=REACHABLE"
+            else
+              echo "S4_B2_QUIESCENT_EXPLICIT_DROP_OLD_CONNTRACK_IPV4=DENIED"
+            fi
+            sudo incus network acl rule remove bw-s4b2-native ingress \
+              action=drop source="$a4" destination="$b4"
+            sudo incus network acl show bw-s4b2-native | grep -Fqx 'ingress: []'
+            echo "S4_B2_QUIESCENT_EXPLICIT_DROP_NATIVE_RULE_RESTORED=PASS"
+          else
+            echo "S4_B2_QUIESCENT_EXPLICIT_DROP_NATIVE_RULE_UPDATE=UNAVAILABLE"
+            cat "$RUNNER_TEMP/s4b2-quiescent-explicit-drop-add.txt"
+          fi
+          # B2 research: can revocation plus native static dual-stack
+          # identity rotation invalidate an established pair WITHOUT a
+          # privileged conntrack deletion? Only on this disposable runner.
+          # Preserve old address reservations in the product until a safe
+          # native lease-fencing design exists; this is NOT yet activation.
+          new4=10.248.83.32
+          new6=fd83:248::32
+          sudo conntrack -L -f ipv4 -s "$a4" -d "$b4" \
+            > "$RUNNER_TEMP/s4b2-quiescent-before-rotation-ct4.txt" 2>&1 || :
+          sudo incus --project bwowned stop s4b2b
+          sudo incus --project bwowned config device set s4b2b eth0 ipv4.address "$new4"
+          sudo incus --project bwowned config device set s4b2b eth0 ipv6.address "$new6"
+          sudo incus --project bwowned start s4b2b
+          for i in $(seq 1 45); do
+            if [[ "$(guest4 s4b2b)" = "$new4" && "$(guest6 s4b2b)" = "$new6" ]]; then break; fi
+            sleep 2
+          done
+          test "$(guest4 s4b2b)" = "$new4" && test "$(guest6 s4b2b)" = "$new6"
+          echo "S4_B2_QUIESCENT_REVOKE_NATIVE_ROTATED_IPV4_IPV6=PASS"
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 2 -W 2 "$new4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_REVOKE_ROTATED_IPV4_REACHABLE_UNSAFE"; exit 82
+          fi
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 2 -W 2 "$new6" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_REVOKE_ROTATED_IPV6_REACHABLE_UNSAFE"; exit 83
+          fi
+          echo "S4_B2_QUIESCENT_REVOKE_ROTATED_BOTH_FAMILIES_DENIED=PASS"
+          sudo conntrack -L -f ipv4 -s "$a4" -d "$b4" \
+            > "$RUNNER_TEMP/s4b2-quiescent-after-rotation-ct4.txt" 2>&1 || :
+          sudo incus --project bwowned stop s4b2b
+          sudo incus --project bwowned config device set s4b2b eth0 ipv4.address "$b4"
+          sudo incus --project bwowned config device set s4b2b eth0 ipv6.address "$b6"
+          sudo incus --project bwowned start s4b2b
+          require_addresses
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_OLD_IP_AFTER_ROTATION_RESTORE=REACHABLE"
+          else
+            echo "S4_B2_QUIESCENT_OLD_IP_AFTER_ROTATION_RESTORE=DENIED"
+          fi
+          # Investigate whether the observed post-revoke established ICMP
+          # reachability can be removed with exact *pair-scoped* conntrack
+          # cleanup. This is a disposable privileged test ONLY; it does not
+          # authorize a host-wide flush or install a privileged helper.
+          sudo conntrack -L > "$RUNNER_TEMP/s4b2-quiescent-conntrack-before-scoped.txt" 2>&1 || :
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then src="$a4"; dst="$b4"; else src="$a6"; dst="$b6"; fi
+            if sudo conntrack -D -f "$family" -s "$src" -d "$dst" > "$RUNNER_TEMP/s4b2-quiescent-conntrack-scoped-$family.txt" 2>&1; then
+              echo "S4_B2_QUIESCENT_SCOPED_CONNTRACK_DELETE_$family=OBSERVED"
+            else
+              echo "S4_B2_QUIESCENT_SCOPED_CONNTRACK_DELETE_$family=UNAVAILABLE_OR_EMPTY"
+            fi
+          done
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_AFTER_SCOPED_CONNTRACK_IPV4=REACHABLE"
+          else
+            echo "S4_B2_QUIESCENT_AFTER_SCOPED_CONNTRACK_IPV4=DENIED"
+          fi
+          # Never flush host-global conntrack, including on disposable CI.
+          # Delete only A<->B exact verified dual-stack tuples, each once.
+          for family in ipv4 ipv6; do
+            if [[ "$family" = ipv4 ]]; then x="$a4"; y="$b4"; else x="$a6"; y="$b6"; fi
+            for direction in ab ba; do
+              if [[ "$direction" = ab ]]; then src="$x"; dst="$y"; else src="$y"; dst="$x"; fi
+              if sudo conntrack -D -f "$family" -s "$src" -d "$dst" \
+                > "$RUNNER_TEMP/s4b2-quiescent-exact-$family-$direction.txt" 2>&1; then
+                echo "S4_B2_QUIESCENT_EXACT_PAIR_DELETE_$family-$direction=OBSERVED"
+              else
+                echo "S4_B2_QUIESCENT_EXACT_PAIR_DELETE_$family-$direction=EMPTY_OR_UNCERTAIN"
+              fi
+            done
+          done
+          echo "S4_B2_QUIESCENT_NO_GLOBAL_CONNTRACK_FLUSH=PASS"
+          status=0
+          if sudo incus --project bwowned exec s4b2a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_SCOPED_CONNTRACK=REACHABLE_UNSAFE"; status=80
+          else
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV4_FLOW_AFTER_SCOPED_CONNTRACK=DENIED"
+          fi
+          if sudo incus --project bwowned exec s4b2a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_SCOPED_CONNTRACK=REACHABLE_UNSAFE"; status=81
+          else
+            echo "S4_B2_QUIESCENT_POST_REVOKE_NEW_IPV6_FLOW_AFTER_SCOPED_CONNTRACK=DENIED"
+          fi
+          if [[ "$status" -eq 0 ]]; then echo "S4_B2_QUIESCENT_NEW_FLOWS_AFTER_REVOKE_SCOPED_CONNTRACK_DENIED=PASS"; fi
+          for box in s4b2a s4b2b s4b2c; do
+            sudo incus --project bwowned stop "$box" --force
+            sudo incus --project bwowned delete "$box" --force
+          done
+          sudo incus --project bwowned profile device unset default eth0 security.acls
+          sudo incus project delete bwowned
+          sudo incus network acl delete bw-s4b2-native
+          sudo incus network delete bwbr0
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B2_QUIESCENT_EXACT_CLEANUP=PASS"
+          echo "S4_B2_QUIESCENT_DESIGN_CANDIDATE_ONLY_NOT_INSTALLED_PRODUCT=TRUE"
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s4b2-disposable-quiescent-fault-evidence
+          path: |
+            ${{ runner.temp }}/s4b2-quiescent-*.nft
+            ${{ runner.temp }}/s4b2-quiescent-*.txt
+          if-no-files-found: ignore

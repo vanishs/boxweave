@@ -10,11 +10,11 @@ import (
 func TestS2ReplayAfterNativeDeleteOrUnknownWithoutReadback(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)
-	_, actor, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, actor, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, other, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, other, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

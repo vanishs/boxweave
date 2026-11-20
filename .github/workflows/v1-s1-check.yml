@@ -52,7 +52,7 @@ jobs:
           echo "SMOKE 1/5: binary built"
           "$tmp/boxweave" status -db "$tmp/ledger.sqlite" -project no-project -incus-socket /nonexistent | grep -q '"ready": false'
           echo "SMOKE 2/5: CLI status works"
-          credentials="$("$tmp/boxweave" token-create -db "$tmp/ledger.sqlite" -role admin -ttl 1h)"
+          credentials="$("$tmp/boxweave" token-create -db "$tmp/ledger.sqlite" -ttl 1h)"
           token="$(printf '%s\n' "$credentials" | sed -n 's/^token=//p')"
           token_id="$(printf '%s\n' "$credentials" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
           test -n "$token" && test -n "$token_id"

@@ -43,7 +43,7 @@ type NextAction struct {
 
 func nextAction(status, action, id string) NextAction {
 	switch status {
-	case "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING":
+	case "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "OBSERVING":
 		return NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: id}
 	case "UNKNOWN":
 		return NextAction{Kind: "HOST_LOCAL_REVIEW"}
@@ -60,7 +60,6 @@ func nextAction(status, action, id string) NextAction {
 type OperationQuery struct {
 	Layer     string
 	Requester string
-	Role      string
 	ActorID   string
 	WorkRef   string
 	AgentRef  string
@@ -98,7 +97,7 @@ func validHexID(id string) bool {
 
 func validOperationState(s string) bool {
 	switch s {
-	case "", "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED":
+	case "", "ADMITTED", "DISPATCHING", "RUNNING", "VERIFYING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED", "OBSERVING", "TIMED_OUT":
 		return true
 	default:
 		return false
@@ -107,7 +106,6 @@ func validOperationState(s string) bool {
 
 func (q OperationQuery) normalize() (OperationQuery, error) {
 	if q.Layer == "" || len(q.Layer) > 64 || !validHexID(q.Requester) ||
-		(q.Role != "admin" && q.Role != "viewer") ||
 		!validRef(q.WorkRef) || !validRef(q.AgentRef) ||
 		len(q.Action) > 64 || !validOperationState(q.State) ||
 		q.SinceNS < 0 || q.UntilNS < 0 ||
@@ -117,12 +115,6 @@ func (q OperationQuery) normalize() (OperationQuery, error) {
 	}
 	if q.ActorID != "" && !validHexID(q.ActorID) {
 		return q, ErrInvalid
-	}
-	if q.Role == "viewer" {
-		if q.ActorID != "" && q.ActorID != q.Requester {
-			return q, ErrNotFound
-		}
-		q.ActorID = q.Requester
 	}
 	if q.Limit == 0 {
 		q.Limit = 20
@@ -144,7 +136,7 @@ func cursorMAC(secret []byte, c operationCursor) string {
 }
 
 // ListOperations never scans unbounded history and never accepts a cursor
-// across actors, layers, roles or filters. A forged cursor cannot widen the
+// across actors, layers or filters. A forged cursor cannot widen the
 // parametrized SQL authorization even if its MAC implementation is altered.
 func (s *Store) ListOperations(ctx context.Context, query OperationQuery) (OperationPage, error) {
 	q, err := query.normalize()
@@ -261,28 +253,17 @@ func (s *Store) ListOperations(ctx context.Context, query OperationQuery) (Opera
 
 // GetScopedOperation is the read boundary for operation_get/output/cancel:
 // neither a guessed original ID nor a borrowed work_ref is authorization.
-func (s *Store) GetScopedOperation(ctx context.Context, layer, requester, role, id string) (Receipt, error) {
-	if layer == "" || !validHexID(requester) || !validHexID(id) ||
-		(role != "admin" && role != "viewer") {
+func (s *Store) GetScopedOperation(ctx context.Context, layer, requester, id string) (Receipt, error) {
+	if layer == "" || !validHexID(requester) || !validHexID(id) {
 		return Receipt{}, ErrInvalid
 	}
 	var r Receipt
-	var err error
-	if role == "admin" {
-		err = s.db.QueryRowContext(ctx, `SELECT id,tracking_id,state,native_operation_id,
+	err := s.db.QueryRowContext(ctx, `SELECT id,tracking_id,state,native_operation_id,
 			work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at
 			FROM operations WHERE id=? AND layer=?`, id, layer).Scan(
-			&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID,
-			&r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation,
-			&r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
-	} else {
-		err = s.db.QueryRowContext(ctx, `SELECT id,tracking_id,state,native_operation_id,
-			work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at
-			FROM operations WHERE id=? AND layer=? AND actor_id=?`, id, layer, requester).Scan(
-			&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID,
-			&r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation,
-			&r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
-	}
+		&r.ID, &r.TrackingID, &r.State, &r.NativeOperationID,
+		&r.WorkRef, &r.AgentRef, &r.Action, &r.BoxUUID, &r.Incarnation,
+		&r.ErrorClass, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, ErrNotFound
 	}

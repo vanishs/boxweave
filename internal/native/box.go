@@ -99,6 +99,28 @@ func (r Reader) confined(ctx context.Context) (incus.InstanceServer, error) {
 	return base.UseProject(r.Project), nil
 }
 
+// confinedExactBox is a per-operation Incus SDK handle coupled to an exact
+// native identity observation. Never cache across operations or treat
+// UseProject as a privilege boundary: confined() redoes Reader.Strict first.
+// Callers that mutate must still re-read/check immediately before dispatch.
+func (r Reader) confinedExactBox(ctx context.Context, name, uuid string) (incus.InstanceServer, *api.Instance, string, error) {
+	if !safeName.MatchString(name) || uuid == "" {
+		return nil, nil, "", ErrNotOwned
+	}
+	c, err := r.confined(ctx)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	inst, etag, err := c.GetInstance(name)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if inst.Config["volatile.uuid"] != uuid || (inst.Project != "" && inst.Project != r.Project) {
+		return nil, nil, "", ErrNotOwned
+	}
+	return c, inst, etag, nil
+}
+
 func validSize(cpu int, memory, disk int64) bool {
 	return cpu >= 1 && cpu <= 64 && memory >= 128 && memory <= 262144 && disk >= 2 && disk <= 2048
 }
@@ -236,22 +258,15 @@ func nativeGuestReadiness(status string, config api.ConfigMap) *bool {
 }
 
 func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, string, error) {
-	out := BoxState{Project: r.Project, Name: name}
-	if !safeName.MatchString(name) || uuid == "" {
-		return out, "", ErrNotOwned
-	}
-	c, err := r.confined(ctx)
+	_, inst, etag, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
-		return out, "", err
+		return BoxState{Project: r.Project, Name: name}, "", err
 	}
-	inst, etag, err := c.GetInstance(name)
-	if err != nil {
-		return out, "", err
-	}
-	if inst.Config["volatile.uuid"] != uuid || inst.Project != "" && inst.Project != r.Project {
-		return out, "", ErrNotOwned
-	}
-	out.UUID = uuid
+	return observedBoxState(r.Project, name, uuid, inst), etag, nil
+}
+
+func observedBoxState(project, name, uuid string, inst *api.Instance) BoxState {
+	out := BoxState{Project: project, Name: name, UUID: uuid}
 	// Incus's instance_ready_state extension is a *guest-originated*
 	// readiness signal (PATCH via /dev/incus), not a Controller guess from
 	// Running. The volatile.last_state.ready flag is maintained and cleared
@@ -269,20 +284,13 @@ func (r Reader) GetExactBox(ctx context.Context, name, uuid string) (BoxState, s
 	out.Nesting = inst.ExpandedConfig["security.nesting"] == "true"
 	out.NativeOptions = observedNativeOptions(inst.ExpandedConfig)
 	observeBoxEffectiveDevices(&out, inst.ExpandedDevices)
-	return out, etag, nil
+	return out
 }
 
 func (r Reader) CheckExactPrivateNIC(ctx context.Context, name, uuid string) error {
-	c, err := r.confined(ctx)
+	_, inst, _, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
 		return err
-	}
-	inst, _, err := c.GetInstance(name)
-	if err != nil {
-		return err
-	}
-	if inst.Config["volatile.uuid"] != uuid || inst.Project != "" && inst.Project != r.Project {
-		return ErrNotOwned
 	}
 	if !nicPrivate(inst.ExpandedDevices) {
 		return ErrUnsafeNetwork
@@ -466,26 +474,29 @@ func (r Reader) SetPower(ctx context.Context, name, uuid, action string) (string
 	if action != "start" && action != "stop" {
 		return "", ErrNativeUnsupported
 	}
-	state, _, err := r.GetExactBox(ctx, name, uuid)
+	c, inst, _, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err
 	}
-	if action == "start" {
-		if err := r.Strict(ctx); err != nil {
-			return "", err
-		}
-		if state.NativeState == "Running" {
-			return "", ErrNativeUnsupported
-		}
-		if err := r.CheckExactPrivateNIC(ctx, name, uuid); err != nil {
-			return "", err
-		}
-	} else if state.NativeState != "Running" {
+	isRunning := inst.Status == "Running" || inst.Status == "Ready"
+	if (action == "start" && isRunning) || (action == "stop" && !isRunning) {
 		return "", ErrNativeUnsupported
 	}
-	c, err := r.confined(ctx)
+	// Preserve a second exact-identity/native-state check close to dispatch,
+	// now against the SAME operation-local confined SDK connection.
+	fresh, _, err := c.GetInstance(name)
 	if err != nil {
 		return "", err
+	}
+	if fresh.Config["volatile.uuid"] != uuid || (fresh.Project != "" && fresh.Project != r.Project) {
+		return "", ErrNotOwned
+	}
+	runningNow := fresh.Status == "Running" || fresh.Status == "Ready"
+	if (action == "start" && runningNow) || (action == "stop" && !runningNow) {
+		return "", ErrNativeUnsupported
+	}
+	if action == "start" && !nicPrivate(fresh.ExpandedDevices) {
+		return "", ErrUnsafeNetwork
 	}
 	op, err := c.UpdateInstanceState(name, api.InstanceStatePut{Action: action, Timeout: 30}, "")
 	if err != nil {
@@ -499,17 +510,12 @@ func (r Reader) SetPower(ctx context.Context, name, uuid, action string) (string
 }
 
 func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes InstanceChanges) (string, error) {
-	if err := r.Strict(ctx); err != nil {
-		return "", err
-	}
-	_, etag, err := r.GetExactBox(ctx, name, uuid)
+	c, _, etag, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err
 	}
-	c, err := r.confined(ctx)
-	if err != nil {
-		return "", err
-	}
+	// The second GetInstance protects the original ETag and incarnation
+	// immediately before modifying the same SDK-scoped native resource.
 	inst, etag2, err := c.GetInstance(name)
 	if err != nil {
 		return "", err
@@ -621,25 +627,26 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 }
 
 func (r Reader) DeleteBox(ctx context.Context, name, uuid string) (string, error) {
-	box, _, err := r.GetExactBox(ctx, name, uuid)
+	c, inst, _, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err
 	}
-	if box.NativeState != "Stopped" {
+	if inst.Status != "Stopped" {
 		return "", ErrNativeDependents
 	}
-	c, err := r.confined(ctx)
+	// A second native observation is required at dispatch. Keeping it on
+	// this operation-local client removes extra connections, not safety proof.
+	fresh, _, err := c.GetInstance(name)
 	if err != nil {
 		return "", err
 	}
-	inst, _, err := c.GetInstance(name)
-	if err != nil {
-		return "", err
-	}
-	if inst.Config["volatile.uuid"] != uuid {
+	if fresh.Config["volatile.uuid"] != uuid || (fresh.Project != "" && fresh.Project != r.Project) {
 		return "", ErrNotOwned
 	}
-	for _, d := range inst.ExpandedDevices {
+	if fresh.Status != "Stopped" {
+		return "", ErrNativeDependents
+	}
+	for _, d := range fresh.ExpandedDevices {
 		if d["type"] == "proxy" {
 			return "", ErrNativeDependents
 		}
@@ -674,14 +681,11 @@ func boundedGuestCommand(spec ExecSpec) ([]string, error) {
 }
 
 func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (string, error) {
-	if err := r.Strict(ctx); err != nil {
-		return "", err
-	}
-	box, _, err := r.GetExactBox(ctx, name, uuid)
+	c, inst, _, err := r.confinedExactBox(ctx, name, uuid)
 	if err != nil {
 		return "", err
 	}
-	if box.NativeState != "Running" {
+	if inst.Status != "Running" && inst.Status != "Ready" {
 		return "", ErrNativeUnsupported
 	}
 	if len(spec.Argv) == 0 || len(spec.Argv) > 64 {
@@ -705,12 +709,15 @@ func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (str
 			return "", ErrNativeUnsupported
 		}
 	}
-	c, err := r.confined(ctx)
+	argv, err := boundedGuestCommand(spec)
 	if err != nil {
 		return "", err
 	}
-	argv, err := boundedGuestCommand(spec)
-	if err != nil {
+	// A full root-volume qgroup also prevents Incus from creating its
+	// sibling recorded-output spool before a Guest command is started.
+	// Refuse before dispatch when live per-volume usage proves too little
+	// headroom. Native postcondition checks still protect races.
+	if err := preflightExecSpoolHeadroom(c, inst, name); err != nil {
 		return "", err
 	}
 	op, err := c.ExecInstance(name, api.InstanceExecPost{

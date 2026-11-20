@@ -1,0 +1,43 @@
+# S4-B1 L0 RC7 flat sibling A/B/C network baseline — 2026-11-16 PT
+
+**Verdict: `FLAT_L0_PACKET_BASELINE_PASS_LIMITED`; `ACL_GRANT_REVOKE_NOT_TESTED`; `S4_B1_PARTIAL` unchanged.** This is a live installed **L0 BoxWeave MCP** test across three *sibling* owned guest containers on one native Incus 7.6 daemon. No guest has an inner Incus, and no privileged host command was issued. It is not S4-B2/B3/B4 implementation, an authorized host-wide ACL mutation, or an S4-B acceptance.
+
+## Provenance, topology and initial inventory
+
+- Owner [flat-network-first decision](../decisions/S4_FLAT_NETWORK_FIRST_NESTING_S5_2026-11-16.md) separates S4 peer/forward work from late S5 #150 recursive AppArmor/BPF research.
+- L0 `host_status`: installed BoxWeave **1.0.0-rc.7**, source `2211e1a602814811732c5ac07ce304ae9f27133b`, binary SHA256 `fc405473a3fa59fa412521986b73c97563d0a39399d53352783184f538bac6eb`, native Incus **7.6**, Project `user-1001`; `ready=true`, native `ready=true`, `mcp_ready=true`. Selected storage quota is not independently verified.
+- Five existing L0 Boxes before test were all Running: `0d0ffd60-2fd6-4734-b40c-6eabdb561033`, `43b0852c-8747-44dc-9d49-253bd04b82fe`, `8267272d-a1d7-412d-9a5d-dd32dfa1d6ee`, `cd1ea3d0-a24f-477b-b01c-08fb5acac53e`, `e5de554e-96a9-4253-8ad8-18193eaaf72e`. No prior Box, unknown Operation, foreign Project or ACL was edited.
+- Only three fresh owned Ubuntu 24.04.5 sibling test Boxes, each `security.nesting=false`, 1 CPU, 768 MiB memory, 8 GiB configured disk, initially `internet=false`, `start=true`. Work label `S4-B-L0-FLAT-ABC-20261116` is correlation, not authority.
+
+| Owned Box | Exact Box UUID/incarnation | Actual IPv4 / global IPv6 | Actual MAC | Original Create BW / native Incus Operation |
+| --- | --- | --- | --- | --- |
+| `s4b-flat-a-1116` | `ded784bc-2a8f-419b-8970-660b9285b76d` | `10.249.1.7/24`; `fd42:13bd:c9f1:24a3:1266:6aff:fe66:1fae/64` | `10:66:6a:66:1f:ae` | `9d8b204051ebad9bb4bc0469739f5f56` / `dbe983cf-c5da-4ce7-998f-4588ce610784` |
+| `s4b-flat-b-1116` | `65c02b6a-d229-4dd8-9201-4449c8976c69` | `10.249.1.8/24`; `fd42:13bd:c9f1:24a3:1266:6aff:feb0:6333/64` | `10:66:6a:b0:63:33` | `82fd58eb637ac451a147d295f88f1efd` / `8bd64805-b687-4f0b-8366-50f66ddc50d0` |
+| `s4b-flat-c-1116` | `557d9881-2eeb-4eda-8d64-82922e6389d0` | `10.249.1.9/24`; `fd42:13bd:c9f1:24a3:1266:6aff:feb0:6c6a/64` | `10:66:6a:b0:6c:6a` | `2dd33d2f0861c1f7a47bb8d2de0e76c5` / `4788bf00-fd92-43a8-b6f9-102d02ce9a68` |
+
+Every original Create Operation independently returned `SUCCEEDED`; each `box_get` observed Running, exact UUID and Project. All three guest `/proc/self/attr/current` labels were `unconfined`. **This is an additional AppArmor security fact to review, not proof of enforcing host isolation, and not permission for a deep nesting workaround.**
+
+## Actual IPv4/IPv6 ICMP and Internet controls
+
+1. **Default `internet=false`:** A→B, B→A, C→B ICMPv4 and ICMPv6 each emitted 2 probes / 0 replies. All three also sent IPv4/IPv6 gateway pings with **no replies**. Original BW Execs A `0f3c5691ab23a4cb693b042d74e00fbe` (native `43ab3967-66b0-4f05-8679-743bb3644335`), B `500bf545e450d0f88113d716eb316b84` (native `0620ceb6-5255-440b-9a9f-d06b9b037bc0`), C `2e56d19bb69f4c89191d1d3efca952ca` (native `17dbd434-4ca2-4a9f-901b-af50bde69f05`). **Do not attribute these denies solely to ingress ACL:** egress was also blocked.
+2. **Per-Box egress control:** Set `internet=true` via the original BoxWeave `box_update` (not a host-global ACL edit) on only A and B. A update BW `aa75c88742c0042d01d98485c5c7f167` / native `592d8e95-3fc8-4fb1-87fd-17edd3c3b5ff`; B BW `d2b0f7f8abc3097d1ffe14460dc22d41` / native `7cb5dafc-ab93-49b5-87a4-3a50b3a50664`. Both returned `SUCCEEDED` and native `box_get` independently observed `internet=true`; C remained `internet=false`.
+3. **Positive external/gateway controls after enabling A/B:** both A and B IPv4 bridge gateway `10.249.1.1` and public `1.1.1.1` ICMP replies **1/1**, public HTTPS `https://example.com` actual HTTP **200**. A additionally reached IPv6 bridge gateway `fd42:13bd:c9f1:24a3::1` **1/1**. A control BW `d08df5bc16986d0d33df3361719f0494` / native `d8667c40-60c0-4aae-bea2-90bac8564229`; B BW `3d31e504e345eca3326b01d2b7829690` / native `52d95abc-03fa-4650-b01e-001408ffbf67`; additional A IPv6 gateway BW `546aa9de3a6e4ee364eb15f155b48c48` / native `4506767a-f91b-4977-9eeb-404f9f7e0d2c`.
+4. **Sibling refusal despite allowed outgoing A/B:** A→B and B→A IPv4 and IPv6 ICMP each produced **0/1 reply** while both had demonstrated positive gateway/Internet reachability; no peer grant was issued. This is packet-level evidence of the configured default sibling-isolation behavior, **not** independent native ACL `used_by` or ingress rule readback.
+5. **C still `internet=false`:** IPv4/IPv6 gateway and public `1.1.1.1` probes each produced 0/1; BW `654e2a93145272b1b6a1b2af0e5f0aab` / native `5566d257-dcb1-4d9d-a627-56d239b2c336`. This controls the egress toggle effect but does not separately prove C's peer ingress ACL.
+
+## Real TCP and UDP sibling negative experiments
+
+- In owned B only, created a simple guest-local Python listener with four independent sockets: TCP IPv4 `0.0.0.0:18501`, TCP IPv6 `[::]:18502`, UDP IPv4 `0.0.0.0:18503`, UDP IPv6 `[::]:18504`. `ss -ltnu` observed all four listening. Actual **B localhost** TCP responses `S4B-TCP-PASS` and UDP `S4B-UDP:hello` succeeded over both families. Original B Exec BW `177d4b5d59bfd671a5c6f72b630c11ff` / native `a76353a4-c2c7-4d40-8fbe-577b4d4ae7a7`, guest exit0.
+- A, with proven enabled external egress, attempted all four target B sockets using Python TCP `connect/recv` or UDP `sendto/recv` with 2-second socket timeouts. **TCP4, TCP6, UDP4, UDP6 each timed out**; no application reply was received. BW `ba95e249694e3c0debc732c26ce2dbe0` / native `82163611-0f34-437e-848a-b46c648adea7`, Exec exit0 (the script intentionally records individual expected timeouts).
+- C attempted the same four; all four timed out. BW `b22efbfb6003a4a0efffe47c7320537a` / native `485baefd-aded-4647-ac93-f757c2b1545b`. Since C egress was off, these C timeouts **cannot independently establish ingress-deny**.
+- None of these tests is native TCP/UDP *port_forward_create* or shared ACL peer-grant verification; they are ordinary direct sibling traffic probes. Actual native ACL GET/ETag/PUT, grant/revoke, proxy listen/collision, MAC/IPv6 spoof negative, IP lease recycling and partial NIC reload remain **NOT TESTED in L0 installed MCP**. Existing separate signed Incus SDK CI proofs in [B1 report](S4_B1_INVESTIGATION_2026-11-16.md) are not this L0 test.
+
+## Capability boundary and disposal
+
+- Current installed RC7 exposes **16 MCP Tools** and does not have `box_peer_set` or `port_forward_create/list/delete`. The guest root process is not an L0 native Incus administrator, and using an inner Incus would test the wrong daemon. Without an additionally approved exact host native SDK service/client, the **correct next step** is implementing B2's owned ACL/NIC/identity foundation and B3/B4's narrow network Tools with isolated native acceptance; never manufacture ACL positive packet evidence from the existing 16 Tools or modify the shared L0 daemon-global Scriptlet without explicit host-specific permission.
+- No guest remained after cleanup. Fresh test A Stop BW `fa1a797de1005c02ef72bfd20fa249db` / native `317586d7-05ef-4902-bd68-cadda79f702c`; Delete BW `5ec09e7b6ea6ddddd70bfd6001cfcd16` / native `ea386413-36dc-4e39-93f5-2227e788f75c`: both `SUCCEEDED`.
+- B Stop BW `4bc4902171aa28ee68546ee7cd86a548` / native `c0d1cacf-9647-4165-9294-a99484aed87e`; Delete BW `8c6b9b19f7debdc5b3b047ef7adcd7d1` / native `71768528-4498-4724-95c5-f98bccd0c25c`: both `SUCCEEDED`.
+- C Stop BW `613fcced49a2a191d88451520ece9ac3` / native `d41d6828-a55d-4b3d-b72b-40260672cfd9`; Delete BW `d865c4dc4199c27675c925a6e49c9858` / native `a7a9b9d7-31da-4574-ab4d-561a3edffab8`: both `SUCCEEDED`.
+- Fresh independent L0 `box_list` after these six terminal Operations again returned **exactly the original five Running UUIDs**, no `s4b-flat-*` Box. Fresh L0 `host_status` remained RC7/Incus7.6 and `ready=true`. Test-local B Python servers were removed with B. No shared host AppArmor, Incus global ACL/Scriptlet, foreign Box or historical UNKNOWN was touched.
+
+**Next S4-B stage entry:** implement/use an authorized exact-ACL read/ETag/PUT path and stable UUID↔address lease reservations, then rerun the **same A/B/C positive+negative matrices** with one-way A→B permit, reverse/third-party deny, revoke and partial failure checks. The existing network baseline alone does **not** change `S4_B1_PARTIAL` or sign off B2.

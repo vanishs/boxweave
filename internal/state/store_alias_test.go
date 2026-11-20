@@ -101,7 +101,7 @@ func TestS2SQLiteTwoLocalWritersSerializeWithoutJournalDamage(t *testing.T) {
 			if i%2 != 0 {
 				write, read = two, one
 			}
-			raw, issued, err := write.IssueToken(ctx, "viewer", time.Hour)
+			raw, issued, err := write.IssueToken(ctx, time.Hour)
 			if err != nil {
 				errs <- err
 				return
@@ -111,7 +111,7 @@ func TestS2SQLiteTwoLocalWritersSerializeWithoutJournalDamage(t *testing.T) {
 				errs <- err
 				return
 			}
-			if got.ID != issued.ID || got.Role != "viewer" {
+			if got.ID != issued.ID || got.ActorID != issued.ActorID {
 				errs <- ErrState
 			}
 		}(i)
@@ -122,7 +122,7 @@ func TestS2SQLiteTwoLocalWritersSerializeWithoutJournalDamage(t *testing.T) {
 		t.Fatalf("concurrent SQLite credential write/read: %v", err)
 	}
 	var count int
-	if err := one.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE role='viewer'").Scan(&count); err != nil || count != writers {
+	if err := one.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials").Scan(&count); err != nil || count != writers {
 		t.Fatalf("concurrent writes disappeared: got=%d err=%v", count, err)
 	}
 	// No mixed or partial journal schema may be introduced by concurrent CLI

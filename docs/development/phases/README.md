@@ -1,5 +1,7 @@
 # Phase cards — load only the phase you are executing
 
+**2026-11-16 active state:** S3 is [formally signed and merged](../S3_MINIMAL_PASS_2026-11-16.md). [S4 Draft PR #153](https://github.com/vanishs/boxweave/pull/153) is opened for **preparation only**; next Agent begins `S4-A` in that same PR, followed by `S4-B` and `S4-C` as independently reported checkpoints. [Current S4/S5 reallocation](../S4_S5_EXECUTION_REBALANCE_2026-11-16.md), [kickoff](../S4_EXECUTION_KICKOFF_2026-11-16.md). Older no-S3-PASS/status rows below are historical. Tool total remains exactly 20 after S4, and S5 final assurance/Release remains mandatory.
+
 **Latest owner stage allocation (2026-11-15):** [minimal S3 and explicit S4/S5 carry-forward](../S3_S4_S5_MINIMAL_REBALANCE_2026-11-15.md) takes precedence over historical phase-boundary language. Public catalog remains 1+12+0+3+4=20. **No S3/S4/S5 source acceptance is implied by this edit.**
 
 

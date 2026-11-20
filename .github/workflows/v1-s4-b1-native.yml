@@ -1,0 +1,328 @@
+name: S4-B1 disposable native Incus ACL investigation (non-product)
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b1-native.yml
+      - scripts/s4_b1_acl_sdk_probe.go
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fresh one-use runner and syntax checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          test -z "$(gofmt -l scripts/s4_b1_acl_sdk_probe.go)"
+          go build -o "$RUNNER_TEMP/s4b1-sdk" scripts/s4_b1_acl_sdk_probe.go
+          echo "S4_B1_SOURCE=$GITHUB_SHA"
+          echo S4_B1_FRESH_HOST_AND_SDK_BUILD=PASS
+      - name: Install signed Incus 7.6 on fresh temporary VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b1-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b1-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b1-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          echo "S4_B1_SIGNED_NATIVE_76_NO_SCRIPTLET_GLOBAL_CHANGE=PASS"
+      - name: Verify two native NICs, ETag, IPv4 IPv6 packets and native proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo incus network acl create bw-s4b1-native
+          sudo incus profile device set default eth0 \
+            security.acls=bw-s4b1-native \
+            security.acls.default.ingress.action=reject \
+            security.acls.default.egress.action=allow \
+            security.ipv4_filtering=true \
+            security.ipv6_filtering=true \
+            security.mac_filtering=true
+          sudo incus init images:ubuntu/24.04 s4b1a -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus init images:ubuntu/24.04 s4b1b -c limits.cpu=1 -c limits.memory=512MiB
+          sudo incus start s4b1a
+          sudo incus start s4b1b
+          for i in $(seq 1 50); do
+            a4="$(sudo incus exec s4b1a -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            b4="$(sudo incus exec s4b1b -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            a6="$(sudo incus exec s4b1a -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            b6="$(sudo incus exec s4b1b -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :)"
+            if [[ -n "$a4" && -n "$b4" && -n "$a6" && -n "$b6" ]]; then break; fi
+            sleep 2
+          done
+          test -n "$a4" && test -n "$b4" && test -n "$a6" && test -n "$b6"
+          echo "S4_B1_IPV4_IPV6_NATIVE_DHCP_RA=PASS"
+          sudo "$RUNNER_TEMP/s4b1-sdk" read
+          sudo "$RUNNER_TEMP/s4b1-sdk" etag
+          if sudo incus exec s4b1a -- ping -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 41; fi
+          if sudo incus exec s4b1a -- ping -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 42; fi
+          echo "S4_B1_IPV4_IPV6_DEFAULT_INGRESS_DENY_PACKET=PASS"
+          sudo "$RUNNER_TEMP/s4b1-sdk" grant "$a4" "$b4" "$a6" "$b6"
+          sudo incus exec s4b1a -- ping -c 1 -W 4 "$b4"
+          sudo incus exec s4b1a -- ping -6 -c 1 -W 4 "$b6"
+          if sudo incus exec s4b1b -- ping -c 1 -W 2 "$a4" >/dev/null 2>&1; then exit 43; fi
+          if sudo incus exec s4b1b -- ping -6 -c 1 -W 2 "$a6" >/dev/null 2>&1; then exit 44; fi
+          echo "S4_B1_IPV4_IPV6_ONE_WAY_PEER_PACKET=PASS"
+          sudo "$RUNNER_TEMP/s4b1-sdk" revoke
+          if sudo incus exec s4b1a -- ping -c 1 -W 2 "$b4" >/dev/null 2>&1; then exit 45; fi
+          if sudo incus exec s4b1a -- ping -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then exit 46; fi
+          echo "S4_B1_IPV4_IPV6_REVOKE_NEW_FLOW=PASS"
+          sudo incus exec s4b1b -- sh -c 'nohup python3 -m http.server 18085 --bind 0.0.0.0 >/tmp/s4b1-http.log 2>&1 </dev/null &'
+          sudo incus config device add s4b1b s4b1-proxy proxy \
+            listen=tcp:127.0.0.1:18086 connect=tcp:"$b4":18085 bind=host
+          for i in $(seq 1 25); do
+            status="$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:18086/ || :)"
+            if [[ "$status" = 200 ]]; then break; fi
+            sleep 1
+          done
+          test "$status" = 200
+          echo "S4_B1_NATIVE_TCP_PROXY_WITH_REVOKED_PEER=PASS"
+          if sudo incus config device add s4b1a s4b1-collision proxy \
+            listen=tcp:127.0.0.1:18086 connect=tcp:"$a4":18085 bind=host >/dev/null 2>&1; then
+            sudo incus config device remove s4b1a s4b1-collision
+            echo "S4_B1_UNEXPECTED_PROXY_LISTENER_COLLISION_ACCEPTED" >&2
+            exit 48
+          fi
+          test "$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:18086/)" = 200
+          echo "S4_B1_NATIVE_TCP_PROXY_PORT_COLLISION_REJECTED=PASS"
+          sudo incus exec s4b1b -- sh -c 'cat >/tmp/s4b1-udp.py' <<'PY'
+          import socket
+          sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          sock.bind(("0.0.0.0", 18087))
+          while True:
+              payload, peer = sock.recvfrom(2048)
+              sock.sendto(b"ack:" + payload, peer)
+          PY
+          sudo incus exec s4b1b -- sh -c 'nohup python3 /tmp/s4b1-udp.py >/tmp/s4b1-udp.log 2>&1 </dev/null &'
+          sudo incus config device add s4b1b s4b1-udp proxy \
+            listen=udp:127.0.0.1:18088 connect=udp:"$b4":18087 bind=host
+          udp_reply=""
+          for i in $(seq 1 12); do
+            udp_reply="$(python3 -c 'import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(2); s.sendto(b"s4b1",("127.0.0.1",18088)); print(s.recvfrom(128)[0].decode())' 2>/dev/null || :)"
+            if [[ "$udp_reply" = 'ack:s4b1' ]]; then break; fi
+            sleep 1
+          done
+          test "$udp_reply" = 'ack:s4b1'
+          echo "S4_B1_NATIVE_UDP_PROXY_PACKET=PASS"
+          sudo incus config device remove s4b1b s4b1-udp
+          sudo incus config device remove s4b1b s4b1-proxy
+          if curl -s --max-time 3 http://127.0.0.1:18086/ >/dev/null; then exit 47; fi
+          echo "S4_B1_PROXY_REMOVAL_REFUSED_NEW_CONNECTION=PASS"
+          sudo incus stop s4b1a
+          sudo incus stop s4b1b
+          sudo incus delete s4b1a
+          sudo incus delete s4b1b
+          # The default Profile remains an ACL consumer even after both instances
+          # are deleted; detach its OWN newly-created ACL before deleting that ACL.
+          sudo incus profile device unset default eth0 security.acls
+          sudo incus network acl show bw-s4b1-native | grep -Fqx 'used_by: []'
+          sudo incus network acl delete bw-s4b1-native
+          if sudo incus network acl show bw-s4b1-native >/dev/null 2>&1; then exit 49; fi
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B1_EXACT_NATIVE_CLEANUP=PASS"
+      - name: S4 B1 exact S1 egress and IPv4 address reuse (disposable native host only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is the SAME fresh GitHub-hosted runner after the earlier native
+          # probe cleaned its own instances/ACL. No L0/shared host is accessed.
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$GITHUB_ACTIONS" = true
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          test -z "$(gofmt -l internal/install/native_s4_b1_egress_lease_test.go)"
+          go test -c -o "$RUNNER_TEMP/s4b1-policy-test" ./internal/install
+          probe() {
+            sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+              "$RUNNER_TEMP/s4b1-policy-test" -test.v -test.run "^$1$"
+          }
+          probe TestS4B1ExactS1ACLNativeFixture
+          # Replace only this runner's previous intentionally open-egress profile
+          # with the actual S1 implicit-deny default and exact S1 shared ACL.
+          sudo incus profile device unset default eth0 security.acls.default.egress.action
+          sudo incus profile device set default eth0 \
+            security.acls=bw-s4b1-native \
+            security.acls.default.ingress.action=reject \
+            security.ipv4_filtering=true \
+            security.ipv6_filtering=true \
+            security.mac_filtering=true
+          for name in s4b1a s4b1b s4b1c; do
+            sudo incus init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            # This full NIC override mimics current BoxWeave internet=true.
+            sudo incus config device override "$name" eth0 \
+              security.acls.default.egress.action=allow
+          done
+          sudo incus start s4b1a
+          sudo incus start s4b1b
+          sudo incus start s4b1c
+          a4=''; b4=''; c4=''; a6=''; b6=''; c6=''
+          guest4() {
+            sudo incus exec "$1" -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :
+          }
+          guest6() {
+            sudo incus exec "$1" -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :
+          }
+          for i in $(seq 1 60); do
+            a4="$(guest4 s4b1a)"; b4="$(guest4 s4b1b)"; c4="$(guest4 s4b1c)"
+            a6="$(guest6 s4b1a)"; b6="$(guest6 s4b1b)"; c6="$(guest6 s4b1c)"
+            if [[ -n "$a4" && -n "$b4" && -n "$c4" &&
+                  -n "$a6" && -n "$b6" && -n "$c6" ]]; then break; fi
+            sleep 2
+          done
+          test -n "$a4" && test -n "$b4" && test -n "$c4"
+          test -n "$a6" && test -n "$b6" && test -n "$c6"
+          test "$a4" != "$b4" && test "$b4" != "$c4"
+          echo "S4_B1_ACTUAL_ADDRESSES_A4=$a4 B4=$b4 C4=$c4"
+          echo "S4_B1_ACTUAL_ADDRESSES_A6=$a6 B6=$b6 C6=$c6"
+          gw4="$(sudo incus network get incusbr0 ipv4.address | cut -d/ -f1)"
+          gw6="$(sudo incus network get incusbr0 ipv6.address | cut -d/ -f1)"
+          sudo incus exec s4b1a -- ping -n -c 1 -W 4 "$gw4"
+          sudo incus exec s4b1a -- ping -n -6 -c 1 -W 4 "$gw6"
+          echo S4_B1_S1_NATIVE_EGRESS_INTERNET_TRUE_GATEWAY_V4V6=PASS
+          if sudo incus exec s4b1a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo S4_B1_S1_BEFORE_GRANT_IPV4=UNEXPECTED_REACHABLE
+            exit 80
+          fi
+          if sudo incus exec s4b1a -- ping -n -6 -c 1 -W 2 "$b6" >/dev/null 2>&1; then
+            echo S4_B1_S1_BEFORE_GRANT_IPV6=UNEXPECTED_REACHABLE
+            exit 81
+          fi
+          sudo "$RUNNER_TEMP/s4b1-sdk" read
+          sudo "$RUNNER_TEMP/s4b1-sdk" grant "$a4" "$b4" "$a6" "$b6"
+          # Observe the real kernel packet behavior of the exact S1 egress
+          # rules. Do not assume this is either PASS or FAIL in advance.
+          if sudo incus exec s4b1a -- ping -n -c 1 -W 3 "$b4" >/dev/null 2>&1; then
+            echo S4_B1_S1_INGRESS_GRANT_WITH_PRIVATE_EGRESS_REJECT_IPV4=REACHABLE
+          else
+            echo S4_B1_S1_INGRESS_GRANT_WITH_PRIVATE_EGRESS_REJECT_IPV4=DENIED
+          fi
+          if sudo incus exec s4b1a -- ping -n -6 -c 1 -W 3 "$b6" >/dev/null 2>&1; then
+            echo S4_B1_S1_INGRESS_GRANT_WITH_PRIVATE_EGRESS_REJECT_IPV6=REACHABLE
+          else
+            echo S4_B1_S1_INGRESS_GRANT_WITH_PRIVATE_EGRESS_REJECT_IPV6=DENIED
+          fi
+          # A TEST-ONLY potential bridge-subnet carve; keeps other S1 rejects.
+          # It is NOT a safe production fix until foreign/cross-project proof.
+          probe TestS4B1CarveOnlyOwnedBridgeForNativeExperiment
+          sudo incus exec s4b1a -- ping -n -c 1 -W 4 "$b4"
+          sudo incus exec s4b1a -- ping -n -6 -c 1 -W 4 "$b6"
+          echo S4_B1_EXPERIMENT_CARVED_S1_PEER_ALLOW_IPV4_IPV6=PASS
+          for origin in s4b1b s4b1c s4b1a; do
+            case "$origin" in
+              s4b1b) dst4="$a4"; dst6="$a6" ;;
+              s4b1c) dst4="$b4"; dst6="$b6" ;;
+              s4b1a) dst4="$c4"; dst6="$c6" ;;
+            esac
+            if sudo incus exec "$origin" -- ping -n -c 1 -W 2 "$dst4" >/dev/null 2>&1; then
+              echo "S4_B1_UNEXPECTED_REVERSE_OR_THIRD_PARTY_V4_$origin" >&2
+              exit 82
+            fi
+            if sudo incus exec "$origin" -- ping -n -6 -c 1 -W 2 "$dst6" >/dev/null 2>&1; then
+              echo "S4_B1_UNEXPECTED_REVERSE_OR_THIRD_PARTY_V6_$origin" >&2
+              exit 83
+            fi
+          done
+          echo S4_B1_EXPERIMENT_CARVED_S1_REVERSE_THIRD_PARTY_DENY=PASS
+          # Switching *only* A to internet=false must not be mistaken for
+          # permission on the existing incoming A-to-B grant.
+          sudo incus config device set s4b1a eth0 security.acls.default.egress.action=reject
+          if sudo incus exec s4b1a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+            echo S4_B1_UNEXPECTED_PRIVATE_PEER_REACHABLE_WITH_EGRESS_REJECT >&2
+            exit 84
+          fi
+          echo S4_B1_INTERNET_FALSE_PEER_EGRESS_BLOCKS=OBSERVED
+          sudo incus config device set s4b1a eth0 security.acls.default.egress.action=allow
+          sudo incus exec s4b1a -- ping -n -c 1 -W 4 "$b4"
+          # Controlled IP takeover experiment. B is definitively deleted.
+          # Reassign its former IPv4 to C with the Incus native NIC pin.
+          # Retain original A->B ACL rules on purpose, to test stale grants.
+          sudo incus stop s4b1b
+          sudo incus delete s4b1b
+          sudo incus stop s4b1c
+          sudo incus config device set s4b1c eth0 ipv4.address="$b4"
+          sudo incus start s4b1c
+          new_c4=''
+          for i in $(seq 1 40); do
+            new_c4="$(guest4 s4b1c)"
+            if [[ "$new_c4" = "$b4" ]]; then break; fi
+            sleep 2
+          done
+          echo "S4_B1_REUSED_OLD_B4=$b4 NEW_C4=$new_c4"
+          if [[ "$new_c4" = "$b4" ]]; then
+            echo S4_B1_NATIVE_OLD_IPV4_ALLOCATED_TO_DIFFERENT_UUID=PASS
+            echo "S4_B1_OWNED_NEW_C_UUID=$(sudo incus config get s4b1c volatile.uuid)"
+            echo S4_B1_OLD_B_REMOVED_AND_C_EFFECTIVE_NIC
+            sudo incus list --format csv -c n
+            sudo incus config show s4b1c --expanded | grep -E 'ipv4.address:|security.acls:|security.ipv4_filtering:|security.mac_filtering:' || :
+            sudo incus exec s4b1c -- sh -c 'ip -4 -o addr show eth0; ip -o link show eth0'
+            echo S4_B1_SOURCE_A_NEIGHBOR_BEFORE
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
+            # A just reached the deleted B. Cached old B MAC can mask the
+            # stale-grant problem until ARP expires; verify this independently.
+            if sudo incus exec s4b1a -- ip -4 neigh del "$b4" dev eth0; then
+              echo S4_B1_SOURCE_A_OLD_NEIGHBOR_CLEARED=PASS
+            else
+              echo S4_B1_SOURCE_A_OLD_NEIGHBOR_CLEARED=DENIED_SLEEP_FOR_EXPIRATION
+              sleep 40
+            fi
+            echo S4_B1_SOURCE_A_NEIGHBOR_AFTER
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
+            if sudo incus exec s4b1a -- ping -n -c 3 -W 3 "$b4"; then
+              echo S4_B1_STALE_IPV4_PEER_GRANT_AFTER_ARP_REFRESH=REACHABLE_NEW_UUID
+            else
+              echo S4_B1_STALE_IPV4_PEER_GRANT_AFTER_ARP_REFRESH=NOT_REACHABLE
+            fi
+            echo S4_B1_SOURCE_A_NEIGHBOR_POST_PACKET
+            sudo incus exec s4b1a -- ip -4 neigh show to "$b4" dev eth0 || :
+          else
+            echo S4_B1_NATIVE_DHCP_REUSE=NOT_REPRODUCED
+          fi
+          probe TestS4B1RevokeStaleRulesNativeExperiment
+          if [[ "$new_c4" = "$b4" ]]; then
+            if sudo incus exec s4b1a -- ping -n -c 1 -W 2 "$b4" >/dev/null 2>&1; then
+              echo S4_B1_STALE_REVOKE_NOT_EFFECTIVE >&2
+              exit 85
+            fi
+            echo S4_B1_IPV4_REVOKE_NEW_UUID_PACKET_DENY=PASS
+          fi
+          # Independently verify cleanup and prove there is no shared state.
+          sudo incus stop s4b1a
+          sudo incus stop s4b1c
+          sudo incus delete s4b1a
+          sudo incus delete s4b1c
+          sudo incus profile device unset default eth0 security.acls
+          sudo incus network acl show bw-s4b1-native | grep -Fqx 'used_by: []'
+          sudo incus network acl delete bw-s4b1-native
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo S4_B1_S1_EGRESS_LEASE_EXPERIMENT_EXACT_CLEANUP=PASS

@@ -1,0 +1,104 @@
+import json,os,sqlite3,subprocess,sys,time
+from pathlib import Path
+sys.path.insert(0,"/root/s4c-ready-native/scripts")
+from mcp_testkit import LoopbackMCP,MCPToolError
+lab=Path("/var/tmp/s4c-ready-native")
+db=lab/"private/ledger.sqlite"
+ck=lab/"full-reboot-witness.json"
+fixture="s4c-readiness-fixture"
+box="39c49655-f06e-46aa-9137-59e3a17fba51"
+url="http://127.0.0.1:18677/mcp"
+unit="s4c-final-reboot-candidate.service"
+def native(*args):
+ return subprocess.check_output(["incus","--project","user-1001",*args],text=True).strip()
+def inside(cmd):
+ return native("exec",fixture,"--","sh","-c",cmd)
+def sql(q,args=()):
+ with sqlite3.connect("file:"+str(db)+"?mode=ro",uri=True,timeout=3) as c:return c.execute(q,args).fetchone()
+def original(m,oid):
+ return m.call("operation_get",dict(operation_id=oid)).structured
+def terminal(m,oid):
+ until=time.monotonic()+30
+ while time.monotonic()<until:
+  z=m.call("operation_get",dict(operation_id=oid,wait_ms=2000)).structured
+  if z["operation"]["state"] in ("SUCCEEDED","FAILED","UNKNOWN","TIMED_OUT","CANCELLED"):return z
+ raise AssertionError("nonterminal "+oid)
+def start_args(name):
+ return dict(box_id=box,idempotency_key="s4c-final-reboot-"+name+"-20261120",checks=["running","exec"],timeout_seconds=30)
+def wire(m,tool,**args):
+ return m.call(tool,args).structured
+def prepare_probe(mode):
+ # Only the disposable L2 guest is changed; restore its original binary
+ # before returning the deliberately delayed/nonzero test result.
+ assert native("config","get",fixture,"volatile.uuid")==box
+ assert mode in ("nonzero","delay")
+ content="exit 23" if mode=="nonzero" else 'sleep 4; exec /usr/bin/timeout "$@"'
+ cmd=r"""set -eu
+test -f /usr/bin/timeout
+test ! -L /usr/bin/timeout
+test ! -e /usr/bin/timeout.s4c-fixture-original
+test ! -e /usr/bin/timeout.s4c-fixture-new
+cat > /usr/bin/timeout.s4c-fixture-new <<'FIXTURE'
+#!/bin/sh
+set -eu
+mv /usr/bin/timeout.s4c-fixture-original /usr/bin/timeout
+"""+content+"""
+FIXTURE
+chmod 0755 /usr/bin/timeout.s4c-fixture-new
+mv /usr/bin/timeout /usr/bin/timeout.s4c-fixture-original
+mv /usr/bin/timeout.s4c-fixture-new /usr/bin/timeout
+"""
+ inside(cmd)
+def restore():
+ inside("if test -e /usr/bin/timeout.s4c-fixture-original; then mv /usr/bin/timeout.s4c-fixture-original /usr/bin/timeout; fi")
+assert native("config","get",fixture,"volatile.uuid")==box
+with LoopbackMCP(url,token=os.environ["BW_TEST_TOKEN"],allow_mutations=True) as m:
+ if sys.argv[1]=="pre":
+  assert not ck.exists()
+  a=wire(m,"box_start",box_id=box,idempotency_key="s4c-final-reboot-start-20261120")
+  t=terminal(m,a["operation_id"]);assert t["operation"]["state"]=="SUCCEEDED",t["operation"]
+  baseline=inside("sha256sum /usr/bin/timeout | cut -d' ' -f1")
+  assert len(baseline)==64
+  try:
+   prepare_probe("nonzero")
+   x=wire(m,"box_wait_ready",**start_args("nonzero"))
+   q=terminal(m,x["operation_id"])
+   assert q["operation"]["state"]=="FAILED" and q["readiness"]["guest_exit_code"]==23 and not q["readiness"]["ready"],q
+   print("S4_C_NATIVE_NONZERO",json.dumps(q,sort_keys=True),flush=True)
+  finally:restore()
+  assert inside("sha256sum /usr/bin/timeout | cut -d' ' -f1")==baseline
+  try:
+   prepare_probe("delay")
+   x=wire(m,"box_wait_ready",**start_args("inflight"))
+   oid=x["operation_id"]
+   end=time.monotonic()+5
+   while time.monotonic()<end:
+    st,nid=sql("select state,native_operation_id from operations where id=?",(oid,))
+    if st=="VERIFYING" and nid:break
+    if st in ("SUCCEEDED","FAILED","UNKNOWN","TIMED_OUT"):raise AssertionError("probe completed before interruption")
+    time.sleep(0.02)
+   else:raise AssertionError("no acknowledged native probe")
+   # Capture the original receipt before stopping only this candidate process.
+   ck.write_text(json.dumps(dict(box=box,original=oid,native=nid,sha=baseline,rows=sql("select count(*) from operations")[0]))+"\n")
+   print("S4_C_NATIVE_PROBE_ACK_BEFORE_STOP",oid,nid,flush=True)
+   subprocess.run(["systemctl","stop",unit],check=True,timeout=10)
+   st,nid2=sql("select state,native_operation_id from operations where id=?",(oid,))
+   assert st=="VERIFYING" and nid2==nid,"native probe was settled before restart"
+   print("S4_C_DURABLE_UNFINISHED_ORIGINAL_BEFORE_FULL_BOX_RESTART_PASS",oid,nid,flush=True)
+  finally:restore()
+  assert inside("sha256sum /usr/bin/timeout | cut -d' ' -f1")==baseline
+ elif sys.argv[1]=="post":
+  d=json.loads(ck.read_text())
+  assert inside("sha256sum /usr/bin/timeout | cut -d' ' -f1")==d["sha"]
+  q=original(m,d["original"])
+  print("POST_FULL_RESTART",json.dumps(q,sort_keys=True),flush=True)
+  assert q["operation"]["state"]=="UNKNOWN" and q["operation"]["native_operation_id"]==d["native"] and not q["readiness"]["ready"],q
+  same=wire(m,"box_wait_ready",**start_args("inflight"))
+  assert same["duplicate"] and same["operation_id"]==d["original"]
+  assert sql("select count(*) from operations")[0]==d["rows"]
+  try:wire(m,"box_wait_ready",**start_args("new-after-unknown"))
+  except MCPToolError:pass
+  else:raise AssertionError("second native probe admitted while original unknown")
+  assert sql("select count(*) from operations")[0]==d["rows"]
+  print("S4_C_FULL_L1_RESTART_ACKED_ORIGINAL_UNKNOWN_SAME_KEY_NO_REPLAY_PASS",flush=True)
+ else:raise ValueError("phase")

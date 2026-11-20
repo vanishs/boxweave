@@ -18,7 +18,7 @@ func TestManualUnknownRecoveryNoReplayAndResourceLock(t *testing.T) {
 	if err := s.RegisterOwnedBox(ctx, uuid, project, "bw-s1-native-op-1108", "original-incarnation"); err != nil {
 		t.Fatal(err)
 	}
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestManualRecoveryCannotAdoptAbsentOwnership(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	_, tok, err := s.IssueToken(ctx, "admin", time.Hour)
+	_, tok, err := s.IssueToken(ctx, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

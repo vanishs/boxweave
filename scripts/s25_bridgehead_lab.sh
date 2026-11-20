@@ -94,10 +94,8 @@ import json,sys
 s=json.load(open(sys.argv[1]))
 assert s["ready"] and s["native"]["ready"],s
 S25_DOCTOR_ASSERT
-for spec in "admin1:admin" "admin2:admin" "admin3:admin" "viewer:viewer"; do
- name="$(printf '%s\n' "$spec" | cut -d: -f1)"
- role="$(printf '%s\n' "$spec" | cut -d: -f2)"
- sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create -role "$role" > "$work/private/$name.secret"
+for name in admin1 admin2 admin3 peer; do
+ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.secret"
  chmod 0600 "$work/private/$name.secret"
 done
 sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
@@ -127,7 +125,7 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
   CGO_ENABLED=1 go build -trimpath -o "$work/staging/s3-file-installed-agent" ./scripts/s3_file_installed_probe.go
   export BW_S3_MCP_URL=http://127.0.0.1:18650/mcp
   export BW_S3_ADMIN_TOKEN_FILE="$work/private/admin1.secret"
-  export BW_S3_VIEWER_TOKEN_FILE="$work/private/viewer.secret"
+  export BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret"
   export BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm
   echo "S3_INSTALLED_TEST_SOURCE_SHA=$(git rev-parse HEAD)"
   installed_bin_sha="$(sudo sha256sum /usr/local/bin/boxweave | awk '{print $1}')"
@@ -306,7 +304,7 @@ export BW_S25_OUTER_DB=/var/lib/boxweave/ledger.sqlite
 export BW_S25_ADMIN1_FILE="$work/private/admin1.secret"
 export BW_S25_ADMIN2_FILE="$work/private/admin2.secret"
 export BW_S25_ADMIN3_FILE="$work/private/admin3.secret"
-export BW_S25_VIEWER_FILE="$work/private/viewer.secret"
+export BW_S25_PEER_FILE="$work/private/peer.secret"
 export BW_S25_CHECKPOINT="$work/private/outer-checkpoint.json"
 export BW_S25_STAGE_URL="http://$gateway:$port"
 export BW_S25_PACKAGE_PROXY_URL="http://$gateway:$proxy_port"
@@ -406,10 +404,10 @@ python3 scripts/s25_independent_verifier.py agents
 echo S25_R2_SIGKILL_ORIGINAL_TWO_AGENT_SQLITE_AND_NATIVE_NO_REPLAY=PASS
 # Token revocation is a direct dedicated-user local CLI action; the old
 # HTTP bearer is tested by a separate process but never logged/exported.
-viewer_id="$(sed -n 's/^id=\([0-9a-f]*\) .*/\1/p' "$work/private/viewer.secret")"
-test "$viewer_id" != ""
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-revoke -id "$viewer_id" >/dev/null
-python3 - "$work/private/viewer.secret" <<'S25_REVOKED_HTTP'
+peer_id="$(sed -n 's/^id=\([0-9a-f]*\) .*/\1/p' "$work/private/peer.secret")"
+test "$peer_id" != ""
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-revoke -id "$peer_id" >/dev/null
+python3 - "$work/private/peer.secret" <<'S25_REVOKED_HTTP'
 import sys,urllib.request,urllib.error
 token=next(x[6:].strip() for x in open(sys.argv[1]) if x.startswith("token="))
 req=urllib.request.Request("http://127.0.0.1:18650/mcp",data=b"{}",
@@ -420,12 +418,12 @@ except urllib.error.HTTPError as exc:
   assert exc.code==401,exc.code
 else:
   raise AssertionError("revoked bearer unexpectedly returned HTTP "+str(res.status))
-print("S25_REVOKED_VIEWER_TOKEN_HTTP_DENIED=PASS")
+print("S25_REVOKED_PEER_TOKEN_HTTP_DENIED=PASS")
 S25_REVOKED_HTTP
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-create -role viewer > "$work/private/viewer.rotated"
-chmod 0600 "$work/private/viewer.rotated"
-export BW_S25_VIEWER_FILE="$work/private/viewer.rotated"
-"$work/staging/s25-lab-agent" rotated-viewer
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME  HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config  /usr/local/bin/boxweave token-create > "$work/private/peer.rotated"
+chmod 0600 "$work/private/peer.rotated"
+export BW_S25_PEER_FILE="$work/private/peer.rotated"
+"$work/staging/s25-lab-agent" rotated-peer
 "$work/staging/s25-lab-agent" bootstrap
 python3 scripts/s25_independent_verifier.py wan6inner
 # Evidence is captured *before* any original SDK cleanup. These outputs are

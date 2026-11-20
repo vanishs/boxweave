@@ -1,6 +1,6 @@
 #!/bin/sh
 # Exact original installed binary under its own service OS identity in GDB.
-# Pause at operation_tools.go:149 *after* durable ListOperations SQL, *before*
+# Derive the unique source boundary after durable ListOperations SQL and before
 # privateReadReply. Revocation/expiry is performed by an independent actor.
 # No production hook or mock handler; this fixture is never shipped.
 set -eu
@@ -26,8 +26,55 @@ actor() {
    BW_S2_TEST_UID="$(id -u boxweave)" \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
+# A historical fixed line can silently move into Tool registration when new
+# helpers are added. Require the exact post-query return and its error guard;
+# source drift or ambiguity must fail before any debugger fixture is started.
+boundary_line="$(python3 - internal/control/operation_tools.go <<'PY_LIST_BOUNDARY'
+from pathlib import Path
+import sys
+lines=Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+anchor="return privateReadReply(ctx, s, principal.TokenID, operationListResult{TrackingID: tracking, Page: page})"
+matches=[i for i,line in enumerate(lines) if line.strip()==anchor]
+assert len(matches)==1, "unique final operation_list response boundary missing"
+at=matches[0]
+assert [line.strip() for line in lines[at-3:at]]==[
+    "if err != nil {", "return nil, operationListResult{}, err", "}"
+], "operation_list post-query error guard changed"
+queries=[i for i,line in enumerate(lines[:at])
+         if line.strip()=="page, err := s.Store.ListOperations(ctx, state.OperationQuery{"]
+assert len(queries)==1 and at-queries[0]<=12, "final boundary is not immediately after ListOperations"
+print(at+1)
+PY_LIST_BOUNDARY
+)"
+echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_LINE=$boundary_line"
+# The source now passes the SDK-derived principal.TokenID directly.
+# Source-line PCs may still be ambiguous under Go optimization.
+# Stop at the unique actual privateReadReply CALL in the installed bytes,
+# after successful ListOperations, before the final credential recheck.
+go tool objdump -s 'registerOperationReadTools\.func2$' "$work/boxweave" \
+  > "$work/p1-list-boundary.disassembly"
+boundary_pc="$(python3 - "$work/boxweave" "$work/p1-list-boundary.disassembly" "$boundary_line" <<'PY_LIST_PC'
+from pathlib import Path
+import re,struct,sys
+binary=Path(sys.argv[1]).read_bytes()
+assert binary[:4]==b"\x7fELF" and binary[5] in (1,2), "unknown executable address format"
+endian="<" if binary[5]==1 else ">"
+assert struct.unpack(endian+"H",binary[16:18])[0]==2, "relocatable binary needs an independently verified relocated PC"
+lines=Path(sys.argv[2]).read_text(encoding="utf-8").splitlines()
+assert len([line for line in lines if line.startswith("TEXT ")])==1, "ambiguous compiled list handler"
+matches=[]
+for line in lines:
+    if "CALL " in line and "control.privateReadReply[" in line and "state.OperationPage" in line:
+        match=re.match(r"\s*operation_tools\.go:(\d+)\s+(0x[0-9a-f]+)\s+",line)
+        assert match and int(match[1])==int(sys.argv[3]), "compiled call differs from exact source boundary"
+        matches.append(match[2])
+assert len(matches)==1, "unique compiled privateReadReply call missing"
+print(matches[0])
+PY_LIST_PC
+)"
+echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_PC=$boundary_pc"
 # Populate exactly this test's private ledger; zero native mutation.
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-list-debugger-admin.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-admin.secret"
 chmod 0600 "$work/p1-list-debugger-admin.secret"
 cat > "$work/p1-list-boundary.gdb" <<EOF
 set pagination off
@@ -37,9 +84,10 @@ set breakpoint pending off
 set print thread-events off
 handle SIGURG nostop noprint pass
 handle SIGPIPE nostop noprint pass
-break github.com/vanishs/boxweave/internal/control/operation_tools.go:149
+break *$boundary_pc
 commands 1
 silent
+printf "S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT\\n"
 shell /bin/sh -c "if test -e $lab/armed; then touch $lab/held; timeout 30 /bin/sh -c 'until test -e $lab/release; do sleep 0.1; done'; fi"
 continue
 end
@@ -91,5 +139,7 @@ grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_EXPIRED_NO_LEAK
  "$work/p1-list-boundary-results.txt"
 grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_TWO_INFLIGHT_AUTH_RACES=PASS \
  "$work/p1-list-boundary-results.txt"
+test "$(grep -Fxc S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT "$work/p1-list-debugger.redacted.log")" = 2
+echo "S4_A_OPERATION_LIST_COMPILED_CALL_TWO_INDEPENDENT_AUTH_CUTS=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK=PASS"

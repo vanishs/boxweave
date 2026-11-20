@@ -133,15 +133,13 @@ func main() {
 				"operation_id": opID, "stream": "stdout", "limit": 128})
 			stderr := sdkCall(ctx, session, "operation_output_get", map[string]any{
 				"operation_id": opID, "stream": "stderr", "limit": 128})
-			errBytes, decodeErr := base64.StdEncoding.DecodeString(attr(stderr, "content_base64"))
-			require(attr(stdout, "availability") == "unavailable" &&
-				attr(stdout, "unavailable_reason") == "NATIVE_RECORDED_OUTPUT_MISSING" &&
-				stdout["exit_code"] == float64(0) && stdout["command_success"] == true &&
-				attr(stderr, "availability") == "available" &&
-				decodeErr == nil && string(errBytes) == "retained-err" &&
-				stderr["exit_code"] == float64(0) && stderr["command_success"] == true,
-				"lost native DELETE ACK invented expiry or erased untouched stderr")
-			fmt.Println("S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS")
+			// This fixture was aged beyond the seven-day read window before
+			// physical GC. Do not infer physical deletion from logical TTL.
+			for _, out := range []map[string]any{stdout, stderr} {
+				require(attr(out, "availability") == "expired" && attr(out, "unavailable_reason") == "RETENTION_WINDOW_ELAPSED" && attr(out, "content_base64") == "" && out["exit_code"] == float64(0) && out["command_success"] == true,
+					"expired read window leaked bytes or falsely claimed verified native GC")
+			}
+			fmt.Println("S2_GC_PUBLIC_LOST_ACK_TTL_ELAPSED_NOT_PHYSICAL_EXPIRY=PASS")
 			return
 		}
 		for _, stream := range []string{"stdout", "stderr"} {
@@ -162,8 +160,8 @@ func main() {
 	}
 	defer s.Close()
 	actor, err := s.VerifyToken(ctx, token)
-	require(err == nil && actor.Role == "admin", "exact authenticated admin required")
-	op, err := s.GetScopedOperation(ctx, project, actor.ID, "admin", opID)
+	require(err == nil && actor.ActorID != "" && actor.ID != "", "exact authenticated Actor and live credential required")
+	op, err := s.GetScopedOperation(ctx, project, actor.ActorID, opID)
 	require(err == nil && op.State == "SUCCEEDED" && op.Action == "box_exec" &&
 		op.BoxUUID == uuid && op.NativeOperationID == nativeID, "unsafe GC original identity")
 	box, err := s.OwnedBox(ctx, project, uuid)

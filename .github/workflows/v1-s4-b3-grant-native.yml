@@ -1,0 +1,714 @@
+name: S4-B3 original-scoped PRS grant native dual-stack (disposable)
+
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b3-grant-native.yml
+      - internal/install/native_peer_root_grant_installed_native_test.go
+      - internal/install/native_peer_root_multi_installed_native_test.go
+      - internal/install/native_peer_root_integrated.go
+      - internal/install/network_peer_revocation.go
+      - internal/state/network_peer_revoke_snapshot.go
+      - internal/install/native_peer_root_grant_review.go
+      - internal/install/native_peer_root_grant_apply.go
+      - internal/install/native_peer_root_grant_nft.go
+      - internal/state/network_peer_root_grant.go
+      - internal/state/network_peer_root_grant_worker.go
+      - internal/install/native_peer_root_grant_recovery.go
+      - internal/install/native_peer_root_recovery.go
+      - internal/state/network_peer_root_recovery.go
+      - internal/state/network_peer_root_grant_recovery_test.go
+      - internal/state/network_peer_grant_snapshot.go
+      - internal/control/peer_root.go
+      - internal/state/network_peer_operation_mode.go
+      - internal/install/native_peer_root_service.go
+      - cmd/boxweave/main.go
+      - scripts/s4_b3_native_packet_probe.go
+      - scripts/s4_b3_native_mcp_client.go
+      - scripts/s4_b5_linked_delete_client.py
+      - internal/state/delete_dependencies.go
+      - internal/control/delete_dependencies.go
+      - internal/control/peer_tools.go
+      - internal/state/network_peer_scope.go
+      - internal/state/network_peer_replay.go
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-grant:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [normal, after_acl_fault, after_resume_fault, before_completion_fault, installed_normal, multi_revoke, multi_regrant, installed_mcp, grant_ack_lost]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Provision one-use fresh Incus 7.6 and protected native Project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus && ! id boxweave >/dev/null 2>&1
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base nftables conntrack sqlite3 jq >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b3-root-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b3-root-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b3-root-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          sudo incus version
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          if test "${{ matrix.scenario }}" = installed_mcp; then
+            # Incus 7.6: 'incus' is the *restricted user socket* group.
+            # 'incus-admin' (and sudo/lxd/docker) are privileged and forbidden.
+            sudo useradd -m -s /bin/sh boxweave
+            sudo usermod -aG incus boxweave
+            test -S /var/lib/incus/unix.socket.user
+            id -nG boxweave | tr ' ' '\n' | grep -qx incus
+            if id -nG boxweave | tr ' ' '\n' | grep -Eq '^(incus-admin|sudo|lxd|docker)$'; then
+              echo S4_B3_REFUSE_PRIVILEGED_CONTROLLER_GROUP; exit 89
+            fi
+            echo S4_B3_RESTRICTED_INCUS_USER_GROUP_WITHOUT_ADMIN=PASS
+          else
+            sudo useradd -m -s /bin/sh boxweave
+          fi
+          uid="$(id -u boxweave)"
+          test "$uid" -ge 1000
+          project="user-$uid"
+          sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
+          go test -c -o "$RUNNER_TEMP/s4b3-root-fixture" ./internal/install
+          sudo install -m0755 "$RUNNER_TEMP/s4b3-root-fixture" /usr/local/bin/s4b3-root-fixture
+          go build -o "$RUNNER_TEMP/s4b3-installed" ./cmd/boxweave
+          sudo install -m0755 "$RUNNER_TEMP/s4b3-installed" /usr/local/bin/boxweave
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
+          sudo incus project create "$project" \
+            -c restricted=true -c features.images=false -c features.profiles=true -c features.networks=false \
+            -c restricted.devices.nic=managed -c restricted.networks.access=bwbr0
+          sudo incus --project "$project" profile device add default root disk path=/ pool=default
+          sudo incus --project "$project" profile device add default eth0 nic name=eth0 \
+            network=bwbr0 security.acls=bw-s4b2-native \
+            security.acls.default.ingress.action=reject security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true security.ipv6_filtering=true security.mac_filtering=true
+          for spec in 's4b2a 10.248.83.11 fd83:248::11' 's4b2b 10.248.83.12 fd83:248::12' 's4b2c 10.248.83.13 fd83:248::13'; do
+            read -r name ipv4 ipv6 <<< "$spec"
+            sudo incus --project "$project" init images:ubuntu/24.04 "$name" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project "$project" config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+            sudo incus --project "$project" start "$name"
+          done
+          ready=0
+          for _ in $(seq 1 55); do
+            if sudo incus --project "$project" exec s4b2a -- ip -4 -o addr show eth0 | grep -q '10.248.83.11' &&
+               sudo incus --project "$project" exec s4b2b -- ip -4 -o addr show eth0 | grep -q '10.248.83.12' &&
+               sudo incus --project "$project" exec s4b2c -- ip -4 -o addr show eth0 | grep -q '10.248.83.13' &&
+               sudo incus --project "$project" exec s4b2a -- ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11' &&
+               sudo incus --project "$project" exec s4b2b -- ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12'; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          echo "$project" > "$RUNNER_TEMP/s4b3-project"
+          echo "S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS=PASS"
+          echo "S4_B3_NATIVE_SOURCE_SHA=$GITHUB_SHA"
+
+      - name: Admit nonroot original and execute journaled root GRANT
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          scope="/tmp/s4b3-disposable-native-scope.json"
+          db=/var/lib/boxweave/ledger.sqlite
+          sudo install -d -m0700 -o boxweave -g boxweave /var/lib/boxweave
+          sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+            BOXWEAVE_S4B3_SCOPE="$scope" \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
+          admit_only=0
+          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp || test "${{ matrix.scenario }}" = grant_ack_lost; then admit_only=1; fi
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+            BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_ADMIT_ONLY="$admit_only" \
+            /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$' \
+            | tee "$RUNNER_TEMP/s4b3-seed.log"
+          original="$(sed -n 's/^S4_B3_NATIVE_GRANT_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-seed.log" | tail -n1)"
+          test "${#original}" -eq 32
+          echo "$original" > "$RUNNER_TEMP/s4b3-original"
+          if test "${{ matrix.scenario }}" = installed_normal || test "${{ matrix.scenario }}" = multi_revoke || test "${{ matrix.scenario }}" = multi_regrant || test "${{ matrix.scenario }}" = installed_mcp || test "${{ matrix.scenario }}" = grant_ack_lost; then
+            bin=/usr/local/bin/boxweave
+            sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+            sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" > "$RUNNER_TEMP/s4b3-installed-plan.json"
+            sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-installed-plan.json")"
+            test "$(printf '%s' "$sha" | wc -c)" = 64
+            sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now boxweave-native-peer-root.service
+            ready=0
+            for _ in $(seq 1 35); do
+              if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            test "$(stat -c '%a:%U:%G' /run/boxweave-native-peer-root.sock)" = "660:root:boxweave"
+            if sudo "$bin" native-peer-root-request -operation-id "$original" >/dev/null 2>&1; then
+              echo S4_B3_INSTALLED_FOREIGN_UID_ROOT_REQUEST_ACCEPTED; exit 87
+            fi
+            if test "${{ matrix.scenario }}" = grant_ack_lost; then
+              sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" > "$RUNNER_TEMP/s4b3-ack-root-response.json"
+              test "$(jq -r .status "$RUNNER_TEMP/s4b3-ack-root-response.json")" = COMPLETE_VERIFIED
+              journal="/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
+              test "$(sudo jq -r .status "$journal")" = COMPLETE_VERIFIED
+              before="$(sudo sha256sum "$journal" | awk '{print $1}')"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+              sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_ORIGINAL="$original" /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootMarkCompletedGrantACKLost$'
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
+              sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" -operation-id "$original" -peer-plan-sha256 "$sha"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE operation_id=''")" = CONFIRMED:1
+              test "$(sudo sha256sum "$journal" | awk '{print $1}')" = "$before"
+              if sudo -u boxweave "$bin" native-peer-root-request -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+                echo S4_B3_COMPLETED_ACK_LOSS_ORIGINAL_REDISPATCHED; exit 94
+              fi
+              if sudo -u boxweave "$bin" native-peer-root-reconcile -db "$db" -project "$project" -operation-id "$original" -peer-plan-sha256 "$sha" >/dev/null 2>&1; then
+                echo S4_B3_COMPLETED_ACK_LOSS_TWICE_SETTLED; exit 95
+              fi
+              echo "S4_B3_INSTALLED_GRANT_COMPLETED_ACK_LOSS_NATIVE_READONLY_NO_REPLAY=PASS original=$original"
+            else
+              sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+              test "$(sudo -u boxweave sqlite3 "$db" "SELECT status||':'||desired FROM peer_grants WHERE source_uuid=(SELECT box_uuid FROM operations WHERE id='$original')")" = CONFIRMED:1
+              test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+              if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+                echo S4_B3_INSTALLED_ORIGINAL_REPLAYED; exit 88
+              fi
+              echo "S4_B3_INSTALLED_NONROOT_CONTROLLER_PRS_SYSTEMD_SOCKET_SQLITE_JOURNAL_NO_REPLAY=PASS original=$original"
+            fi
+          else
+            sudo env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+              BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" \
+              BOXWEAVE_S4B3_ORIGINAL="$original" BOXWEAVE_S4B3_SCENARIO="${{ matrix.scenario }}" \
+              /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeInstalledRootGrantActualEffect$'
+          fi
+          echo "S4_B3_NATIVE_ROOT_ONE_SHOT_RESULT=${{ matrix.scenario }}"
+
+      - name: Official public MCP admission to installed Controller then exact approved PRS execution
+        if: matrix.scenario == 'installed_mcp'
+        shell: bash
+        run: |
+          set -euo pipefail
+          db=/var/lib/boxweave/ledger.sqlite
+          bin=/usr/local/bin/boxweave
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          source="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE name='s4b2b' AND project='$project'")"
+          target="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE name='s4b2c' AND project='$project'")"
+          test -n "$source" && test -n "$target" && test "$source" != "$target"
+          admin_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h)"
+          revoked_raw="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h)"
+          admin_token="$(printf '%s\n' "$admin_raw" | sed -n 's/^token=//p')"
+          revoked_token="$(printf '%s\n' "$revoked_raw" | sed -n 's/^token=//p')"
+          revoked_id="$(printf '%s\n' "$revoked_raw" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
+          test -n "$revoked_id"
+          sudo -u boxweave "$bin" token-revoke -db "$db" -id "$revoked_id" >/dev/null
+          unset admin_raw revoked_raw
+          test -n "$admin_token" && test -n "$revoked_token"
+          # Use the same production nonroot Incus preflight as the MCP handler.
+          # Emit only the bounded error classification, never credentials.
+          sudo -u boxweave "$bin" doctor -db "$db" -project "$project" \
+            -incus-socket /var/lib/incus/unix.socket.user > "$RUNNER_TEMP/s4b3-mcp-native-doctor.json"
+          if test "$(jq -r .native.ready "$RUNNER_TEMP/s4b3-mcp-native-doctor.json")" != true; then
+            echo "S4_B3_NATIVE_NONROOT_PREFLIGHT_CLASS=$(jq -r .native.error_class "$RUNNER_TEMP/s4b3-mcp-native-doctor.json")"
+            exit 96
+          fi
+          echo S4_B3_NATIVE_NONROOT_RESTRICTED_INCUS_PREFLIGHT=PASS
+          sudo -u boxweave env BOXWEAVE_S4B3_SERVE_PROJECT="$project" sh -c             'nohup /usr/local/bin/boxweave serve -db /var/lib/boxweave/ledger.sqlite -project "$BOXWEAVE_S4B3_SERVE_PROJECT" -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650 >/tmp/s4b3-mcp-serve.log 2>&1 </dev/null & echo $! >/tmp/s4b3-mcp-serve.pid'
+          ready=0
+          for _ in $(seq 1 40); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp 2>/dev/null || true)"
+            if test "$code" = 401; then ready=1; break; fi
+            sleep 1
+          done
+          if test "$ready" != 1; then
+            sudo cat /tmp/s4b3-mcp-serve.log || :
+            echo S4_B3_PUBLIC_MCP_INSTALLED_SERVER_NOT_READY; exit 98
+          fi
+          S4B3_MCP_TOKEN="$admin_token" S4B3_REVOKED_TOKEN="$revoked_token"             S4B3_SOURCE_UUID="$source" S4B3_TARGET_UUID="$target"             go run -tags s4b3_native_ci ./scripts/s4_b3_native_mcp_client.go             | tee "$RUNNER_TEMP/s4b3-public-mcp.log"
+          unset admin_token revoked_token
+          original="$(sed -n 's/^S4_B3_NATIVE_MCP_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-public-mcp.log" | tail -n1)"
+          test "$(printf '%s' "$original" | wc -c)" = 32
+          echo "$original" > "$RUNNER_TEMP/s4b3-original"
+          sudo kill "$(sudo cat /tmp/s4b3-mcp-serve.pid)"
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo systemctl disable boxweave-native-peer-root.service
+          sudo rm /etc/systemd/system/boxweave-native-peer-root.service
+          sudo systemctl daemon-reload
+          sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" > "$RUNNER_TEMP/s4b3-mcp-plan.json"
+          sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-mcp-plan.json")"
+          test "$(printf '%s' "$sha" | wc -c)" = 64
+          sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = SUCCEEDED
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM peer_grants WHERE status='CONFIRMED' AND desired=1")" = 2
+          test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+          if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+            echo S4_B3_PUBLIC_MCP_ORIGINAL_REDISPATCHED; exit 99
+          fi
+          echo "S4_B3_NATIVE_OFFICIAL_PUBLIC_MCP_CONTROLLER_PRS_SQLITE=PASS original=$original"
+
+      - name: Native installed multi-grant then selective revoke
+        if: matrix.scenario == 'multi_revoke' || matrix.scenario == 'multi_regrant'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          db=/var/lib/boxweave/ledger.sqlite
+          scope=/tmp/s4b3-disposable-native-scope.json
+          bin=/usr/local/bin/boxweave
+          steps="grant_bc revoke_ab"
+          if test "${{ matrix.scenario }}" = multi_regrant; then steps="$steps grant_cb regrant_ab"; fi
+          for step in $steps; do
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+              BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_STEP="$step" \
+              /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootAdmitFollowupPeer$' \
+              | tee "$RUNNER_TEMP/s4b3-$step-admit.log"
+            original="$(sed -n 's/^S4_B3_NATIVE_FOLLOWUP_ORIGINAL=//p' "$RUNNER_TEMP/s4b3-$step-admit.log" | tail -n1)"
+            test "$(printf '%s' "$original" | wc -c)" = 32
+            sudo systemctl stop boxweave-native-peer-root.service
+            sudo systemctl disable boxweave-native-peer-root.service
+            sudo rm /etc/systemd/system/boxweave-native-peer-root.service
+            sudo systemctl daemon-reload
+            sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$original"
+            test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = DISPATCHING
+            sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" > "$RUNNER_TEMP/s4b3-$step-plan.json"
+            sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-$step-plan.json")"
+            test "$(printf '%s' "$sha" | wc -c)" = 64
+            sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$original" -peer-plan-sha256 "$sha" -approve-local
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now boxweave-native-peer-root.service
+            ready=0
+            for _ in $(seq 1 35); do
+              if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original"
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_S4B3_ONE_USE=20261118-disposable-root-grant \
+              BOXWEAVE_S4B3_SCOPE="$scope" BOXWEAVE_S4B3_DB="$db" BOXWEAVE_S4B3_STEP="$step" BOXWEAVE_S4B3_ORIGINAL="$original" \
+              /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B3NativeNonrootConfirmFollowupPeer$'
+            test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$original.json")" = COMPLETE_VERIFIED
+            if sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$original" >/dev/null 2>&1; then
+              echo "S4_B3_UNEXPECTED_FOLLOWUP_REPLAY=$step"; exit 82
+            fi
+            echo "S4_B3_INSTALLED_FOLLOWUP_CLAIM_PRS_SOCKET_ROOT_SQLITE=PASS step=$step original=$original"
+          done
+          if test "${{ matrix.scenario }}" = multi_regrant; then
+            echo S4_B3_NATIVE_INSTALLED_REVOKE_NEXT_GRANT_EXACT_REGRANT_FULL_LINK=PASS
+          else
+            echo S4_B3_NATIVE_INSTALLED_TWO_GRANTS_ONE_REVOKE_FULL_LINK=PASS
+          fi
+
+      - name: Test real IPv4 and IPv6 TCP/UDP permit, reverse and sibling denies
+        if: matrix.scenario == 'normal' || matrix.scenario == 'installed_normal' || matrix.scenario == 'installed_mcp' || matrix.scenario == 'grant_ack_lost'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          # A root NIC Start ACK/Incus Running state is not a guest IPv6
+          # network-ready signal. Preserve true packet acceptance by waiting
+          # for the source and destination guest dual-stack addresses/routes.
+          # If the timeout expires, fail with original guest route evidence.
+          network_ready=0
+          for _ in $(seq 1 80); do
+            if sudo incus --project "$project" exec s4b2a -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11' && ip -6 route get fd83:248::12 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2b -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12' && ip -6 route get fd83:248::11 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2c -- sh -c \
+                 "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13'"; then
+              network_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if test "$network_ready" != 1; then
+            echo S4_B3_GUEST_POST_ROOT_RESUME_DUALSTACK_NOT_READY
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" exec "$name" -- ip -6 addr show eth0 || :
+              sudo incus --project "$project" exec "$name" -- ip -6 route show || :
+            done
+            exit 89
+          fi
+          echo S4_B3_GUEST_AFTER_ROOT_RESUME_IPV6_ADDRESS_AND_ROUTE_READY=PASS
+          CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
+          for name in s4b2a s4b2b s4b2c; do
+            sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
+            sudo incus --project "$project" exec "$name" -- chmod 0755 /root/s4b3-packet
+          done
+          sudo incus --project "$project" exec s4b2b -- sh -c \
+            'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+          sudo incus --project "$project" exec s4b2a -- sh -c \
+            'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+          for name in s4b2a s4b2b; do
+            ready=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project "$project" exec "$name" -- test -f /tmp/s4b3-packet-ready; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          done
+          for proto in tcp udp; do
+            for dst in 10.248.83.12 fd83:248::12; do
+              accepted=0
+              for attempt in $(seq 1 20); do
+                if sudo incus --project "$project" exec s4b2a -- /root/s4b3-packet probe "$proto" "$dst"; then
+                  accepted=1
+                  echo "S4_B3_REAL_NATIVE_ACCEPT=PASS $proto $dst attempt=$attempt"
+                  break
+                fi
+                echo "S4_B3_NATIVE_ALLOW_WAIT_FOR_REAL_PACKET_RETRY $proto $dst attempt=$attempt"
+                sleep 2
+              done
+              if test "$accepted" != 1; then
+                echo "S4_B3_REAL_NATIVE_ACCEPT_FAILED $proto $dst"
+                sudo incus --project "$project" exec s4b2a -- ip -6 route show || :
+                sudo incus --project "$project" exec s4b2a -- ip -6 neigh show || :
+                exit 91
+              fi
+            done
+            for dst in 10.248.83.11 fd83:248::11; do
+              if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_REVERSE_UNEXPECTEDLY_ALLOWED $proto $dst"; exit 84
+              fi
+              echo "S4_B3_REAL_NATIVE_REVERSE_REJECT=PASS $proto $dst"
+            done
+            for dst in 10.248.83.12 fd83:248::12; do
+              if sudo incus --project "$project" exec s4b2c -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_SIBLING_UNEXPECTEDLY_ALLOWED $proto $dst"; exit 85
+              fi
+              echo "S4_B3_REAL_NATIVE_UNRELATED_REJECT=PASS $proto $dst"
+            done
+          done
+          echo S4_B3_REAL_NATIVE_IPV4_IPV6_TCP_UDP_DIRECTIONAL_ALLOW_AND_DENY=PASS
+
+      - name: Prove genuine dualstack packet revoke and unrelated confirmed direction
+        if: matrix.scenario == 'multi_revoke'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          ready=0
+          for _ in $(seq 1 80); do
+            if sudo incus --project "$project" exec s4b2a -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11'" &&
+               sudo incus --project "$project" exec s4b2b -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12'" &&
+               sudo incus --project "$project" exec s4b2c -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13'" &&
+               sudo incus --project "$project" exec s4b2b -- ip -6 route get fd83:248::13 >/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
+          for name in s4b2a s4b2b s4b2c; do
+            sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
+            sudo incus --project "$project" exec "$name" -- chmod 0755 /root/s4b3-packet
+          done
+          for name in s4b2b s4b2c; do
+            sudo incus --project "$project" exec "$name" -- sh -c 'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+            ready=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project "$project" exec "$name" -- test -f /tmp/s4b3-packet-ready; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          done
+          for proto in tcp udp; do
+            for dst in 10.248.83.13 fd83:248::13; do
+              accepted=0
+              for attempt in $(seq 1 12); do
+                if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"; then
+                  accepted=1
+                  echo "S4_B3_NATIVE_RETAINED_B_TO_C=PASS proto=$proto dst=$dst attempt=$attempt"
+                  break
+                fi
+                echo "S4_B3_MULTI_REVOKE_RETAINED_ALLOW_WAIT $proto $dst attempt=$attempt"
+                sleep 2
+              done
+              if test "$accepted" != 1; then
+                echo "S4_B3_MULTI_REVOKE_RETAINED_ALLOW_FAILED $proto $dst"
+                sudo incus --project "$project" exec s4b2b -- ip -6 addr show eth0 || :
+                sudo incus --project "$project" exec s4b2b -- ip -6 route show || :
+                sudo incus --project "$project" exec s4b2b -- ip -6 neigh show || :
+                exit 91
+              fi
+            done
+            for dst in 10.248.83.12 fd83:248::12; do
+              if sudo incus --project "$project" exec s4b2a -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_REVOKED_A_TO_B_STILL_ALLOWED proto=$proto dst=$dst"; exit 83
+              fi
+              echo "S4_B3_NATIVE_REVOKED_A_TO_B=PASS proto=$proto dst=$dst"
+            done
+          done
+          echo S4_B3_NATIVE_IPV4_IPV6_TCP_UDP_REVOKE_OTHER_GRANT_REMAINS=PASS
+      - name: Verify real IPv4/IPv6 TCP UDP after revoke, third grant and same-incarnation regrant
+        if: matrix.scenario == 'multi_regrant'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          ready=0
+          for _ in $(seq 1 80); do
+            if sudo incus --project "$project" exec s4b2a -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::11' && ip -6 route get fd83:248::12 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2b -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::12' && ip -6 route get fd83:248::13 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2c -- sh -c "ip -6 -o addr show eth0 scope global | grep -q 'fd83:248::13' && ip -6 route get fd83:248::12 >/dev/null"; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
+          for name in s4b2a s4b2b s4b2c; do
+            sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
+            sudo incus --project "$project" exec "$name" -- chmod 0755 /root/s4b3-packet
+            sudo incus --project "$project" exec "$name" -- sh -c 'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+            ready=0
+            for _ in $(seq 1 30); do
+              if sudo incus --project "$project" exec "$name" -- test -f /tmp/s4b3-packet-ready; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          done
+          for proto in tcp udp; do
+            for spec in 's4b2a 10.248.83.12' 's4b2a fd83:248::12' 's4b2b 10.248.83.13' 's4b2b fd83:248::13' 's4b2c 10.248.83.12' 's4b2c fd83:248::12'; do
+              read -r source dest <<< "$spec"
+              accepted=0
+              for attempt in $(seq 1 20); do
+                if sudo incus --project "$project" exec "$source" -- /root/s4b3-packet probe "$proto" "$dest"; then
+                  accepted=1
+                  echo "S4_B3_REGRANT_REAL_PACKET_ALLOW=PASS src=$source proto=$proto dst=$dest attempt=$attempt"
+                  break
+                fi
+                sleep 2
+              done
+              if test "$accepted" != 1; then
+                echo "S4_B3_REGRANT_REAL_PACKET_FAILED src=$source proto=$proto dst=$dest"
+                sudo incus --project "$project" exec "$source" -- ip -6 route show || :
+                exit 96
+              fi
+            done
+            for dst in 10.248.83.11 fd83:248::11; do
+              if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dst"; then
+                echo "S4_B3_REGRANT_REVERSE_UNEXPECTEDLY_ALLOWED $proto $dst"
+                exit 97
+              fi
+              echo "S4_B3_REGRANT_REVERSE_REAL_PACKET_DENIED=PASS proto=$proto dst=$dst"
+            done
+          done
+          echo S4_B3_NATIVE_REVOKE_THIRD_GRANT_REGRANT_FINAL_DUALSTACK_TCP_UDP=PASS
+      - name: Public MCP B-to-C real IPv4 IPv6 TCP UDP permit
+        if: matrix.scenario == 'installed_mcp'
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          ready=0
+          for _ in $(seq 1 60); do
+            if sudo incus --project "$project" exec s4b2b -- sh -c "ip -6 addr show eth0 scope global | grep -q 'fd83:248::12' && ip -6 route get fd83:248::13 >/dev/null" &&
+               sudo incus --project "$project" exec s4b2c -- sh -c "ip -6 addr show eth0 scope global | grep -q 'fd83:248::13'"; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" s4b2c/root/s4b3-packet
+          sudo incus --project "$project" exec s4b2c -- chmod 0755 /root/s4b3-packet
+          sudo incus --project "$project" exec s4b2c -- sh -c             'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
+          ready=0
+          for _ in $(seq 1 30); do
+            if sudo incus --project "$project" exec s4b2c -- test -f /tmp/s4b3-packet-ready; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          for proto in tcp udp; do
+            for dest in 10.248.83.13 fd83:248::13; do
+              accepted=0
+              for attempt in $(seq 1 20); do
+                if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dest"; then
+                  accepted=1
+                  echo "S4_B3_NATIVE_MCP_B_TO_C_REAL_ECHO=PASS proto=$proto dst=$dest attempt=$attempt"
+                  break
+                fi
+                sleep 2
+              done
+              test "$accepted" = 1
+            done
+          done
+
+      - name: B5 parent Delete linked PRS revoke and retained unrelated packets
+        if: matrix.scenario == 'installed_mcp'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          db=/var/lib/boxweave/ledger.sqlite
+          bin=/usr/local/bin/boxweave
+          test "$project" = "user-$(id -u boxweave)"
+          uuid="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE project='$project' AND name='s4b2a' AND state='OWNED'")"
+          test "${#uuid}" = 36
+          token="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h | sed -n 's/^token=//p')"
+          test -n "$token"
+          sudo -u boxweave env BOXWEAVE_S4B3_SERVE_PROJECT="$project" sh -c 'nohup /usr/local/bin/boxweave serve -db /var/lib/boxweave/ledger.sqlite -project "$BOXWEAVE_S4B3_SERVE_PROJECT" -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650 >/tmp/s4b3-mcp-serve.log 2>&1 </dev/null & echo $! >/tmp/s4b3-mcp-serve.pid'
+          ready=0
+          for _ in $(seq 1 40); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp 2>/dev/null || true)"
+            if test "$code" = 401; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          export B5_SCOPE=b5-disposable-20261119 B5_UUID="$uuid" B5_TOKEN="$token"
+          python3 scripts/s4_b5_linked_delete_client.py admit | tee "$RUNNER_TEMP/b5-parent.log"
+          parent="$(sed -n 's/^S4_B5_LINKED_PARENT=//p' "$RUNNER_TEMP/b5-parent.log")"
+          test "${#parent}" = 32
+          child=""
+          for _ in $(seq 1 60); do
+            child="$(sudo -u boxweave sqlite3 "$db" "SELECT o.id FROM operations o JOIN operation_resource_claims c ON c.operation_id=o.id WHERE c.resource_key='delete-parent:$parent' AND o.action='box_peer_set' AND o.state='ADMITTED'")"
+            if test "${#child}" = 32; then break; fi
+            sleep 1
+          done
+          test "${#child}" = 32
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$parent'")" = DISPATCHING
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo systemctl disable boxweave-native-peer-root.service
+          sudo rm /etc/systemd/system/boxweave-native-peer-root.service
+          sudo systemctl daemon-reload
+          sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$child"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$child'")" = DISPATCHING
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$child" > "$RUNNER_TEMP/s4b3-b5-linked-plan.json"
+          sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-b5-linked-plan.json")"
+          test "$(printf '%s' "$sha" | wc -c)" = 64
+          sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$child" -peer-plan-sha256 "$sha" -approve-local
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$child"
+          test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$child.json")" = COMPLETE_VERIFIED
+          B5_PARENT="$parent" python3 scripts/s4_b5_linked_delete_client.py verify
+          unset B5_TOKEN token
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state||':'||deleted_by_operation_id FROM owned_boxes WHERE uuid='$uuid'")" = "DELETED:$parent"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM network_address_fences WHERE box_uuid='$uuid' AND state='RELEASED' AND operation_id='$parent'")" = 2
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM peer_grants WHERE source_uuid='$uuid' AND status='REVOKED' AND desired=0")" = 1
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM peer_grants WHERE status='CONFIRMED' AND desired=1")" = 1
+          test "$(sudo incus --project "$project" list --format csv -c n | sort | paste -sd,)" = s4b2b,s4b2c
+          sudo incus --project "$project" exec s4b2c -- sh -c 'rm -f /tmp/s4b3-packet-ready; nohup /root/s4b3-packet server >/tmp/s4b5-server.log 2>&1 </dev/null &'
+          for _ in $(seq 1 30); do
+            if sudo incus --project "$project" exec s4b2c -- test -f /tmp/s4b3-packet-ready; then break; fi
+            sleep 1
+          done
+          for proto in tcp udp; do
+            for dest in 10.248.83.13 fd83:248::13; do
+              passed=0
+              for _ in $(seq 1 20); do
+                if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dest"; then passed=1; break; fi
+                sleep 2
+              done
+              test "$passed" = 1
+            done
+          done
+          echo S4_B5_NATIVE_LINKED_PRS_DELETE_TOMBSTONE_UNRELATED_PACKETS=PASS
+          sudo kill "$(sudo cat /tmp/s4b3-mcp-serve.pid)"
+
+      # Capture scoped disposable-native witnesses BEFORE Project teardown.
+      # Never upload service token tables, raw cloud-init or production DB.
+      - name: Capture scoped original and kernel evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          ev=/tmp/s4b3-evidence
+          mkdir -p "$ev"
+          project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
+          original="$(cat "$RUNNER_TEMP/s4b3-original" 2>/dev/null)"
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "scenario=${{ matrix.scenario }}"
+            echo "original=$original"
+            echo "project=$project"
+            echo "incus_version=$(sudo incus version 2>&1 | head -1)"
+          } > "$ev/provenance.txt"
+          if test -n "$project"; then
+            sudo incus --project "$project" list --format json 2>&1 |
+              jq '[.[] | {name,status,uuid:.config["volatile.uuid"],autostart:.config["boot.autostart"],eth0:.devices.eth0}]' > "$ev/owned-instances.json"
+            echo "incus_owned_inventory_exit=$?" >> "$ev/provenance.txt"
+          fi
+          sudo incus network acl show bw-s4b2-native > "$ev/native-acl.yaml" 2>&1
+          echo "native_acl_exit=$?" >> "$ev/provenance.txt"
+          sudo nft -a list ruleset > "$ev/kernel-nft.txt" 2>&1
+          echo "nft_exit=$?" >> "$ev/provenance.txt"
+          if test -n "$original"; then
+            sudo cat "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" > "$ev/original-root-journal.json" 2>&1
+            echo "root_journal_exit=$?" >> "$ev/provenance.txt"
+          fi
+          if sudo test -f /var/lib/boxweave/ledger.sqlite; then
+            sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT id,action,state,layer,box_uuid,incarnation,error_class,updated_at FROM operations WHERE action='box_peer_set' ORDER BY created_at;"               > "$ev/sqlite-original-operations.csv" 2>&1
+            echo "sqlite_operations_exit=$?" >> "$ev/provenance.txt"
+            sudo -u boxweave sqlite3 -header -csv /var/lib/boxweave/ledger.sqlite               "SELECT project,source_uuid,source_incarnation,target_uuid,target_incarnation,desired,status,operation_id FROM peer_grants ORDER BY source_uuid,target_uuid;"               > "$ev/sqlite-peer-grants.csv" 2>&1
+            echo "sqlite_peer_grants_exit=$?" >> "$ev/provenance.txt"
+          fi
+          (cd "$ev" && sha256sum provenance.txt owned-instances.json native-acl.yaml kernel-nft.txt             original-root-journal.json sqlite-original-operations.csv sqlite-peer-grants.csv 2>/dev/null)             > "$ev/file-sha256.txt"
+          echo "S4_B3_DISPOSABLE_NATIVE_EVIDENCE_CAPTURED sha=$GITHUB_SHA scenario=${{ matrix.scenario }}"
+
+      - name: Upload sealed disposable native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s4b3-native-${{ matrix.scenario }}
+          path: /tmp/s4b3-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Original native Project cleanup evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
+          sudo systemctl stop boxweave-native-peer-root.service 2>/dev/null || :
+          if test -n "$project"; then
+            for name in s4b2a s4b2b s4b2c; do
+              sudo incus --project "$project" stop "$name" 2>/dev/null || :
+              sudo incus --project "$project" delete "$name" 2>/dev/null || :
+            done
+            sudo incus --project "$project" profile device remove default eth0 >/dev/null 2>&1 || :
+            sudo incus --project "$project" project delete "$project" >/dev/null 2>&1 || :
+          fi
+          sudo incus network acl delete bw-s4b2-native 2>/dev/null || :
+          sudo incus network delete bwbr0 2>/dev/null || :
+          echo "S4_B3_NATIVE_CLEANUP_ATTEMPTED"
+          sudo incus list --all-projects --format csv -c n 2>/dev/null || :

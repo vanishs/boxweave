@@ -6,7 +6,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -90,7 +92,22 @@ func readOutput(ctx context.Context, s *mcp.ClientSession, id, stream string, ex
 	})
 	data, err := base64.StdEncoding.DecodeString(getString(out, "content_base64"))
 	require(err == nil, "base64 output %s: %v", stream, err)
-	require(string(data) == want, "unexpected %s for original %s: %q", stream, id, string(data))
+	if string(data) != want {
+		// Never write raw Guest bytes to CI diagnostic logs. The original
+		// one-effect claim requires exact content, not an optimistic exit code.
+		class := "UNEXPECTED_BYTES"
+		switch {
+		case len(data) == 0:
+			class = "EMPTY"
+		case bytes.Count(data, []byte(want)) > 1:
+			class = "DUPLICATE_EFFECT"
+		case bytes.Contains(data, []byte(want)):
+			class = "EXTRA_BYTES"
+		}
+		hash := sha256.Sum256(data)
+		panic(fmt.Sprintf("BH018_MCP_FAIL: unexpected %s for original %s class=%s expected_len=%d actual_len=%d actual_sha256=%x",
+			stream, id, class, len(want), len(data), hash))
+	}
 	code, ok := out["exit_code"].(float64)
 	require(ok && int(code) == exit, "original guest exit was not retained: %v", out["exit_code"])
 	success, ok := out["command_success"].(bool)
@@ -98,7 +115,7 @@ func readOutput(ctx context.Context, s *mcp.ClientSession, id, stream string, ex
 }
 func argv(tcExit int) []string {
 	return []string{"/bin/sh", "-c", fmt.Sprintf(
-		"printf 'BH018_EFFECT_%d\\n' >> /tmp/bh018-atomic-effect-%d; printf 'OUT_%d'; printf 'ERR_%d' >&2; exit %d",
+		"printf 'BH018_EFFECT_%d\\n' >> /var/tmp/bh018-atomic-effect-%d; printf 'OUT_%d'; printf 'ERR_%d' >&2; exit %d",
 		tcExit, tcExit, tcExit, tcExit, tcExit,
 	)}
 }
@@ -196,25 +213,33 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_REPLAY_VERIFIED\n", original.Exit)
 
 		// A NEW request is allowed only after the verified original
-		// native terminal. Independently read guest file, prove exact
+		// native terminal. The one-use Guest's first boot may clear /tmp;
+		// the test's /var/tmp effect marker is durable across that lifecycle.
+		// Independently read guest file, prove exact
 		// effect count = one, and verify the fresh Exec itself succeeded.
 		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_READBACK\n", original.Exit)
 		check := invoke(ctx, s, "box_exec", map[string]any{
 			"box_id": cp.BoxID,
 			"argv": []string{"/bin/cat",
-				fmt.Sprintf("/tmp/bh018-atomic-effect-%d", original.Exit)},
+				fmt.Sprintf("/var/tmp/bh018-atomic-effect-%d", original.Exit)},
 			"idempotency_key": fmt.Sprintf("s2-bh018-independent-readback-%d-001", original.Exit),
 		})
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_CALL_RETURNED\n", original.Exit)
 		readID := originalID(check)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_ID_VALIDATED\n", original.Exit)
 		// An admitted fresh readback is new, independent work, never a retry
 		// of an uncertain original. Print only its immutable nonsecret ID.
 		fmt.Printf("BH018_MCP_FRESH_ADMITTED_EXIT_%d_BW_ID=%s\n", original.Exit, readID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_TERMINAL_WAIT\n", original.Exit)
 		fresh := poll(ctx, s, readID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_TERMINAL_PASS\n", original.Exit)
 		freshNativeID := getString(fresh, "native_operation_id")
 		require(len(freshNativeID) == 36, "new readback lacks native identity")
 		fmt.Printf("BH018_MCP_READBACK_EXIT_%d_BW_ID=%s NATIVE_ID=%s\n", original.Exit, readID, freshNativeID)
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_OUTPUT_READ\n", original.Exit)
 		readOutput(ctx, s, readID, "stdout", 0,
 			fmt.Sprintf("BH018_EFFECT_%d\n", original.Exit))
+		fmt.Printf("BH018_MCP_RESUME_PHASE=ORIGINAL_%d_FRESH_OUTPUT_PASS\n", original.Exit)
 		fmt.Printf("BH018_NATIVE_REAL_HTTP_MCP_EXIT_%d_DEDUPE_READBACK_AFTER_RESTART=PASS\n",
 			original.Exit)
 	}
@@ -224,11 +249,28 @@ func resume(ctx context.Context, s *mcp.ClientSession, stateFile string) {
 	stopID := originalID(stop)
 	stopReceipt := poll(ctx, s, stopID)
 	fmt.Printf("BH018_MCP_CLEAN_STOP_BW_ID=%s NATIVE_ID=%s\n", stopID, getString(stopReceipt, "native_operation_id"))
-	del := invoke(ctx, s, "box_delete", map[string]any{
+	deleteArgs := map[string]any{
 		"box_id": cp.BoxID, "idempotency_key": "s2-bh018-atomic-native-delete-001",
-	})
-	delID := originalID(del)
+	}
+	// Concurrent original-key admission must converge on one durable Delete,
+	// including callers racing with native absence and the atomic tombstone.
+	deletes := make(chan map[string]any, 12)
+	for range 12 {
+		go func() { deletes <- invoke(ctx, s, "box_delete", deleteArgs) }()
+	}
+	delID := ""
+	for range 12 {
+		id := originalID(<-deletes)
+		if delID == "" {
+			delID = id
+		}
+		require(id == delID, "concurrent Delete admitted a second original")
+	}
 	delReceipt := poll(ctx, s, delID)
+	replay := invoke(ctx, s, "box_delete", deleteArgs)
+	require(originalID(replay) == delID && replay["duplicate"] == true,
+		"Delete original lost after native absence/tombstone")
+	fmt.Println("BH018_INSTALLED_CONCURRENT_DELETE_ORIGINAL_AND_TOMBSTONE_REPLAY=PASS")
 	fmt.Printf("BH018_MCP_CLEAN_DELETE_BW_ID=%s NATIVE_ID=%s\n", delID, getString(delReceipt, "native_operation_id"))
 	list := invoke(ctx, s, "box_list", map[string]any{})
 	rows, ok := list["boxes"].([]any)

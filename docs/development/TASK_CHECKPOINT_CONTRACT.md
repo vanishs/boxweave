@@ -7,7 +7,20 @@
 
 **Purpose:** help any Agent/workflow client resume long-running work that used BoxWeave; this is **not** a BoxWeave database record, MCP Tool, authentication role, private model thought log or new product boundary. [Design owner](../design/AGENT_OPERATION_CONTINUITY.md). Agents in projects other than BoxWeave may implement the same checkpoint format in their own storage.
 
+## Actual support boundary and MCP call path
+
+**Task Checkpoint is a client/workflow-owned format, not an implemented BoxWeave subsystem.** MCP `tools/list` exposes generic `box_exec`, `operation_get`, `operation_list` and `operation_output_get` (subject to the installed version); it exposes **no** Git-specific Tool, `checkpoint_save/get` Tool or automatic task-resumption service. MCP does not announce that a particular guest directory is a Git repository or teach an Agent a Checkpoint workflow. The task instructions, Agent policy or external workflow must supply that convention.
+
+1. **Agent/client chooses the command:** if Git is installed inside an owned guest and the given `cwd` is a repository, the client can call `box_exec` with typed `argv` such as `["git", "rev-parse", "HEAD"]` and `["git", "status", "--porcelain"]`. These are ordinary guest commands, not special MCP Git APIs. Git run by a separate local terminal is outside this BoxWeave call path.
+2. **BoxWeave executes without interpreting Git:** it records the usual durable `box_exec` Operation/Incus evidence, guest exit status and bounded output. The client reads the original receipt with `operation_get` and, when authorized, `operation_output_get`. BoxWeave does **not** detect `git` commands to create special records, parse commits/branches/dirty status into schema fields, poll Git, or automatically write a Checkpoint.
+3. **Client/workflow interprets and saves:** the Agent or test harness reads the command results, decides what the observed Git state means and explicitly writes its own versioned Checkpoint to a trusted file/Git/workflow store. `source.commit` and `source.worktree` below are **optional client-supplied example fields**, not values that BoxWeave produces or guarantees.
+4. **Another Agent resumes explicitly:** it needs a handoff instruction/location for that external Checkpoint, then independently re-runs relevant Git checks and reads original authorized Operations/native poststate. Simply connecting to the BoxWeave MCP server does **not** discover or load the prior Agent's work context.
+
+**Implemented vs tested:** S2 supplies the generic persistent Operations and scoped work/Agent labels; S3 tested actual guest Git commands and an external harness-written evidence Checkpoint plus a supervised Agent Git loop. That does **not** constitute a built-in checkpoint writer, Git status service, automatic second-Agent takeover or two-writer conflict resolution. Full latter-case acceptance remains TC-015/016 in S5.
+
 ## Example format (illustrative, safe placeholder IDs only)
+
+For BoxWeave development, the same client-owned checkpoint works in a Box or a conventional Git workspace. Record environment identity and save the checkpoint outside the Box (Git or approved durable workflow storage), including on PASS while waiting for the user to choose whether to delete the named workspace.
 
 ```yaml
 format_version: 1
@@ -16,6 +29,13 @@ attempt_ref: agent-run-007
 updated_at_utc: "2026-11-10T00:00:00Z"
 objective: "Validate project X in a disposable Box"
 stage: "verify"
+workspace:
+  kind: "box"  # box | local | vm | ci
+  box_name: "example-dev-box"  # omit for non-Box workspaces
+  box_uuid: "example-owned-uuid"
+  layer: "L1"
+  path: "/example/worktree"
+  deletion_approval: "not_approved"  # not_approved | approved; approval is externally verified
 source:
   repository: "project-x"
   commit: "example-commit-sha"
@@ -39,7 +59,8 @@ links:
 ## Minimal rules
 
 - **No content duplication:** stable `work_ref` is shared across the workflow/client, not a secret or a permissions grant; `attempt_ref` can change on handoff. Use separate authenticated BoxWeave credentials if the user wants trustworthy per-Agent attribution. Preserve original BoxWeave `operation_id` and native ID, never rewrite them to make a checkpoint look complete.
-- **Write at meaningful boundaries:** before context compaction, after admitting an irreversible mutation (persist the returned original receipt), after a verified result, before handing work to another Agent, and before user-requested stop. **Sudden crashes can occur before a checkpoint is written**; missing information must be rediscovered from original indexed journal, Git and native postread. Do not claim zero data loss.
+- **Workspace continuity:** preserve the same worktree and original Operations across handoff. For accepted work, record committed/pushed code, docs, durable evidence locations and the retained workspace name/UUID/layer; ask the user whether to delete it. A checkpoint value is not proof of actual deletion approval. On interruption or a blocked gate, retain the Box and working state. For conventional development, record the local/VM/worktree identity instead and preserve its work. Follow the [development Box lifecycle](AGENT_WORKFLOW.md#development-environment-and-box-lifecycle).
+- **Write at meaningful boundaries:** before context compaction, after admitting an irreversible mutation (persist the returned original receipt), after a verified result, before handing work to another Agent, before reporting completion, and before user-requested stop. **Sudden crashes can occur before a checkpoint is written**; missing information must be rediscovered from original indexed journal, Git and native postread. Do not claim zero data loss.
 - **Checkpoint state isn't native truth:** a declared `completed` step must carry evidence ref/source SHA; `UNKNOWN` remains UNKNOWN even if a summary says “probably finished”. Reconnect with `operation_list(work_ref)`, then `operation_get(original_id)`, native readback and Git/CI checks before further mutations.
 - **Concurrency and privacy:** the Agent/workflow's Git/revisioned store owns checkpoint merge/optimistic concurrency; preserve conflicts rather than last-writer-wins lost information. No tokens/keys/host secrets/guest stdout/raw prompt chains/private env in project-shared checkpoint; use scoped evidence references and sanitized summaries. For private artifacts, follow local organization controls.
 - **Compatibility:** plain file/Git is an acceptable first implementation; optional external workflow systems may maintain their own checkpoints. BoxWeave never needs to parse this format or implement `checkpoint_save`/`checkpoint_get`; a later MCP Tasks adapter is unrelated to this broader work checkpoint.

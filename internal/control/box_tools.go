@@ -61,9 +61,16 @@ type listBoxesResult struct {
 	NextCursor string            `json:"next_cursor,omitempty"`
 }
 
+type getBoxInput struct {
+	BoxID  string `json:"box_id"`
+	Detail bool   `json:"detail,omitempty" jsonschema:"Set true to include runtime State, Snapshots, and Backups; otherwise return basic instance information."`
+}
+
 type getBoxResult struct {
-	TrackingID string          `json:"tracking_id"`
-	Box        native.BoxState `json:"box"`
+	TrackingID   string          `json:"tracking_id"`
+	Box          native.BoxState `json:"box"`
+	InstanceFull map[string]any  `json:"instance_full,omitempty"`
+	ObservedAt   *time.Time      `json:"observed_at,omitempty"`
 }
 
 type operateBoxInput struct {
@@ -97,17 +104,6 @@ type execBoxInput struct {
 	TimeoutMS      int               `json:"timeout_ms,omitempty"`
 	WorkRef        string            `json:"work_ref,omitempty"`
 	AgentRef       string            `json:"agent_ref,omitempty"`
-}
-
-func requireAdmin(req *mcp.CallToolRequest, s *Service) (string, string, error) {
-	actor, role, layer, err := s.operationPrincipal(req)
-	if err != nil {
-		return "", "", err
-	}
-	if role != "admin" {
-		return "", "", errors.New("PERMISSION_DENIED")
-	}
-	return actor, layer, nil
 }
 
 func mutationAnnotations(destructive bool) *mcp.ToolAnnotations {
@@ -158,7 +154,7 @@ func safeJSON(v any) ([]byte, error) {
 // timeout, UNKNOWN and process restart without redispatch or name adoption.
 func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
 	action, key, boxID, work, agent string, intent any) (state.Receipt, bool, error) {
-	actor, layer, err := requireAdmin(req, s)
+	principal, err := s.requestPrincipal(req)
 	if err != nil {
 		return state.Receipt{}, false, err
 	}
@@ -174,7 +170,7 @@ func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
 		return state.Receipt{}, false, err
 	}
 	rec, err := s.Store.Replay(ctx, state.Admission{
-		Layer: layer, ActorID: actor, TokenID: actor,
+		Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID,
 		Key: key, Action: action, BoxUUID: boxID,
 		Incarnation: boxID, SafeIntent: safe,
 		WorkRef: work, AgentRef: agent,
@@ -187,7 +183,7 @@ func (s *Service) replayNative(ctx context.Context, req *mcp.CallToolRequest,
 
 func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	action, key, boxUUID, incarnation, resourceKey, work, agent string, intent any) (state.Receipt, error) {
-	actor, layer, err := requireAdmin(req, s)
+	principal, err := s.requestPrincipal(req)
 	if err != nil {
 		return state.Receipt{}, err
 	}
@@ -207,9 +203,9 @@ func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 		return state.Receipt{}, err
 	}
 	return s.Store.Admit(ctx, state.Admission{
-		Layer: layer, ActorID: actor, TokenID: actor, Key: key, Action: action,
+		Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID, Key: key, Action: action,
 		BoxUUID: boxUUID, Incarnation: incarnation, ResourceKey: resourceKey,
-		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID,
+		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID, CleanupDependencies: action == "box_delete",
 	})
 }
 
@@ -221,6 +217,9 @@ func preflightNative(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, native.ErrNativeExecQuotaLow) {
+		return state.PreDispatchError{Class: "NATIVE_EXEC_SPOOL_QUOTA_HEADROOM_LOW"}
+	}
 	if errors.Is(err, native.ErrNativeUnsupported) ||
 		errors.Is(err, native.ErrUnsafeNetwork) ||
 		errors.Is(err, native.ErrNotOwned) ||
@@ -230,12 +229,25 @@ func preflightNative(err error) error {
 	return err
 }
 
-func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
-	_, _, layer, err := s.operationPrincipal(req)
+func (s *Service) readOwnedLedger(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
+	principal, err := s.requestPrincipal(req)
 	if err != nil {
 		return state.OwnedBox{}, err
 	}
-	box, err := s.Store.OwnedBox(ctx, layer, uuid)
+	box, err := s.Store.OwnedBox(ctx, principal.Layer, uuid)
+	if errors.Is(err, state.ErrNotFound) {
+		// A missing/foreign UUID is deliberately indistinguishable. Do not
+		// expose the backing Operation-store error as the user-facing Box type.
+		return state.OwnedBox{}, fmt.Errorf("BOX_NOT_FOUND_OR_NOT_OWNED: %w", err)
+	}
+	if err != nil {
+		return box, err
+	}
+	return box, nil
+}
+
+func (s *Service) readOwned(ctx context.Context, req *mcp.CallToolRequest, uuid string) (state.OwnedBox, error) {
+	box, err := s.readOwnedLedger(ctx, req, uuid)
 	if err != nil {
 		return box, err
 	}
@@ -357,7 +369,7 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 
 func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_create",
-		Description: "Admit one owned container with typed dotted Incus/LXC options; omitted booleans preserve defaults. Low-level AppArmor requires an independently reviewed trusted Project adapter. Never disable host AppArmor: after installing inner incusd by box_exec, configure INCUS_SECURITY_APPARMOR on that inner service only, check inherited enforce and UID/GID budgets. Asynchronous durable receipt.",
+		Description: "Admit creation of one owned container with typed Incus/LXC options; omitted booleans preserve defaults. Returns an asynchronous Operation, not guest readiness. Never disable host AppArmor; nested Incus requires independently verified Project/AppArmor/UID/GID constraints.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in createBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if !validBoxName.MatchString(in.Name) || !native.ValidImageChoice(in.Image) {
@@ -443,16 +455,22 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
 				}
-				if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
-					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
-				}
-				if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
-					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
-				}
-				if start && observed.NativeState == "Stopped" {
+				if (!originalNativeOutcomeMissing && op.StatusCode != api.Success) ||
+					(start && observed.NativeState == "Stopped") {
+					// Keep the exact native UUID claim for failed-start residue.
+					// It is NOT a successful Create and needs explicit cleanup.
+					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+						return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+					}
+					if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
+						return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_FAILED_OWNED_STOPPED"}
+					}
 					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
 				}
-				return nil
+				if err := s.Store.FinalizeVerifiedCreate(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
+				}
+				return state.ErrVerifiedCreateCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err
@@ -462,11 +480,11 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		Description: "List only UUID-registered owned Boxes with independently observed exact native identity.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in listBoxesInput) (*mcp.CallToolResult, listBoxesResult, error) {
-			actor, _, project, err := s.operationPrincipal(req)
+			principal, err := s.requestPrincipal(req)
 			if err != nil {
 				return nil, listBoxesResult{}, err
 			}
-			records, next, err := s.Store.ListOwnedBoxes(ctx, project, in.After, in.Limit)
+			records, next, err := s.Store.ListOwnedBoxes(ctx, principal.Layer, in.After, in.Limit)
 			if err != nil {
 				return nil, listBoxesResult{}, err
 			}
@@ -482,16 +500,19 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				out.Boxes = append(out.Boxes, status)
 			}
-			return privateReadReply(ctx, s, actor, out)
+			return privateReadReply(ctx, s, principal.TokenID, out)
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native running is not guest readiness.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
 		Annotations: readToolAnnotations()},
-		func(ctx context.Context, req *mcp.CallToolRequest, in boxIdentityInput) (*mcp.CallToolResult, getBoxResult, error) {
-			actor, _, _, err := s.operationPrincipal(req)
+		func(ctx context.Context, req *mcp.CallToolRequest, in getBoxInput) (*mcp.CallToolResult, getBoxResult, error) {
+			principal, err := s.requestPrincipal(req)
 			if err != nil {
 				return nil, getBoxResult{}, err
+			}
+			if in.Detail {
+				return s.readDetailedBox(ctx, req, principal, in.BoxID)
 			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
@@ -505,7 +526,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, getBoxResult{}, err
 			}
-			return privateReadReply(ctx, s, actor, getBoxResult{TrackingID: tracking, Box: status})
+			return privateReadReply(ctx, s, principal.TokenID, getBoxResult{TrackingID: tracking, Box: status})
 		})
 
 	for _, action := range []string{"box_start", "box_stop"} {
@@ -516,7 +537,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		}
 		addStrictTool(server, &mcp.Tool{Name: action, Description: desc, Annotations: mutationAnnotations(false)},
 			func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-				if _, _, err := requireAdmin(req, s); err != nil {
+				if _, err := s.requestPrincipal(req); err != nil {
 					return nil, state.Receipt{}, err
 				}
 				intent := struct {
@@ -581,10 +602,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 	}
 
 	addStrictTool(server, &mcp.Tool{Name: "box_update",
-		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
+		Description: "Patch exact owned Box by presence-aware typed dotted Incus options; explicit false differs from omission. CPU 1..64, memory_mib 128..262144 and disk_gib 2..2048; invalid bounds are rejected before admission unless an original key is replayed. Mapping, AppArmor, and interception changes require safe stopped-instance capability; never permit privileged or raw config fallbacks.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in updateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, err := s.requestPrincipal(req); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			if in.Internet == nil && in.CPU == nil && in.MemoryMiB == nil &&
@@ -604,6 +625,14 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			if already {
 				return &mcp.CallToolResult{}, original, nil
+			}
+			// Reject impossible native dimensions before admitting a durable
+			// operation. Replay precedes this check so historical originals
+			// (including failed ones) retain their exact idempotency receipt.
+			if in.CPU != nil && (*in.CPU < 1 || *in.CPU > 64) ||
+				in.MemoryMiB != nil && (*in.MemoryMiB < 128 || *in.MemoryMiB > 262144) ||
+				in.DiskGiB != nil && (*in.DiskGiB < 2 || *in.DiskGiB > 2048) {
+				return nil, state.Receipt{}, state.ErrInvalid
 			}
 			box, err := s.readOwned(ctx, req, in.BoxID)
 			if err != nil {
@@ -652,10 +681,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
-		Description: "Delete only an exact owned STOPPED Box after refusing native proxy/peer dependencies; retain UNKNOWN on unverified deletion.",
+		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Peer requires existing host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, err := s.requestPrincipal(req); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			intent := struct {
@@ -682,9 +711,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			var nativeID string
 			effect := func(ctx context.Context) (string, error) {
-				id, e := s.Native.DeleteBox(ctx, box.Name, box.UUID)
+				id, e := s.executeDependentDelete(ctx, r.ID, box)
 				nativeID = id
-				return id, preflightNative(e)
+				return id, e
 			}
 			verify := func(ctx context.Context) error {
 				if err := nativeDone(ctx, s.Native, nativeID); err != nil {
@@ -693,17 +722,20 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err := s.Native.ConfirmDeleteAbsence(ctx, box.Name); err != nil {
 					return err
 				}
-				return s.Store.TombstoneOwnedBox(ctx, box)
+				if err := s.Store.FinalizeVerifiedDelete(ctx, r.ID, box); err != nil {
+					return state.VerificationUncertain{Class: "NATIVE_DELETE_TOMBSTONE_UNVERIFIED"}
+				}
+				return state.ErrVerifiedDeleteCommitted
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_exec",
-		Description: "Durable asynchronous argv execution INSIDE an exact owned guest, guest UID/GID typed; original stdout/stderr through operation_output_get.",
+		Description: "Execute a nonempty argv array asynchronously INSIDE an exact owned guest with typed guest UID/GID; read original stdout/stderr and observed exit_code via operation_output_get. Operation SUCCEEDED is not proof of guest exit 0.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in execBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
-			if _, _, err := requireAdmin(req, s); err != nil {
+			if _, err := s.requestPrincipal(req); err != nil {
 				return nil, state.Receipt{}, err
 			}
 			if len(in.Argv) == 0 || len(in.Argv) > 64 ||
@@ -764,6 +796,13 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if final == nil || final.ID != nativeID {
 					return native.ErrUnverified
 				}
+				// Incus 7.6 creates recorded logs BEFORE it calls Guest
+				// Exec. An exact failed log-open with no Guest metadata is
+				// a proven terminal pre-start native failure, not UNKNOWN.
+				// Unclassified native failures stay UNKNOWN/fail-closed.
+				if native.ExecRecordingQuotaPreStartFailure(final, box.Name, nativeID) {
+					return state.VerifiedEffectFailure{Class: "NATIVE_EXEC_SPOOL_QUOTA_EXHAUSTED_PRESTART"}
+				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
 					return err
@@ -774,6 +813,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if out.Exit == nil {
 					return native.ErrUnverified
 				}
+				// Capture bounded private output while the original Exec claim still
+				// protects the Box from concurrent Delete. A spool failure must
+				// not erase an independently verified native terminal result.
+				s.captureExecArchive(ctx, r.ID, out.StdoutPath, out.StderrPath)
 				// The final native Exec receipt, Guest exit, paths and
 				// BoxWeave SUCCEEDED event are ONE SQLite commit. Never
 				// leave a separate output-row / final-state crash gap.

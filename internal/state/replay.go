@@ -11,13 +11,13 @@ import (
 // mutating Tool retries; it never dispatches or changes any operation state.
 // The caller must already be authenticated on the exact original actor/layer.
 func (s *Store) Replay(ctx context.Context, a Admission) (Receipt, error) {
-	if a.Layer == "" || a.ActorID == "" || a.TokenID != a.ActorID ||
+	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" ||
 		len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 ||
 		!validRef(a.WorkRef) || !validRef(a.AgentRef) {
 		return Receipt{}, ErrInvalid
 	}
-	active, err := s.tokenActive(ctx, a.TokenID)
+	active, err := activeCredentialForActor(ctx, s.db, a.ActorID, a.TokenID)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -40,9 +40,12 @@ func (s *Store) Replay(ctx context.Context, a Admission) (Receipt, error) {
 	if err != nil {
 		return Receipt{}, err
 	}
-	expected := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" +
-		a.BoxUUID + "\x00" + a.Incarnation)
-	if hash != expected || token != a.TokenID ||
+	claims, err := normalizeAdmissionResourceKeys(a)
+	if err != nil {
+		return Receipt{}, ErrInvalid
+	}
+	expected := admissionIntentDigest(a, claims)
+	if hash != expected ||
 		(a.WorkRef != "" && a.WorkRef != r.WorkRef) ||
 		(a.AgentRef != "" && a.AgentRef != r.AgentRef) {
 		return Receipt{}, ErrConflict

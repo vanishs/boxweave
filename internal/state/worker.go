@@ -41,6 +41,12 @@ var ErrNoNativeChange = errors.New("native readback proves no change necessary")
 // checks the same original ID/state/native ID before treating it as finished.
 var ErrVerifiedExecCommitted = errors.New("original native Exec terminal committed atomically")
 
+// The Create/Deleted identity+business-state finalization is also one
+// transaction. These sentinels are internal verifier control flow ONLY.
+var ErrVerifiedCreateCommitted = errors.New("original native Create UUID/terminal committed atomically")
+var ErrVerifiedDeleteCommitted = errors.New("original native Delete tombstone/terminal committed atomically")
+var ErrVerifiedForwardCommitted = errors.New("original native Forward terminal committed atomically")
+
 type Worker struct {
 	Store  *Store
 	Budget time.Duration
@@ -83,7 +89,12 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 			return
 		}
 		// A native SDK error/timeout cannot prove the request was not dispatched.
-		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS")
+		reason := "NATIVE_OUTCOME_AMBIGUOUS"
+		var partial VerificationUncertain
+		if errors.As(err, &partial) && strings.HasPrefix(partial.Class, "DELETE_DEPENDENCY_") && len(partial.Class) <= 100 && !strings.ContainsAny(partial.Class, "\x00\n\r") {
+			reason = partial.Class
+		}
+		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", reason)
 		return
 	}
 	if nativeID == "" {
@@ -102,18 +113,35 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		return
 	}
 	if err = verify(ctx); err != nil {
-		if errors.Is(err, ErrVerifiedExecCommitted) {
-			// This is not an error from the native command: the Exec
-			// verifier already completed ONE durable SQLite transaction.
-			// Never write a second SUCCEEDED event. A forged/uncertain
-			// control result cannot unlock a Box on its own.
+		if errors.Is(err, ErrVerifiedExecCommitted) ||
+			errors.Is(err, ErrVerifiedCreateCommitted) ||
+			errors.Is(err, ErrVerifiedDeleteCommitted) ||
+			errors.Is(err, ErrVerifiedForwardCommitted) {
+			// A domain verifier claims to have atomically finalized a native
+			// effect. Confirm the same original receipt before returning;
+			// never call Verified again or manufacture a second terminal event.
+			wantAction, reason := "box_exec", "ATOMIC_EXEC_TERMINAL_UNVERIFIED"
+			switch {
+			case errors.Is(err, ErrVerifiedCreateCommitted):
+				wantAction, reason = "box_create", "ATOMIC_CREATE_TERMINAL_UNVERIFIED"
+			case errors.Is(err, ErrVerifiedDeleteCommitted):
+				wantAction, reason = "box_delete", "ATOMIC_DELETE_TERMINAL_UNVERIFIED"
+			case errors.Is(err, ErrVerifiedForwardCommitted):
+				wantAction, reason = "port_forward_create", "ATOMIC_FORWARD_TERMINAL_UNVERIFIED"
+			}
 			rec, readErr := w.Store.Get(context.Background(), operationID)
-			if readErr == nil && rec.Action == "box_exec" &&
-				rec.State == "SUCCEEDED" && rec.NativeOperationID == nativeID {
+			if errors.Is(err, ErrVerifiedForwardCommitted) && readErr == nil {
+				wantAction = rec.Action
+				if wantAction != "port_forward_create" && wantAction != "port_forward_delete" {
+					wantAction = ""
+				}
+			}
+			if readErr == nil && rec.Action == wantAction &&
+				rec.State == "SUCCEEDED" && rec.NativeOperationID == nativeID &&
+				(wantAction == "box_exec" || (rec.BoxUUID != "" && rec.Incarnation != "")) {
 				return
 			}
-			_ = w.Store.Unknown(context.Background(), operationID,
-				"VERIFYING", "ATOMIC_EXEC_TERMINAL_UNVERIFIED")
+			_ = w.Store.Unknown(context.Background(), operationID, "VERIFYING", reason)
 			return
 		}
 		var proved VerifiedEffectFailure

@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Independent S4 test witness of one FRESH native Incus Operation.
+
+Read-only: original SQLite WAL + native 'incus query'; no MCP writes, no
+re-dispatch, no credentials, raw output or unredacted native error messages.
+Run while a disposable original is still active: Incus may expire the object.
+"""
+import argparse
+import datetime
+import json
+import re
+import sqlite3
+import subprocess
+import time
+from pathlib import Path
+from urllib.parse import quote
+
+HEX32 = re.compile(r"^[0-9a-f]{32}$")
+NATIVE = re.compile(r"^[0-9a-fA-F-]{32,36}$")
+
+
+def journal(db_path, op_id):
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    with sqlite3.connect(uri, uri=True, timeout=3) as db:
+        row = db.execute(
+            "SELECT id,action,layer,box_uuid,incarnation,resource_key,"
+            "native_operation_id,state FROM operations WHERE id=?",
+            (op_id,),
+        ).fetchone()
+        if not row:
+            return None
+        names = ("operation_id", "action", "project", "box_uuid",
+                 "incarnation", "resource_key", "native_operation_id", "state")
+        result = dict(zip(names, row))
+        if result["action"] == "box_exec":
+            out = db.execute(
+                "SELECT exit_code,truncation FROM exec_outputs WHERE operation_id=?",
+                (op_id,),
+            ).fetchone()
+            result["guest_exit_code"] = None if out is None else out[0]
+            result["output_truncated"] = None if out is None else bool(out[1])
+        return result
+
+
+def discover_original(db_path, key_digest):
+    """Locate exactly one fresh journal admission by its nonsecret key digest."""
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    with sqlite3.connect(uri, uri=True, timeout=3) as db:
+        matches = db.execute(
+            "SELECT id FROM operations WHERE key_digest=? LIMIT 2", (key_digest,)
+        ).fetchall()
+    # A digest is globally unique for a fresh one-use ledger test fixture.
+    # An ambiguous match must NOT select an arbitrary original.
+    return matches[0][0] if len(matches) == 1 else None
+
+
+def query_original(project, native_id):
+    route = "/1.0/operations/" + native_id + "?project=" + quote(project, safe="")
+    try:
+        proc = subprocess.run(
+            ["incus", "query", route], capture_output=True, text=True,
+            timeout=5, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, "NATIVE_READ_UNAVAILABLE"
+    if proc.returncode != 0:
+        # A 404 does NOT establish whether the original ever ran.
+        return None, "NATIVE_NOT_RETAINED_OR_UNAVAILABLE"
+    try:
+        response = json.loads(proc.stdout)
+        op = response["metadata"]
+        if not isinstance(op, dict):
+            return None, "NATIVE_METADATA_MISSING"
+        if str(op.get("id", "")).rsplit("/", 1)[-1] != native_id:
+            return None, "NATIVE_ORIGINAL_ID_MISMATCH"
+        code, status = op.get("status_code"), op.get("status")
+        if not isinstance(code, int) or not isinstance(status, str):
+            return None, "NATIVE_STATUS_UNVERIFIED"
+        return {
+            "native_operation_id": native_id,
+            "status_code": code,
+            "status": status,
+            "error_present": bool(op.get("err")),
+        }, None
+    except (ValueError, KeyError, TypeError):
+        return None, "NATIVE_RESPONSE_INVALID"
+
+
+
+def event_terminal(event_path, project, native_id):
+    """Read original terminal seen by a pre-dispatch, project-scoped Incus SDK event listener."""
+    if not event_path:
+        return None
+    last = None
+    try:
+        with Path(event_path).open(encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    item = json.loads(line)
+                except (ValueError, TypeError):
+                    # A partial append is never terminal evidence.
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                if item.get("source") != "INCUS_OPERATION_EVENT_WEBSOCKET":
+                    continue
+                if (item.get("project") != project or
+                        item.get("event_project") not in ("", project) or
+                        item.get("native_operation_id") != native_id):
+                    continue
+                if item.get("status_code") not in (200, 400, 401):
+                    continue
+                digest = item.get("raw_metadata_sha256")
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    continue
+                if not isinstance(item.get("status"), str):
+                    continue
+                if type(item.get("error_present")) is not bool:
+                    continue
+                last = {
+                    "native_operation_id": native_id,
+                    "status_code": item["status_code"],
+                    "status": item["status"],
+                    "error_present": item["error_present"],
+                    "evidence_source": "INCUS_OPERATION_EVENT_WEBSOCKET",
+                    "raw_metadata_sha256": digest,
+                }
+    except OSError:
+        return None
+    return last
+
+
+def query_event_or_original(project, native_id, event_path):
+    observed = event_terminal(event_path, project, native_id)
+    if observed is not None:
+        return observed, None
+    return query_original(project, native_id)
+
+
+def collect(db_path, op_id, seconds, read=journal, native=query_original):
+    deadline = time.monotonic() + seconds
+    first, observed = None, None
+    reason = "NO_NATIVE_ORIGINAL_RECEIPT"
+    while True:
+        first = read(db_path, op_id)
+        if first is None:
+            reason = "SQLITE_ORIGINAL_NOT_FOUND"
+        elif first["native_operation_id"]:
+            native_id = first["native_operation_id"]
+            if not NATIVE.fullmatch(native_id):
+                reason = "NATIVE_ID_FORMAT_UNVERIFIED"
+                break
+            observed, reason = native(first["project"], native_id)
+            if observed is not None and observed.get("status_code") in (200, 400, 401):
+                break
+            if observed is not None:
+                reason = "NATIVE_NOT_TERMINAL"
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(min(.1, max(0, deadline - time.monotonic())))
+    terminal = bool(observed is not None and first is not None and
+                    observed.get("status_code") in (200, 400, 401) and
+                    observed.get("native_operation_id") == first["native_operation_id"])
+    return {
+        "source": "INDEPENDENT_INCUS_CLI_READ_ONLY",
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "observation": "CAPTURED_TERMINAL" if terminal else "NOT_CAPTURED",
+        "reason": None if terminal else reason,
+        "original_sqlite": first,
+        "journal_after": read(db_path, op_id),
+        "native_terminal": observed if terminal else None,
+        "original_id_matches": terminal,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", required=True)
+    original = parser.add_mutually_exclusive_group(required=True)
+    original.add_argument("--operation-id")
+    original.add_argument("--key-digest", help="sha256 of fresh test-only idempotency key")
+    parser.add_argument("--timeout-seconds", type=float, default=15)
+    parser.add_argument("--events-jsonl", help="pre-dispatch native operation event receipt stream")
+    args = parser.parse_args()
+    if not (0 < args.timeout_seconds <= 120) or (
+            args.operation_id and not HEX32.fullmatch(args.operation_id)) or (
+            args.key_digest and not re.fullmatch(r"[0-9a-f]{64}", args.key_digest)):
+        parser.error("invalid original selector or bounded timeout")
+    if not Path(args.db).is_file():
+        parser.error("SQLite file unavailable")
+    if args.events_jsonl and not Path(args.events_jsonl).is_file():
+        parser.error("native event receipt stream unavailable")
+    start = time.monotonic()
+    op_id = args.operation_id
+    if args.key_digest:
+        # Start BEFORE the first mutating request. Discover only this new
+        # original by its opaque digest; never dispatch or infer an ID.
+        while time.monotonic() - start < args.timeout_seconds:
+            op_id = discover_original(args.db, args.key_digest)
+            if op_id:
+                break
+            time.sleep(.05)
+    if not op_id:
+        result = {
+            "source": "INDEPENDENT_INCUS_CLI_READ_ONLY",
+            "observation": "NOT_CAPTURED",
+            "reason": "SQLITE_FRESH_ORIGINAL_NOT_DISCOVERED",
+            "original_sqlite": None,
+            "native_terminal": None,
+            "original_id_matches": False,
+        }
+    else:
+        native = query_original if not args.events_jsonl else (
+            lambda project, native_id: query_event_or_original(
+                project, native_id, args.events_jsonl))
+        result = collect(args.db, op_id,
+                         max(.01, args.timeout_seconds - (time.monotonic() - start)),
+                         native=native)
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0 if result["original_id_matches"] else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

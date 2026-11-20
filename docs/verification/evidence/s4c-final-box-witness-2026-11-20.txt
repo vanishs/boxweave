@@ -1,0 +1,99 @@
+Original outer operation f6e84f46d3f29efebe963edfac09a5d5; guest exit 0
+s4b2a,RUNNING
+s4b2b,RUNNING
+s4b2c,RUNNING
+s4b2legacyguest,STOPPED
+s4b2otherguest,STOPPED
+s4c-readiness-fixture,STOPPED
+S4_C_INNER_INCUS_SUPPORTED_RESTART_RECOVERY_PASS
+
+Original outer operation 146c95e282700616561ab8a5f474e352; guest exit 0
+PREVIOUS_ORIGINAL {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795166329976950000, "error_class": "PROCESS_RESTART_BEFORE_DISPATCH", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "next_action": {"kind": "NONE"}, "operation_id": "78bcc5ad229e3bc6ea06d8f961473ce0", "state": "FAILED", "tracking_id": "80923deaf336d6e26caa87b2bc9ff1ef", "updated_at": 1795166332071479000}, "readiness": {"checked_at_ns": 0, "checks": ["exec", "running"], "deadline_ns": 1795166629976950000, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "PROCESS_RESTART_BEFORE_DISPATCH", "ready": false, "running": "unknown", "started_at_ns": 1795166329976950000}, "tracking_id": "fa5f11de11bd08d73a4d853e3e7a1ab3", "version": "1.0.0-rc.8-candidate"}
+CANCEL {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795166879189371400, "error_class": "CANCELLED_BEFORE_DISPATCH", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "next_action": {"kind": "NONE"}, "operation_id": "885f25fe1000ad1dd1c4457e8ba19314", "state": "CANCELLED", "tracking_id": "0ca7f143a052aa1636c82bac146088db", "updated_at": 1795166879303458300, "work_ref": "s4c-final-acceptance-20261120"}, "readiness": {"checked_at_ns": 1795166879281703200, "checks": ["exec", "running"], "deadline_ns": 1795167059189371400, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "CANCELLED_BEFORE_DISPATCH", "ready": false, "running": "not_ready", "started_at_ns": 1795166879189371400}, "tracking_id": "8bfb637077d0fbcfc055b6912667cc9d", "version": "1.0.0-rc.8-candidate"}
+S4_C_NEGATIVE_CANCEL_AND_PRE_RESTART_PASS 40722f89d2bb69c9a7174bf6e8d525aa
+s4b2a,RUNNING
+s4b2b,RUNNING
+s4b2c,RUNNING
+s4c-readiness-fixture,STOPPED
+POST_RESTART {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795166879373625600, "error_class": "PROCESS_RESTART_BEFORE_DISPATCH", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "next_action": {"kind": "NONE"}, "operation_id": "40722f89d2bb69c9a7174bf6e8d525aa", "state": "FAILED", "tracking_id": "981c7f7f70651c475e4a7ce8668eb69e", "updated_at": 1795166879460704500, "work_ref": "s4c-final-acceptance-20261120"}, "readiness": {"checked_at_ns": 0, "checks": ["exec", "running"], "deadline_ns": 1795167059373625600, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "PROCESS_RESTART_BEFORE_DISPATCH", "ready": false, "running": "unknown", "started_at_ns": 1795166879373625600}, "tracking_id": "0c94d78f04c009ee8308a98aa70f702d", "version": "1.0.0-rc.8-candidate"}
+S4_C_REAL_CONTROLLER_RESTART_NO_REPLAY_PASS
+7f25f843ad39e12e71694cd9e748d4ed|SUCCEEDED|4d17e89a-44a1-49ff-ace2-63e3e62484c6|
+a1dddc2faf860e9e233b7a294a025f8c|SUCCEEDED|55ee9e5c-cc6b-4c9d-be01-dbc23e55878c|
+118258fcd841ecae1f8174e2117daf4c|TIMED_OUT||READINESS_DEADLINE_ELAPSED
+93c6f7c2cfc69add2e7673e6dbcdb8ca|SUCCEEDED|dadd41e5-26ab-4729-ab67-9b39e17d4b9e|
+c3f6db03e828510fc9cd89a9d707d0e3|SUCCEEDED|46a68f98-d7ea-4fd2-a1dc-b1f6d128a620|
+7e1edb43c5fcc0ffb4d49e7d24f29d8a|SUCCEEDED|81a93302-811b-420e-8b1d-bf132dd46ca8|
+78bcc5ad229e3bc6ea06d8f961473ce0|FAILED||PROCESS_RESTART_BEFORE_DISPATCH
+885f25fe1000ad1dd1c4457e8ba19314|CANCELLED||CANCELLED_BEFORE_DISPATCH
+5b3a4c6a5c85bfd926b867990f839968|SUCCEEDED||VERIFIED_ALREADY_IN_DESIRED_STATE
+40722f89d2bb69c9a7174bf6e8d525aa|FAILED||PROCESS_RESTART_BEFORE_DISPATCH
+S4_C_NEGATIVE_RESTART_SCOPED_PASS
+
+Original outer operation d8c8d5edfdb550c151019c526cb9f60e; guest exit 0
+active
+active
+active
+BASELINE_DENIED s4b2a tcp 10.248.83.12
+BASELINE_DENIED s4b2c tcp 10.248.83.12
+BASELINE_DENIED s4b2a tcp fd83:248::12
+BASELINE_DENIED s4b2c tcp fd83:248::12
+BASELINE_DENIED s4b2a udp 10.248.83.12
+BASELINE_DENIED s4b2c udp 10.248.83.12
+BASELINE_DENIED s4b2a udp fd83:248::12
+BASELINE_DENIED s4b2c udp fd83:248::12
+S4_C_FINAL_SIBLING_BASELINE_DUALSTACK_PASS
+
+Original outer operation 5f6fdafca66fc55f04e852016e6c9c46; guest exit 0
+S4_C_AUTH revoke {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795166984786573800, "error_class": "READINESS_AUTH_OR_STATE_UNAVAILABLE", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "next_action": {"kind": "NONE"}, "operation_id": "7219d05dc0734e4c06ed5ad2a29b4233", "state": "FAILED", "tracking_id": "fc370b76c4c9615231e9142db42adcb2", "updated_at": 1795166986862908700}, "readiness": {"checked_at_ns": 1795166984857587500, "checks": ["exec", "running"], "deadline_ns": 1795167074786573800, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "READINESS_AUTH_OR_STATE_UNAVAILABLE", "ready": false, "running": "not_ready", "started_at_ns": 1795166984786573800}, "tracking_id": "cea0db5c7ec7bcdee867cf839850d8e9", "version": "1.0.0-rc.8-candidate"}
+S4_C_AUTH expire {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795166987287565000, "error_class": "READINESS_AUTH_OR_STATE_UNAVAILABLE", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "next_action": {"kind": "NONE"}, "operation_id": "54d9866474159903c861acb0d4c034e7", "state": "FAILED", "tracking_id": "cab6d1ffdde3334ffcc36224c263b996", "updated_at": 1795166993638711000}, "readiness": {"checked_at_ns": 1795166991625160700, "checks": ["exec", "running"], "deadline_ns": 1795167077287565000, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "READINESS_AUTH_OR_STATE_UNAVAILABLE", "ready": false, "running": "not_ready", "started_at_ns": 1795166987287565000}, "tracking_id": "0dbb84feaf45d7d34532e48ef6755f8c", "version": "1.0.0-rc.8-candidate"}
+S4_C_ACTUAL_REVOKED_AND_EXPIRED_WAIT_NO_DISPATCH_PASS
+
+Original outer operation d7ebd040127c74c86e90d9f131d8bd5c; guest exit 0
+S4_C_NATIVE_NONZERO {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795167051521628200, "error_class": "READINESS_PROBE_NONZERO_OR_UNSUPPORTED", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "native_operation_id": "09a6d697-bb9f-42b7-8cd0-9cf2a1bfacd6", "next_action": {"kind": "NONE"}, "operation_id": "b2ea23c19f24174b6b5ebe8b1ceffff6", "state": "FAILED", "tracking_id": "bd943cb1b5871f284710534225c10bda", "updated_at": 1795167051850368500}, "readiness": {"checked_at_ns": 1795167051664189200, "checks": ["exec", "running"], "deadline_ns": 1795167081521628200, "exec_ready": "not_ready", "guest_exit_code": 23, "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "READINESS_PROBE_NONZERO_OR_UNSUPPORTED", "ready": false, "running": "ready", "started_at_ns": 1795167051521628200}, "tracking_id": "41782c5cdc88d4d6689143f8edc1ca64", "version": "1.0.0-rc.8-candidate"}
+S4_C_NATIVE_PROBE_ACK_BEFORE_STOP 201c99d0b5aad526bf46d237cef8ad22 4f74385f-9a5a-4b1f-9829-bdd8a2cdf0a4
+S4_C_DURABLE_UNFINISHED_ORIGINAL_BEFORE_FULL_BOX_RESTART_PASS 201c99d0b5aad526bf46d237cef8ad22 4f74385f-9a5a-4b1f-9829-bdd8a2cdf0a4
+enabled
+Fri Nov 20 08:39:38 2026
+S4_C_REBOOT_PRESTATE_READY
+
+Original outer operation d551d58c31d9ce379768012fda112141; guest exit 0
+active
+active
+Fri Nov 20 09:31:11 2026
+s4b2a,RUNNING
+s4b2b,RUNNING
+s4b2c,RUNNING
+s4c-readiness-fixture,RUNNING
+POST_FULL_RESTART {"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "39c49655-f06e-46aa-9137-59e3a17fba51", "created_at": 1795167052172435700, "error_class": "PROCESS_RESTART_OR_LOST_ACK", "incarnation": "39c49655-f06e-46aa-9137-59e3a17fba51", "native_operation_id": "4f74385f-9a5a-4b1f-9829-bdd8a2cdf0a4", "next_action": {"kind": "HOST_LOCAL_REVIEW"}, "operation_id": "201c99d0b5aad526bf46d237cef8ad22", "state": "UNKNOWN", "tracking_id": "d5a90dd1083699235c01b4c0d24f7fbd", "updated_at": 1795167076014860300}, "readiness": {"checked_at_ns": 0, "checks": ["exec", "running"], "deadline_ns": 1795167082172435700, "exec_ready": "unknown", "ipv4_assigned": "not_checked", "ipv6_assigned": "not_checked", "last_error_class": "PROCESS_RESTART_OR_LOST_ACK", "ready": false, "running": "unknown", "started_at_ns": 1795167052172435700}, "tracking_id": "ce92daa5a25f00f916453a8492d4cde0", "version": "1.0.0-rc.8-candidate"}
+S4_C_FULL_L1_RESTART_ACKED_ORIGINAL_UNKNOWN_SAME_KEY_NO_REPLAY_PASS
+7f25f843ad39e12e71694cd9e748d4ed|SUCCEEDED|4d17e89a-44a1-49ff-ace2-63e3e62484c6|
+a1dddc2faf860e9e233b7a294a025f8c|SUCCEEDED|55ee9e5c-cc6b-4c9d-be01-dbc23e55878c|
+118258fcd841ecae1f8174e2117daf4c|TIMED_OUT||READINESS_DEADLINE_ELAPSED
+93c6f7c2cfc69add2e7673e6dbcdb8ca|SUCCEEDED|dadd41e5-26ab-4729-ab67-9b39e17d4b9e|
+c3f6db03e828510fc9cd89a9d707d0e3|SUCCEEDED|46a68f98-d7ea-4fd2-a1dc-b1f6d128a620|
+7e1edb43c5fcc0ffb4d49e7d24f29d8a|SUCCEEDED|81a93302-811b-420e-8b1d-bf132dd46ca8|
+78bcc5ad229e3bc6ea06d8f961473ce0|FAILED||PROCESS_RESTART_BEFORE_DISPATCH
+885f25fe1000ad1dd1c4457e8ba19314|CANCELLED||CANCELLED_BEFORE_DISPATCH
+5b3a4c6a5c85bfd926b867990f839968|SUCCEEDED||VERIFIED_ALREADY_IN_DESIRED_STATE
+40722f89d2bb69c9a7174bf6e8d525aa|FAILED||PROCESS_RESTART_BEFORE_DISPATCH
+7219d05dc0734e4c06ed5ad2a29b4233|FAILED||READINESS_AUTH_OR_STATE_UNAVAILABLE
+54d9866474159903c861acb0d4c034e7|FAILED||READINESS_AUTH_OR_STATE_UNAVAILABLE
+d0480c0e8f7ec8896ff41cee55b4ff54|SUCCEEDED|b9c91e37-46fe-4af4-988e-8464cb898700|
+b2ea23c19f24174b6b5ebe8b1ceffff6|FAILED|09a6d697-bb9f-42b7-8cd0-9cf2a1bfacd6|READINESS_PROBE_NONZERO_OR_UNSUPPORTED
+201c99d0b5aad526bf46d237cef8ad22|UNKNOWN|4f74385f-9a5a-4b1f-9829-bdd8a2cdf0a4|PROCESS_RESTART_OR_LOST_ACK
+S4_C_FULL_BOX_RESTART_SCOPED_PASS
+
+Original outer operation 5c22a190fc96d8825926a21d1ea91950; guest exit 0
+s4b2a,RUNNING
+s4b2b,RUNNING
+s4b2c,RUNNING
+s4c-readiness-fixture,RUNNING
+active
+active
+ORIGINAL_JOURNAL
+51|OBSERVING|1795167052172435660|READINESS:{"running":"unknown","exec_ready":"unknown","ipv4_assigned":"not_checked","ipv6_assigned":"not_checked","checked_at_ns":0}
+52|DISPATCHING|1795167052240594302|READINESS_POINT_OF_USE_FENCE
+53|VERIFYING|1795167052395131765|
+54|UNKNOWN|1795167076014860399|PROCESS_RESTART_OR_LOST_ACK
+NATIVE_ORIGINAL_NOT_READABLE_AFTER_INNER_DAEMON_RESTART
+S4_C_SEPARATE_READONLY_SQL_NATIVE_AUDIT_PASS

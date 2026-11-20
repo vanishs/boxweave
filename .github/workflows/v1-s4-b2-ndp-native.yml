@@ -1,0 +1,169 @@
+name: S4-B2 isolated native IPv6 NDP and MLD differential
+on:
+  push:
+    branches: [feat/v1-s4-runtime-integration-20261116]
+    paths:
+      - .github/workflows/v1-s4-b2-ndp-native.yml
+      - internal/install/network_peer_policy.go
+      - internal/install/native_s4_b2_policy_test.go
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Signed Incus 7.6 fresh runner and fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test ! -e /var/lib/incus
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl gpg dnsmasq-base nftables tcpdump iproute2 >/dev/null
+          curl -fsSL --max-time 30 https://pkgs.zabbly.com/key.asc -o "$RUNNER_TEMP/key.asc"
+          fpr="$(gpg --show-keys --with-colons "$RUNNER_TEMP/key.asc" | awk -F: '$1=="fpr" {print $10; exit}')"
+          test "$fpr" = 4EFC590696CB15B87C73A3AD82CC8797C838DCFD
+          sudo install -m 0644 "$RUNNER_TEMP/key.asc" /etc/apt/keyrings/s4b2-ndp-zabbly.asc
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/s4b2-ndp-zabbly.asc] https://pkgs.zabbly.com/incus/stable noble main' | sudo tee /etc/apt/sources.list.d/s4b2-ndp-incus.list >/dev/null
+          sudo apt-get update -qq
+          pkg="$(apt-cache madison incus | awk '/pkgs.zabbly.com/ && $3 ~ /:7[.]6[-.]/ {print $3; exit}')"
+          test -n "$pkg"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "incus=$pkg" "incus-client=$pkg" "incus-base=$pkg" >/dev/null
+          sudo systemctl start incus.service
+          sudo incus admin init --auto --storage-backend=dir
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          sudo incus version
+          test "$(sudo incus config get authorization.client.tls-restricted)" != scriptlet
+          test -z "$(gofmt -l internal/install/network_peer_policy.go internal/install/native_s4_b2_policy_test.go)"
+          go test -c -o "$RUNNER_TEMP/s4b2-test" ./internal/install
+          echo "S4_B2_NDP_SOURCE=$GITHUB_SHA"
+      - name: S1 exact ACL, dynamic NDP capture, MLD and default-action differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          a4=''; b4=''; a6=''; b6=''
+          probe() {
+            sudo env BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
+              S4B2_A4="$a4" S4B2_B4="$b4" S4B2_A6="$a6" S4B2_B6="$b6" \
+              "$RUNNER_TEMP/s4b2-test" -test.v -test.run "^$1$"
+          }
+          probe TestS4B1ExactS1ACLNativeFixture
+          sudo incus profile device set default eth0 \
+            security.acls=bw-s4b1-native \
+            security.acls.default.ingress.action=reject \
+            security.acls.default.egress.action=reject \
+            security.ipv4_filtering=true \
+            security.ipv6_filtering=true \
+            security.mac_filtering=true
+          for box in s4b2a s4b2b s4b2c; do
+            sudo incus init images:ubuntu/24.04 "$box" -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus start "$box"
+          done
+          guest4() { sudo incus exec "$1" -- sh -c "ip -4 -o addr show eth0 | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :; }
+          guest6() { sudo incus exec "$1" -- sh -c "ip -6 -o addr show eth0 scope global | awk '{print \$4}' | cut -d/ -f1" 2>/dev/null || :; }
+          for i in $(seq 1 65); do
+            a4="$(guest4 s4b2a)"; b4="$(guest4 s4b2b)"
+            a6="$(guest6 s4b2a)"; b6="$(guest6 s4b2b)"
+            if [[ -n "$a4" && -n "$b4" && -n "$a6" && -n "$b6" ]]; then break; fi
+            sleep 2
+          done
+          test -n "$a4" && test -n "$b4" && test -n "$a6" && test -n "$b6"
+          echo "S4_B2_NDP_NATIVE_A=$a4,$a6 B=$b4,$b6"
+          probe TestS4B2NativeExactTargetEgressAndIngress
+          sudo incus exec s4b2a -- ping -n -c 1 -W 3 "$b4"
+          echo "S4_B2_NDP_IPV4_CONTROL=PASS"
+          report() {
+            echo "S4_B2_NDP_STEP=$1 SNOOPING=$(cat /sys/class/net/incusbr0/bridge/multicast_snooping)"
+            sudo bridge mdb show dev incusbr0 | head -n 60 || :
+            sudo incus exec s4b2a -- ip -6 neigh show || :
+            sudo incus exec s4b2b -- ip -6 neigh show || :
+          }
+          ping6() {
+            sudo incus exec s4b2a -- ip -6 neigh del "$b6" dev eth0 >/dev/null 2>&1 || :
+            if sudo incus exec s4b2a -- ping -n -6 -c 2 -W 3 "$b6"; then
+              echo "S4_B2_NDP_$1=REACHABLE"
+            else
+              echo "S4_B2_NDP_$1=UNREACHABLE"
+            fi
+            report "$1"
+          }
+          aif="$(sudo incus config get s4b2a volatile.eth0.host_name)"
+          bif="$(sudo incus config get s4b2b volatile.eth0.host_name)"
+          test -n "$aif" && test -n "$bif"
+          sudo timeout 12 tcpdump -l -e -nnvv -i "$aif" icmp6 >"$RUNNER_TEMP/ndp-a.log" 2>&1 &
+          pa=$!
+          sudo timeout 12 tcpdump -l -e -nnvv -i "$bif" icmp6 >"$RUNNER_TEMP/ndp-b.log" 2>&1 &
+          pb=$!
+          sleep 1
+          ping6 BASELINE
+          # Distinguish actual ACL egress propagation / IPv6 NDP
+          # convergence from a subsequent native ACL re-apply.
+          for retry in 1 2 3 4 5; do
+            sleep 3
+            ping6 "PASSIVE_NO_NATIVE_WRITE_RETRY_$retry"
+          done
+          echo "S4_B2_NDP_PASSIVE_RETRY_SEQUENCE_COMPLETED=YES"
+          wait "$pa" || :
+          wait "$pb" || :
+          echo "S4_B2_NDP_PACKET_CAPTURE_A"
+          tail -n 70 "$RUNNER_TEMP/ndp-a.log"
+          echo "S4_B2_NDP_PACKET_CAPTURE_B"
+          tail -n 70 "$RUNNER_TEMP/ndp-b.log"
+          echo "S4_B2_NDP_NFT_RULES"
+          sudo nft -a list ruleset | grep -E 'nd-neighbor|icmpv6 type|mld|fwd.s4b2|egress|ingress' | head -n 90 || :
+          echo "S4_B2_NDP_BRIDGE_NETFILTER=$(cat /proc/sys/net/bridge/bridge-nf-call-ip6tables 2>/dev/null || echo absent)"
+          sudo nft -a list ruleset | grep -F -A 65 'chain fwd.s4b2a.eth0 {' | head -n 80 || :
+          sudo nft -a list ruleset | grep -F -A 65 'chain fwd.s4b2b.eth0 {' | head -n 80 || :
+          sudo ip6tables -S FORWARD | head -n 40 || :
+          if sudo incus network acl rule add bw-s4b1-native egress action=allow protocol=icmp6 icmp_type=143; then
+            echo "S4_B2_NDP_MLD143_RULE_ADDED=YES"
+          else
+            echo "S4_B2_NDP_MLD143_RULE_ADDED=NO"
+          fi
+          if sudo incus network acl rule add bw-s4b1-native ingress action=allow protocol=icmp6 icmp_type=130; then
+            echo "S4_B2_NDP_MLD130_RULE_ADDED=YES"
+          else
+            echo "S4_B2_NDP_MLD130_RULE_ADDED=NO"
+          fi
+          echo "S4_B2_NDP_MLD_RULE_STAGE_COMPLETE=YES"
+          sudo incus restart s4b2a
+          sudo incus restart s4b2b
+          for i in $(seq 1 45); do
+            nowa="$(guest6 s4b2a)"; nowb="$(guest6 s4b2b)"
+            if [[ "$nowa" = "$a6" && "$nowb" = "$b6" ]]; then break; fi
+            sleep 2
+          done
+          echo "S4_B2_NDP_POST_RESTART_A=$nowa B=$nowb"
+          if [[ "$nowa" != "$a6" || "$nowb" != "$b6" ]]; then
+            echo "S4_B2_NDP_RESTART_CHANGED_NATIVE_IP_OR_NOT_READY=BLOCKED"
+            exit 81
+          fi
+          ping6 MLD_143_EGRESS_130_INGRESS
+          sudo ip link set dev incusbr0 type bridge mcast_snooping 0
+          ping6 DISABLE_SNOOPING_DIAGNOSTIC_ONLY
+          sudo incus config device override s4b2b eth0 security.acls.default.ingress.action=allow
+          ping6 B_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device override s4b2a eth0 security.acls.default.egress.action=allow
+          ping6 A_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device set s4b2b eth0 security.acls.default.egress.action=allow
+          ping6 B_EGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device set s4b2a eth0 security.acls.default.ingress.action=allow
+          ping6 A_INGRESS_DEFAULT_ALLOW_DIAGNOSTIC_ONLY
+          sudo incus config device set s4b2b eth0 security.ipv6_filtering=false
+          ping6 B_IPV6_FILTER_OFF_DIAGNOSTIC_ONLY
+          echo "S4_B2_NDP_DIFFERENTIAL_COMPLETE=YES_NOT_A_PRODUCT_FIX"
+          for box in s4b2a s4b2b s4b2c; do sudo incus stop "$box"; sudo incus delete "$box"; done
+          sudo incus profile device unset default eth0 security.acls
+          sudo incus network acl show bw-s4b1-native | grep -Fqx 'used_by: []'
+          sudo incus network acl delete bw-s4b1-native
+          test -z "$(sudo incus list --all-projects --format csv -c n)"
+          echo "S4_B2_NDP_DISPOSABLE_CLEANUP=PASS"

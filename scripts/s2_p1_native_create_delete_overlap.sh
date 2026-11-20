@@ -1,8 +1,8 @@
 #!/bin/sh
-# Real native Incus 7.6, actual UUID-bound VERIFYING Create and 12 parallel
-# authentic SDK Delete requests. Only the worker source of THIS acceptance
-# binary is overlaid with a deterministic post-commit pause. Release/product
-# worker.go and its binary remain unchanged, separately native-accepted.
+# Real native Incus 7.6, native-verified pre-atomic Create and 12 parallel
+# authentic SDK Delete requests. Only the lifecycle source of THIS acceptance
+# binary is overlaid with a deterministic pre-atomic-commit pause. Release/product
+# lifecycle.go and its binary remain unchanged, separately native-accepted.
 set -eu
 if [ "${GITHUB_ACTIONS:-}" != true ] ||
    [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ] ||
@@ -17,9 +17,9 @@ test ! -e "$lab"
 mkdir -m 0700 "$lab"
 # Build a disposable test-only binary using a Go source overlay while
 # still owning this private workspace. No committed code or release binary
-# is edited. Fail closed if the exact post-verify anchor has changed.
+# is edited. Fail closed if the exact atomic Create anchor has changed.
 python3 scripts/s2_p1_build_overlap_overlay.py \
-  "$PWD/internal/state/worker.go" "$lab"
+  "$PWD/internal/state/lifecycle.go" "$lab"
 CGO_ENABLED=1 go build -trimpath -overlay="$lab/go-overlay.json" \
   -ldflags "-X main.version=1.0.24-s2-overlap-overlay -X main.commit=$(git rev-parse HEAD)" \
   -o "$work/s2-p1-overlap-service" ./cmd/boxweave
@@ -38,8 +38,8 @@ actor() {
    BW_S2_TEST_UID="$(id -u boxweave)" \
    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$@"
 }
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-overlap-seed.secret"
-actor "$work/boxweave" token-create -db "$db" -role admin > "$work/p1-overlap-peer.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-overlap-seed.secret"
+actor "$work/boxweave" token-create -db "$db" > "$work/p1-overlap-peer.secret"
 chmod 0600 "$work/p1-overlap-seed.secret" "$work/p1-overlap-peer.secret"
 token="$(sed -n 's/^token=//p' "$work/p1-overlap-seed.secret")"
 other="$(sed -n 's/^token=//p' "$work/p1-overlap-peer.secret")"
@@ -78,13 +78,18 @@ attempt=0
 while [ "$attempt" -lt 90 ] && ! sudo test -s "$lab/bound.json"; do
  if ! kill -0 "$probe_pid" 2>/dev/null; then
   cat "$work/p1-native-overlap-results.txt"
-  echo "S2_P1_FAIL: verifier stopped before exact bound SQLite witness" >&2; exit 96
+  echo "S2_P1_FAIL: verifier stopped before exact pre-atomic native witness" >&2; exit 96
  fi
  attempt=$((attempt+1)); sleep 1
 done
 sudo test -s "$lab/held"
 sudo test -s "$lab/bound.json"
-sudo grep -Fqx POST_REGISTER_CREATED_BOX_COMMIT_VERIFIED_EFFECT_RETURNED "$lab/held"
+sudo python3 - "$lab/held" <<'PY_HELD'
+import json,sys
+v=json.load(open(sys.argv[1]))
+assert v["phase"]=="NATIVE_VERIFIED_BEFORE_ATOMIC_CREATE"
+assert len(v["uuid"])==36 and len(v["original_id"])==32 and v["native_id"]
+PY_HELD
 uuid="$(sudo python3 - "$lab/bound.json" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
@@ -97,22 +102,29 @@ test "$(sudo incus config get "$name" volatile.uuid --project "$project")" = "$u
 test "$(sudo incus list "$name" --project "$project" --format csv -c s)" = STOPPED
 test "$(sudo incus list --all-projects --format csv -c n)" = "$name"
 sudo touch "$lab/native-verified"
-echo "S2_P1_NATIVE_UUID_BOUND_VERIFYING_INDEPENDENT_INCUS_CONFIRM=PASS"
+original_id="$(sudo python3 - "$lab/bound.json" <<'PY_ORIGINAL'
+import json,sys
+print(json.load(open(sys.argv[1]))["original_id"])
+PY_ORIGINAL
+)"
+test "$(sudo incus config get "$name" user.boxweave.create_operation --project "$project")" = "$original_id"
+echo "S4_A_NATIVE_UUID_PREATOMIC_INDEPENDENT_INCUS_CONFIRM=PASS"
 if ! wait "$probe_pid"; then
  cat "$work/p1-native-overlap-results.txt"
  tail -70 "$work/p1-overlap-service.redacted.log"
  echo "S2_P1_FAIL: original in-flight MCP lock/verified recovery failed" >&2; exit 97
 fi
 probe_pid=""
-grep -Fqx S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS \
+grep -Fqx S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED=PASS \
  "$work/p1-native-overlap-results.txt"
-grep -Fqx S2_P1_REAL_NATIVE_OVERLAP_RELEASE_VERIFIED_DELETE_SUCCEEDED=PASS \
+grep -Fqx S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE=PASS \
  "$work/p1-native-overlap-results.txt"
 # Both positive claims were independently checked above, but the SDK probe
 # stdout was deliberately written to a private fixture results file. Emit
 # only the verified, non-secret PASS markers so the separate P3 audit can
 # require them from the public CI witness transcript.
-echo "S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED=PASS"
-echo "S2_P1_REAL_NATIVE_OVERLAP_RELEASE_VERIFIED_DELETE_SUCCEEDED=PASS"
+echo "S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED=PASS"
+echo "S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE=PASS"
+grep '^S4_A_OVERLAP_CREATE_BW_ID=' "$work/p1-native-overlap-results.txt"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
-echo "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE=PASS"
+echo "S4_A_REAL_NATIVE_PREATOMIC_CONCURRENT_DELETE_FULL_LIFECYCLE=PASS"

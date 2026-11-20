@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/native"
@@ -48,10 +49,10 @@ type cancelOperationResult struct {
 func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_output_get",
-		Description: "Read up to 65536 bytes from the original recorded guest Exec stdout or stderr by offset, with observed nonzero exit retained.",
+		Description: "Read the original native box_exec stream up to 16MiB while the exact Box exists; recover a separately bounded 7-day private archive after Box Delete. Expiration, missing output and truncation are explicit; command_success uses the separately recorded exit_code. Advance next_offset for pagination. Each stream is capped at 1MiB in the private archive.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
-		actor, role, layer, err := s.operationPrincipal(req)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -63,7 +64,7 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		if in.Limit == 0 {
 			in.Limit = 16384
 		}
-		original, err := s.Store.GetScopedOperation(ctx, layer, actor, role, in.OperationID)
+		original, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.OperationID)
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
@@ -96,44 +97,70 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.Ended, result.NextOffset = true, in.Offset
 			result.Availability = "expired"
 			result.UnavailableReason = "RETENTION_EXPIRED_VERIFIED"
-			return privateReadReply(ctx, s, actor, result)
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
-		box, err := s.Store.OwnedBox(ctx, layer, original.BoxUUID)
-		if err != nil {
-			return nil, operationOutputResult{}, err
+		// The controller archive is independent of the Incus instance and
+		// must be checked before any live-Box lookup. TTL remains anchored
+		// to the immutable Exec witness, not to a caller's read time.
+		if out.ObservedAt > 0 && time.Now().UnixNano()-out.ObservedAt >= state.ExecRetention.Nanoseconds() {
+			result.Ended, result.NextOffset = true, in.Offset
+			result.Availability = "expired"
+			result.UnavailableReason = "RETENTION_WINDOW_ELAPSED"
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
-		if _, _, err = s.Native.GetExactBox(ctx, box.Name, box.UUID); err != nil {
-			return nil, operationOutputResult{}, err
+		// Preserve the 16MiB native pagination contract while the exact
+		// admitted Box exists. The private 1MiB archive is a separate
+		// recovery prefix, not a replacement for live native evidence.
+		box, ownedErr := s.Store.OwnedBox(ctx, principal.Layer, original.BoxUUID)
+		missingReason := "BOX_REMOVED_OUTPUT_NOT_ARCHIVED"
+		if ownedErr == nil {
+			if _, _, nativeErr := s.Native.GetExactBox(ctx, box.Name, box.UUID); nativeErr == nil {
+				missingReason = "NATIVE_RECORDED_OUTPUT_MISSING"
+				if path == "" {
+					missingReason = "NO_NATIVE_RECORDED_STREAM_PATH"
+				} else {
+					if in.Offset == native.MaxRecordedOutputBytes {
+						result.Ended, result.Truncated = true, true
+						result.NextOffset = in.Offset
+						return privateReadReply(ctx, s, principal.TokenID, result)
+					}
+					data, ended, readErr := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
+					if readErr == nil {
+						result.ContentBase64 = base64.StdEncoding.EncodeToString(data)
+						result.NextOffset = in.Offset + int64(len(data))
+						result.Ended = ended
+						if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
+							result.Ended, result.Truncated = true, true
+						}
+						return privateReadReply(ctx, s, principal.TokenID, result)
+					}
+					if !errors.Is(readErr, native.ErrRecordedOutputUnavailable) {
+						return nil, operationOutputResult{}, readErr
+					}
+				}
+			} else {
+				missingReason = "EXACT_NATIVE_BOX_NOT_AVAILABLE"
+			}
+		} else if !errors.Is(ownedErr, state.ErrNotFound) {
+			return nil, operationOutputResult{}, ownedErr
 		}
-		if path == "" {
-			result.Ended = true
-			result.Availability = "unavailable"
-			result.UnavailableReason = "NO_NATIVE_RECORDED_STREAM_PATH"
-			return privateReadReply(ctx, s, actor, result)
+		// With no readable native stream, use only the original authorized
+		// private archive. Do not resolve caller-selected or guest paths.
+		archive, ended, truncated, found, archiveErr := s.readExecArchive(original.ID, in.Stream, in.Offset, in.Limit)
+		if archiveErr != nil {
+			return nil, operationOutputResult{}, archiveErr
 		}
-		if in.Offset == native.MaxRecordedOutputBytes {
-			result.Ended, result.Truncated = true, true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, actor, result)
+		if found {
+			result.ContentBase64 = base64.StdEncoding.EncodeToString(archive)
+			result.NextOffset = in.Offset + int64(len(archive))
+			result.Ended = ended
+			result.Truncated = result.Truncated || truncated
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
-		data, ended, err := s.Native.ReadRecordedOutput(ctx, path, in.Offset, in.Limit)
-		if errors.Is(err, native.ErrRecordedOutputUnavailable) {
-			result.Availability = "unavailable"
-			result.UnavailableReason = "NATIVE_RECORDED_OUTPUT_MISSING"
-			result.Ended = true
-			result.NextOffset = in.Offset
-			return privateReadReply(ctx, s, actor, result)
-		}
-		if err != nil {
-			return nil, operationOutputResult{}, err
-		}
-		result.ContentBase64 = base64.StdEncoding.EncodeToString(data)
-		result.NextOffset = in.Offset + int64(len(data))
-		result.Ended = ended
-		if result.NextOffset >= native.MaxRecordedOutputBytes && !ended {
-			result.Ended, result.Truncated = true, true
-		}
-		return privateReadReply(ctx, s, actor, result)
+		result.Availability, result.UnavailableReason, result.Ended = "unavailable", missingReason, true
+		result.NextOffset = in.Offset
+		return privateReadReply(ctx, s, principal.TokenID, result)
+
 	})
 
 	addStrictTool(server, &mcp.Tool{
@@ -141,11 +168,11 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 		Description: "Journal a separate cancellation request for a proven queued-undispatched owned Operation. Detached running Exec/native operations are not cancelable with the proved SDK path.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cancelOperationInput) (*mcp.CallToolResult, cancelOperationResult, error) {
-		actor, layer, err := requireAdmin(req, s)
+		principal, err := s.requestPrincipal(req)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
-		target, err := s.Store.GetScopedOperation(ctx, layer, actor, "admin", in.TargetOperationID)
+		target, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, in.TargetOperationID)
 		if err != nil {
 			return nil, cancelOperationResult{}, err
 		}
@@ -160,16 +187,16 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			return nil, cancelOperationResult{}, err
 		}
 		effect := func(ctx context.Context) (string, error) {
-			if target.State != "ADMITTED" {
+			if target.State != "ADMITTED" && !(target.Action == state.ReadinessAction && target.State == "OBSERVING") {
 				return "", state.PreDispatchError{Class: "ORIGINAL_ALREADY_DISPATCHED_CANCEL_UNSUPPORTED"}
 			}
-			if err := s.Store.CancelQueued(ctx, layer, target.ID); err != nil {
+			if err := s.Store.CancelQueued(ctx, principal.Layer, target.ID); err != nil {
 				return "", state.PreDispatchError{Class: "ORIGINAL_NOT_QUEUED_CANCEL_UNSUPPORTED"}
 			}
 			return "", state.ErrNoNativeChange
 		}
 		verify := func(ctx context.Context) error {
-			got, err := s.Store.GetScopedOperation(ctx, layer, actor, "admin", target.ID)
+			got, err := s.Store.GetScopedOperation(ctx, principal.Layer, principal.ActorID, target.ID)
 			if err != nil {
 				return err
 			}

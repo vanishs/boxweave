@@ -24,6 +24,7 @@ work="$(mktemp -d -p /tmp bw-v1-s2-ghci.XXXXXX)"
 chmod 0711 "$work"
 mkdir -m 0700 "$work/ledger"
 echo "S2_NATIVE_CANDIDATE_SOURCE_SHA=$(git rev-parse HEAD)"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FRESH_RUNNER_PRECHECK"
 
 # CI only: install an exact upstream 7.6 signed package on the pristine
 # disposable VM. Ubuntu 24.04's archive ships 6.0.0, whose bridged NIC does
@@ -62,6 +63,7 @@ sudo systemctl is-active --quiet incus.service
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 test "$(sudo incus project list --format csv | wc -l)" -eq 1
 sudo incus admin init --auto --storage-backend=dir
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INCUS_76_BASE_READY"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 
 # A real single-use mounted ext4 loop block device (NOT a host-root
@@ -162,6 +164,12 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.24-s2-native-ci -
   -o "$work/boxweave" ./cmd/boxweave
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-probe" ./scripts/s2_native_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-bh018-atomic-mcp-probe" ./scripts/s2_bh018_atomic_mcp_probe.go
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go
+  CGO_ENABLED=1 go build -trimpath -o "$work/s4-native-event-tap" ./scripts/s4_raw_native_event_tap.go
+  chmod 0755 "$work/s4-native-event-tap"
+  echo "S4_A_NATIVE_STAGE=OAUTH_AND_INCUS_EVENT_PROBES_COMPILED"
+fi
 chmod 0755 "$work/s2-bh018-atomic-mcp-probe"
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-crash-probe" ./scripts/s2_crash_probe.go
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-queued-cancel-seed" ./scripts/s2_queued_cancel_seed.go
@@ -189,6 +197,7 @@ CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-list-debugger-probe" ./scripts/
 CGO_ENABLED=1 go build -trimpath -o "$work/s2-p1-native-overlap-probe" ./scripts/s2_p1_native_create_delete_overlap_probe.go
 chmod 0755 "$work/boxweave" "$work/s2-probe" "$work/s2-crash-probe" "$work/s2-queued-cancel-seed" "$work/s2-native-guest-quota" "$work/s2-mcp-quota-probe" "$work/s2-exec-gc-probe" "$work/s2-gc-delete-proxy" "$work/s2-sqlite-fsync-probe" "$work/s2-p0-native-sqlite-proxy" "$work/s2-p0-native-sqlite-probe" "$work/s2-ack-loss-probe" "$work/s2-unknown-create-bind-probe" "$work/s2-ack-loss-proxy" "$work/s2-p1-stop-delete-proxy" "$work/s2-p1-stop-delete-probe" "$work/s2-p1-token-inflight-probe" "$work/s2-two-controllers-probe" "$work/s2-private-read-proxy" "$work/s2-private-read-probe" "$work/s2-bound-create-probe" "$work/s2-malformed-exec-proxy" "$work/s2-malformed-exec-probe" "$work/s2-altpool-probe" "$work/s2-p1-list-debugger-probe" "$work/s2-p1-native-overlap-probe"
 sha256sum "$work/boxweave"
+echo "S4_A_CANDIDATE_BINARY_SHA256=$(sha256sum "$work/boxweave" | cut -d' ' -f1)"
 sudo chown boxweave:incus "$work/ledger"
 db="$work/ledger/ledger.sqlite"
 socket=/var/lib/incus/unix.socket.user
@@ -260,23 +269,23 @@ sudo incus storage delete bw-s2-noquota-pool
 sudo umount "$work/noquota-mounted"
 sudo losetup -d "$noquota_loop"
 
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/viewer.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role admin > "$work/admin2.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer -ttl 1s > "$work/expired-viewer.secret"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -role viewer > "$work/revoked-viewer.secret"
-chmod 0600 "$work/admin.secret" "$work/viewer.secret" "$work/admin2.secret" "$work/expired-viewer.secret" "$work/revoked-viewer.secret"
-revoked_viewer_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/revoked-viewer.secret")"
-echo "$revoked_viewer_id" | grep -Eq '^[0-9a-f]{32}$'
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-revoke -db "$db" -id "$revoked_viewer_id" > "$work/revoked-viewer-result.txt"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/admin.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/peer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/admin2.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" -ttl 1s > "$work/expired-peer.secret"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$db" > "$work/revoked-peer.secret"
+chmod 0600 "$work/admin.secret" "$work/peer.secret" "$work/admin2.secret" "$work/expired-peer.secret" "$work/revoked-peer.secret"
+revoked_peer_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/revoked-peer.secret")"
+echo "$revoked_peer_id" | grep -Eq '^[0-9a-f]{32}$'
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-revoke -db "$db" -id "$revoked_peer_id" > "$work/revoked-peer-result.txt"
 admin="$(sed -n 's/^token=//p' "$work/admin.secret")"
-viewer="$(sed -n 's/^token=//p' "$work/viewer.secret")"
+peer="$(sed -n 's/^token=//p' "$work/peer.secret")"
 admin2="$(sed -n 's/^token=//p' "$work/admin2.secret")"
-expired_viewer="$(sed -n 's/^token=//p' "$work/expired-viewer.secret")"
-revoked_viewer="$(sed -n 's/^token=//p' "$work/revoked-viewer.secret")"
+expired_peer="$(sed -n 's/^token=//p' "$work/expired-peer.secret")"
+revoked_peer="$(sed -n 's/^token=//p' "$work/revoked-peer.secret")"
 admin_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin.secret")"
 admin2_id="$(sed -n 's/^id=\([^ ]*\).*/\1/p' "$work/admin2.secret")"
-test -n "$admin" && test -n "$viewer" && test -n "$admin2" && test -n "$expired_viewer" && test -n "$revoked_viewer"
+test -n "$admin" && test -n "$peer" && test -n "$admin2" && test -n "$expired_peer" && test -n "$revoked_peer"
 echo "$admin_id" | grep -Eq '^[0-9a-f]{32}$'
 echo "$admin2_id" | grep -Eq '^[0-9a-f]{32}$'
 test "$admin_id" != "$admin2_id"
@@ -285,7 +294,7 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_
   -incus-socket "$socket" -project "$project" \
   -listen 127.0.0.1:18650 > "$work/service.redacted.log" 2>&1 &
 service_pid=$!
-trap 'kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :' EXIT
+trap 'if [ -n "${s4_event_tap_pid:-}" ]; then sudo touch "$work/ledger/s4-native-events-stop" 2>/dev/null || :; kill "$s4_event_tap_pid" 2>/dev/null || :; wait "$s4_event_tap_pid" 2>/dev/null || :; fi; kill "$service_pid" 2>/dev/null || :; wait "$service_pid" 2>/dev/null || :' EXIT
 attempt=0
 until [ "$attempt" -ge 40 ]; do
   if [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp 2>/dev/null)" = 401 ]; then
@@ -295,6 +304,8 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_START"
 
 # A second serve on the identical SQLite must be rejected BEFORE it may
 # run Recover() on the original controller's still-live operations.
@@ -310,10 +321,12 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_
 test -s "$work/concurrent-status.json"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18650/mcp)" = 401
 echo "S2_NATIVE_ACTIVE_SERVER_LOCAL_DB_MUTEX_AND_OBSERVER=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_PASS"
 
 # Prove a *shipped* older official Go SDK (v1.6.1, protocol <=2025-11-25)
 # negotiates against the current v1.8.0 server. Its independent temp module
 # cannot silently use the candidate's newer SDK. No native writes are allowed.
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=LEGACY_OFFICIAL_MCP_SDK_START"
 legacy_client_dir="$work/legacy-sdk-client"
 mkdir -m 0700 "$legacy_client_dir"
 # The tracked probe is build-tagged "ignore"; remove only that tag in
@@ -334,10 +347,11 @@ GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
     echo "S2_P1_FAIL: old SDK interoperability probe" >&2
     exit 125
   }
-grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
+grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS" "$work/legacy-sdk-probe.log"
 grep -Fqx "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS" "$work/legacy-sdk-probe.log"
-echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_13_TOOLS_NO_NATIVE_EFFECT=PASS"
+echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS"
 echo "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=LEGACY_OFFICIAL_MCP_SDK_PASS"
 
 # Seed a single original ADMITTED operation with no native dispatch under
 # the SAME restricted service actor/database. The official SDK prober then
@@ -383,15 +397,16 @@ sh scripts/s2_p1_simulated_wan_lab.sh setup "$work" "$project"
 simulated_wan_ca_b64="$(base64 -w0 "$work/s2-simwan-cert.pem")"
 test -n "$simulated_wan_ca_b64"
 
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BASELINE_S2_MCP_PROBE_START"
 # The independent official MCP SDK prober temporarily holds one completed
 # 16MiB+4-byte dual-stream Exec until this CI VM administrator measures its
 # ACTUAL native spool files. This is read-only and never deletes native logs.
 # A failure is not an excuse to retry an original native mutation.
 ( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
-  BW_S2_ADMIN_TOKEN="$admin" BW_S2_VIEWER_TOKEN="$viewer" \
+  BW_S2_ADMIN_TOKEN="$admin" BW_S2_PEER_TOKEN="$peer" \
   BW_S2_ADMIN2_TOKEN="$admin2" BW_S2_ADMIN1_ID="$admin_id" \
   BW_S2_ADMIN2_ID="$admin2_id" BW_S2_OUTPUT_WITNESS_DIR="$work" \
-  BW_S2_EXPIRED_TOKEN="$expired_viewer" BW_S2_REVOKED_TOKEN="$revoked_viewer" \
+  BW_S2_EXPIRED_TOKEN="$expired_peer" BW_S2_REVOKED_TOKEN="$revoked_peer" \
   BW_S2_FOREIGN_LAYER_OPID="$foreign_layer_id" \
   BW_S2_HISTORY_CURSOR_WITNESS_DIR="$work" \
   BW_S2_SIMULATED_WAN_CA_CERT_B64="$simulated_wan_ca_b64" \
@@ -544,7 +559,7 @@ if grep -Fq "S2_P1_META_REDACTION_SENTINEL_110" "$work/service.redacted.log"; th
   echo "S2_P1_FAIL: untrusted _meta content appeared in service logs" >&2
   exit 119
 fi
-grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_VIEWER_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
+grep -Fqx "S2_P1_REAL_SDK_HOSTILE_META_AND_SCHEMA_NO_NATIVE_EFFECT=PASS" "$work/native-probe.log"
 grep -Fqx "S2_P1_REAL_SDK_LEGACY_TEXT_AND_STRUCTURED_RECEIPT_SAME_ID=PASS" "$work/native-probe.log"
 echo "S2_P1_INSTALLED_RECEIVING_MIDDLEWARE_REDACTION_AND_TYPED_NEGATIVES=PASS"
 
@@ -556,6 +571,7 @@ sudo incus delete "$foreign_name" --project "$foreign_project"
 sudo incus project delete "$foreign_project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BASELINE_S2_MCP_PROBE_PASS"
 
 # BH-018: an additional native end-to-end acceptance through the *installed*
 # non-root, restricted-Project BoxWeave service and official Go MCP SDK.
@@ -566,17 +582,222 @@ echo "S2_P1_TWO_REAL_PROJECTS_SAME_NAME_ISOLATED_FOREIGN_UUID_PRESERVED=PASS"
 # identity and output without native redispatch; fresh commands must work.
 # The original historical UNKNOWN claims on other hosts are never touched.
 test -z "$(sudo incus list --all-projects --format csv -c n)"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_MCP_PROBE_START"
 bh018_checkpoint="$work/bh018-atomic-original.json"
 test ! -e "$bh018_checkpoint"
-BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
+# S4-A only: start THREE independent read-only CLI observers before the
+# first disposable native admission; Incus may expire a final Operation
+# immediately. They read one-use SQLite WAL and native daemon over the
+# restricted service identity's ordinary Incus CLI connection. No replay.
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  test -f scripts/s4_raw_operation_witness.py
+  # The CI checkout under /home/runner is not necessarily traversable by
+  # the restricted service UID. Copy the exact tracked, test-only observer
+  # to our own chmod 0711 disposable staging root; never widen checkout,
+  # installed service, Incus socket, or host-global permissions.
+  install -m 0755 scripts/s4_raw_operation_witness.py "$work/s4-raw-operation-witness.py"
+  cmp -s scripts/s4_raw_operation_witness.py "$work/s4-raw-operation-witness.py"
+  if ! sudo runuser -u boxweave -- python3 "$work/s4-raw-operation-witness.py" --help >/dev/null 2>&1; then
+    echo "S4_A_RAW_NATIVE_WITNESS_RESTRICTED_EXEC=BLOCKED"
+    exit 94
+  fi
+  echo "S4_A_RAW_NATIVE_WITNESS_RESTRICTED_EXEC=PASS"
+  # Subscribe through the official Incus Go SDK BEFORE dispatching a fresh
+  # effect. The native daemon can expire completed Operations immediately;
+  # the read-only event stream preserves the original final metadata digest.
+  # Only the one-use restricted service user and its own Project are used.
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
+    "$work/s4-native-event-tap" -socket "$socket" -project "$project" \
+    -output "$work/ledger/s4-native-events.jsonl" \
+    -ready "$work/ledger/s4-native-events-ready" \
+    -stop "$work/ledger/s4-native-events-stop" \
+    > "$work/s4-native-event-tap.redacted.log" 2>&1 &
+  s4_event_tap_pid=$!
+  attempt=0
+  until sudo test -s "$work/ledger/s4-native-events-ready" || [ "$attempt" -ge 100 ]; do
+    if ! kill -0 "$s4_event_tap_pid" 2>/dev/null; then break; fi
+    attempt=$((attempt+1))
+    sleep 0.1
+  done
+  if ! sudo grep -Fqx 'PROJECT_OPERATION_SUBSCRIBED' "$work/ledger/s4-native-events-ready" 2>/dev/null; then
+    if grep -Fq 'S4_EVENT_TAP_FAIL=PROJECT_OPERATION_SUBSCRIPTION_DENIED' "$work/s4-native-event-tap.redacted.log"; then
+      echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=PROJECT_DENIED"
+    else
+      echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=BLOCKED"
+    fi
+    exit 94
+  fi
+  echo "S4_A_RAW_NATIVE_EVENT_SUBSCRIPTION=PASS"
+  s4_witness_pids=""
+  for case in create exit126 exit127; do
+    case "$case" in
+      create) key="s2-bh018-atomic-native-create-001" ;;
+      exit126) key="s2-bh018-original-exit-126-001" ;;
+      exit127) key="s2-bh018-original-exit-127-001" ;;
+    esac
+    digest="$(printf %s "$key" | sha256sum | cut -d ' ' -f 1)"
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+      -u XDG_CONFIG_HOME HOME=/home/boxweave \
+      XDG_CONFIG_HOME=/home/boxweave/.config \
+      python3 "$work/s4-raw-operation-witness.py" \
+      --db "$db" --key-digest "$digest" --timeout-seconds 120 \
+      --events-jsonl "$work/ledger/s4-native-events.jsonl" \
+      > "$work/s4-raw-$case.json" 2> "$work/s4-raw-$case.redacted.err" &
+    s4_witness_pids="$s4_witness_pids $!"
+  done
+  unset key digest
+fi
+bh018_start_rc=0
+( BW_S2_MCP_URL="http://127.0.0.1:18650/mcp" \
   BW_S2_ADMIN_TOKEN="$admin" BW_S2_BH018_CHECKPOINT="$bh018_checkpoint" \
-  "$work/s2-bh018-atomic-mcp-probe" start > "$work/bh018-atomic-start.log" 2>&1
+  "$work/s2-bh018-atomic-mcp-probe" start ) > "$work/bh018-atomic-start.log" 2>&1 || bh018_start_rc=$?
+if [ "$bh018_start_rc" -ne 0 ]; then
+  echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_START_FAILED"
+  if grep -Eq 'BH018_MCP_FAIL: original [0-9a-f]{32} stopped in UNKNOWN' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_TERMINAL_UNKNOWN'
+  elif grep -Eq 'BH018_MCP_FAIL: original [0-9a-f]{32} stopped in FAILED' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_TERMINAL_FAILED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP box_create rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=CREATE_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=ORIGINAL_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=TERMINAL_POLL_TIMEOUT'
+  elif grep -Fq 'BH018_MCP_FAIL: original guest exit was not retained' "$work/bh018-atomic-start.log"; then
+    echo 'S4_A_BH018_FAILURE_CLASS=GUEST_EXIT_UNVERIFIED'
+  else
+    echo 'S4_A_BH018_FAILURE_CLASS=UNTYPED_CLIENT_FAILURE'
+  fi
+  # Read the one-use WAL through an independent, read-only local process.
+  # Print only immutable original IDs and bounded state/error enums, never
+  # the original Guest command/output or bearer credentials.
+  sudo python3 - "$db" <<'S4_BH018_FAILED_RECEIPT'
+import hashlib
+import sqlite3
+import sys
+db = sys.argv[1]
+originals = (
+    ("create", "s2-bh018-atomic-native-create-001"),
+    ("exit126", "s2-bh018-original-exit-126-001"),
+    ("exit127", "s2-bh018-original-exit-127-001"),
+)
+try:
+    with sqlite3.connect("file:" + db + "?mode=ro", uri=True, timeout=3) as conn:
+        for label, key in originals:
+            digest = hashlib.sha256(key.encode()).hexdigest()
+            rows = conn.execute(
+                "SELECT id,state,native_operation_id,error_class "
+                "FROM operations WHERE key_digest=? LIMIT 2", (digest,)
+            ).fetchall()
+            if len(rows) == 1:
+                oid, status, native_id, error_class = rows[0]
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " BW_ID=" + oid
+                      + " STATE=" + status + " NATIVE_ID=" + (native_id or "NONE")
+                      + " ERROR_CLASS=" + (error_class or "NONE"))
+            elif len(rows) > 1:
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " AMBIGUOUS")
+            else:
+                print("S4_A_BH018_ORIGINAL_CASE=" + label + " NOT_ADMITTED")
+except (sqlite3.Error, OSError):
+    print("S4_A_BH018_SQLITE_POSTMORTEM=UNAVAILABLE")
+S4_BH018_FAILED_RECEIPT
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=BH018_INSTALLED_START_PASS"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_126_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_EXIT_127_ATOMIC_RECEIPT=PASS' "$work/bh018-atomic-start.log"
 grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_START=PASS' "$work/bh018-atomic-start.log"
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  # Capture witnesses are test-only: do not print bearer tokens, raw stderr,
+  # unmanaged operation messages, or assume that a missing object failed.
+  for p in $s4_witness_pids; do
+    wait "$p" || :
+  done
+  for case in create exit126 exit127; do
+    if ! test -s "$work/s4-raw-$case.json"; then
+      if grep -Fq 'sqlite3.OperationalError:' "$work/s4-raw-$case.redacted.err"; then
+        echo "S4_A_RAW_WITNESS_${case}=SQLITE_READ_FAILURE"
+      elif grep -Eq 'PermissionError:|FileNotFoundError:' "$work/s4-raw-$case.redacted.err"; then
+        echo "S4_A_RAW_WITNESS_${case}=FILE_ACCESS_DENIED"
+      else
+        echo "S4_A_RAW_WITNESS_${case}=UNCLASSIFIED_FAILURE"
+      fi
+    fi
+  done
+  python3 - "$work" <<'S4_RAW_ORIGINAL_CHECK'
+import json
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+seen = []
+for name in ("create", "exit126", "exit127"):
+    try:
+        with (root / ("s4-raw-" + name + ".json")).open() as stream:
+            result = json.load(stream)
+    except (OSError, ValueError, TypeError):
+        # A crashed observer is not an observed terminal, and no raw error
+        # log or original Guest output is exposed to the public CI log.
+        print("S4_A_RAW_NATIVE_" + name.upper() + "=WITNESS_UNREADABLE")
+        continue
+    original = result.get("original_sqlite") or {}
+    terminal = result.get("native_terminal") or {}
+    if (result.get("observation") == "CAPTURED_TERMINAL"
+            and result.get("original_id_matches") is True
+            and original.get("project")
+            and original.get("native_operation_id") == terminal.get("native_operation_id")
+            and terminal.get("status_code") in (200, 400, 401)):
+        seen.append((name, original, terminal))
+    else:
+        reason = result.get("reason")
+        allowed = {
+            "SQLITE_FRESH_ORIGINAL_NOT_DISCOVERED",
+            "SQLITE_ORIGINAL_NOT_FOUND",
+            "NO_NATIVE_ORIGINAL_RECEIPT",
+            "NATIVE_READ_UNAVAILABLE",
+            "NATIVE_NOT_RETAINED_OR_UNAVAILABLE",
+            "NATIVE_METADATA_MISSING",
+            "NATIVE_ORIGINAL_ID_MISMATCH",
+            "NATIVE_STATUS_UNVERIFIED",
+            "NATIVE_RESPONSE_INVALID",
+            "NATIVE_NOT_TERMINAL",
+            "NATIVE_ID_FORMAT_UNVERIFIED",
+        }
+        reason = reason if reason in allowed else "UNCLASSIFIED"
+        print("S4_A_RAW_NATIVE_" + name.upper() + "=NOT_CAPTURED_" + reason)
+if not seen:
+    print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=NOT_CAPTURED")
+    # Continue independent OAuth/native tests. Missing retained raw Op is
+    # still a failing final acceptance gate, not a reason to omit other proof.
+for name, original, native in seen:
+    print("S4_A_RAW_NATIVE_CASE_" + name.upper() + "=PASS")
+    print("S4_A_NATIVE_RAW_TERMINAL_CASE=" + name
+          + " BW_ID=" + original["operation_id"]
+          + " NATIVE_ID=" + native["native_operation_id"]
+          + " PROJECT=" + original["project"]
+          + " BOX_UUID=" + str(original.get("box_uuid") or "PENDING"))
+    print("S4_A_NATIVE_RAW_TERMINAL_STATUS=" + str(native["status_code"]))
+if seen:
+    print("S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS")
+if any(native.get("evidence_source") == "INCUS_OPERATION_EVENT_WEBSOCKET"
+       for _, _, native in seen):
+    print("S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=PASS")
+else:
+    print("S4_A_RAW_NATIVE_EVENT_ORIGINAL_TERMINAL=NOT_CAPTURED")
+S4_RAW_ORIGINAL_CHECK
+fi
 # Emit only scoped, validated identifiers from the disposable client; no token or output bytes.
 echo "BH018_MCP_PROJECT=$project"
 grep '^BH018_MCP_' "$work/bh018-atomic-start.log"
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  S4_A_WORK="$work" S4_A_DB="$db" S4_A_PROJECT="$project" \
+    sh scripts/s4_oauth_native_integration.sh
+
+fi
 echo "BH018_NATIVE_INSTALLED_MCP_ORIGINAL_126_127_ATOMIC_RECEIPTS=PASS"
 
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
@@ -635,8 +856,32 @@ if [ "$bh018_resume_rc" -ne 0 ]; then
   grep '^BH018_MCP_FRESH_ADMITTED_EXIT_' "$work/bh018-atomic-resume.log" || :
   if grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_EXEC_MCP_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: lost immutable BW original operation ID' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_RECEIPT_ID_MISSING'
   elif grep -Fq 'BH018_MCP_FAIL: MCP operation_get rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OPERATION_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: MCP operation_output_get rejected' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_OUTPUT_READ_REJECTED'
+  elif grep -Fq 'BH018_MCP_FAIL: unexpected stdout for original' "$work/bh018-atomic-resume.log"; then
+    if grep -Fq 'class=DUPLICATE_EFFECT' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=DUPLICATE_GUEST_EFFECT_MARKER'
+    elif grep -Fq 'class=EMPTY' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=EMPTY_GUEST_EFFECT_MARKER'
+    elif grep -Fq 'class=EXTRA_BYTES' "$work/bh018-atomic-resume.log"; then
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=EXTRA_GUEST_EFFECT_BYTES'
+    else
+      echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=WRONG_GUEST_EFFECT_MARKER'
+    fi
+  elif grep -Fq 'BH018_MCP_FAIL: original guest exit was not retained' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=RECORDED_GUEST_EXIT_MISSING'
+  elif grep -Fq 'BH018_MCP_FAIL: new readback lacks native identity' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_NATIVE_ID_MISSING'
+  elif grep -Fq 'BH018_MCP_FAIL: original receipt ID drift' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=ORIGINAL_RECEIPT_ID_DRIFT'
+  elif grep -Fq 'BH018_MCP_FAIL: confused native terminal and guest command_success' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=RECORDED_GUEST_SUCCESS_DRIFT'
+  elif grep -Fq 'BH018_MCP_FAIL: base64 output' "$work/bh018-atomic-resume.log"; then
+    echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=RECORDED_GUEST_OUTPUT_INVALID'
   elif grep -Fq 'BH018_MCP_FAIL: terminal confirmation deadline exceeded' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=TERMINAL_POLL_TIMEOUT'
   elif grep -Fq 'BH018_MCP_FAIL: original ' "$work/bh018-atomic-resume.log"; then
@@ -650,6 +895,58 @@ if [ "$bh018_resume_rc" -ne 0 ]; then
   else
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=UNTYPED_CLIENT_FAILURE'
   fi
+  # Read-only postmortem of the fresh original: never log Guest bytes or tokens.
+  fresh_read_id="$(sed -n 's/^BH018_MCP_FRESH_ADMITTED_EXIT_[0-9]*_BW_ID=\([0-9a-f]*\)$/\1/p' "$work/bh018-atomic-resume.log" | tail -n1)"
+  if printf '%s' "$fresh_read_id" | grep -Eq '^[0-9a-f]{32}$'; then
+    sudo runuser -u boxweave -- python3 - "$db" "$fresh_read_id" <<'S4_BH018_RESTART_INSPECT'
+import sqlite3, sys
+try:
+    with sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True, timeout=4) as conn:
+        row = conn.execute(
+            "SELECT state,native_operation_id,error_class,box_uuid FROM operations WHERE id=?",
+            (sys.argv[2],)).fetchone()
+    if row:
+        state, native_id, error, box_uuid = row
+        allowed_states = {"ADMITTED", "CLAIMED", "DISPATCHING", "VERIFYING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED"}
+        safe = lambda x: x if isinstance(x, str) and x.isupper() and len(x) <= 100 and all(c.isupper() or c.isdigit() or c == "_" for c in x) else "REDACTED"
+        print("BH018_INSTALLED_FAILURE_SQLITE_ORIGINAL=" + sys.argv[2]
+              + " STATE=" + (state if state in allowed_states else "UNVERIFIED")
+              + " ERROR_CLASS=" + safe(error or "NONE")
+              + " NATIVE_ID_PRESENT=" + str(bool(native_id))
+              + " BOX_UUID_PRESENT=" + str(bool(box_uuid)))
+    else:
+        print("BH018_INSTALLED_FAILURE_SQLITE_ORIGINAL=NOT_FOUND")
+except (sqlite3.Error, OSError):
+    print("BH018_INSTALLED_FAILURE_SQLITE_READ=UNAVAILABLE")
+S4_BH018_RESTART_INSPECT
+  else
+    echo "BH018_INSTALLED_FAILURE_FRESH_ORIGINAL_ID=NOT_CAPTURED"
+  fi
+  # Independent admin-native Guest observation for a known, disposable,
+  # exact UUID. Read only a fixed test marker's line count, no output bytes.
+  if grep -Fq 'BH018_MCP_FAIL: unexpected stdout for original' "$work/bh018-atomic-resume.log"; then
+    observed_uuid="$(sudo incus config get bw-s2-bh018-atomic-native volatile.uuid --project "$project" 2>/dev/null || :)"
+    expected_uuid="$(python3 - "$bh018_checkpoint" <<'S4_BH018_EXPECT_UUID'
+import json,sys
+try:
+    print(json.load(open(sys.argv[1]))["box_id"])
+except (OSError,ValueError,KeyError):
+    print("")
+S4_BH018_EXPECT_UUID
+)"
+    if [ -n "$expected_uuid" ] && [ "$expected_uuid" = "$observed_uuid" ]; then
+      for exit_case in 126 127; do
+        if count="$(sudo incus exec bw-s2-bh018-atomic-native --project "$project" -- /bin/sh -c "wc -l < /var/tmp/bh018-atomic-effect-$exit_case" 2>/dev/null)" &&
+            printf '%s' "$count" | grep -Eq '^[0-9]{1,8}$'; then
+          echo "BH018_INSTALLED_NATIVE_GUEST_MARKER_${exit_case}_LINES=$count"
+        else
+          echo "BH018_INSTALLED_NATIVE_GUEST_MARKER_${exit_case}_LINES=UNAVAILABLE"
+        fi
+      done
+    else
+      echo 'BH018_INSTALLED_NATIVE_GUEST_MARKER_WITNESS=UUID_UNVERIFIED'
+    fi
+  fi
   echo "BH018_INSTALLED_NORMAL_RESTART_MCP_VERIFIER=BLOCKED" >&2
   exit 96
 fi
@@ -660,6 +957,64 @@ grep -Fqx 'BH018_NATIVE_REAL_HTTP_MCP_ATOMIC_RESTART_AND_CLEANUP=PASS' "$work/bh
 grep '^BH018_MCP_' "$work/bh018-atomic-resume.log"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS"
+
+if [ "${S4_A_RAW_WITNESS:-}" = true ]; then
+  # The pre-dispatch native subscription survives controller restart and
+  # records the original Delete even if Incus expires its object immediately.
+  digest="$(printf %s s2-bh018-atomic-native-delete-001 | sha256sum | cut -d' ' -f1)"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+    -u XDG_CONFIG_HOME HOME=/home/boxweave \
+    XDG_CONFIG_HOME=/home/boxweave/.config \
+    python3 "$work/s4-raw-operation-witness.py" \
+    --db "$db" --key-digest "$digest" --timeout-seconds 20 \
+    --events-jsonl "$work/ledger/s4-native-events.jsonl" > "$work/s4-raw-delete.json"
+  sudo runuser -u boxweave -- python3 - "$db" "$work/s4-raw-delete.json" <<'S4_DELETE_CHECK'
+import json,sqlite3,sys
+with open(sys.argv[2]) as handle:
+    record=json.load(handle)
+original=record.get("original_sqlite") or {}
+native=record.get("native_terminal") or {}
+assert record.get("observation")=="CAPTURED_TERMINAL", "original Delete terminal NOT_CAPTURED"
+assert record.get("original_id_matches") is True
+assert original["action"]=="box_delete" and original["state"]=="SUCCEEDED"
+assert original["native_operation_id"]==native["native_operation_id"]
+assert native["status_code"]==200 and native["error_present"] is False
+with sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True) as db:
+    tombstone=db.execute("SELECT state,deleted_by_operation_id,deleted_at FROM owned_boxes WHERE uuid=? AND project=?",(original["box_uuid"],original["project"])).fetchone()
+    assert tombstone and tombstone[0]=="DELETED" and tombstone[1]==original["operation_id"] and tombstone[2]>0
+    assert db.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED'",(original["operation_id"],)).fetchone()[0]==1
+    assert db.execute("SELECT COUNT(*) FROM operations WHERE action='box_delete' AND box_uuid=?",(original["box_uuid"],)).fetchone()[0]==1
+    # Witnesses may have captured a VERIFYING journal before the terminal
+    # transaction. Independently re-read exact originals after cleanup.
+    from pathlib import Path
+    for case,action,guest_exit in (("create","box_create",None),("exit126","box_exec",126),("exit127","box_exec",127)):
+        with (Path(sys.argv[2]).parent/("s4-raw-"+case+".json")).open() as handle:
+            earlier=json.load(handle)
+        prior=earlier.get("original_sqlite") or {}
+        terminal=earlier.get("native_terminal") or {}
+        assert earlier.get("observation")=="CAPTURED_TERMINAL"
+        row=db.execute("SELECT action,state,layer,box_uuid,native_operation_id FROM operations WHERE id=?",(prior["operation_id"],)).fetchone()
+        assert row==(action,"SUCCEEDED",original["project"],original["box_uuid"],terminal["native_operation_id"])
+        assert prior["native_operation_id"]==terminal["native_operation_id"]
+        if guest_exit is not None:
+            assert db.execute("SELECT exit_code FROM exec_outputs WHERE operation_id=?",(prior["operation_id"],)).fetchone()==(guest_exit,)
+        else:
+            assert terminal["status_code"]==200 and terminal["error_present"] is False
+print("S4_A_RAW_CREATE_EXEC_FINAL_SQLITE_UUID_EXIT_CORRELATION=PASS")
+print("S4_A_RAW_DELETE_BW_ID="+original["operation_id"]+" NATIVE_ID="+native["native_operation_id"]+" BOX_UUID="+original["box_uuid"]+" PROJECT="+original["project"])
+print("S4_A_RAW_DELETE_TERMINAL_ATOMIC_TOMBSTONE_SINGLE_ORIGINAL=PASS")
+S4_DELETE_CHECK
+  # The observer must remain connected through the OAuth refresh/once
+  # effect. Stop only the test-owned stream after independent checks.
+  sudo runuser -u boxweave -- touch "$work/ledger/s4-native-events-stop"
+  if ! wait "$s4_event_tap_pid"; then
+    echo "S4_A_RAW_NATIVE_EVENT_STREAM=DISCONNECTED" >&2
+    exit 94
+  fi
+  s4_event_tap_pid=""
+  echo "S4_A_RAW_NATIVE_EVENT_STREAM=PASS"
+fi
+
 
 # Independently kill the exact disposable BoxWeave service WHILE a native
 # guest Exec (whose original native ID is already durably acknowledged) runs.
@@ -1068,6 +1423,7 @@ sudo incus delete bw-s2-bh018-after-cut --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo 'BH018_INSTALLED_SERVICE_AFTER_WAL_FSYNC_ACKLOSS_RECOVERY=PASS'
 
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_MATRIX_START"
 # The installed candidate must refuse arbitrary/foreign SQLite histories
 # BEFORE altering any byte or issuing an Incus mutation. A one-use lab DB
 # is intentionally constructed independently from the running journal.
@@ -1099,7 +1455,9 @@ for path,version,extra_row in ((legacy,0,False),(ambiguous,1,True),(versioned_fo
 for path in sys.argv[1:]:
     os.chmod(path,0o600)
 PY
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_FIXTURES_CREATED"
 for case in foreign corrupt legacy ambiguous versioned_foreign; do
+  [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_NEGATIVE_${case}_START"
   case "$case" in
     foreign) f="$foreign_db" ;;
     corrupt) f="$corrupt_db" ;;
@@ -1118,9 +1476,11 @@ for case in foreign corrupt legacy ambiguous versioned_foreign; do
     echo "S2_NATIVE_FAIL: foreign SQLite bytes modified during refusal: $case" >&2
     exit 95
   fi
+  [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=FOREIGN_SQLITE_NEGATIVE_${case}_PASS"
 done
 echo "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED=PASS"
 echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_NEW_DISPOSABLE_DB_START"
 
 # Deliberate ACK loss after the REAL Incus server accepts a Create. This
 # does not retry or adopt any historical task; it uses a new independent
@@ -1128,6 +1488,7 @@ echo "S2_NATIVE_SQLITE_OLD_MULTIPLE_VERSION_AND_FOREIGN_TABLES_DENIED=PASS"
 # user/Project. The MITM Unix socket cannot access privileged daemon APIs.
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
 wait "$service_pid" 2>/dev/null || :
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PRIOR_SERVICE_TERMINATED"
 ack_proxy="$work/ledger/ack-proxy.sock"
 ack_marker="$work/ledger/ack-trap.txt"
 ack_db="$work/ledger/ack.sqlite"
@@ -1143,7 +1504,9 @@ until sudo test -S "$ack_proxy" || [ "$attempt" -ge 30 ]; do
   sleep 1
 done
 sudo test -S "$ack_proxy"
-sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" -role admin > "$work/ack-admin.secret"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PROXY_SOCKET_READY"
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" token-create -db "$ack_db" > "$work/ack-admin.secret"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_ONE_USE_CREDENTIAL_READY"
 chmod 0600 "$work/ack-admin.secret"
 ack_admin="$(sed -n 's/^token=//p' "$work/ack-admin.secret")"
 test -n "$ack_admin"
@@ -1163,8 +1526,10 @@ test "$attempt" -lt 40
 BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" start
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_CLIENT_PROBE_PASS"
 sudo grep -Fqx "UPSTREAM_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_PROXY_NATIVE_ACK_SUPPRESSED_ONCE"
 echo "S2_NATIVE_CREATE_REAL_INCUS_ACCEPTED_ACK_DROPPED=PASS"
 
 # Second oracle: independent daemon administrator verifies exactly one
@@ -1179,16 +1544,79 @@ until [ "$attempt" -ge 50 ]; do
   sleep 1
 done
 test -n "$ack_uuid"
-test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_NATIVE_UUID_READY"
+# The native daemon may expose volatile.uuid before its asynchronous Create
+# has become consistently visible to a separate inventory connection.
+# Retry READS ONLY: no second Create, no automatic adoption, no UNKNOWN replay.
+# The exact all-Projects singleton remains a non-negotiable safety gate.
+attempt=0
+inventory=""
+inventory_rc=0
+while [ "$attempt" -lt 45 ]; do
+  inventory_rc=0
+  inventory="$(sudo incus list --all-projects --format csv -c n 2>/dev/null)" || inventory_rc=$?
+  if [ "$inventory_rc" -eq 0 ] && [ "$inventory" = bw-s2-ack-native-110d ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  if [ "$inventory_rc" -ne 0 ]; then
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=READ_UNAVAILABLE" >&2
+  elif [ -z "$inventory" ]; then
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=EXPECTED_INSTANCE_NOT_LISTED" >&2
+  else
+    echo "S4_A_ACK_NATIVE_INVENTORY_CLASS=UNEXPECTED_OR_AMBIGUOUS_INSTANCES" >&2
+  fi
+  echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_INVENTORY_BLOCKED" >&2
+  exit 95
+fi
+test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_INDEPENDENT_NATIVE_INVENTORY_PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_EFFECT_EXISTS_INDEPENDENTLY=PASS"
 # Genuine accepted-but-unbound native Create is an explicit negative Delete
 # boundary: even an independently witnessed UUID cannot authorize adoption.
-BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_DELETE_REFUSAL_START"
+unbound_rc=0
+( BW_S2_ACK_NATIVE_UUID="$ack_uuid" BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
-  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete
-test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" unbound_delete ) \
+  > "$work/ack-unbound-delete.redacted.log" 2>&1 || unbound_rc=$?
+if [ "$unbound_rc" -ne 0 ]; then
+  if grep -Fq 'unbound real native UUID was deleted or adopted' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=REJECTION_MISSING" >&2
+  elif grep -Fq 'ACK-loss original lacked safe UNKNOWN lock' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_UNKNOWN_RECEIPT_DRIFT" >&2
+  elif grep -Fq 'original ACK loss never reached terminal safe UNKNOWN' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_UNKNOWN_NOT_READY" >&2
+  elif grep -Fq 'original accepted Create receipt missing' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=ORIGINAL_CHECKPOINT_MISSING" >&2
+  elif grep -Fq 'only private disposable MCP listener' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=CLIENT_ENDPOINT_SCOPE_MISMATCH" >&2
+  elif grep -Fq 'tool operation_get refused' "$work/ack-unbound-delete.redacted.log"; then
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=READ_REFUSED" >&2
+  else
+    echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=REDACTED_CLIENT_FAILURE" >&2
+  fi
+  if sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null |
+      grep -Fqx "$ack_uuid"; then
+    echo "S4_A_UNBOUND_DELETE_NATIVE_POSTREAD=ORIGINAL_UUID_RETAINED"
+  else
+    echo "S4_A_UNBOUND_DELETE_NATIVE_POSTREAD=UNVERIFIED_OR_MISSING"
+  fi
+  exit 94
+fi
+grep -Fqx 'S2_P1_REAL_UNBOUND_CREATE_UUID_DELETE_REFUSED_WITHOUT_REDISPATCH=PASS' "$work/ack-unbound-delete.redacted.log"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_DELETE_REFUSAL_PASS"
+if [ "$(sudo wc -l "$ack_marker" | awk '{print $1}')" != 1 ]; then
+  echo "S4_A_UNBOUND_DELETE_FAILURE_CLASS=UNEXPECTED_NATIVE_POST_COUNT" >&2
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_UNBOUND_NATIVE_POST_COUNT_PASS"
 
 # Reopen the SAME unknown journal; do not replay the original Create.
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_REOPEN_SAME_UNKNOWN_START"
 sudo pkill -TERM -u boxweave -f "^$work/boxweave serve" || :
 wait "$service_pid" 2>/dev/null || :
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config "$work/boxweave" serve -db "$ack_db" \
@@ -1204,12 +1632,71 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
-BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_CLIENT_START"
+resume_ack_rc=0
+( BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
-  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume
-test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 1
-test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
-test "$(sudo incus list --all-projects --format csv -c n)" = bw-s2-ack-native-110d
+  BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" resume ) \
+  > "$work/ack-resume.redacted.log" 2>&1 || resume_ack_rc=$?
+if [ "$resume_ack_rc" -ne 0 ]; then
+  echo "S4_A_ACK_RESTART_FAILURE_CLASS=REDACTED_ORIGINAL_REPLAY_ASSERTION" >&2
+  exit 94
+fi
+grep -Fqx 'S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY=PASS' "$work/ack-resume.redacted.log"
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_ORIGINAL_PASS"
+if [ "$(sudo wc -l "$ack_marker" | awk '{print $1}')" != 1 ]; then
+  echo "S4_A_ACK_RESTART_NATIVE_MARKER_COUNT=UNEXPECTED" >&2
+  exit 95
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_POST_COUNT_PASS"
+# This is a second independent native connection; the original daemon
+# Create may still be finishing when the original HTTP server reopens.
+# Only read native state. Never re-issue a Create or adopt UNKNOWN claims.
+attempt=0
+after_uuid=""
+uuid_read_rc=0
+while [ "$attempt" -lt 45 ]; do
+  uuid_read_rc=0
+  after_uuid="$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project" 2>/dev/null)" || uuid_read_rc=$?
+  if [ "$uuid_read_rc" -eq 0 ] && [ "$after_uuid" = "$ack_uuid" ]; then
+    break
+  fi
+  # A DIFFERENT nonempty UUID is a safety failure, not transient lag.
+  if [ -n "$after_uuid" ] && [ "$after_uuid" != "$ack_uuid" ]; then
+    echo "S4_A_ACK_RESTART_NATIVE_UUID=IDENTITY_DRIFT" >&2
+    exit 96
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  echo "S4_A_ACK_RESTART_NATIVE_UUID=UNAVAILABLE" >&2
+  exit 96
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_NATIVE_UUID_VERIFIED"
+attempt=0
+inventory=""
+inventory_rc=0
+while [ "$attempt" -lt 45 ]; do
+  inventory_rc=0
+  inventory="$(sudo incus list --all-projects --format csv -c n 2>/dev/null)" || inventory_rc=$?
+  if [ "$inventory_rc" -eq 0 ] && [ "$inventory" = bw-s2-ack-native-110d ]; then
+    break
+  fi
+  attempt=$((attempt+1))
+  sleep 1
+done
+if [ "$attempt" -ge 45 ]; then
+  if [ "$inventory_rc" -ne 0 ]; then
+    echo "S4_A_ACK_RESTART_INVENTORY=READ_UNAVAILABLE" >&2
+  elif [ -z "$inventory" ]; then
+    echo "S4_A_ACK_RESTART_INVENTORY=EXPECTED_INSTANCE_NOT_LISTED" >&2
+  else
+    echo "S4_A_ACK_RESTART_INVENTORY=UNEXPECTED_OR_AMBIGUOUS_INSTANCES" >&2
+  fi
+  exit 96
+fi
+[ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=ACK_LOSS_POSTRESTART_INDEPENDENT_INVENTORY_PASS"
 echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
 
 # Only this **one-use CI host administrator**, NOT BoxWeave's original
@@ -1219,6 +1706,7 @@ echo "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST=PASS"
 # Create can still be running when its UUID becomes visible. Inspect Incus
 # asynchronous operations read-only and wait for the REAL native Create to
 # settle before attempting cleanup. Never retry the original MCP mutation.
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_NATIVE_SETTLEMENT_START"
 attempt=0
 while [ "$attempt" -lt 120 ]; do
   if sudo incus operation list --project "$project" --format json |
@@ -1234,7 +1722,12 @@ if [ "$attempt" -ge 120 ]; then
   sudo incus info bw-s2-ack-native-110d --project "$project" || :
   exit 96
 fi
-test "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" = "$ack_uuid"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_NATIVE_SETTLEMENT_PASS"
+if [ "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$project")" != "$ack_uuid" ]; then
+  echo "S4_A_ACK_BIND_UUID=IDENTITY_MISMATCH" >&2
+  exit 96
+fi
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_BIND_UUID_PASS"
 # Genuine native Create accepted once, its ACK lost, and the original
 # controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
 # SQLite copy; original remains immutable and receives no retry/delete.
@@ -1245,14 +1738,30 @@ assert len(op)==32
 print(op)
 PY_SCRIPT
 )"
-test "$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")" = "$ack_original_id"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_CHECKPOINT_READ"
+ack_native_marker="$(sudo incus config get bw-s2-ack-native-110d user.boxweave.create_operation --project "$project")"
+if [ "$ack_native_marker" != "$ack_original_id" ]; then
+  if [ -z "$ack_native_marker" ]; then
+    echo "S4_A_ACK_BIND_MARKER=MISSING" >&2
+  else
+    echo "S4_A_ACK_BIND_MARKER=ORIGINAL_MISMATCH" >&2
+  fi
+  exit 96
+fi
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_BIND_MARKER_PASS"
 echo "S2_NATIVE_CREATE_REAL_LOST_ACK_ORIGINAL_MARKER=PASS"
 ack_copy="$work/ledger/unknown-create-bind-copy"
-sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"
+if ! sudo install -d -m 0700 -o boxweave -g incus "$ack_copy"; then
+  echo "S4_A_ACK_BIND_COPY=DIRECTORY_UNAVAILABLE" >&2
+  exit 96
+fi
 # The original checkpoint belongs to the runner and is deliberately 0600.
 # Give the restricted probe ONLY a new exact byte-copy owned by its UID.
-sudo install -m 0600 -o boxweave -g incus "$ack_checkpoint" "$ack_copy/ack-original.json"
-sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
+if ! sudo install -m 0600 -o boxweave -g incus "$ack_checkpoint" "$ack_copy/ack-original.json"; then
+  echo "S4_A_ACK_BIND_COPY=CHECKPOINT_UNAVAILABLE" >&2
+  exit 96
+fi
+if ! sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_copy/ledger.sqlite" <<'PY_SCRIPT'
 import sqlite3,sys
 src,dst=sys.argv[1:]
 with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
@@ -1260,26 +1769,43 @@ with sqlite3.connect(f"file:{src}?mode=ro",uri=True) as original:
     with sqlite3.connect(dst) as copy:
         original.backup(copy)
 PY_SCRIPT
+then
+  echo "S4_A_ACK_BIND_COPY=SQLITE_BACKUP_UNAVAILABLE" >&2
+  exit 96
+fi
 sudo chmod 0600 "$ack_copy/ledger.sqlite"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_READY"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
   "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_BIND_PASS"
 # This original database remains truly unbound UNKNOWN; the test binding
 # happened ONLY on a disposable standalone copy.
-test "$(sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
+if ! sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
 import sqlite3,sys
 db,op=sys.argv[1:]
 with sqlite3.connect(f"file:{db}?mode=ro",uri=True) as c:
-    print(c.execute("SELECT state||':'||box_uuid FROM operations WHERE id=?",(op,)).fetchone()[0])
+    row=c.execute("SELECT state,box_uuid,incarnation,native_operation_id FROM operations WHERE id=?",(op,)).fetchone()
+    owned=c.execute("SELECT COUNT(*) FROM owned_boxes").fetchone()[0]
+    valid=row==("UNKNOWN","","","") and owned==0
+    print("S4_A_ACK_ORIGINAL_SQLITE_UNBOUND="+("PASS" if valid else "MISMATCH"))
+    if not valid:
+        print("S4_A_ACK_ORIGINAL_SQLITE_ROW_PRESENT="+str(row is not None)+" OWNED_ROWS="+str(owned))
+    sys.exit(0 if valid else 1)
 PY_SCRIPT
-)" = "UNKNOWN:"
+then
+  echo "S4_A_ACK_ORIGINAL_SQLITE_UNCHANGED=FAIL" >&2
+  exit 96
+fi
 echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_VERIFIED_BIND_COPY=PASS"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_SQLITE_UNCHANGED_PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_ADMIN_TEARDOWN_PASS"
 
 # Same isolated native/proxy service, a separate new Box and request keys.
 # Advance the real native ETag just between S2's GetInstance and
@@ -1287,6 +1813,7 @@ echo "S2_NATIVE_CREATE_ACK_LOSS_FIXTURE_ADMIN_TEARDOWN=PASS"
 BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" etag
+echo "S4_A_NATIVE_STAGE=ACK_PROXY_ETAG_PASS"
 sudo grep -Fqx "ETAG_FIXTURE_CREATE_FORWARDED" "$ack_marker"
 sudo grep -Fqx "ETAG_RACE_NATIVE_CHANGED_BEFORE_STALE_PUT" "$ack_marker"
 sudo grep -Fqx "ETAG_RACE_ORIGINAL_STALE_PUT_REFUSED" "$ack_marker"
@@ -1328,6 +1855,7 @@ BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
   BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack
+echo "S4_A_NATIVE_STAGE=ACK_PROXY_UPDATE_ACK_PASS"
 sudo grep -Fqx "UPDATE_ACK_FIXTURE_CREATE_FORWARDED" "$ack_marker"
 sudo grep -Fqx "UPDATE_ACK_NATIVE_ACCEPTED_ONCE_AND_ACK_SUPPRESSED" "$ack_marker"
 if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
@@ -1377,6 +1905,7 @@ BW_S2_UPDATE_ACK_STATE_FILE="$update_ack_checkpoint" \
   BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" update_ack_resume
+echo "S4_A_NATIVE_STAGE=ACK_PROXY_UPDATE_ACK_RESUME_PASS"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 6
 if sudo grep -q 'UNEXPECTED_SECOND' "$ack_marker"; then
   echo "S2_NATIVE_FAIL: Update retransmitted after same-SQLite restart" >&2
@@ -1396,6 +1925,7 @@ BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
   BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread
+echo "S4_A_NATIVE_STAGE=ACK_PROXY_POSTREAD_PASS"
 for event in POSTREAD_FIXTURE_CREATE_FORWARDED POSTREAD_NATIVE_UPDATE_202_ACK_DELIVERED POSTREAD_AFTER_NATIVE_ACK_INSTANCE_GET_REFUSED_ONCE; do
   sudo grep -Fqx "$event" "$ack_marker"
 done
@@ -1439,6 +1969,7 @@ BW_S2_POSTREAD_STATE_FILE="$postread_checkpoint" \
   BW_S2_ACK_STATE_FILE="$ack_checkpoint" \
   BW_S2_MCP_URL="http://127.0.0.1:18652/mcp" \
   BW_S2_ADMIN_TOKEN="$ack_admin" "$work/s2-ack-loss-probe" postread_resume
+echo "S4_A_NATIVE_STAGE=ACK_PROXY_POSTREAD_RESUME_PASS"
 test "$(sudo wc -l "$ack_marker" | awk '{print $1}')" = 9
 test "$(sudo incus config get bw-s2-update-postread-native-110g volatile.uuid --project "$project")" = "$postread_uuid"
 test "$(sudo incus config get bw-s2-update-postread-native-110g limits.cpu --project "$project")" = 2
@@ -1595,7 +2126,7 @@ mkdir -m 0700 "$work/mcp-quota-ledger"
 sudo chown boxweave:incus "$work/mcp-quota-ledger"
 mcp_quota_db="$work/mcp-quota-ledger/ledger.sqlite"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  "$work/boxweave" token-create -db "$mcp_quota_db" -role admin > "$work/mcp-quota-admin.secret"
+  "$work/boxweave" token-create -db "$mcp_quota_db" > "$work/mcp-quota-admin.secret"
 chmod 0600 "$work/mcp-quota-admin.secret"
 mcp_quota_token="$(sed -n 's/^token=//p' "$work/mcp-quota-admin.secret")"
 test -n "$mcp_quota_token"
@@ -1718,6 +2249,17 @@ echo "S2_MCP_REAL_GUEST_QUOTA_ORIGINAL_RECEIPT_OUTPUT_EXIT_ONE=PASS"
 # This is an independent deliberate log-loss negative, NOT automatic GC.
 sudo incus query -X DELETE "/1.0/instances/$mcp_quota_name/logs/exec-output/exec_$mcp_native.stdout?project=$project"   > "$work/mcp-quota-native-log-delete.json"
 sudo test ! -f "$mcp_output_file"
+# Native log loss alone now has a private 1 MiB archive fallback; verify it.
+s2_mcp_quota archive > "$work/mcp-quota-native-archived.txt"
+grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX=PASS' "$work/mcp-quota-native-archived.txt"
+echo "S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_ARCHIVE_PREFIX=PASS"
+# Deliberately remove ONLY the exact disposable original archive, to retain
+# the old real no-native/no-archive typed-unavailable negative.
+mcp_archive_file="$mcp_quota_db.exec-archive/$mcp_original.stdout"
+sudo test -f "$mcp_archive_file"
+test "$(sudo stat -c '%s' "$mcp_archive_file")" -eq 1048576
+sudo -u boxweave rm -- "$mcp_archive_file"
+sudo test ! -e "$mcp_archive_file"
 s2_mcp_quota missing > "$work/mcp-quota-native-missing.txt"
 grep -Fqx 'S2_MCP_EXACT_ORIGINAL_NATIVE_LOG_MISSING_TYPED_UNAVAILABLE=PASS'   "$work/mcp-quota-native-missing.txt"
 echo "S2_MCP_NATIVE_OUTPUT_404_TYPED_WITHOUT_FALSE_EXPIRY=PASS"
@@ -1852,7 +2394,7 @@ until [ "$attempt" -ge 40 ]; do
 done
 test "$attempt" -lt 40
 s2_gc loss-check > "$work/s2-gc-loss-public.txt"
-grep -Fqx "S2_GC_PUBLIC_LOST_ACK_MISSING_NOT_EXPIRED_SIBLING_AVAILABLE=PASS" "$work/s2-gc-loss-public.txt"
+grep -Fqx "S2_GC_PUBLIC_LOST_ACK_TTL_ELAPSED_NOT_PHYSICAL_EXPIRY=PASS" "$work/s2-gc-loss-public.txt"
 echo "S2_GC_LOST_NATIVE_DELETE_ACK_SAME_SQLITE_RESTART_NO_FALSE_EXPIRY=PASS"
 
 s2_mcp_quota cleanup > "$work/mcp-quota-cleanup.txt"
@@ -1879,7 +2421,7 @@ for phase in before after; do
   fsync_witness="$fsync_dir/sync-triggered"
   sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
     HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-    "$work/boxweave" token-create -db "$fsync_db" -role admin \
+    "$work/boxweave" token-create -db "$fsync_db" \
     > "$work/fsync-$phase-admin.secret"
   chmod 0600 "$work/fsync-$phase-admin.secret"
   fsync_token="$(sed -n 's/^token=//p' "$work/fsync-$phase-admin.secret")"
@@ -1939,7 +2481,7 @@ test "$(sudo stat -Lc '%d' "$sqlite_full_dir")" != "$(stat -Lc '%d' /)"
 sqlite_full_db="$sqlite_full_dir/ledger.sqlite"
 sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
-  "$work/boxweave" token-create -db "$sqlite_full_db" -role admin \
+  "$work/boxweave" token-create -db "$sqlite_full_db" \
   > "$work/sqlite-full-admin.secret"
 chmod 0600 "$work/sqlite-full-admin.secret"
 sqlite_full_token="$(sed -n 's/^token=//p' "$work/sqlite-full-admin.secret")"
@@ -1966,22 +2508,42 @@ sudo umount "$sqlite_full_dir"
 sudo losetup -d "$sqlite_full_loop"
 echo "S2_SQLITE_ACTUAL_ISOLATED_EXT4_ENOSPC_RECOVERY_UNKNOWN_NO_REPLAY=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
+echo "S4_A_NATIVE_STAGE=S2_P0_NATIVE_SQLITE_FAULT_START"
 sh scripts/s2_p0_native_sqlite_fault.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P0_NATIVE_SQLITE_FAULT_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P1_STOP_DELETE_FAULT_START"
 sh scripts/s2_p1_stop_delete_fault.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P1_STOP_DELETE_FAULT_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P1_TOKEN_INFLIGHT_START"
 sh scripts/s2_p1_token_inflight.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P1_TOKEN_INFLIGHT_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P1_OPERATION_LIST_BOUNDARY_START"
 sh scripts/s2_p1_operation_list_boundary.sh "$work" "$project" "$socket"
-# This separate test-only Go overlay adds ONE post-RegisterCreatedBox COMMIT
-# pause in an independently compiled disposable binary, without altering
+echo "S4_A_NATIVE_STAGE=S2_P1_OPERATION_LIST_BOUNDARY_PASS"
+# This separate test-only Go overlay adds ONE native-verified, pre-atomic
+# Create pause in an independently compiled disposable binary, without altering
 # the original release candidate used by the complete native suite. Unlike
-# prior GDB source-line experiments, its exact post-bind boundary is
+# prior GDB source-line experiments, its exact unbound precommit boundary is
 # verified by independent SQLite + Incus before 12 real MCP Deletes.
 # A failure is a real required CI failure, not an invented S2 PASS.
+echo "S4_A_NATIVE_STAGE=OVERLAP_START"
 sh scripts/s2_p1_native_create_delete_overlap.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=OVERLAP_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P1_TWO_CONTROLLERS_START"
 sh scripts/s2_p1_two_controllers.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P1_TWO_CONTROLLERS_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P1_PRIVATE_READ_INFLIGHT_START"
 sh scripts/s2_p1_private_read_inflight.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P1_PRIVATE_READ_INFLIGHT_PASS"
+echo "S4_A_NATIVE_STAGE=ATOMIC_CREATE_ROLLBACK_START"
 sh scripts/s2_p1_bound_create_receipt_fault.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=ATOMIC_CREATE_ROLLBACK_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P2_MALFORMED_EXEC_FAULT_START"
 sh scripts/s2_p2_malformed_exec_fault.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P2_MALFORMED_EXEC_FAULT_PASS"
+echo "S4_A_NATIVE_STAGE=S2_P2_ALTERNATE_POOL_START"
 sh scripts/s2_p2_alternate_pool.sh "$work" "$project" "$socket"
+echo "S4_A_NATIVE_STAGE=S2_P2_ALTERNATE_POOL_PASS"
 echo "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS"
 # S2's historical isolated RFC2544 198.18.0.2 simulated WAN is
 # intentionally run against its ORIGINAL legacy S2 native fixture. The

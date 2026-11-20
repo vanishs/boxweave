@@ -299,7 +299,7 @@ func s3ApprovedPackageProxy() string {
 	return raw
 }
 
-func runS3GuestGitPhase3(ctx context.Context, admin, viewer *mcp.ClientSession, uuid string) {
+func runS3GuestGitPhase3(ctx context.Context, admin, peer *mcp.ClientSession, uuid string) {
 	// One trusted attended Agent; no remote shared repo, network peer Tool
 	// or unsafe File replace. Guest has a native Git working tree.
 	const dir = "/root/s3-guest-git"
@@ -366,7 +366,7 @@ mkdir -p /root/s3-guest-git
 		id := originalID(r)
 		await(ctx, admin, id, "SUCCEEDED")
 		created = append(created, id)
-		need(bytes.Equal(fileBytes(ctx, viewer, uuid, v.path), []byte(v.data)),
+		need(bytes.Equal(fileBytes(ctx, peer, uuid, v.path), []byte(v.data)),
 			"Viewer could not independently read original Git source")
 	}
 	fmt.Println("S3_PHASE3_MCP_FILE_EXCLUSIVE_CREATE_TWO_SOURCE_FILES=PASS")
@@ -399,7 +399,7 @@ mkdir -p /root/s3-guest-git
 	need(fixExit == 0, "Guest authorized repair or Git second commit failed")
 	fixedCommit := gitCommitLine(fixOut, "S3_GIT_REPAIRED_COMMIT=")
 	need(fixedCommit != firstCommit, "Git final commit matches deliberately failing original")
-	need(bytes.Equal(fileBytes(ctx, viewer, uuid, dir+"/calc.py"), []byte(rightSource)),
+	need(bytes.Equal(fileBytes(ctx, peer, uuid, dir+"/calc.py"), []byte(rightSource)),
 		"File tool did not return corrected Guest source byte-for-byte")
 	passScript := "cd " + dir + "; python3 -B -m unittest -v test_calc"
 	passID, passExit, _, passErr := s3GuestExec(ctx, admin, uuid, "s3-git-passing-test-original-once", passScript)
@@ -520,8 +520,8 @@ func main() {
 		os.Getenv("BW_S3_PHASE3_MODE") == "stage", "unsupported S3 phase3 verifier mode")
 	admin := connect(ctx, "admin", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
 	defer admin.Close()
-	viewer := connect(ctx, "viewer", requiredEnv("BW_S3_VIEWER_TOKEN_FILE"))
-	defer viewer.Close()
+	peer := connect(ctx, "peer", requiredEnv("BW_S3_PEER_TOKEN_FILE"))
+	defer peer.Close()
 	t, err := admin.ListTools(ctx, nil)
 	if err != nil {
 		panic(err)
@@ -530,11 +530,11 @@ func main() {
 	for _, tool := range t.Tools {
 		names[tool.Name] = true
 	}
-	for _, n := range []string{"box_file_list", "box_file_read", "box_file_apply"} {
-		need(names[n], "missing File Tool "+n)
+	for _, n := range []string{"box_file_list", "box_file_read", "box_file_apply", "box_activity_get", "box_peer_set"} {
+		need(names[n], "missing RC8 Tool "+n)
 	}
-	need(len(names) == 16, "installed catalog is not exactly 16 after S3 phase1")
-	fmt.Println("S3_INSTALLED_16_TOOL_OFFICIAL_SDK_CATALOG=PASS")
+	need(len(names) == 22, "S4-B4 candidate must expose 22 Tools including public Activity and Forward")
+	fmt.Println("S3_INSTALLED_22_TOOL_OFFICIAL_SDK_CATALOG=PASS")
 	// One and only one new disposable owned Box. No shared user Boxes,
 	// L0-L5 historical resources, or parent Incus credential delegation.
 	const name = "s3-file-phase2-ci"
@@ -596,9 +596,9 @@ func main() {
 	need(ok && len(entries) == 2 && field(listing, "next_cursor") != "",
 		"bounded non-snapshot File listing did not paginate")
 	need(bytes.Equal(bytesRead, []byte("S3_PHASE2_VICTIM_LOCKED")), "native original victim mismatch")
-	need(bytes.Equal(fileBytes(ctx, viewer, uuid, base+"/victim"), bytesRead),
+	need(bytes.Equal(fileBytes(ctx, peer, uuid, base+"/victim"), bytesRead),
 		"authorized Viewer read did not return original Guest bytes")
-	fmt.Println("S3_INSTALLED_FILE_LIST_PAGINATION_ADMIN_VIEWER_READ=PASS")
+	fmt.Println("S3_INSTALLED_FILE_LIST_PAGINATION_ADMIN_PEER_READ=PASS")
 	hugeFixture := "mkdir -p /root/s3-file-phase2/many; " +
 		"i=0; while [ \"$i\" -lt 6000 ]; do " +
 		": > /root/s3-file-phase2/many/entry-$i; i=$((i+1)); done"
@@ -651,10 +651,16 @@ func main() {
 	changed["content_base64"] = base64.StdEncoding.EncodeToString([]byte("CHANGED"))
 	need(rejects(ctx, admin, "box_file_apply", changed), "same key accepted different content")
 	fmt.Println("S3_INSTALLED_MCP_FILE_EXCLUSIVE_CREATE_ORIGINAL_ONCE=PASS")
-	need(rejects(ctx, viewer, "box_file_apply", map[string]any{
-		"box_id": uuid, "path": base + "/viewer-forbidden", "mode": "create",
-		"idempotency_key": "s3-viewer-denied-file-create",
-	}), "Viewer performed a native write")
+	// A second approved Actor may perform an owned guest-file mutation.
+	peerBytes := []byte("S3_INDEPENDENT_ACTOR_CREATE_OK")
+	peerCreate := call(ctx, peer, "box_file_apply", map[string]any{
+		"box_id": uuid, "path": base + "/peer-created", "mode": "create",
+		"content_base64":  base64.StdEncoding.EncodeToString(peerBytes),
+		"idempotency_key": "s3-peer-file-create-verified-01",
+	})
+	await(ctx, peer, originalID(peerCreate), "SUCCEEDED")
+	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/peer-created"), peerBytes),
+		"independent authorized Actor's guest-file Create not readable")
 	for _, mode := range []string{"replace", "delete"} {
 		need(rejects(ctx, admin, "box_file_apply", map[string]any{
 			"box_id": uuid, "path": base + "/victim", "mode": mode,
@@ -663,7 +669,7 @@ func main() {
 	}
 	need(bytes.Equal(fileBytes(ctx, admin, uuid, base+"/victim"), bytesRead),
 		"unsafe file mode modified original Guest bytes")
-	fmt.Println("S3_INSTALLED_VIEWER_AND_UNSUPPORTED_CAS_DENIAL=PASS")
+	fmt.Println("S3_INSTALLED_PEER_FILE_CREATE_AND_UNSUPPORTED_CAS_DENIAL=PASS")
 	for i, path := range []string{base + "/victim", base + "/sym", base + "/hard", base + "/fifo", "/root/s3-file-phase2-link/new"} {
 		input := map[string]any{
 			"box_id": uuid, "path": path, "mode": "create",
@@ -688,7 +694,7 @@ func main() {
 		"denied Create retained false resource lock")
 	fmt.Println("S3_INSTALLED_MCP_POST_DENIAL_LOCK_RELEASE=PASS")
 	if os.Getenv("BW_S3_PHASE3_MODE") == "stage" {
-		runS3GuestGitPhase3(ctx, admin, viewer, uuid)
+		runS3GuestGitPhase3(ctx, admin, peer, uuid)
 		// The same negative and idempotency matrix already passed before
 		// staging the supervised Git fixture. Emit its normal CI marker.
 		fmt.Println("S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY=PASS")

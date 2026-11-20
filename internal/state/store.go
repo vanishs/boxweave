@@ -19,17 +19,17 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 5
 
-// Pre-release schema v2: fresh pilots only; historical v1 SQLite is refused.
+// Pre-release schema v5: fresh pilots only; older SQLite schemas are refused.
 // The OAuth slice must be independently staged with a clean pilot database.
 // Both tables and indexes are exact-fingerprinted; old S1 test DBs are refused,
 // never silently migrated, adopted or deleted. Once deployed, schema changes
 // will require reviewed migration and rollback.
 var schemaDDL = []string{
 	"CREATE TABLE schema_version (version INTEGER NOT NULL)",
-	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
-	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(project,name,incarnation))",
+	"CREATE TABLE credentials (id TEXT PRIMARY KEY, token_digest TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE owned_boxes (uuid TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, deleted_by_operation_id TEXT NOT NULL DEFAULT '', deleted_at INTEGER NOT NULL DEFAULT 0, UNIQUE(project,name,incarnation))",
 	"CREATE TABLE operations (id TEXT PRIMARY KEY, tracking_id TEXT NOT NULL, request_id TEXT NOT NULL, layer TEXT NOT NULL, actor_id TEXT NOT NULL, token_id TEXT NOT NULL, key_digest TEXT NOT NULL, action TEXT NOT NULL, intent_digest TEXT NOT NULL, safe_intent BLOB NOT NULL, work_ref TEXT NOT NULL DEFAULT '', agent_ref TEXT NOT NULL DEFAULT '', resource_key TEXT NOT NULL DEFAULT '', box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_operation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL, error_class TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(layer,actor_id,key_digest))",
 	"CREATE TABLE operation_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, state TEXT NOT NULL, safe_detail TEXT NOT NULL DEFAULT '')",
 	"CREATE TABLE recovery_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL REFERENCES operations(id), at INTEGER NOT NULL, reviewer TEXT NOT NULL, decision TEXT NOT NULL, evidence_digest TEXT NOT NULL)",
@@ -39,12 +39,17 @@ var schemaDDL = []string{
 	"CREATE TABLE exec_output_gc_audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, stream TEXT NOT NULL, at INTEGER NOT NULL, event TEXT NOT NULL CHECK(event IN ('BEFORE_DELETE','EXPIRED','REVIEW_REQUIRED','RECOVERED_UNCERTAIN','CHALLENGE_ISSUED','REVIEWED_RELEASED')), reviewer TEXT NOT NULL DEFAULT '', evidence_digest TEXT NOT NULL DEFAULT '', FOREIGN KEY(operation_id,stream) REFERENCES exec_output_gc(operation_id,stream))",
 	"CREATE TABLE oauth_config (id INTEGER PRIMARY KEY CHECK(id=1), public_origin TEXT NOT NULL DEFAULT '', password_hash TEXT NOT NULL DEFAULT '', epoch INTEGER NOT NULL DEFAULT 1)",
 	"CREATE TABLE oauth_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, redirects TEXT NOT NULL, created_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_pending (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, scope TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL, expires_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_codes (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, expires_at INTEGER NOT NULL)",
-	"CREATE TABLE oauth_grants (id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), role TEXT NOT NULL CHECK(role IN ('admin','viewer')), resource TEXT NOT NULL, epoch INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_pending (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, state TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_codes (digest TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+	"CREATE TABLE oauth_grants (id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(id), resource TEXT NOT NULL, epoch INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
 	"CREATE TABLE oauth_access (token_id TEXT PRIMARY KEY REFERENCES credentials(id), grant_id TEXT NOT NULL REFERENCES oauth_grants(id))",
 	"CREATE TABLE oauth_refresh (digest TEXT PRIMARY KEY, grant_id TEXT NOT NULL REFERENCES oauth_grants(id), expires_at INTEGER NOT NULL)",
 	"CREATE TABLE oauth_attempts (at INTEGER NOT NULL, kind TEXT NOT NULL)",
+	"CREATE TABLE operation_resource_claims (operation_id TEXT NOT NULL REFERENCES operations(id), layer TEXT NOT NULL, resource_key TEXT NOT NULL, PRIMARY KEY(operation_id,resource_key))",
+	"CREATE TABLE network_bindings (project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, nic TEXT NOT NULL, bridge TEXT NOT NULL, acl TEXT NOT NULL, mac TEXT NOT NULL, ipv4 TEXT NOT NULL, ipv6 TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('OBSERVED','PINNED','QUARANTINED','RELEASED')), observed_at INTEGER NOT NULL, PRIMARY KEY(project,box_uuid,incarnation,nic))",
+	"CREATE TABLE network_address_fences (bridge TEXT NOT NULL, family TEXT NOT NULL CHECK(family IN ('ipv4','ipv6')), address TEXT NOT NULL, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('RESERVED','QUARANTINED','RELEASED')), operation_id TEXT NOT NULL DEFAULT '', observed_at INTEGER NOT NULL, PRIMARY KEY(bridge,family,address))",
+	"CREATE TABLE peer_grants (project TEXT NOT NULL, source_uuid TEXT NOT NULL, source_incarnation TEXT NOT NULL, target_uuid TEXT NOT NULL, target_incarnation TEXT NOT NULL, desired INTEGER NOT NULL CHECK(desired IN (0,1)), status TEXT NOT NULL CHECK(status IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), source_ipv4 TEXT NOT NULL DEFAULT '', target_ipv4 TEXT NOT NULL DEFAULT '', source_ipv6 TEXT NOT NULL DEFAULT '', target_ipv6 TEXT NOT NULL DEFAULT '', acl_generation TEXT NOT NULL DEFAULT '', operation_id TEXT NOT NULL DEFAULT '', last_verified_operation_id TEXT REFERENCES operations(id), PRIMARY KEY(project,source_uuid,source_incarnation,target_uuid,target_incarnation))",
+	"CREATE TABLE forward_claims (forward_id TEXT PRIMARY KEY, project TEXT NOT NULL, box_uuid TEXT NOT NULL, incarnation TEXT NOT NULL, native_device TEXT NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('tcp','udp')), host_bind TEXT NOT NULL, host_port INTEGER NOT NULL CHECK(host_port BETWEEN 1 AND 65535), guest_port INTEGER NOT NULL CHECK(guest_port BETWEEN 1 AND 65535), guest_ip TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('PENDING','CONFIRMED','UNKNOWN','REVOKED')), operation_id TEXT NOT NULL DEFAULT '')",
 }
 
 var schemaIndexes = []string{
@@ -53,6 +58,8 @@ var schemaIndexes = []string{
 	"CREATE INDEX operations_work_time ON operations(layer,work_ref,created_at,id)",
 	"CREATE INDEX operations_agent_time ON operations(layer,agent_ref,created_at,id)",
 	"CREATE INDEX operations_state_time ON operations(layer,state,created_at,id)",
+	"CREATE INDEX operation_events_op_seq ON operation_events(operation_id,seq)",
+	"CREATE INDEX recovery_audit_op_seq ON recovery_audit(operation_id,seq)",
 	"CREATE INDEX operations_resource_claim ON operations(layer,resource_key,state)",
 	"CREATE UNIQUE INDEX owned_active_name ON owned_boxes(project,name) WHERE state='OWNED'",
 	"CREATE INDEX exec_output_gc_box_status ON exec_output_gc(project,box_uuid,state)",
@@ -61,6 +68,13 @@ var schemaIndexes = []string{
 	"CREATE INDEX oauth_access_grant ON oauth_access(grant_id)",
 	"CREATE INDEX oauth_refresh_grant ON oauth_refresh(grant_id)",
 	"CREATE INDEX oauth_attempts_kind_time ON oauth_attempts(kind,at)",
+	"CREATE INDEX operation_resource_key_state ON operation_resource_claims(layer,resource_key)",
+	"CREATE UNIQUE INDEX network_bindings_pinned_v4 ON network_bindings(bridge,ipv4) WHERE state='PINNED' AND ipv4!=''",
+	"CREATE UNIQUE INDEX network_bindings_pinned_v6 ON network_bindings(bridge,ipv6) WHERE state='PINNED' AND ipv6!=''",
+	"CREATE UNIQUE INDEX network_bindings_pinned_mac ON network_bindings(bridge,mac) WHERE state='PINNED' AND mac!=''",
+	"CREATE INDEX network_address_fences_owner_state ON network_address_fences(project,box_uuid,state)",
+	"CREATE INDEX peer_grants_target_state ON peer_grants(project,target_uuid,status)",
+	"CREATE UNIQUE INDEX forward_claims_active_listener ON forward_claims(host_bind,protocol,host_port) WHERE state!='REVOKED'",
 }
 
 var (
@@ -72,11 +86,25 @@ var (
 	ErrResourceLocked = errors.New("original unresolved resource claim is still locked")
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db             *sql.DB
+	execArchiveDir string
+	// auditReadOnly is set only by the validated existing-owner,
+	// SQLite mode=ro / query_only root-side audit constructor.
+	auditReadOnly bool
+}
+
+// IsNetworkAuditReadOnly distinguishes a protected root witness handle from
+// an ordinary writable service Store. It does not grant OS privileges.
+func (s *Store) IsNetworkAuditReadOnly() bool {
+	return s != nil && s.db != nil && s.auditReadOnly
+}
 
 type Token struct {
-	ID      string
-	Role    string
+	ID string
+	// ActorID is stable for an OAuth grant; ID is the individual access credential.
+	// A manual Bearer token remains its own actor.
+	ActorID string
 	Expires time.Time
 	Revoked bool
 }
@@ -96,8 +124,14 @@ type Admission struct {
 	// ResourceKey is a typed, domain-constructed per-native-Box name lock, never
 	// a caller-provided arbitrary SQL scope. It survives create before UUID exists.
 	ResourceKey string
-	WorkRef     string
-	AgentRef    string
+	// ResourceKeys are additional typed locks acquired atomically with admission.
+	// Peer operations require both Boxes and the exact shared ACL.
+	ResourceKeys        []string
+	ForwardCreate       *ForwardCreateAdmission
+	ForwardDeleteID     string
+	CleanupDependencies bool // Typed internal Box Delete admission only.
+	WorkRef             string
+	AgentRef            string
 }
 
 type Receipt struct {
@@ -183,132 +217,145 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: db, execArchiveDir: path + ".exec-archive"}
 	if err := s.init(flags&os.O_EXCL != 0); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
 }
+func (s *Store) ExecArchiveDir() string {
+	if s == nil {
+		return ""
+	}
+	return s.execArchiveDir
+}
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) init(fresh bool) error {
-	if !fresh {
-		// Inspect existing files with read-only SQL BEFORE any journal mode,
-		// DDL or migration: never modify a foreign/unversioned database.
-		var n int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
-			return err
-		}
-		if n != 1 {
-			return fmt.Errorf("existing database missing version: refuse foreign adoption")
-		}
-		var version int
-		if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
-			return err
-		}
-		if version != SchemaVersion {
-			return fmt.Errorf("unsupported schema %d; refuse automatic migration", version)
-		}
-		// A LIMIT 1 version read alone can hide a second conflicting migration
-		// record. Never choose one history or adopt unknown application tables.
-		var versionRows int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
-			return err
-		}
-		if versionRows != 1 {
-			return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
-		}
-		rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
-		if err != nil {
-			return err
-		}
-		actualTables := make(map[string]bool)
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			actualTables[name] = true
-		}
-		if err := rows.Err(); err != nil {
+func (s *Store) validateExistingSchema() error {
+	// Inspect existing files with read-only SQL BEFORE any journal mode,
+	// DDL or migration: never modify a foreign/unversioned database.
+	var n int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'").Scan(&n); err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("existing database missing version: refuse foreign adoption")
+	}
+	var version int
+	if err := s.db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version); err != nil {
+		return err
+	}
+	if version != SchemaVersion {
+		return fmt.Errorf("unsupported schema %d (expected %d): pre-release database is incompatible; preserve unresolved original/UNKNOWN native operations, then recreate a fresh isolated controller environment with explicit reset approval; no automatic migration or deletion", version, SchemaVersion)
+	}
+	// A LIMIT 1 version read alone can hide a second conflicting migration
+	// record. Never choose one history or adopt unknown application tables.
+	var versionRows int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&versionRows); err != nil {
+		return err
+	}
+	if versionRows != 1 {
+		return fmt.Errorf("ambiguous SQLite migration history: %d version rows", versionRows)
+	}
+	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'")
+	if err != nil {
+		return err
+	}
+	actualTables := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			_ = rows.Close()
 			return err
 		}
-		if err := rows.Close(); err != nil {
-			return err
+		actualTables[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(actualTables) != len(schemaDDL) {
+		return fmt.Errorf("unexpected SQLite schema/migration tables: refuse foreign adoption")
+	}
+	for _, expected := range schemaDDL {
+		if !actualTables[strings.Fields(expected)[2]] {
+			return fmt.Errorf("missing declared schema table: refuse foreign adoption")
 		}
-		if len(actualTables) != len(schemaDDL) {
-			return fmt.Errorf("unexpected SQLite schema/migration tables: refuse foreign adoption")
+	}
+	for _, expected := range schemaDDL {
+		name := strings.Fields(expected)[2]
+		var actual string
+		if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
+			return fmt.Errorf("missing exact schema table %s: %w", name, err)
 		}
-		for _, expected := range schemaDDL {
-			if !actualTables[strings.Fields(expected)[2]] {
-				return fmt.Errorf("missing declared schema table: refuse foreign adoption")
-			}
+		if actual != expected {
+			return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
 		}
-		for _, expected := range schemaDDL {
-			name := strings.Fields(expected)[2]
-			var actual string
-			if err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&actual); err != nil {
-				return fmt.Errorf("missing exact schema table %s: %w", name, err)
-			}
-			if actual != expected {
-				return fmt.Errorf("schema version %d changed table %s: refuse undeclared migration", SchemaVersion, name)
-			}
-		}
-		// Validate every index in the new initial schema as well as tables. No
-		// silently changed/foreign index may influence a security-scoped query.
-		indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
-		if err != nil {
-			return err
-		}
-		actualIndexes := map[string]string{}
-		for indexRows.Next() {
-			var name, sqlText string
-			if err := indexRows.Scan(&name, &sqlText); err != nil {
-				_ = indexRows.Close()
-				return err
-			}
-			actualIndexes[name] = sqlText
-		}
-		if err := indexRows.Err(); err != nil {
+	}
+	// Validate every index in the new initial schema as well as tables. No
+	// silently changed/foreign index may influence a security-scoped query.
+	indexRows, err := s.db.Query("SELECT name,sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")
+	if err != nil {
+		return err
+	}
+	actualIndexes := map[string]string{}
+	for indexRows.Next() {
+		var name, sqlText string
+		if err := indexRows.Scan(&name, &sqlText); err != nil {
 			_ = indexRows.Close()
 			return err
 		}
-		if err := indexRows.Close(); err != nil {
-			return err
+		actualIndexes[name] = sqlText
+	}
+	if err := indexRows.Err(); err != nil {
+		_ = indexRows.Close()
+		return err
+	}
+	if err := indexRows.Close(); err != nil {
+		return err
+	}
+	if len(actualIndexes) != len(schemaIndexes) {
+		return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
+	}
+	for _, expected := range schemaIndexes {
+		words := strings.Fields(expected)
+		nameOffset := 2 // CREATE INDEX <name>
+		if len(words) > 3 && words[1] == "UNIQUE" {
+			nameOffset = 3 // CREATE UNIQUE INDEX <name>
 		}
-		if len(actualIndexes) != len(schemaIndexes) {
-			return errors.New("unexpected SQLite schema indexes: refuse foreign adoption")
-		}
-		for _, expected := range schemaIndexes {
-			words := strings.Fields(expected)
-			nameOffset := 2 // CREATE INDEX <name>
-			if len(words) > 3 && words[1] == "UNIQUE" {
-				nameOffset = 3 // CREATE UNIQUE INDEX <name>
-			}
-			name := words[nameOffset]
-			if actualIndexes[name] != expected {
-				return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
-			}
-		}
-		// A foreign trigger/view can silently change mutation semantics even when
-		// the six declared table names and schema_version are unchanged.
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
-			return err
-		}
-		if n != 0 {
-			return errors.New("unexpected SQLite trigger/view: refuse foreign database")
-		}
-		var integrity string
-		if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
-			return err
-		}
-		if integrity != "ok" {
-			return fmt.Errorf("integrity check failed")
+		name := words[nameOffset]
+		if actualIndexes[name] != expected {
+			return fmt.Errorf("schema index %s changed: refuse foreign adoption", name)
 		}
 	}
+	// A foreign trigger/view can silently change mutation semantics even when
+	// the six declared table names and schema_version are unchanged.
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('trigger','view')").Scan(&n); err != nil {
+		return err
+	}
+	if n != 0 {
+		return errors.New("unexpected SQLite trigger/view: refuse foreign database")
+	}
+	var integrity string
+	if err := s.db.QueryRow("PRAGMA quick_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("integrity check failed")
+	}
+	return nil
+}
+func (s *Store) init(fresh bool) error {
+	if !fresh {
+		if err := s.validateExistingSchema(); err != nil {
+			return err
+		}
+	}
+
 	for _, q := range []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=FULL",
@@ -331,7 +378,7 @@ func (s *Store) init(fresh bool) error {
 		return err
 	}
 	schema := append(append([]string{}, schemaDDL...), schemaIndexes...)
-	schema = append(schema, "INSERT INTO schema_version(version) VALUES (2)")
+	schema = append(schema, fmt.Sprintf("INSERT INTO schema_version(version) VALUES (%d)", SchemaVersion))
 	for _, q := range schema {
 		if _, err := tx.Exec(q); err != nil {
 			return err
@@ -351,8 +398,8 @@ func (s *Store) Schema(ctx context.Context) (int, error) {
 	return v, err
 }
 
-func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) (string, Token, error) {
-	if role != "admin" && role != "viewer" || ttl <= 0 || ttl > 365*24*time.Hour {
+func (s *Store) IssueToken(ctx context.Context, ttl time.Duration) (string, Token, error) {
+	if ttl <= 0 || ttl > 365*24*time.Hour {
 		return "", Token{}, ErrInvalid
 	}
 	b := make([]byte, 32)
@@ -364,8 +411,8 @@ func (s *Store) IssueToken(ctx context.Context, role string, ttl time.Duration) 
 	if err != nil {
 		return "", Token{}, err
 	}
-	t := Token{ID: id, Role: role, Expires: time.Now().UTC().Add(ttl)}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO credentials (id,token_digest,role,expires_at,created_at) VALUES (?,?,?,?,?)", id, DigestToken(raw), role, t.Expires.Unix(), time.Now().Unix())
+	t := Token{ID: id, ActorID: id, Expires: time.Now().UTC().Add(ttl)}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO credentials (id,token_digest,expires_at,created_at) VALUES (?,?,?,?)", id, DigestToken(raw), t.Expires.Unix(), time.Now().Unix())
 	if err != nil {
 		return "", Token{}, err
 	}
@@ -381,10 +428,11 @@ func (s *Store) VerifyToken(ctx context.Context, raw string) (Token, error) {
 	var t Token
 	var expires int64
 	var revoked int
-	err := s.db.QueryRowContext(ctx, "SELECT id,role,expires_at,revoked FROM credentials WHERE token_digest=?", DigestToken(raw)).Scan(&t.ID, &t.Role, &expires, &revoked)
+	err := s.db.QueryRowContext(ctx, "SELECT id,expires_at,revoked FROM credentials WHERE token_digest=?", DigestToken(raw)).Scan(&t.ID, &expires, &revoked)
 	if err != nil {
 		return Token{}, ErrRevoked
 	}
+	t.ActorID = t.ID
 	t.Expires = time.Unix(expires, 0).UTC()
 	t.Revoked = revoked != 0
 	if t.Revoked || !t.Expires.After(time.Now()) {
@@ -446,32 +494,68 @@ func (s *Store) RequireActiveTokenID(ctx context.Context, tokenID string) error 
 	return nil
 }
 
+// activeCredentialForActor verifies BOTH identities at the durable SQLite boundary.
+// OAuth grants are stable actors but only a currently live, resource-bound access
+// credential may read or admit work. A manual token is scoped to its own ID.
+// Use the SAME transaction as admission/claim to prevent refresh/revoke races.
+type credentialRowQuery interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func activeCredentialForActor(ctx context.Context, q credentialRowQuery, actorID, tokenID string) (bool, error) {
+	if !validHexID(actorID) || !validHexID(tokenID) {
+		return false, nil
+	}
+	var count int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM credentials c
+		LEFT JOIN oauth_access a ON a.token_id=c.id
+		LEFT JOIN oauth_grants g ON g.id=a.grant_id
+		LEFT JOIN oauth_config cfg ON cfg.id=1
+		WHERE c.id=? AND COALESCE(a.grant_id,c.id)=?
+		  AND c.revoked=0 AND c.expires_at>?
+		  AND (a.grant_id IS NULL OR (g.revoked=0 AND g.epoch=cfg.epoch AND g.resource=cfg.public_origin||'/mcp'
+		       AND cfg.public_origin!=''))`,
+		tokenID, actorID, time.Now().Unix()).Scan(&count)
+	return count == 1, err
+}
+
 // Admit persists the original immutable intent hash and sanitized replay payload.
 // Concurrent equal requests must return exactly the original IDs and cause no native effect.
 func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
-	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || a.ActorID != a.TokenID || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
+	if a.Layer == "" || a.ActorID == "" || a.TokenID == "" || len(a.Key) < 16 || len(a.Key) > 128 || a.Action == "" ||
 		len(a.SafeIntent) == 0 || len(a.SafeIntent) > 65536 || a.RequestID == "" ||
 		!validRef(a.WorkRef) || !validRef(a.AgentRef) || len(a.ResourceKey) > 192 ||
 		strings.ContainsAny(a.ResourceKey, "\x00\n\r") {
+		return Receipt{}, ErrInvalid
+	}
+	claims, err := normalizeAdmissionResourceKeys(a)
+	if err != nil {
 		return Receipt{}, ErrInvalid
 	}
 	// A non-secret digest avoids storing raw client key.
 	keyHash := digest(a.Key)
 	// Labels are stored immutably but are not part of the native intent hash.
 	// A retry that omits optional attribution reuses the original labels.
-	intentHash := digest(a.Action + "\x00" + string(a.SafeIntent) + "\x00" + a.BoxUUID + "\x00" + a.Incarnation)
+	intentHash := admissionIntentDigest(a, claims)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Receipt{}, err
 	}
 	defer tx.Rollback()
+	active, err := activeCredentialForActor(ctx, tx, a.ActorID, a.TokenID)
+	if err != nil {
+		return Receipt{}, err
+	}
+	if !active {
+		return Receipt{}, ErrRevoked
+	}
 	var found Receipt
 	var priorHash, priorToken string
 	err = tx.QueryRowContext(ctx, "SELECT id,tracking_id,state,intent_digest,token_id,native_operation_id,work_ref,agent_ref,action,box_uuid,incarnation,error_class,created_at,updated_at FROM operations WHERE layer=? AND actor_id=? AND key_digest=?", a.Layer, a.ActorID, keyHash).Scan(&found.ID, &found.TrackingID, &found.State, &priorHash, &priorToken, &found.NativeOperationID, &found.WorkRef, &found.AgentRef, &found.Action, &found.BoxUUID, &found.Incarnation, &found.ErrorClass, &found.CreatedAt, &found.UpdatedAt)
 	if err == nil {
 		// Omitted optional labels do not erase the original attribution.
 		// Explicitly contradicting a prior label always conflicts.
-		if priorHash != intentHash || priorToken != a.TokenID ||
+		if priorHash != intentHash ||
 			(a.WorkRef != "" && a.WorkRef != found.WorkRef) ||
 			(a.AgentRef != "" && a.AgentRef != found.AgentRef) {
 			return Receipt{}, ErrConflict
@@ -482,6 +566,50 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
+	}
+	if a.Action == ReadinessAction {
+		return s.admitReadinessTx(ctx, tx, a, keyHash, intentHash)
+	}
+	// A dependency-aware delete owns the whole Project for the duration of
+	// its exact child cleanup. Only private, linked children can bypass this
+	// admission barrier; a caller-supplied idempotency key never can.
+	var deleteBusy int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.layer=? AND c.resource_key=? AND o.action='box_delete' AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') AND NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED')", a.Layer, "delete-project:"+a.Layer).Scan(&deleteBusy); err != nil {
+		return Receipt{}, err
+	}
+	if deleteBusy != 0 {
+		return Receipt{}, ErrResourceLocked
+	}
+	cascade := false
+	if a.CleanupDependencies {
+		if a.Action != "box_delete" {
+			return Receipt{}, ErrInvalid
+		}
+		cascade, err = validateDeleteAdmission(ctx, tx, a)
+		if err != nil {
+			return Receipt{}, err
+		}
+	}
+	// An installed root Peer revoke temporarily stops ALL owned NICs in a
+	// Project, including siblings not present in the original two-Box claim.
+	// The SQLite admission writer provides a Project-wide exclusive barrier.
+	// A root UNKNOWN may NEVER be bypassed by generic recovery RELEASED.
+	var projectBusy int
+	if a.Action == "box_peer_set" || cascade {
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.layer=? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+			AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+			  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`, a.Layer).Scan(&projectBusy)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+			WHERE o.layer=? AND o.action='box_peer_set'
+			AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')`, a.Layer).Scan(&projectBusy)
+	}
+	if err != nil {
+		return Receipt{}, err
+	}
+	if projectBusy != 0 {
+		return Receipt{}, ErrResourceLocked
 	}
 	// Reserve the native Box name across any potentially in-flight effect,
 	// including a create that cannot know the native UUID until postread.
@@ -497,6 +625,49 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, err
 		}
 		if busy != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
+	// Multi-resource locks are checked in the SAME SQLite admission
+	// transaction. UNKNOWN claims remain latched until reviewed release.
+	for _, key := range claims {
+		var busy int
+		err = tx.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM operation_resource_claims c "+
+				"JOIN operations o ON o.id=c.operation_id "+
+				"WHERE c.layer=? AND c.resource_key=? "+
+				"AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') "+
+				"AND NOT EXISTS (SELECT 1 FROM recovery_audit ra "+
+				"WHERE ra.operation_id=o.id AND ra.decision='RELEASED')",
+			a.Layer, key).Scan(&busy)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if busy != 0 {
+			return Receipt{}, ErrResourceLocked
+		}
+	}
+	// An active peer grant, unknown network address fence or exposed proxy
+	// forbids lifecycle mutations that could recycle an authorized native IP.
+	// This is checked in the SAME transaction as per-Box/ACL admission locks.
+	// S4-B2 intentionally has NO implicit revoke/release on Box deletion.
+	if (a.Action == "box_delete" || a.Action == "box_stop" ||
+		a.Action == "box_start" || a.Action == "box_update") &&
+		a.BoxUUID != "" && a.Incarnation != "" {
+		var dependent int
+		err = tx.QueryRowContext(ctx,
+			"SELECT "+
+				"(SELECT COUNT(*) FROM peer_grants WHERE project=? AND status!='REVOKED' "+
+				"AND ((source_uuid=? AND source_incarnation=?) OR (target_uuid=? AND target_incarnation=?)))+"+
+				"(SELECT COUNT(*) FROM network_address_fences WHERE project=? AND box_uuid=? AND incarnation=? AND state!='RELEASED')+"+
+				"(SELECT COUNT(*) FROM forward_claims WHERE project=? AND box_uuid=? AND incarnation=? AND state!='REVOKED')",
+			a.Layer, a.BoxUUID, a.Incarnation, a.BoxUUID, a.Incarnation,
+			a.Layer, a.BoxUUID, a.Incarnation,
+			a.Layer, a.BoxUUID, a.Incarnation).Scan(&dependent)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if dependent != 0 && !cascade {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
@@ -551,14 +722,6 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
-	var active int
-	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", a.TokenID, time.Now().Unix()).Scan(&active)
-	if err != nil {
-		return Receipt{}, err
-	}
-	if active != 1 {
-		return Receipt{}, ErrRevoked
-	}
 	id, err := newID()
 	if err != nil {
 		return Receipt{}, err
@@ -574,6 +737,19 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		return Receipt{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state) VALUES (?,?,?)", id, now, "ADMITTED"); err != nil {
+		return Receipt{}, err
+	}
+	for _, key := range claims {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES (?,?,?)", id, a.Layer, key); err != nil {
+			return Receipt{}, err
+		}
+	}
+	if cascade {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", id, a.Layer, "delete-project:"+a.Layer); err != nil {
+			return Receipt{}, err
+		}
+	}
+	if err = stageForwardAdmission(ctx, tx, a, id); err != nil {
 		return Receipt{}, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -610,6 +786,11 @@ func (s *Store) transition(ctx context.Context, id, expected, next, nativeID, er
 	if n != 1 {
 		return ErrState
 	}
+	if next == "FAILED" {
+		if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, time.Now().UnixNano(), next, errClass); err != nil {
 		return err
 	}
@@ -624,24 +805,29 @@ func (s *Store) Claim(ctx context.Context, id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	var token, state string
-	if err = tx.QueryRowContext(ctx, "SELECT token_id,state FROM operations WHERE id=?", id).Scan(&token, &state); err != nil {
+	var token, actor, state string
+	if err = tx.QueryRowContext(ctx, "SELECT token_id,actor_id,state FROM operations WHERE id=?", id).Scan(&token, &actor, &state); err != nil {
 		return err
 	}
 	if state != "ADMITTED" {
 		return ErrState
 	}
-	var active int
-	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credentials WHERE id=? AND revoked=0 AND expires_at>?", token, time.Now().Unix()).Scan(&active); err != nil {
+	active, err := activeCredentialForActor(ctx, tx, actor, token)
+	if err != nil {
 		return err
 	}
 	next, reason := "DISPATCHING", ""
-	if active != 1 {
+	if !active {
 		next, reason = "FAILED", "AUTH_REVOKED_BEFORE_DISPATCH"
 	}
 	now := time.Now().UnixNano()
 	if _, err = tx.ExecContext(ctx, "UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state='ADMITTED'", next, reason, now, id); err != nil {
 		return err
+	}
+	if !active {
+		if err := settleForwardNoEffectTx(ctx, tx, id); err != nil {
+			return err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", id, now, next, reason); err != nil {
 		return err
@@ -649,7 +835,7 @@ func (s *Store) Claim(ctx context.Context, id string) error {
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	if active != 1 {
+	if !active {
 		return ErrRevoked
 	}
 	return nil
@@ -698,7 +884,7 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING')")
+	rows, err := tx.QueryContext(ctx, "SELECT id,state FROM operations WHERE state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','OBSERVING')")
 	if err != nil {
 		return 0, err
 	}
@@ -725,7 +911,7 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 	for _, item := range ids {
 		now := time.Now().UnixNano()
 		next, reason := "UNKNOWN", "PROCESS_RESTART_OR_LOST_ACK"
-		if item.state == "ADMITTED" {
+		if item.state == "ADMITTED" || item.state == "OBSERVING" {
 			// No Claim was committed and therefore the process was forbidden
 			// from dispatching native work. The in-memory handler is gone:
 			// do not silently replay an arbitrary old guest command.
@@ -735,6 +921,11 @@ func (s *Store) Recover(ctx context.Context) (int64, error) {
 			"UPDATE operations SET state=?,error_class=?,updated_at=? WHERE id=? AND state=?",
 			next, reason, now, item.id, item.state); err != nil {
 			return 0, err
+		}
+		if next == "FAILED" {
+			if err := settleForwardNoEffectTx(ctx, tx, item.id); err != nil {
+				return 0, err
+			}
 		}
 		if _, err = tx.ExecContext(ctx,
 			"INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)",

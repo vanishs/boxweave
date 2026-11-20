@@ -38,7 +38,6 @@ type OAuthIntent struct {
 	ClientName  string
 	RedirectURI string
 	Challenge   string
-	Scope       string
 	Resource    string
 	State       string
 }
@@ -46,7 +45,6 @@ type OAuthPair struct {
 	Access    string
 	Refresh   string
 	ExpiresIn int
-	Scope     string
 	GrantID   string
 }
 
@@ -254,35 +252,14 @@ func (s *Store) oauthClient(ctx context.Context, id, redirect string) (string, e
 	}
 	return "", ErrOAuthInvalid
 }
-func parseOAuthScope(scope string) (string, error) {
-	fields := strings.Fields(scope)
-	if len(fields) == 0 {
-		return "viewer", nil
+
+// Application-permission scopes are deliberately unsupported. Never
+// interpret a legacy requested scope as implicit full-management approval.
+func rejectOAuthScopes(scope string) error {
+	if scope != "" {
+		return ErrOAuthInvalid
 	}
-	if len(fields) > 2 {
-		return "", ErrOAuthInvalid
-	}
-	hasAdmin, hasViewer := false, false
-	for _, v := range fields {
-		switch v {
-		case "mcp:admin":
-			if hasAdmin {
-				return "", ErrOAuthInvalid
-			}
-			hasAdmin = true
-		case "mcp:viewer":
-			if hasViewer {
-				return "", ErrOAuthInvalid
-			}
-			hasViewer = true
-		default:
-			return "", ErrOAuthInvalid
-		}
-	}
-	if hasAdmin {
-		return "admin", nil
-	}
-	return "viewer", nil
+	return nil
 }
 func (s *Store) BeginOAuth(ctx context.Context, client, redirect, scope, challenge, resource, state string) (string, error) {
 	cfg, err := s.OAuthConfig(ctx)
@@ -292,7 +269,7 @@ func (s *Store) BeginOAuth(ctx context.Context, client, redirect, scope, challen
 	if _, err = s.oauthClient(ctx, client, redirect); err != nil {
 		return "", err
 	}
-	if _, err = parseOAuthScope(scope); err != nil {
+	if err = rejectOAuthScopes(scope); err != nil {
 		return "", err
 	}
 	if resource != cfg.Origin+"/mcp" || !oauthPKCE.MatchString(challenge) || len(state) < 8 || len(state) > 512 {
@@ -323,8 +300,8 @@ func (s *Store) BeginOAuth(ctx context.Context, client, redirect, scope, challen
 	if count >= 512 {
 		return "", ErrOAuthRateLimited
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO oauth_pending(digest,client_id,redirect_uri,challenge,scope,resource,state,expires_at) VALUES(?,?,?,?,?,?,?,?)",
-		DigestToken(pending), client, redirect, challenge, scope, resource, state, time.Now().Add(5*time.Minute).Unix()); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO oauth_pending(digest,client_id,redirect_uri,challenge,resource,state,expires_at) VALUES(?,?,?,?,?,?,?)",
+		DigestToken(pending), client, redirect, challenge, resource, state, time.Now().Add(5*time.Minute).Unix()); err != nil {
 		return "", err
 	}
 	if err = tx.Commit(); err != nil {
@@ -338,8 +315,8 @@ func (s *Store) OAuthPending(ctx context.Context, pending string) (OAuthIntent, 
 		return o, ErrOAuthInvalid
 	}
 	var expires int64
-	err := s.db.QueryRowContext(ctx, "SELECT p.client_id,c.name,p.redirect_uri,p.challenge,p.scope,p.resource,p.state,p.expires_at FROM oauth_pending p JOIN oauth_clients c ON c.id=p.client_id WHERE p.digest=?",
-		DigestToken(pending)).Scan(&o.ClientID, &o.ClientName, &o.RedirectURI, &o.Challenge, &o.Scope, &o.Resource, &o.State, &expires)
+	err := s.db.QueryRowContext(ctx, "SELECT p.client_id,c.name,p.redirect_uri,p.challenge,p.resource,p.state,p.expires_at FROM oauth_pending p JOIN oauth_clients c ON c.id=p.client_id WHERE p.digest=?",
+		DigestToken(pending)).Scan(&o.ClientID, &o.ClientName, &o.RedirectURI, &o.Challenge, &o.Resource, &o.State, &expires)
 	if err != nil || expires <= time.Now().Unix() {
 		return OAuthIntent{}, ErrOAuthInvalid
 	}
@@ -361,11 +338,6 @@ func (s *Store) ApproveOAuth(ctx context.Context, pending, password string) (cod
 	}
 	if !verifyOAuthPassword(hashed, password) {
 		err = ErrOAuthInvalid
-		return
-	}
-	role, e := parseOAuthScope(intent.Scope)
-	if e != nil {
-		err = e
 		return
 	}
 	code, e = newOAuthSecret("bwa_")
@@ -390,8 +362,8 @@ func (s *Store) ApproveOAuth(ctx context.Context, pending, password string) (cod
 		err = ErrOAuthInvalid
 		return
 	}
-	_, e = tx.ExecContext(ctx, "INSERT INTO oauth_codes(digest,client_id,redirect_uri,challenge,role,resource,expires_at) VALUES(?,?,?,?,?,?,?)",
-		DigestToken(code), intent.ClientID, intent.RedirectURI, intent.Challenge, role, intent.Resource, time.Now().Add(2*time.Minute).Unix())
+	_, e = tx.ExecContext(ctx, "INSERT INTO oauth_codes(digest,client_id,redirect_uri,challenge,resource,expires_at) VALUES(?,?,?,?,?,?)",
+		DigestToken(code), intent.ClientID, intent.RedirectURI, intent.Challenge, intent.Resource, time.Now().Add(2*time.Minute).Unix())
 	if e != nil {
 		err = e
 		return
@@ -411,9 +383,9 @@ func (s *Store) ExchangeOAuth(ctx context.Context, client, redirect, code, verif
 		return OAuthPair{}, err
 	}
 	defer tx.Rollback()
-	var rowClient, rowRedirect, challenge, role, rowResource string
+	var rowClient, rowRedirect, challenge, rowResource string
 	var expires int64
-	if err = tx.QueryRowContext(ctx, "SELECT client_id,redirect_uri,challenge,role,resource,expires_at FROM oauth_codes WHERE digest=?", DigestToken(code)).Scan(&rowClient, &rowRedirect, &challenge, &role, &rowResource, &expires); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT client_id,redirect_uri,challenge,resource,expires_at FROM oauth_codes WHERE digest=?", DigestToken(code)).Scan(&rowClient, &rowRedirect, &challenge, &rowResource, &expires); err != nil {
 		return OAuthPair{}, ErrOAuthInvalid
 	}
 	var origin string
@@ -424,7 +396,7 @@ func (s *Store) ExchangeOAuth(ctx context.Context, client, redirect, code, verif
 	if expires <= time.Now().Unix() || rowClient != client || rowRedirect != redirect || resource != rowResource || resource != origin+"/mcp" || !oauth2.CodeChallengeS256.Validate(challenge, verifier) {
 		return OAuthPair{}, ErrOAuthInvalid
 	}
-	pair, err := s.issueOAuthPairTx(ctx, tx, client, role, resource, epoch, "")
+	pair, err := s.issueOAuthPairTx(ctx, tx, client, resource, epoch, "")
 	if err != nil {
 		return OAuthPair{}, err
 	}
@@ -441,7 +413,7 @@ func (s *Store) ExchangeOAuth(ctx context.Context, client, redirect, code, verif
 	}
 	return pair, nil
 }
-func (s *Store) issueOAuthPairTx(ctx context.Context, tx *sql.Tx, client, role, resource string, epoch int, existingGrant string) (OAuthPair, error) {
+func (s *Store) issueOAuthPairTx(ctx context.Context, tx *sql.Tx, client, resource string, epoch int, existingGrant string) (OAuthPair, error) {
 	grant := existingGrant
 	var err error
 	if grant == "" {
@@ -449,7 +421,7 @@ func (s *Store) issueOAuthPairTx(ctx context.Context, tx *sql.Tx, client, role, 
 		if err != nil {
 			return OAuthPair{}, err
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO oauth_grants(id,client_id,role,resource,epoch,created_at) VALUES(?,?,?,?,?,?)", grant, client, role, resource, epoch, time.Now().Unix())
+		_, err = tx.ExecContext(ctx, "INSERT INTO oauth_grants(id,client_id,resource,epoch,created_at) VALUES(?,?,?,?,?)", grant, client, resource, epoch, time.Now().Unix())
 		if err != nil {
 			return OAuthPair{}, err
 		}
@@ -467,7 +439,7 @@ func (s *Store) issueOAuthPairTx(ctx context.Context, tx *sql.Tx, client, role, 
 		return OAuthPair{}, err
 	}
 	now := time.Now().Unix()
-	_, err = tx.ExecContext(ctx, "INSERT INTO credentials(id,token_digest,role,expires_at,created_at) VALUES(?,?,?,?,?)", tokenID, DigestToken(access), role, now+3600, now)
+	_, err = tx.ExecContext(ctx, "INSERT INTO credentials(id,token_digest,expires_at,created_at) VALUES(?,?,?,?)", tokenID, DigestToken(access), now+3600, now)
 	if err != nil {
 		return OAuthPair{}, err
 	}
@@ -479,7 +451,7 @@ func (s *Store) issueOAuthPairTx(ctx context.Context, tx *sql.Tx, client, role, 
 	if err != nil {
 		return OAuthPair{}, err
 	}
-	return OAuthPair{Access: access, Refresh: refresh, ExpiresIn: 3600, Scope: "mcp:" + role, GrantID: grant}, nil
+	return OAuthPair{Access: access, Refresh: refresh, ExpiresIn: 3600, GrantID: grant}, nil
 }
 func (s *Store) RefreshOAuth(ctx context.Context, old, client, resource string) (OAuthPair, error) {
 	if len(old) != 69 || !strings.HasPrefix(old, "bwr1_") {
@@ -490,12 +462,12 @@ func (s *Store) RefreshOAuth(ctx context.Context, old, client, resource string) 
 		return OAuthPair{}, err
 	}
 	defer tx.Rollback()
-	var grant, rowClient, role, rowResource string
+	var grant, rowClient, rowResource string
 	var epoch, current int
 	var expires int64
 	var revoked int
-	err = tx.QueryRowContext(ctx, "SELECT r.grant_id,r.expires_at,g.client_id,g.role,g.resource,g.epoch,g.revoked,c.epoch FROM oauth_refresh r JOIN oauth_grants g ON g.id=r.grant_id CROSS JOIN oauth_config c WHERE r.digest=?",
-		DigestToken(old)).Scan(&grant, &expires, &rowClient, &role, &rowResource, &epoch, &revoked, &current)
+	err = tx.QueryRowContext(ctx, "SELECT r.grant_id,r.expires_at,g.client_id,g.resource,g.epoch,g.revoked,c.epoch FROM oauth_refresh r JOIN oauth_grants g ON g.id=r.grant_id CROSS JOIN oauth_config c WHERE r.digest=?",
+		DigestToken(old)).Scan(&grant, &expires, &rowClient, &rowResource, &epoch, &revoked, &current)
 	if err != nil || revoked != 0 || epoch != current || rowClient != client || rowResource != resource {
 		return OAuthPair{}, ErrOAuthInvalid
 	}
@@ -535,7 +507,7 @@ func (s *Store) RefreshOAuth(ctx context.Context, old, client, resource string) 
 	if _, err = tx.ExecContext(ctx, "UPDATE credentials SET revoked=1 WHERE id IN (SELECT token_id FROM oauth_access WHERE grant_id=?)", grant); err != nil {
 		return OAuthPair{}, err
 	}
-	pair, err := s.issueOAuthPairTx(ctx, tx, client, role, resource, current, grant)
+	pair, err := s.issueOAuthPairTx(ctx, tx, client, resource, current, grant)
 	if err != nil {
 		return OAuthPair{}, err
 	}
@@ -552,8 +524,8 @@ func (s *Store) VerifyOAuthAccess(ctx context.Context, raw string) (Token, error
 	var expires int64
 	var epoch, current, revoked, grantRevoked int
 	var resource, origin string
-	err := s.db.QueryRowContext(ctx, "SELECT c.id,c.role,c.expires_at,c.revoked,g.revoked,g.epoch,o.epoch,g.resource,o.public_origin FROM credentials c JOIN oauth_access a ON a.token_id=c.id JOIN oauth_grants g ON g.id=a.grant_id CROSS JOIN oauth_config o WHERE o.id=1 AND c.token_digest=?",
-		DigestToken(raw)).Scan(&out.ID, &out.Role, &expires, &revoked, &grantRevoked, &epoch, &current, &resource, &origin)
+	err := s.db.QueryRowContext(ctx, "SELECT c.id,a.grant_id,c.expires_at,c.revoked,g.revoked,g.epoch,o.epoch,g.resource,o.public_origin FROM credentials c JOIN oauth_access a ON a.token_id=c.id JOIN oauth_grants g ON g.id=a.grant_id CROSS JOIN oauth_config o WHERE o.id=1 AND c.token_digest=?",
+		DigestToken(raw)).Scan(&out.ID, &out.ActorID, &expires, &revoked, &grantRevoked, &epoch, &current, &resource, &origin)
 	if err != nil || revoked != 0 || grantRevoked != 0 || epoch != current || resource != origin+"/mcp" || origin == "" || expires <= time.Now().Unix() {
 		return Token{}, ErrRevoked
 	}
@@ -587,13 +559,12 @@ func (s *Store) OAuthExplain(ctx context.Context) (string, error) {
 type OAuthGrantSummary struct {
 	ID        string
 	Client    string
-	Role      string
 	CreatedAt int64
 	Active    bool
 }
 
 func (s *Store) ListOAuthGrants(ctx context.Context) ([]OAuthGrantSummary, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT g.id,c.name,g.role,g.created_at,g.revoked,g.epoch,o.epoch FROM oauth_grants g JOIN oauth_clients c ON c.id=g.client_id CROSS JOIN oauth_config o WHERE o.id=1 ORDER BY g.created_at DESC,g.id DESC LIMIT 100")
+	rows, err := s.db.QueryContext(ctx, "SELECT g.id,c.name,g.created_at,g.revoked,g.epoch,o.epoch FROM oauth_grants g JOIN oauth_clients c ON c.id=g.client_id CROSS JOIN oauth_config o WHERE o.id=1 ORDER BY g.created_at DESC,g.id DESC LIMIT 100")
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +573,7 @@ func (s *Store) ListOAuthGrants(ctx context.Context) ([]OAuthGrantSummary, error
 	for rows.Next() {
 		var g OAuthGrantSummary
 		var revoked, issued, current int
-		if err = rows.Scan(&g.ID, &g.Client, &g.Role, &g.CreatedAt, &revoked, &issued, &current); err != nil {
+		if err = rows.Scan(&g.ID, &g.Client, &g.CreatedAt, &revoked, &issued, &current); err != nil {
 			return nil, err
 		}
 		g.Active = revoked == 0 && issued == current

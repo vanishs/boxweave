@@ -1,6 +1,6 @@
 # Manual installation — BoxWeave v1 RC.3 (general host guide)
 
-This is a **human-reviewed, fresh-install** guide, not a one-shot provisioning script. No machine-specific host hashes, UID, bridge, Release digests or public Tunnel hostnames are reusable defaults. See the [glossary](../GLOSSARY.md).
+This is a **human-reviewed, fresh-install** guide, not a one-shot provisioning script. The separately observed **2026-11-19 physical RC.7→exact-source RC8 candidate rebuild** is recorded in [the Host/ChatGPT acceptance ledger](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md) and [safe uninstall/reinstall design](../development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md); it was **not** a published RC8 release or a general-purpose `uninstall.sh`. No machine-specific host hashes, UID, bridge, Release digests or public Tunnel hostnames are reusable defaults. See the [glossary](../GLOSSARY.md).
 
 **Legend:** **Required** = necessary for this stage; **Optional** = only if you want this feature; **Review/write** = changes the host/Incus and must be explicitly approved; **Extra acceptance** = testing beyond installation.
 
@@ -187,7 +187,7 @@ sudo runuser -u boxweave -- env \
 sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-status
 ```
 
-Expect `Origin` to match **exactly** and `Enabled=true`. The URL entered into an OAuth-capable ChatGPT/custom MCP connection is **`$PUBLIC_ORIGIN/mcp`**, not the bare origin or `/mcp/oauth`. Review OAuth client, redirect URI and granted `admin`/`viewer` role; keep credentials private. ChatGPT connection UI depends on account/workspace access. Verify genuine `host_status` and `box_list` reads **before** writes; OAuth browser approval alone is not end-to-end proof.
+Expect the configured public Origin exactly and `Enabled=true`. Connect an OAuth-capable ChatGPT/custom MCP client to `$PUBLIC_ORIGIN/mcp` (not the bare Origin or `/mcp/oauth`). **This RC.3 installation guide describes published historical OAuth;** Draft PR #153 instead requires fresh Schema v4 credentials and new explicit approval for scope-free full BoxWeave management, without old client/Grant reuse. Do not roll over the old DB or erase native UNKNOWN evidence. Inspect client and redirect URI, protect tokens, and test genuine `host_status` and `box_list` reads before any write. See [reconstruction policy](../process/VERSIONING.md).
 
 Quick Tunnel URLs change between sessions. Update `oauth-set-origin` when that happens. To finish public testing, stop the tunnel and run `sudo runuser -u boxweave -- /usr/local/bin/boxweave oauth-disable`. Long-lived public access needs separate review of HTTPS, identity, exposure, revocation and negative tests.
 
@@ -196,6 +196,33 @@ Quick Tunnel URLs change between sessions. Update `oauth-set-origin` when that h
 Through an **authorized** MCP client, create **one** test Box with an original `idempotency_key`. Retain the returned Operation ID; inspect `operation_get` and native UUID readback before Start/Exec/Stop/Delete. A default image may be fetched from the official catalog; ensure sufficient capacity and public HTTPS outbound access. If an operation is `UNKNOWN` or network-disconnected, **do not generate a new key and retry** before reconciling the original.
 
 For broader HOST_GO evidence, separately test real IPv4/IPv6 isolation and anti-spoof packets, egress toggling, driver-specific disk quota/Exec spool limits, faults and recovery, exact-owned cleanup and independent Verifier/rollback. A green `doctor`, 8/8 prerequisite check or remote MCP read **does not** establish these. See [host pilot evidence](../verification/RC3_PHYSICAL_HOST_PILOT_2026-11-13.md) and [formal gates](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md).
+
+
+## Physical Host RC.7 → exact-source RC8 candidate reset (observed development-only example, 2026-11-19 PT)
+
+**Not a copy/paste general upgrade:** The Owner explicitly approved deleting only its old controller/SQLite/Grants and **14 identified development Boxes**, plus restoring an older Root/Native Project/Profile/ACL journal. First inspect current Incus Projects, all Boxes/UNKNOWN, units, state, network, root journal and other tenants. Never assume the same host hash or ACL name works on a different system. The actual reset retained Incus 7.6, global `default` Btrfs pool, `incusbr-1001`, unrelated objects and closed journal evidence. Two unused legacy image references were **not confirmed deleted**. [Exact operation and cleanup facts](../development/V1_HOST_DECOMMISSION_REINSTALL_AND_UNINSTALL_DESIGN_2026-11-19.md).
+
+The successful exact-source installation deliberately used **a pinned candidate binary, not a nonexistent published RC8 asset**. After verifying the staging binary and matching `install.sh` from **source commit `bc1e844703cdfb7ea3813cc614176d35e8883018`**:
+
+```sh
+# Historical physical Host values for this one binary only; recompute host plan digest locally.
+sudo sh /var/tmp/bw-rc8-staging/install.sh --plan \
+  --local-binary /var/tmp/bw-rc8-staging/boxweave-rc8 \
+  --sha256 06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386 \
+  --project user-1001
+
+# Only after reviewing current host-specific plan, apply:
+sudo sh /var/tmp/bw-rc8-staging/install.sh --apply \
+  --local-binary /var/tmp/bw-rc8-staging/boxweave-rc8 \
+  --sha256 06759b41fbd36727d37684276f82b7b9cfb9447df2f934b61bc79cb2b81c5386 \
+  --project user-1001 --confirm-host-sha256 "<FROM_THIS_HOST_INSTALL_PLAN>"
+```
+
+**The candidate must be deliberately obtained and checked at the exact source/binary SHA; do not assume this staging path exists on another machine or that these commands constitute an available RC8 Release.** Installation only starts the Controller. A fresh separate `native-prepare-plan`/approved `native-prepare-apply` and `native-prereq-plan`/approved verify are still required; the physical run achieved 8/8 and `doctor.ready=true` on a fresh v4 SQLite. Rollback an old **APPLIED** native journal only using `native-prepare-rollback` with its *own exact digest*, confirming true before-state, then use `native-prepare-archive`. Do not delete journal JSON or brute-force ACL/profile changes to make the next plan succeed.
+
+A new service OAuth secret and `oauth-set-origin` were required. `cloudflared tunnel --url http://127.0.0.1:18650` publishes a **temporary** HTTPS hostname. Local root `GET /` may return **404** (not the MCP endpoint); public `invalid Host` can indicate that BoxWeave's configured public Origin does not match the Tunnel hostname. Verify current DNS/Tunnel registration separately; then set **only** the exact `https://...trycloudflare.com` Origin (no trailing slash, no `/mcp`) and connect ChatGPT at **`<origin>/mcp`**. Never log OAuth secrets in Shell/MCP transcripts. Successful real ChatGPT Tool calls prove live authenticated Tool dispatch, **not** that browser Scope parameters or ChatGPT OAuth refresh/reauthorization/revocation were independently captured.
+
+Observed physical Host lifecycle and actual independently installed L1→L2 functional acceptance are in [this scoped evidence ledger](../verification/V1_RC8_PHYSICAL_HOST_CHATGPT_L0_L2_ACCEPTANCE_2026-11-19.md). **Neither the existing installer nor the future design automatically cleans up prior native resources.** The future `uninstall.sh` must have an independently approved, fail-closed plan+apply and separately opted-in purge/native rollback modes; it is **not implemented yet**.
 
 ## Common failure boundaries
 
@@ -209,4 +236,4 @@ For broader HOST_GO evidence, separately test real IPv4/IPv6 isolation and anti-
 | `STORAGE_QUOTA_UNVERIFIED` | Warning: test Incus driver quota and host spool/disk independently; not a readiness gate. |
 | Local `/mcp` returns HTTP 401 | Correct unauthenticated rejection, not proof of completed OAuth login. |
 | No Guest image locally | Acceptable in RC.3; default image selection occurs during original Create. |
-| Public client requests `/` instead of `/mcp` | Fix the complete MCP URL; root-path 405 is not evidence of a broken `/mcp`. |
+| Public client requests `/` instead of `/mcp` | Fix the complete MCP URL; root-path 404/405 is not evidence of a broken `/mcp`. |
