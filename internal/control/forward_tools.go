@@ -87,7 +87,7 @@ func (s *Service) registerForwardTools(server *mcp.Server) {
 
 	addStrictTool(server, &mcp.Tool{
 		Name:        "port_forward_create",
-		Description: "Admit one exact owned Box TCP/UDP instance-native proxy to guest 127.0.0.1:guest_port. Host bind defaults to 127.0.0.1 loopback. Specific external host IP requires explicit confirm_external_exposure; wildcard/foreign targets are forbidden. An async receipt is NOT proof of listener reachability; use operation_get, port_forward_list and separate packet checks. Never blindly retry UNKNOWN.",
+		Description: "Admit one exact owned Box TCP/UDP instance-native proxy to guest 127.0.0.1:guest_port. Host bind defaults to 127.0.0.1 loopback. External host binds are currently UNSUPPORTED even with client confirmation until an independent exact-host approval contract is available. Wildcard/foreign targets are forbidden. An async receipt is NOT proof of listener reachability; use operation_get, port_forward_list and separate packet checks. Never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in forwardCreateInput) (*mcp.CallToolResult, state.Receipt, error) {
 		principal, err := s.requestPrincipal(req)

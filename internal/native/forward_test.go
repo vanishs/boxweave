@@ -15,7 +15,7 @@ func TestB4ForwardSpecAndExactProxyDevice(t *testing.T) {
 	}{
 		{"127.0.0.1", "tcp", 22001, 80, false, true},
 		{"::1", "udp", 22002, 53, false, true},
-		{"192.0.2.8", "tcp", 80, 8080, true, true},
+		{"192.0.2.8", "tcp", 80, 8080, true, false},
 		{"192.0.2.8", "tcp", 80, 8080, false, false},
 		{"0.0.0.0", "tcp", 80, 80, true, false},
 		{"::", "udp", 53, 53, true, false},

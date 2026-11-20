@@ -104,7 +104,16 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 	if uuid == "" {
 		t.Fatal("fixture native UUID absent")
 	}
-	path := filepath.Join(t.TempDir(), "b4.sqlite")
+	// The Go testing temp root may be shared in the runner; Store.Open
+	// intentionally requires the DIRECT SQLite parent to be 0700.
+	private := filepath.Join(t.TempDir(), "controller-private")
+	if err := os.Mkdir(private, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(private, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(private, "b4.sqlite")
 	st, err := state.Open(path)
 	if err != nil {
 		t.Fatal(err)

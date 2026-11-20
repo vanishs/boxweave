@@ -38,7 +38,10 @@ func (f ForwardSpec) Validate() error {
 	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() {
 		return ErrNativeUnsupported
 	}
-	if !ip.IsLoopback() && !f.ExternalAcknowledged {
+	// The public actor confirmation flag alone is NOT a trusted host-local
+	// approval for binding an external interface. Keep B4 loopback-only until
+	// a separate exact-address host approval mechanism is independently accepted.
+	if !ip.IsLoopback() {
 		return ErrNativeUnsupported
 	}
 	if f.HostBind != ip.String() {
