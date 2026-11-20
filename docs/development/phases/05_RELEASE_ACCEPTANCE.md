@@ -34,6 +34,42 @@
 
 **Mandatory additional mid-project evidence:** [S2.5 BRIDGEHEAD](025_BRIDGEHEAD.md) and [BH-001–BH-017](../../verification/BRIDGEHEAD_ACCEPTANCE.md) supply independent early pilot/rollback/native proof; they **never substitute** for this S5 exact-current-candidate 20/20 Tool and CLI, full S4 networking/L0/L1/L2, realistic failure, physical LAN, independent verifier and immutable Release gate. Re-run affected BRIDGEHEAD cases against the final S5 binary if intervening S3/S4 code changed their contracts. A failed or unauthorized pilot is not retroactively PASS; S5 still needs all its own mandatory evidence.
 
+## S5-MCP-RECOVERY — Box 自服务恢复与诊断（2026-11-19 Owner 批准纳入开发计划）
+
+**目标：** Box 生命周期中的正常异常处理不应强迫用户登录 Host 执行 `boxweave recover`。Agent 应优先通过经过认证的 MCP 找回原始 Operation，进行只读 Incus/SQLite 复核，在具有足够原生证据时安全完成恢复；确实不确定且必须释放资源锁时，在 ChatGPT 中向用户展示具体风险并取得**可由服务端独立验证**的授权。Host CLI 继续保留为紧急救援入口。本节是 **S5 任务范围与验收要求，不代表新工具已经实现、部署或通过验收**；此前 20/21/22 的固定数量是历史清单，S5 应以最终批准的实际 `tools/list` 为准。
+
+### 优先级与接口边界
+
+| 优先级 | 现有 Host CLI / 能力 | S5 MCP 交付 | 开发与安全边界 |
+| --- | --- | --- | --- |
+| **P0** | `recover inspect/challenge/release`、`create-inspect/create-challenge/create-bind`、`gc-inspect/gc-challenge/gc-release` | **新增一个** `operation_recover`（一工具多阶段，而非分别暴露 inspect/confirm 工具） | 对原始 `operation_id` 读证据、判断 `SAFE_RECOVER` 或 `APPROVAL_REQUIRED`；经服务端验证授权后才释放仍不确定的资源锁；保留原始 UNKNOWN、禁止盲重放、不可假造成功 |
+| **P0** | `recover inspect`、原始日志 / 状态复核 | **增强现有** `operation_get`（并复用 `box_activity_get` 的 issues/evidence） | 返回原始操作、受限的失败阶段、可信 native/SQLite 证据、缺失证据、阻塞资源及可执行的下一步；不泄露 Host 路径、秘密或跨 Project 信息 |
+| **P1** | `native-peer-root-reconcile` | 由同一个 `operation_recover` 处理网络授权/撤权的原始 UNKNOWN | 复用既有受控 Root/PRS 安全链、严格区分授权与撤权；不开放泛化 Root 调用、ACL 写入或独立宿主 shell |
+| **P1** | `native-peer-audit`、`native-peer-purge-plan` | **扩展现有** `box_get` / `operation_get` 的所属 Box 网络诊断和建议 | 仅展示精确受管 Box/Peer 的可审计、脱敏、必要的只读证据；Root 私有审计及真实清理仍由受控内部链负责 |
+| **P1** | `status`、`doctor`、`build-info`、`install-status` 的只读摘要 | **增强现有** `host_status` | 输出已认证当前 Layer 的版本、准备状态、诊断和安全限制；不暴露宿主机文件、其他 Project、安装凭证或操作者信息 |
+| **P2（评估后决定）** | `oauth-status`、`oauth-list-grants` | 优先考虑当前 Actor 的自身连接/授权状态查询，复用现有读取接口 | 不允许读取或撤销其他 Actor 的授权；不是对外开放全局 OAuth 配置，必要时保持 CLI-only |
+
+**明确不迁移到 MCP：** `serve`、`install-*`、`upgrade/rollback`、`native-bootstrap`、`native-prepare-*`、`native-migrate-*`、`native-scriptlet-*`、`native-peer-root-serve/unit-stage/execute` 等宿主基础设施/Root 执行器生命周期操作，以及 `token-create/revoke`、`oauth-setup/set-origin/disable/revoke-grant` 等全局身份管理。它们保持 Host 可信本地边界。不能把 Host CLI 参数原样封装成具有 root 权限的 MCP 转发器。
+
+### 单工具恢复协议与审批边界
+
+1. `operation_recover` 以**精确原始操作标识**为目标，查询授权作用域内的 SQLite 原始记录、native 操作回执、Box UUID/incarnation、当前状态及资源占用；返回 `INSPECT`、`SAFE_RECOVER`、`APPROVAL_REQUIRED`、`BLOCKED` 等**结构化结果**。阶段名称是设计建议，编码前须在 Tool 合约中固定。
+2. 只有从原始回执与独立只读 poststate 中**足以证明安全**的状态才能直接完成确定性恢复；任何派发后结果不确定、读回不完整或存在 Root/Peer/GC 依赖时，**不得自动释放** UNKNOWN 安全锁。
+3. 需人工承担不确定性时，由 ChatGPT 展示操作 ID、Box 身份、原生状态、风险和释放后的影响，用户在 ChatGPT 中确认。**普通聊天“同意”、`approved=true`、Agent 自己提供的 token/文本均不构成后端可信批准**；MCP 服务必须校验来自独立可信用户交互/审批通道的绑定凭证（操作 ID + native UUID/incarnation + 意图摘要 + 审批主体 + 过期时间 + 单次使用），并防止 Agent 自批、重放和跨 Actor/Layer 借用。
+4. 若当前 ChatGPT/MCP 集成**没有可验证的用户审批机制**，则高风险 `CONFIRM` 返回 `APPROVAL_UNAVAILABLE`/ `BLOCKED`，保持原始 UNKNOWN 和锁，回退 Host `recover`；**不可**因为用户在聊天中回复“同意”就当作可信授权。S5 实施前先完成官方 SDK/实际 ChatGPT 审批能力验证与威胁模型；如需要独立受限后端审批入口，须另行审查，不能默增 Host/Root API。
+5. 服务端执行必须经受控、最小权限、预设操作的恢复执行链和不可篡改审计，保证没有 native 原始操作重放、没有伪造原始成功结果；原 `UNKNOWN` 永久保留作为历史事实，解锁是另一个可审计决定。维持原有 host-root `recover` 作为救援路径。
+6. 对 `operation_recover` 的重试只使用其**自身**幂等键/原始 ID，不得借用或重发原始失败操作的 key；异常恢复步骤和审计证据应可通过 Activity/operation API 让新 Agent 找回。
+
+### 必须完成的 S5 验收场景
+
+- **实际磁盘配额用尽：** 用独立一次性 2 GiB Btrfs Box 复现 `box_exec` spool/ENOSPC/EDQUOT，确认无派发时安全拒绝、有充分证明时正确完成、证据不足时原 UNKNOWN 与锁保留；通过 MCP 完成被允许的恢复及随后 Stop/Delete，杜绝直接 Host 删除造成账本失配。
+- **原生不确定/并发：** native ACK 丢失、Exec 已派发但日志缺失、创建后状态不确定、删除/GC 半途失败、Peer grant/revoke Root 结果未知；验证精确 UUID、operation lineage、资源锁、可重复只读核查、无二次 native 效果。
+- **审批安全：** 实际 ChatGPT 用户确认与服务端凭证检验；拒绝无确认、伪造文字、同意但无可信凭证、跨 Layer、过期、重放、错 UUID/意图、另一个 Actor 代签。没有可验审批时应稳定阻断高风险恢复，证明 CLI 后备可用。
+- **诊断覆盖：** `operation_get`、`box_get`、`host_status` 按 MCP Tool 名逐项验证正常/故障/权限拒绝、脱敏和历史 Activity 贯穿；不得混淆 `box_exec` 的原生完成与 Guest 退出码 0。
+- **真实接入与回归：** 实际安装的候选二进制 + 真实 ChatGPT OAuth MCP 客户端 + Incus/SQLite/Root/PRS，完整从 `UNKNOWN` → 诊断 → 可信批准或安全拒绝 → 恢复 → 清理 → 重连查证；独立 Agent/Verifier 复核；所有原始 ID、native 证据、CI SHA 和阴性失败记录进入验收报告。
+
+**S5 出口：** P0/P1 编码、最小接口目录/产品边界同步、独立安全复核及上述原生测试均通过，才可将此工作包标记为 `S5_MCP_RECOVERY_PASS`。P2 的身份只读探索可单独注明 DEFERRED。若可信 ChatGPT 审批不可实现，则 `S5_MCP_RECOVERY_BLOCKED`，不把 Host 本地批准伪称为完成；不得以修改文档或新增一个可调用工具替代此门禁。
+
 ## TC-019–TC-020: final independent continuity calibration
 
 Add [TC-019–TC-020](../../verification/CONTINUITY_ACCEPTANCE.md) to acceptance of the **actual enumerated final installed Tool + CLI inventory**. Independent verifier deliberately reproduces broken attribution/authorization or duplicate-dispatch native failure and verifies the test **fails**, then checks original case repaired. Reaccept SDK legacy/new clients, optional `_meta` and tested fallback, private caching, Tool hints, typed/legacy result, dropped optional progress and genuine Agent/checkpoint recovery. The MCP Tasks extension remains future only; original S5 native/LAN/UNKNOWN and release tests are not substituted.
