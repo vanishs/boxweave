@@ -304,6 +304,17 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
+if [ "${S5A2_RECOVERY_NATIVE_ONLY:-}" = true ]; then
+  # This branch inherits the pristine one-use host/Project/ledger guards.
+  # The test probe creates a scoped SQLite fault, not a production setting.
+  CGO_ENABLED=1 go build -trimpath -o "$work/s5a2-recovery-probe" ./scripts/s5a2_recovery_probe.go
+  chmod 0755 "$work/s5a2-recovery-probe"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted S5A2_RECOVERY_NATIVE_ONLY=true \
+    S5A2_DB="$db" S5A2_TOKEN="$admin" "$work/s5a2-recovery-probe"
+  exit 0
+fi
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_START"
 

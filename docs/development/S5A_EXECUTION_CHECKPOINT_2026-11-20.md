@@ -7,7 +7,7 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | Increment | Formal status |
 | --- | --- |
 | S5A1 — incident provenance and typed diagnostics | PARTIAL |
-| S5A2 — bounded shared operation recovery | NOT_STARTED |
+| S5A2 — bounded shared operation recovery | PARTIAL |
 | S5A3 — independently verifiable user approval | NOT_STARTED |
 | S5A4 — network and dependent Delete recovery | NOT_STARTED |
 | S5A5 — diagnostic and recovery evidence integration | NOT_STARTED |
@@ -19,4 +19,4 @@ Read-only handoff baseline: published RC8, installed commit `36e7933e12f83d129a3
 
 Use Box-first isolated development and immediate scoped acceptance for each increment. Keep original operation identities, exact tested source and residual gates in the execution log. No S5B acceptance, stable publication, host changes or implementation are authorized by this checkpoint itself.
 
-A1 started on owner instruction. See the [A1 implementation checkpoint](S5A1_DIAGNOSTICS_2026-11-20.md). A2–A6 remain NOT_STARTED.
+A1 started on owner instruction. See the [A1 implementation checkpoint](S5A1_DIAGNOSTICS_2026-11-20.md). Both independent A1 native jobs passed; historical #151 witness remains unavailable. A2 implementation and Box verification completed; see [A2 checkpoint](S5A2_RECOVERY_2026-11-20.md). A3–A6 remain NOT_STARTED.

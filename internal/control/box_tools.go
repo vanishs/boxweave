@@ -660,20 +660,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
-				if in.CPU != nil && actual.CPU != fmt.Sprint(*in.CPU) ||
-					in.MemoryMiB != nil && actual.Memory != fmt.Sprintf("%dMiB", *in.MemoryMiB) ||
-					in.Nesting != nil && actual.Nesting != *in.Nesting ||
-					in.Internet != nil && actual.Internet != *in.Internet {
+				if !native.InstanceChangesMatch(changes, actual) {
 					return native.ErrUnverified
 				}
-				// Root disk size postread must also be proved, never only
-				// trust the successful UpdateInstance operation.
-				if in.DiskGiB != nil && actual.RootDiskSize != fmt.Sprintf("%dGiB", *in.DiskGiB) {
-					return native.ErrUnverified
-				}
-				if !in.InstanceOptions.Matches(actual.NativeOptions) {
-					return native.ErrUnverified
-				}
+
 				return nil
 			}
 			r, err = s.submitNative(r, effect, verify)

@@ -166,6 +166,19 @@ type NativeReadSnapshot struct {
 // an expired operation ID, or a guessed absence of guest side effects.
 func (s *Store) FinalizeVerifiedExec(ctx context.Context, operationID string, box OwnedBox,
 	nativeID, stdoutPath, stderrPath string, exit int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = finishVerifiedExecTx(ctx, tx, operationID, box, nativeID, stdoutPath, stderrPath, exit, "VERIFYING", "VERIFIED_NATIVE_EXEC_TERMINAL"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func finishVerifiedExecTx(ctx context.Context, tx *sql.Tx, operationID string, box OwnedBox,
+	nativeID, stdoutPath, stderrPath string, exit int, expectedPhase, detail string) error {
 	if operationID == "" || box.UUID == "" || box.Project == "" ||
 		box.Name == "" || box.Incarnation == "" || box.State != "OWNED" ||
 		len(box.Name) > 63 || strings.ContainsAny(box.Name, "/\\?%#\x00\r\n") ||
@@ -189,23 +202,17 @@ func (s *Store) FinalizeVerifiedExec(ctx context.Context, operationID string, bo
 		return ErrInvalid
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
 	// A terminal ACK for a foreign operation or prior incarnation cannot
 	// release this resource claim, even if the output filename looks valid.
 	now := time.Now().UnixNano()
 	res, err := tx.ExecContext(ctx, `UPDATE operations
 		SET state='SUCCEEDED',error_class='',updated_at=?
-		WHERE id=? AND action='box_exec' AND state='VERIFYING'
+		WHERE id=? AND action='box_exec' AND state=?
 		AND layer=? AND box_uuid=? AND incarnation=? AND resource_key=?
 		AND native_operation_id=?
 		AND EXISTS (SELECT 1 FROM owned_boxes
 			WHERE uuid=? AND project=? AND name=? AND incarnation=? AND state='OWNED')`,
-		now, operationID, box.Project, box.UUID, box.Incarnation,
+		now, operationID, expectedPhase, box.Project, box.UUID, box.Incarnation,
 		"box:"+box.Name, nativeID,
 		box.UUID, box.Project, box.Name, box.Incarnation)
 	if err != nil {
@@ -226,10 +233,10 @@ func (s *Store) FinalizeVerifiedExec(ctx context.Context, operationID string, bo
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events
 		(operation_id,at,state,safe_detail) VALUES (?,?,?,?)`,
-		operationID, now, "SUCCEEDED", "VERIFIED_NATIVE_EXEC_TERMINAL"); err != nil {
+		operationID, now, "SUCCEEDED", detail); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *Store) SaveExecOutput(ctx context.Context, opID, stdoutPath, stderrPath string, exit *int) error {

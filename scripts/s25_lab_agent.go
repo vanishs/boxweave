@@ -122,11 +122,11 @@ func tools(ctx context.Context, c *mcp.ClientSession) {
 	expected := map[string]bool{"host_status": true, "box_create": true, "box_get": true,
 		"box_list": true, "box_update": true, "box_start": true, "box_stop": true, "box_delete": true,
 		"box_exec": true, "operation_get": true, "operation_list": true,
-		"operation_output_get": true, "operation_cancel": true,
+		"operation_output_get": true, "operation_cancel": true, "operation_recover": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 		"box_peer_set": true, "port_forward_list": true, "port_forward_create": true, "port_forward_delete": true,
 		"box_activity_get": true, "box_wait_ready": true}
-	must(len(t.Tools) == len(expected), "MCP source contract changed: exact 22 public tools required")
+	must(len(t.Tools) == len(expected), "MCP source contract changed: exact 23 public tools required")
 	for _, tool := range t.Tools {
 		must(expected[tool.Name], "unexpected or duplicate public MCP Tool "+tool.Name)
 		delete(expected, tool.Name)
@@ -807,7 +807,7 @@ func main() {
 		c := connectActor(ctx, "a")
 		defer c.Close()
 		tools(ctx, c)
-		fmt.Println("S25_EXACT_22_TOOL_CATALOG=PASS")
+		fmt.Println("S25_EXACT_23_TOOL_CATALOG=PASS")
 	case "admit":
 		admit(ctx)
 	case "recover":

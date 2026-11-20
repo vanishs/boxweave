@@ -142,14 +142,30 @@ func (s *Store) BindUnknownCreatedBox(ctx context.Context, r CreateRecoverySnaps
 		time.Since(time.Unix(0, at)) < 0 || time.Since(time.Unix(0, at)) > 5*time.Minute {
 		return ErrConflict
 	}
+	if err = bindUnknownCreateTx(ctx, tx, r.OperationID, r.Project, r.Name, r.UpdatedAt, uuid, "EXACT_NATIVE_UUID_BOUND_LOCAL_REVIEW_NO_REPLAY"); err != nil {
+		return err
+	}
 	now := time.Now().UnixNano()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO owned_boxes(uuid,project,name,incarnation,state,created_at)
-        VALUES(?,?,?,?,'OWNED',?)`, uuid, r.Project, r.Name, uuid, now); err != nil {
+
+	reasonHash := sha256.Sum256([]byte(reason))
+	if _, err = tx.ExecContext(ctx, `INSERT INTO recovery_audit(operation_id,at,reviewer,decision,evidence_digest)
+        VALUES(?,?,?,?,?)`, r.OperationID, now, reviewer, "CREATE_BOUND", hex.EncodeToString(reasonHash[:])); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// Both local review and deterministic MCP identity binding keep UNKNOWN
+// and its original resource protection unchanged.
+func bindUnknownCreateTx(ctx context.Context, tx *sql.Tx, id, project, name string, updatedAt int64, uuid, detail string) error {
+	now := time.Now().UnixNano()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO owned_boxes(uuid,project,name,incarnation,state,created_at)
+        VALUES(?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
 		return err
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE operations SET box_uuid=?,incarnation=?,updated_at=?
         WHERE id=? AND state='UNKNOWN' AND box_uuid='' AND updated_at=?`,
-		uuid, uuid, now, r.OperationID, r.UpdatedAt)
+		uuid, uuid, now, id, updatedAt)
 	if err != nil {
 		return err
 	}
@@ -158,13 +174,8 @@ func (s *Store) BindUnknownCreatedBox(ctx context.Context, r CreateRecoverySnaps
 		return ErrConflict
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events(operation_id,at,state,safe_detail)
-        VALUES(?,?,?,?)`, r.OperationID, now, "UNKNOWN", "EXACT_NATIVE_UUID_BOUND_LOCAL_REVIEW_NO_REPLAY"); err != nil {
+        VALUES(?,?,?,?)`, id, now, "UNKNOWN", detail); err != nil {
 		return err
 	}
-	reasonHash := sha256.Sum256([]byte(reason))
-	if _, err = tx.ExecContext(ctx, `INSERT INTO recovery_audit(operation_id,at,reviewer,decision,evidence_digest)
-        VALUES(?,?,?,?,?)`, r.OperationID, now, reviewer, "CREATE_BOUND", hex.EncodeToString(reasonHash[:])); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return nil
 }

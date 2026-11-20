@@ -136,7 +136,7 @@ jobs:
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119             /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4InstalledMCPNativeCreateListDelete$' | tee "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_tcp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_udp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
-          grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_22_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_23_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           for binding in external-v4-tcp external-v4-udp external-v6-tcp external-v6-udp; do

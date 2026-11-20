@@ -1,0 +1,362 @@
+package recovery
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/state"
+)
+
+// Read-only native seam, shared with the root-reviewed CLI. No mutation
+// method is reachable from recovery; test doubles cannot issue native work.
+type Observer interface {
+	ObserveOwnedBox(context.Context, string, string) (native.BoxObservation, error)
+	ObserveCreatedByOperation(context.Context, string, string) (native.BoxState, error)
+	ObserveUnknownDelete(context.Context, string, string, string) (native.DeleteRecoveryObservation, error)
+	GetExactBox(context.Context, string, string) (native.BoxState, string, error)
+	CheckExactPrivateNIC(context.Context, string, string) error
+	NativeOperation(context.Context, string) (*api.Operation, error)
+	ReadRecordedOutput(context.Context, string, int64, int64) ([]byte, bool, error)
+	ReadGuestFile(context.Context, string, string, string, int64, int) (native.GuestFilePage, error)
+}
+type Service struct {
+	Store  *state.Store
+	Native Observer
+	Layer  string
+}
+
+type View struct {
+	OriginalID         string `json:"original_operation_id"`
+	OriginalAction     string `json:"original_action"`
+	OriginalState      string `json:"original_state"`
+	BoxID              string `json:"box_id,omitempty"`
+	Incarnation        string `json:"incarnation,omitempty"`
+	OriginalNativeID   string `json:"original_native_operation_id,omitempty"`
+	ClaimProtection    string `json:"claim_protection"`
+	Disposition        string `json:"disposition"`
+	Reason             string `json:"reason"`
+	ProposedAction     string `json:"proposed_action,omitempty"`
+	NativeObservation  string `json:"native_observation"`
+	EvidenceSource     string `json:"evidence_source"`
+	ObservedNativeUUID string `json:"observed_native_uuid,omitempty"`
+	GuestExitCode      *int   `json:"guest_exit_code,omitempty"`
+	GCStream           string `json:"gc_stream,omitempty"`
+}
+type Result struct {
+	View          View                  `json:"diagnosis"`
+	Recovery      *state.RecoveryRecord `json:"recovery,omitempty"`
+	NativeRetried bool                  `json:"native_retried"`
+}
+
+func base(t state.RecoveryTarget, stream string) View {
+	v := View{OriginalID: t.ID, OriginalAction: t.Action, OriginalState: t.State, BoxID: t.UUID, Incarnation: t.Incarnation, OriginalNativeID: t.NativeID, ClaimProtection: "NOT_UNKNOWN", NativeObservation: "NOT_CHECKED", EvidenceSource: "SQLITE_DURABLE", GCStream: stream}
+	if t.State == "UNKNOWN" {
+		v.ClaimProtection = "RETAINED"
+		if t.Released {
+			v.ClaimProtection = "REVIEWED_RELEASED"
+		}
+	}
+	return v
+}
+func validStream(s string) bool { return s == "" || s == "stdout" || s == "stderr" }
+
+func ObserveCreate(ctx context.Context, n Observer, name, id string) (native.BoxState, native.BoxObservation, error) {
+	box, e := n.ObserveCreatedByOperation(ctx, name, id)
+	if e != nil {
+		return box, native.BoxObservation{}, e
+	}
+	obs, e := n.ObserveOwnedBox(ctx, name, box.UUID)
+	if e != nil {
+		return box, obs, e
+	}
+	if box.UUID == "" || box.Name != name || obs.Name != name || obs.Project != box.Project || obs.State != "PRESENT_UUID_CONFIRMED" || obs.ExpectedUUID != box.UUID {
+		return box, obs, native.ErrUnverified
+	}
+	return box, obs, nil
+}
+func ObserveGC(ctx context.Context, n Observer, r state.ExecGCReview) (string, error) {
+	box, _, e := n.GetExactBox(ctx, r.Name, r.BoxUUID)
+	if e != nil {
+		return "", e
+	}
+	if box.UUID != r.BoxUUID || box.Project != r.Project {
+		return "", native.ErrNotOwned
+	}
+	_, _, e = n.ReadRecordedOutput(ctx, r.Path, 0, 1)
+	if errors.Is(e, native.ErrRecordedOutputUnavailable) {
+		return "NATIVE_MISSING", nil
+	}
+	if e != nil {
+		return "", e
+	}
+	return "NATIVE_PRESENT", nil
+}
+
+func (s Service) Inspect(ctx context.Context, id, stream string) (Result, error) {
+	if !validStream(stream) {
+		return Result{}, state.ErrInvalid
+	}
+	t, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, id)
+	if e != nil {
+		return Result{}, e
+	}
+	v, _ := s.observe(ctx, t, stream)
+	return Result{View: v}, nil
+}
+func (s Service) Reconcile(ctx context.Context, r state.RecoveryRequest) (Result, error) {
+	if r.Layer != s.Layer {
+		return Result{}, state.ErrInvalid
+	}
+	old, e := s.Store.ReplayRecovery(ctx, r)
+	if e == nil {
+		t, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, r.OriginalID)
+		if e != nil {
+			return Result{}, e
+		}
+		v := base(t, r.Stream)
+		v.Disposition, v.Reason = old.Disposition, old.Reason
+		v.NativeObservation = "NOT_REOBSERVED_REPLAY"
+		if r.Stream != "" {
+			v.ClaimProtection = "GC_NOT_REOBSERVED"
+		}
+		return Result{View: v, Recovery: &old}, nil
+	}
+	if !errors.Is(e, state.ErrNotFound) {
+		return Result{}, e
+	}
+	t, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, r.OriginalID)
+	if e != nil {
+		return Result{}, e
+	}
+	v, p := s.observe(ctx, t, r.Stream)
+	if ctx.Err() != nil {
+		return Result{}, ctx.Err()
+	}
+	record, e := s.Store.CommitRecovery(ctx, r, t, p)
+	if e != nil {
+		return Result{}, e
+	}
+	current, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, t.ID)
+	if e != nil {
+		return Result{}, e
+	}
+	latest := base(current, r.Stream)
+	if record.Receipt.Duplicate {
+		latest.NativeObservation = "NOT_REOBSERVED_REPLAY"
+		if r.Stream != "" {
+			latest.ClaimProtection = "GC_NOT_REOBSERVED"
+		}
+	} else {
+		latest.NativeObservation = v.NativeObservation
+		latest.EvidenceSource = v.EvidenceSource
+		latest.ObservedNativeUUID = v.ObservedNativeUUID
+		latest.GuestExitCode = v.GuestExitCode
+		if r.Stream != "" {
+			latest.ClaimProtection = v.ClaimProtection
+		}
+	}
+	latest.Disposition, latest.Reason = record.Disposition, record.Reason
+	return Result{View: latest, Recovery: &record}, nil
+}
+func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream string) (View, state.RecoveryProof) {
+	v := base(t, stream)
+	finish := func(kind, reason string) (View, state.RecoveryProof) {
+		v.Disposition, v.Reason = kind, reason
+		if kind == state.RecoverySettle || kind == state.RecoveryBind {
+			v.Disposition = "SAFE_RECOVER"
+			v.ProposedAction = kind
+		}
+		return v, state.RecoveryProof{Kind: kind, Reason: reason}
+	}
+	if stream != "" {
+		if t.Action != "box_exec" {
+			return finish(state.RecoveryBlocked, "GC_REQUIRES_ORIGINAL_EXEC")
+		}
+		gc, e := s.Store.ExecGCReviewInspect(ctx, t.ID, stream)
+		if e != nil || gc.Project != s.Layer {
+			return finish(state.RecoveryBlocked, "GC_REVIEW_NOT_AVAILABLE")
+		}
+		v.ClaimProtection = "GC_REVIEW_RETAINED"
+		observed, e := ObserveGC(ctx, s.Native, gc)
+		if e != nil {
+			return finish(state.RecoveryBlocked, "GC_NATIVE_OBSERVATION_UNVERIFIED")
+		}
+		v.NativeObservation = observed
+		v.EvidenceSource = "SQLITE_AND_NATIVE"
+		return finish(state.RecoveryApproval, "GC_RELEASE_REQUIRES_APPROVAL_NO_EXPIRY_INFERENCE")
+	}
+	if t.Action == "operation_recover" {
+		return finish(state.RecoveryBlocked, "RECOVERY_OF_RECOVERY_UNSUPPORTED")
+	}
+	if t.State != "UNKNOWN" {
+		switch t.State {
+		case "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT":
+			return finish(state.RecoveryNotNeeded, "ORIGINAL_TERMINAL")
+		default:
+			return finish(state.RecoveryBlocked, "ORIGINAL_NOT_UNKNOWN")
+		}
+	}
+	if t.Released {
+		return finish(state.RecoveryNotNeeded, "ORIGINAL_ALREADY_REVIEWED_RELEASED")
+	}
+	if t.DependentDelete || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete" {
+		return finish(state.RecoveryBlocked, "NETWORK_RECOVERY_DEFERRED_A4")
+	}
+	if t.Action == "operation_cancel" {
+		var in struct {
+			Target string `json:"target_operation_id"`
+		}
+		if json.Unmarshal([]byte(t.SafeIntent), &in) == nil {
+			target, e := s.Store.ReadRecoveryTarget(ctx, s.Layer, in.Target)
+			if e == nil && target.State == "CANCELLED" && target.NativeID == "" {
+				return finish(state.RecoveryBlocked, "TARGET_CANCELLED_ORIGINAL_CAUSALITY_UNPROVED")
+			}
+		}
+		return finish(state.RecoveryBlocked, "CANCEL_OUTCOME_UNPROVED")
+	}
+	if t.Name == "" || t.Resource != "box:"+t.Name {
+		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
+	}
+	if t.Action == "box_create" && t.UUID == "" && t.Incarnation == "" {
+		box, obs, e := ObserveCreate(ctx, s.Native, t.Name, t.ID)
+		if e != nil || box.Project != s.Layer {
+			return finish(state.RecoveryBlocked, "CREATE_MARKER_IDENTITY_UNPROVED")
+		}
+		v.ObservedNativeUUID = box.UUID
+		v.NativeObservation = obs.State
+		v.EvidenceSource = "SQLITE_AND_NATIVE"
+		view, p := finish(state.RecoveryBind, "CREATE_MARKER_EXACT_IDENTITY")
+		p.UUID, p.Fingerprint = box.UUID, obs.Fingerprint
+		return view, p
+	}
+	if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" {
+		return finish(state.RecoveryBlocked, "EXACT_ORIGINAL_OWNERSHIP_UNPROVED")
+	}
+	if t.Action == "box_delete" {
+		obs, e := s.Native.ObserveUnknownDelete(ctx, t.Name, t.UUID, t.NativeID)
+		if e != nil {
+			return finish(state.RecoveryBlocked, "DELETE_NATIVE_OBSERVATION_UNVERIFIED")
+		}
+		v.NativeObservation = obs.Class
+		v.EvidenceSource = "SQLITE_AND_NATIVE"
+		if obs.NativeID != t.NativeID || obs.Box.Project != t.Layer || obs.Box.ExpectedUUID != t.UUID || obs.Box.Name != t.Name {
+			return finish(state.RecoveryBlocked, "DELETE_IDENTITY_UNPROVED")
+		}
+		if obs.Class != "ORIGINAL_TERMINAL_DELETE_VERIFIED" || obs.Box.State != "ABSENT_UNCERTAIN" {
+			return finish(state.RecoveryApproval, "DELETE_TERMINAL_ABSENCE_NOT_PROVED")
+		}
+		view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
+		p.UUID, p.NativeID, p.Fingerprint = t.UUID, t.NativeID, obs.Fingerprint
+		return view, p
+	}
+	box, etag, e := s.Native.GetExactBox(ctx, t.Name, t.UUID)
+	if e != nil || box.UUID != t.UUID || box.Project != s.Layer {
+		return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")
+	}
+	v.NativeObservation = "PRESENT_UUID_CONFIRMED"
+	v.EvidenceSource = "SQLITE_AND_NATIVE"
+	switch t.Action {
+	case "box_create":
+		return finish(state.RecoveryApproval, "CREATE_IDENTITY_BOUND_OUTCOME_UNPROVED")
+	case state.ReadinessAction:
+		return finish(state.RecoveryApproval, "READINESS_HISTORICAL_OUTCOME_UNPROVED")
+	case "box_file_apply":
+		// Persisted keys use snake case; explicit tags avoid accidental matches.
+		var saved struct {
+			BoxID  string `json:"box_id"`
+			Path   string `json:"path"`
+			Mode   string `json:"mode"`
+			Bytes  int    `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		}
+		if json.Unmarshal([]byte(t.SafeIntent), &saved) != nil || saved.BoxID != t.UUID || saved.Mode != "create" || !native.SafeGuestFilePath(saved.Path) || saved.Bytes < 0 || saved.Bytes > native.MaxGuestFileBytes {
+			return finish(state.RecoveryBlocked, "FILE_ORIGINAL_INTENT_UNVERIFIED")
+		}
+		page, e := s.Native.ReadGuestFile(ctx, t.Name, t.UUID, saved.Path, 0, native.MaxGuestFileBytes)
+		if e == nil && page.WholeFile && page.Size == int64(saved.Bytes) && page.PageSHA256 == saved.SHA256 {
+			return finish(state.RecoveryApproval, "FILE_CONTENT_MATCHES_CAUSALITY_UNPROVED")
+		}
+		return finish(state.RecoveryApproval, "FILE_ORIGINAL_EFFECT_UNPROVED")
+	case "box_exec", "box_start", "box_stop", "box_update":
+	default:
+		return finish(state.RecoveryBlocked, "DOMAIN_RECOVERY_UNSUPPORTED")
+	}
+	if t.NativeID == "" {
+		return finish(state.RecoveryApproval, "ORIGINAL_NATIVE_ACK_MISSING")
+	}
+	op, e := s.Native.NativeOperation(ctx, t.NativeID)
+	if api.StatusErrorCheck(e, http.StatusNotFound) {
+		return finish(state.RecoveryApproval, "ORIGINAL_NATIVE_RECEIPT_UNAVAILABLE")
+	}
+	if e != nil || op == nil || op.ID != t.NativeID {
+		return finish(state.RecoveryBlocked, "ORIGINAL_NATIVE_RECEIPT_UNVERIFIED")
+	}
+	if !op.StatusCode.IsFinal() {
+		v.NativeObservation = "NATIVE_ACTIVE"
+		return finish(state.RecoveryBlocked, "ORIGINAL_NATIVE_ACTIVE")
+	}
+	v.NativeObservation = "NATIVE_TERMINAL"
+	if t.Action == "box_exec" {
+		ev, e := native.ExecEvidenceFromFinal(op)
+		if e != nil || !native.ExecEvidenceMatchesOriginal(ev, t.Name, t.NativeID) {
+			return finish(state.RecoveryApproval, "EXEC_TERMINAL_EVIDENCE_UNPROVED")
+		}
+		// Repeat exact native identity after observing terminal. Recorded paths
+		// and exit are not proof that output bytes remain accessible.
+		again, _, e := s.Native.GetExactBox(ctx, t.Name, t.UUID)
+		if e != nil || again.UUID != t.UUID || again.Project != s.Layer {
+			return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")
+		}
+		v.GuestExitCode = ev.Exit
+		view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
+		p.NativeID, p.UUID, p.Exit, p.StdoutPath, p.StderrPath = t.NativeID, t.UUID, ev.Exit, ev.StdoutPath, ev.StderrPath
+		p.Fingerprint = fingerprint(t.ID, t.NativeID, t.UUID, fmt.Sprint(*ev.Exit), ev.StdoutPath, ev.StderrPath)
+		return view, p
+	}
+	if op.StatusCode != api.Success {
+		return finish(state.RecoveryApproval, "NATIVE_TERMINAL_SUCCESS_UNPROVED")
+	}
+	// Re-read after the native terminal; the original UNKNOWN protection
+	// prevents other BoxWeave mutations until the single SQLite commit.
+	box, etag, e = s.Native.GetExactBox(ctx, t.Name, t.UUID)
+	if e != nil || box.UUID != t.UUID || box.Project != s.Layer {
+		return finish(state.RecoveryBlocked, "EXACT_NATIVE_UUID_UNVERIFIED")
+	}
+	if e = s.Native.CheckExactPrivateNIC(ctx, t.Name, t.UUID); e != nil {
+		return finish(state.RecoveryBlocked, "PRIVATE_NIC_UNVERIFIED")
+	}
+	switch t.Action {
+	case "box_start":
+		if box.NativeState != "Running" {
+			return finish(state.RecoveryApproval, "POWER_POSTSTATE_UNVERIFIED")
+		}
+	case "box_stop":
+		if box.NativeState != "Stopped" {
+			return finish(state.RecoveryApproval, "POWER_POSTSTATE_UNVERIFIED")
+		}
+	case "box_update":
+		var in struct {
+			BoxID   string                 `json:"box_id"`
+			Changes native.InstanceChanges `json:"changes"`
+		}
+		if json.Unmarshal([]byte(t.SafeIntent), &in) != nil || in.BoxID != t.UUID || !native.InstanceChangesMatch(in.Changes, box) {
+			return finish(state.RecoveryApproval, "UPDATE_POSTSTATE_UNVERIFIED")
+		}
+	}
+	view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
+	p.NativeID, p.UUID, p.Fingerprint = t.NativeID, t.UUID, fingerprint(t.ID, t.NativeID, t.UUID, etag, box.NativeState)
+	return view, p
+}
+
+func fingerprint(parts ...string) string {
+	raw, _ := json.Marshal(parts)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}

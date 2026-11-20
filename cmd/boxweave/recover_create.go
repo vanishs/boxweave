@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/recovery"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -24,17 +25,11 @@ func performUnknownCreateBinding(ctx context.Context, store *state.Store, a reco
 	reader := native.Reader{Socket: a.Socket, Project: a.Project}
 	// Exact original admission marker is mandatory. Even a matching name and
 	// UUID with the right ACL must not be adopted without this witness.
-	box, err := reader.ObserveCreatedByOperation(ctx, original.Name, original.OperationID)
+	box, observed, err := recovery.ObserveCreate(ctx, reader, original.Name, original.OperationID)
 	if err != nil {
-		return fmt.Errorf("original native create identity not proven: %w", err)
+		return fmt.Errorf("original native Create identity not proven: %w", err)
 	}
-	observed, err := reader.ObserveOwnedBox(ctx, original.Name, box.UUID)
-	if err != nil {
-		return fmt.Errorf("second native UUID/ETag readback failed: %w", err)
-	}
-	if observed.State != "PRESENT_UUID_CONFIRMED" {
-		return errors.New("native state not currently verified present")
-	}
+
 	out := json.NewEncoder(os.Stdout)
 	switch a.Action {
 	case "create-inspect":

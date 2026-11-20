@@ -203,7 +203,7 @@ func main() {
 		"host_status": true, "box_create": true, "box_list": true, "box_get": true,
 		"box_update": true, "box_start": true, "box_stop": true, "box_delete": true,
 		"box_exec": true, "operation_get": true, "operation_list": true,
-		"operation_output_get": true, "operation_cancel": true,
+		"operation_output_get": true, "operation_cancel": true, "operation_recover": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 		"box_peer_set": true, "box_activity_get": true,
 		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true, "box_wait_ready": true,
@@ -254,6 +254,6 @@ func main() {
 	readBoxes(ctx, session)
 	fmt.Println("S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_LEGACY_PROTOCOL_16_TOOLS_NO_NATIVE_EFFECT=PASS")
 	// The prior 17-Tool baseline is intentionally superseded by Activity.
-	fmt.Println("S4_B4_PREVIOUS_OFFICIAL_SDK_22_TOOLS_DISCOVERY=PASS")
+	fmt.Println("S4_B4_PREVIOUS_OFFICIAL_SDK_23_TOOLS_DISCOVERY=PASS")
 	legacyLifecycle(ctx, session)
 }

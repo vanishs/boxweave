@@ -166,6 +166,7 @@ func (s *Service) Handler() http.Handler {
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)
+	s.registerRecoveryTool(server)
 	s.registerActivityTools(server)
 	s.registerForwardTools(server)
 	s.registerBoxTools(server)

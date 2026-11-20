@@ -57,6 +57,19 @@ type InstanceChanges struct {
 	Options   InstanceOptions
 }
 
+// InstanceChangesMatch is the shared typed Update postcondition. Recovery
+// may use it only with the original durable intent and exact native receipt.
+func InstanceChangesMatch(c InstanceChanges, actual BoxState) bool {
+	if c.CPU == nil && c.MemoryMiB == nil && c.DiskGiB == nil && c.Nesting == nil && c.Internet == nil && c.Options.IsZero() {
+		return false
+	}
+	return !(c.CPU != nil && actual.CPU != fmt.Sprint(*c.CPU) ||
+		c.MemoryMiB != nil && actual.Memory != fmt.Sprintf("%dMiB", *c.MemoryMiB) ||
+		c.DiskGiB != nil && actual.RootDiskSize != fmt.Sprintf("%dGiB", *c.DiskGiB) ||
+		c.Nesting != nil && actual.Nesting != *c.Nesting ||
+		c.Internet != nil && actual.Internet != *c.Internet) && c.Options.Matches(actual.NativeOptions)
+}
+
 type BoxState struct {
 	Name          string            `json:"name"`
 	UUID          string            `json:"box_id"`

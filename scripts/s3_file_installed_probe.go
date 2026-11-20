@@ -530,11 +530,11 @@ func main() {
 	for _, tool := range t.Tools {
 		names[tool.Name] = true
 	}
-	for _, n := range []string{"box_file_list", "box_file_read", "box_file_apply", "box_activity_get", "box_peer_set"} {
+	for _, n := range []string{"box_file_list", "box_file_read", "box_file_apply", "box_activity_get", "box_peer_set", "operation_recover"} {
 		need(names[n], "missing RC8 Tool "+n)
 	}
-	need(len(names) == 22, "S4-B4 candidate must expose 22 Tools including public Activity and Forward")
-	fmt.Println("S3_INSTALLED_22_TOOL_OFFICIAL_SDK_CATALOG=PASS")
+	need(len(names) == 23, "S4-B4 candidate must expose 23 Tools including public Activity and Forward")
+	fmt.Println("S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS")
 	// One and only one new disposable owned Box. No shared user Boxes,
 	// L0-L5 historical resources, or parent Incus credential delegation.
 	const name = "s3-file-phase2-ci"

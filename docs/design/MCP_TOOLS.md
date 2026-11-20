@@ -1,5 +1,7 @@
 # Public MCP tool catalog — intentionally narrow v1 P0
 
+**S5A2 (2026-11-20):** PR #163 adds exactly one public Tool, `operation_recover`, bringing the candidate catalog to **23**. RC8 installed catalog remains 22. Source implementation and Box tests completed; independent installed acceptance pending. See [S5A2 checkpoint](../development/S5A2_RECOVERY_2026-11-20.md). Historical counts below describe their original checkpoints.
+
 **2026-11-19 additive decision:** Draft PR #153 now registers the Owner-approved read-only `box_activity_get` as its **18th current Tool**, over bounded, authenticated SQLite Operation/Peer/network/Exec-GC evidence; it does not change the previous 17 public Tool contracts. Long-term planned count is **22** (20 baseline + S4-C readiness + Activity), not a claim that S4-B4–B6/S4-C are implemented. [Approval](../decisions/PRODUCT_BOUNDARY.md) · [implementation and test gates](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md).
 
 **S4-C owner-requested start (2026-11-20):** `box_get(detail=true)` is implemented in source; installed native proof pending. `box_wait_ready` is implemented in source (local verify and scoped real native smoke PASS, independent acceptance pending), bringing registered Tools including Activity to **22**. B6 completion remains a final S4-C gate. No new service, host API, Agent daemon or role. See [the precise S4-C contract](../development/S4_C_BOX_INSPECTION_READINESS_PLAN_2026-11-16.md). Existing S4-B implementation and acceptance remain based on the first 20 Tools.
@@ -10,7 +12,7 @@
 
 **Git / Task Checkpoint scope:** MCP `tools/list` can expose `box_exec` and the generic `operation_*` Tools. An Agent must choose and call guest `git` commands through `box_exec` (or use its own external terminal), then interpret their output itself. BoxWeave does **not** advertise a Git-specific Tool, auto-detect Git commands, persist parsed Git HEAD/branch/dirty state, or write a Task Checkpoint. [The external client-owned Checkpoint contract](../development/TASK_CHECKPOINT_CONTRACT.md) records derived Git state only when an Agent/workflow explicitly collects and saves it; merely connecting to MCP does not restore such a file.
 
-## P0 roadmap — 22 planned tools (20 baseline + S4-C readiness + Activity)
+## P0 roadmap — 23 candidate tools (22 RC8 + Recovery)
 
 | Tool | Kind | Contract |
 |---|---|---|
@@ -31,6 +33,7 @@
 | `box_activity_get` | Read (public in Draft PR #153) | `overview/issues/evidence`: Layer-authenticated, bounded SQLite original-operation/evidence readback; old blocking network/Peer/GC issues, signed keyset `next_cursor`; no native effects or task checkpoint. |
 | `operation_output_get` | Read | Bounded/paginated guest Exec output and observed exit details after reconnect. |
 | `operation_cancel` | Mutation | Prove queued cancellation or request supported Exec termination; no speculative undo or UNKNOWN resolution. |
+| `operation_recover` | Read diagnose / durable reconcile | Exact original evidence; deterministic settlement or identity binding; no re-dispatch or unproven claim release. |
 | `port_forward_list` | Read | List only native BoxWeave-owned TCP/UDP forwards and host binds. |
 | `port_forward_create` | Mutation | Native Incus host listener protocol/address/port -> verified owned Box UUID/guest port; default loopback is not LAN-reachable, explicit LAN/public bind authorized, native address/port and external probe verified separately. |
 | `port_forward_delete` | Mutation | Remove verified owned native forwarding only. |
