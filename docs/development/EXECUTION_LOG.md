@@ -235,7 +235,7 @@ Actual authenticated `_meta` malformed type/control/URL/argument-conflict and Vi
 | Protected originals | All historical/shared-host UNKNOWN unchanged. CI ACK-loss original remains unbound UNKNOWN; only its standalone SQLite copy binds. No uncertain native redispatch. |
 | Remaining scope | S4-B/C/#150/#151/S5 retain their own gates; owner starts S4-B after final report. No shared-host Scriptlet/AA/BPF change, physical deploy or release. |
 
-This checkpoint is mutable; dated observations below remain append-only.
+This checkpoint is mutable; dated observations below remain append-only. The 2026-11-20 owner [development environment and Box lifecycle](AGENT_WORKFLOW.md#development-environment-and-box-lifecycle) supersedes older instructions for automatic deletion of development workspaces; historical acceptance verdicts are unchanged.
 
 ## Log entry format
 
@@ -1307,3 +1307,9 @@ Owner signed into Codex CLI. Isolated bwcodex now reports Logged in using ChatGP
 ### RC8 isolated post-Delete Exec archive and issues semantic repair — 2026-11-19 PT
 
 On disposable L0-owned Box cdda8d43-73f5-44da-81b9-c34ce656c5c9, added private bounded archival Exec output before SQLite terminal finalization, seven-day file GC, post-Delete MCP read fallback and structured missing/expired, plus Activity active/history/coverage classification. Original focused test operation bf3ee30aa18bc18d13df5f0eefa7d450 PASS; first full Go attempt surfaced only missing next_offset wording and was fixed; subsequent internal/control, state, native full package test PASS. No shared Host deployment or physical Btrfs quota signoff. Full latest race/CI and independent native receipt require separate evidence. [Dedicated source acceptance](../verification/V1_RC8_EXEC_ARCHIVE_ACTIVITY_ISSUES_ACCEPTANCE_2026-11-19.md).
+
+### Owner workflow decision — Box-first with conventional fallback and user-confirmed deletion (2026-11-20 PT)
+
+- Owner approved one reusable task-owned development Box where available, nested native labs only as needed, reuse of the Python MCP test kit and existing test scenarios, local fix/retest before final GitHub Actions; conventional isolated Git worktree/local/authorized VM or CI remains supported when Box access is unavailable or unnecessary.
+- After successful acceptance, save code, documentation, evidence and the client checkpoint independently of the Box; report locations and exact name/UUID/layer, then ask the user whether to delete it. No automatic development Box deletion, including on PASS. Preserve incomplete/blocked/interrupted work and original UNKNOWN; authorized ephemeral test fixture cleanup and CI teardown are unchanged.
+- Updated AGENTS, CONTRIBUTING, Agent workflow, phase protocol, quality gates, Task Checkpoint and docs index. Documentation-only policy change; no runtime/schema/MCP/CI configuration changes, no Box created/stopped/deleted, no new feature or native signoff. Existing security/independent/release gates remain in force.

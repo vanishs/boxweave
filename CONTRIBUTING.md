@@ -2,6 +2,10 @@
 
 This repository is deliberately a staged, security-sensitive Go implementation. Follow [AGENTS.md](AGENTS.md), the [active phase plan](docs/process/IMPLEMENTATION_PLAN.md), and [quality gates](docs/process/QUALITY_GATES.md) rather than the historical `main` branch workflow.
 
+## Development environment
+
+Prefer an authorized reusable development Box when it is available and useful; otherwise work in an isolated conventional clone/worktree or approved VM/CI. Use identical source gates and the appropriate native evidence tier. See the [Box-first workflow and user-confirmed cleanup](docs/development/AGENT_WORKFLOW.md#development-environment-and-box-lifecycle). A successful development Box remains intact until the user explicitly approves deletion after saved code, docs and evidence are reported. Repository-only changes do not require provisioning a Box.
+
 ## Before any commit
 
 1. Work on an isolated topic branch; do not commit directly to `v1`, force-push or publish an unfinished stage. Avoid mixing S1 fixes with S2–S5 work.

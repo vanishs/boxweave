@@ -20,6 +20,8 @@
 
 ## Example format (illustrative, safe placeholder IDs only)
 
+For BoxWeave development, the same client-owned checkpoint works in a Box or a conventional Git workspace. Record environment identity and save the checkpoint outside the Box (Git or approved durable workflow storage), including on PASS while waiting for the user to choose whether to delete the named workspace.
+
 ```yaml
 format_version: 1
 work_ref: project-x/test-cycle
@@ -27,6 +29,13 @@ attempt_ref: agent-run-007
 updated_at_utc: "2026-11-10T00:00:00Z"
 objective: "Validate project X in a disposable Box"
 stage: "verify"
+workspace:
+  kind: "box"  # box | local | vm | ci
+  box_name: "example-dev-box"  # omit for non-Box workspaces
+  box_uuid: "example-owned-uuid"
+  layer: "L1"
+  path: "/example/worktree"
+  deletion_approval: "not_approved"  # not_approved | approved; approval is externally verified
 source:
   repository: "project-x"
   commit: "example-commit-sha"
@@ -50,7 +59,8 @@ links:
 ## Minimal rules
 
 - **No content duplication:** stable `work_ref` is shared across the workflow/client, not a secret or a permissions grant; `attempt_ref` can change on handoff. Use separate authenticated BoxWeave credentials if the user wants trustworthy per-Agent attribution. Preserve original BoxWeave `operation_id` and native ID, never rewrite them to make a checkpoint look complete.
-- **Write at meaningful boundaries:** before context compaction, after admitting an irreversible mutation (persist the returned original receipt), after a verified result, before handing work to another Agent, and before user-requested stop. **Sudden crashes can occur before a checkpoint is written**; missing information must be rediscovered from original indexed journal, Git and native postread. Do not claim zero data loss.
+- **Workspace continuity:** preserve the same worktree and original Operations across handoff. For accepted work, record committed/pushed code, docs, durable evidence locations and the retained workspace name/UUID/layer; ask the user whether to delete it. A checkpoint value is not proof of actual deletion approval. On interruption or a blocked gate, retain the Box and working state. For conventional development, record the local/VM/worktree identity instead and preserve its work. Follow the [development Box lifecycle](AGENT_WORKFLOW.md#development-environment-and-box-lifecycle).
+- **Write at meaningful boundaries:** before context compaction, after admitting an irreversible mutation (persist the returned original receipt), after a verified result, before handing work to another Agent, before reporting completion, and before user-requested stop. **Sudden crashes can occur before a checkpoint is written**; missing information must be rediscovered from original indexed journal, Git and native postread. Do not claim zero data loss.
 - **Checkpoint state isn't native truth:** a declared `completed` step must carry evidence ref/source SHA; `UNKNOWN` remains UNKNOWN even if a summary says “probably finished”. Reconnect with `operation_list(work_ref)`, then `operation_get(original_id)`, native readback and Git/CI checks before further mutations.
 - **Concurrency and privacy:** the Agent/workflow's Git/revisioned store owns checkpoint merge/optimistic concurrency; preserve conflicts rather than last-writer-wins lost information. No tokens/keys/host secrets/guest stdout/raw prompt chains/private env in project-shared checkpoint; use scoped evidence references and sanitized summaries. For private artifacts, follow local organization controls.
 - **Compatibility:** plain file/Git is an acceptable first implementation; optional external workflow systems may maintain their own checkpoints. BoxWeave never needs to parse this format or implement `checkpoint_save`/`checkpoint_get`; a later MCP Tasks adapter is unrelated to this broader work checkpoint.

@@ -43,6 +43,7 @@
 | When can the accepted S1+S2 candidate become an early real-host development base without weakening S4/S5? | [S2.5 BRIDGEHEAD phase card](development/phases/025_BRIDGEHEAD.md) · [predeployment SDK/source audit](research/S25_PREDEPLOY_REALITY_AUDIT_2026-11-11.md) · [BH-001–BH-017 exact native acceptance](verification/BRIDGEHEAD_ACCEPTANCE.md) |
 | Where were PR #145 and #149 historical UNKNOWN/AppArmor and RC5 OAuth/Create/Delete audits consolidated? | [S2.5 PR #146 consolidated scope and remaining gates](verification/S25_PR145_149_CONSOLIDATION_2026-11-15.md) · [historical original UNKNOWN/AppArmor evidence](verification/S25_EXEC_UNKNOWN_APPARMOR_2026-11-14.md) · [original RC5 cross-surface audit](verification/V1_RC5_BH018_CROSS_SURFACE_SOURCE_AUDIT_2026-11-14.md) |
 | How to execute continuously, handle repeated failures and avoid context loss? | [Execution protocol](development/PHASE_EXECUTION_PROTOCOL.md) |
+| How to develop Box-first, fall back to conventional Git development, reuse test fixtures, and retain or delete development Boxes? | [Development environment and Box lifecycle](development/AGENT_WORKFLOW.md#development-environment-and-box-lifecycle) |
 | What did earlier Agents do, decide, leave UNKNOWN or require the owner to decide? | [Execution log and live checkpoint](development/EXECUTION_LOG.md) |
 | Which focused inputs and exit gates belong to the current phase? | [Phase cards index](development/phases/README.md) |
 
