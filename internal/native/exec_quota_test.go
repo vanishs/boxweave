@@ -10,10 +10,10 @@ import (
 func TestRC8ExecSpoolQuotaHeadroom(t *testing.T) {
 	const gib = int64(1 << 30)
 	cases := []struct {
-		name string
-		used uint64
+		name  string
+		used  uint64
 		total int64
-		want bool
+		want  bool
 	}{
 		{"full-quota", 2 << 30, 2 * gib, true},
 		{"within-16mib-margin", (2 << 30) - (8 << 20), 2 * gib, true},
@@ -42,8 +42,8 @@ func TestRC8ExactIncusRecordedExecOpenQuotaFailure(t *testing.T) {
 	const id = "6f0e3a7a-7ff7-4dc3-b46f-7d7965533ba9"
 	base := "exec_" + id + ".stdout"
 	for _, errText := range []string{
-		"open /var/lib/incus/storage-pools/default/containers/user-1001_box/exec-output/"+base+": disk quota exceeded",
-		"open "+base+": no space left on device",
+		"open /var/lib/incus/storage-pools/default/containers/user-1001_box/exec-output/" + base + ": disk quota exceeded",
+		"open " + base + ": no space left on device",
 	} {
 		op := &api.Operation{ID: id, StatusCode: api.Failure, Err: errText}
 		if !ExecRecordingQuotaPreStartFailure(op, "box", id) {
@@ -53,12 +53,12 @@ func TestRC8ExactIncusRecordedExecOpenQuotaFailure(t *testing.T) {
 	ambiguous := []api.Operation{
 		{ID: id, StatusCode: api.Failure, Err: "no space left on device"},
 		{ID: id, StatusCode: api.Failure, Err: "open unrelated.stdout: disk quota exceeded"},
-		{ID: id, StatusCode: api.Success, Err: "open "+base+": disk quota exceeded"},
-		{ID: "other-id", StatusCode: api.Failure, Err: "open "+base+": disk quota exceeded"},
-		{ID: id, StatusCode: api.Failure, Err: "open "+base+": disk quota exceeded", Metadata: map[string]any{"return": float64(1)}},
-		{ID: id, StatusCode: api.Failure, Err: "open "+base+": disk quota exceeded", Metadata: map[string]any{"output": map[string]any{}}},
-		{ID: id, StatusCode: api.Failure, Err: "open "+base+": disk quota exceeded\nmore"},
-		{ID: id, StatusCode: api.Failure, Err: "close "+base+": disk quota exceeded"},
+		{ID: id, StatusCode: api.Success, Err: "open " + base + ": disk quota exceeded"},
+		{ID: "other-id", StatusCode: api.Failure, Err: "open " + base + ": disk quota exceeded"},
+		{ID: id, StatusCode: api.Failure, Err: "open " + base + ": disk quota exceeded", Metadata: map[string]any{"return": float64(1)}},
+		{ID: id, StatusCode: api.Failure, Err: "open " + base + ": disk quota exceeded", Metadata: map[string]any{"output": map[string]any{}}},
+		{ID: id, StatusCode: api.Failure, Err: "open " + base + ": disk quota exceeded\nmore"},
+		{ID: id, StatusCode: api.Failure, Err: "close " + base + ": disk quota exceeded"},
 	}
 	for i := range ambiguous {
 		if ExecRecordingQuotaPreStartFailure(&ambiguous[i], "box", id) {
