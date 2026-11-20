@@ -1317,3 +1317,7 @@ On disposable L0-owned Box cdda8d43-73f5-44da-81b9-c34ce656c5c9, added private b
 ### S4-B6 start and Box-first negative-fixture repair — 2026-11-20 PT
 
 Owner requested B6. [Live checkpoint and initial verification](S4_B6_INTEGRATION_ACCEPTANCE_2026-11-20.md). B5 final exact-source S4-A and B4/B5 native CI raw logs independently read, B5 scoped PASS. Reused nested lab be1af99d-b9b1-48f9-9548-524473eef163, separate /root/b6-integration worktree; original full verify exit 2 under umask 077, corrected actual insecure fixture modes and rerun exit 0 under both umasks/full verify. Python network mutation-name guard strengthened and 16 tests PASS. Keep B6 IN_PROGRESS, S4-B PARTIAL; no physical reboot/shared-host mutation, no Box deletion. Exact integrated native and final CI/independent gates remain open.
+
+### S4-B6 exact candidate installed integration — 2026-11-20 PT
+
+Exact source 1f1d1d8 real loopback restricted HTTP MCP and inner native Incus 7.6: 21 Tools, actual Create, three File Tools, Exec, TCP/UDP, controller restart original/packet readback, forward/delete-dependent lifecycle and SQLite/native postread PASS. Outer Exec 62b83f03e41a8bcbf7d4b1d9f7ab4a60 exit 0, postread b4b3326a57b0e27edbd77a59f27e988b exit 0. [Original IDs and evidence](S4_B6_INTEGRATION_ACCEPTANCE_2026-11-20.md). Code quality/dualarch SUCCESS, S4-A pending at read. B6 IN_PROGRESS: PRS/Scriptlet/remaining native fault, persistent-host reboot and independent verifier still required. Retain both development Boxes; only the scoped ephemeral child was deleted by the test.

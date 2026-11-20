@@ -1,0 +1,108 @@
+import base64, hashlib, json, os, socket, subprocess, sys, time, uuid
+from pathlib import Path
+sys.path.insert(0, "/root/b6-candidate/scripts")
+from mcp_testkit import LoopbackMCP, MCPToolError
+LAB=Path("/var/tmp/s4b6-integration")
+NAME="s4b6-smoke"
+REF="s4b6-installed-20261120"
+URL="http://127.0.0.1:18673/mcp"
+COMMIT="1f1d1d8011f053a44faa3d4bf7ad7ab931763336"
+ck=LAB/"checkpoint.json"
+def native(*args):
+    return subprocess.check_output(["incus","--project","user-1001",*args],text=True).strip()
+def packet(proto, port, want):
+    msg=b"s4b6-echo"
+    s=socket.socket(socket.AF_INET,socket.SOCK_STREAM if proto=="tcp" else socket.SOCK_DGRAM)
+    s.settimeout(2)
+    ok=False
+    try:
+        s.connect(("127.0.0.1",port)); s.sendall(msg)
+        ok=s.recv(len(msg))==msg
+    except OSError:
+        pass
+    finally:
+        s.close()
+    assert ok is want,(proto,port,want)
+    print("S4_B6_PACKET",proto,"PASS" if want else "DENIED",flush=True)
+def mutate(m,tool,key,**args):
+    r=m.call(tool,dict(args,idempotency_key=key+"-original",work_ref=REF,agent_ref="s4b6")).structured
+    oid=r["operation_id"]
+    print("S4_B6_ADMITTED",tool,oid,flush=True)
+    op=m.poll_operation(oid,seconds=150)
+    print("S4_B6_ORIGINAL",tool,oid,op.get("native_operation_id"),op["state"],op.get("error_class",""),flush=True)
+    assert op["state"]=="SUCCEEDED"
+    return oid
+def refuse(m,tool,args):
+    try:
+        m.call(tool,args)
+    except MCPToolError:
+        print("S4_B6_EXPECTED_REFUSAL",tool,flush=True)
+    else:
+        raise AssertionError("unexpected admission: "+tool)
+with LoopbackMCP(URL,token=os.environ["BOXWEAVE_MCP_TOKEN"],allow_mutations=True) as m:
+    cat=m.all_tools()
+    assert len(cat)==21,sorted(cat)
+    assert all(not cat[n]["annotations"].get("readOnlyHint",False) for n in ("box_peer_set","port_forward_create","port_forward_delete"))
+    assert cat["port_forward_list"]["annotations"]["readOnlyHint"] is True
+    st=m.host_status()
+    assert st["commit"]==COMMIT and st["schema_version"]==5 and st["ready"]
+    print("S4_B6_CATALOG_21_AND_NETWORK_SCHEMAS=PASS",flush=True)
+    if sys.argv[1]=="create":
+        assert not m.call("box_list").structured.get("boxes")
+        assert not native("list","-c","n","-f","csv")
+        a=mutate(m,"box_create","s4b6-create-v1",name=NAME,cpu=1,memory_mib=512,disk_gib=4,image="s4b6-fixture-image",start=True,internet=False)
+        rows=[x for x in m.call("box_list").structured["boxes"] if x.get("name")==NAME]
+        assert len(rows)==1
+        box=rows[0]["box_id"]
+        assert native("config","get",NAME,"volatile.uuid")==box
+        ck.write_text(json.dumps(dict(box=box,create=a))+"\n")
+        print("S4_B6_EXACT_OWNED_CREATE",box,flush=True)
+        data=b"s4b6-file-roundtrip\n"
+        f=mutate(m,"box_file_apply","s4b6-file-v1",box_id=box,path="/tmp/s4b6-probe.txt",mode="create",content_base64=base64.b64encode(data).decode())
+        got=m.call("box_file_read",dict(box_id=box,path="/tmp/s4b6-probe.txt")).structured
+        assert base64.b64decode(got["data_base64"])==data
+        assert got["page_sha256"]==hashlib.sha256(data).hexdigest()
+        entries=m.call("box_file_list",dict(box_id=box,path="/tmp")).structured["entries"]
+        assert any(e.get("name")=="s4b6-probe.txt" for e in entries)
+        ex=mutate(m,"box_exec","s4b6-exec-v1",box_id=box,argv=["cat","/tmp/s4b6-probe.txt"])
+        out=m.operation_output(ex)
+        assert out["exit_code"]==0 and base64.b64decode(out["content_base64"])==data
+        print("S4_B6_FILE_APPLY_READ_LIST_EXEC_NATIVE=PASS",flush=True)
+        refuse(m,"box_peer_set",dict(source_box_id=box,target_box_id=str(uuid.uuid4()),allow=True,idempotency_key="s4b6-peer-foreign-v1",work_ref=REF))
+        refuse(m,"port_forward_create",dict(box_id=box,protocol="tcp",guest_port=19091,host_port=24211,host_bind="0.0.0.0",idempotency_key="s4b6-wildcard-v1",work_ref=REF))
+        native("file","push",str(LAB/"echo"),NAME+"/root/s4b6-echo","--mode","0755")
+        native("exec",NAME,"--","sh","-c","nohup /root/s4b6-echo server >/tmp/s4b6-echo.log 2>&1 </dev/null &")
+        for i in range(20):
+            try:
+                native("exec",NAME,"--","test","-f","/tmp/s4b2-flow-server-ready");break
+            except subprocess.CalledProcessError:
+                time.sleep(.5)
+        else:
+            raise RuntimeError("echo not ready")
+        ids={}
+        for proto,host,guest in (("tcp",24211,19091),("udp",24212,19092)):
+            ids[proto]=mutate(m,"port_forward_create","s4b6-forward-"+proto+"-v1",box_id=box,protocol=proto,host_bind="127.0.0.1",host_port=host,guest_port=guest)
+            packet(proto,host,True)
+        rows=m.call("port_forward_list",dict(box_id=box)).structured["forwards"]
+        assert len(rows)==2 and all(r["native_verified"] for r in rows)
+        ck.write_text(json.dumps(dict(box=box,create=a,file=f,exec=ex,forward=ids))+"\n")
+        print("S4_B6_INSTALLED_FORWARD_TCP_UDP_AND_LIST=PASS",flush=True)
+    elif sys.argv[1]=="resume":
+        d=json.loads(ck.read_text());box=d["box"]
+        assert native("config","get",NAME,"volatile.uuid")==box
+        for oid in (d["create"],d["file"],d["exec"],*d["forward"].values()):
+            op=m.operation_get(oid);assert op["state"]=="SUCCEEDED" and op["operation_id"]==oid
+        packet("tcp",24211,True);packet("udp",24212,True)
+        print("S4_B6_RECONNECT_ORIGINALS_AND_PACKETS=PASS",flush=True)
+        mutate(m,"port_forward_delete","s4b6-delete-tcp-v1",forward_id=d["forward"]["tcp"])
+        packet("tcp",24211,False);packet("udp",24212,True)
+        parent=mutate(m,"box_delete","s4b6-dependent-delete-v1",box_id=box)
+        packet("udp",24212,False)
+        assert not native("list","-c","n","-f","csv")
+        assert not m.call("box_list").structured.get("boxes")
+        dup=m.call("box_delete",dict(box_id=box,idempotency_key="s4b6-dependent-delete-v1-original",work_ref=REF,agent_ref="s4b6")).structured
+        assert dup["duplicate"] is True and dup["operation_id"]==parent
+        ck.write_text(json.dumps(dict(d,delete=parent))+"\n")
+        print("S4_B6_FORWARD_DELETE_DEPENDENT_DELETE_REPLAY_NATIVE_ABSENCE=PASS",flush=True)
+    else:
+        raise ValueError("unknown phase")
