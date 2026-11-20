@@ -91,6 +91,13 @@ This is an **internal B1→B6 execution decomposition of S4-B**, not six new PRs
 
 **Deliverables:** all four S4-B public Tool implementations registered, contracts/errors and native test receipts. **Gate `S4_B4_PASS`:** TCP/UDP positive and negative native network results, safe ownership/idempotency and correct exposure boundaries; do not claim physical LAN/public Internet tested.
 
+## Owner directive — Box-first functional acceptance (2026-11-19 PT)
+
+- Prefer an owned, disposable Box for implementation, rapid iteration and functional acceptance, including a nested Incus lab when the actual native behavior is needed. An existing nested environment's AppArmor label (including unconfined or complain), UID/GID mapping, storage and kernel features are evidence/limitations, not by themselves a reason to stop ordinary isolated functional testing.
+- A passing test in a Box counts for the functionality actually exercised, provided exact source, real versus simulated dependencies, original Operation IDs, independently observed postconditions and guest command exits are recorded. Do not require duplicate native CI merely because a functional test ran inside a Box. A mocked test does not establish real packet or native effects.
+- On failure, investigate whether source behavior or nested capabilities caused it. Keep UNKNOWN intact, record raw safe evidence, continue unrelated tests; use a fresh permitted native runner/CI when nesting prevents the required effect or classification. Do not relabel unexplained failure as environment-only or PASS.
+- Functional acceptance is not recursive-isolation/security certification. Do not change outer host AppArmor, elevate a guest to privileged, expose parent daemon sockets, alter shared Project permissions or weaken any production security boundary to pass a test. Security-specific gates and final release/merge quality and independent evidence remain mandatory. Disclose the particular environment and untested capabilities.
+
 ## B5 — Forward/peer dependent Box Delete and fault recovery
 
 **Goal:** close the lifecycle so network claims cannot outlive or race Box deletion unsafely.
