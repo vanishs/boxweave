@@ -126,9 +126,11 @@ type Admission struct {
 	ResourceKey string
 	// ResourceKeys are additional typed locks acquired atomically with admission.
 	// Peer operations require both Boxes and the exact shared ACL.
-	ResourceKeys []string
-	WorkRef      string
-	AgentRef     string
+	ResourceKeys    []string
+	ForwardCreate   *ForwardCreateAdmission
+	ForwardDeleteID string
+	WorkRef         string
+	AgentRef        string
 }
 
 type Receipt struct {
@@ -717,6 +719,9 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES (?,?,?)", id, a.Layer, key); err != nil {
 			return Receipt{}, err
 		}
+	}
+	if err = stageForwardAdmission(ctx, tx, a, id); err != nil {
+		return Receipt{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return Receipt{}, err

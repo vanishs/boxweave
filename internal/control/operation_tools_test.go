@@ -55,7 +55,7 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	}
 	reads := map[string]bool{"host_status": true, "box_list": true, "box_get": true,
 		"operation_get": true, "operation_list": true, "box_activity_get": true, "operation_output_get": true,
-		"box_file_list": true, "box_file_read": true}
+		"box_file_list": true, "box_file_read": true, "port_forward_list": true}
 	for _, tool := range listing.Tools {
 		if tool.Annotations == nil || tool.Annotations.ReadOnlyHint != reads[tool.Name] {
 			t.Fatalf("incorrect side-effect annotation: %s", tool.Name)

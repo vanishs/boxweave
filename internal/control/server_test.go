@@ -141,6 +141,7 @@ func TestOfficialMCPHandshakeAndS2ReadTools(t *testing.T) {
 			"box_create": true, "box_start": true, "box_stop": true,
 			"box_update": true, "box_delete": true, "box_exec": true,
 			"box_file_apply": true, "box_peer_set": true, "operation_cancel": true,
+			"port_forward_create": true, "port_forward_delete": true,
 		}
 		hinted := 0
 		for _, tool := range tools.Tools {
@@ -156,17 +157,18 @@ func TestOfficialMCPHandshakeAndS2ReadTools(t *testing.T) {
 				hinted++
 			}
 		}
-		if hinted != 9 {
-			t.Fatalf("want 9 mutating tools with compact hints, got %d", hinted)
+		if hinted != 11 {
+			t.Fatalf("want 11 mutating tools with compact hints, got %d", hinted)
 		}
 		expected := []string{
 			"host_status", "box_create", "box_list", "box_get", "box_update",
 			"box_start", "box_stop", "box_delete", "box_exec", "box_peer_set",
 			"operation_get", "operation_list", "box_activity_get", "operation_output_get", "operation_cancel",
 			"box_file_list", "box_file_read", "box_file_apply",
+			"port_forward_list", "port_forward_create", "port_forward_delete",
 		}
 		if len(gotNames) != len(expected) {
-			t.Fatalf("v1 requires exact 18-tool inventory: %+v", tools.Tools)
+			t.Fatalf("v1 requires exact 21-tool inventory: %+v", tools.Tools)
 		}
 		for _, name := range expected {
 			if !gotNames[name] {

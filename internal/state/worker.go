@@ -45,6 +45,7 @@ var ErrVerifiedExecCommitted = errors.New("original native Exec terminal committ
 // transaction. These sentinels are internal verifier control flow ONLY.
 var ErrVerifiedCreateCommitted = errors.New("original native Create UUID/terminal committed atomically")
 var ErrVerifiedDeleteCommitted = errors.New("original native Delete tombstone/terminal committed atomically")
+var ErrVerifiedForwardCommitted = errors.New("original native Forward terminal committed atomically")
 
 type Worker struct {
 	Store  *Store
@@ -75,7 +76,9 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		}
 		var pre PreDispatchError
 		if errors.As(err, &pre) {
-			_ = w.Store.FailPreDispatch(context.Background(), operationID, pre.Class)
+			if w.Store.FailPreDispatch(context.Background(), operationID, pre.Class) == nil {
+				_ = w.Store.MarkForwardNoDispatch(context.Background(), operationID)
+			}
 			return
 		}
 		if errors.Is(err, ErrNoNativeChange) {
@@ -109,7 +112,8 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 	if err = verify(ctx); err != nil {
 		if errors.Is(err, ErrVerifiedExecCommitted) ||
 			errors.Is(err, ErrVerifiedCreateCommitted) ||
-			errors.Is(err, ErrVerifiedDeleteCommitted) {
+			errors.Is(err, ErrVerifiedDeleteCommitted) ||
+			errors.Is(err, ErrVerifiedForwardCommitted) {
 			// A domain verifier claims to have atomically finalized a native
 			// effect. Confirm the same original receipt before returning;
 			// never call Verified again or manufacture a second terminal event.
@@ -119,8 +123,16 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 				wantAction, reason = "box_create", "ATOMIC_CREATE_TERMINAL_UNVERIFIED"
 			case errors.Is(err, ErrVerifiedDeleteCommitted):
 				wantAction, reason = "box_delete", "ATOMIC_DELETE_TERMINAL_UNVERIFIED"
+			case errors.Is(err, ErrVerifiedForwardCommitted):
+				wantAction, reason = "port_forward_create", "ATOMIC_FORWARD_TERMINAL_UNVERIFIED"
 			}
 			rec, readErr := w.Store.Get(context.Background(), operationID)
+			if errors.Is(err, ErrVerifiedForwardCommitted) && readErr == nil {
+				wantAction = rec.Action
+				if wantAction != "port_forward_create" && wantAction != "port_forward_delete" {
+					wantAction = ""
+				}
+			}
 			if readErr == nil && rec.Action == wantAction &&
 				rec.State == "SUCCEEDED" && rec.NativeOperationID == nativeID &&
 				(wantAction == "box_exec" || (rec.BoxUUID != "" && rec.Incarnation != "")) {
@@ -132,6 +144,7 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 		var proved VerifiedEffectFailure
 		if errors.As(err, &proved) && proved.Class != "" {
 			if w.Store.VerifiedFailed(context.Background(), operationID, proved.Class) == nil {
+				_ = w.Store.MarkForwardNoDispatch(context.Background(), operationID)
 				return
 			}
 		}

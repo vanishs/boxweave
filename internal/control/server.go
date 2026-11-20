@@ -167,6 +167,7 @@ func (s *Service) Handler() http.Handler {
 		})
 	s.registerOperationReadTools(server)
 	s.registerActivityTools(server)
+	s.registerForwardTools(server)
 	s.registerBoxTools(server)
 	s.registerPeerTools(server)
 	s.registerFileTools(server)
