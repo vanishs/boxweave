@@ -1,0 +1,277 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+test "$(id -u)" = 0
+test -f /var/tmp/s4b6-integration/boxweave
+test "$(sha256sum /var/tmp/s4b6-integration/boxweave | cut -d' ' -f1)" = 85695931a2f01196b0830986c83b0d44e951636cd8e8ffbbc30f7e584282ff73
+test "$(cat /proc/1/comm)" = systemd
+test "$(incus version | tail -1)" = 'Server version: 7.6'
+test -z "$(incus list --all-projects -c n -f csv)"
+test -z "$(incus config get authorization.scriptlet)"
+test -z "$(incus config get authorization.client.tls-restricted)"
+test -z "$(incus config get core.https_address)"
+test ! -e /var/lib/boxweave-native-scriptlet-v1.json
+test -z "$(incus project list -c n -f csv | grep -E '^bw(legacy|other|plan)$' || true)"
+incus config trust list --format json | jq -S 'map({fingerprint,restricted,projects,type})' | cmp - /var/tmp/s4b6-integration/scriptlet-trust-before.json
+export RUNNER_TEMP=/var/tmp/s4b6-scriptlet-evidence
+test ! -e "$RUNNER_TEMP"
+install -d -m0700 "$RUNNER_TEMP"
+bin=/var/tmp/s4b6-integration/boxweave
+incus config show > "$RUNNER_TEMP/server-before.yaml"
+printf 'S4_B6_EXPLICIT_ISOLATED_INNER_DAEMON_PREFLIGHT=PASS\n'
+incus config set core.https_address=127.0.0.1:8443
+incus project create bwlegacy -c features.images=false
+incus project create bwother -c features.images=false
+incus project create bwplan
+incus project set bwplan restricted=true
+# Fresh non-default Projects do not inherit the default Project's
+# root device. Guest Exec/Files fixtures require an explicit pool.
+incus --project bwlegacy profile device add default root disk path=/ pool=default
+incus --project bwother profile device add default root disk path=/ pool=default
+incus --project bwlegacy profile create s4b2legacy
+incus --project bwother profile create s4b2other
+incus network acl create bw-s4b2-scriptlet
+incus network acl create bw-s4b2-not-owned
+for name in legacy other writer; do
+  openssl req -new -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-384 -nodes -days 1 \
+    -subj "/CN=s4b2-$name" -keyout "$RUNNER_TEMP/$name.key" -out "$RUNNER_TEMP/$name.crt" >/dev/null 2>&1
+  chmod 600 "$RUNNER_TEMP/$name.key"
+done
+incus config trust add-certificate "$RUNNER_TEMP/legacy.crt" --projects=bwlegacy --restricted
+incus config trust add-certificate "$RUNNER_TEMP/other.crt" --projects=bwother --restricted
+incus config trust add-certificate "$RUNNER_TEMP/writer.crt" --projects=default --restricted
+writer_fpr="$(openssl x509 -in "$RUNNER_TEMP/writer.crt" -outform der | sha256sum | awk '{print $1}')"
+test "${#writer_fpr}" = 64
+echo "$writer_fpr" > "$RUNNER_TEMP/writer.fingerprint"
+openssl x509 -in /var/lib/incus/server.crt -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64 -A > "$RUNNER_TEMP/server.spki"
+# Real owned and foreign instance fixtures for restricted TLS
+# Files/Exec parity; all effects are inside this fresh CI Incus.
+incus --project bwlegacy init s4b6-fixture-image s4b2legacyguest
+incus --project bwother init s4b6-fixture-image s4b2otherguest
+incus --project bwlegacy start s4b2legacyguest
+incus --project bwother start s4b2otherguest
+test "$(incus --project bwlegacy list s4b2legacyguest -c s --format csv)" = RUNNING
+test "$(incus --project bwother list s4b2otherguest -c s --format csv)" = RUNNING
+echo "S4_B2_SCRIPTLET_REAL_GUEST_EXECS_FILES_FIXTURE=PASS"
+echo "S4_B2_SCRIPTLET_DISPOSABLE_PREPARE_NATIVE_7_6=PASS"
+
+probe() {
+  local client="$1" method="$2" path="$3" expected="$4"
+  local code
+  code="$(curl -ksS --cert "$RUNNER_TEMP/$client.crt" --key "$RUNNER_TEMP/$client.key" \
+    --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+    --connect-timeout 4 --max-time 12 \
+    -X "$method" -H 'Content-Type: application/json' \
+    -o "$RUNNER_TEMP/last-response.json" -w '%{http_code}' \
+    "https://127.0.0.1:8443$path")"
+  echo "S4_B2_SCRIPTLET_OBSERVED client=$client method=$method url=$path code=$code expected=$expected"
+  if [[ "$code" != "$expected" ]]; then
+    cat "$RUNNER_TEMP/last-response.json"
+    return 1
+  fi
+}
+legacy_files_exec_probe() {
+  local stage="$1" code op_id response
+  probe legacy GET '/1.0/instances/s4b2legacyguest/files?path=/etc/hostname&project=bwlegacy' 200
+  probe legacy GET '/1.0/instances/s4b2otherguest/files?path=/etc/hostname&project=bwother' 403
+  response="$RUNNER_TEMP/legacy-exec-$stage.json"
+  code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+    --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+    --connect-timeout 4 --max-time 30 \
+    -X POST -H 'Content-Type: application/json' \
+    --data-binary '{"command":["/bin/true"],"wait-for-websocket":false,"record-output":true}' \
+    -o "$response" -w '%{http_code}' \
+    'https://127.0.0.1:8443/1.0/instances/s4b2legacyguest/exec?project=bwlegacy')"
+  echo "S4_B2_SCRIPTLET_LEGACY_EXEC_$stage HTTP=$code"
+  if [[ "$code" != 202 ]]; then cat "$response"; return 1; fi
+  op_id="$(jq -er '.metadata.id | select(type=="string" and length>0)' "$response")"
+  test -n "$op_id"
+  echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_NATIVE_ID_$stage=$op_id"
+  # HTTP 202 is only an accepted async Exec. The SAME restricted
+  # client must retain permission to wait for its original native
+  # operation and prove a successful final state across the route.
+  local terminal_code
+  terminal_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+    --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+    --connect-timeout 4 --max-time 35 \
+    -o "$RUNNER_TEMP/legacy-exec-terminal-$stage.json" -w '%{http_code}' \
+    "https://127.0.0.1:8443/1.0/operations/$op_id/wait?timeout=30&project=bwlegacy")"
+  echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_TERMINAL_$stage HTTP=$terminal_code"
+  if [[ "$terminal_code" != 200 ]]; then
+    cat "$RUNNER_TEMP/legacy-exec-terminal-$stage.json"; return 1
+  fi
+  jq -e '.metadata.status_code == 200' "$RUNNER_TEMP/legacy-exec-terminal-$stage.json" >/dev/null
+  echo "S4_B2_SCRIPTLET_LEGACY_EXEC_ORIGINAL_SUCCESS_$stage=PASS"
+  code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+    --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+    --connect-timeout 4 --max-time 30 \
+    -X POST -H 'Content-Type: application/json' \
+    --data-binary '{"command":["/bin/true"],"wait-for-websocket":false,"record-output":true}' \
+    -o "$RUNNER_TEMP/foreign-exec-$stage.json" -w '%{http_code}' \
+    'https://127.0.0.1:8443/1.0/instances/s4b2otherguest/exec?project=bwother')"
+  echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_EXEC_$stage HTTP=$code"
+  if [[ "$code" != 403 ]]; then cat "$RUNNER_TEMP/foreign-exec-$stage.json"; return 1; fi
+  echo "S4_B2_SCRIPTLET_NATIVE_RESTRICTED_FILES_EXEC_$stage=PASS"
+}
+for i in $(seq 1 30); do
+  if curl -ksS --connect-timeout 2 --max-time 3 "https://127.0.0.1:8443/1.0" -o /dev/null; then break; fi
+  sleep 1
+done
+probe legacy GET '/1.0/projects/bwlegacy' 200
+probe legacy GET '/1.0/projects/bwother' 403
+probe other GET '/1.0/projects/bwother' 200
+probe other GET '/1.0/projects/bwlegacy' 403
+probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
+probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+legacy_files_exec_probe PRE_ROUTE
+echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_PROJECT_MATRIX=PASS"
+writer_fpr="$(cat "$RUNNER_TEMP/writer.fingerprint")"
+# Use the actual candidate's host-local CLI, not a CI-only test guard.
+"$bin" native-scriptlet-plan -project user-1001 -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" > "$RUNNER_TEMP/product-plan.json"
+sha="$(jq -er .review_sha256 "$RUNNER_TEMP/product-plan.json")"
+test "${#sha}" = 64
+"$bin" native-scriptlet-apply -project user-1001 -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" -scriptlet-plan-sha256 "$sha" -approve-local > "$RUNNER_TEMP/product-applied.json"
+test "$(jq -r .status "$RUNNER_TEMP/product-applied.json")" = ROUTE_APPLIED_PARITY_PENDING
+test "$(jq -r .ready_for_peer "$RUNNER_TEMP/product-applied.json")" = false
+test "$(incus config get authorization.client.tls-restricted)" = scriptlet
+printf 'S4_B6_PRODUCT_SCRIPTLET_CLI_APPLIED=%s\n' "$sha"
+probe legacy GET '/1.0/projects/bwlegacy' 200
+probe legacy GET '/1.0/projects/bwother' 403
+probe other GET '/1.0/projects/bwother' 200
+probe other GET '/1.0/projects/bwlegacy' 403
+probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+probe other GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 403
+legacy_files_exec_probe AFTER_SCRIPTLET
+echo "S4_B2_SCRIPTLET_NATIVE_OLD_CLIENT_ALLOWED_DENIED_MATRIX=PASS"
+systemctl restart incus.service
+for _ in $(seq 1 30); do
+  if incus version >/dev/null 2>&1 && \
+    test "$(incus config get authorization.client.tls-restricted)" = scriptlet; then break; fi
+  sleep 1
+done
+test "$(incus config get authorization.client.tls-restricted)" = scriptlet
+probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+probe other GET '/1.0/profiles/s4b2other?project=bwother' 200
+probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
+legacy_files_exec_probe POST_DAEMON_RESTART
+echo "S4_B2_SCRIPTLET_INSTALLED_NATIVE_DAEMON_RESTART_OLD_CLIENT_RIGHTS_PARITY=PASS"
+probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 403
+probe writer POST '/1.0/network-acls?project=default' 403
+probe writer DELETE '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 403
+probe writer GET '/1.0/projects/bwlegacy' 403
+probe writer GET '/1.0/projects/bwother' 403
+cat > "$RUNNER_TEMP/legacy-profile-put.json" <<'JSON'
+{"description":"Legacy restricted client retains same-Project PUT via Scriptlet","config":{},"devices":{}}
+JSON
+profile_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+  --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+  --connect-timeout 4 --max-time 12 \
+  -X PUT -H 'Content-Type: application/json' \
+  --data-binary @"$RUNNER_TEMP/legacy-profile-put.json" \
+  -o "$RUNNER_TEMP/legacy-profile-put-response.json" -w '%{http_code}' \
+  'https://127.0.0.1:8443/1.0/profiles/s4b2legacy?project=bwlegacy')"
+echo "S4_B2_SCRIPTLET_LEGACY_SAME_PROJECT_PROFILE_PUT_STATUS=$profile_code"
+test "$profile_code" = 200
+incus --project bwlegacy profile show s4b2legacy | grep -Fq "Legacy restricted client retains same-Project PUT via Scriptlet"
+echo "S4_B2_SCRIPTLET_LEGACY_SAME_PROJECT_EDIT_PARITY=PASS"
+forbidden_profile_code="$(curl -ksS --cert "$RUNNER_TEMP/legacy.crt" --key "$RUNNER_TEMP/legacy.key" \
+  --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+  --connect-timeout 4 --max-time 12 \
+  -X PUT -H 'Content-Type: application/json' \
+  --data-binary @"$RUNNER_TEMP/legacy-profile-put.json" \
+  -o "$RUNNER_TEMP/foreign-profile-put-response.json" -w '%{http_code}' \
+  'https://127.0.0.1:8443/1.0/profiles/s4b2other?project=bwother')"
+echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_PROFILE_PUT_STATUS=$forbidden_profile_code"
+test "$forbidden_profile_code" = 403
+if incus --project bwother profile show s4b2other | grep -Fq "Legacy restricted client retains same-Project PUT via Scriptlet"; then exit 70; fi
+echo "S4_B2_SCRIPTLET_LEGACY_FOREIGN_PROJECT_EDIT_DENIED=PASS"
+probe legacy GET '/1.0' 200
+probe legacy PUT '/1.0/projects/bwlegacy' 403
+probe legacy POST '/1.0/projects' 403
+echo "S4_B2_SCRIPTLET_LEGACY_GLOBAL_AND_PROJECT_EDIT_DENY=PASS"
+echo "S4_B2_SCRIPTLET_NATIVE_DEDICATED_EXACT_ACL_ONLY_DENIALS=PASS"
+# Writer must make exactly one real API ACL change, with native readback.
+cat > "$RUNNER_TEMP/exact-acl-put.json" <<'JSON'
+{"description":"S4-B2 exact scriptlet writer authorized native PUT","ingress":[],"egress":[],"config":{}}
+JSON
+acl_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+  --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+  --connect-timeout 4 --max-time 12 \
+  -X PUT -H 'Content-Type: application/json' \
+  --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+  -o "$RUNNER_TEMP/exact-acl-put-response.json" -w '%{http_code}' \
+  'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-scriptlet?project=default')"
+echo "S4_B2_SCRIPTLET_WRITER_EXACT_PUT_STATUS=$acl_code"
+test "$acl_code" = 200
+incus network acl show bw-s4b2-scriptlet | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'
+echo "S4_B2_SCRIPTLET_NATIVE_EXACT_ACL_PUT_READBACK=PASS"
+forbidden_code="$(curl -ksS --cert "$RUNNER_TEMP/writer.crt" --key "$RUNNER_TEMP/writer.key" \
+  --pinnedpubkey "sha256//$(cat "$RUNNER_TEMP/server.spki")" \
+  --connect-timeout 4 --max-time 12 \
+  -X PUT -H 'Content-Type: application/json' \
+  --data-binary @"$RUNNER_TEMP/exact-acl-put.json" \
+  -o "$RUNNER_TEMP/foreign-acl-put-response.json" -w '%{http_code}' \
+  'https://127.0.0.1:8443/1.0/network-acls/bw-s4b2-not-owned?project=default')"
+echo "S4_B2_SCRIPTLET_WRITER_FOREIGN_PUT_STATUS=$forbidden_code"
+test "$forbidden_code" = 403
+if incus network acl show bw-s4b2-not-owned | grep -Fq 'S4-B2 exact scriptlet writer authorized native PUT'; then exit 68; fi
+echo "S4_B2_SCRIPTLET_NATIVE_FOREIGN_ACL_PUT_DENIED=PASS"
+
+set +e
+incus config set authorization.scriptlet='def authorize(details, object, entitlement):' > "$RUNNER_TEMP/bad-scriptlet.txt" 2>&1
+bad_rc=$?
+set -e
+echo "S4_B2_SCRIPTLET_BAD_SCRIPT_UPDATE_EXIT=$bad_rc"
+if [[ "$bad_rc" -eq 0 ]]; then
+  echo "S4_B2_SCRIPTLET_BAD_SCRIPTLET_UPDATE_ACCEPTED_UNEXPECTED"; exit 69
+fi
+test "$(incus config get authorization.client.tls-restricted)" = scriptlet
+probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+echo "S4_B2_SCRIPTLET_FAILED_SCRIPT_CHANGE_EXISTING_RIGHTS_UNCHANGED=PASS"
+systemctl restart incus.service
+incus version
+test "$(incus config get authorization.client.tls-restricted)" = scriptlet
+probe legacy GET '/1.0/projects/bwlegacy' 200
+probe legacy GET '/1.0/projects/bwother' 403
+probe writer GET '/1.0/network-acls/bw-s4b2-scriptlet?project=default' 200
+echo "S4_B2_SCRIPTLET_FAILED_NATIVE_UPDATE_RESTART_PRESERVES_EXACT_RIGHTS=PASS"
+"$bin" native-scriptlet-rollback -scriptlet-plan-sha256 "$sha" -approve-local > "$RUNNER_TEMP/product-rollback.json"
+test "$(jq -r .status "$RUNNER_TEMP/product-rollback.json")" = ROLLED_BACK
+echo S4_B6_PRODUCT_SCRIPTLET_CLI_ROLLBACK=PASS
+test -z "$(incus config get authorization.client.tls-restricted)"
+test -z "$(incus config get authorization.scriptlet)"
+probe legacy GET '/1.0/projects/bwlegacy' 200
+probe legacy GET '/1.0/projects/bwother' 403
+probe other GET '/1.0/projects/bwother' 200
+probe other GET '/1.0/projects/bwlegacy' 403
+probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
+probe legacy GET '/1.0/profiles/s4b2legacy?project=bwlegacy' 200
+probe legacy GET '/1.0/profiles/s4b2other?project=bwother' 403
+legacy_files_exec_probe POST_ROLLBACK
+echo "S4_B2_SCRIPTLET_LEGACY_POST_ROLLBACK_PROFILE_PARITY=PASS"
+echo "S4_B2_SCRIPTLET_NATIVE_PRE_ROUTE_MATRIX_AFTER_EXACT_ROLLBACK=PASS"
+systemctl restart incus.service
+incus version
+test -z "$(incus config get authorization.client.tls-restricted)"
+probe legacy GET '/1.0/projects/bwlegacy' 200
+probe legacy GET '/1.0/projects/bwother' 403
+legacy_files_exec_probe POST_ROLLBACK_RESTART
+echo "S4_B2_SCRIPTLET_EXACT_ROLLBACK_SURVIVES_NATIVE_DAEMON_RESTART=PASS"
+incus config trust list --format json > "$RUNNER_TEMP/trust-inventory.json"
+incus config get authorization.client.tls-restricted
+incus config get authorization.scriptlet
+echo "S4_B2_SCRIPTLET_GLOBAL_AUTH_TEST_COMPLETED_EXACT_ROLLBACK=PASS"
+
+incus config unset core.https_address
+incus config show > "$RUNNER_TEMP/server-after.yaml"
+diff -u "$RUNNER_TEMP/server-before.yaml" "$RUNNER_TEMP/server-after.yaml"
+echo S4_B6_SCRIPTLET_EXACT_GLOBAL_CONFIG_RESTORED=PASS
