@@ -187,6 +187,11 @@ func TestS5A2RecoveryBindDoesNotUnlockOrInventNativeAck(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	r, target := recoveryOriginal(t, s, "box_create", "")
+	var originalSeq, originalAt int64
+	var originalDetail string
+	if e := s.db.QueryRow("SELECT seq,at,safe_detail FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", target.ID).Scan(&originalSeq, &originalAt, &originalDetail); e != nil {
+		t.Fatal(e)
+	}
 	p := RecoveryProof{Kind: RecoveryBind, Reason: "CREATE_MARKER_EXACT_IDENTITY", UUID: rUUID, Fingerprint: "test-marker"}
 	got, e := s.CommitRecovery(ctx, r, target, p)
 	if e != nil || got.Disposition != "IDENTITY_BOUND" || got.Receipt.BoxUUID != rUUID {
@@ -195,6 +200,25 @@ func TestS5A2RecoveryBindDoesNotUnlockOrInventNativeAck(t *testing.T) {
 	current, e := s.ReadRecoveryTarget(ctx, r.Layer, target.ID)
 	if e != nil || current.State != "UNKNOWN" || current.UUID != rUUID || current.NativeID != "" || current.Released {
 		t.Fatalf("unsafe binding %+v %v", current, e)
+	}
+	duplicate, e := s.ReplayRecovery(ctx, r)
+	if e != nil || !duplicate.Receipt.Duplicate || duplicate.Receipt.ID != got.Receipt.ID {
+		t.Fatalf("binding replay %+v %v", duplicate, e)
+	}
+	var at int64
+	var detail, phase string
+	if e = s.db.QueryRow("SELECT at,state,safe_detail FROM operation_events WHERE operation_id=? AND seq=?", target.ID, originalSeq).Scan(&at, &phase, &detail); e != nil || at != originalAt || phase != "UNKNOWN" || detail != originalDetail {
+		t.Fatalf("original event changed %v", e)
+	}
+	var n int
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", target.ID).Scan(&n); e != nil || n != 2 {
+		t.Fatalf("expected two UNKNOWN events, got %d %v", n, e)
+	}
+	if e = s.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND seq>? AND state='UNKNOWN' AND safe_detail='EXACT_NATIVE_UUID_BOUND_RECOVERY_NO_REPLAY'", target.ID, originalSeq).Scan(&n); e != nil || n != 1 {
+		t.Fatalf("missing unique bind event %d %v", n, e)
+	}
+	if e = s.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision='RECOVERY_IDENTITY_BOUND'", target.ID).Scan(&n); e != nil || n != 1 {
+		t.Fatalf("missing unique binding audit %d %v", n, e)
 	}
 	_, e = s.Admit(ctx, Admission{Layer: r.Layer, ActorID: r.ActorID, TokenID: r.TokenID, Key: "never-admit-under-original-lock", Action: "box_exec", RequestID: "refusal", ResourceKey: "box:owned", BoxUUID: rUUID, Incarnation: rUUID, SafeIntent: []byte("{}")})
 	if !errors.Is(e, ErrResourceLocked) {

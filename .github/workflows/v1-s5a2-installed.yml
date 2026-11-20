@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           logfile="$RUNNER_TEMP/s5a2-native.log"
           if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
-            grep -E '^(S5A2_|S2_NATIVE_CANDIDATE_SOURCE_SHA=)' "$logfile" | tail -n 100 || :
+            grep -E '^(S5A2_|S2_NATIVE_CANDIDATE_SOURCE_SHA=|panic: S5A2_NATIVE_FAIL:)' "$logfile" | tail -n 100 || :
             echo S5A2_INSTALLED_NATIVE=BLOCKED_OR_FAILED
             exit 1
           fi

@@ -96,6 +96,11 @@ func (l lab) original(name, key string, args map[string]any, fault bool) map[str
 }
 func (l lab) recover(op map[string]any, key, want string) map[string]any {
 	id := str(op, "operation_id")
+	var originalSeq, originalAt int64
+	var originalDetail string
+	check(l.db.QueryRow("SELECT seq,at,safe_detail FROM operation_events WHERE operation_id=? AND state='UNKNOWN' ORDER BY seq LIMIT 1", id).Scan(&originalSeq, &originalAt, &originalDetail) == nil, "original UNKNOWN event missing before recovery")
+	var count int
+	check(l.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", id).Scan(&count) == nil && count == 1, "unexpected original UNKNOWN history before recovery")
 	args := map[string]any{"operation_id": id, "mode": "reconcile", "idempotency_key": "s5a2-recovery-" + key}
 	out := l.call("operation_recover", args)
 	rec := obj(out["recovery"])
@@ -114,8 +119,20 @@ func (l lab) recover(op map[string]any, key, want string) map[string]any {
 	}
 	check(state == expected, "original outcome or claim changed incorrectly")
 	check(l.db.QueryRow("SELECT json_extract(safe_intent,'$.original_operation_id') FROM operations WHERE id=? AND action='operation_recover'", rid).Scan(&linked) == nil && linked == id, "durable recovery lineage")
-	var count int
-	check(l.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", id).Scan(&count) == nil && count == 1, "UNKNOWN history lost")
+	// An identity-only binding appends a second UNKNOWN event. The original
+	// event must remain unchanged and the new event must occur exactly once.
+	var at int64
+	var detail, eventState string
+	check(l.db.QueryRow("SELECT at,state,safe_detail FROM operation_events WHERE operation_id=? AND seq=?", id, originalSeq).Scan(&at, &eventState, &detail) == nil && at == originalAt && eventState == "UNKNOWN" && detail == originalDetail, "original UNKNOWN event changed")
+	expectedUnknown := 1
+	if want == "IDENTITY_BOUND" {
+		expectedUnknown = 2
+	}
+	check(l.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND state='UNKNOWN'", id).Scan(&count) == nil && count == expectedUnknown, "unexpected UNKNOWN event count after recovery")
+	if want == "IDENTITY_BOUND" {
+		check(l.db.QueryRow("SELECT count(*) FROM operation_events WHERE operation_id=? AND seq>? AND state='UNKNOWN' AND safe_detail='EXACT_NATIVE_UUID_BOUND_RECOVERY_NO_REPLAY'", id, originalSeq).Scan(&count) == nil && count == 1, "identity binding evidence missing or duplicated")
+	}
+	check(l.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision=?", id, "RECOVERY_"+want).Scan(&count) == nil && count == 1, "recovery audit missing or duplicated")
 	check(l.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision='RELEASED'", id).Scan(&count) == nil && count == 0, "unapproved claim release")
 	return out
 }
