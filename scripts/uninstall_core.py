@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Operator-reviewed BoxWeave host removal. Fixed paths, no silent native ownership."""
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -25,7 +27,9 @@ VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
 TERMINAL = {"SUCCEEDED", "FAILED", "CANCELLED"}
-STATE_FILES = {"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm", "install-manifest.json"}
+SERVE_LOCK_NAME = "ledger.sqlite.serve.lock"
+STATE_FILES = {"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm",
+               "install-manifest.json", SERVE_LOCK_NAME}
 SCOPES = ("service", "controller", "full")
 
 
@@ -66,6 +70,21 @@ def validate_state_dir(path, service_uid):
         raise UninstallError("verified controller state directory missing")
     if info.st_uid != service_uid or stat.S_IMODE(info.st_mode) != 0o700:
         raise UninstallError("state directory owner/mode no longer matches installer policy")
+    return info
+
+
+def require_service_lock_owner(path, service_uid):
+    if path.lstat().st_uid != service_uid:
+        raise UninstallError("serve lock must belong to exact service UID")
+
+
+def verified_serve_lock(path, service_uid):
+    info = checked_file(path, "file", 4096)
+    if info is None:
+        return None
+    if stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1:
+        raise UninstallError("unsafe serve lock mode or hardlink")
+    require_service_lock_owner(path, service_uid)
     return info
 
 
@@ -301,7 +320,8 @@ def inspect(scope, project, box_uuids, native_sha):
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
         if entry.name not in STATE_FILES:
             raise UninstallError("unrecognized owned state file: " + entry.name)
-        info = checked_file(entry, "file")
+        info = (verified_serve_lock(entry, owner.pw_uid)
+                if entry.name == SERVE_LOCK_NAME else checked_file(entry, "file"))
         if stat.S_IMODE(info.st_mode) & 0o077:
             raise UninstallError("controller state file has unsafe permissions: " + entry.name)
         files.append({"name": entry.name, "info": file_fingerprint(entry)})
@@ -437,13 +457,52 @@ def exact_unlink(path, fingerprint):
     path.unlink()
 
 
+@contextmanager
+def hold_stopped_serve_lock(plan):
+    """The persistent lock inode is never unlinked while another serve owns it.
+
+    Keep our exclusive flock through state removal. The file must be removed
+    LAST, after the DB and other state, to minimize split-lock exposure.
+    """
+    path = STATE / SERVE_LOCK_NAME
+    original = next((x["info"] for x in plan["state_files"]
+                     if x["name"] == SERVE_LOCK_NAME), None)
+    if original is None:
+        if checked_file(path, "file") is not None:
+            raise UninstallError("serve lock appeared after review")
+        yield
+        return
+    if verified_serve_lock(path, plan["service_user_uid"]) is None or file_fingerprint(path) != original:
+        raise UninstallError("serve lock inode changed since plan")
+    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(str(path), flags)
+    try:
+        state = os.fstat(fd)
+        if (state.st_dev != original["device"] or state.st_ino != original["inode"]
+                or state.st_nlink != 1 or stat.S_IMODE(state.st_mode) != 0o600
+                or state.st_uid != plan["service_user_uid"]):
+            raise UninstallError("serve lock changed while opening")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise UninstallError("serve lock held by another process; refusing uninstall") from exc
+        yield
+    finally:
+        os.close(fd)
+
+
 def apply(plan):
     # At this point the operator has already approved both exact digests;
     # no automatic retries or implicit "yes" on modified host state.
     if plan["service_state"] == "active":
         command(["systemctl", "stop", "boxweave.service"])
-        if systemd_status() == "active":
-            raise UninstallError("controller did not stop")
+    if systemd_status() == "active":
+        raise UninstallError("controller did not stop")
+    with hold_stopped_serve_lock(plan):
+        return apply_with_serve_lock(plan)
+
+
+def apply_with_serve_lock(plan):
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
     after = inspect_sqlite(STATE / "ledger.sqlite")
@@ -484,6 +543,9 @@ def apply(plan):
         # Close WAL is already enforced by service stop. Never recurse into
         # unrecognized state or delete symlinks, folders or foreign assets.
         for item in plan["state_files"]:
+            # Never unlink an actively held flock inode before DB/state cleanup.
+            if item["name"] == SERVE_LOCK_NAME:
+                continue
             path = STATE / item["name"]
             if item["name"] == "ledger.sqlite":
                 # DB may checkpoint during stop, verify type and ownership.
@@ -497,6 +559,12 @@ def apply(plan):
                     exact_unlink(path, current)
             else:
                 exact_unlink(path, item["info"])
+        lock = next((x for x in plan["state_files"]
+                     if x["name"] == SERVE_LOCK_NAME), None)
+        if lock is not None:
+            # We hold the exclusive original flock from apply(); safe to
+            # remove only after the SQLite and all other state disappeared.
+            exact_unlink(STATE / SERVE_LOCK_NAME, lock["info"])
         if list(STATE.iterdir()):
             raise UninstallError("new files appeared in state directory")
         STATE.rmdir()
