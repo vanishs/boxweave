@@ -1,8 +1,8 @@
-# S5A3 — independent user approval decision draft (2026-11-20)
+# S5A3 — independent user approval decision (2026-11-20)
 
-**Status: DESIGN_REVIEW — owner selection required. Not approval, implementation or acceptance.** Authority: canonical S5A3 phase card and engineering review §6. Baseline `bd712407ee7e30afd0a6366f0f28b3af285c6496`, Draft PR #163. A2's installed native/CLI scoped acceptance passed; A1 historical #151 disposition remains open.
+**Status: CLIENT_SIGNATURE_SELECTED / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE.** The owner selected MCP-client-signed operation approval, not the browser-password proposal. This is a mechanism decision, not a verified client capability, high-risk authorization, implementation or acceptance. Authority: canonical S5A3 phase card and engineering review §6. Baseline `bd712407ee7e30afd0a6366f0f28b3af285c6496`, Draft PR #163. A2's installed native/CLI scoped acceptance passed; A1 historical #151 disposition remains open.
 
-## Recommended mechanism (proposal)
+## Previous browser mechanism proposal (not selected)
 
 Use a narrowly scoped independent HTTPS browser approval route on the existing configured OAuth public origin, not a new service or management Tool. Reuse the existing local high-entropy OAuth approval password verifier (Argon2id), rate-limits, origin and protected form pattern; never reuse an OAuth grant as action consent. The human enters the password directly in their browser, never in chat, Tool arguments, a guest or agent-accessible files. Security assumption: the approving credential is controlled by the trusted owner independently of MCP Agents. If compromised or shared with an Agent, this mechanism cannot establish independent approval; rotate it or use the existing Host root fallback. No new public origin exposure authorized.
 
@@ -20,4 +20,25 @@ Prefer one narrowly typed durable approval table over overloading audit strings 
 
 Box-first source and genuine HTTP browser-form / SDK test harness with action-bound original, user-controlled credential, server verification, approve/deny, missing/wrong password, CSRF/origin, forged bool/text, ordinary bearer self-approval, stale epoch/evidence, cross-original/Layer/Actor, revoked requester, expired and concurrent consumption, restart and lost response, rollback/all-or-none. Native independent postread proves no replay and permitted claim release while original stays UNKNOWN. Explicit refusals for unsafe domains. Actual ChatGPT public-client user interaction is a distinct witness, not implied by a synthetic client. No actual user password in test or chat.
 
-**Owner decision pending:** approve the independent existing-origin browser mechanism with password reuse and a narrowly justified schema change if needed, or choose another trusted mechanism. No remote high-risk release implementation until selection; no change to current installed RC8.
+**Superseded selection:** the owner chose MCP client signature authorization instead. Do not implement the browser-password flow unless separately approved.
+
+## Owner-selected client signature path
+
+Decision on 2026-11-20: prefer action-specific independently verifiable authorization signed by a trusted MCP client/platform outside the model's control. The existing root-reviewed Host CLI remains the fallback. Do not equate the selection with proof of actual ChatGPT support.
+
+### Current public specification check (2026-11-20)
+- [OpenAI plugin authentication](https://developers.openai.com/plugins/build/auth#client-identification): mTLS authenticates ChatGPT's client transport; CIMD `private_key_jwt` is a signed client assertion at OAuth token exchange, verifiable against the client's published JWKS. Neither documented mechanism attests a human's approval of the particular recovery request.
+- [OpenAI MCP server guidance](https://developers.openai.com/plugins/build/mcp-server): Tool annotations affect confirmation UX, not server authorization.
+- [Custom MCP client testing](https://developers.openai.com/api/docs/guides/custom-mcp-server): saved approval choices may apply to later calls in the same conversation. That is not a fresh operation-bound human signature.
+- [MCP Go client](https://go.sdk.modelcontextprotocol.io/client/) and [2026-07-28 MCP release](https://blog.modelcontextprotocol.io/posts/2026-07-28/): elicitation and input round trips convey client responses, not a documented independently verifiable human approval signature. Existing A1 actual Go SDK tests show synthetic accept without a human.
+- [Responses API MCP guide](https://developers.openai.com/api/docs/guides/tools-connectors-mcp): API application approval objects are a separate caller-side mechanism; do not assume those objects become verifiable signed attestations sent to the remote MCP server.
+
+Public documentation did not establish a supported per-operation signed human approval assertion from ChatGPT to the remote server. This is an evidence gap, not a categorical claim about private platform capabilities or all MCP clients.
+
+### Minimal feasibility gate before implementing a release verifier
+
+Use a separate authorized inert test endpoint/candidate, no native dispatch or state unlock. Compare an actual client-confirmed call, decline, remembered or automatic confirmation, and a direct unapproved client call. Observe only bounded, redacted approval-related metadata shape, presence, and cryptographically verified result; never record bearer tokens, credentials, complete request headers or user content. Require a documented/authenticated issuer/key discovery and signature contract; reject unsigned metadata, arbitrary keys/issuers and caller-reported booleans. Demonstrate a client/platform actually binds the precise action and intentional independent human interaction, not merely a trusted client connection. A synthetic signer can test a verifier but is not proof of real ChatGPT support. No new public endpoint deployment or live credential/config change is authorized by this record.
+
+Required verified claims (semantic contract only; no invented platform field names): trusted issuer, server audience, exact Layer and requesting Actor, original Operation ID, exact requested recovery effect/intent digest, resource incarnation and reviewed evidence fingerprint (or signature over a server-created immutable challenge containing those facts), nonce/unique approval ID, short expiry and single-use. Verify keys with explicit trust configuration and algorithm policy, reject stale state or revoked requester, and consume the approval with durable recovery receipt/audit in one transaction. Preserve domain barriers and UNKNOWN original outcome. Do not accept a signature merely because it verifies cryptographically if the signer cannot attest independent human approval. Never expose signing keys to an Agent or guest.
+
+If the actual ChatGPT client does not supply this proof, keep remote approval-dependent repair BLOCKED and retain deterministic A2 and existing local Host fallback. A separately controlled MCP client with a trusted human approval interface could implement such a contract, but building/distributing it is a distinct scope decision. Never silently substitute browser approval, generic UI confirmation, transport identity or OAuth client assertion. No schema or runtime changes until the actual signature contract and compatibility impact are known. A4 safe evidence-only work may continue separately, but approval-dependent effects require A3 safeguards.
