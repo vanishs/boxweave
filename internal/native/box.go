@@ -710,6 +710,13 @@ func (r Reader) Exec(ctx context.Context, name, uuid string, spec ExecSpec) (str
 	if err != nil {
 		return "", err
 	}
+	// A full root-volume qgroup also prevents Incus from creating its
+	// sibling recorded-output spool before a Guest command is started.
+	// Refuse before dispatch when live per-volume usage proves too little
+	// headroom. Native postcondition checks still protect races.
+	if err := preflightExecSpoolHeadroom(c, inst, name); err != nil {
+		return "", err
+	}
 	op, err := c.ExecInstance(name, api.InstanceExecPost{
 		Command: argv, Cwd: spec.Cwd, User: spec.UID, Group: spec.GID,
 		Environment: spec.Environment, RecordOutput: true, WaitForWS: false,
