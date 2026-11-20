@@ -16,7 +16,11 @@ def is_documentation(path: str) -> bool:
     # Workflow, source, installer and policy/config changes are ALWAYS full.
     if path.startswith(".github/"):
         return False
-    return path.startswith("docs/") or path.endswith((".md", ".markdown", ".mdx"))
+    return path.lower().endswith((".md", ".markdown", ".mdx", ".rst"))
+
+
+def docs_only(paths: list[str]) -> bool:
+    return bool(paths) and all(is_documentation(path) for path in paths)
 
 
 def classify() -> tuple[bool, str]:
@@ -40,10 +44,10 @@ def classify() -> tuple[bool, str]:
         else:
             return True, "UNSUPPORTED_EVENT"
         paths = [item.decode("utf-8", "surrogateescape") for item in
-                 git("diff", "--name-only", "-z", "--no-ext-diff", base, "HEAD").split(b"\0") if item]
+                 git("diff", "--no-renames", "--name-only", "-z", "--no-ext-diff", base, "HEAD", "--").split(b"\0") if item]
         if not paths:
             return True, "EMPTY_OR_UNVERIFIABLE_DIFF"
-        if all(is_documentation(path) for path in paths):
+        if docs_only(paths):
             return False, "DOCS_ONLY"
         return True, "SOURCE_OR_WORKFLOW_CHANGED"
     except (OSError, subprocess.CalledProcessError, UnicodeError):

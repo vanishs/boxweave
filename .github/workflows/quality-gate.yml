@@ -37,7 +37,9 @@ jobs:
           CI_BASE_REF: ${{ github.base_ref }}
         run: python3 scripts/ci_change_scope.py
       - name: Test CI change-scope fail-closed behavior
-        run: python3 scripts/test_ci_change_scope.py
+        run: |
+          python3 scripts/test_ci_change_scope.py
+          python3 scripts/test_local_hook_scope.py
       - name: Set up pinned Go
         if: steps.scope.outputs.full == 'true'
         uses: actions/setup-go@v5

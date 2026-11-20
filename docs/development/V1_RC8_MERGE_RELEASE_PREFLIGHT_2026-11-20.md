@@ -1,0 +1,14 @@
+# RC8 development prerelease — reconciliation and publication preflight
+
+Owner explicitly requested: resolve PR #153 conflicts, finish S4-A CI, then ready/merge to protected v1, and create the exact merged-source release/v1.0.0-rc.8 branch for the existing immutable development prerelease CI. No stable release, physical-host install/reset, destructive cleanup, or stable pointer promotion is authorized. VERSION remains 1.0.0; V1_PUBLISHED_RELEASE remains UNPUBLISHED.
+
+## Source and evidence
+
+- PR starting HEAD 96297100ae8ca50842978c1dcd93258499a8596a; protected v1 e3d85a65397338dc5f082cee98dfdabe9d6017e1. Four upstream commits (README, CI/hook fast path, concise AGENTS). Six conflicts, all CI/scripts/docs. Merge in separate retained Box worktree /root/rc8-merge, existing development Box s4b5-dependency-lab.
+- Exact runtime 9c42137d3cb86f29ae82ce6f1885523c440a7431 underwent all ten CI checks; S4-A [attempt 2 SUCCESS](https://github.com/vanishs/boxweave/actions/runs/44709336502), not a waiver of attempt 1. [B6](S4_B6_INTEGRATION_ACCEPTANCE_2026-11-20.md), [S4-C](S4_C_IMPLEMENTATION_2026-11-20.md) retain original scoped native/Box proof, including full L1 restart with acknowledged Operation preserved UNKNOWN and no replay. Earlier B2/B3/B4/B5 native positives/negatives are separate witnesses.
+- Preserve PR full-on-protected/release/unknown CI and always-emitted required check, upstream staged/pre-push classifier and format machinery, source-to-document rename negative and strict textual docs classification. Keep role-free S1 smoke. Keep upstream concise AGENTS and environment-focused README updated for current 22 Tools/Schema5. Re-run both classifier test sets and complete verify before updating PR. No Go runtime edits.
+- Preserve phase verdicts S4_B6_PARTIAL / S4_C_PARTIAL; no independent separate Agent formal signoff. RC8 is an owner-requested development prerelease, not an assertion of completed S4 or S5. Outstanding active Peer/forward combined whole-L1 restart, nonempty native snapshot/backup restricted by Project, remaining late-IP/replacement/concurrency negatives and live-client OAuth/host postflight remain recorded; physical reboot/power-loss and heavy stress S5. Do not relax security to manufacture proof. No unresolved test declared PASS. Release must pass existing exact-source native S2/S2.5 and artifact gates.
+
+## Distribution
+
+The existing v1-release workflow publishes only from a new release/v1.0.0-rc.8 branch pointing to the exact current protected v1 HEAD after ordinary PR merge. Both Linux CGO architectures, source, native S2 and nested S2.5, manifest/checksums, immutable tag/publication readback. Do not manually publish, bypass required checks, retarget tags or overwrite assets. Fresh schema-v5 environment/reissued credentials required for incompatible old schemas; no silent upgrade, adoption or deletion. Separate host-specific approval required for deployment.

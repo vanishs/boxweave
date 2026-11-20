@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from ci_change_scope import docs_only
 
 CHECKER = Path(__file__).with_name("ci_change_scope.py")
 
@@ -48,6 +49,27 @@ class ChangeScopeTests(unittest.TestCase):
                               env=env, text=True, capture_output=True, check=True)
         self.assertIn("CI_CHANGE_SCOPE=", proc.stdout)
         return dict(line.split("=", 1) for line in result.read_text().splitlines())
+
+    def test_docs_directory_non_document_inputs_require_full(self) -> None:
+        for name in ("docs/example.py", "docs/policy.json", "docs/image.svg"):
+            with self.subTest(name=name):
+                self.write(name, "not textual documentation\n")
+                self.commit(name)
+                self.assertEqual(self.classify()["full"], "true")
+
+    def test_source_to_document_rename_requires_full(self) -> None:
+        self.write("old.go", "package demo\n")
+        self.commit("old.go")
+        before = self.git("rev-parse", "HEAD")
+        self.git("mv", "old.go", "new.md")
+        self.git("commit", "-qm", "rename")
+        self.assertEqual(self.classify(before=before)["full"], "true")
+
+    def test_shared_local_classifier(self) -> None:
+        self.assertTrue(docs_only(["README.md", "docs/manual.rst"]))
+        self.assertFalse(docs_only([]))
+        self.assertFalse(docs_only(["docs/image.svg"]))
+        self.assertFalse(docs_only([".github/guide.md"]))
 
     def test_markdown_and_docs_skip_expensive_jobs(self) -> None:
         self.write("docs/acceptance.md", "PASS scoped\n")

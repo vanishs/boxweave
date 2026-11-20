@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TEXT_SUFFIXES = {".go", ".md", ".yml", ".yaml", ".json", ".sh", ".toml", ".py"}
+TEXT_SUFFIXES = {".go", ".md", ".mdx", ".rst", ".yml", ".yaml", ".json", ".sh", ".toml", ".py"}
 TEXT_BASENAMES = {
     "VERSION", "Makefile", ".gitignore", ".editorconfig", ".gitattributes",
     ".yamllint", ".markdownlint.yaml", "AGENTS.md", "CONTRIBUTING.md",
@@ -57,10 +57,10 @@ def check_file(name: str, data: bytes) -> list[str]:
     for lineno, line in enumerate(data.split(b"\n"), 1):
         if not line:
             continue
-        if name.endswith((".md", ".yml", ".yaml")) and b"\t" in line:
+        if name.endswith((".md", ".mdx", ".rst", ".yml", ".yaml")) and b"\t" in line:
             failures.append(f"{name}:{lineno}: tabs forbidden in Markdown/YAML")
         if line.rstrip(b" \t") != line:
-            if path.suffix.lower() == ".md" and line.endswith(b"  ") and not line.endswith(b"   "):
+            if path.suffix.lower() in {".md", ".mdx", ".rst"} and line.endswith(b"  ") and not line.endswith(b"   "):
                 # Pre-existing Markdown explicit hard breaks; new lines still
                 # require git diff --check to pass.
                 continue
@@ -83,9 +83,18 @@ def check_file(name: str, data: bytes) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cached", action="store_true", help="validate index, not working tree")
+    parser.add_argument("--paths0", action="store_true", help="read NUL-delimited changed paths on stdin")
     args = parser.parse_args()
     errors: list[str] = []
-    for name in tracked_files():
+    if args.paths0:
+        try:
+            paths = [p.decode("utf-8") for p in sys.stdin.buffer.read().split(b"\0") if p]
+        except UnicodeDecodeError as exc:
+            print(f"FORMAT FAIL: invalid changed path encoding ({exc})", file=sys.stderr)
+            return 1
+    else:
+        paths = tracked_files()
+    for name in paths:
         try:
             errors += check_file(name, source_bytes(name, args.cached))
         except (OSError, subprocess.CalledProcessError) as exc:
@@ -96,7 +105,7 @@ def main() -> int:
         if len(errors) > 100:
             print(f"FORMAT FAIL: {len(errors) - 100} additional issues", file=sys.stderr)
         return 1
-    print("FORMAT PASS: all tracked source, configs and docs")
+    print(f"FORMAT PASS: {len(paths)} selected tracked files")
     return 0
 
 
