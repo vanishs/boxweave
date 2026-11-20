@@ -1,0 +1,62 @@
+Operation: b5190b62bc6b0509bd72f87cc92d8db1
+Native: 7f8702de-b216-46cb-bc39-0b9c9b90b1a6
+Guest exit: 0
+active
+active
+enabled
+active
+active
+active
+3f02a4e6-003e-4228-88bc-06541407b24e|s4b2a|3f02a4e6-003e-4228-88bc-06541407b24e|OWNED
+2a9b3c1e-7371-41f7-a4b4-50c8607b1213|s4b2b|2a9b3c1e-7371-41f7-a4b4-50c8607b1213|OWNED
+8347c76d-09d6-4611-b19e-c512cba2ce56|s4b2c|8347c76d-09d6-4611-b19e-c512cba2ce56|OWNED
+s4b2a,RUNNING
+s4b2b,RUNNING
+s4b2c,RUNNING
+Fri Nov 20 07:33:17 2026
+c7226220-6775-415d-a4f5-a2c70a95eac9
+Id=incus.service
+InvocationID=2e19c1a2c6254a04a574b11952bab056
+
+Id=s4b6-controller.service
+InvocationID=03e0e365254a468aa2118fc9e766fc4e
+S4_B6_PERSISTENT_BOX_RESTART_PRESTATE_SAVED=PASS
+
+Operation: 71d46aafa0815d2ad8702e57b0588987
+Native: 22c41116-ec72-413f-9ea8-b6ae3686012c
+Guest exit: 0
+active
+active
+Fri Nov 20 08:39:38 2026
+94fc365d-206b-47d4-a3e2-76e9bf6a9d8e
+Id=incus.service
+InvocationID=0898bc6bf5984f88bf3b119fa7193c81
+
+Id=s4b6-controller.service
+InvocationID=bb23646dc86546288ceec8ea2f5c852f
+/var/tmp/s4b6-integration/boxweave: OK
+/var/lib/boxweave-native-scriptlet-v1.json: OK
+active
+4: eth0    inet 10.248.83.11/24 metric 100 brd 10.248.83.255 scope global dynamic eth0\       valid_lft 3581sec preferred_lft 3581sec
+4: eth0    inet6 fd83:248::11/128 scope global dynamic noprefixroute \       valid_lft 3583sec preferred_lft 3583sec
+active
+6: eth0    inet 10.248.83.12/24 metric 100 brd 10.248.83.255 scope global dynamic eth0\       valid_lft 3581sec preferred_lft 3581sec
+6: eth0    inet6 fd83:248::12/128 scope global dynamic noprefixroute \       valid_lft 3583sec preferred_lft 3583sec
+active
+8: eth0    inet 10.248.83.13/24 metric 100 brd 10.248.83.255 scope global dynamic eth0\       valid_lft 3581sec preferred_lft 3581sec
+8: eth0    inet6 fd83:248::13/128 scope global dynamic noprefixroute \       valid_lft 3582sec preferred_lft 3582sec
+S4_B6_FULL_L1_RESTART_PERSISTENCE_AUTO_START_UUID_ACL_LEDGER=PASS
+
+Operation: 0e5bfd107fbf86cc443bfb6435820f13
+Native: 3abe25fd-c4c3-415c-9b83-af2cd0b0c2c7
+Guest exit: 0
+BASELINE_DENIED s4b2a tcp 10.248.83.12
+BASELINE_DENIED s4b2c tcp 10.248.83.12
+BASELINE_DENIED s4b2a tcp fd83:248::12
+BASELINE_DENIED s4b2c tcp fd83:248::12
+BASELINE_DENIED s4b2a udp 10.248.83.12
+BASELINE_DENIED s4b2c udp 10.248.83.12
+BASELINE_DENIED s4b2a udp fd83:248::12
+BASELINE_DENIED s4b2c udp fd83:248::12
+S4_B6_POST_RESTART_BASELINE_ISOLATION_AND_LOCAL_ECHO=PASS
+

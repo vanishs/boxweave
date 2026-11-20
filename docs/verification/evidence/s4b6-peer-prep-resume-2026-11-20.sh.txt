@@ -1,0 +1,74 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+lab=/var/tmp/s4b6-peer
+bin=/var/tmp/s4b6-integration/boxweave
+project=user-1001
+acl=bw-s4b2-native
+db="$lab/private/ledger.sqlite"
+export BOXWEAVE_B6_ONE_USE=s4b6-isolated-native-lab-20261120
+incus --project "$project" exec s4b2a -- systemctl daemon-reload
+incus --project "$project" exec s4b2a -- systemctl enable --now s4b6-packet.service
+for spec in 's4b2b 10.248.83.12 fd83:248::12' 's4b2c 10.248.83.13 fd83:248::13'; do
+  read -r name ipv4 ipv6 <<< "$spec"
+  incus --project "$project" init s4b6-fixture-image "$name" -c limits.cpu=1 -c limits.memory=512MiB -c boot.autostart=true
+  incus --project "$project" config device override "$name" eth0 "ipv4.address=$ipv4" "ipv6.address=$ipv6"
+  incus --project "$project" start "$name"
+  incus --project "$project" file push "$lab/packet" "$name/root/s4b6-packet" --mode 0755
+  cat <<'UNIT' | incus --project "$project" exec "$name" -- sh -c 'cat > /etc/systemd/system/s4b6-packet.service'
+[Unit]
+Description=Disposable B6 echo witness
+After=network.target
+[Service]
+ExecStart=/root/s4b6-packet server
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+  for i in $(seq 1 45); do
+    incus --project "$project" exec "$name" -- test -S /run/systemd/private && break
+    sleep 1
+  done
+  incus --project "$project" exec "$name" -- systemctl daemon-reload
+  incus --project "$project" exec "$name" -- systemctl enable --now s4b6-packet.service
+done
+ready=0
+for i in $(seq 1 60); do
+ if incus --project "$project" exec s4b2a -- ip -4 -o addr show eth0 | grep -q 10.248.83.11 &&
+    incus --project "$project" exec s4b2b -- ip -4 -o addr show eth0 | grep -q 10.248.83.12 &&
+    incus --project "$project" exec s4b2c -- ip -4 -o addr show eth0 | grep -q 10.248.83.13 &&
+    incus --project "$project" exec s4b2a -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::11 &&
+    incus --project "$project" exec s4b2b -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::12 &&
+    incus --project "$project" exec s4b2c -- ip -6 -o addr show eth0 scope global | grep -q fd83:248::13; then ready=1; break; fi
+ sleep 1
+done
+test "$ready" = 1
+BOXWEAVE_S4B3_SCOPE="$lab/scope.json" "$lab/root-fixture" -test.v -test.run '^TestS4B3NativeRootSeedBaselineAndExactScope$'
+chmod 0644 "$lab/scope.json"
+runuser -u boxweave -- env BOXWEAVE_B6_ONE_USE="$BOXWEAVE_B6_ONE_USE" BOXWEAVE_B6_SEED_ONLY=1 BOXWEAVE_S4B3_SCOPE="$lab/scope.json" BOXWEAVE_S4B3_DB="$db" "$lab/root-fixture" -test.v -test.run '^TestS4B3NativeNonrootSeedClaimedGrantOriginal$'
+test "$(sqlite3 -readonly "$db" 'select count(*) from operations')" = 0
+cat > /etc/systemd/system/s4b6-controller.service <<UNIT
+[Unit]
+Description=Disposable B6 exact candidate controller
+After=incus.service
+Requires=incus.service
+[Service]
+Type=simple
+User=boxweave
+Group=boxweave
+UMask=0077
+ExecStart=$bin serve -db $db -project $project -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now s4b6-controller.service
+for i in $(seq 1 40); do
+ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp || true)
+ test "$code" = 401 && break
+ sleep 1
+done
+test "$code" = 401
+"$bin" build-info
+printf 'S4_B6_PEER_FIXTURE_READY=PASS\n'
