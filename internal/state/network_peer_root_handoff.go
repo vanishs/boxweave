@@ -79,17 +79,6 @@ func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, br
 		token == "" || layer != project {
 		return zero, ErrResourceLocked
 	}
-	// Host root repeats the independent barrier proof before any native effect.
-	// An unclaimed sibling may be operating in a pre-upgrade database: refuse.
-	var concurrent int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-		WHERE o.layer=? AND o.id<>?
-		AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
-		AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
-		  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
-		project, id).Scan(&concurrent); err != nil || concurrent != 0 {
-		return zero, ErrResourceLocked
-	}
 	var intent RootPeerRevokeSafeIntent
 	if err := json.Unmarshal(raw, &intent); err != nil {
 		return zero, ErrInvalid
@@ -100,6 +89,21 @@ func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, br
 		intent.SourceUUID == "" || intent.TargetUUID == "" ||
 		intent.SourceUUID == intent.TargetUUID ||
 		boxUUID != intent.SourceUUID || incarnation != intent.SourceIncarnation {
+		return zero, ErrResourceLocked
+	}
+	// Host root repeats the independent barrier proof before any native effect.
+	// An unclaimed sibling may be operating in a pre-upgrade database: refuse.
+	parent, e := linkedDeletePeerParent(ctx, tx, id, intent, expectedState == "UNKNOWN")
+	if e != nil {
+		return zero, e
+	}
+	var concurrent int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
+		WHERE o.layer=? AND o.id<>? AND o.id<>?
+		AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
+		AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
+		  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
+		project, id, parent).Scan(&concurrent); err != nil || concurrent != 0 {
 		return zero, ErrResourceLocked
 	}
 	owner := map[string]NetworkAuditBinding{}
@@ -153,6 +157,9 @@ func (s *Store) readRootPeerRevocationState(ctx context.Context, id, project, br
 		return zero, err
 	}
 	expected := []string{"acl:default/" + acl, "box:" + src.UUID, "box:" + dst.UUID}
+	if parent != "" {
+		expected = append(expected, deleteParentKey(parent))
+	}
 	slices.Sort(expected)
 	if !slices.Equal(claims, expected) {
 		return zero, ErrResourceLocked

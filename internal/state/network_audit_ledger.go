@@ -77,6 +77,10 @@ func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bri
 	if len(bindings) == 0 {
 		return zero, ErrResourceLocked
 	}
+	historical, err := verifiedDeletedNetworkBindings(ctx, tx, project, bridge, acl)
+	if err != nil {
+		return zero, ErrResourceLocked
+	}
 	rows, err = tx.QueryContext(ctx, "SELECT box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state FROM network_bindings WHERE project=?", project)
 	if err != nil {
 		return zero, err
@@ -87,6 +91,14 @@ func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bri
 		var uuid, inc, nic, nw, ac, mac, v4, v6, status string
 		if err = rows.Scan(&uuid, &inc, &nic, &nw, &ac, &mac, &v4, &v6, &status); err != nil {
 			break
+		}
+		if status == "RELEASED" {
+			old, ok := historical[uuid]
+			if !ok || old.Incarnation != inc || nic != "eth0" || nw != bridge || ac != acl || old.MAC != mac || old.IPv4 != v4 || old.IPv6 != v6 {
+				err = ErrResourceLocked
+				break
+			}
+			continue
 		}
 		b, ok := bindings[uuid]
 		if !ok || found[uuid] || b.Incarnation != inc || nic != "eth0" || nw != bridge || ac != acl || status != "PINNED" || !auditMAC(mac) || !auditIP(v4, false) || !auditIP(v6, true) || macs[mac] || ips[v4] || ips[v6] {
@@ -125,6 +137,14 @@ func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bri
 		var family, address, p, uuid, inc, status string
 		if err = rows.Scan(&family, &address, &p, &uuid, &inc, &status); err != nil {
 			break
+		}
+		if status == "RELEASED" {
+			old, ok := historical[uuid]
+			if !ok || p != project || inc != old.Incarnation || !((family == "ipv4" && address == old.IPv4) || (family == "ipv6" && address == old.IPv6)) {
+				err = ErrResourceLocked
+				break
+			}
+			continue
 		}
 		b, ok := bindings[uuid]
 		key := uuid + "|" + family

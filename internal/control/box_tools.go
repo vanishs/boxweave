@@ -198,7 +198,7 @@ func (s *Service) admitNative(ctx context.Context, req *mcp.CallToolRequest,
 	return s.Store.Admit(ctx, state.Admission{
 		Layer: principal.Layer, ActorID: principal.ActorID, TokenID: principal.TokenID, Key: key, Action: action,
 		BoxUUID: boxUUID, Incarnation: incarnation, ResourceKey: resourceKey,
-		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID,
+		WorkRef: work, AgentRef: agent, SafeIntent: b, RequestID: requestID, CleanupDependencies: action == "box_delete",
 	})
 }
 
@@ -663,7 +663,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_delete",
-		Description: "Delete only an exact owned STOPPED Box after refusing native proxy/peer dependencies; retain UNKNOWN on unverified deletion.",
+		Description: "Delete an exact owned Box. With confirmed Forward/Peer dependencies, the original reserves the Project and serially cleans exact linked child Operations before stopping and deleting; Peer requires existing host-local PRS review/approval. Without dependencies the Box must already be STOPPED. Unknown or foreign dependencies refuse; never blindly retry UNKNOWN.",
 		Annotations: mutationAnnotations(true)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operateBoxInput) (*mcp.CallToolResult, state.Receipt, error) {
 			if _, err := s.requestPrincipal(req); err != nil {
@@ -693,9 +693,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			var nativeID string
 			effect := func(ctx context.Context) (string, error) {
-				id, e := s.Native.DeleteBox(ctx, box.Name, box.UUID)
+				id, e := s.executeDependentDelete(ctx, r.ID, box)
 				nativeID = id
-				return id, preflightNative(e)
+				return id, e
 			}
 			verify := func(ctx context.Context) error {
 				if err := nativeDone(ctx, s.Native, nativeID); err != nil {

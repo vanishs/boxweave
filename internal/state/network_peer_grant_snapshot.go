@@ -191,7 +191,22 @@ func (s *Store) ReadPeerRevokedSnapshot(ctx context.Context, project, bridge, ac
 	for _, b := range ledger.Boxes {
 		owners[b.UUID] = b
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,target_incarnation,
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	historical, err := verifiedDeletedNetworkBindings(ctx, tx, project, bridge, acl)
+	if err != nil {
+		return nil, ErrResourceLocked
+	}
+	for id, b := range historical {
+		if _, live := owners[id]; live {
+			return nil, ErrResourceLocked
+		}
+		owners[id] = b
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,target_incarnation,
  source_ipv4,target_ipv4,source_ipv6,target_ipv6
  FROM peer_grants WHERE project=? AND status='REVOKED' AND desired=0 ORDER BY source_uuid,target_uuid`, project)
 	if err != nil {
@@ -216,6 +231,12 @@ func (s *Store) ReadPeerRevokedSnapshot(ctx context.Context, project, bridge, ac
 		revoked = append(revoked, p)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return revoked, nil

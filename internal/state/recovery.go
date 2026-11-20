@@ -147,6 +147,11 @@ func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, re
 	if action == "box_peer_set" || action != r.Action {
 		return ErrResourceLocked
 	}
+	if action == "box_delete" {
+		if err := checkCascadeRelease(ctx, tx, r.OperationID); err != nil {
+			return err
+		}
+	}
 	if state != "UNKNOWN" || updated != r.UpdatedAt {
 		return ErrState
 	}

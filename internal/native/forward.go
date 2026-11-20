@@ -141,7 +141,7 @@ func (r Reader) UpdateOwnedForward(ctx context.Context, name, uuid string, f For
 	if inst.Config["volatile.uuid"] != uuid || (inst.Project != "" && inst.Project != r.Project) || !nicPrivate(inst.ExpandedDevices) {
 		return "", ErrNotOwned
 	}
-	if inst.Status != "Running" && inst.Status != "Ready" {
+	if inst.Status != "Running" && inst.Status != "Ready" && (create || inst.Status != "Stopped") {
 		return "", ErrNativeUnsupported
 	}
 	devices, err := forwardDeviceChange(inst.Devices, f, create)
@@ -195,6 +195,68 @@ func (r Reader) ObserveOwnedForward(ctx context.Context, name, uuid string, f Fo
 		if _, local := inst.Devices[f.Device]; !local {
 			return ErrNativeDependents
 		}
+	}
+	return nil
+}
+
+// PreflightDependentDelete refuses a foreign or drifted native proxy before
+// any dependent cleanup. Only a matching exact local and expanded device
+// can be removed by a linked child operation.
+func (r Reader) PreflightDependentDelete(ctx context.Context, name, uuid string, forwards []ForwardSpec) error {
+	_, inst, _, err := r.confinedExactBox(ctx, name, uuid)
+	if err != nil {
+		return err
+	}
+	if !nicPrivate(inst.ExpandedDevices) {
+		return ErrUnsafeNetwork
+	}
+	if inst.Status != "Running" && inst.Status != "Ready" && inst.Status != "Stopped" {
+		return ErrNativeDependents
+	}
+	if inst.ExpandedConfig["security.protection.delete"] == "true" || inst.Config["security.protection.delete"] == "true" {
+		return ErrNativeDependents
+	}
+	expected := map[string]ForwardSpec{}
+	for _, f := range forwards {
+		if f.Validate() != nil {
+			return ErrNativeDependents
+		}
+		if _, exists := expected[f.Device]; exists {
+			return ErrNativeDependents
+		}
+		expected[f.Device] = f
+	}
+	for n, dev := range inst.ExpandedDevices {
+		if dev["type"] != "proxy" {
+			continue
+		}
+		f, owned := expected[n]
+		if !owned || !exactForwardDevice(dev, f) || !exactForwardDevice(inst.Devices[n], f) {
+			return ErrNativeDependents
+		}
+	}
+	for n, f := range expected {
+		if !exactForwardDevice(inst.ExpandedDevices[n], f) || !exactForwardDevice(inst.Devices[n], f) {
+			return ErrNativeDependents
+		}
+	}
+	return nil
+}
+
+// VerifyPinnedDeleteNIC makes the ledger pin an independently observed exact
+// native device witness, not an authority to edit an arbitrary NIC.
+func (r Reader) VerifyPinnedDeleteNIC(ctx context.Context, name, uuid, bridge, acl, mac, v4, v6 string) error {
+	_, inst, _, e := r.confinedExactBox(ctx, name, uuid)
+	if e != nil {
+		return e
+	}
+	d := inst.ExpandedDevices["eth0"]
+	observed := strings.ToLower(inst.Config["volatile.eth0.hwaddr"])
+	if observed == "" {
+		observed = strings.ToLower(d["hwaddr"])
+	}
+	if !nicPrivate(inst.ExpandedDevices) || d["network"] != bridge || d["security.acls"] != acl || d["ipv4.address"] != v4 || d["ipv6.address"] != v6 || observed != mac {
+		return ErrUnsafeNetwork
 	}
 	return nil
 }

@@ -17,6 +17,12 @@ on:
       - internal/state/network_forward.go
       - internal/state/store.go
       - internal/state/worker.go
+      - internal/control/delete_dependencies.go
+      - internal/control/delete_dependencies_native_test.go
+      - internal/state/delete_dependencies.go
+      - internal/state/delete_dependencies_test.go
+      - internal/state/network_deleted_binding.go
+      - internal/control/box_tools.go
   workflow_dispatch:
 permissions:
   contents: read
@@ -137,8 +143,8 @@ jobs:
           if grep -q 'bwpf-' "$RUNNER_TEMP/s4b4-device-readback.txt"; then
             echo S4_B4_NATIVE_PROXY_LEAK; exit 70
           fi
-          sudo incus --project "$S4_B4_PROJECT" stop s4b4native
-          sudo incus --project "$S4_B4_PROJECT" delete s4b4native
+          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeMCPForwardDependentDelete$' | tee "$RUNNER_TEMP/s4b5-native.log"
+          grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
           sudo incus project delete "$S4_B4_PROJECT"
           sudo incus network acl delete bw-s4b4-native
           sudo incus network delete bwbr0

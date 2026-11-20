@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 )
 
 // StageRootPeerRevocation changes ONLY an already-confirmed exact peer grant
@@ -51,13 +52,17 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 	}
 	// Independently enforce the all-NIC Project barrier at staging, including
 	// old databases containing an in-flight sibling admitted before this fix.
+	parent, err := linkedDeletePeerParent(ctx, tx, id, intent, false)
+	if err != nil {
+		return err
+	}
 	var siblingBusy int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
-		WHERE o.layer=? AND o.id<>?
+		WHERE o.layer=? AND o.id<>? AND o.id<>?
 		AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
 		AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
 		  WHERE r.operation_id=o.id AND r.decision='RELEASED'))`,
-		intent.Project, id).Scan(&siblingBusy); err != nil || siblingBusy != 0 {
+		intent.Project, id, parent).Scan(&siblingBusy); err != nil || siblingBusy != 0 {
 		return ErrResourceLocked
 	}
 	// All three exact claims must have been acquired atomically at Admit.
@@ -86,6 +91,9 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 		"acl:default/" + intent.ACL,
 		"box:" + intent.SourceUUID,
 		"box:" + intent.TargetUUID,
+	}
+	if parent != "" {
+		expected = append(expected, deleteParentKey(parent))
 	}
 	slices.Sort(expected)
 	if !slices.Equal(claims, expected) {
@@ -142,6 +150,19 @@ func (s *Store) StageRootPeerRevocation(ctx context.Context, id string) error {
 	affected, err := result.RowsAffected()
 	if err != nil || affected != 1 {
 		return ErrResourceLocked
+	}
+	if parent != "" {
+		now := time.Now().UnixNano()
+		result, e := tx.ExecContext(ctx, "UPDATE operations SET state='DISPATCHING',updated_at=? WHERE id=? AND state='ADMITTED'", now, id)
+		if e != nil {
+			return e
+		}
+		if n, e := result.RowsAffected(); e != nil || n != 1 {
+			return ErrResourceLocked
+		}
+		if _, e = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'DISPATCHING','DELETE_PEER_STAGE_AND_CLAIM_ATOMIC')", id, now); e != nil {
+			return e
+		}
 	}
 	return tx.Commit()
 }

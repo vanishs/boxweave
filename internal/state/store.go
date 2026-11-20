@@ -126,11 +126,12 @@ type Admission struct {
 	ResourceKey string
 	// ResourceKeys are additional typed locks acquired atomically with admission.
 	// Peer operations require both Boxes and the exact shared ACL.
-	ResourceKeys    []string
-	ForwardCreate   *ForwardCreateAdmission
-	ForwardDeleteID string
-	WorkRef         string
-	AgentRef        string
+	ResourceKeys        []string
+	ForwardCreate       *ForwardCreateAdmission
+	ForwardDeleteID     string
+	CleanupDependencies bool // Typed internal Box Delete admission only.
+	WorkRef             string
+	AgentRef            string
 }
 
 type Receipt struct {
@@ -566,12 +567,32 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
 	}
+	// A dependency-aware delete owns the whole Project for the duration of
+	// its exact child cleanup. Only private, linked children can bypass this
+	// admission barrier; a caller-supplied idempotency key never can.
+	var deleteBusy int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims c JOIN operations o ON o.id=c.operation_id WHERE c.layer=? AND c.resource_key=? AND o.action='box_delete' AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN') AND NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED')", a.Layer, "delete-project:"+a.Layer).Scan(&deleteBusy); err != nil {
+		return Receipt{}, err
+	}
+	if deleteBusy != 0 {
+		return Receipt{}, ErrResourceLocked
+	}
+	cascade := false
+	if a.CleanupDependencies {
+		if a.Action != "box_delete" {
+			return Receipt{}, ErrInvalid
+		}
+		cascade, err = validateDeleteAdmission(ctx, tx, a)
+		if err != nil {
+			return Receipt{}, err
+		}
+	}
 	// An installed root Peer revoke temporarily stops ALL owned NICs in a
 	// Project, including siblings not present in the original two-Box claim.
 	// The SQLite admission writer provides a Project-wide exclusive barrier.
 	// A root UNKNOWN may NEVER be bypassed by generic recovery RELEASED.
 	var projectBusy int
-	if a.Action == "box_peer_set" {
+	if a.Action == "box_peer_set" || cascade {
 		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o
 			WHERE o.layer=? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')
 			AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r
@@ -643,7 +664,7 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 		if err != nil {
 			return Receipt{}, err
 		}
-		if dependent != 0 {
+		if dependent != 0 && !cascade {
 			return Receipt{}, ErrResourceLocked
 		}
 	}
@@ -717,6 +738,11 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	}
 	for _, key := range claims {
 		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES (?,?,?)", id, a.Layer, key); err != nil {
+			return Receipt{}, err
+		}
+	}
+	if cascade {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO operation_resource_claims(operation_id,layer,resource_key) VALUES(?,?,?)", id, a.Layer, "delete-project:"+a.Layer); err != nil {
 			return Receipt{}, err
 		}
 	}

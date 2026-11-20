@@ -397,6 +397,9 @@ func (s *Store) FinalizeVerifiedDelete(ctx context.Context, opID string, box Own
 		incarnation != box.Incarnation || resource != "box:"+box.Name {
 		return ErrState
 	}
+	if err := finalizeDeleteDependencies(ctx, tx, opID, box); err != nil {
+		return err
+	}
 	now := time.Now().UnixNano()
 	result, err := tx.ExecContext(ctx, `UPDATE owned_boxes SET state='DELETED',
 		deleted_by_operation_id=?,deleted_at=?

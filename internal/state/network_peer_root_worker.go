@@ -98,8 +98,14 @@ func (w Worker) ExecuteRootPeerRevocation(original string, isolate SynchronousAC
 	if err := w.Store.StageRootPeerRevocation(ctx, original); err != nil {
 		return
 	}
-	if err := w.Store.Claim(ctx, original); err != nil {
+	rec, err = w.Store.Get(ctx, original)
+	if err != nil {
 		return
+	}
+	if rec.State != "DISPATCHING" {
+		if err := w.Store.Claim(ctx, original); err != nil {
+			return
+		}
 	}
 	unknown := func(reason string) {
 		_ = w.Store.Unknown(context.Background(), original, "DISPATCHING", reason)

@@ -89,7 +89,12 @@ func (w Worker) Execute(operationID string, effect NativeEffect, verify VerifyEf
 			return
 		}
 		// A native SDK error/timeout cannot prove the request was not dispatched.
-		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", "NATIVE_OUTCOME_AMBIGUOUS")
+		reason := "NATIVE_OUTCOME_AMBIGUOUS"
+		var partial VerificationUncertain
+		if errors.As(err, &partial) && strings.HasPrefix(partial.Class, "DELETE_DEPENDENCY_") && len(partial.Class) <= 100 && !strings.ContainsAny(partial.Class, "\x00\n\r") {
+			reason = partial.Class
+		}
+		_ = w.Store.Unknown(context.Background(), operationID, "DISPATCHING", reason)
 		return
 	}
 	if nativeID == "" {

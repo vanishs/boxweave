@@ -21,6 +21,14 @@ func (s *Service) PrepareRootPeerRevocation(original string) error {
 	if err := s.Store.StageRootPeerRevocation(ctx, original); err != nil {
 		return err
 	}
+	// A delete-linked revoke stages and claims in one transaction.
+	rec, err := s.Store.Get(ctx, original)
+	if err != nil {
+		return err
+	}
+	if rec.State == "DISPATCHING" {
+		return nil
+	}
 	return s.Store.Claim(ctx, original)
 }
 
