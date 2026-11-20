@@ -79,7 +79,11 @@ func TestOAuthSetupRejectsUnsafeFiles(t *testing.T) {
 	dir := oauthPrivateTempDir(t)
 	secret := filepath.Join(dir, "approval")
 	const good = "generated-test-password-1234567\n"
-	if err := os.WriteFile(secret, []byte(good), 0644); err != nil {
+	if err := os.WriteFile(secret, []byte(good), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Set the negative fixture's actual mode regardless of the process umask.
+	if err := os.Chmod(secret, 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := setupOAuthNoninteractive(s, false, "", secret); err == nil {
@@ -109,7 +113,10 @@ func TestOAuthSetupRejectsUnsafeFiles(t *testing.T) {
 		t.Fatalf("valid owner-only secret rejected: %v", err)
 	}
 	publicDir := filepath.Join(t.TempDir(), "public")
-	if err := os.Mkdir(publicDir, 0755); err != nil {
+	if err := os.Mkdir(publicDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(publicDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	secretPublic := filepath.Join(publicDir, "password")

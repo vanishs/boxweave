@@ -54,10 +54,12 @@ class MockMCPHandler(BaseHTTPRequestHandler):
                 {"name": n, "annotations": {"readOnlyHint": True}}
                 for n in ("host_status", "operation_list", "operation_get", "box_activity_get", "error_tool", "legacy_text")
             ] + [{"name": "box_create", "annotations": {"readOnlyHint": False}},
-                 {"name": "unannotated"}], "nextCursor": ""}
+                 {"name": "unannotated"},
+                 {"name": "port_forward_create", "annotations": {"readOnlyHint": True}},
+                 {"name": "port_forward_delete", "annotations": {"readOnlyHint": True}}], "nextCursor": ""}
         elif method == "tools/call":
             name, args = params.get("name"), params.get("arguments") or {}
-            if name in ("box_create", "unannotated"):
+            if name in ("box_create", "unannotated", "port_forward_create", "port_forward_delete"):
                 with self.lock:
                     type(self).unsafe_calls += 1
                 result = {"content": [], "structuredContent": {"operation_id": "unsafe-id", "state": "ADMITTED"}}
@@ -143,7 +145,7 @@ class LoopbackSuite(unittest.TestCase):
     def test_initialize_and_catalog(self):
         with self.client() as c:
             self.assertEqual(c.protocol, "2025-11-25")
-            self.assertEqual(len(c.all_tools()), 8)
+            self.assertEqual(len(c.all_tools()), 10)
             self.assertEqual(c.host_status()["schema_version"], 5)
             self.assertIn("no-store", c.last_cache_control)
         self.assertTrue(all(x["auth"] == "Bearer test_secret_never_log" for x in MockMCPHandler.calls))
@@ -154,6 +156,13 @@ class LoopbackSuite(unittest.TestCase):
                 c.call("box_create", {"name": "should-not-create"})
             with self.assertRaises(MCPUnsafeMutation):
                 c.call("unannotated")
+        self.assertEqual(MockMCPHandler.unsafe_calls, 0)
+
+    def test_network_mutations_refused_even_if_misannotated(self):
+        with self.client() as c:
+            for name in ("port_forward_create", "port_forward_delete"):
+                with self.subTest(name=name), self.assertRaises(MCPUnsafeMutation):
+                    c.call(name)
         self.assertEqual(MockMCPHandler.unsafe_calls, 0)
 
     def test_disposable_explicit_mutation_opt_in(self):
@@ -256,7 +265,7 @@ class LoopbackSuite(unittest.TestCase):
         from mcp_lab import main
         with patch.dict(os.environ, {"BOXWEAVE_MCP_TOKEN": "cli-secret"}):
             self.assertEqual(main(["--url", f"http://127.0.0.1:{self.port}/mcp", "smoke",
-                                   "--expected-tools", "8", "--expected-schema", "5", "--require-activity"]), 0)
+                                   "--expected-tools", "10", "--expected-schema", "5", "--require-activity"]), 0)
             self.assertEqual(main(["--url", f"http://127.0.0.1:{self.port}/mcp", "call", "box_create"]), 1)
         self.assertEqual(MockMCPHandler.unsafe_calls, 0)
 

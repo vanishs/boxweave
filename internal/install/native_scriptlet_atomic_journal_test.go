@@ -95,7 +95,11 @@ func TestS4B2ScriptletRootLockRefusesConcurrentAndSymlink(t *testing.T) {
 		t.Fatal("symlink root auth lock accepted")
 	}
 	unsafe := filepath.Join(t.TempDir(), "world-lock")
-	if err := os.WriteFile(unsafe, []byte("open"), 0644); err != nil {
+	if err := os.WriteFile(unsafe, []byte("open"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A restrictive process umask must not turn the negative fixture into a safe file.
+	if err := os.Chmod(unsafe, 0644); err != nil {
 		t.Fatal(err)
 	}
 	if closeIt, err := nativeScriptletAcquireLock(unsafe); err == nil {
