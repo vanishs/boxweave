@@ -226,7 +226,7 @@ def inspect_sqlite(dbpath, guided=False):
         conn.close()
 
 
-def native_instances(project):
+def native_instances(project, guided=False):
     raw, _ = command(["incus", "list", "local:", "--project", project, "--format", "json"], timeout=25)
     try:
         data = json.loads(raw)
@@ -245,8 +245,22 @@ def native_instances(project):
                 not isinstance(uuid, str) or not VALID_UUID.fullmatch(uuid) or \
                 not isinstance(status, str):
             raise UninstallError("Incus UUID/name/status uncertain; no native deletion")
+        if guided:
+            devices = entry.get("expanded_devices")
+            if entry.get("type") != "container" or not isinstance(devices, dict):
+                raise UninstallError("unverified native container devices")
+            if any(not isinstance(dev, dict) or dev.get("type") == "proxy"
+                   for dev in devices.values()):
+                raise UninstallError("native proxy or unknown device: reconcile before guided removal")
         result.append({"uuid": uuid, "name": name, "state": status})
     return sorted(result, key=lambda x: x["uuid"])
+
+
+def require_quiescent_native(project):
+    raw, _ = command(["incus", "operation", "list", "local:", "--project",
+                      project, "--format", "json"], timeout=25)
+    if json.loads(raw) != []:
+        raise UninstallError("native operations present or unreadable: reconcile before retirement")
 
 
 def require_root_journal(path):
@@ -403,7 +417,9 @@ def inspect(scope, project, box_uuids, native_sha, guided=False):
         blockers.append("NATIVE_PREPARE_APPLIED: retain installed rollback binary or choose full")
     incus = []
     if scope == "full":
-        incus = native_instances(project)
+        if guided:
+            require_quiescent_native(project)
+        incus = native_instances(project, guided=guided)
         expected = sorted(x["uuid"] for x in snapshot["boxes"]) if guided else sorted(box_uuids)
         if guided and box_uuids and sorted(box_uuids) != expected:
             blockers.append("EXPLICIT_ALLOWLIST_MISMATCH")
@@ -625,22 +641,29 @@ def apply_with_serve_lock(plan):
         raise UninstallError("exec archive changed after approval")
     archive = archive_controller(plan) if plan.get("guided") else None
     if plan["scope"] == "full":
-        if native_instances(plan["project"]) != plan["incus_instances"]:
+        guided = plan.get("guided", False)
+        if guided:
+            require_quiescent_native(plan["project"])
+        if native_instances(plan["project"], guided=guided) != plan["incus_instances"]:
             raise UninstallError("native inventory changed after approval")
         for box in plan["incus_instances"]:
-            current = native_instances(plan["project"])
+            current = native_instances(plan["project"], guided=guided)
             exact = [x for x in current if x["uuid"] == box["uuid"]]
             if len(exact) != 1 or exact[0] != box:
                 raise UninstallError("Incus target changed before deletion")
             if box["state"] == "Running" and plan.get("guided"):
                 command(["incus", "stop", "local:" + box["name"], "--project",
                          plan["project"], "--timeout", "60"], timeout=90)
-                stopped = [x for x in native_instances(plan["project"]) if x["uuid"] == box["uuid"]]
+                stopped = [x for x in native_instances(plan["project"], guided=guided) if x["uuid"] == box["uuid"]]
                 if stopped != [{**box, "state": "Stopped"}]:
                     raise UninstallError("graceful stop not independently verified")
             command(["incus", "delete", "local:" + box["name"], "--project", plan["project"]], timeout=90)
-            if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"])):
+            if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"], guided=guided)):
                 raise UninstallError("native deletion not verified")
+        if guided:
+            require_quiescent_native(plan["project"])
+            if native_instances(plan["project"], guided=True):
+                raise UninstallError("native Project no longer empty; preserve controller")
         native = plan["native_prepare"]
         if native["status"] == "APPLIED":
             if prepare_record() != native:

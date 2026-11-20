@@ -13,6 +13,9 @@ from unittest import mock
 
 import uninstall_core as u
 
+REAL_NATIVE_INSTANCES = u.native_instances
+REAL_REQUIRE_QUIET = u.require_quiescent_native
+
 
 class FakeHost(unittest.TestCase):
     def setUp(self):
@@ -61,10 +64,13 @@ class FakeHost(unittest.TestCase):
         self.sys.start()
         self.addCleanup(self.sys.stop)
         self.native = []
-        self.incus = mock.patch.object(u, "native_instances", side_effect=lambda _: list(self.native))
+        self.incus = mock.patch.object(u, "native_instances", side_effect=lambda _, guided=False: list(self.native))
         self.incus.start()
         self.addCleanup(self.incus.stop)
         self.cmds = []
+        self.quiet = mock.patch.object(u, "require_quiescent_native")
+        self.quiet.start()
+        self.addCleanup(self.quiet.stop)
         self.command = mock.patch.object(u, "command", side_effect=self.fake_command)
         self.command.start()
         self.addCleanup(self.command.stop)
@@ -469,6 +475,17 @@ class FakeHost(unittest.TestCase):
         self.assertFalse(self.plan("full")["ready"])
         self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
         self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_native_dependency_and_live_operation_refusals(self):
+        entry = {"name": "bw-example", "type": "container", "status": "Running",
+                 "config": {"volatile.uuid": self.box},
+                 "expanded_devices": {"p": {"type": "proxy"}}}
+        with mock.patch.object(u, "command", return_value=(json.dumps([entry]), 0)):
+            with self.assertRaisesRegex(u.UninstallError, "native proxy"):
+                REAL_NATIVE_INSTANCES("user-1001", guided=True)
+        with mock.patch.object(u, "command", return_value=('[{"id":"active"}]', 0)):
+            with self.assertRaisesRegex(u.UninstallError, "operations present"):
+                REAL_REQUIRE_QUIET("user-1001")
 
     def test_guided_denial_and_drift_do_not_mutate(self):
         with mock.patch.object(u.os, "geteuid", return_value=0), \
