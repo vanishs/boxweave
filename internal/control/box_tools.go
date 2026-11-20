@@ -778,6 +778,13 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if final == nil || final.ID != nativeID {
 					return native.ErrUnverified
 				}
+				// Incus 7.6 creates recorded logs BEFORE it calls Guest
+				// Exec. An exact failed log-open with no Guest metadata is
+				// a proven terminal pre-start native failure, not UNKNOWN.
+				// Unclassified native failures stay UNKNOWN/fail-closed.
+				if native.ExecRecordingQuotaPreStartFailure(final, box.Name, nativeID) {
+					return state.VerifiedEffectFailure{Class: "NATIVE_EXEC_SPOOL_QUOTA_EXHAUSTED_PRESTART"}
+				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
 					return err
