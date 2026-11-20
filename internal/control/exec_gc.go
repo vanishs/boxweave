@@ -61,6 +61,12 @@ func (s *Service) execGCLoop(ctx context.Context) {
 		workCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 		n, err := s.SweepExecRetention(workCtx, time.Now())
+		archived, archiveErr := s.SweepExecArchive(workCtx, time.Now())
+		if archiveErr != nil && ctx.Err() == nil {
+			slog.ErrorContext(ctx, "exec_archive_retention_sweep_failed", "error", archiveErr)
+		} else if archived > 0 {
+			slog.InfoContext(ctx, "exec_archive_retention_sweep_completed", "streams", archived)
+		}
 		if err != nil && ctx.Err() == nil {
 			slog.ErrorContext(ctx, "exec_output_retention_sweep_failed", "error", err)
 		} else if n > 0 {

@@ -795,6 +795,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if out.Exit == nil {
 					return native.ErrUnverified
 				}
+				// Capture bounded private output while the original Exec claim still
+				// protects the Box from concurrent Delete. A spool failure must
+				// not erase an independently verified native terminal result.
+				s.captureExecArchive(ctx, r.ID, out.StdoutPath, out.StderrPath)
 				// The final native Exec receipt, Guest exit, paths and
 				// BoxWeave SUCCEEDED event are ONE SQLite commit. Never
 				// leave a separate output-row / final-state crash gap.

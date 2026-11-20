@@ -28,6 +28,7 @@ type ActivityQuery struct {
 }
 
 type ActivityIssue struct {
+	Disposition string `json:"disposition"`
 	OperationID string `json:"operation_id,omitempty"`
 	BoxUUID     string `json:"box_id,omitempty"`
 	ResourceRef string `json:"resource_ref,omitempty"`
@@ -82,17 +83,30 @@ type ActivityEvidence struct {
 	Limitations   []string         `json:"limitations"`
 }
 
+type ActivityCoverageDetails struct {
+	AuthorizedProjectOnly   bool `json:"authorized_project_only"`
+	SQLiteSnapshotOnly      bool `json:"sqlite_snapshot_only"`
+	NativeLiveVerified      bool `json:"native_live_verified"`
+	CrossPageSnapshotStable bool `json:"cross_page_snapshot_stable"`
+	AttentionComplete       bool `json:"attention_complete"`
+	PageTruncated           bool `json:"page_truncated"`
+	HistorySampleBounded    bool `json:"history_sample_bounded"`
+}
+
 type ActivityResult struct {
-	Source            string            `json:"source"`
-	Scope             string            `json:"scope"`
-	AsOfNS            int64             `json:"as_of_ns"`
-	Coverage          string            `json:"coverage"`
-	Truncated         bool              `json:"truncated"`
-	AttentionComplete bool              `json:"attention_complete"`
-	NextCursor        string            `json:"next_cursor,omitempty"`
-	Operations        []Receipt         `json:"operations,omitempty"`
-	Issues            []ActivityIssue   `json:"issues,omitempty"`
-	Evidence          *ActivityEvidence `json:"evidence,omitempty"`
+	CoverageDetails   *ActivityCoverageDetails `json:"coverage_details,omitempty"`
+	Source            string                   `json:"source"`
+	Scope             string                   `json:"scope"`
+	AsOfNS            int64                    `json:"as_of_ns"`
+	Coverage          string                   `json:"coverage"`
+	Truncated         bool                     `json:"truncated"`
+	AttentionComplete bool                     `json:"attention_complete"`
+	NextCursor        string                   `json:"next_cursor,omitempty"`
+	Operations        []Receipt                `json:"operations,omitempty"`
+	Issues            []ActivityIssue          `json:"issues,omitempty"`
+	History           []ActivityIssue          `json:"history,omitempty"`
+	HistoryTruncated  bool                     `json:"history_truncated"`
+	Evidence          *ActivityEvidence        `json:"evidence,omitempty"`
 }
 
 func (q ActivityQuery) normalize() (ActivityQuery, error) {
@@ -253,6 +267,12 @@ func (s *Store) ReadActivity(ctx context.Context, input ActivityQuery) (Activity
 	}
 	if err != nil {
 		return ActivityResult{}, err
+	}
+	result.CoverageDetails = &ActivityCoverageDetails{
+		AuthorizedProjectOnly: true, SQLiteSnapshotOnly: true,
+		NativeLiveVerified: false, CrossPageSnapshotStable: false,
+		AttentionComplete: result.AttentionComplete, PageTruncated: result.Truncated,
+		HistorySampleBounded: q.View == "issues",
 	}
 	if err := tx.Commit(); err != nil {
 		return ActivityResult{}, err
@@ -416,6 +436,7 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 			out.Truncated = true
 			break
 		}
+		issue.Disposition = activityIssueDisposition(issue.Reason, issue.State)
 		out.Issues = append(out.Issues, issue)
 	}
 	if e := rows.Err(); err == nil {
@@ -436,7 +457,73 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	// A bounded scan cannot certify a physical network or the absence of an
 	// unjournaled native effect. Also page transitions can change a ledger.
 	out.AttentionComplete = false
-	return nil
+	return readActivityHistory(ctx, tx, q, cursor.MaxRowID, out)
+}
+
+func activityIssueDisposition(reason, st string) string {
+	switch reason {
+	case "PEER_ACTIVE_DEPENDENCY", "ADDRESS_FENCE_DEPENDENCY":
+		if st == "QUARANTINED" {
+			return "HOST_REVIEW_REQUIRED"
+		}
+		return "ACTIVE_DEPENDENCY_NOT_ERROR"
+	case "FORWARD_DEPENDENCY":
+		if st == "UNKNOWN" {
+			return "HOST_REVIEW_REQUIRED"
+		}
+		return "ACTIVE_DEPENDENCY_NOT_ERROR"
+	case "EXEC_OUTPUT_GC_BLOCKER":
+		return "HOST_REVIEW_REQUIRED"
+	case "PEER_LEDGER_UNRESOLVED", "PROJECT_PEER_BARRIER", "UNRESOLVED_OPERATION":
+		if st == "UNKNOWN" {
+			return "HOST_REVIEW_REQUIRED"
+		}
+		return "IN_PROGRESS_OR_STALLED"
+	default:
+		return "INSPECT_EVIDENCE"
+	}
+}
+
+// A small independent historical sample is NOT an active lock list and
+// does not claim to summarize all historic failures. RELEASED means that
+// an admission claim was released, NOT that a native UNKNOWN was resolved.
+func readActivityHistory(ctx context.Context, tx *sql.Tx, q ActivityQuery, watermark int64, out *ActivityResult) error {
+	where, args := q.where()
+	args = append(args, watermark)
+	limit := q.Limit
+	if limit > 5 {
+		limit = 5
+	}
+	args = append(args, limit+1)
+	query := "SELECT o.id,o.box_uuid,o.resource_key,o.state,o.created_at FROM operations o WHERE " + where +
+		" AND o.rowid<=? AND (o.state='FAILED' OR (o.state='UNKNOWN' AND o.action!='box_peer_set' " +
+		"AND EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))) " +
+		"ORDER BY o.created_at DESC,o.id DESC LIMIT ?"
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	out.History = []ActivityIssue{}
+	for rows.Next() {
+		var issue ActivityIssue
+		if err := rows.Scan(&issue.OperationID, &issue.BoxUUID, &issue.ResourceRef, &issue.State, &issue.AtNS); err != nil {
+			return err
+		}
+		if len(out.History) >= limit {
+			out.HistoryTruncated = true
+			break
+		}
+		if issue.State == "UNKNOWN" {
+			issue.Reason = "HISTORICAL_RELEASED_CLAIM"
+			issue.Disposition = "CLAIM_RELEASED_NATIVE_OUTCOME_UNKNOWN"
+		} else {
+			issue.Reason = "HISTORICAL_FAILED_OPERATION"
+			issue.Disposition = "TERMINAL_FAILED_NOT_ACTIVE"
+		}
+		out.History = append(out.History, issue)
+	}
+	return rows.Err()
 }
 
 func readActivityEvidence(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *ActivityResult) error {

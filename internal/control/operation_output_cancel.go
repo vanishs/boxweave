@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/native"
@@ -48,7 +49,7 @@ type cancelOperationResult struct {
 func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_output_get",
-		Description: "Read recorded box_exec stdout/stderr and guest exit status by original operation_id, at most 65536 bytes/page; advance next_offset. Check exit_code/command_success: Operation SUCCEEDED does not imply guest exit 0, and unavailable/truncated output cannot prove success.",
+		Description: "Read bounded 7-day private archived box_exec stdout/stderr by original operation_id even after Box Delete; fall back to original native recording if no archive exists. Expiration, missing output and truncation are explicit; command_success uses the separately recorded exit_code. Advance next_offset for pagination. Each stream is capped at 1MiB in the private archive.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationOutputInput) (*mcp.CallToolResult, operationOutputResult, error) {
 		principal, err := s.requestPrincipal(req)
@@ -98,12 +99,41 @@ func (s *Service) registerOperationOutputCancel(server *mcp.Server) {
 			result.UnavailableReason = "RETENTION_EXPIRED_VERIFIED"
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
+		// The controller archive is independent of the Incus instance and
+		// must be checked before any live-Box lookup. TTL remains anchored
+		// to the immutable Exec witness, not to a caller's read time.
+		if out.ObservedAt > 0 && time.Now().UnixNano()-out.ObservedAt >= state.ExecRetention.Nanoseconds() {
+			result.Ended, result.NextOffset = true, in.Offset
+			result.Availability = "expired"
+			result.UnavailableReason = "RETENTION_WINDOW_ELAPSED"
+			return privateReadReply(ctx, s, principal.TokenID, result)
+		}
+		archive, ended, truncated, found, archiveErr := s.readExecArchive(original.ID, in.Stream, in.Offset, in.Limit)
+		if archiveErr != nil {
+			// A corrupt/private archive is a security failure, never a cue
+			// to switch to a less-controlled arbitrary path.
+			return nil, operationOutputResult{}, archiveErr
+		}
+		if found {
+			result.ContentBase64 = base64.StdEncoding.EncodeToString(archive)
+			result.NextOffset = in.Offset + int64(len(archive))
+			result.Ended = ended
+			result.Truncated = result.Truncated || truncated
+			return privateReadReply(ctx, s, principal.TokenID, result)
+		}
 		box, err := s.Store.OwnedBox(ctx, principal.Layer, original.BoxUUID)
+		if errors.Is(err, state.ErrNotFound) {
+			result.Availability, result.UnavailableReason, result.Ended = "unavailable", "BOX_REMOVED_OUTPUT_NOT_ARCHIVED", true
+			result.NextOffset = in.Offset
+			return privateReadReply(ctx, s, principal.TokenID, result)
+		}
 		if err != nil {
 			return nil, operationOutputResult{}, err
 		}
 		if _, _, err = s.Native.GetExactBox(ctx, box.Name, box.UUID); err != nil {
-			return nil, operationOutputResult{}, err
+			result.Availability, result.UnavailableReason, result.Ended = "unavailable", "EXACT_NATIVE_BOX_NOT_AVAILABLE", true
+			result.NextOffset = in.Offset
+			return privateReadReply(ctx, s, principal.TokenID, result)
 		}
 		if path == "" {
 			result.Ended = true

@@ -87,7 +87,8 @@ var (
 )
 
 type Store struct {
-	db *sql.DB
+	db             *sql.DB
+	execArchiveDir string
 	// auditReadOnly is set only by the validated existing-owner,
 	// SQLite mode=ro / query_only root-side audit constructor.
 	auditReadOnly bool
@@ -213,12 +214,18 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: db, execArchiveDir: path + ".exec-archive"}
 	if err := s.init(flags&os.O_EXCL != 0); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+func (s *Store) ExecArchiveDir() string {
+	if s == nil {
+		return ""
+	}
+	return s.execArchiveDir
 }
 func (s *Store) Close() error { return s.db.Close() }
 
