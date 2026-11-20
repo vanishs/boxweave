@@ -10,6 +10,7 @@ from pathlib import Path
 import pwd
 import re
 import sqlite3
+import shutil
 import stat
 import subprocess
 import sys
@@ -23,11 +24,14 @@ SCRIPTLET = Path("/var/lib/boxweave-native-scriptlet-v1.json")
 ROOT_UNIT = Path("/etc/systemd/system/boxweave-native-peer-root.service")
 AUDIT = Path("/var/lib/boxweave-uninstall-v1-audit.json")
 BACKUP = Path("/var/lib/boxweave-installer-backup")
+RETIRED = Path("/var/lib/boxweave-retired")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
 TERMINAL = {"SUCCEEDED", "FAILED", "CANCELLED"}
 SERVE_LOCK_NAME = "ledger.sqlite.serve.lock"
+EXEC_ARCHIVE_NAME = "ledger.sqlite.exec-archive"
+EXEC_ARCHIVE_RE = re.compile(r"[a-f0-9]{32}\.(stdout|stderr)\Z")
 STATE_FILES = {"ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm",
                "install-manifest.json", SERVE_LOCK_NAME}
 SCOPES = ("service", "controller", "full")
@@ -153,7 +157,7 @@ def machine_sha():
     return sha(mid.encode())
 
 
-def inspect_sqlite(dbpath):
+def inspect_sqlite(dbpath, guided=False):
     """A read-only snapshot; never import a v4/v5 DB into a new controller."""
     if checked_file(dbpath, "file") is None:
         raise UninstallError("no readable controller SQLite evidence")
@@ -168,11 +172,31 @@ def inspect_sqlite(dbpath):
         operation_count = 0
         blockers = []
         unresolved = 0
+        historical = []
         for op, layer, box, state, native in conn.execute(
                 "SELECT id,layer,box_uuid,state,native_operation_id FROM operations ORDER BY id"):
             operation_hash.update(canonical([op, layer, box, state, native]) + b"\n")
             operation_count += 1
             if state not in TERMINAL:
+                # Keep UNKNOWN unchanged. Only retire a reviewed historical
+                # Exec with exact successful Delete lineage.
+                if guided and version[0] == 5 and state == "UNKNOWN":
+                    witness = conn.execute("""
+                        SELECT o.id, b.uuid, d.id, r.seq, r.evidence_digest
+                        FROM operations o
+                        JOIN owned_boxes b ON b.uuid=o.box_uuid AND b.incarnation=o.incarnation
+                           AND b.project=o.layer AND b.state='DELETED' AND b.deleted_at>0
+                        JOIN operations d ON d.id=b.deleted_by_operation_id AND d.action='box_delete'
+                           AND d.state='SUCCEEDED' AND d.layer=b.project
+                           AND d.box_uuid=b.uuid AND d.incarnation=b.incarnation
+                        JOIN recovery_audit r ON r.operation_id=o.id AND r.decision='RELEASED'
+                        WHERE o.id=? AND o.action='box_exec' AND r.at<=b.deleted_at
+                        ORDER BY r.seq
+                    """, (op,)).fetchall()
+                    if len(witness) == 1 and VALID_SHA.fullmatch(witness[0][4]):
+                        historical.append(list(witness[0]))
+                        operation_hash.update(canonical(witness[0]) + b"\n")
+                        continue
                 unresolved += 1
                 if unresolved <= 24:
                     blockers.append("OPERATION_" + state + ":" + op + ":native=" + (native or "unverified"))
@@ -185,7 +209,7 @@ def inspect_sqlite(dbpath):
             ("peer_grants", "status NOT IN ('REVOKED')"),
             ("forward_claims", "state NOT IN ('REVOKED')"),
             ("network_address_fences", "state NOT IN ('RELEASED')"),
-            ("exec_output_gc", "state NOT IN ('REVIEWED_RELEASED')"),
+            ("exec_output_gc", "state NOT IN ('REVIEWED_RELEASED','EXPIRED')" if guided else "state NOT IN ('REVIEWED_RELEASED')"),
         ):
             count = conn.execute("SELECT count(*) FROM " + table + " WHERE " + condition).fetchone()[0]
             if count:
@@ -194,14 +218,15 @@ def inspect_sqlite(dbpath):
         # current durable originals, including terminal operations.
         return {"version": version[0], "operations": operation_count,
                 "operations_sha256": operation_hash.hexdigest(), "boxes": boxes,
-                "unresolved_operations": unresolved, "blockers": blockers}
+                "unresolved_operations": unresolved, "historical_released_exec": historical,
+                "blockers": blockers}
     except sqlite3.Error as exc:
         raise UninstallError("SQLite snapshot cannot be verified: " + str(exc)) from exc
     finally:
         conn.close()
 
 
-def native_instances(project):
+def native_instances(project, guided=False):
     raw, _ = command(["incus", "list", "local:", "--project", project, "--format", "json"], timeout=25)
     try:
         data = json.loads(raw)
@@ -220,8 +245,22 @@ def native_instances(project):
                 not isinstance(uuid, str) or not VALID_UUID.fullmatch(uuid) or \
                 not isinstance(status, str):
             raise UninstallError("Incus UUID/name/status uncertain; no native deletion")
+        if guided:
+            devices = entry.get("expanded_devices")
+            if entry.get("type") != "container" or not isinstance(devices, dict):
+                raise UninstallError("unverified native container devices")
+            if any(not isinstance(dev, dict) or dev.get("type") == "proxy"
+                   for dev in devices.values()):
+                raise UninstallError("native proxy or unknown device: reconcile before guided removal")
         result.append({"uuid": uuid, "name": name, "state": status})
     return sorted(result, key=lambda x: x["uuid"])
+
+
+def require_quiescent_native(project):
+    raw, _ = command(["incus", "operation", "list", "local:", "--project",
+                      project, "--format", "json"], timeout=25)
+    if json.loads(raw) != []:
+        raise UninstallError("native operations present or unreadable: reconcile before retirement")
 
 
 def require_root_journal(path):
@@ -281,7 +320,29 @@ def audit_status():
     return {"status": record["status"], "sha256": file_fingerprint(AUDIT)["sha256"]}
 
 
-def inspect(scope, project, box_uuids, native_sha):
+def inspect_exec_archive(uid):
+    root = STATE / EXEC_ARCHIVE_NAME
+    info = checked_file(root, "dir")
+    if info is None:
+        return None
+    if info.st_uid != uid or stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("unsafe exec archive directory")
+    records = []
+    total = 0
+    for entry in sorted(root.iterdir(), key=lambda x: x.name):
+        if len(records) >= 4096 or not EXEC_ARCHIVE_RE.fullmatch(entry.name):
+            raise UninstallError("unrecognized or oversized exec archive inventory")
+        st = checked_file(entry, "file", 1024 * 1024)
+        if st is None or st.st_uid != uid or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) & 0o077:
+            raise UninstallError("unsafe exec archive entry")
+        total += st.st_size
+        if total > 256 * 1024 * 1024:
+            raise UninstallError("exec archive exceeds verified retention bound")
+        records.append({"name": entry.name, "info": file_fingerprint(entry)})
+    return {"device": info.st_dev, "inode": info.st_ino, "files": records}
+
+
+def inspect(scope, project, box_uuids, native_sha, guided=False):
     if not VALID_NAME.fullmatch(project):
         raise UninstallError("exact valid --project required")
     if len(box_uuids) != len(set(box_uuids)) or any(not VALID_UUID.fullmatch(x) for x in box_uuids):
@@ -319,10 +380,17 @@ def inspect(scope, project, box_uuids, native_sha):
         raise UninstallError("effective systemd unit is foreign or unexpectedly replaced")
     if binary is None and service == "active":
         raise UninstallError("unit is absent but service still active")
+    if guided and os.path.lexists("/run/boxweave-native-peer-root.sock"):
+        raise UninstallError("Root peer socket present: reconcile exact original before retirement")
     if checked_file(ROOT_UNIT, "file") is not None:
         raise UninstallError("separate root peer service exists: manual original audit required")
     files = []
+    exec_archive = inspect_exec_archive(owner.pw_uid) if guided else None
     for entry in sorted(STATE.iterdir(), key=lambda x: x.name):
+        if guided and entry.name == EXEC_ARCHIVE_NAME:
+            if exec_archive is None:
+                raise UninstallError("exec archive changed during planning")
+            continue
         if entry.name not in STATE_FILES:
             raise UninstallError("unrecognized owned state file: " + entry.name)
         info = (verified_serve_lock(entry, owner.pw_uid)
@@ -330,7 +398,7 @@ def inspect(scope, project, box_uuids, native_sha):
         if stat.S_IMODE(info.st_mode) & 0o077:
             raise UninstallError("controller state file has unsafe permissions: " + entry.name)
         files.append({"name": entry.name, "info": file_fingerprint(entry)})
-    snapshot = inspect_sqlite(STATE / "ledger.sqlite")
+    snapshot = inspect_sqlite(STATE / "ledger.sqlite", guided=guided)
     if any(x["project"] != project for x in snapshot["boxes"]):
         raise UninstallError("foreign Layer in owned Box inventory")
     native = prepare_record()
@@ -349,14 +417,23 @@ def inspect(scope, project, box_uuids, native_sha):
         blockers.append("NATIVE_PREPARE_APPLIED: retain installed rollback binary or choose full")
     incus = []
     if scope == "full":
-        incus = native_instances(project)
-        expected = sorted(box_uuids)
+        if guided:
+            require_quiescent_native(project)
+        incus = native_instances(project, guided=guided)
+        expected = sorted(x["uuid"] for x in snapshot["boxes"]) if guided else sorted(box_uuids)
+        if guided and box_uuids and sorted(box_uuids) != expected:
+            blockers.append("EXPLICIT_ALLOWLIST_MISMATCH")
         current = sorted(x["uuid"] for x in incus)
         db_current = sorted(x["uuid"] for x in snapshot["boxes"])
         if current != db_current or expected != current:
             blockers.append("INCUS_DB_ALLOWLIST_MISMATCH")
-        if any(x["state"] != "Stopped" for x in incus):
+        if guided and ({(x["uuid"], x["name"]) for x in incus} !=
+                       {(x["uuid"], x["name"]) for x in snapshot["boxes"] if x["state"] == "OWNED"}):
+            blockers.append("INCUS_DB_NAME_OR_STATE_MISMATCH")
+        if any(x["state"] not in (("Stopped", "Running") if guided else ("Stopped",)) for x in incus):
             blockers.append("NATIVE_BOX_NOT_STOPPED")
+        if guided and native_sha is None and native["status"] in ("APPLIED", "ROLLED_BACK"):
+            native_sha = native["review_sha256"]
         if native["status"] in ("APPLIED", "ROLLED_BACK") and native_sha != native["review_sha256"]:
             blockers.append("NATIVE_PREPARE_DIGEST_REQUIRED")
         if native["status"] == "ABSENT" and native_sha:
@@ -365,9 +442,9 @@ def inspect(scope, project, box_uuids, native_sha):
     if scope != "service" and BACKUP.exists():
         blockers.append("INSTALLER_BACKUP_REQUIRES_SEPARATE_RETENTION_REVIEW")
     inputs = {
-        "format": 1, "scope": scope, "project": project, "host_machine_id_sha256": host,
+        "format": 1, "scope": scope, "guided": guided, "project": project, "host_machine_id_sha256": host,
         "service_user_uid": owner.pw_uid, "service_state": service,
-        "unit": unit, "binary": binary, "state_files": files,
+        "unit": unit, "binary": binary, "state_files": files, "exec_archive": exec_archive,
         "effective_unit": fragment, "uninstall_audit": audit,
         "sqlite": snapshot, "native_prepare": native, "scriptlet_present": scriptlet is not None,
         "incus_instances": incus, "allowlist": expected if scope == "full" else [],
@@ -380,6 +457,9 @@ def inspect(scope, project, box_uuids, native_sha):
     if scope == "full":
         actions = ["delete exact stopped, DB-owned, explicitly allowlisted Incus UUIDs",
                    "rollback/archive exact approved native preparation journal"] + actions
+    if guided:
+        actions = ["archive original controller files under root-only retirement directory",
+                   "gracefully stop exact approved running Boxes before deletion"] + actions
     if scope in ("controller", "full"):
         actions += ["unlink only recognized files from /var/lib/boxweave",
                     "rmdir empty /var/lib/boxweave"]
@@ -507,22 +587,83 @@ def apply(plan):
         return apply_with_serve_lock(plan)
 
 
+def archive_controller(plan):
+    # Preserve originals before native deletion. Separate names avoid
+    # directory/binary basename collisions.
+    RETIRED.mkdir(mode=0o700, exist_ok=True)
+    info = RETIRED.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise UninstallError("unsafe retirement archive directory")
+    dest = Path(tempfile.mkdtemp(prefix="retired-", dir=RETIRED))
+    items = [(STATE / x["name"], dest / ("state-" + x["name"])) for x in plan["state_files"]]
+    if plan.get("exec_archive"):
+        items += [(STATE / EXEC_ARCHIVE_NAME / x["name"], dest / ("exec-" + x["name"]))
+                  for x in plan["exec_archive"]["files"]]
+    items += [(BINARY, dest / "boxweave.bin"), (UNIT, dest / "boxweave.service"),
+              (NATIVE, dest / "native-prepare.json")]
+    for src, dst in items:
+        proof = file_fingerprint(src)
+        if proof is None:
+            if src.name in ("ledger.sqlite-wal", "ledger.sqlite-shm") or src == NATIVE:
+                continue
+            raise UninstallError("retirement source disappeared")
+        fd = os.open(str(src), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, "rb") as inp, dst.open("xb") as out:
+            os.fchmod(out.fileno(), 0o600)
+            shutil.copyfileobj(inp, out)
+            out.flush()
+            os.fsync(out.fileno())
+        if file_fingerprint(src) != proof or file_fingerprint(dst)["sha256"] != proof["sha256"]:
+            raise UninstallError("retirement copy changed during backup")
+    with (dest / "review.json").open("xb") as out:
+        os.fchmod(out.fileno(), 0o600)
+        out.write(canonical(plan) + b"\n")
+        out.flush()
+        os.fsync(out.fileno())
+    for directory in (dest, RETIRED, RETIRED.parent):
+        fd = os.open(str(directory), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    print("Retirement archive: " + str(dest), flush=True)
+    return str(dest)
+
+
 def apply_with_serve_lock(plan):
     # Stopping may legitimately checkpoint WAL; recheck native and SQLite
     # semantic blockers, not a fabricated claim that WAL bytes are immutable.
-    after = inspect_sqlite(STATE / "ledger.sqlite")
+    after = inspect_sqlite(STATE / "ledger.sqlite", guided=plan.get("guided", False))
     if after["operations_sha256"] != plan["sqlite"]["operations_sha256"] or \
             after["boxes"] != plan["sqlite"]["boxes"] or after["blockers"]:
         raise UninstallError("SQLite ledger changed during stop; preserve evidence")
+    if plan.get("guided") and inspect_exec_archive(plan["service_user_uid"]) != plan.get("exec_archive"):
+        raise UninstallError("exec archive changed after approval")
+    archive = archive_controller(plan) if plan.get("guided") else None
     if plan["scope"] == "full":
+        guided = plan.get("guided", False)
+        if guided:
+            require_quiescent_native(plan["project"])
+        if native_instances(plan["project"], guided=guided) != plan["incus_instances"]:
+            raise UninstallError("native inventory changed after approval")
         for box in plan["incus_instances"]:
-            current = native_instances(plan["project"])
+            current = native_instances(plan["project"], guided=guided)
             exact = [x for x in current if x["uuid"] == box["uuid"]]
             if len(exact) != 1 or exact[0] != box:
                 raise UninstallError("Incus target changed before deletion")
+            if box["state"] == "Running" and plan.get("guided"):
+                command(["incus", "stop", "local:" + box["name"], "--project",
+                         plan["project"], "--timeout", "60"], timeout=90)
+                stopped = [x for x in native_instances(plan["project"], guided=guided) if x["uuid"] == box["uuid"]]
+                if stopped != [{**box, "state": "Stopped"}]:
+                    raise UninstallError("graceful stop not independently verified")
             command(["incus", "delete", "local:" + box["name"], "--project", plan["project"]], timeout=90)
-            if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"])):
+            if any(x["uuid"] == box["uuid"] for x in native_instances(plan["project"], guided=guided)):
                 raise UninstallError("native deletion not verified")
+        if guided:
+            require_quiescent_native(plan["project"])
+            if native_instances(plan["project"], guided=True):
+                raise UninstallError("native Project no longer empty; preserve controller")
         native = plan["native_prepare"]
         if native["status"] == "APPLIED":
             if prepare_record() != native:
@@ -564,6 +705,12 @@ def apply_with_serve_lock(plan):
                     exact_unlink(path, current)
             else:
                 exact_unlink(path, item["info"])
+        if plan.get("exec_archive"):
+            if inspect_exec_archive(plan["service_user_uid"]) != plan["exec_archive"]:
+                raise UninstallError("exec archive changed before retirement")
+            for item in plan["exec_archive"]["files"]:
+                exact_unlink(STATE / EXEC_ARCHIVE_NAME / item["name"], item["info"])
+            (STATE / EXEC_ARCHIVE_NAME).rmdir()
         lock = next((x for x in plan["state_files"]
                      if x["name"] == SERVE_LOCK_NAME), None)
         if lock is not None:
@@ -576,7 +723,7 @@ def apply_with_serve_lock(plan):
     return {"outcome": "COMPLETE", "scope": plan["scope"],
             "host_machine_id_sha256": plan["host_machine_id_sha256"],
             "approved_review_sha256": plan["review_sha256"],
-            "retained": plan["retained"]}
+            "retirement_archive": archive, "retained": plan["retained"]}
 
 
 def main(argv=None):
@@ -584,6 +731,7 @@ def main(argv=None):
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
+    action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
     parser.add_argument("--scope", choices=SCOPES, help="service | controller | full (never shared Incus)")
     parser.add_argument("--project", help="exact restricted service Project (user-UID)")
     parser.add_argument("--box-uuid", action="append", default=[], help="full only: complete exact immutable UUID allowlist")
@@ -591,17 +739,36 @@ def main(argv=None):
     parser.add_argument("--confirm-host-sha256", help="apply: exact machine SHA printed by plan")
     parser.add_argument("--confirm-review-sha256", help="apply: exact immutable inventory review SHA")
     args = parser.parse_args(argv)
-    if not args.plan and not args.apply:
+    if not args.plan and not args.apply and not args.full:
         parser.print_help()
         return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
+    if args.full:
+        if args.scope or args.confirm_host_sha256 or args.confirm_review_sha256:
+            parser.error("--full uses terminal approval, not explicit scope/digests")
+        args.scope = "full"
+        args.project = args.project or "user-" + str(pwd.getpwnam("boxweave").pw_uid)
     if not args.scope or not args.project:
         parser.error("--scope and --project required for plan/apply")
     if os.geteuid() != 0 or sys.platform != "linux":
         raise UninstallError("root on the reviewed Linux host required for safe ledger/Incus inspection")
-    plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256)
+    plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=args.full)
     if args.plan:
         print(json.dumps(plan, indent=2, sort_keys=True))
         return 0 if plan["ready"] else 2
+    if args.full:
+        print(json.dumps(plan, indent=2, sort_keys=True), flush=True)
+        if not plan["ready"]:
+            raise UninstallError("guided retirement blocked by current evidence")
+        with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+            out.write("Type REMOVE " + args.project + " to approve deleting all listed Boxes and retiring this controller: ")
+            out.flush()
+            if inp.readline().strip() != "REMOVE " + args.project:
+                raise UninstallError("retirement not approved")
+        fresh = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=True)
+        if fresh["review_sha256"] != plan["review_sha256"] or not fresh["ready"]:
+            raise UninstallError("host/scope/inventory drift; review again")
+        args.confirm_host_sha256 = plan["host_machine_id_sha256"]
+        args.confirm_review_sha256 = plan["review_sha256"]
     if not VALID_SHA.fullmatch(args.confirm_host_sha256 or "") or \
             not VALID_SHA.fullmatch(args.confirm_review_sha256 or ""):
         raise UninstallError("apply requires exact host AND review SHA256 from fresh plan")
@@ -611,7 +778,8 @@ def main(argv=None):
     audited_write({"status": "STARTED", "scope": plan["scope"],
                    "host_sha256": plan["host_machine_id_sha256"],
                    "review_sha256": plan["review_sha256"],
-                   "actions": plan["actions"]})
+                   "actions": plan["actions"],
+                   "historical_released_exec": plan["sqlite"]["historical_released_exec"]})
     result = apply(plan)
     # Completion is a separate fsynced audit transition; interruptions keep
     # the original STARTED receipt and require deliberate manual reconciliation.

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Offline negative checks for the v1-only Release manifest and installer."""
 import importlib.util
+import contextlib
+import io
+import json
+import socket
+import sys
+import types
+from unittest import mock
 import hashlib
 import subprocess
 from pathlib import Path
@@ -32,7 +39,11 @@ class ReleaseTests(unittest.TestCase):
         m = module.assemble(self.dir, "v1.0.0-rc.1", "a" * 40, self.installer)
         self.assertEqual(m["product"], "boxweave-v1")
         lines = (self.dir / "SHA256SUMS").read_text().splitlines()
-        self.assertEqual(len(lines), 4)
+        self.assertEqual(len(lines), 5)
+        output = subprocess.run(["sh", str(self.dir / "uninstall.sh"), "--help"],
+                                text=True, capture_output=True)
+        self.assertEqual(output.returncode, 0, output.stderr)
+        self.assertIn("--full", output.stdout)
         self.assertEqual(len(m["assets"]), 2)
         self.assertEqual(m["dependencies"]["go_toolchain"], "1.26.9")
         self.assertTrue(m["dependencies"]["incus_go_sdk"].startswith("v7."))
@@ -91,6 +102,107 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS", s25)
         self.assertIn("runs-on: ubuntu-24.04", s2)
         self.assertIn("runs-on: ubuntu-24.04", s25)
+
+    def exercise_guided_install(self, answer, drift=False, native_ready=True):
+        content = (ROOT / "install.sh").read_text()
+        embedded = content.split("<<'PY_BOXWEAVE_INSTALL'\n", 1)[1].rsplit("\nPY_BOXWEAVE_INSTALL", 1)[0]
+        ns = {}
+        exec(compile(embedded.rsplit("\ntry:\n    main()", 1)[0], "guided-test", "exec"), ns)
+        source = "b" * 40
+        approval = "a" * 64
+        candidate = b"fake reviewed release binary"
+        target = dict(project="user-1001", pool="default", network="incusbr-1001", acl="bw-user-1001-acl")
+        native_plan = {"target": target, "review_sha256": approval}
+        calls = []
+        socket_path = Path(tempfile.mkdtemp(dir=self.dir)) / "incus.sock"
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(socket_path))
+        self.addCleanup(sock.close)
+
+        def fake_path(raw):
+            if str(raw) == "/var/lib/incus/unix.socket.user":
+                # Validation sees the actual approved path string and an
+                # isolated test socket's type; no real host file is read.
+                p = mock.Mock(wraps=socket_path)
+                p.__str__ = mock.Mock(return_value=str(raw))
+                p.parts = Path(raw).parts
+                p.is_absolute.return_value = True
+                p.is_symlink.return_value = False
+                p.exists.return_value = True
+                p.stat.return_value = socket_path.stat()
+                return p
+            return self.dir / ("isolated-" + Path(raw).name)
+
+        def output(argv, **kwargs):
+            action = argv[1] if argv[0] != "runuser" else argv[5]
+            calls.append(action)
+            if action == "native-prepare-plan":
+                result = dict(native_plan)
+                if drift and calls.count(action) > 1:
+                    result["review_sha256"] = "c" * 64
+                return json.dumps(result)
+            if action == "native-prepare-apply":
+                self.assertIn(approval, argv)
+                return json.dumps({"status": "APPLIED"})
+            if action == "native-prereq-plan":
+                return json.dumps({"config_ready": native_ready, "review_sha256": approval})
+            if action == "doctor":
+                return json.dumps({"ready": True, "mcp_ready": True, "native": {"ready": True},
+                                   "version": "1.0.0-rc.8", "commit": source})
+            raise AssertionError(argv)
+
+        def run(argv, **kwargs):
+            calls.append(argv[1])
+            return mock.Mock(returncode=0)
+
+        ns["Path"] = fake_path
+        ns["current_host_digest"] = lambda: "e" * 64
+        ns["select_release"] = lambda *_: (candidate, "1.0.0-rc.8", source, hashlib.sha256(candidate).hexdigest())
+        # The temporary candidate must use a real Path, not our host-path mapper.
+        ns["Path"] = lambda raw: fake_path(raw) if str(raw).startswith(("/var/", "/usr/", "/etc/")) else Path(raw)
+        with mock.patch.object(ns["os"], "geteuid", return_value=0), \
+                mock.patch.object(ns["os"].path, "lexists", return_value=False), \
+                mock.patch.object(ns["pwd"], "getpwnam", return_value=types.SimpleNamespace(pw_uid=1001)), \
+                mock.patch.object(ns["sys"], "argv", ["install.sh", "--interactive", "--version", "v1.0.0-rc.8"]), \
+                mock.patch.object(ns["subprocess"], "check_output", side_effect=output), \
+                mock.patch.object(ns["subprocess"], "run", side_effect=run), \
+                mock.patch("builtins.open", side_effect=[io.StringIO(answer + "\n"), io.StringIO(),
+                                                         io.StringIO("n\n"), io.StringIO()]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            try:
+                ns["main"]()
+                return calls, None
+            except ns["InstallError"] as exc:
+                return calls, str(exc)
+
+    def test_guided_install_approval_sequence_and_fail_closed(self):
+        calls, error = self.exercise_guided_install("INSTALL user-1001")
+        self.assertIsNone(error)
+        self.assertEqual(calls, ["native-prepare-plan", "native-prepare-plan", "install-stage",
+                                 "native-prepare-apply", "native-prereq-plan", "native-prereq-verify",
+                                 "install-activate", "install-status", "doctor"])
+
+    def test_guided_install_decline_and_changed_plan(self):
+        calls, error = self.exercise_guided_install("NO")
+        self.assertIn("not approved", error)
+        self.assertEqual(calls, ["native-prepare-plan"])
+        calls, error = self.exercise_guided_install("INSTALL user-1001", drift=True)
+        self.assertIn("plan changed", error)
+        self.assertNotIn("install-stage", calls)
+
+    def test_guided_install_incomplete_native_never_activates(self):
+        calls, error = self.exercise_guided_install("INSTALL user-1001", native_ready=False)
+        self.assertIn("configuration not ready", error)
+        self.assertNotIn("install-activate", calls)
+
+    def test_embedded_guided_installer_keeps_explicit_plan_and_approvals(self):
+        source = (ROOT / "install.sh").read_text()
+        self.assertIn("--interactive", source)
+        self.assertIn('open("/dev/tty", "r")', source)
+        self.assertIn('native plan changed after approval; review again', source)
+        self.assertIn('existing Native journal', source)
+        self.assertLess(source.index('"native-prepare-apply"'), source.index('"install-activate"'))
+        self.assertLess(source.index('"native-prereq-verify"'), source.index('"install-activate"'))
 
     def test_rc_flag_not_required_and_removed(self):
         script = (ROOT / "install.sh").read_text()

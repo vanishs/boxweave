@@ -147,14 +147,26 @@ def main():
     parser.add_argument("--local-binary", help="approved absolute path to pre-release candidate")
     parser.add_argument("--sha256", help="required 64-hex SHA256 for local candidate")
     mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--interactive", action="store_true", help="review and install with native postflight in one terminal")
     mode.add_argument("--plan", action="store_true", help="read-only plan (default)")
     mode.add_argument("--apply", action="store_true", help="apply on exact approved host")
     parser.add_argument("--upgrade", action="store_true", help="explicitly upgrade an existing verified install")
     parser.add_argument("--project", help="pre-provisioned restricted native Incus Project")
+    parser.add_argument("--pool", help="existing Incus storage pool (guided install)")
+    parser.add_argument("--network", help="existing managed Incus bridge (guided install)")
+    parser.add_argument("--acl", help="exclusive new ACL (guided install)")
+    parser.add_argument("--public-origin", help="optional already-operated HTTPS origin (guided install)")
     parser.add_argument("--service-user", default="boxweave")
     parser.add_argument("--incus-socket", default="/var/lib/incus/unix.socket.user")
     parser.add_argument("--confirm-host-sha256", help="exact SHA256 of /etc/machine-id printed by --plan")
     args = parser.parse_args()
+    # Source is a heredoc: use the controlling terminal for human consent.
+    guided = args.interactive or (not args.plan and not args.apply and
+                                 os.geteuid() == 0 and sys.stdout.isatty())
+    if guided and (args.upgrade or args.confirm_host_sha256):
+        raise InstallError("guided fresh install cannot upgrade or accept a supplied approval")
+    if not guided and any((args.pool, args.network, args.acl, args.public_origin)):
+        raise InstallError("native/OAuth options require interactive install")
 
     if platform.system() != "Linux":
         raise InstallError("Linux required")
@@ -193,6 +205,18 @@ def main():
 
     if not args.service_user or not PROJECT_RE.fullmatch(args.service_user):
         raise InstallError("invalid service identity")
+    if guided:
+        if os.geteuid() != 0:
+            raise InstallError("interactive install requires root")
+        uid = pwd.getpwnam(args.service_user).pw_uid
+        args.project = args.project or ("user-" + str(uid))
+        if uid == 0 or args.service_user != "boxweave" or args.project != "user-" + str(uid):
+            raise InstallError("guided install requires exact dedicated restricted identity/Project")
+        args.pool = args.pool or "default"
+        args.network = args.network or ("incusbr-" + str(uid))
+        args.acl = args.acl or ("bw-" + args.project + "-acl")
+        if any(not PROJECT_RE.fullmatch(x) for x in (args.pool, args.network, args.acl)):
+            raise InstallError("invalid guided native target")
     if args.project is not None and not PROJECT_RE.fullmatch(args.project):
         raise InstallError("invalid project name")
     sock = Path(args.incus_socket)
@@ -213,10 +237,10 @@ def main():
     print("operation=" + ("upgrade" if args.upgrade else "fresh install"))
     print("changes=only existing v1 Go installer-owned binary/unit/SQLite; never Incus setup or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
-    if not args.apply:
+    if not args.apply and not guided:
         print("PLAN_ONLY: no host changes (pass --apply, --project, --confirm-host-sha256 after approval)")
         return
-    if os.geteuid() != 0 or args.confirm_host_sha256 != host_digest:
+    if os.geteuid() != 0 or (not guided and args.confirm_host_sha256 != host_digest):
         raise InstallError("--apply requires root and exact current --confirm-host-sha256")
     if args.project is None:
         raise InstallError("--apply requires explicit --project")
@@ -233,6 +257,12 @@ def main():
         raise InstallError("no verified installation to upgrade")
     if not installed and (Path("/usr/local/bin/boxweave").exists() or Path("/etc/systemd/system/boxweave.service").exists() or Path("/var/lib/boxweave").exists()):
         raise InstallError("unmanaged or legacy main installation detected: refuse adoption/co-installation")
+    if guided:
+        if os.path.lexists("/var/lib/boxweave-native-prereq-v1.json"):
+            raise InstallError("existing Native journal; review and reconcile before guided install")
+        previous = Path("/var/lib/boxweave-uninstall-v1-audit.json")
+        if previous.exists() and json.loads(previous.read_text()).get("status") != "COMPLETE":
+            raise InstallError("previous retirement incomplete; inspect original audit")
     # The downloaded executable is public but Go installer verifies it under
     # the restricted service account. Use an accessible temporary directory.
     with tempfile.TemporaryDirectory(prefix="boxweave-v1-reviewed-") as folder:
@@ -240,6 +270,27 @@ def main():
         candidate = Path(folder) / "boxweave"
         candidate.write_bytes(binary)
         candidate.chmod(0o755)
+        native_args = ["-project", args.project, "-pool", args.pool,
+                       "-network", args.network, "-acl", args.acl] if guided else []
+        if guided:
+            plan = subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
+                                           text=True)
+            review = json.loads(plan)
+            expected = dict(project=args.project, pool=args.pool, network=args.network, acl=args.acl)
+            if review.get("target") != expected or not SHA_RE.fullmatch(review.get("review_sha256", "")):
+                raise InstallError("native plan identity missing or mismatched")
+            print("Reviewed native preparation:", plan, flush=True)
+            print("Will install, prepare Native, verify and check doctor; no shared Incus rebuild.", flush=True)
+            with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+                out.write("Type INSTALL " + args.project + " to approve this exact plan: ")
+                out.flush()
+                if inp.readline().strip() != "INSTALL " + args.project:
+                    raise InstallError("installation not approved")
+            if current_host_digest() != host_digest:
+                raise InstallError("host changed after approval")
+            if subprocess.check_output([str(candidate), "native-prepare-plan", *native_args],
+                                       text=True) != plan:
+                raise InstallError("native plan changed after approval; review again")
         command = [
             str(candidate), "upgrade" if args.upgrade else "install-stage",
             "-project", args.project,
@@ -252,12 +303,52 @@ def main():
         # Only the dedicated Go executable is permitted to own installer
         # writes, backup, service health, and rollback.
         subprocess.run(command, check=True)
+        if guided:
+            prepared = json.loads(subprocess.check_output(
+                [str(candidate), "native-prepare-apply", *native_args,
+                 "-native-prepare-sha256", review["review_sha256"], "-approve-local"], text=True))
+            if prepared.get("status") != "APPLIED":
+                raise InstallError("native preparation incomplete; inspect original journal")
+            prereq = json.loads(subprocess.check_output(
+                [str(candidate), "native-prereq-plan", "-project", args.project], text=True))
+            if not prereq.get("config_ready") or not SHA_RE.fullmatch(prereq.get("review_sha256", "")):
+                raise InstallError("native configuration not ready; preserve staged installation")
+            print("Native prerequisite readback:", json.dumps(prereq), flush=True)
+            subprocess.run([str(candidate), "native-prereq-verify", "-project", args.project,
+                            "-native-prereq-sha256", prereq["review_sha256"], "-approve-local"], check=True)
         if not args.upgrade:
             subprocess.run([str(candidate), "install-activate", "-project", args.project,
                             "-service-user", args.service_user, "-incus-socket", str(sock),
                             "-approve-local"], check=True)
         subprocess.run([str(candidate), "install-status", "-project", args.project,
                         "-service-user", args.service_user, "-incus-socket", str(sock)], check=True)
+        if guided:
+            installed = "/usr/local/bin/boxweave"
+            identity = ["runuser", "-u", args.service_user, "--", installed]
+            doctor = json.loads(subprocess.check_output(identity + ["doctor", "-project", args.project], text=True))
+            print("Doctor:", json.dumps(doctor), flush=True)
+            if not args.local_binary and (doctor.get("version") != version or doctor.get("commit") != source):
+                raise InstallError("installed doctor build identity differs from reviewed release")
+            if not (doctor.get("ready") and doctor.get("mcp_ready") and doctor.get("native", {}).get("ready")):
+                raise InstallError("doctor not ready; inspect installed service")
+            with open("/dev/tty", "r") as inp, open("/dev/tty", "w") as out:
+                out.write("Configure a new OAuth approval password? [y/N] ")
+                out.flush()
+                if inp.readline().strip().lower() == "y":
+                    subprocess.run(identity + ["oauth-setup", "-project", args.project],
+                                   stdin=inp, stdout=out, stderr=out, check=True)
+                    origin = args.public_origin
+                    if not origin:
+                        out.write("Existing HTTPS tunnel origin (empty for later): ")
+                        out.flush()
+                        origin = inp.readline().strip()
+                    if origin:
+                        subprocess.run(identity + ["oauth-set-origin", "-project", args.project,
+                                                   "-public-origin", origin], check=True)
+                        print("MCP URL:", origin + "/mcp")
+                elif args.public_origin:
+                    print("OAuth skipped; public origin was not configured")
+            print("GUIDED_INSTALL_COMPLETE: native config ready; packet/quota/PRS acceptance remains separate")
     print("INSTALL_HELPER_APPLY_COMPLETE: inspect original installer manifest and native postflight; not HOST_GO PASS")
 
 

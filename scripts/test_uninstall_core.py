@@ -13,6 +13,9 @@ from unittest import mock
 
 import uninstall_core as u
 
+REAL_NATIVE_INSTANCES = u.native_instances
+REAL_REQUIRE_QUIET = u.require_quiescent_native
+
 
 class FakeHost(unittest.TestCase):
     def setUp(self):
@@ -28,6 +31,7 @@ class FakeHost(unittest.TestCase):
             "ROOT_UNIT": root / "units" / "boxweave-native-peer-root.service",
             "AUDIT": root / "uninstall-audit.json",
             "BACKUP": root / "installer-backup",
+            "RETIRED": root / "retired",
         }
         for name, p in self.paths.items():
             patcher = mock.patch.object(u, name, p)
@@ -60,10 +64,13 @@ class FakeHost(unittest.TestCase):
         self.sys.start()
         self.addCleanup(self.sys.stop)
         self.native = []
-        self.incus = mock.patch.object(u, "native_instances", side_effect=lambda _: list(self.native))
+        self.incus = mock.patch.object(u, "native_instances", side_effect=lambda _, guided=False: list(self.native))
         self.incus.start()
         self.addCleanup(self.incus.stop)
         self.cmds = []
+        self.quiet = mock.patch.object(u, "require_quiescent_native")
+        self.quiet.start()
+        self.addCleanup(self.quiet.stop)
         self.command = mock.patch.object(u, "command", side_effect=self.fake_command)
         self.command.start()
         self.addCleanup(self.command.stop)
@@ -77,8 +84,11 @@ class FakeHost(unittest.TestCase):
         db.executescript("""
         CREATE TABLE schema_version(version INTEGER NOT NULL);
         INSERT INTO schema_version VALUES(5);
-        CREATE TABLE operations(id TEXT,layer TEXT,box_uuid TEXT,state TEXT,native_operation_id TEXT);
-        CREATE TABLE owned_boxes(uuid TEXT,project TEXT,name TEXT,state TEXT,deleted_at INTEGER);
+        CREATE TABLE operations(id TEXT,layer TEXT,box_uuid TEXT,state TEXT,native_operation_id TEXT,
+                                action TEXT DEFAULT '', incarnation TEXT DEFAULT '');
+        CREATE TABLE owned_boxes(uuid TEXT,project TEXT,name TEXT,state TEXT,deleted_at INTEGER,
+                                 incarnation TEXT DEFAULT '', deleted_by_operation_id TEXT DEFAULT '');
+        CREATE TABLE recovery_audit(seq INTEGER PRIMARY KEY, operation_id TEXT, decision TEXT, at INTEGER, evidence_digest TEXT);
         CREATE TABLE peer_grants(status TEXT);
         CREATE TABLE forward_claims(state TEXT);
         CREATE TABLE network_address_fences(state TEXT);
@@ -106,6 +116,9 @@ class FakeHost(unittest.TestCase):
         self.cmds.append(args)
         if args[:2] == ["systemctl", "stop"]:
             self.service = "inactive"
+        if args[:2] == ["incus", "stop"]:
+            self.native = [{**b, "state": "Stopped"} if b["name"] == args[2][6:] else b
+                           for b in self.native]
         if args[:2] == ["incus", "delete"]:
             self.assertTrue(args[2].startswith("local:"))
             self.native = [b for b in self.native if b["name"] != args[2][6:]]
@@ -194,7 +207,7 @@ class FakeHost(unittest.TestCase):
         self.assertEqual(self.native, [])
 
     def test_unknown_operation_fails_closed_all_scopes(self):
-        self.insert("INSERT INTO operations VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO operations(id,layer,box_uuid,state,native_operation_id) VALUES(?,?,?,?,?)",
                     ("b" * 32, "user-1001", self.box, "UNKNOWN", "native1"))
         for scope in ("service", "controller", "full"):
             p = self.plan(scope)
@@ -225,7 +238,7 @@ class FakeHost(unittest.TestCase):
             self.plan()
 
     def test_full_exact_box_uuid_allowlist_and_stopped_only(self):
-        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
                     (self.box, "user-1001", "bw-example", "Stopped", 0))
         self.native = [{"uuid": self.box, "name": "bw-example", "state": "Stopped"}]
         self.assertFalse(self.plan("full")["ready"])
@@ -238,7 +251,7 @@ class FakeHost(unittest.TestCase):
         self.assertTrue(any(cmd[:2] == ["incus", "delete"] for cmd in self.cmds))
 
     def test_full_running_box_never_autostopped_or_forced(self):
-        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?)",
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
                     (self.box, "user-1001", "bw-example", "Running", 0))
         self.native = [{"uuid": self.box, "name": "bw-example", "state": "Running"}]
         plan = self.plan("full", [self.box])
@@ -405,6 +418,92 @@ class FakeHost(unittest.TestCase):
         lock.symlink_to(self.db)
         with self.assertRaisesRegex(u.UninstallError, "unsafe path"):
             self.plan("full")
+
+    def test_guided_retires_exact_running_box_and_archives(self):
+        self.insert("INSERT INTO owned_boxes(uuid,project,name,state,deleted_at) VALUES(?,?,?,?,?)",
+                    (self.box, "user-1001", "bw-example", "OWNED", 0))
+        self.native = [{"uuid": self.box, "name": "bw-example", "state": "Running"}]
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"])
+        self.assertEqual(plan["allowlist"], [self.box])
+        result = u.apply(plan)
+        dest = Path(result["retirement_archive"])
+        self.assertTrue((dest / "state-ledger.sqlite").is_file())
+        self.assertTrue((dest / "boxweave.bin").is_file())
+        self.assertFalse(self.native)
+        self.assertLess(next(i for i,a in enumerate(self.cmds) if a[:2] == ["incus","stop"]),
+                        next(i for i,a in enumerate(self.cmds) if a[:2] == ["incus","delete"]))
+
+    def test_guided_exec_archive_preserves_contents_and_rejects_unknown_files(self):
+        directory = u.STATE / u.EXEC_ARCHIVE_NAME
+        directory.mkdir(mode=0o700)
+        entry = directory / ("a" * 32 + ".stdout")
+        entry.write_bytes(b"original")
+        entry.chmod(0o600)
+        with mock.patch.object(u.pwd, "getpwnam", return_value=types.SimpleNamespace(pw_uid=directory.stat().st_uid)):
+            snapshot = u.inspect_exec_archive(directory.stat().st_uid)
+            self.assertEqual(len(snapshot["files"]), 1)
+            bad = directory / "unexpected"
+            bad.write_text("no")
+            with self.assertRaisesRegex(u.UninstallError, "unrecognized"):
+                u.inspect_exec_archive(directory.stat().st_uid)
+            bad.unlink()
+        # Test the archive/retirement path against the validated proof without
+        # changing real host ownership.
+        real_inspect = u.inspect_exec_archive
+        with mock.patch.object(u, "inspect_exec_archive",
+                               side_effect=lambda uid: real_inspect(directory.stat().st_uid)):
+            plan = u.inspect("full", "user-1001", [], None, guided=True)
+            self.assertTrue(plan["ready"])
+            result = u.apply(plan)
+        self.assertEqual((Path(result["retirement_archive"]) / ("exec-" + entry.name)).read_bytes(), b"original")
+        self.assertFalse(u.STATE.exists())
+
+    def test_guided_history_requires_exact_released_exec_and_successful_delete(self):
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("e"*32, "user-1001", self.box, "UNKNOWN", "native1", "box_exec", self.box))
+        self.insert("INSERT INTO operations VALUES(?,?,?,?,?,?,?)",
+                    ("d"*32, "user-1001", self.box, "SUCCEEDED", "native2", "box_delete", self.box))
+        self.insert("INSERT INTO owned_boxes VALUES(?,?,?,?,?,?,?)",
+                    (self.box, "user-1001", "old", "DELETED", 20, self.box, "d"*32))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+        self.insert("INSERT INTO recovery_audit VALUES(?,?,?,?,?)",
+                    (1, "e"*32, "RELEASED", 10, "a"*64))
+        plan = u.inspect("full", "user-1001", [], None, guided=True)
+        self.assertTrue(plan["ready"])
+        self.assertEqual(len(plan["sqlite"]["historical_released_exec"]), 1)
+        self.assertFalse(self.plan("full")["ready"])
+        self.insert("UPDATE operations SET state='FAILED' WHERE id=?", ("d"*32,))
+        self.assertFalse(u.inspect("full", "user-1001", [], None, guided=True)["ready"])
+
+    def test_guided_native_dependency_and_live_operation_refusals(self):
+        entry = {"name": "bw-example", "type": "container", "status": "Running",
+                 "config": {"volatile.uuid": self.box},
+                 "expanded_devices": {"p": {"type": "proxy"}}}
+        with mock.patch.object(u, "command", return_value=(json.dumps([entry]), 0)):
+            with self.assertRaisesRegex(u.UninstallError, "native proxy"):
+                REAL_NATIVE_INSTANCES("user-1001", guided=True)
+        with mock.patch.object(u, "command", return_value=('[{"id":"active"}]', 0)):
+            with self.assertRaisesRegex(u.UninstallError, "operations present"):
+                REAL_REQUIRE_QUIET("user-1001")
+
+    def test_guided_denial_and_drift_do_not_mutate(self):
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch("builtins.open", side_effect=[io.StringIO("NO\n"), io.StringIO()]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(u.UninstallError, "not approved"):
+                u.main(["--full"])
+        self.assertFalse(u.AUDIT.exists())
+        self.assertTrue(u.BINARY.exists())
+        initial = u.inspect("full", "user-1001", [], None, guided=True)
+        changed = {**initial, "review_sha256": "0"*64}
+        with mock.patch.object(u.os, "geteuid", return_value=0), \
+                mock.patch("builtins.open", side_effect=[io.StringIO("REMOVE user-1001\n"), io.StringIO()]), \
+                mock.patch.object(u, "inspect", side_effect=[initial, changed]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(u.UninstallError, "drift"):
+                u.main(["--full"])
+        self.assertFalse(u.AUDIT.exists())
 
     def test_separate_root_peer_or_active_scriptlet_blocks(self):
         u.ROOT_UNIT.write_text("peer root helper")
