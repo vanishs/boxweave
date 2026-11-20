@@ -9,13 +9,13 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | S5A1 — incident provenance and typed diagnostics | PARTIAL |
 | S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
 | S5A3 — independently verifiable user approval | SYNTHETIC_SIGNED_LAB_PASS / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
-| S5A4 — network and dependent Delete recovery | NOT_STARTED |
+| S5A4 — network and dependent Delete recovery | PARTIAL / BOX_SOURCE_PASS / NATIVE_PENDING |
 | S5A5 — diagnostic and recovery evidence integration | NOT_STARTED |
 | S5A6 — compatibility, release engineering and feature freeze | NOT_STARTED |
 
 Reuse existing CLI recovery, PRS, Activity, OAuth and SQLite capabilities. Guided install/uninstall work from #162 is already implemented; physical integrated acceptance stays in S5B. Existing implementation evidence is not a new S5A PASS.
 
-Read-only handoff baseline: published RC8, installed commit `36e7933e12f83d129a382efc917f8f6c2b3b6820`, Schema5, Incus 7.6, 22 visible MCP tools, readiness true, storage quota witness unverified. Recheck at execution time. #151 remains unresolved; #148 source fix and existing evidence must be reviewed, not duplicated. A3 mechanism requires owner discussion.
+Read-only handoff baseline: published RC8, installed commit `36e7933e12f83d129a382efc917f8f6c2b3b6820`, Schema5, Incus 7.6, 22 visible MCP tools, readiness true, storage quota witness unverified. Recheck at execution time. #151 remains unresolved; #148 source fix and existing evidence must be reviewed, not duplicated. A3 selected signed MCP-client proof; real platform proof remains unavailable.
 
 Use Box-first isolated development and immediate scoped acceptance for each increment. Keep original operation identities, exact tested source and residual gates in the execution log. No S5B acceptance, stable publication, host changes or implementation are authorized by this checkpoint itself.
 
@@ -28,3 +28,5 @@ Owner subsequently selected MCP-client-signed operation approval (not the browse
 A3 development started. Standalone official-SDK inert probe built and tested in owned Box; see [A3 checkpoint](S5A3_APPROVAL_DECISION_2026-11-20.md#development-checkpoint-independent-inert-probe). Actual ChatGPT user-approved request evidence still needed; no new production tool, native release or schema change. Do not sign A3 PASS.
 
 A3 owner-directed Box simulation, pinned Ed25519 test signer, isolated durable consumption/receipt and official SDK HTTP simulation PASS, 32 negatives and five race repetitions, including DB reopen and atomic rollback; [evidence](S5A3_APPROVAL_DECISION_2026-11-20.md#signed-client-simulation-in-box--scoped-pass-2026-11-20). Actual platform-signed approval and production integration remain unverified; no actual release or schema migration. S5A3 not formally signed.
+
+S5A4 started on owner instruction. See [A4 implementation and acceptance](S5A4_NETWORK_RECOVERY_2026-11-20.md). Deterministic network settlement and dependent Delete recovery Box source tests pass. Native workflow evidence and the A3-dependent compensation/release gate remain open. A5–A6 remain NOT_STARTED.

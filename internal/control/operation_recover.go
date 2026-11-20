@@ -20,7 +20,7 @@ type operationRecoverInput struct {
 
 func (s *Service) registerRecoveryTool(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "operation_recover",
-		Description: "Inspect the exact authorized original Operation and optionally reconcile only independently proven original native terminal/poststate or bind an exact unbound Create identity without releasing UNKNOWN. mode=inspect is read-only; mode=reconcile requires its own idempotency_key and returns a durable recovery receipt separate from the original. Optional stream examines original Exec GC review. Unproved outcomes require approval (not available here); network/dependent recovery blocked. No original replay, native dispatch, or blanket unlock.",
+		Description: "Inspect the exact authorized original Operation and optionally reconcile only independently proven original native terminal/poststate or bind an exact unbound Create identity without releasing UNKNOWN. mode=inspect is read-only; mode=reconcile requires its own idempotency_key and returns a durable recovery receipt separate from the original. Optional stream examines original Exec GC review. Forward and dependent Delete require exact original success and dependency proof; Peer requires completed PRS journal and independent root read-only kernel verification. Unproved outcomes remain blocked or require approval (not available here). No original replay, native dispatch, or blanket unlock.",
 		Annotations: mutationAnnotations(false)},
 		func(ctx context.Context, req *mcp.CallToolRequest, in operationRecoverInput) (*mcp.CallToolResult, recovery.Result, error) {
 			principal, e := s.requestPrincipal(req)
@@ -29,7 +29,7 @@ func (s *Service) registerRecoveryTool(server *mcp.Server) {
 			}
 			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
-			svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: principal.Layer}
+			svc := recovery.Service{Store: s.Store, Native: s.Native, Layer: principal.Layer, PeerWitness: recovery.ObserveCompletedPeer}
 			var out recovery.Result
 			switch in.Mode {
 			case "inspect":

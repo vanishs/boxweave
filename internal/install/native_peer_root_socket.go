@@ -28,6 +28,9 @@ type NativePeerRootRequest struct {
 	OperationID string `json:"operation_id"`
 	PlanSHA256  string `json:"plan_sha256"`
 	Reconcile   bool   `json:"reconcile,omitempty"`
+	// ReconcileApproved is a read-only request for the server-pinned original
+	// and digest; the caller cannot select a plan or invoke dispatch.
+	ReconcileApproved bool `json:"reconcile_approved,omitempty"`
 }
 type NativePeerRootResponse struct {
 	Status     string                             `json:"status"`
@@ -75,6 +78,9 @@ func nativePeerRootPeerUID(conn *net.UnixConn, expected uint32) error {
 func nativePeerRootValidateRequest(req NativePeerRootRequest) error {
 	if _, err := nativePeerConntrackOperationJournalPath(req.OperationID); err != nil {
 		return err
+	}
+	if req.ReconcileApproved && (req.Reconcile || req.PlanSHA256 != "") {
+		return errors.New("ambiguous approved reconciliation request")
 	}
 	if req.Reconcile && req.PlanSHA256 == "" {
 		return errors.New("root reconciliation requires the original reviewed digest")
@@ -248,6 +254,12 @@ func NativePeerRootServe(ctx context.Context, cfg NativePeerRootScope) error {
 			if !nativePeerRootApprovedRequest(cfg, req) {
 				return NativePeerRootResponse{}, errors.New("root helper operator approval does not match original and plan")
 			}
+			if req.ReconcileApproved {
+				// The exact operator-approved config, not the caller, chooses the
+				// digest. This enters only the existing read-only completed path.
+				req.Reconcile = true
+				req.PlanSHA256 = cfg.ApprovedPlanSHA
+			}
 			// Grant/revoke mode comes only from independently verified SQLite,
 			// never a request-controlled root mode or arbitrary ACL tuple.
 			_, grantErr := db.ReadRootPeerGrant(callCtx, req.OperationID, cfg.Project, cfg.Bridge, cfg.ACL)
@@ -318,13 +330,31 @@ func nativePeerRootCall(ctx context.Context, path string, req NativePeerRootRequ
 	if !ok {
 		return out, errors.New("root handoff did not connect by Unix credentials")
 	}
+	if req.ReconcileApproved {
+		// Actual kernel Unix peer, not a fake same-group listener or caller-
+		// supplied assertion. Bound the entire read-only RPC by our deadline.
+		if err := nativePeerRootPeerUID(uc, 0); err != nil {
+			return out, errors.New("unverified root reconciliation peer")
+		}
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(60 * time.Second)
+		}
+		if err := uc.SetDeadline(deadline); err != nil {
+			return out, err
+		}
+		stop := context.AfterFunc(ctx, func() { _ = uc.Close() })
+		defer stop()
+	}
 	if err := json.NewEncoder(uc).Encode(req); err != nil {
 		return out, err
 	}
 	if err := uc.CloseWrite(); err != nil {
 		return out, err
 	}
-	_ = uc.SetReadDeadline(time.Now().Add(210 * time.Second))
+	if !req.ReconcileApproved {
+		_ = uc.SetReadDeadline(time.Now().Add(210 * time.Second))
+	}
 	if err := json.NewDecoder(io.LimitReader(uc, 4096)).Decode(&out); err != nil {
 		return out, err
 	}
@@ -351,4 +381,10 @@ func NativePeerRootCallReconcile(ctx context.Context, original, reviewedSHA stri
 	return nativePeerRootCall(ctx, nativePeerRootSocketPath, NativePeerRootRequest{
 		OperationID: original, PlanSHA256: reviewedSHA, Reconcile: true,
 	})
+}
+
+// NativePeerRootCallReconcileApproved requests only a read-only witness of
+// the exact original already approved by the running local root helper.
+func NativePeerRootCallReconcileApproved(ctx context.Context, original string) (NativePeerRootResponse, error) {
+	return nativePeerRootCall(ctx, nativePeerRootSocketPath, NativePeerRootRequest{OperationID: original, ReconcileApproved: true})
 }

@@ -16,6 +16,10 @@ type RecoveryTarget struct {
 	Layer, Resource, SafeIntent, Name, OwnedState                          string
 	UpdatedAt                                                              int64
 	Released, DependentDelete                                              bool
+	Forward                                                                ForwardClaim
+	ForwardReady                                                           bool
+	Peer                                                                   RecoveryPeerClaim
+	PeerReady                                                              bool
 }
 
 func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id string) (RecoveryTarget, error) {
@@ -43,6 +47,18 @@ func readRecoveryTarget(ctx context.Context, q credentialRowQuery, layer, id str
 			t.Name = in.Name
 		}
 	}
+	if t.State == "UNKNOWN" && (t.Action == "port_forward_create" || t.Action == "port_forward_delete") {
+		t.Forward, t.ForwardReady, e = readRecoveryForward(ctx, q, t)
+		if e != nil {
+			return t, e
+		}
+	}
+	if t.State == "UNKNOWN" && t.Action == "box_peer_set" {
+		t.Peer, t.PeerReady, e = readRecoveryPeer(ctx, q, t)
+		if e != nil {
+			return t, e
+		}
+	}
 	return t, nil
 }
 
@@ -59,6 +75,8 @@ type RecoveryProof struct {
 	Kind, Reason, NativeID, UUID, Fingerprint string
 	Exit                                      *int
 	StdoutPath, StderrPath                    string
+	Forward                                   ForwardClaim
+	Peer                                      RootPeerResult
 }
 
 const (
@@ -209,15 +227,33 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 	now := time.Now().UnixNano()
 	outcome := p.Kind
 	success := false
-	if p.Kind == RecoverySettle || p.Kind == RecoveryBind {
-		if r.Stream != "" || t.State != "UNKNOWN" || t.Released || t.DependentDelete || t.Name == "" || t.Resource != "box:"+t.Name {
+	if p.Kind == RecoverySettle && t.Action == "box_peer_set" {
+		if r.Stream != "" {
 			return RecoveryRecord{}, ErrResourceLocked
 		}
+		if e = finishRecoveryPeerTx(ctx, tx, t, p); e != nil {
+			return RecoveryRecord{}, e
+		}
+		outcome, success = "SETTLED", true
+	} else if p.Kind == RecoverySettle || p.Kind == RecoveryBind {
+		if r.Stream != "" || t.State != "UNKNOWN" || t.Released || t.Name == "" || t.Resource != "box:"+t.Name {
+			return RecoveryRecord{}, ErrResourceLocked
+		}
+		if t.DependentDelete {
+			if e = recoveryDependentDeleteReady(ctx, tx, t); e != nil {
+				return RecoveryRecord{}, e
+			}
+		}
+		parent, e := recoveryDeleteChildParent(ctx, tx, t)
+		if e != nil {
+			return RecoveryRecord{}, e
+		}
 		var busy int
-		e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') AND
+		e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operations o WHERE o.layer=? AND o.id<>? AND o.id<>? AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING') AND
    (o.action='box_peer_set' OR NOT EXISTS(SELECT 1 FROM recovery_audit a WHERE a.operation_id=o.id AND a.decision='RELEASED')) AND
-   (o.action='box_peer_set' OR o.resource_key=? OR (?<>'' AND o.box_uuid=? AND o.incarnation=?) OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.resource_key='delete-project:'||o.layer))`,
-			t.Layer, t.ID, t.Resource, t.UUID, t.UUID, t.Incarnation).Scan(&busy)
+   (o.action='box_peer_set' OR o.resource_key=? OR (?<>'' AND o.box_uuid=? AND o.incarnation=?) OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.resource_key='delete-project:'||o.layer)
+ OR EXISTS(SELECT 1 FROM operation_resource_claims c JOIN operation_resource_claims orig ON orig.operation_id=? AND c.layer=orig.layer AND c.resource_key=orig.resource_key WHERE c.operation_id=o.id) OR ?<>'' OR ?=1)`,
+			t.Layer, t.ID, parent, t.Resource, t.UUID, t.UUID, t.Incarnation, t.ID, parent, t.DependentDelete).Scan(&busy)
 		if e != nil {
 			return RecoveryRecord{}, e
 		}
@@ -250,12 +286,19 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 					return RecoveryRecord{}, ErrInvalid
 				}
 				e = finishVerifiedDeleteTx(ctx, tx, t.ID, box, "UNKNOWN", "RECOVERY_DELETE_TERMINAL_NO_REPLAY")
+			case "port_forward_create", "port_forward_delete":
+				e = finishRecoveryForwardTx(ctx, tx, t, p, parent)
 			case "box_exec":
 				if p.Exit == nil {
 					return RecoveryRecord{}, ErrInvalid
 				}
 				e = finishVerifiedExecTx(ctx, tx, t.ID, box, t.NativeID, p.StdoutPath, p.StderrPath, *p.Exit, "UNKNOWN", "RECOVERY_EXEC_TERMINAL_NO_REPLAY")
 			case "box_start", "box_stop", "box_update":
+				if parent != "" {
+					if e = recoveryClaimKeys(ctx, tx, t, []string{t.Resource, deleteParentKey(parent)}); e != nil {
+						return RecoveryRecord{}, e
+					}
+				}
 				var res sql.Result
 				res, e = tx.ExecContext(ctx, `UPDATE operations SET state='SUCCEEDED',error_class='',updated_at=? WHERE id=? AND state='UNKNOWN' AND updated_at=?`, now, t.ID, t.UpdatedAt)
 				if e == nil {

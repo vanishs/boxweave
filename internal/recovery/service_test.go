@@ -101,9 +101,9 @@ func TestS5A2DomainProofMatrix(t *testing.T) {
 			w.deleteObs.NativeID = t.NativeID
 			w.deleteObs.Class = "NATIVE_RECEIPT_UNAVAILABLE"
 		}, "APPROVAL_REQUIRED", "DELETE_TERMINAL_ABSENCE_NOT_PROVED"},
-		{"dependent delete", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_delete"; t.DependentDelete = true }, "BLOCKED", "NETWORK_RECOVERY_DEFERRED_A4"},
-		{"peer", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_peer_set" }, "BLOCKED", "NETWORK_RECOVERY_DEFERRED_A4"},
-		{"forward", func(t *state.RecoveryTarget, w *witness) { t.Action = "port_forward_create" }, "BLOCKED", "NETWORK_RECOVERY_DEFERRED_A4"},
+		{"dependent delete", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_delete"; t.DependentDelete = true }, "BLOCKED", "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED"},
+		{"peer", func(t *state.RecoveryTarget, w *witness) { t.Action = "box_peer_set" }, "BLOCKED", "PEER_ROOT_COMPLETED_PROOF_REQUIRED"},
+		{"forward", func(t *state.RecoveryTarget, w *witness) { t.Action = "port_forward_create" }, "BLOCKED", "FORWARD_ORIGINAL_CLAIM_UNVERIFIED"},
 		{"readiness", func(t *state.RecoveryTarget, w *witness) { t.Action = state.ReadinessAction }, "APPROVAL_REQUIRED", "READINESS_HISTORICAL_OUTCOME_UNPROVED"},
 		{"matching file", func(t *state.RecoveryTarget, w *witness) {
 			t.Action = "box_file_apply"

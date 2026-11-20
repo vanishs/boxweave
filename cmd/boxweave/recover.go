@@ -156,7 +156,7 @@ func performRecovery(a recoverArgs) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if a.Action == "diagnose" || a.Action == "reconcile" {
-		svc := recovery.Service{Store: store, Native: native.Reader{Socket: a.Socket, Project: a.Project}, Layer: a.Project}
+		svc := recovery.Service{Store: store, Native: native.Reader{Socket: a.Socket, Project: a.Project}, Layer: a.Project, PeerWitness: recovery.ObserveCompletedPeer}
 		var result recovery.Result
 		if a.Action == "diagnose" {
 			if a.RecoveryKey != "" {

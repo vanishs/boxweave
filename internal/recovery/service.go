@@ -30,6 +30,9 @@ type Service struct {
 	Store  *state.Store
 	Native Observer
 	Layer  string
+	// PeerWitness is the installed, root-authenticated read-only PRS RPC.
+	// No plan, approval assertion or root request parameters come from MCP.
+	PeerWitness func(context.Context, string) (state.RootPeerResult, error)
 }
 
 type View struct {
@@ -206,8 +209,57 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 	if t.Released {
 		return finish(state.RecoveryNotNeeded, "ORIGINAL_ALREADY_REVIEWED_RELEASED")
 	}
-	if t.DependentDelete || t.Action == "box_peer_set" || t.Action == "port_forward_create" || t.Action == "port_forward_delete" {
-		return finish(state.RecoveryBlocked, "NETWORK_RECOVERY_DEFERRED_A4")
+	if t.Action == "box_peer_set" {
+		if !t.PeerReady || s.PeerWitness == nil {
+			return finish(state.RecoveryBlocked, "PEER_ROOT_COMPLETED_PROOF_REQUIRED")
+		}
+		proof, e := s.PeerWitness(ctx, t.ID)
+		if e != nil || !state.ValidCompletedPeerProof(proof) {
+			return finish(state.RecoveryBlocked, "PEER_ROOT_COMPLETED_PROOF_REQUIRED")
+		}
+		v.NativeObservation = "ROOT_COMPLETED_KERNEL_VERIFIED"
+		v.EvidenceSource = "SQLITE_AND_ROOT_JOURNAL"
+		view, p := finish(state.RecoverySettle, "ROOT_COMPLETED_POSTSTATE_VERIFIED")
+		p.UUID, p.NativeID, p.Peer = t.UUID, t.NativeID, proof
+		p.Fingerprint = fingerprint(t.ID, t.UUID, proof.PlanSHA256, proof.PostNativeDigestSHA256)
+		return view, p
+	}
+	if t.DependentDelete && (s.Store == nil || s.Store.CheckDependentDeleteRecovery(ctx, t) != nil) {
+		return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
+	}
+	if t.Action == "port_forward_create" || t.Action == "port_forward_delete" {
+		if !t.ForwardReady {
+			return finish(state.RecoveryBlocked, "FORWARD_ORIGINAL_CLAIM_UNVERIFIED")
+		}
+		observer, ok := s.Native.(interface {
+			ObserveOwnedForward(context.Context, string, string, native.ForwardSpec, bool) error
+			AuthorizeForwardCreate(native.ForwardSpec) error
+		})
+		if !ok {
+			return finish(state.RecoveryBlocked, "FORWARD_NATIVE_OBSERVER_UNAVAILABLE")
+		}
+		if t.OwnedState != "OWNED" || t.UUID == "" || t.Incarnation == "" || t.Name == "" || t.Resource != "box:"+t.Name || t.NativeID == "" {
+			return finish(state.RecoveryBlocked, "FORWARD_ORIGINAL_IDENTITY_UNVERIFIED")
+		}
+		op, e := s.Native.NativeOperation(ctx, t.NativeID)
+		if e != nil || op == nil || op.ID != t.NativeID || op.StatusCode != api.Success {
+			return finish(state.RecoveryBlocked, "FORWARD_ORIGINAL_TERMINAL_UNVERIFIED")
+		}
+		f := t.Forward
+		spec := native.ForwardSpec{Device: f.NativeDevice, Protocol: f.Protocol, HostBind: f.HostBind, HostPort: f.HostPort, GuestPort: f.GuestPort, ExternalAcknowledged: true}
+		create := t.Action == "port_forward_create"
+		if create && observer.AuthorizeForwardCreate(spec) != nil {
+			return finish(state.RecoveryBlocked, "FORWARD_CURRENT_EXPOSURE_UNVERIFIED")
+		}
+		if e = observer.ObserveOwnedForward(ctx, t.Name, t.UUID, spec, create); e != nil {
+			return finish(state.RecoveryBlocked, "FORWARD_DEVICE_POSTSTATE_UNVERIFIED")
+		}
+		v.NativeObservation = "ORIGINAL_TERMINAL_DEVICE_VERIFIED"
+		v.EvidenceSource = "SQLITE_AND_NATIVE"
+		view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
+		p.UUID, p.NativeID, p.Forward = t.UUID, t.NativeID, f
+		p.Fingerprint = fingerprint(t.ID, t.NativeID, t.UUID, f.NativeDevice, f.Protocol, f.HostBind, fmt.Sprint(f.HostPort), fmt.Sprint(f.GuestPort), fmt.Sprint(create))
+		return view, p
 	}
 	if t.Action == "operation_cancel" {
 		var in struct {
@@ -250,6 +302,9 @@ func (s Service) observe(ctx context.Context, t state.RecoveryTarget, stream str
 			return finish(state.RecoveryBlocked, "DELETE_IDENTITY_UNPROVED")
 		}
 		if obs.Class != "ORIGINAL_TERMINAL_DELETE_VERIFIED" || obs.Box.State != "ABSENT_UNCERTAIN" {
+			if t.DependentDelete {
+				return finish(state.RecoveryBlocked, "DEPENDENT_DELETE_FINAL_PROOF_REQUIRED")
+			}
 			return finish(state.RecoveryApproval, "DELETE_TERMINAL_ABSENCE_NOT_PROVED")
 		}
 		view, p := finish(state.RecoverySettle, "ORIGINAL_TERMINAL_POSTSTATE_VERIFIED")
