@@ -78,6 +78,11 @@ def require_service_lock_owner(path, service_uid):
         raise UninstallError("serve lock must belong to exact service UID")
 
 
+def require_serve_lock_fd_owner(fd, service_uid):
+    if os.fstat(fd).st_uid != service_uid:
+        raise UninstallError("serve lock FD must belong to service UID")
+
+
 def verified_serve_lock(path, service_uid):
     info = checked_file(path, "file", 4096)
     if info is None:
@@ -479,9 +484,9 @@ def hold_stopped_serve_lock(plan):
     try:
         state = os.fstat(fd)
         if (state.st_dev != original["device"] or state.st_ino != original["inode"]
-                or state.st_nlink != 1 or stat.S_IMODE(state.st_mode) != 0o600
-                or state.st_uid != plan["service_user_uid"]):
+                or state.st_nlink != 1 or stat.S_IMODE(state.st_mode) != 0o600):
             raise UninstallError("serve lock changed while opening")
+        require_serve_lock_fd_owner(fd, plan["service_user_uid"])
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
