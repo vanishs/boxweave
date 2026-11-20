@@ -26,6 +26,9 @@ on:
       - cmd/boxweave/main.go
       - scripts/s4_b3_native_packet_probe.go
       - scripts/s4_b3_native_mcp_client.go
+      - scripts/s4_b5_linked_delete_client.py
+      - internal/state/delete_dependencies.go
+      - internal/control/delete_dependencies.go
       - internal/control/peer_tools.go
       - internal/state/network_peer_scope.go
       - internal/state/network_peer_replay.go
@@ -561,6 +564,85 @@ jobs:
               test "$accepted" = 1
             done
           done
+
+      - name: B5 parent Delete linked PRS revoke and retained unrelated packets
+        if: matrix.scenario == 'installed_mcp'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          project="$(cat "$RUNNER_TEMP/s4b3-project")"
+          db=/var/lib/boxweave/ledger.sqlite
+          bin=/usr/local/bin/boxweave
+          test "$project" = "user-$(id -u boxweave)"
+          uuid="$(sudo -u boxweave sqlite3 "$db" "SELECT uuid FROM owned_boxes WHERE project='$project' AND name='s4b2a' AND state='OWNED'")"
+          test "${#uuid}" = 36
+          token="$(sudo -u boxweave "$bin" token-create -db "$db" -ttl 1h | sed -n 's/^token=//p')"
+          test -n "$token"
+          sudo -u boxweave env BOXWEAVE_S4B3_SERVE_PROJECT="$project" sh -c 'nohup /usr/local/bin/boxweave serve -db /var/lib/boxweave/ledger.sqlite -project "$BOXWEAVE_S4B3_SERVE_PROJECT" -incus-socket /var/lib/incus/unix.socket.user -listen 127.0.0.1:18650 >/tmp/s4b3-mcp-serve.log 2>&1 </dev/null & echo $! >/tmp/s4b3-mcp-serve.pid'
+          ready=0
+          for _ in $(seq 1 40); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:18650/mcp 2>/dev/null || true)"
+            if test "$code" = 401; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          export B5_SCOPE=b5-disposable-20261119 B5_UUID="$uuid" B5_TOKEN="$token"
+          python3 scripts/s4_b5_linked_delete_client.py admit | tee "$RUNNER_TEMP/b5-parent.log"
+          parent="$(sed -n 's/^S4_B5_LINKED_PARENT=//p' "$RUNNER_TEMP/b5-parent.log")"
+          test "${#parent}" = 32
+          child=""
+          for _ in $(seq 1 60); do
+            child="$(sudo -u boxweave sqlite3 "$db" "SELECT o.id FROM operations o JOIN operation_resource_claims c ON c.operation_id=o.id WHERE c.resource_key='delete-parent:$parent' AND o.action='box_peer_set' AND o.state='ADMITTED'")"
+            if test "${#child}" = 32; then break; fi
+            sleep 1
+          done
+          test "${#child}" = 32
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$parent'")" = DISPATCHING
+          sudo systemctl stop boxweave-native-peer-root.service
+          sudo systemctl disable boxweave-native-peer-root.service
+          sudo rm /etc/systemd/system/boxweave-native-peer-root.service
+          sudo systemctl daemon-reload
+          sudo -u boxweave "$bin" native-peer-root-stage -db "$db" -project "$project" -operation-id "$child"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$child'")" = DISPATCHING
+          sudo "$bin" native-peer-root-plan -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$child" > "$RUNNER_TEMP/s4b3-b5-linked-plan.json"
+          sha="$(jq -r .plan_sha256 "$RUNNER_TEMP/s4b3-b5-linked-plan.json")"
+          test "$(printf '%s' "$sha" | wc -c)" = 64
+          sudo "$bin" native-peer-root-unit-stage -db "$db" -project "$project" -network bwbr0 -acl bw-s4b2-native -operation-id "$child" -peer-plan-sha256 "$sha" -approve-local
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now boxweave-native-peer-root.service
+          ready=0
+          for _ in $(seq 1 35); do
+            if sudo systemctl is-active --quiet boxweave-native-peer-root.service && sudo test -S /run/boxweave-native-peer-root.sock; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          sudo -u boxweave "$bin" native-peer-root-execute -db "$db" -project "$project" -operation-id "$child"
+          test "$(sudo jq -r .status "/var/lib/boxweave-native-peer-conntrack-v1/$child.json")" = COMPLETE_VERIFIED
+          B5_PARENT="$parent" python3 scripts/s4_b5_linked_delete_client.py verify
+          unset B5_TOKEN token
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT state||':'||deleted_by_operation_id FROM owned_boxes WHERE uuid='$uuid'")" = "DELETED:$parent"
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM network_address_fences WHERE box_uuid='$uuid' AND state='RELEASED' AND operation_id='$parent'")" = 2
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM peer_grants WHERE source_uuid='$uuid' AND status='REVOKED' AND desired=0")" = 1
+          test "$(sudo -u boxweave sqlite3 "$db" "SELECT COUNT(*) FROM peer_grants WHERE status='CONFIRMED' AND desired=1")" = 1
+          test "$(sudo incus --project "$project" list --format csv -c n | sort | paste -sd,)" = s4b2b,s4b2c
+          sudo incus --project "$project" exec s4b2c -- sh -c 'rm -f /tmp/s4b3-packet-ready; nohup /root/s4b3-packet server >/tmp/s4b5-server.log 2>&1 </dev/null &'
+          for _ in $(seq 1 30); do
+            if sudo incus --project "$project" exec s4b2c -- test -f /tmp/s4b3-packet-ready; then break; fi
+            sleep 1
+          done
+          for proto in tcp udp; do
+            for dest in 10.248.83.13 fd83:248::13; do
+              passed=0
+              for _ in $(seq 1 20); do
+                if sudo incus --project "$project" exec s4b2b -- /root/s4b3-packet probe "$proto" "$dest"; then passed=1; break; fi
+                sleep 2
+              done
+              test "$passed" = 1
+            done
+          done
+          echo S4_B5_NATIVE_LINKED_PRS_DELETE_TOMBSTONE_UNRELATED_PACKETS=PASS
+          sudo kill "$(sudo cat /tmp/s4b3-mcp-serve.pid)"
 
       # Capture scoped disposable-native witnesses BEFORE Project teardown.
       # Never upload service token tables, raw cloud-init or production DB.

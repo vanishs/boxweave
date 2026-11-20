@@ -19,6 +19,7 @@ on:
       - internal/state/worker.go
       - internal/control/delete_dependencies.go
       - internal/control/delete_dependencies_native_test.go
+      - internal/control/delete_ack_native_test.go
       - internal/state/delete_dependencies.go
       - internal/state/delete_dependencies_test.go
       - internal/state/network_deleted_binding.go
@@ -145,6 +146,21 @@ jobs:
           fi
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeMCPForwardDependentDelete$' | tee "$RUNNER_TEMP/s4b5-native.log"
           grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
+          for cut in before-ack after-ack; do
+            sudo incus --project "$S4_B4_PROJECT" init images:ubuntu/24.04 s4b5ack -c limits.cpu=1 -c limits.memory=512MiB
+            sudo incus --project "$S4_B4_PROJECT" config device override s4b5ack eth0 ipv4.address=10.248.83.22 ipv6.address=fd83:248::22
+            sudo incus --project "$S4_B4_PROJECT" start s4b5ack
+            sudo incus --project "$S4_B4_PROJECT" file push "$RUNNER_TEMP/s4b4-echo" s4b5ack/root/s4b4-echo
+            sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- chmod 0755 /root/s4b4-echo
+            sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- sh -c 'nohup /root/s4b4-echo server >/tmp/s4b4-echo.log 2>&1 </dev/null &'
+            for i in $(seq 1 40); do
+              if sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- test -f /tmp/s4b2-flow-server-ready; then break; fi
+              sleep 1
+            done
+            sudo incus --project "$S4_B4_PROJECT" exec s4b5ack -- test -f /tmp/s4b2-flow-server-ready
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 BW_B5_ACK_CUT="$cut" /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeDeleteAckLoss$' | tee "$RUNNER_TEMP/b5-$cut.log"
+            grep -Fq "S4_B5_FINAL_DELETE_ACK_RECOVER_UNKNOWN_NO_REPLAY=PASS cut=$cut" "$RUNNER_TEMP/b5-$cut.log"
+          done
           sudo incus project delete "$S4_B4_PROJECT"
           sudo incus network acl delete bw-s4b4-native
           sudo incus network delete bwbr0
