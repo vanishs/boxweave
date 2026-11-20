@@ -1,0 +1,65 @@
+Operation b4b26a09bf397cea21ea825e25439a45
+stdout; guest exit 0
+S4_C_READY_ORIGINAL 7f25f843ad39e12e71694cd9e748d4ed OBSERVING
+{"commit": "9c42137d3cb86f29ae82ce6f1885523c440a7431", "operation": {"action": "box_wait_ready", "box_uuid": "3f02a4e6-003e-4228-88bc-06541407b24e", "created_at": 1795166233678171400, "incarnation": "3f02a4e6-003e-4228-88bc-06541407b24e", "native_operation_id": "4d17e89a-44a1-49ff-ace2-63e3e62484c6", "next_action": {"kind": "NONE"}, "operation_id": "7f25f843ad39e12e71694cd9e748d4ed", "state": "SUCCEEDED", "tracking_id": "9bcbbabb90042f78841f5be73b2cc1ad", "updated_at": 1795166234110094600}, "readiness": {"checked_at_ns": 1795166234109683000, "checks": ["exec", "ipv4", "ipv6", "running"], "deadline_ns": 1795166263678171400, "exec_ready": "ready", "guest_exit_code": 0, "ipv4_assigned": "ready", "ipv6_assigned": "ready", "ready": true, "running": "ready", "started_at_ns": 1795166233678171400}, "tracking_id": "f3ab27487102c738135961c83c07f233", "version": "1.0.0-rc.8-candidate"}
+S4_C_REAL_FOUR_CHECKS_AND_ORIGINAL_REPLAY_PASS
+stderr; guest exit 0
+
+
+Operation e151a024801271f38c4d38a212cac5b9
+stdout; guest exit 1
+ORIGINAL box_create a1dddc2faf860e9e233b7a294a025f8c
+TIMEOUT 118258fcd841ecae1f8174e2117daf4c TIMED_OUT {'checked_at_ns': 1795166294439997700, 'checks': ['exec', 'running'], 'deadline_ns': 1795166295253415400, 'exec_ready': 'unknown', 'ipv4_assigned': 'not_checked', 'ipv6_assigned': 'not_checked', 'last_error_class': 'READINESS_DEADLINE_ELAPSED', 'ready': False, 'running': 'not_ready', 'started_at_ns': 1795166294253415400}
+ORIGINAL box_start c3f6db03e828510fc9cd89a9d707d0e3
+DELAYED 93c6f7c2cfc69add2e7673e6dbcdb8ca SUCCEEDED {'checked_at_ns': 1795166297775963100, 'checks': ['exec', 'running'], 'deadline_ns': 1795166385351047000, 'exec_ready': 'ready', 'guest_exit_code': 0, 'ipv4_assigned': 'not_checked', 'ipv6_assigned': 'not_checked', 'ready': True, 'running': 'ready', 'started_at_ns': 1795166295351047000}
+ORIGINAL box_stop 7e1edb43c5fcc0ffb4d49e7d24f29d8a
+stderr; guest exit 1
+Error: Project "user-1001" doesn't allow for snapshot creation
+Traceback (most recent call last):
+  File "/var/tmp/s4c-ready-native/metadata-smoke.py", line 54, in <module>
+    native("snapshot","create",name,"s4c-meta-snap")
+  File "/var/tmp/s4c-ready-native/metadata-smoke.py", line 11, in native
+    return subprocess.check_output(["incus","--project",project,*args],text=True).strip()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['incus', '--project', 'user-1001', 'snapshot', 'create', 's4c-readiness-fixture', 's4c-meta-snap']' returned non-zero exit status 1.
+
+Operation 35d97de469975e30742edc3465dc9a9a
+stdout; guest exit 1
+S4_C_PRE_RESTART_OBSERVING 78bcc5ad229e3bc6ea06d8f961473ce0
+stderr; guest exit 1
+Error: Failed to begin transaction: failed to create cowsql connection: no available cowsql leader server found
+Traceback (most recent call last):
+  File "/var/tmp/s4c-ready-native/restart-smoke.py", line 12, in <module>
+    assert native("config","get",name,"volatile.uuid")==box
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/tmp/s4c-ready-native/restart-smoke.py", line 11, in native
+    return subprocess.check_output(["incus","--project","user-1001",*args],text=True).strip()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['incus', '--project', 'user-1001', 'config', 'get', 's4c-readiness-fixture', 'volatile.uuid']' returned non-zero exit status 1.
+
+Operation 3f15329fd3069488e7b7b519f8249e0b
+stdout; guest exit 0
+{"box": "39c49655-f06e-46aa-9137-59e3a17fba51", "create": "a1dddc2faf860e9e233b7a294a025f8c", "pending": "78bcc5ad229e3bc6ea06d8f961473ce0"}
+id,action,state,native_operation_id,error_class
+7f25f843ad39e12e71694cd9e748d4ed,box_wait_ready,SUCCEEDED,4d17e89a-44a1-49ff-ace2-63e3e62484c6,""
+a1dddc2faf860e9e233b7a294a025f8c,box_create,SUCCEEDED,55ee9e5c-cc6b-4c9d-be01-dbc23e55878c,""
+118258fcd841ecae1f8174e2117daf4c,box_wait_ready,TIMED_OUT,"",READINESS_DEADLINE_ELAPSED
+93c6f7c2cfc69add2e7673e6dbcdb8ca,box_wait_ready,SUCCEEDED,dadd41e5-26ab-4729-ab67-9b39e17d4b9e,""
+c3f6db03e828510fc9cd89a9d707d0e3,box_start,SUCCEEDED,46a68f98-d7ea-4fd2-a1dc-b1f6d128a620,""
+7e1edb43c5fcc0ffb4d49e7d24f29d8a,box_stop,SUCCEEDED,81a93302-811b-420e-8b1d-bf132dd46ca8,""
+78bcc5ad229e3bc6ea06d8f961473ce0,box_wait_ready,FAILED,"",PROCESS_RESTART_BEFORE_DISPATCH
+active
+active
+S4_C_RESTART_LEDGER_READONLY_CHECK
+stderr; guest exit 0
+Error: Failed to begin transaction: failed to create cowsql connection: no available cowsql leader server found

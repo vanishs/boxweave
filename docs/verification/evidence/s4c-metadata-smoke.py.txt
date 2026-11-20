@@ -1,0 +1,77 @@
+import os,sys,time,json,subprocess
+from pathlib import Path
+sys.path.insert(0,"/root/s4c-ready-native/scripts")
+from mcp_testkit import LoopbackMCP,MCPToolError
+lab=Path("/var/tmp/s4c-ready-native")
+checkpoint=lab/"metadata-checkpoint.json"
+project="user-1001"
+name="s4c-readiness-fixture"
+url="http://127.0.0.1:18675/mcp"
+def native(*args):
+ return subprocess.check_output(["incus","--project",project,*args],text=True).strip()
+def terminal(m,oid,deadline=100):
+ end=time.monotonic()+deadline
+ while time.monotonic()<end:
+  o=m.call("operation_get",dict(operation_id=oid,wait_ms=2000)).structured
+  if o["operation"]["state"] in ("SUCCEEDED","FAILED","UNKNOWN","TIMED_OUT","CANCELLED"):
+   return o
+ raise RuntimeError("original did not finish "+oid)
+def mutate(m,tool,key,**args):
+ r=m.call(tool,dict(args,idempotency_key="s4c-meta-"+key+"-20261120")).structured
+ print("ORIGINAL",tool,r["operation_id"],flush=True)
+ o=terminal(m,r["operation_id"])
+ assert o["operation"]["state"]=="SUCCEEDED",o["operation"]
+ return r["operation_id"]
+def wait(m,box,key,seconds,checks=["running","exec"]):
+ return m.call("box_wait_ready",dict(box_id=box,idempotency_key="s4c-meta-"+key+"-20261120",checks=checks,timeout_seconds=seconds)).structured["operation_id"]
+with LoopbackMCP(url,token=os.environ["BW_TOKEN"],allow_mutations=True) as m:
+ if sys.argv[1]=="initial":
+  assert not checkpoint.exists()
+  assert name not in native("list","-c","n","-f","csv").splitlines()
+  create=mutate(m,"box_create","create",name=name,cpu=1,memory_mib=512,disk_gib=4,image="s4b6-fixture-image",start=False,internet=False)
+  rows=[r for r in m.call("box_list").structured["boxes"] if r["name"]==name]
+  assert len(rows)==1
+  box=rows[0]["box_id"]
+  assert native("config","get",name,"volatile.uuid")==box
+  checkpoint.write_text(json.dumps(dict(box=box,create=create))+"\n")
+  det=m.call("box_get",dict(box_id=box,detail=True)).structured
+  assert det["box"]["native_state"]=="Stopped"
+  oid=wait(m,box,"timeout",1)
+  o=terminal(m,oid)
+  print("TIMEOUT",oid,o["operation"]["state"],o["readiness"],flush=True)
+  assert o["operation"]["state"]=="TIMED_OUT" and not o["readiness"]["ready"] and not o["operation"].get("native_operation_id")
+  oid=wait(m,box,"delayed",90)
+  pre=m.call("operation_get",dict(operation_id=oid)).structured
+  assert pre["operation"]["state"]=="OBSERVING"
+  start=mutate(m,"box_start","start",box_id=box)
+  post=terminal(m,oid)
+  print("DELAYED",oid,post["operation"]["state"],post["readiness"],flush=True)
+  assert post["operation"]["state"]=="SUCCEEDED" and post["readiness"]["guest_exit_code"]==0 and post["readiness"]["ready"]
+  assert post["readiness"]["ipv4_assigned"]=="not_checked"
+  mutate(m,"box_stop","stop",box_id=box)
+  assert native("config","get",name,"volatile.uuid")==box
+  assert m.call("box_get",dict(box_id=box)).structured["box"]["native_state"]=="Stopped"
+  native("snapshot","create",name,"s4c-meta-snap")
+  native("query","-X","POST","--wait","-d",json.dumps(dict(name="s4c-meta-backup",instance_only=True)),f"/1.0/instances/{name}/backups?project={project}")
+  det=m.call("box_get",dict(box_id=box,detail=True)).structured["instance_full"]
+  print("METADATA",len(det["snapshots"]),len(det["backups"]),flush=True)
+  assert len(det["snapshots"])==1 and len(det["backups"])==1
+  assert det["snapshots"][0]["name"].endswith("s4c-meta-snap") and det["backups"][0]["name"].endswith("s4c-meta-backup")
+  pending=wait(m,box,"restart",300)
+  assert m.call("operation_get",dict(operation_id=pending)).structured["operation"]["state"]=="OBSERVING"
+  checkpoint.write_text(json.dumps(dict(box=box,create=create,pending=pending,delayed=oid))+"\n")
+  print("S4_C_STOPPED_TIMEOUT_CONCURRENT_START_NONEMPTY_METADATA_PASS",flush=True)
+ elif sys.argv[1]=="resume":
+  d=json.loads(checkpoint.read_text());box=d["box"]
+  assert native("config","get",name,"volatile.uuid")==box
+  o=m.call("operation_get",dict(operation_id=d["pending"])).structured
+  print("RESTART",o["operation"]["operation_id"],o["operation"]["state"],o["operation"].get("error_class"),flush=True)
+  assert o["operation"]["state"]=="FAILED" and not o["operation"].get("native_operation_id") and not o["readiness"]["ready"]
+  dup=m.call("box_wait_ready",dict(box_id=box,idempotency_key="s4c-meta-restart-20261120",checks=["running","exec"],timeout_seconds=300)).structured
+  assert dup["duplicate"] and dup["operation_id"]==d["pending"]
+  native("query","-X","DELETE","--wait",f"/1.0/instances/{name}/backups/s4c-meta-backup?project={project}")
+  native("snapshot","delete",name,"s4c-meta-snap")
+  mutate(m,"box_delete","delete",box_id=box)
+  assert name not in native("list","-c","n","-f","csv").splitlines()
+  print("S4_C_REAL_RESTART_BEFORE_PROBE_AND_FIXTURE_CLEANUP_PASS",flush=True)
+ else:raise ValueError("phase")

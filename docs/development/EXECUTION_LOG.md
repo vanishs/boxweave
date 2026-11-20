@@ -1341,3 +1341,7 @@ Exact code 3fd6b76, separate candidate on retained nested B6 Box, original read-
 ### S4-C durable readiness source/local Race PASS — 2026-11-20 PT
 
 Owner continued S4-C. Existing Schema5 operations/events, OBSERVING, 22 catalog, bounded 1..600s, fixed no-output Exec, short fence and original replay. Full make verify 72a55a6db945fd43899c4cf746900132 exit 0. [Implementation checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). Installed native/wider acceptance and B6 remaining gates open. Prior B4/B5 combined CI failure remains unresolved; normalize old composite transcript EOF blank without changing evidence content. Retain development Boxes.
+
+### S4-C exact native readiness functional smoke — 2026-11-20 PT
+
+Exact 9c42137. Actual four checks, guest exit0, 22-Tool discovery and same-key replay PASS b4b26a09bf397cea21ea825e25439a45; stopped timeout and concurrent Start/delayed Exec PASS e151a024801271f38c4d38a212cac5b9, snapshot policy denied, backup not attempted. Actual restart original SQLite FAILED before dispatch; Cowsql leader unavailable blocked native postread and replay, no new probe. Read-only 3f15329fd3069488e7b7b519f8249e0b exit 0 seven original rows, no active originals. Quality/dualarch/S3/Scriptlet CI SUCCESS; other native gates pending. [Checkpoint](S4_C_IMPLEMENTATION_2026-11-20.md). S4_C_PARTIAL, preserve both labs and new stopped child; no reset, deletion, merge or release.

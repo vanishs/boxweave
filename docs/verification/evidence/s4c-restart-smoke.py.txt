@@ -1,0 +1,29 @@
+import os,sys,time,json,subprocess
+from pathlib import Path
+sys.path.insert(0,"/root/s4c-ready-native/scripts")
+from mcp_testkit import LoopbackMCP
+lab=Path("/var/tmp/s4c-ready-native")
+ck=lab/"metadata-checkpoint.json"
+d=json.loads(ck.read_text())
+box=d["box"]
+name="s4c-readiness-fixture"
+def native(*args):
+ return subprocess.check_output(["incus","--project","user-1001",*args],text=True).strip()
+assert native("config","get",name,"volatile.uuid")==box
+with LoopbackMCP("http://127.0.0.1:18675/mcp",token=os.environ["BW_TOKEN"],allow_mutations=True) as m:
+ args=dict(box_id=box,checks=["running","exec"],timeout_seconds=300,idempotency_key="s4c-stopped-restart-original-20261120")
+ if sys.argv[1]=="start":
+  assert m.call("box_get",dict(box_id=box)).structured["box"]["native_state"]=="Stopped"
+  op=m.call("box_wait_ready",args).structured
+  assert op["state"]=="OBSERVING"
+  d["pending"]=op["operation_id"]
+  ck.write_text(json.dumps(d)+"\n")
+  print("S4_C_PRE_RESTART_OBSERVING",op["operation_id"],flush=True)
+ else:
+  op=m.call("operation_get",dict(operation_id=d["pending"])).structured
+  print("S4_C_AFTER_REAL_CONTROLLER_RESTART",json.dumps(op,sort_keys=True),flush=True)
+  assert op["operation"]["state"]=="FAILED" and not op["operation"].get("native_operation_id") and not op["readiness"]["ready"]
+  dup=m.call("box_wait_ready",args).structured
+  assert dup["duplicate"] and dup["operation_id"]==d["pending"]
+  print("S4_C_RESTART_BEFORE_DISPATCH_ORIGINAL_NO_REPLAY_PASS",flush=True)
+  # Keep the stopped disposable fixture for the incomplete metadata gate.
