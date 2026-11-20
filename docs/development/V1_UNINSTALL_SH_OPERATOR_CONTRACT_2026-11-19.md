@@ -37,6 +37,14 @@ Changing a single input, service state, installation manifest, binary/unit hash,
 
 **Important:** `full` means the deepest **safely provable BoxWeave-owned** removal, **not** universal host cleanup. Its Native rollback/Archive intentionally precede removal of the last verified implementation binary. Incus Project and image/bridge references are left for independent human review. If the Native journal is present in `APPLIED` or `ROLLED_BACK` state, `full` requires `--native-prepare-sha256` equal to the actual journal `Plan.ReviewSHA256`; it is not a checksum from this documentation or another Host.
 
+## Persistent serve lock — late RC8 discovered compatibility fix
+
+The real installed L0 includes `/var/lib/boxweave/ledger.sqlite.serve.lock` (owned by the restricted `boxweave` service account, regular mode 0600, one hardlink). This is an **intentional permanent flock inode**, not an abandoned temporary file: `cmd/boxweave/serve_lock.go` explicitly forbids unlinking it while a controller may be running, because that would allow a second process to acquire a different inode.
+
+The initial 2026-11-19 uninstaller source omitted the filename from its fixed state inventory and correctly failed closed with `unrecognized owned state file: ledger.sqlite.serve.lock` during a **read-only `--plan`** on real L0. This was a **tool recognition defect, not operator fault**. The fix accepts **only this exact filename and strict owner/mode/link evidence**, includes it in the plan fingerprint, never unlinks it for `--scope service`, and during `controller/full` apply first stops the exact service and obtains a **nonblocking exclusive flock** on the original reviewed inode. Another process holding the lock, a new/replaced inode, changed mode/owner/hardlink, or an unreviewed new file aborts the uninstall. When removing controller state, it keeps the original flock until every other file is removed, then unlinks the lock file **last**. An active process must never be "fixed" by manual `rm` on the lock.
+
+Tests exercise the lock present in plan, stop+service-only preservation, exclusive holder refusal, nonmatching inode, unexpected new lock, unsafe mode/hardlink/symlink and final ordered purge. This correction does not grant authority to perform `--apply` on shared L0: exact physical native rollback/reinstall, its live WAL/SQLite and process races still require their own approval/verification.
+
 ## Enforcement details
 
 - Only Linux root with the restricted `boxweave` UID and exact `user-<uid>` Project may inspect an installation. Manifest **schema 2** and exact fixed binary/unit/state/socket paths must match. The actual loaded systemd `FragmentPath` must be the exact unit, with **zero** drop-ins. Unit and binary must be root-owned, regular, nonsymlink, and have the hashes recorded in the installer manifest. No adoption of a legacy main/v0.x or unknown state.
