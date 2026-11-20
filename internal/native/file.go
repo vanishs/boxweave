@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -112,7 +113,9 @@ func verifyGuestComponents(c *sftp.Client, p string, finalType string, allowMiss
 		}
 		if !last {
 			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				return ErrNativeUnsupported
+				// Keep the native safety class for callers while telling an
+				// Agent which guest-path precondition failed. No host path leaks.
+				return fmt.Errorf("UNSAFE_GUEST_PATH_COMPONENT: symlink or non-directory ancestor refused: %w", ErrNativeUnsupported)
 			}
 			continue
 		}
@@ -120,7 +123,7 @@ func verifyGuestComponents(c *sftp.Client, p string, finalType string, allowMiss
 			return ErrGuestFileExists
 		}
 		if guestFileType(info) != finalType {
-			return ErrNativeUnsupported
+			return fmt.Errorf("UNSAFE_GUEST_FILE_TYPE: symlink or non-regular guest object refused: %w", ErrNativeUnsupported)
 		}
 	}
 	return nil
