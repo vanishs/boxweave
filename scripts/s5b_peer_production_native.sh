@@ -98,7 +98,17 @@ s=json.load(open(sys.argv[1]))
 assert s["ready"] and s["native"]["ready"],s
 S25_DOCTOR_ASSERT
 for name in admin1 admin2; do
- sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.secret"
+ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config /usr/local/bin/boxweave token-create > "$work/private/$name.receipt"
+ chmod 0600 "$work/private/$name.receipt"
+ # The CLI emits a two-line issuance receipt, while token_from_file
+ # requires a single-line fixture. Reject malformed or duplicate records
+ # before writing anything; both files remain private to this fresh runner.
+ awk '
+  NR == 1 && /^id=[^[:space:]]+ expires=[^[:space:]]+$/ { next }
+  NR == 2 && /^token=[^[:space:]]+$/ { value=substr($0,7); next }
+  { bad=1 }
+  END { if (bad || NR != 2 || value == "") exit 1; print value }
+ ' "$work/private/$name.receipt" > "$work/private/$name.secret"
  chmod 0600 "$work/private/$name.secret"
 done
 sudo /usr/local/bin/boxweave install-activate -project "$project" -approve-local > "$work/private/activated.json"
