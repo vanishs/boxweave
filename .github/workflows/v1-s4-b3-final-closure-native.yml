@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && '["inside_etag_race"]' || '["inside_etag_race","installed_normal"]') }}
+        scenario: ${{ fromJSON(github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && '["installed_normal","installed_mcp","multi_revoke"]' || '["inside_etag_race","installed_normal"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
