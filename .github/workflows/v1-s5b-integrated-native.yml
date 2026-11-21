@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         case: >-
-          ${{ fromJSON(github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
+          ${{ fromJSON(github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal') || startsWith(github.event.head_commit.message, 'test: bind pinned overlap harness diff')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -118,6 +118,23 @@ jobs:
           assert s.count(old)==1
           s=s.replace(old,old+'sudo runuser -u boxweave -- test -x "$sqlite_full_dir"\ntest "$(sudo stat -c %a "$sqlite_full_dir")" = 700\necho "S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS"\n')
           p.write_text(s)
+          # The historical overlap harness expects a pristine checkout. The
+          # pinned orchestrator intentionally overlays exactly three LAB scripts.
+          # Bind the permitted complete diff before execution; reject staged,
+          # additional tracked and untracked changes or changed overlay bytes.
+          p=pathlib.Path('scripts/s2_p1_native_create_delete_overlap.sh'); s=p.read_text()
+          old='if [ -n "$(git status --porcelain)" ]; then'
+          assert s.count(old)==1
+          lines=[
+          'if [ -n "${S5B_HARNESS_DIFF_SHA256:-}" ]; then',
+          '  expected_status="$(printf \'%s\\n\' \' M scripts/accept_s2_native.sh\' \' M scripts/s25_bridgehead_lab.sh\' \' M scripts/s2_p1_native_create_delete_overlap.sh\')"',
+          '  if [ "$(git status --porcelain --untracked-files=all)" != "$expected_status" ] ||',
+          '     [ "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d\' \' -f1)" != "$S5B_HARNESS_DIFF_SHA256" ]; then',
+          '    echo S5B_OVERLAP_APPROVED_HARNESS_DIFF=FAIL >&2; exit 93',
+          '  fi',
+          '  echo S5B_OVERLAP_APPROVED_HARNESS_DIFF=PASS',
+          'elif [ -n "$(git status --porcelain)" ]; then']
+          p.write_text(s.replace(old,'\n'.join(lines)))
           # TC-020: use the normal read-only independent verifier against a
           # separate deliberately incorrect checkpoint; never edit live SQLite,
           # active native state, the authentic checkpoint, or product code.
@@ -147,6 +164,10 @@ jobs:
           git diff --exit-code -- cmd internal go.mod go.sum install.sh uninstall.sh scripts/uninstall_core.py
           sh -n scripts/accept_s2_native.sh
           sh -n scripts/s25_bridgehead_lab.sh
+          sh -n scripts/s2_p1_native_create_delete_overlap.sh
+          expected_status="$(printf '%s\n' ' M scripts/accept_s2_native.sh' ' M scripts/s25_bridgehead_lab.sh' ' M scripts/s2_p1_native_create_delete_overlap.sh')"
+          test "$(git status --porcelain --untracked-files=all)" = "$expected_status"
+          printf 'S5B_HARNESS_DIFF_SHA256=%s\n' "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "S5B_INTEGRATED_PINNED_SOURCE=$S5B_PIN"
       - name: Real isolated native regression and independent readback
         shell: bash
@@ -191,6 +212,10 @@ jobs:
           # Emit only fixed enums and numeric status codes, not raw errors.
           grep -E '^(S4_A_(NATIVE_STAGE|OAUTH_STAGE|OAUTH_FAILURE_CLASS|FAILURE_CLASS)|BH018_(MCP_RESUME_PHASE|INSTALLED_NORMAL_RESTART_CLASS|INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE)|S25_R2_FAILURE_CLASS)=[A-Za-z0-9_]+$' "$logfile" || :
           echo "S5B_INTEGRATED_SCRIPT_EXIT=$rc"
+          test "$(git rev-parse HEAD)" = "$S5B_PIN"
+          test "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d' ' -f1)" = "$S5B_HARNESS_DIFF_SHA256"
+          test -z "$(git ls-files --others --exclude-standard)"
+          git diff --cached --quiet
           test "$rc" = 0
           grep -Fxq "S5B_INTEGRATED_EXACT_BINARY_SHA256=$S5B_SHA" "$logfile"
           for marker in $required; do grep -Fxq "$marker" "$logfile"; done
@@ -198,6 +223,7 @@ jobs:
             grep -Fxq 'S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS' "$logfile"
             test "$(grep -Fxc 'S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL=PASS' "$logfile")" = 2
             grep -Fxq 'S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS' "$logfile"
+            grep -Fxq 'S5B_OVERLAP_APPROVED_HARNESS_DIFF=PASS' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
           fi
