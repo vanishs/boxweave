@@ -78,8 +78,9 @@ func run() error {
 	approveMigration := f.Bool("approve-native-migrate", false, "explicit local root approval for the exact old/new native daemon version and host")
 	ackNativeDowntime := f.Bool("acknowledge-native-downtime", false, "accept exact native daemon stop/restart on a verified zero-consumer host")
 
-	recoveryAction := f.String("action", "inspect", "manual recover inspect|challenge|release, create-*, delete-inspect|delete-challenge|delete-confirm, or gc-*")
+	recoveryAction := f.String("action", "inspect", "manual recover diagnose|reconcile, inspect|challenge|release, create-*, delete-* or gc-*")
 	recoveryStream := f.String("stream", "", "original stdout|stderr only for locally reviewed Exec log GC")
+	recoveryKey := f.String("recovery-key", "", "distinct durable key for the safe reconcile action")
 	recoveryOperation := f.String("operation", "", "exact original UNKNOWN operation ID")
 	recoveryReviewer := f.String("reviewer", "", "recorded host-local operator identity")
 	recoveryChallenge := f.String("challenge", "", "single-use time-limited local recovery challenge")
@@ -385,7 +386,7 @@ func run() error {
 	}
 	if command == "recover" {
 		return recoverLocal(recoverArgs{DB: *db, Socket: *socket, Project: *project, ServiceUser: *serviceUser,
-			Action: *recoveryAction, Operation: *recoveryOperation, Reviewer: *recoveryReviewer, Stream: *recoveryStream,
+			Action: *recoveryAction, Operation: *recoveryOperation, Reviewer: *recoveryReviewer, Stream: *recoveryStream, RecoveryKey: *recoveryKey,
 			Challenge: *recoveryChallenge, ConfirmUUID: *recoveryConfirm, Reason: *recoveryReason,
 			Approved: *approveLocal, Acknowledge: *recoveryAcknowledge})
 	}

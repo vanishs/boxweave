@@ -67,10 +67,11 @@ type getBoxInput struct {
 }
 
 type getBoxResult struct {
-	TrackingID   string          `json:"tracking_id"`
-	Box          native.BoxState `json:"box"`
-	InstanceFull map[string]any  `json:"instance_full,omitempty"`
-	ObservedAt   *time.Time      `json:"observed_at,omitempty"`
+	TrackingID   string            `json:"tracking_id"`
+	Box          native.BoxState   `json:"box"`
+	InstanceFull map[string]any    `json:"instance_full,omitempty"`
+	ObservedAt   *time.Time        `json:"observed_at,omitempty"`
+	Attention    attentionSnapshot `json:"attention"`
 }
 
 type operateBoxInput struct {
@@ -504,7 +505,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. attention lists bounded SQLite-visible blockers/dependencies, independent of live native state. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in getBoxInput) (*mcp.CallToolResult, getBoxResult, error) {
 			principal, err := s.requestPrincipal(req)
@@ -526,7 +527,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, getBoxResult{}, err
 			}
-			return privateReadReply(ctx, s, principal.TokenID, getBoxResult{TrackingID: tracking, Box: status})
+			attention := s.readAttention(ctx, principal, box.UUID)
+			return privateReadReply(ctx, s, principal.TokenID, getBoxResult{TrackingID: tracking, Box: status, Attention: attention})
 		})
 
 	for _, action := range []string{"box_start", "box_stop"} {
@@ -660,20 +662,10 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if err != nil {
 					return err
 				}
-				if in.CPU != nil && actual.CPU != fmt.Sprint(*in.CPU) ||
-					in.MemoryMiB != nil && actual.Memory != fmt.Sprintf("%dMiB", *in.MemoryMiB) ||
-					in.Nesting != nil && actual.Nesting != *in.Nesting ||
-					in.Internet != nil && actual.Internet != *in.Internet {
+				if !native.InstanceChangesMatch(changes, actual) {
 					return native.ErrUnverified
 				}
-				// Root disk size postread must also be proved, never only
-				// trust the successful UpdateInstance operation.
-				if in.DiskGiB != nil && actual.RootDiskSize != fmt.Sprintf("%dGiB", *in.DiskGiB) {
-					return native.ErrUnverified
-				}
-				if !in.InstanceOptions.Matches(actual.NativeOptions) {
-					return native.ErrUnverified
-				}
+
 				return nil
 			}
 			r, err = s.submitNative(r, effect, verify)
@@ -789,12 +781,18 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			verify := func(ctx context.Context) error {
 				final, err := s.Native.ObserveUntilFinal(ctx, nativeID)
 				if err != nil {
-					return err
+					class := "EXEC_NATIVE_READ_UNVERIFIED"
+					if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+						class = "EXEC_NATIVE_OBSERVATION_DEADLINE"
+					} else if api.StatusErrorCheck(err, http.StatusNotFound) {
+						class = "EXEC_NATIVE_RECEIPT_MISSING"
+					}
+					return state.VerificationUncertain{Class: class}
 				}
 				// The original Incus terminal result and its recorded log
 				// paths must belong to this exact admitted guest/Operation.
 				if final == nil || final.ID != nativeID {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_NATIVE_IDENTITY_UNVERIFIED"}
 				}
 				// Incus 7.6 creates recorded logs BEFORE it calls Guest
 				// Exec. An exact failed log-open with no Guest metadata is
@@ -805,13 +803,13 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				out, err := native.ExecEvidenceFromFinal(final)
 				if err != nil {
-					return err
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				if !native.ExecEvidenceMatchesOriginal(out, box.Name, nativeID) {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				if out.Exit == nil {
-					return native.ErrUnverified
+					return state.VerificationUncertain{Class: "EXEC_TERMINAL_EVIDENCE_UNVERIFIED"}
 				}
 				// Capture bounded private output while the original Exec claim still
 				// protects the Box from concurrent Delete. A spool failure must
@@ -822,7 +820,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				// leave a separate output-row / final-state crash gap.
 				if err := s.Store.FinalizeVerifiedExec(ctx, r.ID, box,
 					nativeID, out.StdoutPath, out.StderrPath, *out.Exit); err != nil {
-					return err
+					return state.VerificationUncertain{Class: "EXEC_SQLITE_FINALIZATION_UNVERIFIED"}
 				}
 				return state.ErrVerifiedExecCommitted
 			}

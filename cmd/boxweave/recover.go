@@ -17,12 +17,13 @@ import (
 
 	"github.com/vanishs/boxweave/internal/install"
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/recovery"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
 type recoverArgs struct {
 	DB, Socket, Project, ServiceUser, Action, Operation, Reviewer, Stream string
-	Challenge, ConfirmUUID, Reason                                        string
+	Challenge, ConfirmUUID, Reason, RecoveryKey                           string
 	Approved, Acknowledge                                                 bool
 }
 
@@ -43,11 +44,11 @@ func recoverLocal(a recoverArgs) error {
 	if a.DB != filepath.Join(p.StateDir, "ledger.sqlite") || a.Operation == "" || a.Reviewer == "" {
 		return errors.New("exact installed SQLite path, operation and reviewer required")
 	}
-	if a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
+	if a.Action != "diagnose" && a.Action != "reconcile" && a.Action != "inspect" && a.Action != "challenge" && a.Action != "release" &&
 		a.Action != "gc-inspect" && a.Action != "gc-challenge" && a.Action != "gc-release" &&
 		a.Action != "create-inspect" && a.Action != "create-challenge" && a.Action != "create-bind" &&
 		a.Action != "delete-inspect" && a.Action != "delete-challenge" && a.Action != "delete-confirm" {
-		return errors.New("recovery action must be inspect/challenge/release, create-*, delete-* or gc-*")
+		return errors.New("recovery action must be diagnose/reconcile, inspect/challenge/release, create-*, delete-* or gc-*")
 	}
 	if _, err := install.Status(p); err != nil {
 		return fmt.Errorf("installed identity unverified: %w", err)
@@ -154,6 +155,25 @@ func performRecovery(a recoverArgs) error {
 	defer store.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	if a.Action == "diagnose" || a.Action == "reconcile" {
+		svc := recovery.Service{Store: store, Native: native.Reader{Socket: a.Socket, Project: a.Project}, Layer: a.Project, PeerWitness: recovery.ObserveCompletedPeer}
+		var result recovery.Result
+		if a.Action == "diagnose" {
+			if a.RecoveryKey != "" {
+				return state.ErrInvalid
+			}
+			result, err = svc.Inspect(ctx, a.Operation, a.Stream)
+		} else {
+			result, err = svc.Reconcile(ctx, state.RecoveryRequest{Layer: a.Project, LocalReviewer: a.Reviewer, OriginalID: a.Operation, Stream: a.Stream, Key: a.RecoveryKey})
+		}
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
+	if a.RecoveryKey != "" {
+		return state.ErrInvalid
+	}
 	if strings.HasPrefix(a.Action, "gc-") {
 		return performGCRecovery(ctx, store, a)
 	}
@@ -235,17 +255,11 @@ func performGCRecovery(ctx context.Context, store *state.Store, a recoverArgs) e
 		return errors.New("recorded native log belongs to another Project")
 	}
 	reader := native.Reader{Socket: a.Socket, Project: a.Project}
-	if _, _, err := reader.GetExactBox(ctx, r.Name, r.BoxUUID); err != nil {
-		return fmt.Errorf("exact native GC UUID not re-observed: %w", err)
+	observed, err := recovery.ObserveGC(ctx, reader, r)
+	if err != nil {
+		return fmt.Errorf("original GC observation refused: %w", err)
 	}
-	// Observe only existence, never disclose one guest byte in diagnostics.
-	_, _, err = reader.ReadRecordedOutput(ctx, r.Path, 0, 1)
-	observed := "NATIVE_PRESENT"
-	if errors.Is(err, native.ErrRecordedOutputUnavailable) {
-		observed = "NATIVE_MISSING"
-	} else if err != nil {
-		return fmt.Errorf("original native log existence uncertain: %w", err)
-	}
+
 	out := json.NewEncoder(os.Stdout)
 	switch a.Action {
 	case "gc-inspect":

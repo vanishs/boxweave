@@ -156,13 +156,24 @@ func (s *Store) ListForwards(ctx context.Context, layer, boxID, cursor string, l
 
 // FinalizeVerifiedForward is only called after an independently proved Incus
 // terminal and exact device postcondition. Ledger, original and event commit
-// together or not at all; UNKNOWN has no finalization or replay.
+// together or not at all; A4 UNKNOWN settlement uses the same transaction helper.
 func (s *Store) FinalizeVerifiedForward(ctx context.Context, operationID string, create bool) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if err = finishVerifiedForwardTx(ctx, tx, operationID, create, "VERIFYING", ""); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func finishVerifiedForwardTx(ctx context.Context, tx *sql.Tx, operationID string, create bool, expected, detail string) error {
+	if expected != "VERIFYING" && expected != "UNKNOWN" {
+		return ErrInvalid
+	}
+	var err error
 	action := "port_forward_delete"
 	state := "REVOKED"
 	if create {
@@ -174,7 +185,7 @@ func (s *Store) FinalizeVerifiedForward(ctx context.Context, operationID string,
 	if err != nil {
 		return err
 	}
-	if gotAction != action || gotState != "VERIFYING" {
+	if gotAction != action || gotState != expected {
 		return ErrState
 	}
 	res, err := tx.ExecContext(ctx, "UPDATE forward_claims SET state=? WHERE operation_id=? AND state='PENDING'", state, operationID)
@@ -189,7 +200,7 @@ func (s *Store) FinalizeVerifiedForward(ctx context.Context, operationID string,
 		return ErrState
 	}
 	now := time.Now().UnixNano()
-	res, err = tx.ExecContext(ctx, "UPDATE operations SET state='SUCCEEDED',updated_at=? WHERE id=? AND state='VERIFYING'", now, operationID)
+	res, err = tx.ExecContext(ctx, "UPDATE operations SET state='SUCCEEDED',error_class='',updated_at=? WHERE id=? AND state=?", now, operationID, expected)
 	if err != nil {
 		return err
 	}
@@ -200,10 +211,10 @@ func (s *Store) FinalizeVerifiedForward(ctx context.Context, operationID string,
 	if affected != 1 {
 		return ErrState
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state) VALUES (?,?,?)", operationID, now, "SUCCEEDED"); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES (?,?,?,?)", operationID, now, "SUCCEEDED", detail); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // ForwardReplayBox is used only to reconstruct authenticated original

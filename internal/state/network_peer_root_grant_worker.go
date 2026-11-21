@@ -75,6 +75,13 @@ func (s *Store) FinalizeCompletedUnknownRootPeerGrant(ctx context.Context, origi
 		return err
 	}
 	defer tx.Rollback()
+	if err = finishCompletedUnknownRootPeerGrantTx(ctx, tx, original); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func finishCompletedUnknownRootPeerGrantTx(ctx context.Context, tx *sql.Tx, original string) error {
 	var action, status string
 	if err := tx.QueryRowContext(ctx, "SELECT action,state FROM operations WHERE id=?", original).Scan(&action, &status); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -115,7 +122,7 @@ func (s *Store) FinalizeCompletedUnknownRootPeerGrant(ctx context.Context, origi
  VALUES(?,?,'SUCCEEDED','PEER_ROOT_COMPLETED_UNKNOWN_GRANT_READONLY_NO_REPLAY')`, original, now); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // ExecutePreparedRootPeerGrant invokes only one already-claimed original

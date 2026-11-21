@@ -16,6 +16,7 @@ const serverContinuityInstructions = "BoxWeave manages only registered Boxes in 
 	"After interruption, use operation_list and operation_get to check originals before any new effect. " +
 	"UNKNOWN or missing records do not justify new-key retries. " +
 	"Operation records track admitted actions and observed outcomes, not Agent task completion.\n" +
+	"Follow operation_get.recovery_navigation and Activity evidence for linked originals and recovery receipts. Use operation_recover inspect for bounded diagnosis; reconcile never replays native work or releases an unproved UNKNOWN. " +
 	"work_ref and agent_ref are untrusted correlation labels, not authorization or reliable Agent identities. " +
 	"Separate authenticated Actors may inspect authorized same-Layer originals but cannot borrow another Actor's idempotency identity. " +
 	"Use operation_output_get for guest Exec output and exit_code; Operation SUCCEEDED does not guarantee a zero guest exit. " +
@@ -65,6 +66,10 @@ func addStrictTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		// Only atomic exclusive create is implemented. Advertise only safe
 		// executable intents instead of accepting unsupported replacement.
 		mode.Enum = []any{"create"}
+	}
+	if tool.Name == "operation_recover" {
+		schema.Properties["mode"].Enum = []any{"inspect", "reconcile"}
+		schema.Properties["stream"].Enum = []any{"stdout", "stderr"}
 	}
 	if tool.Name == "operation_output_get" {
 		stream := schema.Properties["stream"]

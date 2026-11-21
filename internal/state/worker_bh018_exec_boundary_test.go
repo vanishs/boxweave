@@ -61,6 +61,18 @@ func TestBH018ExecFailureDispatchBoundaryPreservesOriginal(t *testing.T) {
 			wantVerify: true,
 		},
 		{
+			name:      "typed-exec-terminal-observation-deadline",
+			nativeID:  "incus-original-exec-004",
+			verifyErr: VerificationUncertain{Class: "EXEC_NATIVE_OBSERVATION_DEADLINE"},
+			wantState: "UNKNOWN", wantClass: "EXEC_NATIVE_OBSERVATION_DEADLINE", wantVerify: true,
+		},
+		{
+			name:      "typed-exec-sqlite-finalization-unverified",
+			nativeID:  "incus-original-exec-005",
+			verifyErr: VerificationUncertain{Class: "EXEC_SQLITE_FINALIZATION_UNVERIFIED"},
+			wantState: "UNKNOWN", wantClass: "EXEC_SQLITE_FINALIZATION_UNVERIFIED", wantVerify: true,
+		},
+		{
 			name:      "missing-native-ack-is-ambiguous",
 			effectErr: errors.New("transport timeout may have followed native dispatch"),
 			wantState: "UNKNOWN", wantClass: "NATIVE_OUTCOME_AMBIGUOUS",

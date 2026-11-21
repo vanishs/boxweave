@@ -1,8 +1,12 @@
 name: S4-B4 disposable native instance proxy TCP/UDP
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120]
     paths:
+      - internal/state/network_recovery*.go
+      - internal/recovery/**
+      - internal/control/network_recovery_native_test.go
+      - internal/control/peer_recovery_native_test.go
       - .github/workflows/v1-s4-b4-forward-native.yml
       - internal/native/forward_policy.go
       - cmd/boxweave/main.go
@@ -33,7 +37,7 @@ permissions:
   contents: read
 jobs:
   owned-proxy-native:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -136,7 +140,7 @@ jobs:
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119             /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4InstalledMCPNativeCreateListDelete$' | tee "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_tcp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_udp_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
-          grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_22_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
+          grep -Fq 'S4_B4_INSTALLED_AUTHENTICATED_23_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           grep -Fq 'S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS' "$RUNNER_TEMP/s4b4-mcp.log"
           for binding in external-v4-tcp external-v4-udp external-v6-tcp external-v6-udp; do
@@ -148,8 +152,14 @@ jobs:
           if grep -q 'bwpf-' "$RUNNER_TEMP/s4b4-device-readback.txt"; then
             echo S4_B4_NATIVE_PROXY_LEAK; exit 70
           fi
-          sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeMCPForwardDependentDelete$' | tee "$RUNNER_TEMP/s4b5-native.log"
-          grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
+          if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120"; then
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestS5A4NativeMCPNetworkRecovery$' | tee "$RUNNER_TEMP/s5a4-native.log"
+            grep -Fq S5_A4_FORWARD_REAL_IPV4_IPV6_TCP_UDP_RECOVERY=PASS "$RUNNER_TEMP/s5a4-native.log"
+            grep -Fq S5_A4_DEPENDENT_DELETE_NATIVE_RECOVERY=PASS "$RUNNER_TEMP/s5a4-native.log"
+          else
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB5NativeMCPForwardDependentDelete$' | tee "$RUNNER_TEMP/s4b5-native.log"
+            grep -Fq 'S4_B5_NATIVE_MCP_FORWARD_DEPENDENT_DELETE=PASS' "$RUNNER_TEMP/s4b5-native.log"
+          fi
           for cut in before-ack after-ack receipt-unavailable protected-partial; do
             sudo incus --project "$S4_B4_PROJECT" init images:ubuntu/24.04 s4b5ack -c limits.cpu=1 -c limits.memory=512MiB
             sudo incus --project "$S4_B4_PROJECT" config device override s4b5ack eth0 ipv4.address=10.248.83.22 ipv6.address=fd83:248::22

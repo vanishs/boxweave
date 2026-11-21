@@ -328,7 +328,7 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	// argument object for every public tool, not silently ignore an
 	// unsupported native Project or root-pool selection.
 	list, err := admin.ListTools(ctx, nil)
-	check(err == nil && len(list.Tools) == 22, "strict schema discovery unavailable")
+	check(err == nil && len(list.Tools) == 23, "strict schema discovery unavailable")
 	for _, tool := range list.Tools {
 		schema, marshalErr := json.Marshal(tool.InputSchema)
 		check(marshalErr == nil && bytes.Contains(schema, []byte("\"additionalProperties\":false")),
@@ -416,12 +416,12 @@ func main() {
 		"host_status": true, "box_create": true, "box_list": true, "box_get": true,
 		"box_update": true, "box_start": true, "box_stop": true, "box_delete": true,
 		"box_exec": true, "operation_get": true, "operation_list": true,
-		"operation_output_get": true, "operation_cancel": true,
+		"operation_output_get": true, "operation_cancel": true, "operation_recover": true,
 		"box_file_list": true, "box_file_read": true, "box_file_apply": true,
 		"box_peer_set": true, "box_activity_get": true,
 		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true, "box_wait_ready": true,
 	}
-	check(len(inv.Tools) == len(expected), "exact 22 public MCP Tools including Activity and native forwards discovery")
+	check(len(inv.Tools) == len(expected), "exact 23 public MCP Tools including Activity and native forwards discovery")
 	for _, t := range inv.Tools {
 		check(expected[t.Name], "unexpected Tool "+t.Name)
 		// A real SDK ListTools over HTTP must advertise safety/caching

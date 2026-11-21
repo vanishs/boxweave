@@ -127,7 +127,7 @@ func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, re
 	// not inspect its fsynced root journal or native packet reality.
 	// Only the dedicated root completed-journal reconciliation may
 	// resolve the original. Never unlock it by a general challenge.
-	if r.Action == "box_peer_set" {
+	if r.Action == "box_peer_set" || r.Action == "port_forward_create" || r.Action == "port_forward_delete" {
 		return ErrResourceLocked
 	}
 	if !safeReviewer.MatchString(reviewer) || !acknowledge || confirmUUID != r.BoxUUID ||
@@ -144,10 +144,14 @@ func (s *Store) ReleaseRecoveryClaim(ctx context.Context, r RecoverySnapshot, re
 	if err = tx.QueryRowContext(ctx, "SELECT state,updated_at,action FROM operations WHERE id=?", r.OperationID).Scan(&state, &updated, &action); err != nil {
 		return err
 	}
-	if action == "box_peer_set" || action != r.Action {
+	if action == "box_peer_set" || action == "port_forward_create" || action == "port_forward_delete" || action != r.Action {
 		return ErrResourceLocked
 	}
 	if action == "box_delete" {
+		var dependent int
+		if e := tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_resource_claims WHERE operation_id=? AND layer=? AND resource_key=?", r.OperationID, r.Project, deleteProjectKey(r.Project)).Scan(&dependent); e != nil || dependent != 0 {
+			return ErrResourceLocked
+		}
 		if err := checkCascadeRelease(ctx, tx, r.OperationID); err != nil {
 			return err
 		}

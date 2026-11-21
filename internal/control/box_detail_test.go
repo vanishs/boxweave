@@ -6,18 +6,19 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/state"
 	"testing"
 	"time"
 )
 
 func TestS4CDetailOptInWireShape(t *testing.T) {
-	basic := getBoxResult{TrackingID: "tracking", Box: native.BoxState{Name: "bw-test"}}
+	basic := getBoxResult{TrackingID: "tracking", Box: native.BoxState{Name: "bw-test"}, Attention: attentionSnapshot{Source: "SQLITE_SNAPSHOT", Coverage: "BOUNDED_BLOCKER_SAMPLE", Items: []state.ActivityIssue{}}}
 	encoded, err := json.Marshal(basic)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var wire map[string]json.RawMessage
-	if err = json.Unmarshal(encoded, &wire); err != nil || len(wire) != 2 {
+	if err = json.Unmarshal(encoded, &wire); err != nil || len(wire) != 3 || wire["tracking_id"] == nil || wire["box"] == nil || wire["attention"] == nil {
 		t.Fatal("default shape changed")
 	}
 	now := time.Now().UTC()
@@ -59,11 +60,15 @@ func TestS4CDetailOptInWireShape(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got struct {
-			InstanceFull *api.InstanceFull `json:"instance_full"`
-			ObservedAt   *time.Time        `json:"observed_at"`
+			InstanceFull *api.InstanceFull  `json:"instance_full"`
+			ObservedAt   *time.Time         `json:"observed_at"`
+			Attention    *attentionSnapshot `json:"attention"`
 		}
 		if err = json.Unmarshal(data, &got); err != nil {
 			t.Fatal(err)
+		}
+		if got.Attention == nil || got.Attention.NativeLiveVerified || got.Attention.AttentionComplete {
+			t.Fatal("A5 attention missing or overstated")
 		}
 		if enabled {
 			if got.InstanceFull == nil || got.ObservedAt == nil || got.InstanceFull.State != nil || len(got.InstanceFull.Snapshots) != 1 || len(got.InstanceFull.Backups) != 1 || got.InstanceFull.Config["cloud-init.user-data"] != "synthetic-fixture" {

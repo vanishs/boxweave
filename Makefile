@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check lint test test-race test-mcp-python test-uninstall verify hooks
+.PHONY: fmt fmt-check lint test test-race test-mcp-python test-uninstall test-stable-gate verify hooks
 
 GO ?= go
 PYTHON ?= python3
@@ -27,7 +27,10 @@ test-mcp-python:
 test-uninstall:
 	$(PYTHON) -m unittest discover -s scripts -p 'test_uninstall_core.py' -q
 
-verify: lint test-race test-mcp-python test-uninstall
+test-stable-gate:
+	$(PYTHON) -m unittest discover -s scripts -p 'test_v1_stable_gate.py' -q
+
+verify: lint test-race test-mcp-python test-uninstall test-stable-gate
 	$(PYTHON) -m unittest discover -s scripts -p 'test_s4_raw_operation_witness.py'
 
 hooks:

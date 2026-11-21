@@ -39,7 +39,7 @@ func (s *Service) readDetailedBox(ctx context.Context, req *mcp.CallToolRequest,
 	}
 	// privateReadReply rechecks the actual token after native observation.
 	return privateReadReply(ctx, s, principal.TokenID, getBoxResult{
-		TrackingID: tracking, Box: full.Box, InstanceFull: metadata, ObservedAt: &full.ObservedAt,
+		TrackingID: tracking, Box: full.Box, InstanceFull: metadata, ObservedAt: &full.ObservedAt, Attention: s.readAttention(ctx, principal, box.UUID),
 	})
 }
 

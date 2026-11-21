@@ -224,3 +224,41 @@ func TestS4B2RootSocketCrashRestartOnlyExactStaleInode(t *testing.T) {
 	}
 	t.Log("S4_B2_ROOT_SOCKET_CRASH_RESTART_STALE_ONLY_LIVE_FOREIGN_DENIED=PASS")
 }
+
+func TestS5A4RootReadOnlyApprovalScope(t *testing.T) {
+	original, digest := strings.Repeat("a", 32), strings.Repeat("b", 64)
+	cfg := NativePeerRootScope{Approved: true, OriginalID: original, ApprovedPlanSHA: digest}
+	req := NativePeerRootRequest{OperationID: original, ReconcileApproved: true}
+	if !nativePeerRootApprovedRequest(cfg, req) {
+		t.Fatal("exact approved readonly original refused")
+	}
+	for _, bad := range []NativePeerRootRequest{
+		{OperationID: original, ReconcileApproved: true, PlanSHA256: digest},
+		{OperationID: original, ReconcileApproved: true, Reconcile: true},
+		{OperationID: strings.Repeat("c", 32), ReconcileApproved: true},
+	} {
+		if nativePeerRootApprovedRequest(cfg, bad) {
+			t.Fatalf("ambiguous or foreign approval accepted: %+v", bad)
+		}
+	}
+	cfg.Approved = false
+	if nativePeerRootApprovedRequest(cfg, req) {
+		t.Fatal("unapproved recovery accepted")
+	}
+	var invoked atomic.Int32
+	path, _ := s4b2RootSocketFixture(t, uint32(os.Getuid()), func(_ context.Context, r NativePeerRootRequest) (NativePeerRootResponse, error) {
+		invoked.Add(1)
+		if r != req {
+			t.Fatalf("request changed: %+v", r)
+		}
+		return NativePeerRootResponse{Status: "RECONCILE_VERIFIED"}, nil
+	})
+	res, err := nativePeerRootCall(t.Context(), path, req)
+	if os.Getuid() == 0 {
+		if err != nil || res.Status != "RECONCILE_VERIFIED" || invoked.Load() != 1 {
+			t.Fatalf("root readonly socket failed: %+v %v", res, err)
+		}
+	} else if err == nil || invoked.Load() != 0 {
+		t.Fatal("nonroot socket was trusted as root witness")
+	}
+}

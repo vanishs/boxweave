@@ -71,6 +71,9 @@ func TestS2MCPDurableOperationReadAndActorIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(string(encoded), "\"evidence_source\":\"SQLITE_DURABLE\"") || !strings.Contains(string(encoded), "\"wait_outcome\":\"SNAPSHOT\"") {
+		t.Fatalf("operation_get missing diagnostic: %s", encoded)
+	}
 	if !strings.Contains(string(encoded), receipt.ID) || !strings.Contains(string(encoded), receipt.TrackingID) {
 		t.Fatalf("MCP operation_get lost original IDs: %s", encoded)
 	}
@@ -125,7 +128,7 @@ func TestS2InvalidCredentialCannotMutateAnyNativeTool(t *testing.T) {
 	st, ts, admin, _ := fixture(t)
 	ctx := context.Background()
 	for _, name := range []string{"box_create", "box_update", "box_start",
-		"box_stop", "box_delete", "box_exec", "operation_cancel", "box_peer_set"} {
+		"box_stop", "box_delete", "box_exec", "operation_cancel", "box_peer_set", "operation_recover"} {
 		payload, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
 			"params": map[string]any{"name": name, "arguments": map[string]any{"name": "unauthorized", "idempotency_key": "invalid-auth-no-effect"}}})
 		if err != nil {

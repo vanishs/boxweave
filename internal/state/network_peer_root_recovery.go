@@ -21,6 +21,13 @@ func (s *Store) FinalizeCompletedUnknownRootPeerRevocation(ctx context.Context, 
 		return err
 	}
 	defer tx.Rollback()
+	if err = finishCompletedUnknownRootPeerRevocationTx(ctx, tx, original); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func finishCompletedUnknownRootPeerRevocationTx(ctx context.Context, tx *sql.Tx, original string) error {
 	var action, status string
 	if err := tx.QueryRowContext(ctx, "SELECT action,state FROM operations WHERE id=?", original).Scan(&action, &status); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -58,7 +65,7 @@ func (s *Store) FinalizeCompletedUnknownRootPeerRevocation(ctx context.Context, 
 	if _, err := tx.ExecContext(ctx, "INSERT INTO operation_events(operation_id,at,state,safe_detail) VALUES(?,?,'SUCCEEDED','ROOT_COMPLETED_UNKNOWN_RECONCILED_NO_REPLAY')", original, now); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // ReconcileCompletedUnknownRootPeer is a one-off, explicitly authorized

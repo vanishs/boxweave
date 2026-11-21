@@ -304,6 +304,31 @@ until [ "$attempt" -ge 40 ]; do
   sleep 1
 done
 test "$attempt" -lt 40
+if [ "${S5A2_RECOVERY_NATIVE_ONLY:-}" = true ]; then
+  # This branch inherits the pristine one-use host/Project/ledger guards.
+  # The test probe creates a scoped SQLite fault, not a production setting.
+  CGO_ENABLED=1 go build -trimpath -o "$work/s5a2-recovery-probe" ./scripts/s5a2_recovery_probe.go
+  chmod 0755 "$work/s5a2-recovery-probe"
+  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
+    HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted S5A2_RECOVERY_NATIVE_ONLY=true \
+    S5A2_DB="$db" S5A2_TOKEN="$admin" "$work/s5a2-recovery-probe"
+  # Stop only the exact process spawned by this one-use fixture before the
+  # installed CLI observes the offline clone. Never run a second controller.
+  sudo kill -TERM "$service_pid"
+  wait "$service_pid" 2>/dev/null || :
+  stopped=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ! curl --max-time 1 -sS -o /dev/null http://127.0.0.1:18650/mcp 2>/dev/null; then
+      stopped=1
+      break
+    fi
+    sleep 1
+  done
+  test "$stopped" = 1
+  sh scripts/s5a2_installed_cli_review.sh "$work" "$db" "$project" "$socket"
+  exit 0
+fi
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=INSTALLED_HTTP_MCP_READY"
 [ "${S4_A_RAW_WITNESS:-}" != true ] || echo "S4_A_NATIVE_STAGE=DUAL_SERVE_EXCLUSION_START"
 
@@ -854,6 +879,7 @@ if [ "$bh018_resume_rc" -ne 0 ]; then
   # Emit only fixed, secret-free phase and original-ID witnesses.
   grep '^BH018_MCP_RESUME_PHASE=' "$work/bh018-atomic-resume.log" | tail -n 16 || :
   grep '^BH018_MCP_FRESH_ADMITTED_EXIT_' "$work/bh018-atomic-resume.log" || :
+  grep '^BH018_MCP_TYPED_' "$work/bh018-atomic-resume.log" || :
   if grep -Fq 'BH018_MCP_FAIL: MCP box_exec rejected' "$work/bh018-atomic-resume.log"; then
     echo 'BH018_INSTALLED_NORMAL_RESTART_FAILURE_CLASS=FRESH_EXEC_MCP_REJECTED'
   elif grep -Fq 'BH018_MCP_FAIL: lost immutable BW original operation ID' "$work/bh018-atomic-resume.log"; then
@@ -1004,6 +1030,34 @@ print("S4_A_RAW_CREATE_EXEC_FINAL_SQLITE_UUID_EXIT_CORRELATION=PASS")
 print("S4_A_RAW_DELETE_BW_ID="+original["operation_id"]+" NATIVE_ID="+native["native_operation_id"]+" BOX_UUID="+original["box_uuid"]+" PROJECT="+original["project"])
 print("S4_A_RAW_DELETE_TERMINAL_ATOMIC_TOMBSTONE_SINGLE_ORIGINAL=PASS")
 S4_DELETE_CHECK
+  # S5A1: compare each newly admitted post-restart readback with its
+  # own independent native terminal, never the earlier 126/127 original.
+  expected_readback_uuid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["box_id"])' "$bh018_checkpoint")"
+  for exit_case in 126 127; do
+    digest="$(printf %s "s2-bh018-independent-readback-${exit_case}-001" | sha256sum | cut -d' ' -f1)"
+    sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR \
+      -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
+      python3 "$work/s4-raw-operation-witness.py" \
+      --db "$db" --key-digest "$digest" --timeout-seconds 20 \
+      --events-jsonl "$work/ledger/s4-native-events.jsonl" > "$work/s5a1-raw-readback-$exit_case.json"
+    sudo runuser -u boxweave -- python3 - "$db" "$work/s5a1-raw-readback-$exit_case.json" "$expected_readback_uuid" "$exit_case" <<'S5A1_READBACK_CHECK'
+import json, sqlite3, sys
+with open(sys.argv[2]) as handle:
+    witness = json.load(handle)
+expected_box = sys.argv[3]
+original = witness.get("original_sqlite") or {}
+native = witness.get("native_terminal") or {}
+assert witness.get("observation") == "CAPTURED_TERMINAL"
+assert witness.get("original_id_matches") is True
+assert original["action"] == "box_exec" and original["box_uuid"] == expected_box
+assert original["state"] == "SUCCEEDED" and original["guest_exit_code"] == 0
+assert original["native_operation_id"] == native["native_operation_id"]
+assert native["status_code"] == 200 and native["error_present"] is False
+with sqlite3.connect("file:" + sys.argv[1] + "?mode=ro", uri=True) as db:
+    assert db.execute("SELECT COUNT(*) FROM operation_events WHERE operation_id=? AND state='SUCCEEDED'", (original["operation_id"],)).fetchone() == (1,)
+print("BH018_S5A1_FRESH_READBACK_" + sys.argv[4] + "=PASS BW_ID=" + original["operation_id"] + " NATIVE_ID=" + native["native_operation_id"])
+S5A1_READBACK_CHECK
+  done
   # The observer must remain connected through the OAuth refresh/once
   # effect. Stop only the test-owned stream after independent checks.
   sudo runuser -u boxweave -- touch "$work/ledger/s4-native-events-stop"

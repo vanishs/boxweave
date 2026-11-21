@@ -1,0 +1,59 @@
+name: S5A1 independent installed native diagnostics
+
+on:
+  push:
+    branches: [feat/v1-s5a-closeout-20261120]
+    paths:
+      - 'internal/control/operation_diagnostic*.go'
+      - 'scripts/s2_bh018_atomic_mcp_probe.go'
+      - 'scripts/accept_s2_native.sh'
+      - '.github/workflows/v1-s5a1-installed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+      S4_A_RAW_WITNESS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Exact source and isolated native post-restart readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" -ne 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          go test -count=1 ./internal/state ./internal/native ./internal/control -run 'TestS5A1|TestBH018|TestS4OAuth'
+          logfile="$RUNNER_TEMP/s5a1-native.log"
+          if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
+            grep -E '^(BH018_|S4_A_|S2_NATIVE_)' "$logfile" | tail -n 150 || :
+            echo 'S5A1_INSTALLED_NATIVE=BLOCKED_OR_FAILED'
+            exit 1
+          fi
+          grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
+          grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
+          grep -Fxq 'BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS' "$logfile"
+          grep -Fxq 'S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS' "$logfile"
+          grep -E '^(BH018_S5A1_|BH018_MCP_READBACK_)' "$logfile"
+          echo "S5A1_INSTALLED_NATIVE=PASS SHA=$GITHUB_SHA"

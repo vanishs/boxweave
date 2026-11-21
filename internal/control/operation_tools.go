@@ -54,11 +54,14 @@ type operationGetInput struct {
 }
 
 type operationGetResult struct {
-	TrackingID string                 `json:"tracking_id"`
-	Operation  state.Receipt          `json:"operation"`
-	Version    string                 `json:"version"`
-	Commit     string                 `json:"commit"`
-	Readiness  *state.ReadinessResult `json:"readiness,omitempty"`
+	TrackingID              string                   `json:"tracking_id"`
+	Operation               state.Receipt            `json:"operation"`
+	Version                 string                   `json:"version"`
+	Commit                  string                   `json:"commit"`
+	Readiness               *state.ReadinessResult   `json:"readiness,omitempty"`
+	Diagnostic              operationDiagnostic      `json:"diagnostic"`
+	Recovery                state.RecoveryNavigation `json:"recovery_navigation"`
+	RecoverySnapshotMatches bool                     `json:"recovery_snapshot_matches_operation"`
 }
 
 type operationListInput struct {
@@ -89,7 +92,7 @@ func readToolAnnotations() *mcp.ToolAnnotations {
 func (s *Service) registerOperationReadTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "operation_get",
-		Description: "Read an authorized original Operation by operation_id: durable state, native ID and next_action. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
+		Description: "Read an authorized original Operation by operation_id: durable state, native ID, next_action and typed durable diagnostic plus bounded recovery_navigation (follow original_link/recent_recoveries or next_action; inspect before reconciling); recorded output metadata is not live output availability. Optional wait_ms (0..20000) only polls; it never cancels or retries. UNKNOWN may have dispatched native work: verify read-only post-state or request host review before further effects.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in operationGetInput) (*mcp.CallToolResult, operationGetResult, error) {
 		principal, err := s.requestPrincipal(req)
@@ -110,8 +113,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			if err != nil {
 				return nil, operationGetResult{}, err
 			}
-			if in.WaitMS == 0 || result.State == "SUCCEEDED" || result.State == "FAILED" ||
-				result.State == "UNKNOWN" || result.State == "CANCELLED" || result.State == "TIMED_OUT" {
+			if in.WaitMS == 0 || operationTerminal(result.State) {
 				break
 			}
 			remaining := time.Until(deadline)
@@ -133,6 +135,17 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 		if err != nil {
 			return nil, operationGetResult{}, err
 		}
+		diagnostic := s.readOperationDiagnostic(ctx, result, in.WaitMS > 0)
+		navCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		navigation, navErr := s.Store.ReadRecoveryNavigation(navCtx, principal.Layer, result.ID)
+		cancel()
+		matches := navErr == nil && navigation.UpdatedAt == result.UpdatedAt && navigation.OriginalState == result.State
+		if navErr != nil {
+			navigation = state.RecoveryNavigation{Source: "SQLITE_UNAVAILABLE", Disposition: "SQLITE_READ_UNVERIFIED", ClaimProtection: "UNVERIFIED", Recent: []state.RecoveryLink{}, ApprovalCapability: "TRUSTED_CLIENT_APPROVAL_UNAVAILABLE", OutputAvailability: "NOT_CHECKED"}
+		}
+		if !matches {
+			navigation.NextAction = state.NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: result.ID}
+		}
 		// A token that was valid when the HTTP request arrived may have
 		// expired or been revoked during this bounded long poll. Refuse to
 		// release the private original receipt after that event. Never
@@ -141,7 +154,7 @@ func (s *Service) registerOperationReadTools(server *mcp.Server) {
 			return nil, operationGetResult{}, err
 		}
 		return &mcp.CallToolResult{}, operationGetResult{TrackingID: tracking,
-			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness}, nil
+			Operation: result, Version: s.BuildVersion, Commit: s.BuildCommit, Readiness: readiness, Diagnostic: diagnostic, Recovery: navigation, RecoverySnapshotMatches: matches}, nil
 	})
 
 	addStrictTool(server, &mcp.Tool{

@@ -184,11 +184,12 @@ func (r Reader) ObserveOwnedForward(ctx context.Context, name, uuid string, f Fo
 		return ErrNotOwned
 	}
 	actual, exists := fresh.Devices[f.Device]
+	expanded, expandedExists := fresh.ExpandedDevices[f.Device]
 	if present {
-		if !exists || !exactForwardDevice(actual, f) {
+		if !exists || !expandedExists || !exactForwardDevice(expanded, f) || !exactForwardDevice(actual, f) {
 			return ErrUnverified
 		}
-	} else if exists {
+	} else if exists || expandedExists {
 		return ErrUnverified
 	}
 	if _, occupied := inst.ExpandedDevices[f.Device]; occupied && !present {
