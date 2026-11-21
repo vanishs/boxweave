@@ -39,6 +39,8 @@ type NextAction struct {
 	Tool        string `json:"tool,omitempty"`
 	OperationID string `json:"operation_id,omitempty"`
 	WaitMS      int    `json:"wait_ms,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	View        string `json:"view,omitempty"`
 }
 
 func nextAction(status, action, id string) NextAction {

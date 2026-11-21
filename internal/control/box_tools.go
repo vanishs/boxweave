@@ -67,10 +67,11 @@ type getBoxInput struct {
 }
 
 type getBoxResult struct {
-	TrackingID   string          `json:"tracking_id"`
-	Box          native.BoxState `json:"box"`
-	InstanceFull map[string]any  `json:"instance_full,omitempty"`
-	ObservedAt   *time.Time      `json:"observed_at,omitempty"`
+	TrackingID   string            `json:"tracking_id"`
+	Box          native.BoxState   `json:"box"`
+	InstanceFull map[string]any    `json:"instance_full,omitempty"`
+	ObservedAt   *time.Time        `json:"observed_at,omitempty"`
+	Attention    attentionSnapshot `json:"attention"`
 }
 
 type operateBoxInput struct {
@@ -504,7 +505,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 		})
 
 	addStrictTool(server, &mcp.Tool{Name: "box_get",
-		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
+		Description: "Get exact locally owned Box UUID and independently observed native state; native Running is not guest readiness. attention lists bounded SQLite-visible blockers/dependencies, independent of live native state. Optional detail=true returns native InstanceFull including potentially sensitive configuration, State, Snapshots and Backups. A missing or foreign UUID returns BOX_NOT_FOUND_OR_NOT_OWNED without revealing another Project.",
 		Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, in getBoxInput) (*mcp.CallToolResult, getBoxResult, error) {
 			principal, err := s.requestPrincipal(req)
@@ -526,7 +527,8 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			if err != nil {
 				return nil, getBoxResult{}, err
 			}
-			return privateReadReply(ctx, s, principal.TokenID, getBoxResult{TrackingID: tracking, Box: status})
+			attention := s.readAttention(ctx, principal, box.UUID)
+			return privateReadReply(ctx, s, principal.TokenID, getBoxResult{TrackingID: tracking, Box: status, Attention: attention})
 		})
 
 	for _, action := range []string{"box_start", "box_stop"} {

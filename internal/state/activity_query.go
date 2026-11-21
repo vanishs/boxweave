@@ -16,25 +16,27 @@ import (
 // ActivityQuery is an internal-only, authenticated-controller input. No MCP
 // registration exists for it. Labels narrow a Layer; they never grant access.
 type ActivityQuery struct {
-	Layer       string
-	Requester   string
-	View        string
-	OperationID string
-	BoxUUID     string
-	WorkRef     string
-	AgentRef    string
-	Limit       int
-	Cursor      string
+	Layer        string
+	Requester    string
+	View         string
+	OperationID  string
+	BoxUUID      string
+	WorkRef      string
+	AgentRef     string
+	Limit        int
+	Cursor       string
+	BlockersOnly bool `json:"BlockersOnly,omitempty"`
 }
 
 type ActivityIssue struct {
-	Disposition string `json:"disposition"`
-	OperationID string `json:"operation_id,omitempty"`
-	BoxUUID     string `json:"box_id,omitempty"`
-	ResourceRef string `json:"resource_ref,omitempty"`
-	Reason      string `json:"reason"`
-	State       string `json:"state"`
-	AtNS        int64  `json:"at_ns"`
+	Disposition string      `json:"disposition"`
+	OperationID string      `json:"operation_id,omitempty"`
+	BoxUUID     string      `json:"box_id,omitempty"`
+	ResourceRef string      `json:"resource_ref,omitempty"`
+	Reason      string      `json:"reason"`
+	State       string      `json:"state"`
+	AtNS        int64       `json:"at_ns"`
+	NextAction  *NextAction `json:"next_action,omitempty"`
 }
 
 type ActivityEvent struct {
@@ -72,15 +74,16 @@ type ActivityExec struct {
 }
 
 type ActivityEvidence struct {
-	Original      Receipt          `json:"original"`
-	Events        []ActivityEvent  `json:"events"`
-	Reviews       []ActivityReview `json:"reviews"`
-	ResourceKeys  []string         `json:"resource_keys"`
-	Exec          *ActivityExec    `json:"exec,omitempty"`
-	GC            []ActivityGC     `json:"gc"`
-	Peers         []ActivityPeer   `json:"peers"`
-	OwnedBoxState string           `json:"owned_box_state,omitempty"`
-	Limitations   []string         `json:"limitations"`
+	Original      Receipt            `json:"original"`
+	Recovery      RecoveryNavigation `json:"recovery_navigation"`
+	Events        []ActivityEvent    `json:"events"`
+	Reviews       []ActivityReview   `json:"reviews"`
+	ResourceKeys  []string           `json:"resource_keys"`
+	Exec          *ActivityExec      `json:"exec,omitempty"`
+	GC            []ActivityGC       `json:"gc"`
+	Peers         []ActivityPeer     `json:"peers"`
+	OwnedBoxState string             `json:"owned_box_state,omitempty"`
+	Limitations   []string           `json:"limitations"`
 }
 
 type ActivityCoverageDetails struct {
@@ -117,7 +120,7 @@ func (q ActivityQuery) normalize() (ActivityQuery, error) {
 		q.Limit < 0 || q.Limit > 50 || len(q.Cursor) > 1024 {
 		return q, ErrInvalid
 	}
-	if q.View != "overview" && q.View != "issues" && q.View != "evidence" {
+	if (q.BlockersOnly && q.View != "issues") || (q.View != "overview" && q.View != "issues" && q.View != "evidence") {
 		return q, ErrInvalid
 	}
 	if (q.View == "evidence") != (q.OperationID != "") {
@@ -272,7 +275,7 @@ func (s *Store) ReadActivity(ctx context.Context, input ActivityQuery) (Activity
 		AuthorizedProjectOnly: true, SQLiteSnapshotOnly: true,
 		NativeLiveVerified: false, CrossPageSnapshotStable: false,
 		AttentionComplete: result.AttentionComplete, PageTruncated: result.Truncated,
-		HistorySampleBounded: q.View == "issues",
+		HistorySampleBounded: q.View == "issues" && !q.BlockersOnly,
 	}
 	if err := tx.Commit(); err != nil {
 		return ActivityResult{}, err
@@ -343,21 +346,32 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	if err != nil {
 		return err
 	}
-	opWhere, opArgs := q.where()
+	opQuery := q
+	opQuery.BoxUUID = ""
+	opWhere, opArgs := opQuery.where()
+	if q.BoxUUID != "" {
+		// Project-wide barriers protect sibling Boxes as well; labels still
+		// narrow this view and its coverage is never an all-clear.
+		opWhere += " AND (o.box_uuid=? OR o.resource_key IN (SELECT 'box:'||name FROM owned_boxes WHERE project=? AND uuid=? AND state='OWNED') OR o.action='box_peer_set' OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key IN (?, 'delete-project:'||o.layer)))"
+		opArgs = append(opArgs, q.BoxUUID, q.Layer, q.BoxUUID, "box:"+q.BoxUUID)
+	}
 	opWhere += " AND o.rowid<=?"
+	gcWhere, gcArgs := q.where()
+	gcWhere += " AND o.rowid<=?"
+	gcArgs = append(gcArgs, cursor.MaxRowID)
 	opArgs = append(opArgs, cursor.MaxRowID)
 	branches := []string{
-		"SELECT CASE WHEN o.action='box_peer_set' THEN 'PROJECT_PEER_BARRIER' ELSE 'UNRESOLVED_OPERATION' END AS reason," +
+		"SELECT CASE WHEN o.action='box_peer_set' THEN 'PROJECT_PEER_BARRIER' WHEN EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key='delete-project:'||o.layer) THEN 'PROJECT_DELETE_BARRIER' ELSE 'UNRESOLVED_OPERATION' END AS reason," +
 			"o.id AS original,o.box_uuid AS box_uuid,o.resource_key AS resource,o.state AS state,o.created_at AS at_ns" +
 			" FROM operations o WHERE " + opWhere +
 			" AND o.state IN ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN','OBSERVING')" +
-			" AND (o.action='box_peer_set' OR NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))",
+			" AND (o.action IN ('box_peer_set','port_forward_create','port_forward_delete') OR EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key='delete-project:'||o.layer) OR NOT EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))",
 		"SELECT 'EXEC_OUTPUT_GC_BLOCKER',o.id,g.box_uuid,'gc:'||g.name||'/'||g.stream,g.state,g.claimed_at" +
-			" FROM exec_output_gc g JOIN operations o ON o.id=g.operation_id WHERE " + opWhere +
+			" FROM exec_output_gc g JOIN operations o ON o.id=g.operation_id WHERE " + gcWhere +
 			" AND g.project=o.layer AND g.state IN ('DELETE_SENT','REVIEW_REQUIRED')",
 	}
 	args := append([]any{}, opArgs...)
-	args = append(args, opArgs...)
+	args = append(args, gcArgs...)
 
 	// Exact network sources are constrained to the authenticated Project.
 	// Labels only narrow rows with a genuine original; they never invent
@@ -414,8 +428,12 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	stmt := "WITH candidates(reason,original,box_uuid,resource,state,at_ns) AS (" +
 		strings.Join(branches, " UNION ALL ") +
 		") SELECT reason,original,box_uuid,resource,state,at_ns FROM candidates"
+	stmt += " WHERE 1=1"
+	if q.BlockersOnly {
+		stmt += " AND (reason NOT IN ('PEER_ACTIVE_DEPENDENCY','ADDRESS_FENCE_DEPENDENCY','FORWARD_DEPENDENCY') OR state IN ('UNKNOWN','PENDING','QUARANTINED'))"
+	}
 	if q.Cursor != "" {
-		stmt += " WHERE (at_ns>? OR (at_ns=? AND (reason>? OR (reason=? AND (original>? OR (original=? AND resource>?))))))"
+		stmt += " AND (at_ns>? OR (at_ns=? AND (reason>? OR (reason=? AND (original>? OR (original=? AND resource>?))))))"
 		args = append(args, cursor.AtNS, cursor.AtNS, cursor.Reason, cursor.Reason,
 			cursor.OriginalID, cursor.OriginalID, cursor.Resource)
 	}
@@ -437,6 +455,13 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 			break
 		}
 		issue.Disposition = activityIssueDisposition(issue.Reason, issue.State)
+		if issue.OperationID != "" {
+			next := NextAction{Kind: "READ_OPERATION", Tool: "operation_get", OperationID: issue.OperationID}
+			if issue.State == "UNKNOWN" && issue.Reason != "EXEC_OUTPUT_GC_BLOCKER" {
+				next = NextAction{Kind: "INSPECT_RECOVERY", Tool: "operation_recover", OperationID: issue.OperationID, Mode: "inspect"}
+			}
+			issue.NextAction = &next
+		}
 		out.Issues = append(out.Issues, issue)
 	}
 	if e := rows.Err(); err == nil {
@@ -457,6 +482,9 @@ func readActivityIssues(ctx context.Context, tx *sql.Tx, q ActivityQuery, out *A
 	// A bounded scan cannot certify a physical network or the absence of an
 	// unjournaled native effect. Also page transitions can change a ledger.
 	out.AttentionComplete = false
+	if q.BlockersOnly {
+		return nil
+	}
 	return readActivityHistory(ctx, tx, q, cursor.MaxRowID, out)
 }
 
@@ -471,10 +499,13 @@ func activityIssueDisposition(reason, st string) string {
 		if st == "UNKNOWN" {
 			return "HOST_REVIEW_REQUIRED"
 		}
+		if st == "PENDING" {
+			return "IN_PROGRESS_OR_STALLED"
+		}
 		return "ACTIVE_DEPENDENCY_NOT_ERROR"
 	case "EXEC_OUTPUT_GC_BLOCKER":
 		return "HOST_REVIEW_REQUIRED"
-	case "PEER_LEDGER_UNRESOLVED", "PROJECT_PEER_BARRIER", "UNRESOLVED_OPERATION":
+	case "PEER_LEDGER_UNRESOLVED", "PROJECT_PEER_BARRIER", "PROJECT_DELETE_BARRIER", "UNRESOLVED_OPERATION":
 		if st == "UNKNOWN" {
 			return "HOST_REVIEW_REQUIRED"
 		}
@@ -496,7 +527,7 @@ func readActivityHistory(ctx context.Context, tx *sql.Tx, q ActivityQuery, water
 	}
 	args = append(args, limit+1)
 	query := "SELECT o.id,o.box_uuid,o.resource_key,o.state,o.created_at FROM operations o WHERE " + where +
-		" AND o.rowid<=? AND (o.state='FAILED' OR (o.state='UNKNOWN' AND o.action!='box_peer_set' " +
+		" AND o.rowid<=? AND (o.state='FAILED' OR (o.state='SUCCEEDED' AND EXISTS(SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RECOVERY_SETTLED')) OR (o.state='UNKNOWN' AND o.action NOT IN ('box_peer_set','port_forward_create','port_forward_delete') AND NOT EXISTS(SELECT 1 FROM operation_resource_claims c WHERE c.operation_id=o.id AND c.layer=o.layer AND c.resource_key='delete-project:'||o.layer) " +
 		"AND EXISTS (SELECT 1 FROM recovery_audit r WHERE r.operation_id=o.id AND r.decision='RELEASED'))) " +
 		"ORDER BY o.created_at DESC,o.id DESC LIMIT ?"
 	rows, err := tx.QueryContext(ctx, query, args...)
@@ -517,10 +548,14 @@ func readActivityHistory(ctx context.Context, tx *sql.Tx, q ActivityQuery, water
 		if issue.State == "UNKNOWN" {
 			issue.Reason = "HISTORICAL_RELEASED_CLAIM"
 			issue.Disposition = "CLAIM_RELEASED_NATIVE_OUTCOME_UNKNOWN"
+		} else if issue.State == "SUCCEEDED" {
+			issue.Reason = "HISTORICAL_RECOVERED_OPERATION"
+			issue.Disposition = "RECOVERY_SETTLED_NOT_ACTIVE"
 		} else {
 			issue.Reason = "HISTORICAL_FAILED_OPERATION"
 			issue.Disposition = "TERMINAL_FAILED_NOT_ACTIVE"
 		}
+		issue.NextAction = &NextAction{Kind: "READ_EVIDENCE", Tool: "box_activity_get", OperationID: issue.OperationID, View: "evidence"}
 		out.History = append(out.History, issue)
 	}
 	return rows.Err()
@@ -554,6 +589,13 @@ func readActivityEvidence(ctx context.Context, tx *sql.Tx, q ActivityQuery, out 
 		Limitations: []string{"NO_NATIVE_POSTSTATE", "ROOT_JOURNAL_PRIVATE", "READ_CALLS_NOT_JOURNALED"},
 	}
 	out.Evidence = ev
+	ev.Recovery, err = readRecoveryNavigation(ctx, tx, q.Layer, rec.ID)
+	if err != nil {
+		return err
+	}
+	if ev.Recovery.LinksTruncated || ev.Recovery.LegacyWindowBounded {
+		out.Truncated = true
+	}
 	events, err := tx.QueryContext(ctx, "SELECT seq,at,state,safe_detail FROM operation_events WHERE operation_id=? ORDER BY seq LIMIT ?", rec.ID, q.Limit+1)
 	if err != nil {
 		return err

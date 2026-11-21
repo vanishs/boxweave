@@ -332,7 +332,7 @@ func (s *Store) CommitRecovery(ctx context.Context, r RecoveryRequest, t Recover
 		uuid, inc = p.UUID, p.UUID
 	}
 	_, e = tx.ExecContext(ctx, `INSERT INTO operations(id,tracking_id,request_id,layer,actor_id,token_id,key_digest,action,intent_digest,safe_intent,work_ref,agent_ref,resource_key,box_uuid,incarnation,state,error_class,created_at,updated_at)
- VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, tracking, id, a.Layer, a.ActorID, a.TokenID, digest(a.Key), a.Action, admissionIntentDigest(a, nil), a.SafeIntent, a.WorkRef, a.AgentRef, "", uuid, inc, phase, errClass, now, now)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, tracking, id, a.Layer, a.ActorID, a.TokenID, digest(a.Key), a.Action, admissionIntentDigest(a, nil), a.SafeIntent, a.WorkRef, a.AgentRef, "recovery:"+t.ID, uuid, inc, phase, errClass, now, now)
 	if e != nil {
 		return RecoveryRecord{}, e
 	}

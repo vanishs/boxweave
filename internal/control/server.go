@@ -72,15 +72,16 @@ type Service struct {
 }
 
 type HostStatus struct {
-	TrackingID    string        `json:"tracking_id"`
-	Version       string        `json:"version"`
-	Commit        string        `json:"commit"`
-	BinarySHA256  string        `json:"binary_sha256,omitempty"`
-	GoVersion     string        `json:"go_version"`
-	SchemaVersion int           `json:"schema_version"`
-	MCPReady      bool          `json:"mcp_ready"`
-	Native        native.Status `json:"native"`
-	Ready         bool          `json:"ready"`
+	TrackingID    string             `json:"tracking_id"`
+	Version       string             `json:"version"`
+	Commit        string             `json:"commit"`
+	BinarySHA256  string             `json:"binary_sha256,omitempty"`
+	GoVersion     string             `json:"go_version"`
+	SchemaVersion int                `json:"schema_version"`
+	MCPReady      bool               `json:"mcp_ready"`
+	Native        native.Status      `json:"native"`
+	Ready         bool               `json:"ready"`
+	Attention     *attentionSnapshot `json:"attention,omitempty"`
 }
 
 func newTrackingID() (string, error) {
@@ -149,7 +150,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies, not a global health or permission to dispatch; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {
@@ -163,6 +164,8 @@ func (s *Service) Handler() http.Handler {
 			}
 			result.TrackingID = id
 			result.BinarySHA256 = binaryDigest()
+			attention := s.readAttention(ctx, principal, "")
+			result.Attention = &attention
 			return privateReadReply(ctx, s, principal.TokenID, result)
 		})
 	s.registerOperationReadTools(server)

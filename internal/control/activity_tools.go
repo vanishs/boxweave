@@ -29,7 +29,7 @@ type activityGetResult struct {
 func (s *Service) registerActivityTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{
 		Name:        "box_activity_get",
-		Description: "Read BoxWeave's durable same-Project SQLite activity after reconnect. view=overview (default) lists recent originals; issues separates current blockers/dependencies (with dispositions) from a small historical released-claim/failed-operation sample and explicit bounded coverage; evidence requires operation_id and returns original events, resource claims and safe proof references. Optional box_id/work_ref/agent_ref narrow scope; limit 1..50 and signed next_cursor paginate overview/issues. This does not prove native or guest completion, and UNKNOWN must never be blindly retried.",
+		Description: "Read BoxWeave's durable same-Project SQLite activity after reconnect. view=overview (default) lists recent originals; issues separates current blockers/dependencies (with dispositions) from a small historical released-claim/failed-operation sample and explicit bounded coverage; evidence requires operation_id and returns original events, resource claims and safe proof references including recovery_navigation; Box-scoped issues include Project-wide barriers (labels narrow scope). Optional box_id/work_ref/agent_ref narrow scope; limit 1..50 and signed next_cursor paginate overview/issues. This does not prove native or guest completion, and UNKNOWN must never be blindly retried.",
 		Annotations: readToolAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in activityGetInput) (*mcp.CallToolResult, activityGetResult, error) {
 		principal, err := s.requestPrincipal(req)

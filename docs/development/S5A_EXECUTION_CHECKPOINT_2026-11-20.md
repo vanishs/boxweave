@@ -10,7 +10,7 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
 | S5A3 — independently verifiable user approval | SYNTHETIC_SIGNED_LAB_PASS / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
 | S5A4 — network and dependent Delete recovery | PARTIAL / S5A4_SIMULATED_PASS / NATIVE_REGRESSION_PENDING / TRUSTED_APPROVAL_BLOCKED |
-| S5A5 — diagnostic and recovery evidence integration | NOT_STARTED |
+| S5A5 — diagnostic and recovery evidence integration | PARTIAL / BOX_SOURCE_PASS / INSTALLED_NATIVE_PENDING |
 | S5A6 — compatibility, release engineering and feature freeze | NOT_STARTED |
 
 Reuse existing CLI recovery, PRS, Activity, OAuth and SQLite capabilities. Guided install/uninstall work from #162 is already implemented; physical integrated acceptance stays in S5B. Existing implementation evidence is not a new S5A PASS.
@@ -32,3 +32,5 @@ A3 owner-directed Box simulation, pinned Ed25519 test signer, isolated durable c
 S5A4 started on owner instruction. See [A4 implementation and acceptance](S5A4_NETWORK_RECOVERY_2026-11-20.md). Deterministic network settlement and dependent Delete recovery Box source tests pass. Native workflow evidence and the A3-dependent compensation/release gate remain open. A5–A6 remain NOT_STARTED.
 
 Owner-requested A3→A4 signed compensation simulation passed in Box: [A4 scoped evidence](S5A4_NETWORK_RECOVERY_2026-11-20.md#owner-directed-signed-simulation--s5a4_simulated_pass). Distinct compensation, single consumption, uncertain dispatch, strict post-proof and retained Peer/parent barriers verified as synthetic lab records only. Native positive Forward/dependent Delete/PRS grant+revoke passed at `4fa7db0`, two broader jobs failed; corrected misleading generic RELEASED diagnosis and rerun required. Actual trusted platform approval/production compensation remain unavailable. No final A4 PASS.
+
+Owner started A5. [A5 implementation and acceptance](S5A5_EVIDENCE_INTEGRATION_2026-11-20.md): four reader interfaces integrated, bounded original/recovery links and blockers, Schema5 unchanged, Box scoped Race and full source PASS; new exact installed workflow evidence pending. A4 prior PRS grant/revoke jobs succeeded; B4/B5 fixture job still incomplete despite A4 positive markers. A4 documentation whitespace corrected. No actual trusted approval, Native compensation, stable release or A5 formal signoff. A6 remains NOT_STARTED.

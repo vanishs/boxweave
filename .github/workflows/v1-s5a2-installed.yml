@@ -4,6 +4,10 @@ on:
     branches: [feat/v1-s5a-closeout-20261120]
     paths:
       - 'internal/recovery/**'
+      - 'internal/state/recovery_navigation*.go'
+      - 'internal/state/activity_query.go'
+      - 'internal/control/recovery_attention*.go'
+      - 'internal/control/operation_tools.go'
       - 'internal/state/operation_recover*.go'
       - 'internal/control/operation_recover*.go'
       - 'scripts/s5a2_recovery_probe.go'
@@ -29,19 +33,21 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Scoped source recovery and CLI regression
-        run: go test -count=1 ./internal/state ./internal/recovery ./internal/control ./cmd/boxweave -run 'TestS5A2|Test.*Recovery|Test.*Recover'
+        run: go test -count=1 ./internal/state ./internal/recovery ./internal/control ./cmd/boxweave -run 'TestS5A[25]|Test.*Recovery|Test.*Recover'
       - name: Actual installed candidate, independent native and SQLite original witness
         shell: bash
         run: |
           set -euo pipefail
           logfile="$RUNNER_TEMP/s5a2-native.log"
           if ! sh scripts/accept_s2_native.sh >"$logfile" 2>&1; then
-            grep -E '^(S5A2_|S2_NATIVE_CANDIDATE_SOURCE_SHA=|panic: S5A2_NATIVE_FAIL:)' "$logfile" | tail -n 100 || :
+            grep -E '^(S5A2_|S5A5_|S2_NATIVE_CANDIDATE_SOURCE_SHA=|panic: S5A2_NATIVE_FAIL:)' "$logfile" | tail -n 100 || :
             echo S5A2_INSTALLED_NATIVE=BLOCKED_OR_FAILED
             exit 1
           fi
           for marker in EXEC_ORIGINAL_SQLITE_OUTPUT_AND_ONE_EFFECT POWER_UPDATE_ORIGINAL_TERMINAL_AND_POSTSTATE DELETE_TERMINAL_EXACT_ABSENCE_TOMBSTONE CREATE_BIND_IDENTITY_ONLY_LOCK_RETAINED INSTALLED_RECOVERY STAGED_ROOT_CLI_MCP_PARITY_NO_REPLAY; do
             grep -Fxq "S5A2_NATIVE_${marker}=PASS" "$logfile"
           done
-          grep -E '^(S5A2_|S2_NATIVE_CANDIDATE_SOURCE_SHA=)' "$logfile"
+          grep -Fxq S5A5_NATIVE_RECONNECT_BLOCKER_INSPECT_RECOVERY_LINKS=PASS "$logfile"
+          grep -Fxq S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE=PASS "$logfile"
+          grep -E '^(S5A2_|S5A5_|S2_NATIVE_CANDIDATE_SOURCE_SHA=)' "$logfile"
           echo "S5A2_INSTALLED_NATIVE=PASS SHA=$GITHUB_SHA"

@@ -94,6 +94,37 @@ func (l lab) original(name, key string, args map[string]any, fault bool) map[str
 	fmt.Printf("S5A2_NATIVE_ORIGINAL ACTION=%s BW_ID=%s NATIVE_ID=%s STATE=%s\n", name, id, str(op, "native_operation_id"), want)
 	return op
 }
+func hasOperation(items any, id string) bool {
+	list, ok := items.([]any)
+	if !ok {
+		return false
+	}
+	for _, x := range list {
+		if str(obj(x), "operation_id") == id {
+			return true
+		}
+	}
+	return false
+}
+func (l lab) inspectA5(id, uuid string) {
+	got := l.call("operation_get", map[string]any{"operation_id": id})
+	nav := obj(got["recovery_navigation"])
+	check(got["recovery_snapshot_matches_operation"] == true && nav["claim_protection"] == "RETAINED" && nav["native_live_verified"] == false && obj(nav["next_action"])["mode"] == "inspect", "A5 original navigation")
+	for _, name := range []string{"box_get", "host_status"} {
+		args := map[string]any{}
+		if name == "box_get" {
+			args["box_id"] = uuid
+		}
+		a := obj(l.call(name, args)["attention"])
+		check(a["source"] == "SQLITE_SNAPSHOT" && a["native_live_verified"] == false && a["attention_complete"] == false && hasOperation(a["items"], id), "A5 blocker sample "+name)
+	}
+	detailed := obj(l.call("box_get", map[string]any{"box_id": uuid, "detail": true})["attention"])
+	check(hasOperation(detailed["items"], id), "A5 detailed box blocker")
+	activity := obj(l.call("box_activity_get", map[string]any{"view": "issues", "box_id": uuid})["activity"])
+	check(hasOperation(activity["issues"], id), "A5 activity blocker")
+	diagnostic := obj(l.call("operation_recover", map[string]any{"operation_id": id, "mode": "inspect"})["diagnosis"])
+	check(diagnostic["disposition"] == "SAFE_RECOVER", "A5 read-only live diagnosis")
+}
 func (l lab) recover(op map[string]any, key, want string) map[string]any {
 	id := str(op, "operation_id")
 	var originalSeq, originalAt int64
@@ -134,6 +165,18 @@ func (l lab) recover(op map[string]any, key, want string) map[string]any {
 	}
 	check(l.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision=?", id, "RECOVERY_"+want).Scan(&count) == nil && count == 1, "recovery audit missing or duplicated")
 	check(l.db.QueryRow("SELECT count(*) FROM recovery_audit WHERE operation_id=? AND decision='RELEASED'", id).Scan(&count) == nil && count == 0, "unapproved claim release")
+	got := l.call("operation_get", map[string]any{"operation_id": id})
+	navigation := obj(got["recovery_navigation"])
+	check(got["recovery_snapshot_matches_operation"] == true && hasOperation(navigation["recent_recoveries"], rid), "A5 original recovery link")
+	protection := "NOT_UNKNOWN"
+	if expected == "UNKNOWN" {
+		protection = "RETAINED"
+	}
+	check(navigation["claim_protection"] == protection && navigation["native_live_verified"] == false, "A5 claim navigation")
+	reverse := obj(l.call("operation_get", map[string]any{"operation_id": rid})["recovery_navigation"])
+	check(obj(reverse["original_link"])["original_operation_id"] == id && reverse["disposition"] == want, "A5 reverse recovery link")
+	ev := obj(obj(l.call("box_activity_get", map[string]any{"view": "evidence", "operation_id": id})["activity"])["evidence"])
+	check(hasOperation(obj(ev["recovery_navigation"])["recent_recoveries"], rid), "A5 linked Activity evidence")
 	return out
 }
 func (l lab) terminal(op map[string]any, exit *int) {
@@ -190,7 +233,16 @@ func main() {
 	exec := l.original("box_exec", "exec-once", map[string]any{"box_id": uuid, "argv": []string{"/bin/sh", "-c", "printf 's5a2-once\\n' >> /var/tmp/s5a2-once; printf 's5a2-stdout'"}}, true)
 	zero := 0
 	l.terminal(exec, &zero)
+	// A new official SDK session uses the same authenticated actor, not an
+	// invented task identity or a replacement original.
+	check(sess.Close() == nil, "A5 prior client close")
+	next, e := mcp.NewClient(&mcp.Implementation{Name: "s5a5-reconnected", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://127.0.0.1:18650/mcp", HTTPClient: &http.Client{Transport: bearer{token}}, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
+	check(e == nil, "A5 same credential reconnect")
+	defer next.Close()
+	l.s = next
+	l.inspectA5(str(exec, "operation_id"), uuid)
 	l.recover(exec, "exec-once", "SETTLED")
+	fmt.Println("S5A5_NATIVE_RECONNECT_BLOCKER_INSPECT_RECOVERY_LINKS=PASS")
 	out := l.call("operation_output_get", map[string]any{"operation_id": str(exec, "operation_id"), "stream": "stdout"})
 	data, e := base64.StdEncoding.DecodeString(str(out, "content_base64"))
 	check(e == nil && string(data) == "s5a2-stdout" && out["exit_code"] == float64(0), "original recorded output/exit mismatch")
@@ -223,6 +275,19 @@ func main() {
 	var phase, deletedBy string
 	check(db.QueryRow("SELECT state,deleted_by_operation_id FROM owned_boxes WHERE uuid=?", uuid).Scan(&phase, &deletedBy) == nil && phase == "DELETED" && deletedBy == str(op, "operation_id"), "original delete tombstone")
 	fmt.Println("S5A2_NATIVE_DELETE_TERMINAL_EXACT_ABSENCE_TOMBSTONE=PASS")
+	// Distinct output availability witness: never infer output retention
+	// just because the original execution was successfully reconciled.
+	execID := str(exec, "operation_id")
+	archived := l.call("operation_output_get", map[string]any{"operation_id": execID, "stream": "stdout", "limit": 4})
+	first, e := base64.StdEncoding.DecodeString(str(archived, "content_base64"))
+	check(e == nil && string(first) == "s5a2" && archived["next_offset"] == float64(4) && archived["availability"] == "available", "A5 archived output first page")
+	archived = l.call("operation_output_get", map[string]any{"operation_id": execID, "stream": "stdout", "offset": 4})
+	rest, e := base64.StdEncoding.DecodeString(str(archived, "content_base64"))
+	check(e == nil && string(first)+string(rest) == "s5a2-stdout" && archived["ended"] == true && archived["exit_code"] == float64(0), "A5 archived original output after Delete")
+	ev := obj(obj(l.call("box_activity_get", map[string]any{"view": "evidence", "operation_id": execID})["activity"])["evidence"])
+	check(ev["owned_box_state"] == "DELETED" && obj(ev["recovery_navigation"])["output_availability"] == "NOT_CHECKED_USE_OPERATION_OUTPUT_GET", "A5 archived metadata not live claim")
+	fmt.Println("S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE=PASS")
+
 	// The identity-only bind MUST leave UNKNOWN and prevent new effects.
 	name = "s5a2-identity-native"
 	unbound := mk(name, "unbound-create", false, true)
