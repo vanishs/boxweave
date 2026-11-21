@@ -59,7 +59,12 @@ sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --a
 net="incusbr-$uid"
 acl="bw-s25-standalone-owned"
 sudo incus network show "$net" >/dev/null
-CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+if [ -n "${S5B1_MODE:-}" ]; then
+  test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
+else
+  CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+fi
 CGO_ENABLED=1 go build -trimpath -o "$work/staging/s25-lab-agent" ./scripts/s25_lab_agent.go
 cp scripts/s25_inner_setup.sh "$work/staging/s25_inner_setup.sh"
 cp scripts/s25_simwan6.py "$work/staging/s25_simwan6.py"
@@ -114,6 +119,13 @@ done
 code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST  http://127.0.0.1:18650/mcp -H 'Authorization: Bearer definitely-invalid'  -H 'Content-Type: application/json' -d '{}')"
 test "$code" = 401
 echo S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS
+
+# S5B1 test-only branch, using the same guarded disposable VM and exact
+# installed product. This does not alter the ordinary S25/S3 scenarios.
+if [ -n "${S5B1_MODE:-}" ]; then
+  sh scripts/s5b1_installed_closeout.sh "$work" "$project" "$net" "$acl" "$binary_sha"
+  exit 0
+fi
 
 
 # S3-only isolated installed File Tool acceptance entry. Reuse the existing
