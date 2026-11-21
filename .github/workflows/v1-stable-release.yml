@@ -1,0 +1,71 @@
+name: v1 stable release (signed acceptance only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Exact successful v1 stable candidate Actions run ID
+        required: true
+        type: string
+      evidence_commit:
+        description: Immutable commit containing both signed S5 signoff files
+        required: true
+        type: string
+      publish:
+        description: Explicit stable publication (false is read-only verification)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: v1-stable-publication
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: stable-signed-read-only-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Owner must configure this environment's independent signer public
+    # keys and required reviewer protection before using the workflow.
+    environment: v1-stable-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source and artifact plus both independent signatures
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_COMMIT: ${{ inputs.evidence_commit }}
+          STABLE_OWNER_PUBLIC_KEY: ${{ secrets.STABLE_OWNER_PUBLIC_KEY }}
+          STABLE_VERIFIER_PUBLIC_KEY: ${{ secrets.STABLE_VERIFIER_PUBLIC_KEY }}
+        run: python3 scripts/v1_stable_release_ci.py --run-id "$RUN_ID" --evidence-commit "$EVIDENCE_COMMIT"
+
+  publish:
+    name: stable-immutable-publication
+    needs: verify
+    if: inputs.publish == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: v1-stable-release
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reverify actual same candidate and signed acceptance then publish once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_COMMIT: ${{ inputs.evidence_commit }}
+          STABLE_OWNER_PUBLIC_KEY: ${{ secrets.STABLE_OWNER_PUBLIC_KEY }}
+          STABLE_VERIFIER_PUBLIC_KEY: ${{ secrets.STABLE_VERIFIER_PUBLIC_KEY }}
+          STABLE_PUBLISH_AUTHORIZED: 'true'
+        run: python3 scripts/v1_stable_release_ci.py --run-id "$RUN_ID" --evidence-commit "$EVIDENCE_COMMIT" --publish

@@ -9,9 +9,9 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | S5A1 — incident provenance and typed diagnostics | PARTIAL |
 | S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
 | S5A3 — independently verifiable user approval | SYNTHETIC_SIGNED_LAB_PASS / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
-| S5A4 — network and dependent Delete recovery | PARTIAL / S5A4_SIMULATED_PASS / NATIVE_REGRESSION_PENDING / TRUSTED_APPROVAL_BLOCKED |
+| S5A4 — network and dependent Delete recovery | PARTIAL / S5A4_SIMULATED_PASS / DETERMINISTIC_NATIVE_PASS / TRUSTED_APPROVAL_BLOCKED |
 | S5A5 — diagnostic and recovery evidence integration | PASS (scoped; runtime exact 6bd2226) |
-| S5A6 — compatibility, release engineering and feature freeze | NOT_STARTED |
+| S5A6 — compatibility, release engineering and feature freeze | PARTIAL / STABLE_GATE_BOX_PASS / FREEZE_BLOCKED |
 
 Reuse existing CLI recovery, PRS, Activity, OAuth and SQLite capabilities. Guided install/uninstall work from #162 is already implemented; physical integrated acceptance stays in S5B. Existing implementation evidence is not a new S5A PASS.
 
@@ -36,3 +36,5 @@ Owner-requested A3→A4 signed compensation simulation passed in Box: [A4 scoped
 Owner started A5. [A5 implementation and acceptance](S5A5_EVIDENCE_INTEGRATION_2026-11-20.md): four reader interfaces integrated, bounded original/recovery links and blockers, Schema5 unchanged, Box scoped Race and full source PASS; new exact installed workflow evidence pending. A4 prior PRS grant/revoke jobs succeeded; B4/B5 fixture job still incomplete despite A4 positive markers. A4 documentation whitespace corrected. No actual trusted approval, Native compensation, stable release or A5 formal signoff. A6 remains NOT_STARTED.
 
 A5 scoped PASS signed against exact runtime `6bd2226`: [installed native success](https://github.com/vanishs/boxweave/actions/runs/44841772798) and [A5 Box two-Actor supplemental evidence](S5A5_EVIDENCE_INTEGRATION_2026-11-20.md#a5-scoped-signoff--2026-11-20-pt), including genuine lost HTTP recovery response, restarted handler/ledger, pagination, archive readback and five Race iterations. Only test/document changes since runtime witness. A4 Forward/dependent Delete and PRS revoke native regressions now green at `6bd2226`; A3-dependent production compensation still blocked. No release or actual ChatGPT approval witness. A6 not started.
+
+Owner requested combined completion/Box acceptance of A3/A4/A6. [A6 stable gate checkpoint](S5A6_RELEASE_GATE_2026-11-20.md): separate stable candidate and manual signed-publication workflows implemented, offline signed positive dry-run and incomplete/forged/provenance negatives PASS; full make verify and combined three-repeat A3/A4/A5 Race PASS. A3 trusted actual client contract remains unproved, A4 production compensation blocked; no runtime/schema integration, real release configuration or publication. No feature freeze, S5A6 formal PASS or B acceptance.

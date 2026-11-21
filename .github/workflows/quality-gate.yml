@@ -71,6 +71,9 @@ jobs:
       - name: Offline scoped uninstall planner/approval/negative tests
         if: steps.scope.outputs.full == 'true'
         run: python3 -m unittest discover -s scripts -p 'test_uninstall_core.py' -q
+      - name: Offline stable release gate and provenance negatives
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_v1_stable_gate.py' -q
       - name: Ensure precise Go module formatting and verified checksums
         if: steps.scope.outputs.full == 'true'
         run: |
