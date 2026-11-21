@@ -287,6 +287,15 @@ func (s *Store) ExecOutput(ctx context.Context, originalID string) (NativeReadSn
 // RegisterCreatedBox commits the native UUID/incarnation together with the
 // original operation. A native create is never inferred from name alone.
 func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, name, uuid string) error {
+	return s.registerCreatedBox(ctx, operationID, project, name, uuid, nil)
+}
+func (s *Store) RegisterCreatedBoxWithBinding(ctx context.Context, operationID, project, name, uuid string, binding VerifiedCreateBinding) error {
+	if !binding.valid() {
+		return ErrInvalid
+	}
+	return s.registerCreatedBox(ctx, operationID, project, name, uuid, &binding)
+}
+func (s *Store) registerCreatedBox(ctx context.Context, operationID, project, name, uuid string, binding *VerifiedCreateBinding) error {
 	if operationID == "" || project == "" || name == "" || uuid == "" ||
 		len(name) > 63 || len(uuid) > 128 {
 		return ErrInvalid
@@ -313,6 +322,19 @@ func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, na
 		VALUES (?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
 		return err
 	}
+	if binding != nil {
+		if err := insertVerifiedCreateBinding(ctx, tx, operationID, project, uuid, *binding, now); err != nil {
+			return err
+		}
+	} else {
+		var n int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", operationID).Scan(&n); err != nil {
+			return err
+		}
+		if n != 0 {
+			return ErrResourceLocked
+		}
+	}
 	res, err := tx.ExecContext(ctx, `UPDATE operations
 		SET box_uuid=?,incarnation=?,updated_at=? WHERE id=? AND box_uuid=''`,
 		uuid, uuid, now, operationID)
@@ -337,6 +359,20 @@ func (s *Store) RegisterCreatedBox(ctx context.Context, operationID, project, na
 // and current instance identity. A failed-start residue uses RegisterCreatedBox
 // instead, deliberately retaining a FAILED owned claim for explicit deletion.
 func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string) error {
+	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, nil)
+}
+
+// FinalizeVerifiedCreateWithBinding couples the original Create receipt,
+// exact UUID and independently native-verified static NIC binding. This is
+// not a DHCP allocator or an authority to declare a dynamic lease pinned.
+func (s *Store) FinalizeVerifiedCreateWithBinding(ctx context.Context, opID, project, name, uuid string, binding VerifiedCreateBinding) error {
+	if !binding.valid() {
+		return ErrInvalid
+	}
+	return s.finalizeVerifiedCreate(ctx, opID, project, name, uuid, &binding)
+}
+
+func (s *Store) finalizeVerifiedCreate(ctx context.Context, opID, project, name, uuid string, binding *VerifiedCreateBinding) error {
 	if opID == "" || project == "" || name == "" || uuid == "" ||
 		len(name) > 63 || len(uuid) > 128 {
 		return ErrInvalid
@@ -361,6 +397,19 @@ func (s *Store) FinalizeVerifiedCreate(ctx context.Context, opID, project, name,
 		(uuid,project,name,incarnation,state,created_at)
 		VALUES (?,?,?,?,'OWNED',?)`, uuid, project, name, uuid, now); err != nil {
 		return err
+	}
+	if binding != nil {
+		if err := insertVerifiedCreateBinding(ctx, tx, opID, project, uuid, *binding, now); err != nil {
+			return err
+		}
+	} else {
+		var n int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operation_resource_claims WHERE operation_id=? AND resource_key LIKE 'create-pin:%'", opID).Scan(&n); err != nil {
+			return err
+		}
+		if n != 0 {
+			return ErrResourceLocked
+		}
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE operations SET box_uuid=?,incarnation=?,
 		state='SUCCEEDED',error_class='',updated_at=?

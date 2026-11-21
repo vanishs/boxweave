@@ -36,6 +36,18 @@ func (s *Service) executeDependentDeleteWithWitness(ctx context.Context, origina
 		}
 		return s.Native.VerifyPinnedDeleteNIC(ctx, box.Name, box.UUID, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6)
 	}
+	if pin != nil {
+		dependent, e := s.Store.DeleteHasTrafficDependencies(ctx, original)
+		if e != nil {
+			return "", state.PreDispatchError{Class: "DELETE_DEPENDENCY_PREFLIGHT_DENIED"}
+		}
+		if !dependent {
+			current, _, e := s.Native.GetExactBox(ctx, box.Name, box.UUID)
+			if e != nil || current.NativeState != "Stopped" {
+				return "", state.PreDispatchError{Class: "DELETE_REQUIRES_STOPPED"}
+			}
+		}
+	}
 	if e = checkPin(); e != nil {
 		return "", state.PreDispatchError{Class: "DELETE_PINNED_NATIVE_UNVERIFIED"}
 	}

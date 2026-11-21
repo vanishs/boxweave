@@ -368,6 +368,18 @@ func (s *Service) submitNative(r state.Receipt, effect state.NativeEffect, verif
 	return r, nil
 }
 
+// Verify existing pin before and after a mutation; no implicit change to
+// network bindings or address fences during ordinary power/resource operations.
+func (s *Service) verifyLifecyclePin(ctx context.Context, id string, box state.OwnedBox) error {
+	pin, err := s.Store.LifecyclePinnedNIC(ctx, id, box)
+	if err != nil {
+		return err
+	}
+	if pin == nil {
+		return nil
+	}
+	return s.Native.VerifyPinnedDeleteNIC(ctx, box.Name, box.UUID, pin.Bridge, pin.ACL, pin.MAC, pin.IPv4, pin.IPv6)
+}
 func (s *Service) registerBoxTools(server *mcp.Server) {
 	addStrictTool(server, &mcp.Tool{Name: "box_create",
 		Description: "Admit creation of one owned container with typed Incus/LXC options; omitted booleans preserve defaults. Returns an asynchronous Operation, not guest readiness. Never disable host AppArmor; nested Incus requires independently verified Project/AppArmor/UID/GID constraints.",
@@ -413,11 +425,18 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				return nil, state.Receipt{}, err
 			}
 			var nativeID string
+			var reserved native.VerifiedStaticPeerBinding
 			effect := func(ctx context.Context) (string, error) {
-				id, e := s.Native.Create(ctx, native.InstanceAction{
+				id, e := s.Native.CreateWithPeerBinding(ctx, native.InstanceAction{
 					OperationID: r.ID, Name: in.Name, CPU: in.CPU, MemoryMiB: in.MemoryMiB, DiskGiB: in.DiskGiB,
 					Image: in.Image, Start: start, Nesting: in.Nesting, Internet: internet,
-					Options: in.InstanceOptions})
+					Options: in.InstanceOptions}, func(b native.VerifiedStaticPeerBinding) (bool, error) {
+					ok, err := s.Store.StageCreateBinding(ctx, r.ID, s.Native.Project, in.Name, state.VerifiedCreateBinding(b))
+					if err == nil && ok {
+						reserved = b
+					}
+					return ok, err
+				})
 				nativeID = id
 				return id, preflightNative(e)
 			}
@@ -456,11 +475,32 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				} else if op.StatusCode != api.Success && observed.NativeState != "Stopped" {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_FAILED_STATE_UNVERIFIED"}
 				}
+				// Only the exact reserved static tuple, independently observed twice,
+				// may be attached to the original Create UUID. Bounded read-only
+				// settle handles lease publication lag, never retries Create.
+				var proof native.VerifiedStaticPeerBinding
+				proved := false
+				deadline := time.Now().Add(8 * time.Second)
+				for time.Now().Before(deadline) && ctx.Err() == nil {
+					got, e := s.Native.ObserveOriginalCreateStaticPeerBinding(ctx, in.Name, observed.UUID, r.ID)
+					if e == nil && got == reserved {
+						proof = got
+						proved = true
+						break
+					}
+					select {
+					case <-ctx.Done():
+					case <-time.After(350 * time.Millisecond):
+					}
+				}
+				if !proved {
+					return state.VerificationUncertain{Class: "NATIVE_CREATE_STATIC_BINDING_UNVERIFIED"}
+				}
 				if (!originalNativeOutcomeMissing && op.StatusCode != api.Success) ||
 					(start && observed.NativeState == "Stopped") {
 					// Keep the exact native UUID claim for failed-start residue.
 					// It is NOT a successful Create and needs explicit cleanup.
-					if err := s.Store.RegisterCreatedBox(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+					if err := s.Store.RegisterCreatedBoxWithBinding(ctx, r.ID, s.Native.Project, in.Name, observed.UUID, state.VerifiedCreateBinding(proof)); err != nil {
 						return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
 					}
 					if !originalNativeOutcomeMissing && op.StatusCode != api.Success {
@@ -468,7 +508,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 					}
 					return state.VerifiedEffectFailure{Class: "NATIVE_CREATE_GUEST_NOT_RUNNING_OWNED"}
 				}
-				if err := s.Store.FinalizeVerifiedCreate(ctx, r.ID, s.Native.Project, in.Name, observed.UUID); err != nil {
+				if err := s.Store.FinalizeVerifiedCreateWithBinding(ctx, r.ID, s.Native.Project, in.Name, observed.UUID, state.VerifiedCreateBinding(proof)); err != nil {
 					return state.VerificationUncertain{Class: "NATIVE_CREATE_UUID_LEDGER_UNVERIFIED"}
 				}
 				return state.ErrVerifiedCreateCommitted
@@ -572,6 +612,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				}
 				var nativeID string
 				effect := func(ctx context.Context) (string, error) {
+					if e := s.verifyLifecyclePin(ctx, r.ID, box); e != nil {
+						return "", state.PreDispatchError{Class: "LIFECYCLE_PIN_UNVERIFIED"}
+					}
 					boxStatus, _, e := s.Native.GetExactBox(ctx, box.Name, box.UUID)
 					if e != nil {
 						return "", preflightNative(e)
@@ -596,7 +639,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 					if current.NativeState != want {
 						return native.ErrUnverified
 					}
-					return nil
+					return s.verifyLifecyclePin(ctx, r.ID, box)
 				}
 				r, err = s.submitNative(r, effect, verify)
 				return &mcp.CallToolResult{}, r, err
@@ -650,6 +693,9 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 			}
 			var nativeID string
 			effect := func(ctx context.Context) (string, error) {
+				if e := s.verifyLifecyclePin(ctx, r.ID, box); e != nil {
+					return "", state.PreDispatchError{Class: "LIFECYCLE_PIN_UNVERIFIED"}
+				}
 				id, e := s.Native.UpdateBox(ctx, box.Name, box.UUID, changes)
 				nativeID = id
 				return id, preflightNative(e)
@@ -665,8 +711,7 @@ func (s *Service) registerBoxTools(server *mcp.Server) {
 				if !native.InstanceChangesMatch(changes, actual) {
 					return native.ErrUnverified
 				}
-
-				return nil
+				return s.verifyLifecyclePin(ctx, r.ID, box)
 			}
 			r, err = s.submitNative(r, effect, verify)
 			return &mcp.CallToolResult{}, r, err

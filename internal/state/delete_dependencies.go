@@ -407,3 +407,48 @@ func (s *Store) DeletePinnedNIC(ctx context.Context, id string) (*DeletePinnedNI
 	}
 	return &n, tx.Commit()
 }
+
+// DeleteHasTrafficDependencies differentiates ordinary stopped-only deletion
+// of a pinned NIC from the existing explicit dependent cleanup path.
+func (s *Store) DeleteHasTrafficDependencies(ctx context.Context, id string) (bool, error) {
+	tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if e != nil {
+		return false, e
+	}
+	defer tx.Rollback()
+	p, e := readCascadeParent(ctx, tx, id)
+	if e != nil || p.State != "DISPATCHING" {
+		return false, ErrResourceLocked
+	}
+	peer, fwd, _, _, e := countDeleteDependencies(ctx, tx, p.Project, p.UUID)
+	if e != nil {
+		return false, e
+	}
+	return peer+fwd > 0, tx.Commit()
+}
+
+// LifecyclePinnedNIC reads the exact original claimed lifecycle operation,
+// checks the complete pin/fences, and never declares a dynamic NIC pinned.
+func (s *Store) LifecyclePinnedNIC(ctx context.Context, id string, box OwnedBox) (*DeletePinnedNIC, error) {
+	tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if e != nil {
+		return nil, e
+	}
+	defer tx.Rollback()
+	var n int
+	if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM operations WHERE id=? AND layer=? AND box_uuid=? AND incarnation=? AND action IN ('box_start','box_stop','box_update') AND state IN ('DISPATCHING','VERIFYING')", id, box.Project, box.UUID, box.Incarnation).Scan(&n); e != nil || n != 1 {
+		return nil, ErrResourceLocked
+	}
+	pinned, e := verifyDeletePinned(ctx, tx, box.Project, box.UUID, box.Incarnation)
+	if e != nil {
+		return nil, e
+	}
+	if !pinned {
+		return nil, tx.Commit()
+	}
+	var b DeletePinnedNIC
+	if e = tx.QueryRowContext(ctx, "SELECT bridge,acl,mac,ipv4,ipv6 FROM network_bindings WHERE project=? AND box_uuid=? AND incarnation=? AND nic='eth0' AND state='PINNED'", box.Project, box.UUID, box.Incarnation).Scan(&b.Bridge, &b.ACL, &b.MAC, &b.IPv4, &b.IPv6); e != nil {
+		return nil, e
+	}
+	return &b, tx.Commit()
+}

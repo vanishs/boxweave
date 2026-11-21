@@ -1,0 +1,47 @@
+name: S5B Peer production Create and combined restart (development candidate)
+on:
+  push:
+    branches: [feat/v1-s5b-acceptance-20261120]
+    paths:
+      - '.github/workflows/v1-s5b-peer-production.yml'
+      - 'scripts/s5b_peer_production_native.sh'
+      - 'scripts/s5b_peer_production_native.py'
+      - 'internal/native/peer_static_binding*.go'
+      - 'internal/state/network_create_binding*.go'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production-peer:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Source identity and regression preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          go mod verify
+          go test -count=1 ./internal/native ./internal/state ./internal/control ./internal/install
+          sh -n scripts/s5b_peer_production_native.sh
+          python3 -m py_compile scripts/s5b_peer_production_native.py
+      - name: Fresh installed Create to real Peer and combined restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/s5b_peer_production_native.sh | tee "$RUNNER_TEMP/s5b-peer-production-result.log"
+          grep -Fxq S5B_PROD_MCP_CREATE_AUTOMATIC_PINNED_THREE_BOXES=PASS "$RUNNER_TEMP/s5b-peer-production-result.log"
+          grep -Fxq S5B_PROD_REAL_CREATE_TO_PEER_GRANT_REVOKE_REGRANT=PASS "$RUNNER_TEMP/s5b-peer-production-result.log"
+          grep -Fxq S5B_PROD_COMBINED_ACTIVE_PEER_FORWARD_PENDING_EXEC_RESTART=PASS "$RUNNER_TEMP/s5b-peer-production-result.log"
