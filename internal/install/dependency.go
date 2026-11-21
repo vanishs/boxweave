@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/user"
 	"regexp"
 	"strings"
 )
@@ -18,6 +17,7 @@ type NativeBootstrapReport struct {
 	Mode           string   `json:"mode"`
 	PackageVersion string   `json:"incus_package_version"`
 	PlanSHA256     string   `json:"plan_sha256,omitempty"`
+	Packages       []string `json:"packages,omitempty"`
 	AptChanges     []string `json:"apt_changes,omitempty"`
 	RebootRequired bool     `json:"reboot_required"`
 }
@@ -84,8 +84,14 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 	if _, err = exec.LookPath("incus"); err == nil {
 		return p, errors.New("unmanaged Incus executable present: refuse automatic adoption")
 	}
-	out, err := exec.Command("apt-get", "-s", "--no-install-recommends", "install",
-		"incus="+packageVersion, "incus-client="+packageVersion, "dnsmasq-base").CombinedOutput()
+	names, err := nativePackageNames(packageVersion)
+	if err != nil {
+		return p, err
+	}
+	p.Packages = names
+	args := append([]string{"-s", "--no-install-recommends", "install"}, nativePackageArgs(names, packageVersion)...)
+	args = append(args, "dnsmasq-base")
+	out, err := exec.Command("apt-get", args...).CombinedOutput()
 	if err != nil {
 		return p, fmt.Errorf("signed native apt simulation failed: %w", err)
 	}
@@ -95,20 +101,19 @@ func nativePlan(packageVersion string) (NativeBootstrapReport, error) {
 		strings.Contains(simulation, "essential packages will be removed") {
 		return p, errors.New("unapproved removal or unauthenticated apt plan")
 	}
-	client, daemon := false, false
+	seen := map[string]bool{}
 	for _, line := range strings.Split(simulation, "\n") {
-		if strings.HasPrefix(line, "Inst incus-client ("+packageVersion+" ") {
-			client = true
-		}
-		if strings.HasPrefix(line, "Inst incus ("+packageVersion+" ") {
-			daemon = true
+		for _, name := range names {
+			if strings.HasPrefix(line, "Inst "+name+" ("+packageVersion+" ") {
+				seen[name] = true
+			}
 		}
 		if strings.HasPrefix(line, "Inst ") {
 			p.AptChanges = append(p.AptChanges, strings.TrimSpace(line))
 		}
 	}
-	if !client || !daemon {
-		return p, errors.New("apt cannot provide exact signed native package version")
+	if len(seen) != len(names) {
+		return p, errors.New("apt cannot provide exact signed native package set")
 	}
 	h := sha256.Sum256([]byte("boxweave-s1-native-ubuntu2404\n" + packageVersion + "\n" + simulation))
 	p.PlanSHA256 = hex.EncodeToString(h[:])
@@ -153,21 +158,19 @@ func NativeDependencyBootstrap(version, approvedDigest string, approved bool) (N
 	if approvedDigest == "" || approvedDigest != p.PlanSHA256 {
 		return p, errors.New("approved apt plan SHA differs from current simulation")
 	}
-	if err := runLocal("apt-get", "install", "-y", "--no-install-recommends",
-		"incus="+version, "incus-client="+version, "dnsmasq-base"); err != nil {
+	args := append([]string{"install", "-y", "--no-install-recommends"}, nativePackageArgs(p.Packages, version)...)
+	args = append(args, "dnsmasq-base")
+	if err := runLocal("apt-get", args...); err != nil {
 		return p, fmt.Errorf("partial apt install: stop, inspect, never blindly retry: %w", err)
 	}
 	if err := runLocal("incus", "admin", "init", "--auto", "--storage-backend=dir"); err != nil {
 		return p, fmt.Errorf("partial native initialization: stop, inspect, never blindly retry: %w", err)
 	}
-	if _, err = user.Lookup("boxweave"); err != nil {
-		if err = runLocal("useradd", "--create-home", "--gid", "incus",
-			"--shell", "/usr/sbin/nologin", "boxweave"); err != nil {
-			return p, fmt.Errorf("partial restricted identity bootstrap: %w", err)
-		}
-	}
-	if err := runLocal("runuser", "-u", "boxweave", "--", "incus", "project", "list", "--format", "csv"); err != nil {
+	if err := nativePrepareServiceAccount(); err != nil {
 		return p, fmt.Errorf("per-user restricted Project not ready: %w", err)
+	}
+	if err := verifyNativePackageVersions(p.Packages, version); err != nil {
+		return p, err
 	}
 	pkg, ok, err := installedIncusPackage()
 	if err != nil || !ok || pkg != version {

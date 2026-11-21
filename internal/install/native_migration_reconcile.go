@@ -35,7 +35,7 @@ func NativeMigrationReconcile(hostDigest, expectedVersion string, approved bool)
 	default:
 		return j, errors.New("not an unresolved native migration postcondition")
 	}
-	if err = verifyMigratedNative(expectedVersion); err != nil {
+	if err = verifyMigratedNative(expectedVersion, migrationPackageNames(j)); err != nil {
 		return j, err
 	}
 	if err = setMigrationPhase(&j, settledPhase); err != nil {

@@ -53,8 +53,11 @@ func NativeMigrationRollback(hostDigest, oldVersion string, approved, downtime b
 	// from the offline snapshot AFTER package downgrade and before re-start.
 	server := filepath.Join(nativeMigrationDir, j.OldServerDeb)
 	client := filepath.Join(nativeMigrationDir, j.OldClientDeb)
-	cmd := exec.Command("apt-get", "install", "-y", "--allow-downgrades",
-		"--no-install-recommends", server, client)
+	args := []string{"install", "-y", "--allow-downgrades", "--no-install-recommends", server, client}
+	if len(migrationPackageNames(j)) == 3 {
+		args = append(args, filepath.Join(nativeMigrationDir, j.OldBaseDeb))
+	}
+	cmd := exec.Command("apt-get", args...)
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 	if err = cmd.Run(); err != nil {
 		_ = setMigrationPhase(&j, "ROLLBACK_UNCERTAIN")
@@ -85,7 +88,7 @@ func NativeMigrationRollback(hostDigest, oldVersion string, approved, downtime b
 		_ = setMigrationPhase(&j, "ROLLBACK_UNCERTAIN")
 		return j, fmt.Errorf("offline native snapshot restore uncertain: %w", err)
 	}
-	if err = verifyMigratedNative(oldVersion); err != nil {
+	if err = verifyMigratedNative(oldVersion, migrationPackageNames(j)); err != nil {
 		_ = setMigrationPhase(&j, "ROLLBACK_UNCERTAIN")
 		return j, fmt.Errorf("restored native daemon postcheck failed: %w", err)
 	}
@@ -121,7 +124,7 @@ func NativeMigrationFinalize(hostDigest, expectedVersion string, approved bool) 
 	if err = assertNativeBackup(j); err != nil {
 		return "", err
 	}
-	if err = verifyMigratedNative(want); err != nil {
+	if err = verifyMigratedNative(want, migrationPackageNames(j)); err != nil {
 		return "", err
 	}
 	archive := nativeMigrationDir + "-completed-" + strconv.FormatInt(j.CreatedUnix, 10)

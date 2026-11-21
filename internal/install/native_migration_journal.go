@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -23,6 +25,8 @@ type NativeMigrationJournal struct {
 	OldClientDeb string              `json:"old_client_deb,omitempty"`
 	ServerSHA    string              `json:"old_server_sha256,omitempty"`
 	ClientSHA    string              `json:"old_client_sha256,omitempty"`
+	OldBaseDeb   string              `json:"old_base_deb,omitempty"`
+	BaseSHA      string              `json:"old_base_sha256,omitempty"`
 	CreatedUnix  int64               `json:"created_unix"`
 	ObservedNow  string              `json:"current_observed_package,omitempty"`
 }
@@ -35,10 +39,25 @@ func migrationDirSafe() error {
 		return err
 	}
 	sys, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || !st.IsDir() || sys.Uid != 0 || st.Mode().Perm() != 0700 || sys.Nlink < 2 {
+	if !ok || !st.IsDir() || sys.Uid != 0 || st.Mode().Perm() != 0700 {
+		return errors.New("root-only migration journal directory invalid")
+	}
+	// Btrfs reports a directory link count of one, unlike ext4.
+	// Preserve the root-owned, private, non-symlink directory check.
+	// Only accept that filesystem-specific link count on Btrfs itself.
+	var fs syscall.Statfs_t
+	if err := syscall.Statfs(nativeMigrationDir, &fs); err != nil {
+		return err
+	}
+	if !nativeMigrationDirectoryLinksOK(uint64(sys.Nlink), int64(fs.Type)) {
 		return errors.New("root-only migration journal directory invalid")
 	}
 	return nil
+}
+
+func nativeMigrationDirectoryLinksOK(links uint64, fsType int64) bool {
+	const btrfsMagic = 0x9123683e
+	return links >= 2 || (links == 1 && fsType == btrfsMagic)
 }
 
 func readMigrationJournal() (NativeMigrationJournal, error) {
@@ -152,22 +171,64 @@ func shaNative(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+func migrationPackageNames(j NativeMigrationJournal) []string {
+	// Legacy two-package journal is accepted only if the original signed
+	// server artifact itself proves no exact incus-base dependency.
+	if len(j.Plan.Packages) == 0 {
+		return []string{"incus", "incus-client"}
+	}
+	return j.Plan.Packages
+}
+func assertNativePackagesBackup(j NativeMigrationJournal) error {
+	names := migrationPackageNames(j)
+	if !validNativePackageNames(names) {
+		return errors.New("invalid native journal package set")
+	}
+	items := []struct{ name, file, hash string }{
+		{"incus", j.OldServerDeb, j.ServerSHA}, {"incus-client", j.OldClientDeb, j.ClientSHA},
+	}
+	if len(names) == 3 {
+		items = append(items, struct{ name, file, hash string }{"incus-base", j.OldBaseDeb, j.BaseSHA})
+	}
+	if len(names) == 2 && (j.OldBaseDeb != "" || j.BaseSHA != "") {
+		return errors.New("unexpected base in legacy journal")
+	}
+	for _, item := range items {
+		if item.file == "" || filepath.Base(item.file) != item.file || strings.ContainsAny(item.file, "/\\") || !strings.HasSuffix(item.file, ".deb") || len(item.hash) != 64 {
+			return errors.New("unsafe or absent old package artifact")
+		}
+		path := filepath.Join(nativeMigrationDir, item.file)
+		h, err := shaNative(path)
+		if err != nil || h != item.hash {
+			return errors.New("native old package checksum mismatch")
+		}
+		b, err := exec.Command("dpkg-deb", "-f", path, "Package", "Version").CombinedOutput()
+		// dpkg-deb -f with multiple fields returns their field names.
+		if err != nil || strings.TrimSpace(string(b)) != "Package: "+item.name+"\nVersion: "+j.Plan.OldPackage {
+			return errors.New("old package artifact metadata mismatch")
+		}
+	}
+	server := filepath.Join(nativeMigrationDir, j.OldServerDeb)
+	raw, err := exec.Command("dpkg-deb", "-f", server, "Package", "Version", "Depends").CombinedOutput()
+	if err != nil {
+		return errors.New("old server dependency metadata unavailable")
+	}
+	actual, err := nativePackageNamesFromMetadata(string(raw), j.Plan.OldPackage)
+	if err != nil || !slices.Equal(actual, names) {
+		return errors.New("old signed package set incomplete; manual recovery required")
+	}
+	return nil
+}
 func assertNativeBackup(j NativeMigrationJournal) error {
-	if j.SnapshotSHA == "" || j.ServerSHA == "" || j.ClientSHA == "" {
+	if err := assertNativePackagesBackup(j); err != nil {
+		return err
+	}
+	if len(j.SnapshotSHA) != 64 {
 		return errors.New("no complete native snapshot; manual inspection required")
 	}
-	for _, item := range []struct{ path, hash string }{
-		{filepath.Join(nativeMigrationDir, "native-state.tar"), j.SnapshotSHA},
-		{filepath.Join(nativeMigrationDir, j.OldServerDeb), j.ServerSHA},
-		{filepath.Join(nativeMigrationDir, j.OldClientDeb), j.ClientSHA},
-	} {
-		if strings.ContainsAny(filepath.Base(item.path), "/\\") || item.hash == "" {
-			return errors.New("unsafe backup receipt path/hash")
-		}
-		h, err := shaNative(item.path)
-		if err != nil || h != item.hash {
-			return errors.New("native backup checksum mismatch")
-		}
+	h, err := shaNative(filepath.Join(nativeMigrationDir, "native-state.tar"))
+	if err != nil || h != j.SnapshotSHA {
+		return errors.New("native backup checksum mismatch")
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"slices"
 	"strings"
 )
 
@@ -22,6 +23,7 @@ type NativeMigrationPlan struct {
 	PlanSHA256 string   `json:"plan_sha256"`
 	Projects   []string `json:"observed_projects"`
 	AptChanges []string `json:"apt_changes"`
+	Packages   []string `json:"packages,omitempty"`
 }
 
 func migrationHostDigest() (string, error) {
@@ -90,8 +92,7 @@ func migrationInventory() ([]string, error) {
 	if !ownOK || !defOK {
 		return nil, errors.New("exact restricted service Project and default required")
 	}
-	out, err = exec.Command("runuser", "-u", "boxweave", "--",
-		"incus", "project", "list", "--format", "csv").CombinedOutput()
+	out, err = exec.Command("runuser", confinedProjectListArgs(u.HomeDir)...).CombinedOutput()
 	trimmed := strings.TrimSpace(string(out))
 	if err != nil || strings.Count(trimmed, "\n") != 0 ||
 		!strings.HasPrefix(trimmed, own+" ") {
@@ -103,15 +104,18 @@ func migrationInventory() ([]string, error) {
 	return names, nil
 }
 
-func exactAptMigration(from, to string) ([]string, string, error) {
+func exactAptMigration(from, to string, names []string) ([]string, string, error) {
 	if !ubuntuIncusVersion.MatchString(from) || !ubuntuIncusVersion.MatchString(to) {
 		return nil, "", errors.New("exact pinned Ubuntu Incus versions required")
 	}
 	if exec.Command("dpkg", "--compare-versions", from, "lt", to).Run() != nil {
 		return nil, "", errors.New("target must be an Incus upgrade, not downgrade")
 	}
-	out, err := exec.Command("apt-get", "-s", "--no-install-recommends",
-		"install", "incus="+to, "incus-client="+to).CombinedOutput()
+	if !validNativePackageNames(names) {
+		return nil, "", errors.New("invalid reviewed native package set")
+	}
+	args := append([]string{"-s", "--no-install-recommends", "install"}, nativePackageArgs(names, to)...)
+	out, err := exec.Command("apt-get", args...).CombinedOutput()
 	if err != nil {
 		return nil, "", fmt.Errorf("APT signed simulation failed: %w", err)
 	}
@@ -122,21 +126,29 @@ func exactAptMigration(from, to string) ([]string, string, error) {
 		}
 	}
 	var lines []string
-	var server, client bool
+	seen := map[string]bool{}
 	for _, line := range strings.Split(simulation, "\n") {
 		if !strings.HasPrefix(line, "Inst ") {
 			continue
 		}
+		matched := false
+		for _, name := range names {
+			if strings.HasPrefix(line, "Inst "+name+" ["+from+"] ("+to+" ") && !seen[name] {
+				seen[name] = true
+				matched = true
+				break
+			}
+		}
+		// Rollback backs up only the exact coupled native package set. Refuse
+		// unrelated dependency upgrades/removals rather than promise rollback
+		// of a package whose original signed bytes were not retained.
+		if !matched {
+			return nil, "", errors.New("APT migration changes unreviewed dependency or native version")
+		}
 		lines = append(lines, strings.TrimSpace(line))
-		if strings.HasPrefix(line, "Inst incus ["+from+"] ("+to+" ") {
-			server = true
-		}
-		if strings.HasPrefix(line, "Inst incus-client ["+from+"] ("+to+" ") {
-			client = true
-		}
 	}
-	if !server || !client {
-		return nil, "", errors.New("APT did not plan BOTH exact old packages")
+	if len(seen) != len(names) {
+		return nil, "", errors.New("APT did not plan exact coupled old/new native packages")
 	}
 	return lines, simulation, nil
 }
@@ -181,7 +193,22 @@ func NativeMigrationReview(from, to string) (NativeMigrationPlan, error) {
 	if err != nil {
 		return p, err
 	}
-	changes, simulation, err := exactAptMigration(from, to)
+	oldNames, err := nativePackageNames(from)
+	if err != nil {
+		return p, err
+	}
+	newNames, err := nativePackageNames(to)
+	if err != nil {
+		return p, err
+	}
+	if !slices.Equal(oldNames, newNames) {
+		return p, errors.New("cross-packaging native migration not supported")
+	}
+	if err = verifyNativePackageVersions(oldNames, from); err != nil {
+		return p, err
+	}
+	p.Packages = oldNames
+	changes, simulation, err := exactAptMigration(from, to, oldNames)
 	if err != nil {
 		return p, err
 	}
@@ -193,7 +220,7 @@ func NativeMigrationReview(from, to string) (NativeMigrationPlan, error) {
 	p.Projects = projects
 	p.AptChanges = changes
 	h := sha256.Sum256([]byte("boxweave-native-migration-v1\n" + host + "\n" + from + "\n" + to +
-		"\n" + strings.Join(projects, "\n") + "\n" + simulation))
+		"\n" + strings.Join(projects, "\n") + "\n" + strings.Join(p.Packages, "\n") + "\n" + simulation))
 	p.PlanSHA256 = hex.EncodeToString(h[:])
 	p.Mode = "explicit-migration-approval-required"
 	return p, nil
