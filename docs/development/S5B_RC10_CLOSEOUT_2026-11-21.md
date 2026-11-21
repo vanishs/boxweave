@@ -10,10 +10,10 @@
 | B2 | Scoped integration PASS; legacy compatibility decision closed (option A) | Final review only; no legacy identity retrofit |
 | B3 | Scoped #151, combined completed-PRS restart and independent partial-PRS protection PASS | Review whether direct in-progress PRS interruption concurrent with confirmed Forward is mandatory |
 | B4 | PARTIAL; genuine L0 ChatGPT connection verified | Dedicated RC10 isolated service with two independent real ChatGPT grants to same Project; handoff, refresh/reauth and test-grant revocation. Provisioning not completed |
-| B5 | PARTIAL; physical reboot, pre-reboot EDQUOT CLI witness, boot-bound witness invalidation, physical LAN TCP/UDP and approved simulated routed IPv6 PASS | Fresh post-reboot quota attestation and authenticated MCP true; confirm restoration of temporary host LAN permission |
+| B5 | All scoped physical functional witnesses PASS: reboot, EDQUOT CLI, boot-bound invalidation, fresh post-reboot MCP quota=true, LAN TCP/UDP, approved simulated routed IPv6 | Confirm restoration of temporary host LAN permission; final independent review |
 | B6 | PARTIAL; independent hosted native verification and three known-bad controls scoped PASS | Distinct final independent review, exact acceptance scope and formal signatures where applicable |
 
-**Immediate next work:** verify host cleanup; prepare a fresh disposable quota fixture (old stopped fixture and reviewed UNKNOWN retained); prepare B4 isolated RC10 service. Do not repeat physical reboot, LAN packet positives or completed CI. No final S5B_PASS, HOST_GO or stable publication.
+**Immediate next work:** verify host cleanup; retain both quota fixtures and reviewed UNKNOWN; prepare B4 isolated RC10 service. Do not repeat physical reboot, LAN packet positives or completed CI. No final S5B_PASS, HOST_GO or stable publication.
 
 ## Exact baseline and scope
 
@@ -47,7 +47,7 @@ Source `verifyDeletePinned` / `LifecyclePinnedNIC` allows legacy zero binding/ze
 
 Current real ChatGPT-connected L0 MCP calls successful, original handoff work_ref `s5b-rc10-closeout`, agent_ref `rc10-verification`, Exec ID b298dfc7cf3035aa4b9f99d7855db886. Independent SDK Git/Actor stale-write refusal [44862160239](https://github.com/vanishs/boxweave/actions/runs/44862160239) and exact RC10 nested verifier pass. Actual second independently authorized ChatGPT grant, end-to-end refresh/reconnect stable actor, test-grant revocation and real dual-Agent external Git checkpoint/handoff remain; a second chat on the same grant alone is not independent Actor proof. Do not revoke current active grant or disclose credentials. Elicitation deferred; no artificial requirement to reimplement it.
 
-## B5 — PARTIAL; physical reboot and LAN PASS, fresh quota renewal outstanding
+## B5 — scoped functional PASS; physical reboot, LAN and renewed quota witness verified
 
 Historical RC9 and pre-reboot RC10 physical attestation used fixture 382c4dc2-d82a-4477-a098-1dd2c5d0d640. Post-reboot old witness invalidated, old fixture stopped and start UNKNOWN reviewed/released without replay (details below). Retain it; do not execute the historical command again against this stopped fixture. For reference, original root attestation was:
 ```sh
@@ -59,7 +59,7 @@ For renewal prepare a new disposable, exact-UUID quota fixture and apply the sam
 
 Actual original 7e09a37fc61f41fb4608fad11a5f21c9 / 35e1782e-24f5-463b-aa1d-449f7be9fb85 re-read on RC10, exit 0 and full retained stdout: three baseline PASS, intentionally incorrect actor/native ID/UNKNOWN redispatch detected, restored PASS, final S5B6_EXACT_ISOLATED_THREE_KNOWN_BAD_AND_RESTORED=PASS (earlier isolated source, not new execution). Independent native wrong UUID/control and correct original from 136723972029, exact RC10 nested separate verifier and publication manifests retained. TC-019 crosswalk above supplements existing full inventory; TC-020 calibration scoped complete, final signoff must wait actual remaining gates and distinct independent review. A stable release candidate/artifact and trusted owner/verifier signatures are separate from RC10 closeout; no stable publication authorized.
 
-**Residual only:** B1 review residual positive CLI scope; B3 genuinely interrupted PRS + confirmed Forward combination if required by final review; B4 real client grant lifecycle/handoff; B5 fresh post-reboot quota renewal/MCP true and confirm temporary host permission cleanup; B6 final independent review/signatures. No repeats of established #151, Scriptlet, full SDK/retirement, combined completed-PRS restart or approved simulated IPv6 unless an affected defect warrants them.
+**Residual only:** B1 review residual positive CLI scope; B3 genuinely interrupted PRS + confirmed Forward combination if required by final review; B4 real client grant lifecycle/handoff; B5 confirm temporary host permission cleanup; B6 final independent review/signatures. No repeats of established #151, Scriptlet, full SDK/retirement, combined completed-PRS restart or approved simulated IPv6 unless an affected defect warrants them.
 
 ## Owner physical evidence and compatibility decision — 2026-11-21
 
@@ -80,3 +80,7 @@ Owner observed empty native operation list and no Incus journal entries in the r
 ### Host cleanup pending confirmation
 
 The owner was given the exact restoration commands after both test forwards and the guest test listener were removed. Original proxy setting and external allowlist were empty; remove only the dedicated test drop-in, unset the temporary Project proxy override, reload/restart BoxWeave, and verify service active, port 18080 unbound and L0 exact build/ready. No owner execution result yet, so do not label host restoration PASS. No new quota fixture or B4 environment provisioned yet. This checkpoint is evidence-only; no additional test or RC10 change requested in this documentation update.
+
+### Post-reboot quota renewal — scoped PASS
+
+Owner physical Btrfs space observation: 1.86 TiB device, 30.41 GiB used, 1.83 TiB estimated free; no Host disk configuration changes. Fresh exact RC10 L0 fixture `s5b-rc10-quota-renew-1121`, UUID `20f97192-f769-4dd7-8989-9e4db0a9a949`, 2 GiB disk, 768 MiB RAM, one CPU, internet=false. Create original `13f1bf566907f9d5147acf7ae44a0341` / native `f7778918-7409-4004-a08f-d74c40b0fe0b` SUCCEEDED; readiness `74fcbbc1ae8f1baa0c0a066e7fe6de08` / `34bed3a7-bd1b-49c2-9857-a82bbd32e015` SUCCEEDED guest exit 0. Bounded incompressible write (at most 2 GiB inside only that fixture) original `897fc8b14f083030c266c098f042f9ec` / `ddbf329c-41f9-43b2-9260-0551f5a98a57` SUCCEEDED original, guest exit 1, both streams empty; no inference of errno from missing stderr. Owner ran official root attester with exact new UUID and --verify-write-refusal; reported JSON evidence HOST_QGROUP_NEAR_FULL_EDQUOT_VERIFIED, project user-1001, pool default, expires_in_hours=4. Fresh actual authenticated MCP host_status tracking `4f02020eac7f1c954841572e11228248` verifies exact RC10 version/commit/digest, ready=true, mcp_ready=true, selected_storage_quota_verified=true and STORAGE_QUOTA_HOST_WITNESS warning with four-hour or reboot expiry. Bounded attention empty. Post-reboot false -> verified true is directly observed; no fake witness, time change, or repeat host reboot. Old fixture and UNKNOWN retained. Keep current near-full fixture unchanged for review. All scoped B5 functional evidence complete; host temporary LAN permission restoration still awaiting owner confirmation, not assumed. Final independent signoff remains separate. No stable release or RC10 modification.
