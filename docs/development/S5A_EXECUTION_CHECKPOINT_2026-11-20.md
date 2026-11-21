@@ -1,5 +1,7 @@
 # S5A — execution checkpoint
 
+> Latest owner scope decision: [canonical S5 phase card](phases/05_RELEASE_ACCEPTANCE.md) and [S5B current checkpoint](S5B_EXECUTION_CHECKPOINT_2026-11-20.md) supersede the historical A3 signed-client and Elicitation prerequisite. The v1 supported OAuth recovery/refusal contract is now the acceptance target. Do not delete the historical evidence below or treat the revised scope as a test PASS.
+
 Owner-directed single development PR for S5A1–S5A6, based on protected v1 at `c5a33a374084038649ecab84ca36767aaa949212` (merged #162).
 
 Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonical-execution-order--s5a-development-then-s5b-integrated-acceptance-2026-11-20), [engineering review](../research/V1_S5_CLOSEOUT_ENGINEERING_REVIEW_2026-11-20.md), and [agent rules](../../AGENTS.md). This checkpoint tracks work, not a replacement plan.
@@ -8,8 +10,8 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 | --- | --- |
 | S5A1 — incident provenance and typed diagnostics | PARTIAL |
 | S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
-| S5A3 — independently verifiable user approval | SYNTHETIC_SIGNED_LAB_PASS / BLOCKED_PENDING_TRUSTED_CLIENT_EVIDENCE |
-| S5A4 — network and dependent Delete recovery | PARTIAL / S5A4_SIMULATED_PASS / DETERMINISTIC_NATIVE_PASS / TRUSTED_APPROVAL_BLOCKED |
+| S5A3 — supported OAuth recovery and confirmation scope | OWNER_SCOPE_REVISED / REFUSAL_REGRESSION_PENDING |
+| S5A4 — network and dependent Delete recovery | DETERMINISTIC_NATIVE_PASS / FINAL_SUPPORTED_SCOPE_REVIEW_PENDING; unsupported compensation refused |
 | S5A5 — diagnostic and recovery evidence integration | PASS (scoped; runtime exact 6bd2226) |
 | S5A6 — compatibility, release engineering and feature freeze | PARTIAL / STABLE_GATE_BOX_PASS / FREEZE_BLOCKED |
 
