@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         case: >-
-          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
+          ${{ fromJSON(github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -101,6 +101,23 @@ jobs:
           '    sudo runuser -u boxweave -- python3 - "$db" "$witness_dir/s5a1-raw-readback-$exit_case.json"']
           s=s.replace(old,'\n'.join(lines))
           p.write_text(s)
+          # umask 077 also changes mkdir -p intermediate directories to 0700.
+          # Traverse only the two disposable parent directories; their
+          # service-owned SQLite children remain 0700 and files remain private.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          for old, parent, child in [
+              ('  mkdir -p "$fsync_dir"\n', '$work/fsync-$phase', '$fsync_dir'),
+              ('mkdir -p "$sqlite_full_dir"\n', '$work/sqlite-full', '$sqlite_full_dir')]:
+              assert s.count(old)==1
+              indent='  ' if old.startswith('  ') else ''
+              s=s.replace(old,old+indent+'chmod 0711 "'+parent+'"\n')
+          old='  sudo chown boxweave:incus "$fsync_dir"\n'
+          assert s.count(old)==1
+          s=s.replace(old,old+'  sudo runuser -u boxweave -- test -x "$fsync_dir"\n  test "$(stat -c %a "$fsync_dir")" = 700\n  echo "S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL=PASS"\n')
+          old='sudo chmod 0700 "$sqlite_full_dir"\n'
+          assert s.count(old)==1
+          s=s.replace(old,old+'sudo runuser -u boxweave -- test -x "$sqlite_full_dir"\ntest "$(sudo stat -c %a "$sqlite_full_dir")" = 700\necho "S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS"\n')
+          p.write_text(s)
           # TC-020: use the normal read-only independent verifier against a
           # separate deliberately incorrect checkpoint; never edit live SQLite,
           # active native state, the authentic checkpoint, or product code.
@@ -169,6 +186,8 @@ jobs:
           rc=$?
           set -e
           grep -E '^(S5B|S5A|S25|S3|S4_A|S2_|BH018_)[A-Z0-9_]+(=PASS([[:space:]].*)?$|=BLOCKED$|=FAIL$|_SHA256=[a-f0-9]{64}$|_SHA=[a-f0-9]{40}$|_ID=[a-f0-9-]{32,36}$)' "$logfile" || :
+          # Report actual pass markers in execution order, including MCP quota and SQLite.
+          grep -E '^S2_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 35 || :
           # Emit only fixed enums and numeric status codes, not raw errors.
           grep -E '^(S4_A_(NATIVE_STAGE|OAUTH_STAGE|OAUTH_FAILURE_CLASS|FAILURE_CLASS)|BH018_(MCP_RESUME_PHASE|INSTALLED_NORMAL_RESTART_CLASS|INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE)|S25_R2_FAILURE_CLASS)=[A-Za-z0-9_]+$' "$logfile" || :
           echo "S5B_INTEGRATED_SCRIPT_EXIT=$rc"
@@ -177,6 +196,8 @@ jobs:
           for marker in $required; do grep -Fxq "$marker" "$logfile"; done
           if [[ "$S5B_CASE" == original-fault* ]]; then
             grep -Fxq 'S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS' "$logfile"
+            test "$(grep -Fxc 'S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL=PASS' "$logfile")" = 2
+            grep -Fxq 'S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
           fi
