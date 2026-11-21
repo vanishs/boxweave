@@ -210,7 +210,27 @@ with open_client(actor1, True) as m:
     assert len({p["mac"] for p in pins.values()}) == 3
     assert sql("select count(*) from network_bindings where state='PINNED'") == "3"
     assert sql("select count(*) from network_address_fences where state='RESERVED'") == "6"
-    assert sql("select count(*) from operation_resource_claims where resource_key like 'create-pin:%'") == "0"
+    # Resource claims are durable original history, not disposable lock rows.
+    # Verify every retained reservation belongs to its exact successful Create,
+    # and that there are no pending/uncertain create-pin claims in this clean lab.
+    for k in names:
+        pin = pins[k]
+        prefix = "create-pin:" + bridge + ":"
+        expected = {prefix + "v4:" + pin["ipv4"],
+                    prefix + "v6:" + pin["ipv6"],
+                    prefix + "mac:" + pin["mac"],
+                    prefix + "acl:" + acl}
+        actual = sql(
+            "select c.resource_key from operation_resource_claims c "
+            "join operations o on o.id=c.operation_id where c.operation_id='"
+            + ops["create-" + k] + "' and c.layer='" + project
+            + "' and o.state='SUCCEEDED' and c.resource_key like 'create-pin:%'"
+        ).splitlines()
+        assert len(actual) == 4 and set(actual) == expected, k
+    assert sql("select count(*) from operation_resource_claims where resource_key like 'create-pin:%'") == "12"
+    assert sql("select count(*) from operation_resource_claims c join operations o on o.id=c.operation_id "
+               "where c.resource_key like 'create-pin:%' and "
+               "o.state in ('ADMITTED','DISPATCHING','RUNNING','VERIFYING','UNKNOWN')") == "0"
     print("S5B_PROD_MCP_CREATE_AUTOMATIC_PINNED_THREE_BOXES=PASS", flush=True)
     audit = json.loads(run(["sudo", bw, "native-peer-audit", "-db", db,
                             "-project", project, "-network", bridge, "-acl", acl]))
