@@ -1,6 +1,6 @@
 # S5B — RC9 acceptance checkpoint (2026-11-20 PT)
 
-**2026-11-21 update:** PR #164 is merged and RC10 is published and installed. Use the [RC10 closeout evidence and residual gates](S5B_RC10_CLOSEOUT_2026-11-21.md) as the current checkpoint; this document remains historical evidence, not a current pending-task list.
+**2026-11-21 update:** PR #164 is merged and RC10 is published and installed. Use the [RC10 closeout evidence and residual gates](S5B_RC10_CLOSEOUT_2026-11-21.md) as the current checkpoint; this document remains historical evidence, not a current pending-task list. Latest RC10 update records option A, physical reboot and real LAN TCP/UDP PASS, quota witness invalidation PASS, exact reviewed UNKNOWN claim release with original history preserved; fresh quota renewal and host cleanup confirmation, B4 real dual-grant and final independent review remain. Do not repeat passed physical or CI cases.
 
 ## Scope and authority
 
