@@ -50,7 +50,29 @@ def recover(oid, leaf, *args, success=True):
                          "-operation", oid, "-reviewer", "rc10-ci-reviewer",
                          "-action", leaf, "-approve-local", *args],
                         capture_output=True, text=True, timeout=40)
-    assert (cp.returncode == 0) == success, ("unexpected CLI result", leaf, cp.returncode)
+    if (cp.returncode == 0) != success:
+        # Report only fixed diagnostic categories, never raw process output.
+        if leaf.endswith("-inspect"):
+            categories = {
+                "installed identity unverified": "INSTALLED_IDENTITY_UNVERIFIED",
+                "restricted recovery worker failed": "RESTRICTED_WORKER_FAILED",
+                "permission denied": "PERMISSION_DENIED",
+                "native restricted preflight": "NATIVE_PREFLIGHT_FAILED",
+                "not found": "NOT_FOUND",
+                "invalid state": "INVALID_STATE",
+                "unreviewable original Delete": "UNREVIEWABLE_DELETE",
+                "exact installed SQLite path": "INSTALLED_PATH_MISMATCH",
+                "manual UNKNOWN review requires": "LOCAL_APPROVAL_REQUIRED",
+                "original native Create identity not proven": "CREATE_IDENTITY_UNPROVEN",
+                "native identity changed": "NATIVE_IDENTITY_CHANGED",
+                "context deadline exceeded": "DEADLINE_EXCEEDED",
+                "database is locked": "DATABASE_LOCKED",
+                "unknown action": "UNKNOWN_ACTION",
+            }
+            message = cp.stderr.lower()
+            matches = [label for phrase, label in categories.items() if phrase.lower() in message]
+            print("S5B_RC10_INSPECT_ERROR_CLASSES=" + ",".join(matches or ["UNCLASSIFIED"]), flush=True)
+        raise AssertionError(("unexpected CLI result", leaf, cp.returncode))
     return json.loads(cp.stdout) if success else None
 
 def audit_challenge(oid, leaf):
