@@ -151,8 +151,15 @@ assert os.environ['GITHUB_ACTIONS']=='true' and os.environ['RUNNER_ENVIRONMENT']
 assert os.geteuid()!=0
 name='s5b2-metadata-disposable'
 token=next(x[6:].strip() for x in (work/'private/admin2.secret').read_text().splitlines() if x.startswith('token='))
+def native_argv(*args):
+ # incus query rejects --project; pin the exact Project in its request URI.
+ if args[0]=='query':
+  from urllib.parse import urlsplit,parse_qs
+  assert parse_qs(urlsplit(args[-1]).query).get('project')==[project]
+  return ['sudo','incus',*args]
+ return ['sudo','incus','--project',project,*args]
 def native(*args):
- return subprocess.check_output(['sudo','incus','--project',project,*args],text=True,timeout=80).strip()
+ return subprocess.check_output(native_argv(*args),text=True,timeout=80).strip()
 def call(m,t,**args):
  return m.call(t,args).structured
 def submit(m,t,key,**args):
@@ -190,7 +197,7 @@ with LoopbackMCP(token=token,timeout=30,allow_mutations=True) as m:
  # Classify only an actual explicit Project policy refusal, independently
  # verify absence, and continue the unrelated readiness/retention tests.
  def metadata_create(kind,args):
-  p=subprocess.run(['sudo','incus','--project',project,*args],text=True,capture_output=True,timeout=80)
+  p=subprocess.run(native_argv(*args),text=True,capture_output=True,timeout=80)
   if p.returncode==0:
    print('S5B2_NATIVE_'+kind.upper()+'_CREATED=PASS',flush=True)
    return True

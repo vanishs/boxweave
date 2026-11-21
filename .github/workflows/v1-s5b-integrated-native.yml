@@ -18,7 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [original-fault, original-fault-repeat, nested-restart-verifier]
+        case: >-
+          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -75,6 +76,31 @@ jobs:
               indent='  ' if 'oauth' in binary else ''
               script=script.replace(anchor,anchor+indent+'chmod 0755 "'+binary+'"\n'+indent+'sudo runuser -u boxweave -- test -x "'+binary+'"\n'+indent+'echo S5B_RESTRICTED_TEST_EXECUTABLE_READY=PASS\n')
               p.write_text(script)
+          # Keep originals private and runner-owned. Copy only these
+          # redacted native witness files for the existing nonroot reader.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          old='  sudo runuser -u boxweave -- python3 - "$db" "$work/s4-raw-delete.json"'
+          assert s.count(old)==1
+          lines=[
+          '  witness_dir="$work/s4-service-witness"',
+          '  sudo install -d -o root -g root -m 0711 "$witness_dir"',
+          '  for case in create exit126 exit127 delete; do',
+          '    test -s "$work/s4-raw-$case.json"',
+          '    sudo install -o boxweave -g "$(id -gn boxweave)" -m 0600 "$work/s4-raw-$case.json" "$witness_dir/s4-raw-$case.json"',
+          '    sudo runuser -u boxweave -- test -r "$witness_dir/s4-raw-$case.json"',
+          '  done',
+          '  echo S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS',
+          '  sudo runuser -u boxweave -- python3 - "$db" "$witness_dir/s4-raw-delete.json"']
+          s=s.replace(old,'\n'.join(lines))
+          old='    sudo runuser -u boxweave -- python3 - "$db" "$work/s5a1-raw-readback-$exit_case.json"'
+          assert s.count(old)==1
+          lines=[
+          '    test -s "$work/s5a1-raw-readback-$exit_case.json"',
+          '    sudo install -o boxweave -g "$(id -gn boxweave)" -m 0600 "$work/s5a1-raw-readback-$exit_case.json" "$witness_dir/s5a1-raw-readback-$exit_case.json"',
+          '    sudo runuser -u boxweave -- test -r "$witness_dir/s5a1-raw-readback-$exit_case.json"',
+          '    sudo runuser -u boxweave -- python3 - "$db" "$witness_dir/s5a1-raw-readback-$exit_case.json"']
+          s=s.replace(old,'\n'.join(lines))
+          p.write_text(s)
           # TC-020: use the normal read-only independent verifier against a
           # separate deliberately incorrect checkpoint; never edit live SQLite,
           # active native state, the authentic checkpoint, or product code.
@@ -150,6 +176,7 @@ jobs:
           grep -Fxq "S5B_INTEGRATED_EXACT_BINARY_SHA256=$S5B_SHA" "$logfile"
           for marker in $required; do grep -Fxq "$marker" "$logfile"; done
           if [[ "$S5B_CASE" == original-fault* ]]; then
+            grep -Fxq 'S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
             grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
           fi

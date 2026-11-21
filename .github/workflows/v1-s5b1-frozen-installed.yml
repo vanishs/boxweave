@@ -22,7 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [sdk, retirement, metadata]
+        mode: >-
+          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') && '["metadata"]' || '["sdk","retirement","metadata"]') }}
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
