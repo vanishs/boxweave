@@ -35,6 +35,7 @@ jobs:
       RUNNER_ENVIRONMENT: github-hosted
       S3_FILE_INSTALLED_PHASE2: 'true'
       S3_FILE_INSTALLED_PHASE3: 'true'
+      BW_S5B_TC015: ${{ github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && 'true' || 'false' }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
@@ -69,5 +70,11 @@ jobs:
           grep -Fxq 'S3_INSTALLED_INDEPENDENT_NATIVE_BOX_ABSENCE=PASS' "$RUNNER_TEMP/s3-file-installed.log"
           grep -Fxq 'S3_INSTALLED_SCOPED_HTTP_MCP_NATIVE_INTEGRATION=PASS' "$RUNNER_TEMP/s3-file-installed.log"
           grep -Fxq 'S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS' "$RUNNER_TEMP/s3-file-installed.log"
-          grep -Fxq 'S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          if test "$BW_S5B_TC015" = true; then
+            grep -Fxq 'S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+            grep -Fxq 'S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+            grep -Fxq 'S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          else
+            grep -Fxq 'S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS' "$RUNNER_TEMP/s3-file-installed.log"
+          fi
           echo S3_INSTALLED_FILE_TOOLS_AND_PHASE3_SUPERVISED_GIT_REAL_NATIVE_VERIFIER=PASS

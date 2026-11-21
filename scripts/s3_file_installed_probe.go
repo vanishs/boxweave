@@ -174,7 +174,10 @@ func s3GitCheckpointFile() string {
 }
 
 func persistS3GitCheckpoint(data s3GitCheckpoint) {
-	filename := s3GitCheckpointFile()
+	persistS3GitCheckpointAt(s3GitCheckpointFile(), data)
+}
+
+func persistS3GitCheckpointAt(filename string, data s3GitCheckpoint) {
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		panic(err)
@@ -224,10 +227,17 @@ func loadS3GitCheckpoint() s3GitCheckpoint {
 }
 
 func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, script string) (string, int, string, string) {
+	workRef, agentRef := "lab/s3/one-agent-git", "s3-supervised-single-agent"
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		workRef, agentRef = "lab/s5b/two-actor-git", "s5b-actor-a"
+		if os.Getenv("BW_S3_PHASE3_MODE") == "handoff" {
+			agentRef = "s5b-actor-b"
+		}
+	}
 	r := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", script},
 		"timeout_ms": 300000, "idempotency_key": key,
-		"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
+		"work_ref": workRef, "agent_ref": agentRef,
 	})
 	id := originalID(r)
 	// Operation state SUCCEEDED means native Exec completed, NOT guest exit 0.
@@ -305,9 +315,6 @@ func runS3GuestGitPhase3(ctx context.Context, admin, peer *mcp.ClientSession, uu
 	const dir = "/root/s3-guest-git"
 	const wrongSource = `def double(value):
     return value * 2 + 1
-`
-	const rightSource = `def double(value):
-    return value * 2
 `
 	const unitTest = `import unittest
 from calc import double
@@ -387,39 +394,92 @@ mkdir -p /root/s3-guest-git
 		strings.Contains(failErr, "FAILED"), "original persisted stderr has no actual unittest failure")
 	fmt.Println("S3_PHASE3_GUEST_TEST_FAILED_ORIGINAL_EXIT_ONE=PASS")
 	fmt.Println("S3_PHASE3_GUEST_FAILED_TEST_ORIGINAL_OPERATION_ID=" + failID)
-	// File replace is intentionally UNSUPPORTED; authorized Guest Exec/Git
-	// is the verified safe route to an edit in this trusted supervised Box.
+
+	cp := s3GitCheckpoint{
+		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
+		SetupOp: setupID, FailOp: failID, FileCreateOp: created[0],
+		InitialGitCommit: firstCommit,
+		NativeSetupOp:    s3OriginalNativeID(ctx, admin, uuid, setupID),
+		NativeFailOp:     s3OriginalNativeID(ctx, admin, uuid, failID),
+	}
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		persistS3GitCheckpointAt(requiredEnv("BW_S5B_HANDOFF_CHECKPOINT"), cp)
+		fmt.Printf("S5B_TC015_ACTOR_A_FAILED_CHECKPOINT=PASS BW=%s NATIVE=%s\n", cp.FailOp, cp.NativeFailOp)
+		return // Process A exits before the repair. The runner commits this external checkpoint.
+	}
+	completeS3GuestGitPhase3(ctx, admin, peer, cp)
+}
+
+func completeS3GuestGitPhase3(ctx context.Context, actor, observer *mcp.ClientSession, cp s3GitCheckpoint) {
+	const dir = "/root/s3-guest-git"
+	const rightSource = "def double(value):\n    return value * 2\n"
+	uuid := cp.BoxUUID
+	// Native conditional File replace remains unsupported. Trusted guest
+	// Exec/Git is the normal approved editing path for this disposable Box.
 	fixScript := "set -eu; cd " + dir +
 		"; sed -i 's/ + 1$//' calc.py; " +
 		"git add calc.py; git commit -q -m 'fix: double returns exact value'; " +
 		"test $(git rev-list --count HEAD) = 2; " +
 		"test $(git status --porcelain | wc -l) -eq 0; " +
 		"echo S3_GIT_REPAIRED_COMMIT=$(git rev-parse HEAD)"
-	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
+	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, actor, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
 	need(fixExit == 0, "Guest authorized repair or Git second commit failed")
 	fixedCommit := gitCommitLine(fixOut, "S3_GIT_REPAIRED_COMMIT=")
-	need(fixedCommit != firstCommit, "Git final commit matches deliberately failing original")
-	need(bytes.Equal(fileBytes(ctx, peer, uuid, dir+"/calc.py"), []byte(rightSource)),
+	need(fixedCommit != cp.InitialGitCommit, "Git final commit matches deliberately failing original")
+	need(bytes.Equal(fileBytes(ctx, observer, uuid, dir+"/calc.py"), []byte(rightSource)),
 		"File tool did not return corrected Guest source byte-for-byte")
-	passScript := "cd " + dir + "; python3 -B -m unittest -v test_calc"
-	passID, passExit, _, passErr := s3GuestExec(ctx, admin, uuid, "s3-git-passing-test-original-once", passScript)
+	passID, passExit, _, passErr := s3GuestExec(ctx, actor, uuid, "s3-git-passing-test-original-once", "cd "+dir+"; python3 -B -m unittest -v test_calc")
 	need(passExit == 0 && strings.Contains(passErr, "Ran 1 test") &&
 		strings.Contains(passErr, "OK"), "original Guest regression was not repaired")
 	fmt.Println("S3_PHASE3_GUEST_REPAIR_GIT_COMMIT_AND_TEST_PASS=PASS")
 	sum := sha256.Sum256([]byte(rightSource))
-	persistS3GitCheckpoint(s3GitCheckpoint{
-		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
-		SetupOp: setupID, FailOp: failID, FixOp: fixID, PassOp: passID,
-		FileCreateOp: created[0], InitialGitCommit: firstCommit,
-		FinalGitCommit: fixedCommit, FinalGitClean: true,
-		NativeSetupOp: s3OriginalNativeID(ctx, admin, uuid, setupID),
-		NativeFailOp:  s3OriginalNativeID(ctx, admin, uuid, failID),
-		NativeFixOp:   s3OriginalNativeID(ctx, admin, uuid, fixID),
-		NativePassOp:  s3OriginalNativeID(ctx, admin, uuid, passID),
-		SourceSHA256:  hex.EncodeToString(sum[:]),
-	})
-	fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
+	cp.FixOp, cp.PassOp = fixID, passID
+	cp.FinalGitCommit, cp.FinalGitClean = fixedCommit, true
+	cp.NativeFixOp = s3OriginalNativeID(ctx, actor, uuid, fixID)
+	cp.NativePassOp = s3OriginalNativeID(ctx, actor, uuid, passID)
+	cp.SourceSHA256 = hex.EncodeToString(sum[:])
+	persistS3GitCheckpoint(cp)
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		fmt.Printf("S5B_TC015_ACTOR_B_REPAIRED_CHECKPOINT=PASS BW=%s NATIVE=%s\n", cp.PassOp, cp.NativePassOp)
+	} else {
+		fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
+	}
 	fmt.Println("S3_PHASE3_GUEST_GIT_FAIL_FIX_PASS_STAGE=PASS")
+}
+
+func resumeS5BGitHandoff(ctx context.Context, actor *mcp.ClientSession) {
+	const dir = "/root/s3-guest-git"
+	b, err := os.ReadFile(requiredEnv("BW_S5B_HANDOFF_CHECKPOINT"))
+	need(err == nil && len(b) <= 8192, "missing or oversized external handoff")
+	var cp s3GitCheckpoint
+	need(json.Unmarshal(b, &cp) == nil && cp.NativeBoxName == "s3-file-phase2-ci" &&
+		len(cp.BoxUUID) == 36 && len(cp.SetupOp) == 32 && len(cp.FailOp) == 32 && len(cp.FileCreateOp) == 32 &&
+		len(cp.NativeSetupOp) == 36 && len(cp.NativeFailOp) == 36 && len(cp.InitialGitCommit) == 40 &&
+		cp.FixOp == "" && cp.PassOp == "" && cp.FinalGitCommit == "" && !cp.FinalGitClean &&
+		cp.NativeFixOp == "" && cp.NativePassOp == "" && cp.SourceSHA256 == "", "invalid partial handoff checkpoint")
+	box := object(call(ctx, actor, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
+	need(field(box, "box_id") == cp.BoxUUID && field(box, "native_state") == "Running", "handoff original Box not verified")
+	for _, original := range []struct {
+		id, native, marker, stream string
+		exit                       float64
+	}{
+		{cp.SetupOp, cp.NativeSetupOp, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, "stdout", 0},
+		{cp.FailOp, cp.NativeFailOp, "AssertionError: 5 != 4", "stderr", 1},
+	} {
+		need(s3OriginalNativeID(ctx, actor, cp.BoxUUID, original.id) == original.native, "handoff native receipt mismatch")
+		out := call(ctx, actor, "operation_output_get", map[string]any{"operation_id": original.id, "stream": original.stream, "limit": 4096})
+		decoded, e := base64.StdEncoding.DecodeString(field(out, "content_base64"))
+		need(e == nil && out["exit_code"] == original.exit && bytes.Contains(decoded, []byte(original.marker)), "handoff original output mismatch")
+	}
+	fileOp := object(call(ctx, actor, "operation_get", map[string]any{"operation_id": cp.FileCreateOp}), "operation")
+	need(field(fileOp, "state") == "SUCCEEDED" && field(fileOp, "box_uuid") == cp.BoxUUID && field(fileOp, "action") == "box_file_apply", "handoff original file receipt mismatch")
+	need(bytes.Equal(fileBytes(ctx, actor, cp.BoxUUID, dir+"/calc.py"), []byte("def double(value):\n    return value * 2 + 1\n")), "handoff original source mismatch")
+	_, code, head, stderr := s3GuestExec(ctx, actor, cp.BoxUUID, "s5b-b-independent-git-head-read", "set -eu; cd "+dir+"; test -z \"$(git status --porcelain)\"; git rev-parse HEAD")
+	need(code == 0 && strings.TrimSpace(head) == cp.InitialGitCommit && stderr == "", "handoff stale HEAD or dirty working tree")
+	repro, code, _, stderr := s3GuestExec(ctx, actor, cp.BoxUUID, "s5b-b-reproduce-failure-once", "cd "+dir+"; python3 -B -m unittest -v test_calc")
+	need(code == 1 && strings.Contains(stderr, "AssertionError: 5 != 4"), "second Actor did not independently reproduce failure")
+	fmt.Printf("S5B_TC015_SECOND_ACTOR_REPRODUCED_ORIGINAL_FAIL=PASS BW=%s NATIVE=%s\n", repro, s3OriginalNativeID(ctx, actor, cp.BoxUUID, repro))
+	completeS3GuestGitPhase3(ctx, actor, actor, cp)
 }
 
 func verifyS3GuestGitOriginals(ctx context.Context, admin *mcp.ClientSession) {
@@ -504,6 +564,13 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
+	if os.Getenv("BW_S3_PHASE3_MODE") == "handoff" {
+		need(os.Getenv("BW_S5B_TC015") == "true", "handoff mode not explicitly enabled")
+		actorB := connect(ctx, "s5b-actor-b", requiredEnv("BW_S3_PEER_TOKEN_FILE"))
+		defer actorB.Close()
+		resumeS5BGitHandoff(ctx, actorB)
+		return
+	}
 	if os.Getenv("BW_S3_PHASE3_MODE") == "verify" {
 		independent := connect(ctx, "fresh-restart-verifier", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
 		defer independent.Close()
