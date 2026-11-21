@@ -8,12 +8,12 @@ Authority: [canonical S5 execution plan](phases/05_RELEASE_ACCEPTANCE.md#canonic
 
 | Increment | Formal status |
 | --- | --- |
-| S5A1 — incident provenance and typed diagnostics | PARTIAL |
-| S5A2 — bounded shared operation recovery | PASS (scoped; exact bd71240) |
-| S5A3 — supported OAuth recovery and confirmation scope | OWNER_SCOPE_REVISED / REFUSAL_REGRESSION_PENDING |
-| S5A4 — network and dependent Delete recovery | DETERMINISTIC_NATIVE_PASS / FINAL_SUPPORTED_SCOPE_REVIEW_PENDING; unsupported compensation refused |
-| S5A5 — diagnostic and recovery evidence integration | PASS (scoped; runtime exact 6bd2226) |
-| S5A6 — compatibility, release engineering and feature freeze | PARTIAL / STABLE_GATE_BOX_PASS / FREEZE_BLOCKED |
+| S5A1 — incident provenance and typed diagnostics | PASS (scoped technical acceptance; owner-conditional historical evidence disposition, exact final B3 repeat required) |
+| S5A2 — bounded shared operation recovery | PASS (scoped; reverified native 939d4c06) |
+| S5A3 — supported OAuth recovery and confirmation scope | PASS (scoped revised support/refusal contract; actual client grant evidence remains B4) |
+| S5A4 — network and dependent Delete recovery | PASS (scoped deterministic Native recovery; unsupported compensation refused) |
+| S5A5 — diagnostic and recovery evidence integration | PASS (scoped; reverified native 939d4c06) |
+| S5A6 — compatibility, release engineering and feature freeze | PARTIAL / SOURCE_AND_OFFLINE_GATE_PASS / EXACT_FREEZE_PENDING |
 
 Reuse existing CLI recovery, PRS, Activity, OAuth and SQLite capabilities. Guided install/uninstall work from #162 is already implemented; physical integrated acceptance stays in S5B. Existing implementation evidence is not a new S5A PASS.
 
@@ -40,3 +40,12 @@ Owner started A5. [A5 implementation and acceptance](S5A5_EVIDENCE_INTEGRATION_2
 A5 scoped PASS signed against exact runtime `6bd2226`: [installed native success](https://github.com/vanishs/boxweave/actions/runs/44841772798) and [A5 Box two-Actor supplemental evidence](S5A5_EVIDENCE_INTEGRATION_2026-11-20.md#a5-scoped-signoff--2026-11-20-pt), including genuine lost HTTP recovery response, restarted handler/ledger, pagination, archive readback and five Race iterations. Only test/document changes since runtime witness. A4 Forward/dependent Delete and PRS revoke native regressions now green at `6bd2226`; A3-dependent production compensation still blocked. No release or actual ChatGPT approval witness. A6 not started.
 
 Owner requested combined completion/Box acceptance of A3/A4/A6. [A6 stable gate checkpoint](S5A6_RELEASE_GATE_2026-11-20.md): separate stable candidate and manual signed-publication workflows implemented, offline signed positive dry-run and incomplete/forged/provenance negatives PASS; full make verify and combined three-repeat A3/A4/A5 Race PASS. A3 trusted actual client contract remains unproved, A4 production compensation blocked; no runtime/schema integration, real release configuration or publication. No feature freeze, S5A6 formal PASS or B acceptance.
+
+
+## S5B campaign — A1–A5 scoped technical signoffs, A6 residual freeze
+
+See [S5B execution checkpoint](S5B_EXECUTION_CHECKPOINT_2026-11-20.md) for original IDs, source/digest and evidence. A1 PASS under the explicit owner conditional historical evidence-loss disposition: bounded retrieval exhausted; UNKNOWN_CAUSE / HISTORICAL_EVIDENCE_UNAVAILABLE retained; independent installed repeated postrestart readback at ead80487 and earlier, receipt/refusal/source regressions passed. This is not #151 historical root-cause resolution and does not close it; exact final B3 repeat required.
+
+A2 and A5 scoped native reacceptance PASS at 939d4c06 ([44853876968](https://github.com/vanishs/boxweave/actions/runs/44853876968)). A3 scoped revised OAuth authorization/refusal contract accepted from current-runtime source Race tests and existing installed recovery/CLI parity/native refusal evidence, no independent trusted user approval or compensation claimed; actual intended-client OAuth lifecycle/recovery is kept in B4. A4 supported deterministic native scoped PASS: Forward/dependent Delete [44853876964](https://github.com/vanishs/boxweave/actions/runs/44853876964), prior same-runtime independent PRS grant/revoke [44850734341](https://github.com/vanishs/boxweave/actions/runs/44850734341) / [44850734454](https://github.com/vanishs/boxweave/actions/runs/44850734454), protected/incomplete original evidence retained and unsupported compensation refused.
+
+A6: current full source verification, offline stable-gate positives/negatives, 23 discovered and invoked RC9 Tools, 48 preview top-level CLI help dispatches, dual-arch candidate build and manifest [44854360478](https://github.com/vanishs/boxweave/actions/runs/44854360478), actual contained RC8 install/RC9 upgrade/RC8 rollback all scoped PASS. All are documented separately, not frozen exact candidate installed end-to-end evidence. Final acceptance authority, exact frozen artifact digests, remaining integration/compatibility and physical/client witnesses are not satisfied. A6 remains PARTIAL; no S5A_PASS, S5B_PASS or release signoff. Do not introduce new features in B.
