@@ -2,6 +2,8 @@
 
 **Status: B1–B5 scoped acceptance PASS; B6 independent evidence review scoped PASS; formal S5B/HOST_GO/stable release signatures not issued.** This is an evidence-only closeout on the owner's published RC10 baseline. Supersedes stale pending labels where the specific original evidence below has succeeded; historical failures, scopes and identifiers remain in [prior checkpoint](S5B_EXECUTION_CHECKPOINT_2026-11-20.md). A1–A6 scoped development signoffs are not reopened. No RC10 runtime code change, artifact replacement, existing Box deletion or grant revocation. Owner-authorized physical reboot, temporary LAN permissions and one audited UNKNOWN claim release are recorded below; original UNKNOWN history retained. Host temporary LAN permission restoration confirmed by owner and subsequent authenticated service readback.
 
+**Latest formal review:** [S5B RC10 formal acceptance review and per-interface matrix](S5B_RC10_FORMAL_ACCEPTANCE_REVIEW_2026-11-21.md). All 23 MCP, 48 CLI and 14 recover action names crosswalked with their evidence class; scoped technical disposition preserved. Full S5B_PASS withheld: TC-019 exact-artifact/per-leaf proof differences, remaining mandatory matrix (including A-049 chained physical LAN evidence not located), and stable candidate/signature binding. Fresh L0 exact RC10 read 0abd4149e21208ab88464aa5611697b4 confirmed ready, old quota witness no longer current. No additional waiver, test replay or release authorization.
+
 ## Current gate ledger (latest; supersedes earlier observations)
 
 | Gate | Current status | Remaining work |
@@ -13,7 +15,7 @@
 | B5 | Scoped physical functional, cleanup and independent evidence review PASS: reboot, EDQUOT CLI, boot-bound invalidation, fresh post-reboot MCP quota=true, LAN TCP/UDP, approved simulated routed IPv6; host temporary LAN permissions restored | Preserve time-bounded quota and simulated IPv6 distinctions |
 | B6 | Independent evidence review and calibration scoped PASS; B4 client-specific waiver recorded | Formal final mandatory matrix/TC-019/020 signoff and trusted release signatures remain separate; no stable authorization |
 
-**Immediate next work:** functional closeout and scoped independent evidence review complete. Owner option A removes the actual-client natural-refresh blocker; retain all historical receipts and limitations. No new OAuth tunnel or client grant, no repeated physical/native tests. Final formal acceptance matrix/signatures and any release decision remain separate; PR #165 stays Draft pending that review. No S5B_PASS, HOST_GO or stable publication.
+**Immediate next work:** review exact-artifact evidence-substitution scope or targeted missing witnesses in the formal review above; prepare stable candidate and trusted signatures only after separately authorized merge. Owner OAuth option A removes that client-specific blocker. No new OAuth tunnel or client grant; no repeated passed suites. Retain historical receipts and limitations. PR #165 remains Draft; no S5B_PASS, HOST_GO or stable publication.
 
 ## Exact baseline and scope
 
