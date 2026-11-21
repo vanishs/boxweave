@@ -1,0 +1,142 @@
+name: S5B2-B6 pinned integrated native acceptance (non-release)
+
+on:
+  push:
+    branches: [feat/v1-s5b-acceptance-20261120]
+    paths:
+      - '.github/workflows/v1-s5b-integrated-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrated:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [original-fault, original-fault-repeat, recovery-archive, two-actor-git, nested-restart-verifier]
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+      S5B_CASE: ${{ matrix.case }}
+      S5B_PIN: a3e02b4750edcabb80427e3311a19614d82b0029
+      S5B_SHA: a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: a3e02b4750edcabb80427e3311a19614d82b0029
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Exact source and reproducible binary, review-only harness adjustments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$S5B_PIN"
+          test "$(git rev-parse HEAD^{tree})" = 19f4548315c497f611bd83d5537bf6ec5d63e9d1
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          go mod verify
+          python3 - <<'PY'
+          import pathlib, os
+          sha = os.environ['S5B_SHA']
+          # Only alter the build stamping in the two historical LAB harnesses.
+          # All runtime and original probes come from the exact frozen tree.
+          for file, version, output in [
+              ('scripts/accept_s2_native.sh','1.0.24-s2-native-ci','"$work/boxweave"'),
+              ('scripts/s25_bridgehead_lab.sh','1.0.25-s25lab','"$work/staging/boxweave"')]:
+              p=pathlib.Path(file); s=p.read_text()
+              old='CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version='+version+' -X main.commit=$(git rev-parse HEAD)"'
+              assert s.count(old)==1
+              new='CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid="'
+              s=s.replace(old,new)
+              anchor='-o '+output+' ./cmd/boxweave\n'
+              assert s.count(anchor)==1
+              s=s.replace(anchor,anchor+'test "$(sha256sum '+output+' | cut -d\' \' -f1)" = "'+sha+'"\necho "S5B_INTEGRATED_EXACT_BINARY_SHA256='+sha+'"\n')
+              p.write_text(s)
+          # TC-020: use the normal read-only independent verifier against a
+          # separate deliberately incorrect checkpoint; never edit live SQLite,
+          # active native state, the authentic checkpoint, or product code.
+          p=pathlib.Path('scripts/s25_bridgehead_lab.sh'); s=p.read_text()
+          anchor='python3 scripts/s25_independent_verifier.py l1\n'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+'''if [ "${S5B_CASE:-}" = nested-restart-verifier ]; then
+            bad="$work/private/s5b6-known-bad-checkpoint.json"
+            python3 - "$BW_S25_CHECKPOINT" "$bad" <<'S5B6_BAD'
+          import json,sys
+          v=json.load(open(sys.argv[1]))
+          assert v["uuid"]!="00000000-0000-4000-8000-000000000001"
+          v["uuid"]="00000000-0000-4000-8000-000000000001"
+          with open(sys.argv[2],"x") as f: json.dump(v,f)
+          S5B6_BAD
+            if BW_S25_CHECKPOINT="$bad" python3 scripts/s25_independent_verifier.py l1 > "$work/private/s5b6-known-bad.log" 2>&1; then
+              echo S5B6_KNOWN_BAD_UNDETECTED >&2; exit 96
+            fi
+            grep -Fxq 'S25_V_FAIL: native UUID differs from MCP accepted original' "$work/private/s5b6-known-bad.log"
+            echo S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED=PASS
+            python3 scripts/s25_independent_verifier.py l1
+            echo S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK=PASS
+          fi
+          ''')
+          p.write_text(s)
+          PY
+          git diff --exit-code -- cmd internal go.mod go.sum install.sh uninstall.sh scripts/uninstall_core.py
+          sh -n scripts/accept_s2_native.sh
+          sh -n scripts/s25_bridgehead_lab.sh
+          echo "S5B_INTEGRATED_PINNED_SOURCE=$S5B_PIN"
+      - name: Real isolated native regression and independent readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing independent verifier compares the checkout commit against
+          # GITHUB_SHA. Bind this process to the actual frozen checkout, not
+          # the test-only workflow-trigger commit.
+          export GITHUB_SHA="$S5B_PIN"
+          logfile="$RUNNER_TEMP/s5b-integrated.log"
+          case "$S5B_CASE" in
+            original-fault|original-fault-repeat)
+              export S4_A_RAW_WITNESS=true
+              script=scripts/accept_s2_native.sh
+              required='S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION=PASS S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS'
+              ;;
+            recovery-archive)
+              export S5A2_RECOVERY_NATIVE_ONLY=true
+              script=scripts/accept_s2_native.sh
+              required='S5A2_NATIVE_INSTALLED_RECOVERY=PASS S5A2_NATIVE_STAGED_ROOT_CLI_MCP_PARITY_NO_REPLAY=PASS S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE=PASS'
+              ;;
+            two-actor-git)
+              export S3_FILE_INSTALLED_PHASE2=true S3_FILE_INSTALLED_PHASE3=true BW_S5B_TC015=true
+              script=scripts/s25_bridgehead_lab.sh
+              required='S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP=PASS S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS=PASS S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED=PASS S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS'
+              ;;
+            nested-restart-verifier)
+              script=scripts/s25_bridgehead_lab.sh
+              required='S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY=PASS S25_R2_OPERATOR_ROOT_LOCAL_EXACT_BINARY_ROLLBACK=PASS S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED=PASS S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK=PASS'
+              ;;
+            *) exit 90 ;;
+          esac
+          # No private raw log/artifact upload; only known structured markers.
+          umask 077
+          set +e
+          sh "$script" >"$logfile" 2>&1
+          rc=$?
+          set -e
+          grep -E '^(S5B|S5A|S25|S3|S4_A|S2_|BH018_)[A-Z0-9_]+(=PASS([[:space:]].*)?$|=BLOCKED$|=FAIL$|_SHA256=[a-f0-9]{64}$|_SHA=[a-f0-9]{40}$|_ID=[a-f0-9-]{32,36}$)' "$logfile" || :
+          test "$rc" = 0
+          grep -Fxq "S5B_INTEGRATED_EXACT_BINARY_SHA256=$S5B_SHA" "$logfile"
+          for marker in $required; do grep -Fxq "$marker" "$logfile"; done
+          if [[ "$S5B_CASE" == original-fault* ]]; then
+            grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
+            grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
+          fi
+          echo "S5B_INTEGRATED_CASE_PASS=$S5B_CASE"
