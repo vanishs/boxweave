@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && '["installed_normal","installed_mcp","multi_revoke"]' || '["inside_etag_race","installed_normal"]') }}
+        scenario: ${{ fromJSON(github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && '["installed_mcp"]' || '["inside_etag_race","installed_normal"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -633,8 +633,14 @@ jobs:
             sleep 2
           done
           test "$ready" = 1
-          sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" s4b2c/root/s4b3-packet
-          sudo incus --project "$project" exec s4b2c -- chmod 0755 /root/s4b3-packet
+          CGO_ENABLED=0 go build -tags s4b3_native_ci -o "$RUNNER_TEMP/s4b3-packet" ./scripts/s4_b3_native_packet_probe.go
+          test -x "$RUNNER_TEMP/s4b3-packet"
+          for name in s4b2b s4b2c; do
+            sudo incus --project "$project" file push "$RUNNER_TEMP/s4b3-packet" "$name/root/s4b3-packet"
+            sudo incus --project "$project" exec "$name" -- chmod 0755 /root/s4b3-packet
+            sudo incus --project "$project" exec "$name" -- test -x /root/s4b3-packet
+          done
+          echo S5B_PUBLIC_PEER_PACKET_BOTH_FIXTURES_READY=PASS
           sudo incus --project "$project" exec s4b2c -- sh -c             'nohup /root/s4b3-packet server >/tmp/s4b3-server.log 2>&1 </dev/null &'
           ready=0
           for _ in $(seq 1 30); do

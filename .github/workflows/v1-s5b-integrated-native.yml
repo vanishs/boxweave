@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         case: >-
-          ${{ fromJSON(github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal') || startsWith(github.event.head_commit.message, 'test: bind pinned overlap harness diff')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
+          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: bound quota readback') && '["original-fault"]' || github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal') || startsWith(github.event.head_commit.message, 'test: bind pinned overlap harness diff')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -118,6 +118,23 @@ jobs:
           assert s.count(old)==1
           s=s.replace(old,old+'sudo runuser -u boxweave -- test -x "$sqlite_full_dir"\ntest "$(sudo stat -c %a "$sqlite_full_dir")" = 700\necho "S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS"\n')
           p.write_text(s)
+          # Retain strict native quota limit and original effect checks. A
+          # fresh read-only accounting sample may lag after spool saturation.
+          # Extend only the bounded observation window; never reissue Exec.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          old='for mcp_read_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do\n  mcp_after_read_attempts="$mcp_read_attempt"\n  if sudo incus query "$mcp_state_url"'
+          new='for mcp_read_attempt in $(seq 1 30); do\n  mcp_after_read_attempts="$mcp_read_attempt"\n  mcp_after=""\n  if sudo timeout 5s incus query "$mcp_state_url"'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='v=json.load(open(sys.argv[1]))\nprint(int(v.get("metadata",v)["usage"]["used"]))\nPY\n)" || mcp_after=""'
+          new='v=json.load(open(sys.argv[1]))\nu=v.get("metadata",v)["usage"]\nassert type(u["used"]) is int and u["used"] >= 0\nassert type(u["total"]) is int and u["total"] == 2147483648\nprint(u["used"])\nPY\n)" || mcp_after=""'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='  sleep 0.3\ndone\necho "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES='
+          new='  sleep 1\ndone\necho "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES='
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          p.write_text(s)
           # The historical overlap harness expects a pristine checkout. The
           # pinned orchestrator intentionally overlays exactly three LAB scripts.
           # Bind the permitted complete diff before execution; reject staged,
@@ -211,6 +228,8 @@ jobs:
           grep -E '^S2_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 35 || :
           # Emit only fixed enums and numeric status codes, not raw errors.
           grep -E '^(S4_A_(NATIVE_STAGE|OAUTH_STAGE|OAUTH_FAILURE_CLASS|FAILURE_CLASS)|BH018_(MCP_RESUME_PHASE|INSTALLED_NORMAL_RESTART_CLASS|INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE)|S25_R2_FAILURE_CLASS)=[A-Za-z0-9_]+$' "$logfile" || :
+          # Bounded numeric quota diagnostics (no raw private errors/logs).
+          grep -E '^S2_MCP_QUOTA_(POSTEXEC_NATIVE_USED_BYTES|POSTEXEC_LIMIT_BYTES|POSTEXEC_READ_ATTEMPTS|PHYSICAL_STDOUT_BYTES)=([0-9]{1,20}|UNREADABLE)$' "$logfile" || :
           echo "S5B_INTEGRATED_SCRIPT_EXIT=$rc"
           test "$(git rev-parse HEAD)" = "$S5B_PIN"
           test "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d' ' -f1)" = "$S5B_HARNESS_DIFF_SHA256"

@@ -202,7 +202,10 @@ jobs:
               ! sudo test -e /var/lib/boxweave-native-scriptlet-v1.json
               sudo useradd -m -s /bin/sh -g incus boxweave
               test "$(id -nG boxweave)" = incus
-              sudo -u boxweave env HOME=/home/boxweave INCUS_DIR=/home/boxweave/.config/incus incus project list --format csv >/dev/null
+              # Incus uses INCUS_CONF and XDG_CONFIG_HOME, not INCUS_DIR.
+              # Keep the runner's inherited configuration completely separate.
+              sudo -H -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u INCUS_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project list --format csv >/dev/null
+              echo S5B_SCRIPTLET_RESTRICTED_USER_CONFIG_ISOLATED=PASS
               project="user-$(id -u boxweave)"
               test "$(sudo incus project get "$project" restricted)" = true
               test -z "$(sudo incus --project "$project" list --format csv -c n)"
