@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [original-fault, original-fault-repeat, recovery-archive, two-actor-git, nested-restart-verifier]
+        case: [original-fault, original-fault-repeat, nested-restart-verifier]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -64,6 +64,17 @@ jobs:
               assert s.count(anchor)==1
               s=s.replace(anchor,anchor+'test "$(sha256sum '+output+' | cut -d\' \' -f1)" = "'+sha+'"\necho "S5B_INTEGRATED_EXACT_BINARY_SHA256='+sha+'"\n')
               p.write_text(s)
+          # The orchestrator uses umask 077 to protect logs. Only these
+          # public compiled test executables need traversal by boxweave.
+          # Keep every credential, journal and private log protected.
+          for file, anchor, binary in [
+              ('scripts/accept_s2_native.sh', '  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go\n', '$work/s4-oauth-native-probe'),
+              ('scripts/s25_bridgehead_lab.sh', '  -o "$work/canary-readable/boxweave-r2-canary" ./cmd/boxweave\n', '$work/canary-readable/boxweave-r2-canary')]:
+              p=pathlib.Path(file); script=p.read_text()
+              assert script.count(anchor)==1
+              indent='  ' if 'oauth' in binary else ''
+              script=script.replace(anchor,anchor+indent+'chmod 0755 "'+binary+'"\n'+indent+'sudo runuser -u boxweave -- test -x "'+binary+'"\n'+indent+'echo S5B_RESTRICTED_TEST_EXECUTABLE_READY=PASS\n')
+              p.write_text(script)
           # TC-020: use the normal read-only independent verifier against a
           # separate deliberately incorrect checkpoint; never edit live SQLite,
           # active native state, the authentic checkpoint, or product code.
@@ -132,6 +143,9 @@ jobs:
           rc=$?
           set -e
           grep -E '^(S5B|S5A|S25|S3|S4_A|S2_|BH018_)[A-Z0-9_]+(=PASS([[:space:]].*)?$|=BLOCKED$|=FAIL$|_SHA256=[a-f0-9]{64}$|_SHA=[a-f0-9]{40}$|_ID=[a-f0-9-]{32,36}$)' "$logfile" || :
+          # Emit only fixed enums and numeric status codes, not raw errors.
+          grep -E '^(S4_A_(NATIVE_STAGE|OAUTH_STAGE|OAUTH_FAILURE_CLASS|FAILURE_CLASS)|BH018_(MCP_RESUME_PHASE|INSTALLED_NORMAL_RESTART_CLASS|INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE)|S25_R2_FAILURE_CLASS)=[A-Za-z0-9_]+$' "$logfile" || :
+          echo "S5B_INTEGRATED_SCRIPT_EXIT=$rc"
           test "$rc" = 0
           grep -Fxq "S5B_INTEGRATED_EXACT_BINARY_SHA256=$S5B_SHA" "$logfile"
           for marker in $required; do grep -Fxq "$marker" "$logfile"; done

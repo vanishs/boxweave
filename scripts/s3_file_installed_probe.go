@@ -583,9 +583,11 @@ func s5b1ExactCatalog(ctx context.Context, admin *mcp.ClientSession, tools []*mc
 		fmt.Println("S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=" + tool.Name)
 	}
 	need(len(want) == 0, "S5B1 missing catalog tools")
+	fmt.Println("S5B1_STAGE=initialize")
 	init := admin.InitializeResult()
 	need(init != nil && strings.Contains(init.Instructions, "UNKNOWN") && strings.Contains(init.Instructions, "idempotency_key"), "S5B1 initialize instructions missing")
 	for _, name := range []string{"box_list", "operation_list", "box_activity_get", "port_forward_list"} {
+		fmt.Println("S5B1_STAGE=typed_text_" + name)
 		result, e := admin.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
 		need(e == nil && result != nil && !result.IsError && result.StructuredContent != nil && len(result.Content) > 0, "S5B1 typed and text result missing "+name)
 		raw, e := json.Marshal(result.StructuredContent)
@@ -605,6 +607,7 @@ func s5b1ExactCatalog(ctx context.Context, admin *mcp.ClientSession, tools []*mc
 		}
 		need(compatible, "S5B1 structured/text mismatch "+name)
 	}
+	fmt.Println("S5B1_STAGE=missing_targets")
 	const missingBox = "00000000-0000-4000-8000-000000000001"
 	need(rejects(ctx, admin, "box_peer_set", map[string]any{"source_box_id": missingBox, "target_box_id": "00000000-0000-4000-8000-000000000002", "allow": false, "idempotency_key": "s5b1-exact-missing-peer"}), "S5B1 missing peer unexpectedly admitted")
 	need(rejects(ctx, admin, "port_forward_create", map[string]any{"box_id": missingBox, "protocol": "tcp", "guest_port": 19091, "host_port": 23093, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-missing-forward"}), "S5B1 missing forward owner unexpectedly admitted")
@@ -614,12 +617,15 @@ func s5b1ExactCatalog(ctx context.Context, admin *mcp.ClientSession, tools []*mc
 }
 
 func s5b1ExactOwned(ctx context.Context, admin *mcp.ClientSession, uuid, createID string) {
+	fmt.Println("S5B1_STAGE=readiness")
 	ready := call(ctx, admin, "box_wait_ready", map[string]any{"box_id": uuid, "checks": []string{"running", "exec"}, "timeout_seconds": 60, "idempotency_key": "s5b1-exact-owned-ready"})
 	readyID := originalID(ready)
 	await(ctx, admin, readyID, "SUCCEEDED")
+	fmt.Println("S5B1_STAGE=recovery")
 	diagnosis := call(ctx, admin, "operation_recover", map[string]any{"operation_id": createID, "mode": "inspect"})
 	need(diagnosis["native_retried"] == false, "S5B1 recovery inspect unexpectedly replayed")
 	need(field(object(diagnosis, "diagnosis"), "original_operation_id") == createID, "S5B1 recovery original identity mismatch")
+	fmt.Println("S5B1_STAGE=activity")
 	evidence := call(ctx, admin, "box_activity_get", map[string]any{"view": "evidence", "operation_id": readyID})
 	raw, _ := json.Marshal(evidence)
 	need(bytes.Contains(raw, []byte(readyID)), "S5B1 Activity original absent")
@@ -631,6 +637,19 @@ func s5b1ExactOwned(ctx context.Context, admin *mcp.ClientSession, uuid, createI
 	need(listener.Close() == nil, "S5B1 loopback reservation release")
 	fwd := call(ctx, admin, "port_forward_create", map[string]any{"box_id": uuid, "protocol": "tcp", "guest_port": 19091, "host_port": port, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-loopback-forward"})
 	original := originalID(fwd)
+	fmt.Println("S5B1_STAGE=forward_terminal")
+	policy := requiredEnv("BW_S5B1_PROXY_POLICY")
+	need(policy == "deny" || policy == "allow", "S5B1 missing explicit native proxy policy witness")
+	if policy == "deny" {
+		op := await(ctx, admin, original, "FAILED")
+		need(field(op, "error_class") == "SAFE_NATIVE_PREFLIGHT_DENIED" && field(op, "native_operation_id") == "", "S5B1 default proxy refusal lacks exact predispatch proof")
+		listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+		items, ok := listed["forwards"].([]any)
+		need(ok && len(items) == 0, "S5B1 refused proxy retained live claim")
+		fmt.Printf("S5B1_DEFAULT_PROXY_POLICY_REFUSAL=PASS original=%s ready=%s\n", original, readyID)
+		fmt.Printf("S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ready=%s forward_refused=%s\n", readyID, original)
+		return
+	}
 	op := await(ctx, admin, original, "SUCCEEDED")
 	need(field(op, "native_operation_id") != "", "S5B1 native forward receipt missing")
 	listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})

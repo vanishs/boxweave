@@ -88,10 +88,13 @@ case "$S5B1_MODE" in
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   test "$(go list -m -f '{{.Version}}' github.com/modelcontextprotocol/go-sdk)" = v1.8.0
   CGO_ENABLED=1 go build -trimpath -o "$work/staging/current-sdk" ./scripts/s3_file_installed_probe.go
-  if ! BW_S5B1_EXACT_TOOLS=true BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1 ; then
+  proxy_policy="$(sudo incus project get "$project" restricted.devices.proxy)"
+  case "$proxy_policy" in allow) proxy_policy=allow;; ""|block) proxy_policy=deny;; *) echo S5B1_UNRECOGNIZED_NATIVE_PROXY_POLICY >&2; exit 88;; esac
+  echo "S5B1_NATIVE_PROXY_POLICY=$proxy_policy"
+  if ! BW_S5B1_PROXY_POLICY="$proxy_policy" BW_S5B1_EXACT_TOOLS=true BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1 ; then
     # Emit only approved fixed test marker classes. Never print raw HTTP,
     # credentials, private responses or native error contents.
-    grep -E '^S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=[a-z_]+$|^S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS$' "$work/private/current-sdk.log" || :
+    grep -E '^S5B1_STAGE=[a-z_]+$|^S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=[a-z_]+$|^S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS$' "$work/private/current-sdk.log" || :
     python3 - "$work/private/current-sdk.log" <<'PY'
 import pathlib,re,sys
 s=pathlib.Path(sys.argv[1]).read_text()
@@ -112,6 +115,14 @@ for c in classes:
  if c in s: print("S5B1_REDACTED_FAILURE="+c)
 m=re.search(r'S3_INSTALLED_MCP_TOOL_ERROR name=([a-z_]+)',s)
 if m: print("S5B1_REDACTED_FAILED_TOOL="+m[1])
+if 'panic: runtime error:' in s: print('S5B1_REDACTED_FAILURE=GO_RUNTIME_PANIC')
+for c in ['original durable operation ID absent','missing object diagnosis','native owned Guest is not running','new Box native UUID missing','original did not complete in bounded wait']:
+ if c in s: print('S5B1_REDACTED_FAILURE='+c)
+# Fixed method + terminal state labels only, never arbitrary response text.
+m=re.search(r'original MCP tool ([a-z_]+) transport failed:',s)
+if m: print('S5B1_REDACTED_TRANSPORT_TOOL='+m[1])
+m=re.search(r'original ([0-9a-f]{32}) finished (FAILED|UNKNOWN|CANCELLED|SUCCEEDED) but expected (FAILED|SUCCEEDED|CANCELLED)',s)
+if m: print('S5B1_REDACTED_ORIGINAL='+m[1]+' STATE='+m[2]+' EXPECTED='+m[3])
 print("S5B1_CURRENT_SDK_FAIL_OR_BLOCKED")
 PY
     exit 89
@@ -175,19 +186,40 @@ with LoopbackMCP(token=token,timeout=30,allow_mutations=True) as m:
  stop=submit(m,'box_stop','stop',box_id=box)
  await_state(m,stop,'SUCCEEDED')
  assert native('config','get',name,'volatile.uuid')==box
- native('snapshot','create',name,'s5b2-snap')
- native('query','-X','POST','--wait','-d',json.dumps(dict(name='s5b2-backup',instance_only=True)),f'/1.0/instances/{name}/backups?project={project}')
- print('S5B2_NATIVE_NONEMPTY_SNAPSHOT_BACKUP_CREATED=PASS',flush=True)
- try:
-  det=call(m,'box_get',box_id=box,detail=True)['instance_full']
- except MCPToolError as exc:
-  # Native privilege refusal is not a successful metadata read.
-  print('S5B2_NONEMPTY_DETAIL=REFUSED',flush=True)
-  raise
+ # Restricted Incus can refuse BOTH native operator creation requests.
+ # Classify only an actual explicit Project policy refusal, independently
+ # verify absence, and continue the unrelated readiness/retention tests.
+ def metadata_create(kind,args):
+  p=subprocess.run(['sudo','incus','--project',project,*args],text=True,capture_output=True,timeout=80)
+  if p.returncode==0:
+   print('S5B2_NATIVE_'+kind.upper()+'_CREATED=PASS',flush=True)
+   return True
+  msg=p.stderr.strip()
+  if "Project "+json.dumps(project)+" doesn't allow for "+kind+" creation" not in msg:
+   raise RuntimeError('unexpected native '+kind+' creation failure; not a policy refusal')
+  print('S5B2_NATIVE_'+kind.upper()+'_PROJECT_POLICY_REFUSAL=PASS',flush=True)
+  return False
+ snapshot=metadata_create('snapshot',['snapshot','create',name,'s5b2-snap'])
+ backup=metadata_create('backup',['query','-X','POST','--wait','-d',json.dumps(dict(name='s5b2-backup',instance_only=True)),f'/1.0/instances/{name}/backups?project={project}'])
+ assert native('config','get',name,'volatile.uuid')==box
+ # Native root API reads and MCP opt-in detail remain independently checked.
+ # Read the exact native lists, not merely the expected empty default.
+ for kind,created,item in [('snapshots',snapshot,'s5b2-snap'),('backups',backup,'s5b2-backup')]:
+  rows=json.loads(native('query',f'/1.0/instances/{name}/{kind}?project={project}'))
+  if isinstance(rows,dict): rows=rows['metadata']
+  assert isinstance(rows,list) and len(rows)==int(created)
+  if created: assert str(rows[0]).endswith('/'+item)
+ det=call(m,'box_get',box_id=box,detail=True)['instance_full']
  assert det['config']['volatile.uuid']==box
- assert len(det['snapshots'])==1 and len(det['backups'])==1
- assert det['snapshots'][0]['name'].endswith('s5b2-snap') and det['backups'][0]['name'].endswith('s5b2-backup')
- print('S5B2_ACTUAL_NONEMPTY_DETAIL=PASS',flush=True)
+ for kind,created,item in [('snapshots',snapshot,'s5b2-snap'),('backups',backup,'s5b2-backup')]:
+  rows=det[kind] or []
+  assert len(rows)==int(created)
+  if created: assert rows[0]['name'].endswith(item)
+ print('S5B2_ACTUAL_DETAIL_NATIVE_LIST_MATCH=PASS',flush=True)
+ if snapshot and backup:
+  print('S5B2_ACTUAL_NONEMPTY_DETAIL=PASS',flush=True)
+ else:
+  print('S5B2_NONEMPTY_DETAIL_COVERAGE=PROJECT_POLICY_LIMITED',flush=True)
  pending=ready(m,'restart',300)
  assert m.operation_get(pending)['state']=='OBSERVING'
 # Restart only the freshly installed controller on this disposable VM.
@@ -205,8 +237,8 @@ with LoopbackMCP(token=token,timeout=30,allow_mutations=True) as m:
  same=call(m,'box_wait_ready',box_id=box,checks=['running','exec'],timeout_seconds=300,idempotency_key='s5b2-metadata-restart')
  assert same['duplicate'] and same['operation_id']==pending
  assert native('config','get',name,'volatile.uuid')==box
- native('query','-X','DELETE','--wait',f'/1.0/instances/{name}/backups/s5b2-backup?project={project}')
- native('snapshot','delete',name,'s5b2-snap')
+ if backup: native('query','-X','DELETE','--wait',f'/1.0/instances/{name}/backups/s5b2-backup?project={project}')
+ if snapshot: native('snapshot','delete',name,'s5b2-snap')
  done=submit(m,'box_delete','delete',box_id=box)
  await_state(m,done,'SUCCEEDED')
  assert not native('list','-f','csv','-c','n')
