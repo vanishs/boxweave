@@ -29,7 +29,15 @@ type fileBearerTransport struct{ token string }
 func (t fileBearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	copyReq := req.Clone(req.Context())
 	copyReq.Header.Set("Authorization", "Bearer "+t.token)
-	return http.DefaultTransport.RoundTrip(copyReq)
+	response, err := http.DefaultTransport.RoundTrip(copyReq)
+	if err == nil && response != nil && os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" && req.Method == http.MethodPost {
+		cache := strings.ToLower(response.Header.Get("Cache-Control"))
+		if !strings.Contains(cache, "private") || !strings.Contains(cache, "no-store") || !strings.Contains(strings.Join(response.Header.Values("Vary"), ","), "Authorization") {
+			response.Body.Close()
+			return nil, fmt.Errorf("S5B1 private response cache boundary missing")
+		}
+	}
+	return response, err
 }
 
 func need(ok bool, reason string) {
@@ -555,6 +563,91 @@ func cleanupS3GuestGitPhase3(ctx context.Context, admin *mcp.ClientSession) {
 	fmt.Println("S3_PHASE3_MCP_ORIGINAL_GIT_BOX_STOP_DELETE_VERIFIED=PASS")
 }
 
+func s5b1ExactCatalog(ctx context.Context, admin *mcp.ClientSession, tools []*mcp.Tool) {
+	want := map[string]bool{}
+	for _, name := range strings.Fields("host_status box_create box_list box_get box_update box_start box_stop box_delete box_exec operation_get operation_list operation_output_get operation_cancel operation_recover box_file_list box_file_read box_file_apply box_peer_set box_activity_get port_forward_list port_forward_create port_forward_delete box_wait_ready") {
+		want[name] = true
+	}
+	need(len(tools) == len(want), "S5B1 exact catalog mismatch")
+	status := call(ctx, admin, "host_status", map[string]any{})
+	need(field(status, "commit") == "a3e02b4750edcabb80427e3311a19614d82b0029" && status["mcp_ready"] == true, "S5B1 installed identity")
+	need(field(status, "binary_sha256") == "a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6", "S5B1 exact installed binary mismatch")
+	for _, tool := range tools {
+		need(want[tool.Name] && tool.Description != "" && tool.Annotations != nil, "S5B1 missing actual metadata "+tool.Name)
+		delete(want, tool.Name)
+		raw, e := json.Marshal(tool.InputSchema)
+		need(e == nil && strings.Contains(string(raw), "\"additionalProperties\":false"), "S5B1 input schema not closed "+tool.Name)
+		need(rejects(ctx, admin, tool.Name, map[string]any{"s5b1_nonexistent_field": true}), "S5B1 invalid arguments accepted "+tool.Name)
+		// A rejected call must not be counted from a disconnected client.
+		need(field(call(ctx, admin, "host_status", map[string]any{}), "commit") == field(status, "commit"), "S5B1 transport not connected after refusal")
+		fmt.Println("S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=" + tool.Name)
+	}
+	need(len(want) == 0, "S5B1 missing catalog tools")
+	init := admin.InitializeResult()
+	need(init != nil && strings.Contains(init.Instructions, "UNKNOWN") && strings.Contains(init.Instructions, "idempotency_key"), "S5B1 initialize instructions missing")
+	for _, name := range []string{"box_list", "operation_list", "box_activity_get", "port_forward_list"} {
+		result, e := admin.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
+		need(e == nil && result != nil && !result.IsError && result.StructuredContent != nil && len(result.Content) > 0, "S5B1 typed and text result missing "+name)
+		raw, e := json.Marshal(result.StructuredContent)
+		need(e == nil, "S5B1 typed result marshal")
+		var a map[string]any
+		need(json.Unmarshal(raw, &a) == nil, "S5B1 typed result parse")
+		compatible := false
+		for _, part := range result.Content {
+			if t, ok := part.(*mcp.TextContent); ok {
+				var b map[string]any
+				if json.Unmarshal([]byte(t.Text), &b) == nil {
+					canonical, _ := json.Marshal(a)
+					legacy, _ := json.Marshal(b)
+					compatible = bytes.Equal(canonical, legacy)
+				}
+			}
+		}
+		need(compatible, "S5B1 structured/text mismatch "+name)
+	}
+	const missingBox = "00000000-0000-4000-8000-000000000001"
+	need(rejects(ctx, admin, "box_peer_set", map[string]any{"source_box_id": missingBox, "target_box_id": "00000000-0000-4000-8000-000000000002", "allow": false, "idempotency_key": "s5b1-exact-missing-peer"}), "S5B1 missing peer unexpectedly admitted")
+	need(rejects(ctx, admin, "port_forward_create", map[string]any{"box_id": missingBox, "protocol": "tcp", "guest_port": 19091, "host_port": 23093, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-missing-forward"}), "S5B1 missing forward owner unexpectedly admitted")
+	need(rejects(ctx, admin, "port_forward_delete", map[string]any{"forward_id": "00000000000000000000000000000001", "idempotency_key": "s5b1-exact-missing-proxy"}), "S5B1 missing forward unexpectedly deleted")
+	need(rejects(ctx, admin, "operation_cancel", map[string]any{"target_operation_id": "00000000000000000000000000000001", "idempotency_key": "s5b1-exact-missing-cancel"}), "S5B1 missing cancellation unexpectedly admitted")
+	fmt.Println("S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS=PASS")
+}
+
+func s5b1ExactOwned(ctx context.Context, admin *mcp.ClientSession, uuid, createID string) {
+	ready := call(ctx, admin, "box_wait_ready", map[string]any{"box_id": uuid, "checks": []string{"running", "exec"}, "timeout_seconds": 60, "idempotency_key": "s5b1-exact-owned-ready"})
+	readyID := originalID(ready)
+	await(ctx, admin, readyID, "SUCCEEDED")
+	diagnosis := call(ctx, admin, "operation_recover", map[string]any{"operation_id": createID, "mode": "inspect"})
+	need(diagnosis["native_retried"] == false, "S5B1 recovery inspect unexpectedly replayed")
+	need(field(object(diagnosis, "diagnosis"), "original_operation_id") == createID, "S5B1 recovery original identity mismatch")
+	evidence := call(ctx, admin, "box_activity_get", map[string]any{"view": "evidence", "operation_id": readyID})
+	raw, _ := json.Marshal(evidence)
+	need(bytes.Contains(raw, []byte(readyID)), "S5B1 Activity original absent")
+	// Only a localhost listener within the one-use runner. No external
+	// bind, proxy permission expansion, PRS grant or unowned resource.
+	listener, e := net.Listen("tcp", "127.0.0.1:0")
+	need(e == nil, "S5B1 fresh loopback port unavailable")
+	port := listener.Addr().(*net.TCPAddr).Port
+	need(listener.Close() == nil, "S5B1 loopback reservation release")
+	fwd := call(ctx, admin, "port_forward_create", map[string]any{"box_id": uuid, "protocol": "tcp", "guest_port": 19091, "host_port": port, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-loopback-forward"})
+	original := originalID(fwd)
+	op := await(ctx, admin, original, "SUCCEEDED")
+	need(field(op, "native_operation_id") != "", "S5B1 native forward receipt missing")
+	listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+	items, ok := listed["forwards"].([]any)
+	need(ok && len(items) == 1, "S5B1 forward inventory mismatch")
+	entry, ok := items[0].(map[string]any)
+	need(ok && field(entry, "forward_id") == original && field(entry, "state") == "CONFIRMED" && entry["native_verified"] == true, "S5B1 forward exact device not verified")
+	del := call(ctx, admin, "port_forward_delete", map[string]any{"forward_id": original, "idempotency_key": "s5b1-exact-loopback-forward-delete"})
+	delID := originalID(del)
+	removed := await(ctx, admin, delID, "SUCCEEDED")
+	need(field(removed, "native_operation_id") != "", "S5B1 native forward delete receipt missing")
+	after := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+	empty, ok := after["forwards"].([]any)
+	need(ok && len(empty) == 0, "S5B1 removed forward remains")
+	fmt.Printf("S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ready=%s forward=%s delete=%s\n", readyID, original, delID)
+}
+
 func main() {
 	if os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
@@ -602,6 +695,9 @@ func main() {
 	}
 	need(len(names) == 23, "S4-B4 candidate must expose 23 Tools including public Activity and Forward")
 	fmt.Println("S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS")
+	if os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" {
+		s5b1ExactCatalog(ctx, admin, t.Tools)
+	}
 	// One and only one new disposable owned Box. No shared user Boxes,
 	// L0-L5 historical resources, or parent Incus credential delegation.
 	const name = "s3-file-phase2-ci"
@@ -620,6 +716,9 @@ func main() {
 	need(field(state, "box_id") == uuid && field(state, "native_state") == "Running",
 		"native owned Guest is not running")
 	fmt.Println("S3_INSTALLED_BOX_CREATE_ORIGINAL_UUID=PASS")
+	if os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" {
+		s5b1ExactOwned(ctx, admin, uuid, createID)
+	}
 	base := "/root/s3-file-phase2"
 	fixture := "mkdir -p " + base + "; " +
 		"printf S3_PHASE2_VICTIM_LOCKED > " + base + "/victim; " +

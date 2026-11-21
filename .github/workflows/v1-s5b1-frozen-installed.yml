@@ -8,6 +8,7 @@ on:
       - '.github/workflows/v1-s5b1-frozen-installed.yml'
       - 'scripts/s5b1_installed_closeout.sh'
       - 'scripts/s25_bridgehead_lab.sh'
+      - 'scripts/s3_file_installed_probe.go'
   workflow_dispatch:
 
 permissions:
@@ -40,7 +41,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Require frozen product and only overlay two reviewed test scripts
+      - name: Require frozen product and only overlay reviewed test scripts
         shell: bash
         run: |
           set -euo pipefail
@@ -55,6 +56,7 @@ jobs:
           cmp scripts/uninstall_core.py s5b1-test-harness/scripts/uninstall_core.py
           cp s5b1-test-harness/scripts/s25_bridgehead_lab.sh scripts/s25_bridgehead_lab.sh
           cp s5b1-test-harness/scripts/s5b1_installed_closeout.sh scripts/s5b1_installed_closeout.sh
+          cp s5b1-test-harness/scripts/s3_file_installed_probe.go scripts/s3_file_installed_probe.go
           sh -n scripts/s25_bridgehead_lab.sh
           sh -n scripts/s5b1_installed_closeout.sh
       - name: Installed frozen native fixture and exact scoped proof
@@ -64,6 +66,8 @@ jobs:
           sh scripts/s25_bridgehead_lab.sh | tee "$RUNNER_TEMP/s5b1-result.log"
           grep -Fxq 'S5B1_CLI_GUARDED_ACTUAL_SUBSET=PASS' "$RUNNER_TEMP/s5b1-result.log"
           if test "$S5B1_MODE" = sdk; then
+            grep -Fxq 'S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS=PASS' "$RUNNER_TEMP/s5b1-result.log"
+            grep -q '^S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ' "$RUNNER_TEMP/s5b1-result.log"
             grep -Fxq 'S5B1_EXACT_INSTALLED_OLD_NEW_SDK_SCOPED=PASS' "$RUNNER_TEMP/s5b1-result.log"
           else
             grep -Fxq 'S5B1_ACTUAL_GUIDED_FULL_RETIREMENT_ARCHIVE_AND_INCUS_PRESERVED=PASS' "$RUNNER_TEMP/s5b1-result.log"

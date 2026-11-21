@@ -88,12 +88,18 @@ case "$S5B1_MODE" in
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   test "$(go list -m -f '{{.Version}}' github.com/modelcontextprotocol/go-sdk)" = v1.8.0
   CGO_ENABLED=1 go build -trimpath -o "$work/staging/current-sdk" ./scripts/s3_file_installed_probe.go
-  BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1
+  BW_S5B1_EXACT_TOOLS=true BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1
   for marker in S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY S3_INSTALLED_MCP_ORIGINAL_BOX_CLEANUP_VERIFIED; do
     grep -Fxq "$marker=PASS" "$work/private/current-sdk.log"
     echo "$marker=PASS"
   done
   test -z "$(sudo incus list --all-projects --format csv -c n)"
+  for marker in S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS; do
+    grep -Fxq "$marker=PASS" "$work/private/current-sdk.log"
+    echo "$marker=PASS"
+  done
+  grep '^S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ' "$work/private/current-sdk.log"
+  test "$(grep -c '^S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=' "$work/private/current-sdk.log")" = 23
   echo S5B1_EXACT_INSTALLED_OLD_NEW_SDK_SCOPED=PASS
   ;;
  retirement)
