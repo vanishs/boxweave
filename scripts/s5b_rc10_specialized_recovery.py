@@ -67,6 +67,9 @@ def recover(oid, leaf, *args, success=True):
                 "native identity changed": "NATIVE_IDENTITY_CHANGED",
                 "context deadline exceeded": "DEADLINE_EXCEEDED",
                 "database is locked": "DATABASE_LOCKED",
+                "unexpected sqlite trigger/view": "FOREIGN_SCHEMA_REFUSED",
+                "invalid operation transition": "INVALID_TRANSITION",
+                "native operation or postcondition not independently verified": "NATIVE_UNVERIFIED",
                 "unknown action": "UNKNOWN_ACTION",
             }
             message = cp.stderr.lower()
@@ -94,18 +97,25 @@ with LoopbackMCP(token=actor, timeout=15, allow_mutations=True) as m:
     uuid = created["box_uuid"]
     assert re.fullmatch(r"[0-9a-f-]{36}", uuid)
     assert native("config", "get", name, "volatile.uuid") == uuid
-    # Same production finalization fault pattern as S5A2. Do not change
-    # receipt/native ID, ownership or any existing audit row.
-    sql("CREATE TRIGGER s5b_rc10_only_cli_fault BEFORE UPDATE OF state ON operations "
-        "WHEN OLD.state IN ('VERIFYING','DISPATCHING') AND NEW.state='SUCCEEDED' "
-        "AND OLD.work_ref='rc10/manual-cli-fault' BEGIN "
-        "SELECT RAISE(ABORT,'S5B_RC10_ONE_USE_FINALIZATION_FAULT'); END")
     try:
+        # Same production finalization fault pattern as S5A2. Do not change
+        # receipt/native ID, ownership or any existing audit row.
+        sql("CREATE TRIGGER s5b_rc10_only_cli_fault BEFORE UPDATE OF state ON operations "
+            "WHEN OLD.state IN ('VERIFYING','DISPATCHING') AND NEW.state='SUCCEEDED' "
+            "AND OLD.work_ref='rc10/manual-cli-fault' BEGIN "
+            "SELECT RAISE(ABORT,'S5B_RC10_ONE_USE_FINALIZATION_FAULT'); END")
         op = original(m, "box_delete", "delete-fault", "UNKNOWN", box_id=uuid)
         oid = op["operation_id"]
         native_id = op["native_operation_id"]
         assert re.fullmatch(r"[0-9a-f-]{36}", native_id)
         assert not native("list", name, "-c", "n", "-f", "csv")
+        # The installed recovery CLI opens a new Store and validates its
+        # exact schema. Remove ONLY the temporary CI fault fixture before
+        # opening the recovery CLI, as in the existing S5A2 native test.
+        sql("DROP TRIGGER s5b_rc10_only_cli_fault")
+        assert sql("SELECT count(*) FROM sqlite_master WHERE type IN ('trigger','view')") == "0"
+        assert m.operation_get(oid)["state"] == "UNKNOWN"
+        print("S5B_RC10_DELETE_FIXTURE_SCHEMA_RESTORED=PASS", flush=True)
         inspected = recover(oid, "delete-inspect")
         assert inspected["native"]["class"] == "ORIGINAL_TERMINAL_DELETE_VERIFIED"
         assert inspected["native"]["native_operation_id"] == native_id
@@ -127,6 +137,12 @@ with LoopbackMCP(token=actor, timeout=15, allow_mutations=True) as m:
         print("S5B_RC10_CLI_DELETE_INSPECT_CHALLENGE_CONFIRM=PASS original=" + oid, flush=True)
 
         name = "s5b-rc10-cli-create"
+        # Same production finalization fault pattern as S5A2. Do not change
+        # receipt/native ID, ownership or any existing audit row.
+        sql("CREATE TRIGGER s5b_rc10_only_cli_fault BEFORE UPDATE OF state ON operations "
+            "WHEN OLD.state IN ('VERIFYING','DISPATCHING') AND NEW.state='SUCCEEDED' "
+            "AND OLD.work_ref='rc10/manual-cli-fault' BEGIN "
+            "SELECT RAISE(ABORT,'S5B_RC10_ONE_USE_FINALIZATION_FAULT'); END")
         op = original(m, "box_create", "create-fault", "UNKNOWN",
                       name=name, cpu=1, memory_mib=512, disk_gib=2, start=False, internet=False)
         oid = op["operation_id"]
@@ -134,6 +150,10 @@ with LoopbackMCP(token=actor, timeout=15, allow_mutations=True) as m:
         uuid = native("config", "get", name, "volatile.uuid")
         assert re.fullmatch(r"[0-9a-f-]{36}", uuid)
         assert native("config", "get", name, "user.boxweave.create_operation") == oid
+        sql("DROP TRIGGER s5b_rc10_only_cli_fault")
+        assert sql("SELECT count(*) FROM sqlite_master WHERE type IN ('trigger','view')") == "0"
+        assert m.operation_get(oid)["state"] == "UNKNOWN"
+        print("S5B_RC10_CREATE_FIXTURE_SCHEMA_RESTORED=PASS", flush=True)
         inspected = recover(oid, "create-inspect")
         assert inspected["native_state"].lower() == "stopped"
         c = audit_challenge(oid, "create-challenge")
