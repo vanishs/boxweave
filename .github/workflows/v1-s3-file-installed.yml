@@ -5,6 +5,7 @@ on:
     branches:
       - feat/v1-s3-agent-files-20261115
       - feat/v1-s4-runtime-integration-20261116
+      - feat/v1-s5b-acceptance-20261120
     paths:
       - .github/workflows/v1-s3-file-installed.yml
       - internal/native/box.go
@@ -27,7 +28,7 @@ concurrency:
 jobs:
   installed-file-mcp:
     name: s3-installed-file-tools-and-supervised-git-verifier
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115' || github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116')
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s3-agent-files-20261115' || (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'))
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     env:

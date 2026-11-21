@@ -16,11 +16,11 @@ Owner directed RC9 publication, installed the upgrade on L0, and requested a ded
 | Gate | Status | Next evidence |
 |---|---|---|
 | B1 installed interfaces, CLI, install compatibility and provenance | IN_PROGRESS (early RC9 preflight; not frozen-candidate signoff) | enumerate 23 actual MCP tools, installed exact identity, private/read/negative contracts, full Tool/CLI crosswalk; isolated install/upgrade/uninstall/rollback; inspect PRS separately |
-| B2 integrated S1–S4 features | NOT_STARTED | real lifecycle, File/Git, archives, readiness/detail, Peer/Forward, exact dependencies, flat network and bounded stress |
-| B3 fault/concurrency/restart | NOT_STARTED | #151 repeat and classify, native ACK/SQLite/PRS faults, retained claims, no duplicate effects, archive pressure |
-| B4 actual ChatGPT/OAuth/Agent handoff | NOT_STARTED | #148 grant identity, refresh/revoke, external Git handoff; actual supported OAuth recovery and refusals; unified Elicitation deferred; never treat conversation or synthetic signing as independent server proof |
-| B5 independent host/physical | NOT_STARTED | quota, physical LAN/public IPv6, host/power assurance, installed rollback/uninstall, supported nesting (not #150 hostile deep recursion) |
-| B6 independent signoff | NOT_STARTED | negative controls, TC-019 crosswalk, all mandatory evidence, exact final candidate and signed release gate |
+| B2 integrated S1–S4 features | IN_PROGRESS (RC9 lifecycle/archive scoped PASS) | real lifecycle, File/Git, archives, readiness/detail, Peer/Forward, exact dependencies, flat network and bounded stress |
+| B3 fault/concurrency/restart | IN_PROGRESS (A1/PRS independent regressions and guest restart) | #151 repeat and classify, native ACK/SQLite/PRS faults, retained claims, no duplicate effects, archive pressure |
+| B4 actual ChatGPT/OAuth/Agent handoff | PARTIAL (existing real client baseline; fresh grants/handoff pending) | #148 grant identity, refresh/revoke, external Git handoff; actual supported OAuth recovery and refusals; unified Elicitation deferred; never treat conversation or synthetic signing as independent server proof |
+| B5 independent host/physical | PARTIAL (physical quota owner witness; other physical gates pending) | quota, physical LAN/public IPv6, host/power assurance, installed rollback/uninstall, supported nesting (not #150 hostile deep recursion) |
+| B6 independent signoff | IN_PROGRESS (evidence audit and interface crosswalk; independent verifier pending) | negative controls, TC-019 crosswalk, all mandatory evidence, exact final candidate and signed release gate |
 
 ## Execution rules
 
@@ -95,3 +95,38 @@ Early B1 preflight begun on owner's request to move into S5B. Actual installed R
 New isolated dev Box worktree /tmp/boxweave-s5b1-Cvv8UV, exact source `95e21e9ad405ef7b02b36e6b13309c107d477269` (runtime identical to ead80487; later commits docs only). BW `ce660bce85e14a118d280fe0cc344b82`, native `bcd57584-e584-4c1d-a5c4-0f58d986d288`, guest exit 0: focused control/state Recovery/OAuth/Principal/UNKNOWN Race tests, stable gate 10/10 and quota attester 5/5. Initial recovery package name filter selected no tests; corrected separate full package Race run BW `e2cb51361dbde67b81953295ef249417`, native `b3329eaf-94d4-47cf-80df-eb83708bda08`, guest exit 0. Prior independent A1 and PRS native CI evidence retained. A3 supported-scope regression evidence acquired, final acceptance review pending; A4 supported deterministic evidence retained, final forward/dependent and refusal review pending. No production change, deletion, deployment or signature/freeze by these tests.
 
 Next: finish exact #151 bounded evidence disposition and A3/A4 supported-scope signoff, reconcile A6 and exact candidate artifacts, continue B1 interface/CLI compatibility and isolated install/upgrade/rollback acceptance in parallel. Existing installed RC9 is not the patched quota-witness candidate. Preserve RC8 rollback backup and saturated test Box pending authorized candidate upgrade and renewed witness. No automatic merge, publish or physical Host modification.
+
+## Full S5B campaign — first integrated witness and parallel independent runners
+
+Owner requested B1–B6 and remaining A signoff. Sole PR #164. Live L0 RC9 commit `17ab57959bee96ed7c4ee80655b4cc185c66d568`, digest `734cd1290648bb4ec7f996ffd80d806d51d2773722ab22738d0126b17fa0ea23`, status tracking `022097b2854d3b60db5dfda558ef0e54`, inventory `381aba1ef0be64fa94c63699d300d497`. Source candidate runtime is the B0 patched version, not yet installed on L0. Preserve RC8 rollback and all four earlier Boxes. No shared-host restart, public exposure or privileged mutation.
+
+### A1 conditional historical disposition — scoped technical closure
+
+Bounded historical retrieval repeated: original two failing-run artifact inventories (43776449453 and 43769548925) are both empty. Re-read exact failed job 133003716492 and #151 comments. Historical original `a529cc5a3bb2f64714455d0612161a80` admitted after restart/replay, final visible marker OTHER_VERIFIER_ASSERTION and no terminal/native proof after admission. Preserve the failure and classification UNKNOWN_CAUSE / HISTORICAL_EVIDENCE_UNAVAILABLE, not a diagnosed transport bug or a recovered original. No historical replay. Independent prior two runners plus two ead80487 current-runtime B0 fresh runners pass original post-restart dual exit and native/SQLite checks, and current source full Race and recovery refusal tests pass. Under the explicit owner conditional decision, this closes the bounded retrieval and provides scoped A1 technical acceptance with documented residual risk; final exact-candidate B3 recheck and independent release review remain required. Do not mark the historical original successful or close the issue as fixed.
+
+### B1/B2/B3 actual RC9 lifecycle, guest persistence, output archive
+
+New specifically disposable non-nested offline 4 GiB fixture `s5b-integrated-1120` UUID/incarnation `d9f6316a-0892-4f96-8bf5-aac7de37df1e`, work_ref S5B1-B2-integrated, agent_ref s5b-acceptance. No earlier Box deleted.
+
+| Action | BoxWeave original | Native original | Result |
+|---|---|---|---|
+| Create | b0cb4d66c5f7ca9e664a44fd3c59b95d | e726973e-e8fd-4d88-a5a6-c82fab7d6fee | SUCCEEDED |
+| Four readiness checks | 1d21738eb69be31c0e98203c30b655b4 | ea525953-a97f-4b16-9725-6a2df6c9c1bd | running/exec/IPv4/IPv6 all ready, exit 0 |
+| File exclusive create | 11f107c06faf5ca39ca876500913f716 | none (SFTP) | SUCCEEDED, exact same-key replay; changed bytes conflict refused |
+| Exec | 6e2f03a0470bab182210bac59099d75e | 3d8da962-8aed-45ef-8fcc-e73f8423de7b | SUCCEEDED original, guest exit 23, exact stdout+stderr |
+| Update CPU | 0ad15fc3596bcdf9977d1212df0c09e8 | c8e6d0ba-b5e4-4095-ae4d-7b9d7f6bb159 | SUCCEEDED; native CPU readback 2, internet false retained |
+| Stop | 262140c1ccd0126dd2165be91f3ba9c4 | 4aad13ad-2eb4-4a3c-8d88-627638231d8b | SUCCEEDED |
+| Start | 0d199ba82cbe0d862da039db96c56411 | 014e23f4-f27e-41c2-803b-75a816098618 | SUCCEEDED |
+| Fresh persisted file verification | 6acffcce971efdc5a54eb62176e14716 | 3b176e94-acbf-46e5-a951-2ef59c1ccd88 | guest exit 0, exact original fixture after guest stop/start only |
+| Cancel already-dispatched original | 03ddeb342a4476ff39372c54e121ee2e | none | FAILED / ORIGINAL_ALREADY_DISPATCHED_CANCEL_UNSUPPORTED; original unaltered |
+| Final Stop | 66ae101914b74317c5cca500e66c6101 | 97f53465-c2d1-4e0d-904e-00a52609045e | SUCCEEDED |
+| Delete dedicated fixture only | 663159b97f217a153bcd6ed95784e67e | 37927731-e798-45db-b8b6-7197cf0c7897 | SUCCEEDED; exact Stopped precondition, no forwards |
+
+Detail tracking c2ab9a2ac37e6613415c92e59a7bd3b8 returned native InstanceFull (empty snapshot/backup; nonempty optional metadata gate NOT witnessed). File read tracking 1127925a743e2f6e88ea902cd66b158b and 6c3f296fd4ebf797425db839df031e7d: exact two pages reconstruct 12 bytes; each partial page has own SHA256, no fake full-file hash. List 8dbf9749bb760a695b1573a578e7b964. Original Exec Activity evidence 3bce22564a273c397af4c780675d718b; terminal recovery inspect NOT_REQUIRED, native_retried=false; operation list page 23e7c092e75392094dfb643f24877e84. Before delete both streams available and command_success=false; after actual native deletion stdout tracking 7d392fc8627e44319563599e279489c0 and stderr 4788d364f4c1575fbcdb42f591c77e36 preserve identical Base64, exit 23 and original ID. Activity 9f7ad5a1e09be509b67810c916dbfe74 reports deleted tombstone and exact durable original. Missing/deleted UUID read refuses BOX_NOT_FOUND_OR_NOT_OWNED. No fake native UUID for SFTP. This is scoped actual MCP/native-receipt evidence at installed RC9, not independent raw daemon or final patched-candidate evidence; guest stop/start not host reboot.
+
+### A6, B1/B3/B6 source and independent CI
+
+Exact runtime worktree at 95e21e9ad405ef7b02b36e6b13309c107d477269 verified identical executable/source files vs e7dd78a3. Full make verify BW `96d50e6c217b2d2f5fbd459b9c81b9f7` / native `bc770b1d-66f3-4a01-b6cd-9f8aa390e57d`, guest exit 0: format 716, YAML 37, go mod tidy/vet/verify, all eight Go Race packages, Python MCP 16, uninstall 28, stable gate 10 and raw witness 7 pass. Mock loopback MCP explicitly not actual OAuth/browser/native/release signoff. Source diff exact; no schema or product change.
+Four existing isolated runner workflows enabled on this branch only (S5A2 installed original recovery/A5, S4-B4 Forward/dependent Delete/A4, S4-A installed native/raw verifier/OAuth, S3 File/Git); existing historical branch behavior preserved. Verified exact four Git blob hashes and YAML/bash syntax in Box BW `3801496d18e25ea44e726d79f9195016` / native `22c5f08c-12b8-42ea-b370-d15903f23afb`, exit 0. No CI outcome assumed at submission. They are independent native runners, not final protected stable artifacts or physical/environment proof.
+
+Start existing dedicated nested lab `645deac6-4e96-45fc-9bbb-2723c897ebce` for read-only readiness/inventory, original `48ba4c746676538687665fda39a33c6b` / native `a430c623-72b5-4cc1-8fa8-a575d72e3c92` SUCCEEDED. Preserve its earlier work; only separately scoped tests if preflight supports it; no weakening or parent socket access. B4 current real connected Actor evidence distinct from new independent Actor and OAuth browser traces. B5 physical raw quota owner witness exists; final installed patched witness, expiry/reboot, real LAN/public IPv6 and authorized independent physical environment remain. B6 final independent verifier, known-bad control, all actual Tool and CLI leaf crosswalk, protected candidate build and signer setup remain. A6 offline release tooling passes; no protected branch merge, final freeze, actual stable signed gate or publication claimed.

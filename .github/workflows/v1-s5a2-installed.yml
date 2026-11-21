@@ -1,7 +1,7 @@
 name: S5A2 installed original recovery
 on:
   push:
-    branches: [feat/v1-s5a-closeout-20261120]
+    branches: [feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
     paths:
       - 'internal/recovery/**'
       - 'internal/state/recovery_navigation*.go'
@@ -18,7 +18,7 @@ permissions:
   contents: read
 jobs:
   native-recovery:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
