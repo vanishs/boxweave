@@ -231,6 +231,9 @@ Actual authenticated `_meta` malformed type/control/URL/argument-conflict and Vi
 
 ## Current checkpoint
 
+**2026-11-21 PT — RC10 B4 option A, scoped closeout:** Owner explicitly accepts prior independent installed/native OAuth refresh/rotation/refusal evidence instead of repeating real ChatGPT natural refresh after the four-hour Quick Tunnel timed out. Actual stored expiry and real two-grant, reauthorization, handoff, and stale-checkpoint receipts retained; actual ChatGPT auto-refresh/raw old credential refusal NOT_TESTED and separately waived for this RC10 closeout. B1–B5 scoped acceptance PASS; B6 independent review/calibration scoped PASS. Formal TC-019/020 mandatory matrix and trusted release signatures are not claimed; no stable release, HOST_GO, merge or RC10 runtime change. [Current acceptance ledger](S5B_RC10_CLOSEOUT_2026-11-21.md) and [canonical scope decision](phases/05_RELEASE_ACCEPTANCE.md). PR #165 remains Draft.
+
+
 | Field | Current recorded fact |
 |---|---|
 | Last updated | 2026-11-16 PT; existing Draft PR153; S4-A code3407 independently signed; later-head verdict is governed by its exact-head PR checks. |
