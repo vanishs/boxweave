@@ -2,7 +2,7 @@ name: S5A1 independent installed native diagnostics
 
 on:
   push:
-    branches: [feat/v1-s5a-closeout-20261120]
+    branches: [feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
     paths:
       - 'internal/control/operation_diagnostic*.go'
       - 'scripts/s2_bh018_atomic_mcp_probe.go'
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   native:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:

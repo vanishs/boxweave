@@ -63,3 +63,45 @@ func TestRC8HostRootQuotaWitnessFailClosed(t *testing.T) {
 		}
 	}
 }
+
+func TestNearFullHostQuotaWitnessRequiresWriteRefusal(t *testing.T) {
+	now := time.Unix(1795143691, 0)
+	w := storageQuotaWitness{
+		Schema: 2, Project: "user-1001", Pool: "default", Driver: "btrfs",
+		BootID: "boot-a", MountDev: 23, MountIno: 456, ObservedUnix: now.Unix(),
+		BoxUUID: "382c4dc2-d82a-4477-a098-1dd2c5d0d640", QuotaBytes: 2 << 30,
+		Referenced: 2147467264, QgroupMax: 2 << 30, WriteRefusal: "GUEST_EDQUOT_128K",
+	}
+	valid := func(v storageQuotaWitness) bool {
+		return quotaWitnessValid(v, "user-1001", "default", "btrfs", "boot-a", 23, 456, now)
+	}
+	if !valid(w) {
+		t.Fatal("observed 16 KiB slack with EDQUOT should be accepted")
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*storageQuotaWitness)
+	}{
+		{"slack-boundary-plus-one", func(v *storageQuotaWitness) { v.Referenced = v.QgroupMax - storageQuotaWitnessMaxSlack - 1 }},
+		{"over-limit", func(v *storageQuotaWitness) { v.Referenced = v.QgroupMax + 1 }},
+		{"empty-refusal", func(v *storageQuotaWitness) { v.WriteRefusal = "" }},
+		{"wrong-refusal", func(v *storageQuotaWitness) { v.WriteRefusal = "ENOSPC" }},
+		{"legacy-near-full", func(v *storageQuotaWitness) { v.Schema = 1; v.WriteRefusal = "" }},
+		{"legacy-with-marker", func(v *storageQuotaWitness) { v.Schema = 1; v.Referenced = v.QgroupMax }},
+		{"expired", func(v *storageQuotaWitness) { v.ObservedUnix = now.Add(-5 * time.Hour).Unix() }},
+		{"different-boot", func(v *storageQuotaWitness) { v.BootID = "other" }},
+		{"zero-referenced", func(v *storageQuotaWitness) { v.Referenced = 0 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := w
+			tc.edit(&v)
+			if valid(v) {
+				t.Fatal("invalid near-full proof accepted")
+			}
+		})
+	}
+	w.Referenced = w.QgroupMax - storageQuotaWitnessMaxSlack
+	if !valid(w) {
+		t.Fatal("exact slack boundary refused")
+	}
+}
