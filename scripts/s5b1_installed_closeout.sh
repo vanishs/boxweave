@@ -88,7 +88,34 @@ case "$S5B1_MODE" in
   test -z "$(sudo incus list --all-projects --format csv -c n)"
   test "$(go list -m -f '{{.Version}}' github.com/modelcontextprotocol/go-sdk)" = v1.8.0
   CGO_ENABLED=1 go build -trimpath -o "$work/staging/current-sdk" ./scripts/s3_file_installed_probe.go
-  BW_S5B1_EXACT_TOOLS=true BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1
+  if ! BW_S5B1_EXACT_TOOLS=true BW_S3_MCP_URL=http://127.0.0.1:18650/mcp BW_S3_ADMIN_TOKEN_FILE="$work/private/admin2.secret" BW_S3_PEER_TOKEN_FILE="$work/private/peer.secret" BW_S3_FILE_DISPOSABLE=approved-ephemeral-vm "$work/staging/current-sdk" > "$work/private/current-sdk.log" 2>&1 ; then
+    # Emit only approved fixed test marker classes. Never print raw HTTP,
+    # credentials, private responses or native error contents.
+    grep -E '^S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=[a-z_]+$|^S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS$' "$work/private/current-sdk.log" || :
+    python3 - "$work/private/current-sdk.log" <<'PY'
+import pathlib,re,sys
+s=pathlib.Path(sys.argv[1]).read_text()
+classes=[
+"S5B1 installed identity","S5B1 exact installed binary mismatch",
+"S5B1 missing actual metadata","S5B1 input schema not closed",
+"S5B1 invalid arguments accepted","S5B1 transport not connected",
+"S5B1 initialize instructions missing","S5B1 typed and text result missing",
+"S5B1 typed result marshal","S5B1 typed result parse",
+"S5B1 structured/text mismatch","S5B1 missing peer unexpectedly admitted",
+"S5B1 missing forward owner unexpectedly admitted","S5B1 missing forward unexpectedly deleted",
+"S5B1 missing cancellation unexpectedly admitted","S5B1 private response cache boundary missing",
+"S5B1 recovery inspect unexpectedly replayed","S5B1 recovery original identity mismatch",
+"S5B1 Activity original absent","S5B1 native forward receipt missing",
+"S5B1 forward inventory mismatch","S5B1 forward exact device not verified",
+"S5B1 native forward delete receipt missing","S5B1 removed forward remains"]
+for c in classes:
+ if c in s: print("S5B1_REDACTED_FAILURE="+c)
+m=re.search(r'S3_INSTALLED_MCP_TOOL_ERROR name=([a-z_]+)',s)
+if m: print("S5B1_REDACTED_FAILED_TOOL="+m[1])
+print("S5B1_CURRENT_SDK_FAIL_OR_BLOCKED")
+PY
+    exit 89
+  fi
   for marker in S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG S3_INSTALLED_REAL_HTTP_MCP_FILE_NEGATIVE_AND_IDEMPOTENCY S3_INSTALLED_MCP_ORIGINAL_BOX_CLEANUP_VERIFIED; do
     grep -Fxq "$marker=PASS" "$work/private/current-sdk.log"
     echo "$marker=PASS"
@@ -101,6 +128,92 @@ case "$S5B1_MODE" in
   grep '^S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ' "$work/private/current-sdk.log"
   test "$(grep -c '^S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=' "$work/private/current-sdk.log")" = 23
   echo S5B1_EXACT_INSTALLED_OLD_NEW_SDK_SCOPED=PASS
+  ;;
+ metadata)
+  # Actual stopped Box with independently created owned native snapshot/backup.
+  # No native security change or host credential exposure.
+  PYTHONPATH=scripts python3 -B - "$work" "$project" "$binary_sha" <<'PY'
+import os,sys,pathlib,subprocess,json,time,base64
+from mcp_testkit import LoopbackMCP,MCPToolError
+work=pathlib.Path(sys.argv[1]); project=sys.argv[2]; sha=sys.argv[3]
+assert os.environ['GITHUB_ACTIONS']=='true' and os.environ['RUNNER_ENVIRONMENT']=='github-hosted'
+assert os.geteuid()!=0
+name='s5b2-metadata-disposable'
+token=next(x[6:].strip() for x in (work/'private/admin2.secret').read_text().splitlines() if x.startswith('token='))
+def native(*args):
+ return subprocess.check_output(['sudo','incus','--project',project,*args],text=True,timeout=80).strip()
+def call(m,t,**args):
+ return m.call(t,args).structured
+def submit(m,t,key,**args):
+ z=call(m,t,idempotency_key='s5b2-metadata-'+key,**args)
+ op=z['operation_id']
+ assert len(op)==32
+ return op
+def await_state(m,op,want):
+ r=m.poll_operation(op,seconds=100)
+ assert r['state']==want,(op,r['state'],want)
+ print('S5B2_ORIGINAL='+op+' STATE='+want+' NATIVE='+r.get('native_operation_id','none'),flush=True)
+ return r
+def ready(m,key,seconds):
+ return submit(m,'box_wait_ready',key,box_id=box,checks=['running','exec'],timeout_seconds=seconds)
+with LoopbackMCP(token=token,timeout=30,allow_mutations=True) as m:
+ assert m.host_status()['binary_sha256']==sha
+ assert not native('list','-f','csv','-c','n')
+ create=submit(m,'box_create','create',name=name,cpu=1,memory_mib=768,disk_gib=4,start=False,internet=False)
+ box=await_state(m,create,'SUCCEEDED')['box_uuid']
+ assert native('config','get',name,'volatile.uuid')==box
+ basic=call(m,'box_get',box_id=box)
+ assert 'instance_full' not in basic and basic['box']['native_state']=='Stopped'
+ t=ready(m,'timeout',1)
+ o=await_state(m,t,'TIMED_OUT')
+ assert not o.get('native_operation_id')
+ waiting=ready(m,'delayed',90)
+ start=submit(m,'box_start','start',box_id=box)
+ await_state(m,start,'SUCCEEDED');await_state(m,waiting,'SUCCEEDED')
+ e=submit(m,'box_exec','output',box_id=box,argv=['/bin/printf','s5b2-archive-marker'])
+ await_state(m,e,'SUCCEEDED')
+ stop=submit(m,'box_stop','stop',box_id=box)
+ await_state(m,stop,'SUCCEEDED')
+ assert native('config','get',name,'volatile.uuid')==box
+ native('snapshot','create',name,'s5b2-snap')
+ native('query','-X','POST','--wait','-d',json.dumps(dict(name='s5b2-backup',instance_only=True)),f'/1.0/instances/{name}/backups?project={project}')
+ print('S5B2_NATIVE_NONEMPTY_SNAPSHOT_BACKUP_CREATED=PASS',flush=True)
+ try:
+  det=call(m,'box_get',box_id=box,detail=True)['instance_full']
+ except MCPToolError as exc:
+  # Native privilege refusal is not a successful metadata read.
+  print('S5B2_NONEMPTY_DETAIL=REFUSED',flush=True)
+  raise
+ assert det['config']['volatile.uuid']==box
+ assert len(det['snapshots'])==1 and len(det['backups'])==1
+ assert det['snapshots'][0]['name'].endswith('s5b2-snap') and det['backups'][0]['name'].endswith('s5b2-backup')
+ print('S5B2_ACTUAL_NONEMPTY_DETAIL=PASS',flush=True)
+ pending=ready(m,'restart',300)
+ assert m.operation_get(pending)['state']=='OBSERVING'
+# Restart only the freshly installed controller on this disposable VM.
+subprocess.run(['sudo','systemctl','restart','boxweave.service'],check=True,timeout=30)
+for _ in range(30):
+ try:
+  with LoopbackMCP(token=token,timeout=3) as check:
+   assert check.host_status()['binary_sha256']==sha
+  break
+ except Exception: time.sleep(1)
+else: raise AssertionError('service did not become ready')
+with LoopbackMCP(token=token,timeout=30,allow_mutations=True) as m:
+ original=await_state(m,pending,'FAILED')
+ assert original['error_class']=='PROCESS_RESTART_BEFORE_DISPATCH' and not original.get('native_operation_id')
+ same=call(m,'box_wait_ready',box_id=box,checks=['running','exec'],timeout_seconds=300,idempotency_key='s5b2-metadata-restart')
+ assert same['duplicate'] and same['operation_id']==pending
+ assert native('config','get',name,'volatile.uuid')==box
+ native('query','-X','DELETE','--wait',f'/1.0/instances/{name}/backups/s5b2-backup?project={project}')
+ native('snapshot','delete',name,'s5b2-snap')
+ done=submit(m,'box_delete','delete',box_id=box)
+ await_state(m,done,'SUCCEEDED')
+ assert not native('list','-f','csv','-c','n')
+ out=m.operation_output(e,limit=4096)
+ assert out['exit_code']==0 and base64.b64decode(out['content_base64'])==b's5b2-archive-marker'
+ print('S5B2_READY_TIMEOUT_DELAY_RESTART_NATIVE_DETAIL_ARCHIVE=PASS',flush=True)
+PY
   ;;
  retirement)
   # Compatible VM, not the nested environment. Never modify drop-ins.

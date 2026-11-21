@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [sdk, retirement]
+        mode: [sdk, retirement, metadata]
     env:
       RUNNER_ENVIRONMENT: github-hosted
       PYTHONDONTWRITEBYTECODE: '1'
@@ -69,6 +69,8 @@ jobs:
             grep -Fxq 'S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS=PASS' "$RUNNER_TEMP/s5b1-result.log"
             grep -q '^S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ' "$RUNNER_TEMP/s5b1-result.log"
             grep -Fxq 'S5B1_EXACT_INSTALLED_OLD_NEW_SDK_SCOPED=PASS' "$RUNNER_TEMP/s5b1-result.log"
+          elif test "$S5B1_MODE" = metadata; then
+            grep -Fxq 'S5B2_READY_TIMEOUT_DELAY_RESTART_NATIVE_DETAIL_ARCHIVE=PASS' "$RUNNER_TEMP/s5b1-result.log"
           else
             grep -Fxq 'S5B1_ACTUAL_GUIDED_FULL_RETIREMENT_ARCHIVE_AND_INCUS_PRESERVED=PASS' "$RUNNER_TEMP/s5b1-result.log"
           fi
