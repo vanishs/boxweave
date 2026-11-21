@@ -209,13 +209,20 @@ jobs:
               project="user-$(id -u boxweave)"
               test "$(sudo incus project get "$project" restricted)" = true
               test -z "$(sudo incus --project "$project" list --format csv -c n)"
+              echo S5B_SCRIPTLET_EXACT_RESTRICTED_EMPTY_PROJECT=PASS
+              # The first restricted unix-socket connection creates a local
+              # restricted client certificate. Include it in the full trust
+              # inventory; never delete or narrow an existing client's rights.
+              sudo incus config trust list --format json | jq -e --arg project "$project" '[.[] | select(.restricted==true)] | length==4 and all(.[]; .type=="client" and (.projects|length)==1) and ([.[].projects[0]]|sort)==([$project,"bwlegacy","bwother","default"]|sort)' >/dev/null
+              echo S5B_SCRIPTLET_ALL_FOUR_RESTRICTED_CLIENTS_ACCOUNTED=PASS
               bw="$RUNNER_TEMP/s5b-scriptlet-cli"
               plan="$RUNNER_TEMP/s5b-scriptlet-plan.json"
               before="$RUNNER_TEMP/s5b-scriptlet-before.json"
-              sudo incus query /1.0 | jq -S '.config' > "$before"
+              sudo incus query /1.0 | jq -eS '.config | objects' > "$before"
               sudo "$bw" native-scriptlet-plan -project "$project" -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" > "$plan"
               review="$(jq -er '.review_sha256 | select(test("^[a-f0-9]{64}$"))' "$plan")"
-              jq -e --arg project "$project" '.target.owner_project == $project and .target.acl == "bw-s4b2-scriptlet" and .restricted_client_count == 3' "$plan" >/dev/null
+              echo S5B_SCRIPTLET_EXACT_PLAN_READ=PASS
+              jq -e --arg project "$project" '.target.owner_project == $project and .target.acl == "bw-s4b2-scriptlet" and .restricted_client_count == 4' "$plan" >/dev/null
               check_report() {
                 jq -e --arg review "$review" --arg state "$1" '.review_sha256 == $review and .status == $state and .ready_for_peer == false' "$2" >/dev/null
               }
@@ -224,7 +231,7 @@ jobs:
               if sudo "$bw" native-scriptlet-apply -project "$project" -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" -scriptlet-plan-sha256 "$review" > /dev/null 2>&1; then exit 81; fi
               if sudo "$bw" native-scriptlet-apply -project "$project" -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" -scriptlet-plan-sha256 "$(printf '%064d' 0)" -approve-local > /dev/null 2>&1; then exit 82; fi
               ! sudo test -e /var/lib/boxweave-native-scriptlet-v1.json
-              sudo incus query /1.0 | jq -S '.config' | cmp -s "$before" -
+              sudo incus query /1.0 | jq -eS '.config | objects' | cmp -s "$before" -
               echo S5B1_SCRIPTLET_CLI_PLAN_AND_NEGATIVES=PASS
               sudo "$bw" native-scriptlet-apply -project "$project" -acl bw-s4b2-scriptlet -scriptlet-writer-fingerprint "$writer_fpr" -scriptlet-plan-sha256 "$review" -approve-local > "$RUNNER_TEMP/s5b-scriptlet-apply.json"
               check_report ROUTE_APPLIED_PARITY_PENDING "$RUNNER_TEMP/s5b-scriptlet-apply.json"
@@ -246,7 +253,7 @@ jobs:
               check_report ROLLED_BACK "$RUNNER_TEMP/s5b-scriptlet-reconcile-restored.json"
               sudo "$bw" native-scriptlet-status > "$RUNNER_TEMP/s5b-scriptlet-status-restored.json"
               check_report ROLLED_BACK "$RUNNER_TEMP/s5b-scriptlet-status-restored.json"
-              sudo incus query /1.0 | jq -S '.config' | cmp -s "$before" -
+              sudo incus query /1.0 | jq -eS '.config | objects' | cmp -s "$before" -
               probe writer GET '/1.0/network-acls/bw-s4b2-not-owned?project=default' 200
               echo S5B1_SCRIPTLET_CLI_EXACT_ROLLBACK_AND_RECONCILE=PASS
               test "$(sha256sum "$bw" | cut -d' ' -f1)" = a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6
