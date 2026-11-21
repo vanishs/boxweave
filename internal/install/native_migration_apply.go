@@ -33,7 +33,7 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 		return j, err
 	}
 	// Save exact signed OLD package artifacts before any daemon interruption.
-	c := exec.Command("apt-get", "download", "incus="+from, "incus-client="+from)
+	c := exec.Command("apt-get", append([]string{"download"}, nativePackageArgs(p.Packages, from)...)...)
 	c.Dir = nativeMigrationDir
 	if err = c.Run(); err != nil {
 		return j, fmt.Errorf("old signed package download failed, no native stop: %w", err)
@@ -55,6 +55,15 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 	}
 	j.OldClientDeb, j.ClientSHA, err = selectDeb("incus-client")
 	if err != nil {
+		return j, err
+	}
+	if len(p.Packages) == 3 {
+		j.OldBaseDeb, j.BaseSHA, err = selectDeb("incus-base")
+		if err != nil {
+			return j, err
+		}
+	}
+	if err = assertNativePackagesBackup(j); err != nil {
 		return j, err
 	}
 	if err = setMigrationPhase(&j, "OLD_PACKAGES_SAVED"); err != nil {
@@ -108,8 +117,7 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 	if err = setMigrationPhase(&j, "APT_MAY_HAVE_RUN"); err != nil {
 		return j, err
 	}
-	cmd := exec.Command("apt-get", "install", "-y", "--no-install-recommends",
-		"incus="+to, "incus-client="+to)
+	cmd := exec.Command("apt-get", append([]string{"install", "-y", "--no-install-recommends"}, nativePackageArgs(p.Packages, to)...)...)
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
 	// An optional s1lab-only compiled replacement can simulate a failed
 	// APT invocation. Production always executes the exact reviewed apt-get.
@@ -127,7 +135,7 @@ func NativeMigrationApply(from, to, reviewedSHA, hostDigest string, approve, dow
 	if err = setMigrationPhase(&j, "APT_RETURNED_NEEDS_VERIFICATION"); err != nil {
 		return j, err
 	}
-	if err = verifyMigratedNative(to); err != nil {
+	if err = verifyMigratedNative(to, migrationPackageNames(j)); err != nil {
 		_ = setMigrationPhase(&j, "POSTCHECK_UNKNOWN")
 		return j, fmt.Errorf("new daemon/native postcheck uncertain: %w", err)
 	}
@@ -148,7 +156,10 @@ func stopMigrationDaemon() error {
 	return nil
 }
 
-func verifyMigratedNative(version string) error {
+func verifyMigratedNative(version string, names []string) error {
+	if err := verifyNativePackageVersions(names, version); err != nil {
+		return err
+	}
 	pkg, ok, err := installedIncusPackage()
 	if err != nil || !ok || pkg != version {
 		return errors.New("native daemon package postcondition mismatch")
@@ -169,8 +180,9 @@ func verifyMigratedNative(version string) error {
 	if _, err = migrationInventory(); err != nil {
 		return fmt.Errorf("native isolated ownership lost: %w", err)
 	}
-	if out, err := exec.Command("runuser", "-u", "boxweave", "--",
-		"incus", "profile", "show", "default").CombinedOutput(); err != nil ||
+	args := confinedProjectListArgs("/home/boxweave")
+	args = append(args[:len(args)-4], "profile", "show", "default")
+	if out, err := exec.Command("runuser", args...).CombinedOutput(); err != nil ||
 		!strings.Contains(string(out), "pool: default") || !strings.Contains(string(out), "path: /") {
 		return errors.New("restricted native Project root profile not restored")
 	}

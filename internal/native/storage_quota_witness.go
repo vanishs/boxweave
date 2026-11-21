@@ -17,6 +17,9 @@ const storageQuotaWitnessPath = "/etc/boxweave/storage-quota-witness.json"
 
 const storageQuotaWitnessMaxAge = 4 * time.Hour
 
+// Near-full proof additionally requires an observed EDQUOT on a bounded guest write.
+const storageQuotaWitnessMaxSlack = 64 << 10
+
 type storageQuotaWitness struct {
 	Schema       int    `json:"schema"`
 	Project      string `json:"project"`
@@ -30,16 +33,25 @@ type storageQuotaWitness struct {
 	QuotaBytes   uint64 `json:"quota_bytes"`
 	Referenced   uint64 `json:"referenced_bytes"`
 	QgroupMax    uint64 `json:"qgroup_max_referenced_bytes"`
+	WriteRefusal string `json:"write_refusal,omitempty"`
 }
 
 func quotaWitnessValid(w storageQuotaWitness, project, pool, driver, boot string,
 	dev, ino uint64, now time.Time) bool {
-	if w.Schema != 1 || project == "" || pool == "" || driver != "btrfs" ||
+	if (w.Schema != 1 && w.Schema != 2) || project == "" || pool == "" || driver != "btrfs" ||
 		w.Project != project || w.Pool != pool || w.Driver != driver ||
 		boot == "" || w.BootID != boot ||
 		w.MountDev != dev || w.MountIno != ino ||
 		len(w.BoxUUID) != 36 || w.QuotaBytes < (2<<30) ||
-		w.QgroupMax != w.QuotaBytes || w.Referenced < w.QgroupMax {
+		w.QgroupMax != w.QuotaBytes {
+		return false
+	}
+	if w.Schema == 1 {
+		if w.Referenced < w.QgroupMax || w.WriteRefusal != "" {
+			return false
+		}
+	} else if w.WriteRefusal != "GUEST_EDQUOT_128K" || w.Referenced > w.QgroupMax ||
+		w.QgroupMax-w.Referenced > storageQuotaWitnessMaxSlack {
 		return false
 	}
 	when := time.Unix(w.ObservedUnix, 0)

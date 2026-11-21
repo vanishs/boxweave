@@ -59,7 +59,12 @@ sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --a
 net="incusbr-$uid"
 acl="bw-s25-standalone-owned"
 sudo incus network show "$net" >/dev/null
-CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+if [ -n "${S5B1_MODE:-}" ]; then
+  test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$work/staging/boxweave" ./cmd/boxweave
+else
+  CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version=1.0.25-s25lab -X main.commit=$(git rev-parse HEAD)" -o "$work/staging/boxweave" ./cmd/boxweave
+fi
 CGO_ENABLED=1 go build -trimpath -o "$work/staging/s25-lab-agent" ./scripts/s25_lab_agent.go
 cp scripts/s25_inner_setup.sh "$work/staging/s25_inner_setup.sh"
 cp scripts/s25_simwan6.py "$work/staging/s25_simwan6.py"
@@ -115,6 +120,13 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -X POST  http://127
 test "$code" = 401
 echo S25_HTTP_BAD_HOST_ORIGIN_PATH_AND_TOKEN_DENIAL=PASS
 
+# S5B1 test-only branch, using the same guarded disposable VM and exact
+# installed product. This does not alter the ordinary S25/S3 scenarios.
+if [ -n "${S5B1_MODE:-}" ]; then
+  sh scripts/s5b1_installed_closeout.sh "$work" "$project" "$net" "$acl" "$binary_sha"
+  exit 0
+fi
+
 
 # S3-only isolated installed File Tool acceptance entry. Reuse the existing
 # pristine GitHub runner's signed native preparation, restricted nonroot
@@ -159,6 +171,15 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
     echo S3_PHASE3_SCOPED_HTTPS_PACKAGE_RELAY=PASS
     export BW_S3_PHASE3_MODE=stage
     export BW_S3_PHASE3_CHECKPOINT="$work/private/s3-phase3-original.json"
+    if [ "${BW_S5B_TC015:-false}" = true ]; then
+      handoff="$work/private/s5b-handoff"
+      mkdir -m0700 "$handoff"
+      git init -q --bare --initial-branch=main "$handoff/remote.git"
+      git init -q -b main "$handoff/a"
+      git -C "$handoff/a" config user.name "S5B Actor A fixture"
+      git -C "$handoff/a" config user.email "actor-a@example.invalid"
+      export BW_S5B_HANDOFF_CHECKPOINT="$handoff/a/checkpoint.json"
+    fi
     if ! "$work/staging/s3-file-installed-agent"; then
       # Diagnostic only on disposable CI runner: the original Tool error is
       # preserved. Do NOT redispatch a native mutation or alter the Guest.
@@ -179,6 +200,51 @@ if [ "$(printenv S3_FILE_INSTALLED_PHASE2 2>/dev/null || true)" = true ]; then
       sudo incus file pull s3-file-phase2-ci/root/s3-file-phase2/victim \
         "$work/staging/s3-phase3-failed-victim-read-only" --project "$project" || :
       exit 83
+    fi
+    if [ "${BW_S5B_TC015:-false}" = true ]; then
+      test -s "$BW_S5B_HANDOFF_CHECKPOINT"
+      git -C "$handoff/a" add checkpoint.json
+      git -C "$handoff/a" commit -qm "record Actor A failing original"
+      git -C "$handoff/a" push -q "$handoff/remote.git" HEAD:main
+      initial_revision="$(git -C "$handoff/a" rev-parse HEAD)"
+      git clone -q --branch main "$handoff/remote.git" "$handoff/b"
+      test "$(git -C "$handoff/b" rev-parse HEAD)" = "$initial_revision"
+      git -C "$handoff/b" config user.name "S5B Actor B fixture"
+      git -C "$handoff/b" config user.email "actor-b@example.invalid"
+      export BW_S5B_HANDOFF_CHECKPOINT="$handoff/b/checkpoint.json"
+      export BW_S3_PHASE3_MODE=handoff
+      "$work/staging/s3-file-installed-agent"
+      test -s "$BW_S3_PHASE3_CHECKPOINT"
+      # Independent verifier reads only nonsecret original identity fields.
+      sudo python3 - "$handoff/a/checkpoint.json" "$BW_S3_PHASE3_CHECKPOINT" <<'S5B_ACTOR_WITNESS'
+import json, sqlite3, sys
+before=json.load(open(sys.argv[1])); after=json.load(open(sys.argv[2]))
+for k in ("box_uuid","setup_op","fail_op","native_setup_op","native_fail_op","initial_git_commit"):
+ assert before[k]==after[k], k
+with sqlite3.connect("file:/var/lib/boxweave/ledger.sqlite?mode=ro",uri=True) as db:
+ rows=[]
+ for k in ("setup","fail","fix","pass"):
+  row=db.execute("select actor_id,layer,box_uuid,native_operation_id,state from operations where id=?",(after[k+"_op"],)).fetchone()
+  assert row and row[2]==after["box_uuid"] and row[3]==after["native_"+k+"_op"] and row[4]=="SUCCEEDED",k
+  rows.append(row)
+ assert rows[0][0]==rows[1][0] and rows[2][0]==rows[3][0] and rows[0][0]!=rows[2][0]
+ assert len({r[1] for r in rows})==1
+print("S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS=PASS")
+S5B_ACTOR_WITNESS
+      cp "$BW_S3_PHASE3_CHECKPOINT" "$handoff/b/checkpoint.json"
+      git -C "$handoff/b" add checkpoint.json
+      git -C "$handoff/b" commit -qm "Actor B verified repaired original"
+      git -C "$handoff/b" push -q origin HEAD:main
+      winner="$(git -C "$handoff/b" rev-parse HEAD)"
+      printf 'stale review fixture\n' > "$handoff/a/review.txt"
+      git -C "$handoff/a" add review.txt
+      git -C "$handoff/a" commit -qm "stale Actor A competing checkpoint"
+      if git -C "$handoff/a" push "$handoff/remote.git" HEAD:main >"$handoff/stale-push.log" 2>&1; then
+        echo S5B_TC016_UNEXPECTED_STALE_WRITE >&2; exit 95
+      fi
+      test "$(git --git-dir="$handoff/remote.git" rev-parse refs/heads/main)" = "$winner"
+      git --git-dir="$handoff/remote.git" show refs/heads/main:checkpoint.json | cmp - "$BW_S3_PHASE3_CHECKPOINT"
+      echo S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED=PASS
     fi
     test -s "$BW_S3_PHASE3_CHECKPOINT"
     # Restart only the installed service on this disposable GitHub runner.
@@ -249,7 +315,11 @@ print("S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS")
 S3_VERIFY_NATIVE
     export BW_S3_PHASE3_MODE=cleanup
     "$work/staging/s3-file-installed-agent"
-    echo S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS
+    if [ "${BW_S5B_TC015:-false}" = true ]; then
+      echo S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP=PASS
+    else
+      echo S3_PHASE3_SINGLE_AGENT_GIT_NATIVE_VERIFIED_AND_MCP_CLEANUP=PASS
+    fi
   else
     "$work/staging/s3-file-installed-agent"
   fi

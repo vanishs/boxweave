@@ -157,9 +157,15 @@ func nativePrepareServiceAccount() error {
 			return err
 		}
 	}
-	out, err := exec.Command("runuser", "-u", "boxweave", "--", "incus", "project", "list", "--format", "csv").CombinedOutput()
+	// The first restricted request can create the native Project and emit
+	// initialization notices. Verify the actual inventory on an independent
+	// second read rather than treating those notices as Project data.
+	u, err := user.Lookup("boxweave")
 	if err != nil {
-		return fmt.Errorf("cannot establish restricted native user Project: %w (%s)", err, string(out))
+		return err
+	}
+	if _, err = exec.Command("runuser", confinedProjectListArgs(u.HomeDir)...).Output(); err != nil {
+		return fmt.Errorf("cannot establish restricted native user Project: %w", err)
 	}
 	return nativeServiceActorReady()
 }

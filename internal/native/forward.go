@@ -251,13 +251,5 @@ func (r Reader) VerifyPinnedDeleteNIC(ctx context.Context, name, uuid, bridge, a
 	if e != nil {
 		return e
 	}
-	d := inst.ExpandedDevices["eth0"]
-	observed := strings.ToLower(inst.Config["volatile.eth0.hwaddr"])
-	if observed == "" {
-		observed = strings.ToLower(d["hwaddr"])
-	}
-	if !nicPrivate(inst.ExpandedDevices) || d["network"] != bridge || d["security.acls"] != acl || d["ipv4.address"] != v4 || d["ipv6.address"] != v6 || observed != mac {
-		return ErrUnsafeNetwork
-	}
-	return nil
+	return ValidatePeerACLBox(inst, r.Project, bridge, acl, PeerACLBox{Name: name, UUID: uuid, MAC: mac, IPv4: v4, IPv6: v6}, false)
 }

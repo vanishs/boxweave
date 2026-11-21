@@ -29,7 +29,15 @@ type fileBearerTransport struct{ token string }
 func (t fileBearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	copyReq := req.Clone(req.Context())
 	copyReq.Header.Set("Authorization", "Bearer "+t.token)
-	return http.DefaultTransport.RoundTrip(copyReq)
+	response, err := http.DefaultTransport.RoundTrip(copyReq)
+	if err == nil && response != nil && os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" && req.Method == http.MethodPost {
+		cache := strings.ToLower(response.Header.Get("Cache-Control"))
+		if !strings.Contains(cache, "private") || !strings.Contains(cache, "no-store") || !strings.Contains(strings.Join(response.Header.Values("Vary"), ","), "Authorization") {
+			response.Body.Close()
+			return nil, fmt.Errorf("S5B1 private response cache boundary missing")
+		}
+	}
+	return response, err
 }
 
 func need(ok bool, reason string) {
@@ -174,7 +182,10 @@ func s3GitCheckpointFile() string {
 }
 
 func persistS3GitCheckpoint(data s3GitCheckpoint) {
-	filename := s3GitCheckpointFile()
+	persistS3GitCheckpointAt(s3GitCheckpointFile(), data)
+}
+
+func persistS3GitCheckpointAt(filename string, data s3GitCheckpoint) {
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		panic(err)
@@ -224,10 +235,17 @@ func loadS3GitCheckpoint() s3GitCheckpoint {
 }
 
 func s3GuestExec(ctx context.Context, admin *mcp.ClientSession, uuid, key, script string) (string, int, string, string) {
+	workRef, agentRef := "lab/s3/one-agent-git", "s3-supervised-single-agent"
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		workRef, agentRef = "lab/s5b/two-actor-git", "s5b-actor-a"
+		if os.Getenv("BW_S3_PHASE3_MODE") == "handoff" {
+			agentRef = "s5b-actor-b"
+		}
+	}
 	r := call(ctx, admin, "box_exec", map[string]any{
 		"box_id": uuid, "argv": []string{"/bin/sh", "-c", script},
 		"timeout_ms": 300000, "idempotency_key": key,
-		"work_ref": "lab/s3/one-agent-git", "agent_ref": "s3-supervised-single-agent",
+		"work_ref": workRef, "agent_ref": agentRef,
 	})
 	id := originalID(r)
 	// Operation state SUCCEEDED means native Exec completed, NOT guest exit 0.
@@ -305,9 +323,6 @@ func runS3GuestGitPhase3(ctx context.Context, admin, peer *mcp.ClientSession, uu
 	const dir = "/root/s3-guest-git"
 	const wrongSource = `def double(value):
     return value * 2 + 1
-`
-	const rightSource = `def double(value):
-    return value * 2
 `
 	const unitTest = `import unittest
 from calc import double
@@ -387,39 +402,92 @@ mkdir -p /root/s3-guest-git
 		strings.Contains(failErr, "FAILED"), "original persisted stderr has no actual unittest failure")
 	fmt.Println("S3_PHASE3_GUEST_TEST_FAILED_ORIGINAL_EXIT_ONE=PASS")
 	fmt.Println("S3_PHASE3_GUEST_FAILED_TEST_ORIGINAL_OPERATION_ID=" + failID)
-	// File replace is intentionally UNSUPPORTED; authorized Guest Exec/Git
-	// is the verified safe route to an edit in this trusted supervised Box.
+
+	cp := s3GitCheckpoint{
+		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
+		SetupOp: setupID, FailOp: failID, FileCreateOp: created[0],
+		InitialGitCommit: firstCommit,
+		NativeSetupOp:    s3OriginalNativeID(ctx, admin, uuid, setupID),
+		NativeFailOp:     s3OriginalNativeID(ctx, admin, uuid, failID),
+	}
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		persistS3GitCheckpointAt(requiredEnv("BW_S5B_HANDOFF_CHECKPOINT"), cp)
+		fmt.Printf("S5B_TC015_ACTOR_A_FAILED_CHECKPOINT=PASS BW=%s NATIVE=%s\n", cp.FailOp, cp.NativeFailOp)
+		return // Process A exits before the repair. The runner commits this external checkpoint.
+	}
+	completeS3GuestGitPhase3(ctx, admin, peer, cp)
+}
+
+func completeS3GuestGitPhase3(ctx context.Context, actor, observer *mcp.ClientSession, cp s3GitCheckpoint) {
+	const dir = "/root/s3-guest-git"
+	const rightSource = "def double(value):\n    return value * 2\n"
+	uuid := cp.BoxUUID
+	// Native conditional File replace remains unsupported. Trusted guest
+	// Exec/Git is the normal approved editing path for this disposable Box.
 	fixScript := "set -eu; cd " + dir +
 		"; sed -i 's/ + 1$//' calc.py; " +
 		"git add calc.py; git commit -q -m 'fix: double returns exact value'; " +
 		"test $(git rev-list --count HEAD) = 2; " +
 		"test $(git status --porcelain | wc -l) -eq 0; " +
 		"echo S3_GIT_REPAIRED_COMMIT=$(git rev-parse HEAD)"
-	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, admin, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
+	fixID, fixExit, fixOut, _ := s3GuestExec(ctx, actor, uuid, "s3-git-guest-fix-and-commit-once", fixScript)
 	need(fixExit == 0, "Guest authorized repair or Git second commit failed")
 	fixedCommit := gitCommitLine(fixOut, "S3_GIT_REPAIRED_COMMIT=")
-	need(fixedCommit != firstCommit, "Git final commit matches deliberately failing original")
-	need(bytes.Equal(fileBytes(ctx, peer, uuid, dir+"/calc.py"), []byte(rightSource)),
+	need(fixedCommit != cp.InitialGitCommit, "Git final commit matches deliberately failing original")
+	need(bytes.Equal(fileBytes(ctx, observer, uuid, dir+"/calc.py"), []byte(rightSource)),
 		"File tool did not return corrected Guest source byte-for-byte")
-	passScript := "cd " + dir + "; python3 -B -m unittest -v test_calc"
-	passID, passExit, _, passErr := s3GuestExec(ctx, admin, uuid, "s3-git-passing-test-original-once", passScript)
+	passID, passExit, _, passErr := s3GuestExec(ctx, actor, uuid, "s3-git-passing-test-original-once", "cd "+dir+"; python3 -B -m unittest -v test_calc")
 	need(passExit == 0 && strings.Contains(passErr, "Ran 1 test") &&
 		strings.Contains(passErr, "OK"), "original Guest regression was not repaired")
 	fmt.Println("S3_PHASE3_GUEST_REPAIR_GIT_COMMIT_AND_TEST_PASS=PASS")
 	sum := sha256.Sum256([]byte(rightSource))
-	persistS3GitCheckpoint(s3GitCheckpoint{
-		BoxUUID: uuid, NativeBoxName: "s3-file-phase2-ci",
-		SetupOp: setupID, FailOp: failID, FixOp: fixID, PassOp: passID,
-		FileCreateOp: created[0], InitialGitCommit: firstCommit,
-		FinalGitCommit: fixedCommit, FinalGitClean: true,
-		NativeSetupOp: s3OriginalNativeID(ctx, admin, uuid, setupID),
-		NativeFailOp:  s3OriginalNativeID(ctx, admin, uuid, failID),
-		NativeFixOp:   s3OriginalNativeID(ctx, admin, uuid, fixID),
-		NativePassOp:  s3OriginalNativeID(ctx, admin, uuid, passID),
-		SourceSHA256:  hex.EncodeToString(sum[:]),
-	})
-	fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
+	cp.FixOp, cp.PassOp = fixID, passID
+	cp.FinalGitCommit, cp.FinalGitClean = fixedCommit, true
+	cp.NativeFixOp = s3OriginalNativeID(ctx, actor, uuid, fixID)
+	cp.NativePassOp = s3OriginalNativeID(ctx, actor, uuid, passID)
+	cp.SourceSHA256 = hex.EncodeToString(sum[:])
+	persistS3GitCheckpoint(cp)
+	if os.Getenv("BW_S5B_TC015") == "true" {
+		fmt.Printf("S5B_TC015_ACTOR_B_REPAIRED_CHECKPOINT=PASS BW=%s NATIVE=%s\n", cp.PassOp, cp.NativePassOp)
+	} else {
+		fmt.Println("S3_PHASE3_SUPERVISED_SINGLE_AGENT_EXTERNAL_CHECKPOINT_FSYNC=PASS")
+	}
 	fmt.Println("S3_PHASE3_GUEST_GIT_FAIL_FIX_PASS_STAGE=PASS")
+}
+
+func resumeS5BGitHandoff(ctx context.Context, actor *mcp.ClientSession) {
+	const dir = "/root/s3-guest-git"
+	b, err := os.ReadFile(requiredEnv("BW_S5B_HANDOFF_CHECKPOINT"))
+	need(err == nil && len(b) <= 8192, "missing or oversized external handoff")
+	var cp s3GitCheckpoint
+	need(json.Unmarshal(b, &cp) == nil && cp.NativeBoxName == "s3-file-phase2-ci" &&
+		len(cp.BoxUUID) == 36 && len(cp.SetupOp) == 32 && len(cp.FailOp) == 32 && len(cp.FileCreateOp) == 32 &&
+		len(cp.NativeSetupOp) == 36 && len(cp.NativeFailOp) == 36 && len(cp.InitialGitCommit) == 40 &&
+		cp.FixOp == "" && cp.PassOp == "" && cp.FinalGitCommit == "" && !cp.FinalGitClean &&
+		cp.NativeFixOp == "" && cp.NativePassOp == "" && cp.SourceSHA256 == "", "invalid partial handoff checkpoint")
+	box := object(call(ctx, actor, "box_get", map[string]any{"box_id": cp.BoxUUID}), "box")
+	need(field(box, "box_id") == cp.BoxUUID && field(box, "native_state") == "Running", "handoff original Box not verified")
+	for _, original := range []struct {
+		id, native, marker, stream string
+		exit                       float64
+	}{
+		{cp.SetupOp, cp.NativeSetupOp, "S3_GIT_INITIAL_COMMIT=" + cp.InitialGitCommit, "stdout", 0},
+		{cp.FailOp, cp.NativeFailOp, "AssertionError: 5 != 4", "stderr", 1},
+	} {
+		need(s3OriginalNativeID(ctx, actor, cp.BoxUUID, original.id) == original.native, "handoff native receipt mismatch")
+		out := call(ctx, actor, "operation_output_get", map[string]any{"operation_id": original.id, "stream": original.stream, "limit": 4096})
+		decoded, e := base64.StdEncoding.DecodeString(field(out, "content_base64"))
+		need(e == nil && out["exit_code"] == original.exit && bytes.Contains(decoded, []byte(original.marker)), "handoff original output mismatch")
+	}
+	fileOp := object(call(ctx, actor, "operation_get", map[string]any{"operation_id": cp.FileCreateOp}), "operation")
+	need(field(fileOp, "state") == "SUCCEEDED" && field(fileOp, "box_uuid") == cp.BoxUUID && field(fileOp, "action") == "box_file_apply", "handoff original file receipt mismatch")
+	need(bytes.Equal(fileBytes(ctx, actor, cp.BoxUUID, dir+"/calc.py"), []byte("def double(value):\n    return value * 2 + 1\n")), "handoff original source mismatch")
+	_, code, head, stderr := s3GuestExec(ctx, actor, cp.BoxUUID, "s5b-b-independent-git-head-read", "set -eu; cd "+dir+"; test -z \"$(git status --porcelain)\"; git rev-parse HEAD")
+	need(code == 0 && strings.TrimSpace(head) == cp.InitialGitCommit && stderr == "", "handoff stale HEAD or dirty working tree")
+	repro, code, _, stderr := s3GuestExec(ctx, actor, cp.BoxUUID, "s5b-b-reproduce-failure-once", "cd "+dir+"; python3 -B -m unittest -v test_calc")
+	need(code == 1 && strings.Contains(stderr, "AssertionError: 5 != 4"), "second Actor did not independently reproduce failure")
+	fmt.Printf("S5B_TC015_SECOND_ACTOR_REPRODUCED_ORIGINAL_FAIL=PASS BW=%s NATIVE=%s\n", repro, s3OriginalNativeID(ctx, actor, cp.BoxUUID, repro))
+	completeS3GuestGitPhase3(ctx, actor, actor, cp)
 }
 
 func verifyS3GuestGitOriginals(ctx context.Context, admin *mcp.ClientSession) {
@@ -495,6 +563,110 @@ func cleanupS3GuestGitPhase3(ctx context.Context, admin *mcp.ClientSession) {
 	fmt.Println("S3_PHASE3_MCP_ORIGINAL_GIT_BOX_STOP_DELETE_VERIFIED=PASS")
 }
 
+func s5b1ExactCatalog(ctx context.Context, admin *mcp.ClientSession, tools []*mcp.Tool) {
+	want := map[string]bool{}
+	for _, name := range strings.Fields("host_status box_create box_list box_get box_update box_start box_stop box_delete box_exec operation_get operation_list operation_output_get operation_cancel operation_recover box_file_list box_file_read box_file_apply box_peer_set box_activity_get port_forward_list port_forward_create port_forward_delete box_wait_ready") {
+		want[name] = true
+	}
+	need(len(tools) == len(want), "S5B1 exact catalog mismatch")
+	status := call(ctx, admin, "host_status", map[string]any{})
+	need(field(status, "commit") == "a3e02b4750edcabb80427e3311a19614d82b0029" && status["mcp_ready"] == true, "S5B1 installed identity")
+	need(field(status, "binary_sha256") == "a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6", "S5B1 exact installed binary mismatch")
+	for _, tool := range tools {
+		need(want[tool.Name] && tool.Description != "" && tool.Annotations != nil, "S5B1 missing actual metadata "+tool.Name)
+		delete(want, tool.Name)
+		raw, e := json.Marshal(tool.InputSchema)
+		need(e == nil && strings.Contains(string(raw), "\"additionalProperties\":false"), "S5B1 input schema not closed "+tool.Name)
+		need(rejects(ctx, admin, tool.Name, map[string]any{"s5b1_nonexistent_field": true}), "S5B1 invalid arguments accepted "+tool.Name)
+		// A rejected call must not be counted from a disconnected client.
+		need(field(call(ctx, admin, "host_status", map[string]any{}), "commit") == field(status, "commit"), "S5B1 transport not connected after refusal")
+		fmt.Println("S5B1_EXACT_MCP_SCHEMA_PREFLIGHT=" + tool.Name)
+	}
+	need(len(want) == 0, "S5B1 missing catalog tools")
+	fmt.Println("S5B1_STAGE=initialize")
+	init := admin.InitializeResult()
+	need(init != nil && strings.Contains(init.Instructions, "UNKNOWN") && strings.Contains(init.Instructions, "idempotency_key"), "S5B1 initialize instructions missing")
+	for _, name := range []string{"box_list", "operation_list", "box_activity_get", "port_forward_list"} {
+		fmt.Println("S5B1_STAGE=typed_text_" + name)
+		result, e := admin.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
+		need(e == nil && result != nil && !result.IsError && result.StructuredContent != nil && len(result.Content) > 0, "S5B1 typed and text result missing "+name)
+		raw, e := json.Marshal(result.StructuredContent)
+		need(e == nil, "S5B1 typed result marshal")
+		var a map[string]any
+		need(json.Unmarshal(raw, &a) == nil, "S5B1 typed result parse")
+		compatible := false
+		for _, part := range result.Content {
+			if t, ok := part.(*mcp.TextContent); ok {
+				var b map[string]any
+				if json.Unmarshal([]byte(t.Text), &b) == nil {
+					canonical, _ := json.Marshal(a)
+					legacy, _ := json.Marshal(b)
+					compatible = bytes.Equal(canonical, legacy)
+				}
+			}
+		}
+		need(compatible, "S5B1 structured/text mismatch "+name)
+	}
+	fmt.Println("S5B1_STAGE=missing_targets")
+	const missingBox = "00000000-0000-4000-8000-000000000001"
+	need(rejects(ctx, admin, "box_peer_set", map[string]any{"source_box_id": missingBox, "target_box_id": "00000000-0000-4000-8000-000000000002", "allow": false, "idempotency_key": "s5b1-exact-missing-peer"}), "S5B1 missing peer unexpectedly admitted")
+	need(rejects(ctx, admin, "port_forward_create", map[string]any{"box_id": missingBox, "protocol": "tcp", "guest_port": 19091, "host_port": 23093, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-missing-forward"}), "S5B1 missing forward owner unexpectedly admitted")
+	need(rejects(ctx, admin, "port_forward_delete", map[string]any{"forward_id": "00000000000000000000000000000001", "idempotency_key": "s5b1-exact-missing-proxy"}), "S5B1 missing forward unexpectedly deleted")
+	need(rejects(ctx, admin, "operation_cancel", map[string]any{"target_operation_id": "00000000000000000000000000000001", "idempotency_key": "s5b1-exact-missing-cancel"}), "S5B1 missing cancellation unexpectedly admitted")
+	fmt.Println("S5B1_EXACT_23_SCHEMA_CACHE_TYPED_TEXT_AND_REFUSALS=PASS")
+}
+
+func s5b1ExactOwned(ctx context.Context, admin *mcp.ClientSession, uuid, createID string) {
+	fmt.Println("S5B1_STAGE=readiness")
+	ready := call(ctx, admin, "box_wait_ready", map[string]any{"box_id": uuid, "checks": []string{"running", "exec"}, "timeout_seconds": 60, "idempotency_key": "s5b1-exact-owned-ready"})
+	readyID := originalID(ready)
+	await(ctx, admin, readyID, "SUCCEEDED")
+	fmt.Println("S5B1_STAGE=recovery")
+	diagnosis := call(ctx, admin, "operation_recover", map[string]any{"operation_id": createID, "mode": "inspect"})
+	need(diagnosis["native_retried"] == false, "S5B1 recovery inspect unexpectedly replayed")
+	need(field(object(diagnosis, "diagnosis"), "original_operation_id") == createID, "S5B1 recovery original identity mismatch")
+	fmt.Println("S5B1_STAGE=activity")
+	evidence := call(ctx, admin, "box_activity_get", map[string]any{"view": "evidence", "operation_id": readyID})
+	raw, _ := json.Marshal(evidence)
+	need(bytes.Contains(raw, []byte(readyID)), "S5B1 Activity original absent")
+	// Only a localhost listener within the one-use runner. No external
+	// bind, proxy permission expansion, PRS grant or unowned resource.
+	listener, e := net.Listen("tcp", "127.0.0.1:0")
+	need(e == nil, "S5B1 fresh loopback port unavailable")
+	port := listener.Addr().(*net.TCPAddr).Port
+	need(listener.Close() == nil, "S5B1 loopback reservation release")
+	fwd := call(ctx, admin, "port_forward_create", map[string]any{"box_id": uuid, "protocol": "tcp", "guest_port": 19091, "host_port": port, "host_bind": "127.0.0.1", "idempotency_key": "s5b1-exact-loopback-forward"})
+	original := originalID(fwd)
+	fmt.Println("S5B1_STAGE=forward_terminal")
+	policy := requiredEnv("BW_S5B1_PROXY_POLICY")
+	need(policy == "deny" || policy == "allow", "S5B1 missing explicit native proxy policy witness")
+	if policy == "deny" {
+		op := await(ctx, admin, original, "FAILED")
+		need(field(op, "error_class") == "SAFE_NATIVE_PREFLIGHT_DENIED" && field(op, "native_operation_id") == "", "S5B1 default proxy refusal lacks exact predispatch proof")
+		listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+		items, ok := listed["forwards"].([]any)
+		need(ok && len(items) == 0, "S5B1 refused proxy retained live claim")
+		fmt.Printf("S5B1_DEFAULT_PROXY_POLICY_REFUSAL=PASS original=%s ready=%s\n", original, readyID)
+		fmt.Printf("S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ready=%s forward_refused=%s\n", readyID, original)
+		return
+	}
+	op := await(ctx, admin, original, "SUCCEEDED")
+	need(field(op, "native_operation_id") != "", "S5B1 native forward receipt missing")
+	listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+	items, ok := listed["forwards"].([]any)
+	need(ok && len(items) == 1, "S5B1 forward inventory mismatch")
+	entry, ok := items[0].(map[string]any)
+	need(ok && field(entry, "forward_id") == original && field(entry, "state") == "CONFIRMED" && entry["native_verified"] == true, "S5B1 forward exact device not verified")
+	del := call(ctx, admin, "port_forward_delete", map[string]any{"forward_id": original, "idempotency_key": "s5b1-exact-loopback-forward-delete"})
+	delID := originalID(del)
+	removed := await(ctx, admin, delID, "SUCCEEDED")
+	need(field(removed, "native_operation_id") != "", "S5B1 native forward delete receipt missing")
+	after := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
+	empty, ok := after["forwards"].([]any)
+	need(ok && len(empty) == 0, "S5B1 removed forward remains")
+	fmt.Printf("S5B1_EXACT_READINESS_RECOVERY_ACTIVITY_FORWARD=PASS ready=%s forward=%s delete=%s\n", readyID, original, delID)
+}
+
 func main() {
 	if os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
@@ -504,6 +676,13 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Minute)
 	defer cancel()
+	if os.Getenv("BW_S3_PHASE3_MODE") == "handoff" {
+		need(os.Getenv("BW_S5B_TC015") == "true", "handoff mode not explicitly enabled")
+		actorB := connect(ctx, "s5b-actor-b", requiredEnv("BW_S3_PEER_TOKEN_FILE"))
+		defer actorB.Close()
+		resumeS5BGitHandoff(ctx, actorB)
+		return
+	}
 	if os.Getenv("BW_S3_PHASE3_MODE") == "verify" {
 		independent := connect(ctx, "fresh-restart-verifier", requiredEnv("BW_S3_ADMIN_TOKEN_FILE"))
 		defer independent.Close()
@@ -535,6 +714,9 @@ func main() {
 	}
 	need(len(names) == 23, "S4-B4 candidate must expose 23 Tools including public Activity and Forward")
 	fmt.Println("S3_INSTALLED_23_TOOL_OFFICIAL_SDK_CATALOG=PASS")
+	if os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" {
+		s5b1ExactCatalog(ctx, admin, t.Tools)
+	}
 	// One and only one new disposable owned Box. No shared user Boxes,
 	// L0-L5 historical resources, or parent Incus credential delegation.
 	const name = "s3-file-phase2-ci"
@@ -553,6 +735,9 @@ func main() {
 	need(field(state, "box_id") == uuid && field(state, "native_state") == "Running",
 		"native owned Guest is not running")
 	fmt.Println("S3_INSTALLED_BOX_CREATE_ORIGINAL_UUID=PASS")
+	if os.Getenv("BW_S5B1_EXACT_TOOLS") == "true" {
+		s5b1ExactOwned(ctx, admin, uuid, createID)
+	}
 	base := "/root/s3-file-phase2"
 	fixture := "mkdir -p " + base + "; " +
 		"printf S3_PHASE2_VICTIM_LOCKED > " + base + "/victim; " +

@@ -1,7 +1,7 @@
 name: S4-B4 disposable native instance proxy TCP/UDP
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -37,7 +37,7 @@ permissions:
   contents: read
 jobs:
   owned-proxy-native:
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120')
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'))
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -46,6 +46,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && 'a3e02b4750edcabb80427e3311a19614d82b0029' || github.sha }}
+      - name: Require exact frozen S5B source when running the acceptance branch
+        if: github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
+          test "$(git rev-parse HEAD^{tree})" = 19f4548315c497f611bd83d5537bf6ec5d63e9d1
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -62,7 +70,7 @@ jobs:
           go test -c -o "$RUNNER_TEMP/s4b4-native-test" ./internal/native
           go test -c -o "$RUNNER_TEMP/s4b4-control-test" ./internal/control
           CGO_ENABLED=0 go build -tags s4b2_native_ci -o "$RUNNER_TEMP/s4b4-echo" ./scripts/s4_b2_native_flow_probe.go
-          echo "S4_B4_EXACT_SOURCE=$GITHUB_SHA"
+          echo "S4_B4_EXACT_SOURCE=$(git rev-parse HEAD)"
       - name: Fresh signed Incus 7.6 and dedicated restricted one-use Project
         shell: bash
         run: |
@@ -152,7 +160,7 @@ jobs:
           if grep -q 'bwpf-' "$RUNNER_TEMP/s4b4-device-readback.txt"; then
             echo S4_B4_NATIVE_PROXY_LEAK; exit 70
           fi
-          if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120"; then
+          if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120" || test "$GITHUB_REF" = "refs/heads/feat/v1-s5b-acceptance-20261120"; then
             sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestS5A4NativeMCPNetworkRecovery$' | tee "$RUNNER_TEMP/s5a4-native.log"
             grep -Fq S5_A4_FORWARD_REAL_IPV4_IPV6_TCP_UDP_RECOVERY=PASS "$RUNNER_TEMP/s5a4-native.log"
             grep -Fq S5_A4_DEPENDENT_DELETE_NATIVE_RECOVERY=PASS "$RUNNER_TEMP/s5a4-native.log"

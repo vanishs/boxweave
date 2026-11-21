@@ -95,7 +95,7 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 		return out, err
 	}
 	if project.Config["restricted"] != "true" ||
-		project.Config["restricted.devices.nic"] != "managed" ||
+		!native.PeerManagedNICPolicy(project.Config["restricted.devices.nic"]) ||
 		project.Config["restricted.networks.access"] != t.Bridge {
 		return out, errors.New("native Project may attach unmanaged or foreign network devices")
 	}

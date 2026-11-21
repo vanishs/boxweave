@@ -2,7 +2,7 @@ name: S4-B2 installed restricted controller to root peer revoke (disposable)
 
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -42,13 +42,13 @@ permissions:
 jobs:
   root-installed-native:
     name: s4-b2-installed-controller-root-original-nft-verifier
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120')
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'))
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' && '["lost_ack","after_acl_fault"]' || '["normal", "lost_ack", "after_acl_fault"]') }}
+        scenario: ${{ fromJSON((github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') && '["lost_ack","after_acl_fault"]' || '["normal", "lost_ack", "after_acl_fault"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,7 +95,7 @@ jobs:
           project="user-$uid"
           sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
           go test -c -o "$RUNNER_TEMP/s4b2-root-fixture" ./internal/install
-          if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120"; then
+          if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120" || test "$GITHUB_REF" = "refs/heads/feat/v1-s5b-acceptance-20261120"; then
             go test -c -o "$RUNNER_TEMP/s5a4-peer-test" ./internal/control
             sudo install -m0755 "$RUNNER_TEMP/s5a4-peer-test" /usr/local/bin/s5a4-peer-test
           fi
@@ -341,7 +341,7 @@ jobs:
             fi
             test "$(sudo sha256sum "$journal" | cut -d' ' -f1)" = "$before_journal"
             test "$(sudo jq -r .status "$journal")" = DISPATCH_UNKNOWN
-            if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120"; then
+            if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120" || test "$GITHUB_REF" = "refs/heads/feat/v1-s5b-acceptance-20261120"; then
               sudo -u boxweave env GITHUB_ACTIONS=true S5A4_PEER_ONE_USE=s5a4-hosted-peer-only S5A4_PEER_MODE=blocked S5A4_ORIGINAL="$original" /usr/local/bin/s5a4-peer-test -test.v -test.run '^TestS5A4NativeMCPPeerRecovery$' | tee "$RUNNER_TEMP/s5a4-peer-recovery.log"
               grep -Fq S5_A4_PEER_REAL_PRS_blocked_RECOVERY=PASS "$RUNNER_TEMP/s5a4-peer-recovery.log"
               test "$(sudo sha256sum "$journal" | cut -d' ' -f1)" = "$before_journal"
@@ -369,7 +369,7 @@ jobs:
             test "$(sudo -u boxweave sqlite3 "$db" "SELECT state FROM operations WHERE id='$original'")" = UNKNOWN
             sudo grep -q '"status":"COMPLETE_VERIFIED"' "/var/lib/boxweave-native-peer-conntrack-v1/$original.json"
             before="$(sudo sha256sum "/var/lib/boxweave-native-peer-conntrack-v1/$original.json" | cut -d' ' -f1)"
-            if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120"; then
+            if test "$GITHUB_REF" = "refs/heads/feat/v1-s5a-closeout-20261120" || test "$GITHUB_REF" = "refs/heads/feat/v1-s5b-acceptance-20261120"; then
               sudo -u boxweave env GITHUB_ACTIONS=true S5A4_PEER_ONE_USE=s5a4-hosted-peer-only S5A4_PEER_MODE=settled S5A4_ORIGINAL="$original" /usr/local/bin/s5a4-peer-test -test.v -test.run '^TestS5A4NativeMCPPeerRecovery$' | tee "$RUNNER_TEMP/s5a4-peer-recovery.log"
               grep -Fq S5_A4_PEER_REAL_PRS_settled_RECOVERY=PASS "$RUNNER_TEMP/s5a4-peer-recovery.log"
             else

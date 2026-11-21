@@ -659,16 +659,21 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 			"SELECT "+
 				"(SELECT COUNT(*) FROM peer_grants WHERE project=? AND status!='REVOKED' "+
 				"AND ((source_uuid=? AND source_incarnation=?) OR (target_uuid=? AND target_incarnation=?)))+"+
-				"(SELECT COUNT(*) FROM network_address_fences WHERE project=? AND box_uuid=? AND incarnation=? AND state!='RELEASED')+"+
 				"(SELECT COUNT(*) FROM forward_claims WHERE project=? AND box_uuid=? AND incarnation=? AND state!='REVOKED')",
 			a.Layer, a.BoxUUID, a.Incarnation, a.BoxUUID, a.Incarnation,
-			a.Layer, a.BoxUUID, a.Incarnation,
 			a.Layer, a.BoxUUID, a.Incarnation).Scan(&dependent)
 		if err != nil {
 			return Receipt{}, err
 		}
-		if dependent != 0 && !cascade {
-			return Receipt{}, ErrResourceLocked
+		if !cascade {
+			// Exact RESERVED initial pins are retained across ordinary lifecycle.
+			// Incomplete, mismatched or quarantined bindings remain locked.
+			if _, e := verifyDeletePinned(ctx, tx, a.Layer, a.BoxUUID, a.Incarnation); e != nil {
+				return Receipt{}, ErrResourceLocked
+			}
+			if dependent != 0 {
+				return Receipt{}, ErrResourceLocked
+			}
 		}
 	}
 	// A failed create may have left an exactly registered, still-owned Box.

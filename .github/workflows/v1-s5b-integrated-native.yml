@@ -1,0 +1,249 @@
+name: S5B2-B6 pinned integrated native acceptance (non-release)
+
+on:
+  push:
+    branches: [feat/v1-s5b-acceptance-20261120]
+    paths:
+      - '.github/workflows/v1-s5b-integrated-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrated:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        case: >-
+          ${{ fromJSON(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'test: bound quota readback') && '["original-fault"]' || github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'test: repair private witness and native query routing') || startsWith(github.event.head_commit.message, 'test: fix private SQLite fixture parent traversal') || startsWith(github.event.head_commit.message, 'test: bind pinned overlap harness diff')) && '["original-fault","original-fault-repeat"]' || '["original-fault","original-fault-repeat","nested-restart-verifier"]') }}
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+      S5B_CASE: ${{ matrix.case }}
+      S5B_PIN: a3e02b4750edcabb80427e3311a19614d82b0029
+      S5B_SHA: a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: a3e02b4750edcabb80427e3311a19614d82b0029
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Exact source and reproducible binary, review-only harness adjustments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$S5B_PIN"
+          test "$(git rev-parse HEAD^{tree})" = 19f4548315c497f611bd83d5537bf6ec5d63e9d1
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          sudo -n true
+          test ! -e /var/lib/incus
+          ! id boxweave >/dev/null 2>&1
+          go mod verify
+          python3 - <<'PY'
+          import pathlib, os
+          sha = os.environ['S5B_SHA']
+          # Only alter the build stamping in the two historical LAB harnesses.
+          # All runtime and original probes come from the exact frozen tree.
+          for file, version, output in [
+              ('scripts/accept_s2_native.sh','1.0.24-s2-native-ci','"$work/boxweave"'),
+              ('scripts/s25_bridgehead_lab.sh','1.0.25-s25lab','"$work/staging/boxweave"')]:
+              p=pathlib.Path(file); s=p.read_text()
+              old='CGO_ENABLED=1 go build -trimpath -ldflags "-X main.version='+version+' -X main.commit=$(git rev-parse HEAD)"'
+              assert s.count(old)==1
+              new='CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid="'
+              s=s.replace(old,new)
+              anchor='-o '+output+' ./cmd/boxweave\n'
+              assert s.count(anchor)==1
+              s=s.replace(anchor,anchor+'test "$(sha256sum '+output+' | cut -d\' \' -f1)" = "'+sha+'"\necho "S5B_INTEGRATED_EXACT_BINARY_SHA256='+sha+'"\n')
+              p.write_text(s)
+          # The orchestrator uses umask 077 to protect logs. Only these
+          # public compiled test executables need traversal by boxweave.
+          # Keep every credential, journal and private log protected.
+          for file, anchor, binary in [
+              ('scripts/accept_s2_native.sh', '  CGO_ENABLED=1 go build -trimpath -o "$work/s4-oauth-native-probe" ./scripts/s4_oauth_installed_probe.go\n', '$work/s4-oauth-native-probe'),
+              ('scripts/s25_bridgehead_lab.sh', '  -o "$work/canary-readable/boxweave-r2-canary" ./cmd/boxweave\n', '$work/canary-readable/boxweave-r2-canary')]:
+              p=pathlib.Path(file); script=p.read_text()
+              assert script.count(anchor)==1
+              indent='  ' if 'oauth' in binary else ''
+              script=script.replace(anchor,anchor+indent+'chmod 0755 "'+binary+'"\n'+indent+'sudo runuser -u boxweave -- test -x "'+binary+'"\n'+indent+'echo S5B_RESTRICTED_TEST_EXECUTABLE_READY=PASS\n')
+              p.write_text(script)
+          # Keep originals private and runner-owned. Copy only these
+          # redacted native witness files for the existing nonroot reader.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          old='  sudo runuser -u boxweave -- python3 - "$db" "$work/s4-raw-delete.json"'
+          assert s.count(old)==1
+          lines=[
+          '  witness_dir="$work/s4-service-witness"',
+          '  sudo install -d -o root -g root -m 0711 "$witness_dir"',
+          '  for case in create exit126 exit127 delete; do',
+          '    test -s "$work/s4-raw-$case.json"',
+          '    sudo install -o boxweave -g "$(id -gn boxweave)" -m 0600 "$work/s4-raw-$case.json" "$witness_dir/s4-raw-$case.json"',
+          '    sudo runuser -u boxweave -- test -r "$witness_dir/s4-raw-$case.json"',
+          '  done',
+          '  echo S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS',
+          '  sudo runuser -u boxweave -- python3 - "$db" "$witness_dir/s4-raw-delete.json"']
+          s=s.replace(old,'\n'.join(lines))
+          old='    sudo runuser -u boxweave -- python3 - "$db" "$work/s5a1-raw-readback-$exit_case.json"'
+          assert s.count(old)==1
+          lines=[
+          '    test -s "$work/s5a1-raw-readback-$exit_case.json"',
+          '    sudo install -o boxweave -g "$(id -gn boxweave)" -m 0600 "$work/s5a1-raw-readback-$exit_case.json" "$witness_dir/s5a1-raw-readback-$exit_case.json"',
+          '    sudo runuser -u boxweave -- test -r "$witness_dir/s5a1-raw-readback-$exit_case.json"',
+          '    sudo runuser -u boxweave -- python3 - "$db" "$witness_dir/s5a1-raw-readback-$exit_case.json"']
+          s=s.replace(old,'\n'.join(lines))
+          p.write_text(s)
+          # umask 077 also changes mkdir -p intermediate directories to 0700.
+          # Traverse only the two disposable parent directories; their
+          # service-owned SQLite children remain 0700 and files remain private.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          for old, parent, child in [
+              ('  mkdir -p "$fsync_dir"\n', '$work/fsync-$phase', '$fsync_dir'),
+              ('mkdir -p "$sqlite_full_dir"\n', '$work/sqlite-full', '$sqlite_full_dir')]:
+              assert s.count(old)==1
+              indent='  ' if old.startswith('  ') else ''
+              s=s.replace(old,old+indent+'chmod 0711 "'+parent+'"\n')
+          old='  sudo chown boxweave:incus "$fsync_dir"\n'
+          assert s.count(old)==1
+          s=s.replace(old,old+'  sudo runuser -u boxweave -- test -x "$fsync_dir"\n  test "$(stat -c %a "$fsync_dir")" = 700\n  echo "S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL=PASS"\n')
+          old='sudo chmod 0700 "$sqlite_full_dir"\n'
+          assert s.count(old)==1
+          s=s.replace(old,old+'sudo runuser -u boxweave -- test -x "$sqlite_full_dir"\ntest "$(sudo stat -c %a "$sqlite_full_dir")" = 700\necho "S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS"\n')
+          p.write_text(s)
+          # Retain strict native quota limit and original effect checks. A
+          # fresh read-only accounting sample may lag after spool saturation.
+          # Extend only the bounded observation window; never reissue Exec.
+          p=pathlib.Path('scripts/accept_s2_native.sh'); s=p.read_text()
+          old='for mcp_read_attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do\n  mcp_after_read_attempts="$mcp_read_attempt"\n  if sudo incus query "$mcp_state_url"'
+          new='for mcp_read_attempt in $(seq 1 30); do\n  mcp_after_read_attempts="$mcp_read_attempt"\n  mcp_after=""\n  if sudo timeout 5s incus query "$mcp_state_url"'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='v=json.load(open(sys.argv[1]))\nprint(int(v.get("metadata",v)["usage"]["used"]))\nPY\n)" || mcp_after=""'
+          new='v=json.load(open(sys.argv[1]))\nu=v.get("metadata",v)["usage"]\nassert type(u["used"]) is int and u["used"] >= 0\nassert type(u["total"]) is int and u["total"] == 2147483648\nprint(u["used"])\nPY\n)" || mcp_after=""'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='  sleep 0.3\ndone\necho "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES='
+          new='  sleep 1\ndone\necho "S2_MCP_QUOTA_POSTEXEC_NATIVE_USED_BYTES='
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          p.write_text(s)
+          # The historical overlap harness expects a pristine checkout. The
+          # pinned orchestrator intentionally overlays exactly three LAB scripts.
+          # Bind the permitted complete diff before execution; reject staged,
+          # additional tracked and untracked changes or changed overlay bytes.
+          p=pathlib.Path('scripts/s2_p1_native_create_delete_overlap.sh'); s=p.read_text()
+          old='if [ -n "$(git status --porcelain)" ]; then'
+          assert s.count(old)==1
+          lines=[
+          'if [ -n "${S5B_HARNESS_DIFF_SHA256:-}" ]; then',
+          '  expected_status="$(printf \'%s\\n\' \' M scripts/accept_s2_native.sh\' \' M scripts/s25_bridgehead_lab.sh\' \' M scripts/s2_p1_native_create_delete_overlap.sh\')"',
+          '  if [ "$(git status --porcelain --untracked-files=all)" != "$expected_status" ] ||',
+          '     [ "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d\' \' -f1)" != "$S5B_HARNESS_DIFF_SHA256" ]; then',
+          '    echo S5B_OVERLAP_APPROVED_HARNESS_DIFF=FAIL >&2; exit 93',
+          '  fi',
+          '  echo S5B_OVERLAP_APPROVED_HARNESS_DIFF=PASS',
+          'elif [ -n "$(git status --porcelain)" ]; then']
+          p.write_text(s.replace(old,'\n'.join(lines)))
+          # TC-020: use the normal read-only independent verifier against a
+          # separate deliberately incorrect checkpoint; never edit live SQLite,
+          # active native state, the authentic checkpoint, or product code.
+          p=pathlib.Path('scripts/s25_bridgehead_lab.sh'); s=p.read_text()
+          anchor='python3 scripts/s25_independent_verifier.py l1\n'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+'''if [ "${S5B_CASE:-}" = nested-restart-verifier ]; then
+            bad="$work/private/s5b6-known-bad-checkpoint.json"
+            python3 - "$BW_S25_CHECKPOINT" "$bad" <<'S5B6_BAD'
+          import json,sys
+          v=json.load(open(sys.argv[1]))
+          assert v["uuid"]!="00000000-0000-4000-8000-000000000001"
+          v["uuid"]="00000000-0000-4000-8000-000000000001"
+          with open(sys.argv[2],"x") as f: json.dump(v,f)
+          S5B6_BAD
+            if BW_S25_CHECKPOINT="$bad" python3 scripts/s25_independent_verifier.py l1 > "$work/private/s5b6-known-bad.log" 2>&1; then
+              echo S5B6_KNOWN_BAD_UNDETECTED >&2; exit 96
+            fi
+            grep -Fxq 'S25_V_FAIL: native UUID differs from MCP accepted original' "$work/private/s5b6-known-bad.log"
+            echo S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED=PASS
+            python3 scripts/s25_independent_verifier.py l1
+            echo S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK=PASS
+          fi
+          ''')
+          p.write_text(s)
+          PY
+          git diff --exit-code -- cmd internal go.mod go.sum install.sh uninstall.sh scripts/uninstall_core.py
+          sh -n scripts/accept_s2_native.sh
+          sh -n scripts/s25_bridgehead_lab.sh
+          sh -n scripts/s2_p1_native_create_delete_overlap.sh
+          expected_status="$(printf '%s\n' ' M scripts/accept_s2_native.sh' ' M scripts/s25_bridgehead_lab.sh' ' M scripts/s2_p1_native_create_delete_overlap.sh')"
+          test "$(git status --porcelain --untracked-files=all)" = "$expected_status"
+          printf 'S5B_HARNESS_DIFF_SHA256=%s\n' "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "S5B_INTEGRATED_PINNED_SOURCE=$S5B_PIN"
+      - name: Real isolated native regression and independent readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing independent verifier compares the checkout commit against
+          # GITHUB_SHA. Bind this process to the actual frozen checkout, not
+          # the test-only workflow-trigger commit.
+          export GITHUB_SHA="$S5B_PIN"
+          logfile="$RUNNER_TEMP/s5b-integrated.log"
+          case "$S5B_CASE" in
+            original-fault|original-fault-repeat)
+              export S4_A_RAW_WITNESS=true
+              script=scripts/accept_s2_native.sh
+              required='S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS=PASS BH018_NATIVE_INSTALLED_MCP_ATOMIC_RESTART_IDEMPOTENCY_AND_CLEANUP=PASS S4_A_REAL_INSTALLED_OAUTH_REFRESH_GRANT_REPLAY_ONCE=PASS S4_A_INSTALLED_OAUTH_REVOKED_GRANT_MANUAL_NO_ADMISSION=PASS S4_A_RAW_NATIVE_ORIGINAL_TERMINAL=PASS'
+              ;;
+            recovery-archive)
+              export S5A2_RECOVERY_NATIVE_ONLY=true
+              script=scripts/accept_s2_native.sh
+              required='S5A2_NATIVE_INSTALLED_RECOVERY=PASS S5A2_NATIVE_STAGED_ROOT_CLI_MCP_PARITY_NO_REPLAY=PASS S5A5_NATIVE_POST_DELETE_ORIGINAL_ARCHIVE_AND_EVIDENCE=PASS'
+              ;;
+            two-actor-git)
+              export S3_FILE_INSTALLED_PHASE2=true S3_FILE_INSTALLED_PHASE3=true BW_S5B_TC015=true
+              script=scripts/s25_bridgehead_lab.sh
+              required='S5B_TC015_TWO_AUTHENTICATED_SDK_PROCESSES_NATIVE_VERIFIED_AND_CLEANUP=PASS S5B_TC015_DISTINCT_AUTHENTICATED_ACTORS_AND_NATIVE_ORIGINALS=PASS S5B_TC016_EXTERNAL_GIT_STALE_WRITER_REFUSED_WINNER_PRESERVED=PASS S3_PHASE3_INDEPENDENT_NATIVE_SOURCE_GIT_HEAD_AND_ORIGINAL_IDS=PASS'
+              ;;
+            nested-restart-verifier)
+              script=scripts/s25_bridgehead_lab.sh
+              required='S25_TARGETED_MCP_DUAL_AGENT_RECOVERY_VERIFIER=PASS S25_SIMWAN6_BOTH_LAYER_RAW_PACKET_AND_NATIVE_EVIDENCE_ARCHIVED=PASS S25_R2_REAL_SERVICE_SIGKILL_DISTINCT_PID_HTTP_AUTH_RECOVERY=PASS S25_R2_OPERATOR_ROOT_LOCAL_EXACT_BINARY_ROLLBACK=PASS S5B6_INDEPENDENT_REAL_NATIVE_WRONG_UUID_DETECTED=PASS S5B6_INDEPENDENT_REAL_NATIVE_ORIGINAL_RECHECK=PASS'
+              ;;
+            *) exit 90 ;;
+          esac
+          # No private raw log/artifact upload; only known structured markers.
+          umask 077
+          set +e
+          sh "$script" >"$logfile" 2>&1
+          rc=$?
+          set -e
+          grep -E '^(S5B|S5A|S25|S3|S4_A|S2_|BH018_)[A-Z0-9_]+(=PASS([[:space:]].*)?$|=BLOCKED$|=FAIL$|_SHA256=[a-f0-9]{64}$|_SHA=[a-f0-9]{40}$|_ID=[a-f0-9-]{32,36}$)' "$logfile" || :
+          # Report actual pass markers in execution order, including MCP quota and SQLite.
+          grep -E '^S2_[A-Z0-9_]+=PASS$' "$logfile" | tail -n 35 || :
+          # Emit only fixed enums and numeric status codes, not raw errors.
+          grep -E '^(S4_A_(NATIVE_STAGE|OAUTH_STAGE|OAUTH_FAILURE_CLASS|FAILURE_CLASS)|BH018_(MCP_RESUME_PHASE|INSTALLED_NORMAL_RESTART_CLASS|INSTALLED_NORMAL_RESTART_RESUME_EXIT_CODE)|S25_R2_FAILURE_CLASS)=[A-Za-z0-9_]+$' "$logfile" || :
+          # Bounded numeric quota diagnostics (no raw private errors/logs).
+          grep -E '^S2_MCP_QUOTA_(POSTEXEC_NATIVE_USED_BYTES|POSTEXEC_LIMIT_BYTES|POSTEXEC_READ_ATTEMPTS|PHYSICAL_STDOUT_BYTES)=([0-9]{1,20}|UNREADABLE)$' "$logfile" || :
+          echo "S5B_INTEGRATED_SCRIPT_EXIT=$rc"
+          test "$(git rev-parse HEAD)" = "$S5B_PIN"
+          test "$(git diff --binary --no-ext-diff --no-textconv HEAD | sha256sum | cut -d' ' -f1)" = "$S5B_HARNESS_DIFF_SHA256"
+          test -z "$(git ls-files --others --exclude-standard)"
+          git diff --cached --quiet
+          test "$rc" = 0
+          grep -Fxq "S5B_INTEGRATED_EXACT_BINARY_SHA256=$S5B_SHA" "$logfile"
+          for marker in $required; do grep -Fxq "$marker" "$logfile"; done
+          if [[ "$S5B_CASE" == original-fault* ]]; then
+            grep -Fxq 'S5B_PRIVATE_DELETE_WITNESSES_SERVICE_READABLE=PASS' "$logfile"
+            test "$(grep -Fxc 'S5B_PRIVATE_FSYNC_PARENT_TRAVERSAL=PASS' "$logfile")" = 2
+            grep -Fxq 'S5B_PRIVATE_SQLITE_FULL_PARENT_TRAVERSAL=PASS' "$logfile"
+            grep -Fxq 'S5B_OVERLAP_APPROVED_HARNESS_DIFF=PASS' "$logfile"
+            grep -q '^BH018_S5A1_FRESH_READBACK_126=PASS BW_ID=' "$logfile"
+            grep -q '^BH018_S5A1_FRESH_READBACK_127=PASS BW_ID=' "$logfile"
+          fi
+          echo "S5B_INTEGRATED_CASE_PASS=$S5B_CASE"

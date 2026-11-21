@@ -2,7 +2,7 @@ name: S4-B3 final focused foreign-flow and restart (disposable)
 
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5b-acceptance-20261120]
     paths:
       - .github/workflows/v1-s4-b3-final-gates-native.yml
       - internal/install/native_peer_root_grant_installed_native_test.go
@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   native-grant:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120')
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     strategy:
@@ -47,6 +47,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120' && 'a3e02b4750edcabb80427e3311a19614d82b0029' || github.sha }}
+      - name: Require exact frozen S5B source when running the acceptance branch
+        if: github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = a3e02b4750edcabb80427e3311a19614d82b0029
+          test "$(git rev-parse HEAD^{tree})" = 19f4548315c497f611bd83d5537bf6ec5d63e9d1
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -93,7 +101,13 @@ jobs:
           sudo incus network create bwbr0 ipv4.address=10.248.83.1/24 ipv4.nat=true ipv6.address=fd83:248::1/64 ipv6.nat=true ipv6.dhcp.stateful=true
           go test -c -o "$RUNNER_TEMP/s4b3-root-fixture" ./internal/install
           sudo install -m0755 "$RUNNER_TEMP/s4b3-root-fixture" /usr/local/bin/s4b3-root-fixture
-          go build -o "$RUNNER_TEMP/s4b3-installed" ./cmd/boxweave
+          if [[ "$GITHUB_REF" == refs/heads/feat/v1-s5b-acceptance-20261120 ]]; then
+            CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "-X main.version=1.0.0-rc.10 -X main.commit=$(git rev-parse HEAD) -buildid=" -o "$RUNNER_TEMP/s4b3-installed" ./cmd/boxweave
+            test "$(sha256sum "$RUNNER_TEMP/s4b3-installed" | cut -d' ' -f1)" = a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6
+            echo "S5B_EXACT_PEER_BINARY_SHA256=a7a6a9fb7f32886cad8a891581cdc2eb5a8938200f48ea35b3a8cee3fed3fbf6"
+          else
+            go build -o "$RUNNER_TEMP/s4b3-installed" ./cmd/boxweave
+          fi
           sudo install -m0755 "$RUNNER_TEMP/s4b3-installed" /usr/local/bin/boxweave
           sudo env GITHUB_ACTIONS=true BOXWEAVE_DISPOSABLE_NATIVE_PROBE=s4b1-ci-20261116 \
             /usr/local/bin/s4b3-root-fixture -test.v -test.run '^TestS4B2NativeDedicatedBridgeACLSetup$'
@@ -125,7 +139,7 @@ jobs:
           test "$ready" = 1
           echo "$project" > "$RUNNER_TEMP/s4b3-project"
           echo "S4_B3_FRESH_INCUS_RESTRICTED_PROJECT_DUALSTACK_THREE_NATIVE_NICS=PASS"
-          echo "S4_B3_NATIVE_SOURCE_SHA=$GITHUB_SHA"
+          echo "S4_B3_NATIVE_SOURCE_SHA=$(git rev-parse HEAD)"
 
       - name: Establish independent foreign Project live IPv4 IPv6 TCP UDP sessions
         shell: bash
@@ -693,7 +707,7 @@ jobs:
           project="$(cat "$RUNNER_TEMP/s4b3-project" 2>/dev/null)"
           original="$(cat "$RUNNER_TEMP/s4b3-original" 2>/dev/null)"
           {
-            echo "source_sha=$GITHUB_SHA"
+            echo "source_sha=$(git rev-parse HEAD)"
             echo "scenario=${{ matrix.scenario }}"
             echo "original=$original"
             echo "project=$project"
@@ -719,7 +733,7 @@ jobs:
             echo "sqlite_peer_grants_exit=$?" >> "$ev/provenance.txt"
           fi
           (cd "$ev" && sha256sum provenance.txt owned-instances.json native-acl.yaml kernel-nft.txt             original-root-journal.json sqlite-original-operations.csv sqlite-peer-grants.csv 2>/dev/null)             > "$ev/file-sha256.txt"
-          echo "S4_B3_DISPOSABLE_NATIVE_EVIDENCE_CAPTURED sha=$GITHUB_SHA scenario=${{ matrix.scenario }}"
+          echo "S4_B3_DISPOSABLE_NATIVE_EVIDENCE_CAPTURED sha=$(git rev-parse HEAD) scenario=${{ matrix.scenario }}"
 
       - name: Upload sealed disposable native evidence
         if: always()
