@@ -1,0 +1,47 @@
+name: S5B RC10 residual CLI and partial PRS with confirmed Forward (disposable)
+on:
+  push:
+    branches: [docs/s5b-rc10-closeout-20261121]
+    paths:
+      - '.github/workflows/v1-s5b-rc10-residual-native.yml'
+      - 'scripts/s5b_rc10_residual_native.sh'
+      - 'scripts/s5b_rc10_residual_native.py'
+      - 'scripts/s5b_rc10_cli_auth_probe.go'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  residual:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/docs/s5b-rc10-closeout-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Immutable RC10 product and test-only preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code eb021d3985c787c517cd7aee3efaf433d38f0393 -- cmd internal go.mod go.sum install.sh uninstall.sh
+          go mod verify
+          sh -n scripts/s5b_rc10_residual_native.sh
+          python3 -m py_compile scripts/s5b_rc10_residual_native.py
+          go build -o "$RUNNER_TEMP/rc10-cli-preflight" scripts/s5b_rc10_cli_auth_probe.go
+      - name: Targeted actual installed CLI and native partial-effect witness
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/s5b_rc10_residual_native.sh | tee "$RUNNER_TEMP/s5b-rc10-residual.log"
+          grep -Fxq S5B_RC10_CLI_AUTH=PASS "$RUNNER_TEMP/s5b-rc10-residual.log"
+          grep -Fxq S5B_RC10_CLI_NATIVE_PEER_PURGE_PLAN=PASS "$RUNNER_TEMP/s5b-rc10-residual.log"
+          grep -q '^S5B_RC10_ACTIVE_FORWARD_REAL_ACL_PUT_FAULT=PASS original=' "$RUNNER_TEMP/s5b-rc10-residual.log"
+          grep -q '^S5B_RC10_PARTIAL_PRS_FORWARD_RESTART_FENCE_NO_REPLAY=PASS original=' "$RUNNER_TEMP/s5b-rc10-residual.log"
