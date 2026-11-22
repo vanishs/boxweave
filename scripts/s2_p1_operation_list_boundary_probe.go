@@ -91,9 +91,12 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 	}()
 	observed := false
 	for i := 0; i < 120; i++ {
-		if _, err := os.Stat(held); err == nil {
+		if data, err := os.ReadFile(held); err == nil {
+			must(string(data) == mode+"\n", "held signal does not match the armed case")
 			observed = true
 			break
+		} else {
+			must(os.IsNotExist(err), "cannot read debugger held signal")
 		}
 		select {
 		case early := <-done:

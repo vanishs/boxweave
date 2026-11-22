@@ -76,6 +76,35 @@ echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_PC=$boundary_pc"
 # Populate exactly this test's private ledger; zero native mutation.
 actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-admin.secret"
 chmod 0600 "$work/p1-list-debugger-admin.secret"
+# Keep independent breakpoint witnesses in the private fixture directory.
+# GDB batch stdout can be buffered or mixed with inferior output before exit.
+# A successful shell command is NOT itself a PASS: the actual compiled CALL
+# must be reached exactly once per mode, the probe must verify the mode-specific
+# held signal, and both authorization-denial/original-receipt assertions remain.
+cat > "$work/p1-list-boundary-hook.sh" <<'SH_LIST_HOOK'
+#!/bin/sh
+set -eu
+lab="$1"
+mode=UNARMED
+if [ -f "$lab/armed" ]; then
+ mode="$(cat "$lab/armed")"
+fi
+case "$mode" in revoke|expire) ;; *) mode=UNEXPECTED ;; esac
+printf '%s\n' "$mode" >> "$lab/breakpoint-hits"
+case "$mode" in revoke|expire) ;; *) exit 1 ;; esac
+if [ -e "$lab/held" ] || [ -e "$lab/release" ]; then
+ printf '%s\n' DUPLICATE_OR_STALE >> "$lab/breakpoint-hits"
+ exit 1
+fi
+# Publish a complete, mode-specific signal atomically, not an empty touch.
+printf '%s\n' "$mode" > "$lab/held.tmp"
+mv "$lab/held.tmp" "$lab/held"
+if ! timeout 30 /bin/sh -c 'until test -e "$1/release"; do sleep 0.1; done' sh "$lab"; then
+ printf '%s\n' HOLD_TIMEOUT >> "$lab/breakpoint-hits"
+ exit 1
+fi
+SH_LIST_HOOK
+chmod 0644 "$work/p1-list-boundary-hook.sh"
 cat > "$work/p1-list-boundary.gdb" <<EOF
 set pagination off
 set confirm off
@@ -88,7 +117,7 @@ break *$boundary_pc
 commands 1
 silent
 printf "S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT\\n"
-shell /bin/sh -c "if test -e $lab/armed; then touch $lab/held; timeout 30 /bin/sh -c 'until test -e $lab/release; do sleep 0.1; done'; fi"
+shell /bin/sh "$work/p1-list-boundary-hook.sh" "$lab"
 continue
 end
 run
@@ -102,7 +131,26 @@ cleanup() {
   wait "$debug_pid" 2>/dev/null || :
  fi
 }
-trap cleanup EXIT
+report_exit() {
+ status=$?
+ trap - EXIT
+ if [ "$status" -ne 0 ]; then
+  echo "S2_P1_LIST_BOUNDARY_FAIL: exit=$status" >&2
+  if [ -f "$work/p1-list-boundary-results.txt" ]; then
+   cat "$work/p1-list-boundary-results.txt" >&2
+  fi
+  if sudo test -f "$lab/breakpoint-hits"; then
+   echo "S2_P1_LIST_BOUNDARY_RECORDED_HITS:" >&2
+   sudo cat "$lab/breakpoint-hits" >&2
+  fi
+  if [ -f "$work/p1-list-debugger.redacted.log" ]; then
+   tail -100 "$work/p1-list-debugger.redacted.log" >&2
+  fi
+ fi
+ cleanup
+ exit "$status"
+}
+trap report_exit EXIT
 actor gdb -nx -q --batch -x "$work/p1-list-boundary.gdb" --args \
   "$work/boxweave" serve -db "$db" -incus-socket "$socket" \
   -project "$project" -listen 127.0.0.1:18667 \
@@ -139,7 +187,18 @@ grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_EXPIRED_NO_LEAK
  "$work/p1-list-boundary-results.txt"
 grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_TWO_INFLIGHT_AUTH_RACES=PASS \
  "$work/p1-list-boundary-results.txt"
-test "$(grep -Fxc S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT "$work/p1-list-debugger.redacted.log")" = 2
+# Emit the probe results regardless of stdout buffering in the debugger.
+cat "$work/p1-list-boundary-results.txt"
+# The independent debugger-owned file is the exact, ordered hit witness;
+# unexpected/unarmed/duplicate/timeout entries all fail the original gate.
+expected="$(printf 'revoke\nexpire\n')"
+actual="$(sudo cat "$lab/breakpoint-hits")"
+if [ "$actual" != "$expected" ]; then
+ echo "S2_P1_FAIL: exact ordered breakpoint witness mismatch" >&2
+ exit 98
+fi
+echo "S4_A_OPERATION_LIST_BREAKPOINT_STDOUT_COUNT=$(grep -Fxc S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT "$work/p1-list-debugger.redacted.log" || :)"
+echo "S4_A_OPERATION_LIST_BREAKPOINT_FILE_ORDERED_HITS=revoke,expire"
 echo "S4_A_OPERATION_LIST_COMPILED_CALL_TWO_INDEPENDENT_AUTH_CUTS=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"
 echo "S2_P1_REAL_INSTALLED_OPERATION_LIST_INFLIGHT_REVOCATION_AND_EXPIRY_NO_LEAK=PASS"
