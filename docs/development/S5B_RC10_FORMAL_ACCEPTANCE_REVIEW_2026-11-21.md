@@ -179,3 +179,31 @@ Owner confirmed temporary physical Host authorization. L0 exact RC10 host_status
 ### A-049 final physical witness — PASS (TCP)
 
 Owner returned exact `BOXWEAVE_RC10_CHAINED_LAN_1121_OK` in response to the separate physical LAN computer curl request at 192.168.2.233:18080. This owner-supplied physical packet witness, combined with both independently verified native proxy receipts and exact L2 HTTP payload, closes A-049 chained LAN functional acceptance for TCP; no UDP chained witness inferred. Outer Forward delete `ea2667b25c2b2b035f22510ff4e646c6`, native `fee0347d-60e1-41b1-83b6-4b1a3c1524e0`, SUCCEEDED; subsequent L0 forward list empty, tracking `a7805960680bd2eb7717c85d652c8fca`. Inner cleanup outer Exec `c3d92de8a82c8691229f8c26ffa926d9`, native `9fe6b0fa-7fa6-4a09-bc7d-9e5b4d7a7b1f`, exit0, stdout tracking `13343112168e258a133ea72d36d67767`: exact inner forward delete `295f730bb1e22dd8322d789b292435e9` native `eb48736d-8cf9-4213-82c7-1c67afdc1776` SUCCEEDED; listener stop `962e72f66751ee6ff9de116a16483533` native `119bc6d8-bd91-4bbd-842c-1f7d3471fa56` SUCCEEDED exit0; inner forward list empty and prior restricted.devices.proxy unset verified. Scoped test token revoked; test Box and historical receipt retained. Physical host temporary `99-s5b-chain-lan.conf` and restricted.devices.proxy still require operator restoration and independent readback (no host root access through MCP). No repeated packet test needed. Other CLI positive recovery gaps and stable signature requirements remain separate. No full S5B_PASS or release asserted.
+
+
+## 8. Latest handoff checkpoint — owner requested checkpoint/stop before further execution (2026-11-21 PT)
+
+**Current verdict: B1–B5 scoped PASS; B6 scoped independent evidence review PASS; full S5B remains PARTIAL.** A-049 TCP chained physical LAN has now passed; outer/inner forwards and test listener removed. Physical Host temporary authorization restoration for this *latest chained campaign* has been requested but not yet independently confirmed. Earlier LAN cleanup confirmation does not substitute.
+
+Owner authorized the remaining three targeted CLI recovery positives, then requested immediate evidence/code/document submission and status. New recovery lab reuses previously dedicated zero-consumer migration/Scriptlet fixture `1be7cf04-85b1-492d-8eb2-d860c95b54e7` (`s5b-bootstrap-migration-1120`). Previous migration archives and Scriptlet evidence retained; no existing CLI test UNKNOWN altered. New work_ref `s5b-final-recovery-1121`, agent_ref `rc10-recovery`.
+
+| Step | Original / native and result |
+|---|---|
+| Fresh L0 host and exact candidate | tracking `d6de0915bc1d935d9d621f8fca9d79e2`, exact RC10, ready/mcp_ready; quota witness remains time-expired, no new quota proof |
+| Dedicated lab preflight | `c677abd50825227d64b866540299a0bb`, guest exit0; zero consumers, no installed BoxWeave, no active migration journal, no Scriptlet/TLS listener config; reviewed prepare digest `3b7689dddb47dd201dac91f719e7833bf5d5d51b3d24329b360730f06dcdb568` |
+| Install and prepare published RC10 | `bc10cd726e49a38d0636b9dda6a43c93` / `3b127a60-ffb7-44de-9b13-85a384ea7402`; exit0; stdout tracking `7fc549337f314c7334142cde1e8ef656`; exact published SHA verified, active service, RECOVERY_LAB_READY |
+| Existing testkit copy | `47c8471f8c724548eaf8d3802e914c21` SUCCEEDED, exclusive file `/var/tmp/mcp_testkit.py`, sourced unchanged from RC10 `scripts/mcp_testkit.py` |
+| Fresh pair creation | `70123504166e8336bf1fbdfa7c764ec8` / `b1bcca26-3c03-466c-b923-24b961c1aba6`; exit0, stdout tracking `f5c6e5dc7930c52fbb97ad622d3a7f61`, stderr empty. RECOVERY_PAIR_CREATED. A: original `41aaf867d4a572b209dd746143388130`, UUID `a1f03314-3477-4600-ad83-6e0d6e960a15`, native `1db41167-14a2-4db0-b0c9-151ed465f46d`; B: original `cb521d6417cced8d41cef0ff9613251f`, UUID `3d493e9a-0179-4fc8-92df-5855ba04f4fe`, native `169c7e81-01e0-4b85-8c2b-ca978527d8fe`. Pair checkpoint `/root/s5b-final-recovery/pair.json`. This is Create evidence, not an independent readiness or PRS effect proof. |
+
+Fresh PRS positive harness upload was rejected by the platform safety check; there is no admitted operation/confirmed file or executed test for that attempt. Do not bypass the platform restriction. No new PRS grant admitted by this campaign; prior fixture original `0586d45136a5d90844c81005d8987b61` remains UNKNOWN with revoked original credential and complete native journal; no retry or revival authorized. Only confirmed executed evidence is recorded. No new product code change; existing committed test harnesses are the review references: `scripts/s5a2_recovery_probe.go`, `scripts/s5a2_installed_cli_review.sh`, `scripts/s2_exec_gc_probe.go`, `scripts/s2_exec_gc_installed_review.sh`, `scripts/s5b_peer_production_native.py`, and the PR's RC10 residual/specialized test scripts. The blocked unexecuted upload is not represented as committed working code.
+
+### Outstanding targeted work (not yet PASS on published RC10 bytes)
+
+- `native-peer-root-reconcile`: fresh lab ready; prior actual root request and safe refusal proven, positive completed-original recovery not performed in fresh lab.
+- `recover reconcile`: prior installed earlier-candidate positive and exact-source evidence retained; final-byte positive not executed here.
+- `recover gc-inspect/gc-challenge/gc-release`: earlier exact-source native loss/review cycle PASS, final-byte positive not executed here.
+- Other TC-019 exact-bytes SDK/catalog/provenance nuances in Section 3 and full formal mandatory matrix still need final reconciliation, not an automatic PASS from the three tests. Owner-approved prior waivers remain unchanged.
+- Physical Host cleanup: ask owner only if not already done; restore the exact temporary drop-in and restricted Project capability to prior unset state and verify. No need to repeat A-049.
+- Stable candidate, distinct owner/verifier signatures and protected publication are separate. No full S5B_PASS, HOST_GO, merge or stable release.
+
+Resume from the original receipts and this checkpoint; no broad retest, no blind UNKNOWN retry. User requested status/commit now, so this campaign stops here.
