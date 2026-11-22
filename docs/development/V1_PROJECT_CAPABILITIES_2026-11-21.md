@@ -49,3 +49,20 @@ through exact wildcard listener on loopback and bridge IP, distinct
 native Project denial, exact cleanup/rollback, and old-unit policy
 preservation across upgrade/rollback. Native acceptance and merge are
 pending until exact candidate workflow evidence is available.
+
+## Initial hosted CI failure and correction
+
+PR #169 initial source cea400ef6bb2d0a5775adee2867820a07aa384df:
+- Forward matrix run 44998865778: both legacy upgrade/rollback cases PASS.
+  Fresh approved native proxy grant, Box Create, readiness, HTTP process,
+  disabled external policy refusal and exact native wildcard mutation
+  all passed. The test failed before packet verification at an AF_INET-only
+  ss string assertion (job 137135736498), not at the native mutation.
+  The correction checks both address families, accepts wildcard display
+  forms, retains exact native listen readback and requires IPv4 HTTP 200
+  with the exact body on both host addresses. It also verifies absence
+  after deletion across both socket families.
+- Release toolchain run 44998865826: both architecture builds passed.
+  Job 137135793585 failed only the stale installer plan message assertion.
+  The correction asserts the new reviewed preparation versus service-only
+  distinction. Native retest and final merge remain pending.

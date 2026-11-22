@@ -64,6 +64,25 @@ def mutate(m, tool, key, want="SUCCEEDED", **args):
 def forward_list(m, uuid):
     return m.call("port_forward_list", {"box_id": uuid}).structured["forwards"]
 
+def listener_rows():
+    # Incus/Go may represent a wildcard listener as a dual-stack socket.
+    # Do not filter by AF_INET: ss can render the local address as "*".
+    return command("ss", "-H", "-ltn", f"sport = :{port}").splitlines()
+
+def wait_listener(present):
+    for _ in range(40):
+        rows = listener_rows()
+        if not present and not rows:
+            return
+        if present and rows:
+            endpoints = [row.split()[3] for row in rows]
+            wildcard = {f"0.0.0.0:{port}", f"*:{port}", f"[::]:{port}", f":::{port}"}
+            if all(endpoint in wildcard for endpoint in endpoints):
+                print("FORWARD_INSTALL_WILDCARD_LISTENER=" + ",".join(endpoints), flush=True)
+                return
+        time.sleep(0.25)
+    raise AssertionError(f"listener present={present}: {listener_rows()!r}")
+
 def http_check(address):
     conn = http.client.HTTPConnection(address, port, timeout=5)
     try:
@@ -106,6 +125,7 @@ command("sudo", "systemctl", "daemon-reload")
 command("sudo", "systemctl", "restart", unit)
 m = connect("all")
 try:
+    assert not listener_rows(), "test port already occupied"
     original = mutate(m, "port_forward_create", "wildcard", **args)
     assert original["native_operation_id"]
     rows = forward_list(m, uuid)
@@ -114,13 +134,13 @@ try:
     assert row["forward_id"] == original["operation_id"] and row["host_bind"] == "0.0.0.0"
     assert command("sudo", "incus", "--project", project, "config", "device", "get", name,
                    row["native_device"], "listen") == f"tcp:0.0.0.0:{port}"
-    assert "0.0.0.0:" + str(port) in command("ss", "-4", "-H", "-ltn", f"sport = :{port}")
+    wait_listener(True)
     http_check("127.0.0.1")
     http_check(host)
     print("FORWARD_INSTALL_WILDCARD_HTTP_PACKET=PASS", flush=True)
     mutate(m, "port_forward_delete", "remove", forward_id=row["forward_id"])
     assert not forward_list(m, uuid)
-    assert not command("ss", "-4", "-H", "-ltn", f"sport = :{port}")
+    wait_listener(False)
     # Native policy denial is separate from the service policy. With no
     # active forwards, temporarily tighten the exact owned test Project.
     command("sudo", "incus", "project", "set", project, "restricted.devices.proxy=block")
