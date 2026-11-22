@@ -16,10 +16,6 @@ if ! command -v gdb >/dev/null 2>&1; then
  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gdb >/dev/null
 fi
 command -v gdb >/dev/null 2>&1
-lab="$work/p1-list-boundary"
-mkdir -m 0700 "$lab"
-sudo chown boxweave:incus "$lab"
-db="$lab/ledger.sqlite"
 actor() {
  sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME \
    GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted \
@@ -73,30 +69,27 @@ print(matches[0])
 PY_LIST_PC
 )"
 echo "S4_A_OPERATION_LIST_POSTQUERY_BOUNDARY_PC=$boundary_pc"
-# Populate exactly this test's private ledger; zero native mutation.
-actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-admin.secret"
-chmod 0600 "$work/p1-list-debugger-admin.secret"
-# Keep independent breakpoint witnesses in the private fixture directory.
-# GDB batch stdout can be buffered or mixed with inferior output before exit.
-# A successful shell command is NOT itself a PASS: the actual compiled CALL
-# must be reached exactly once per mode, the probe must verify the mode-specific
-# held signal, and both authorization-denial/original-receipt assertions remain.
+# Each mode has a fresh inferior, private ledger, and one-shot instruction
+# breakpoint. A persistent software breakpoint can stop again at the same PC
+# while GDB resumes a Go process (e.g. a signal/context switch). That is not
+# evidence of a second MCP request. Do not silently discard extra requests:
+# the probe issues one CallTool and the independent service log must contain
+# exactly one completed tools/call for each isolated inferior.
 cat > "$work/p1-list-boundary-hook.sh" <<'SH_LIST_HOOK'
 #!/bin/sh
 set -eu
 lab="$1"
-mode=UNARMED
-if [ -f "$lab/armed" ]; then
- mode="$(cat "$lab/armed")"
-fi
-case "$mode" in revoke|expire) ;; *) mode=UNEXPECTED ;; esac
-printf '%s\n' "$mode" >> "$lab/breakpoint-hits"
+mode="$2"
 case "$mode" in revoke|expire) ;; *) exit 1 ;; esac
+if [ "$(cat "$lab/armed")" != "$mode" ]; then
+ printf '%s\n' UNEXPECTED >> "$lab/breakpoint-hits"
+ exit 1
+fi
+printf '%s\n' "$mode" >> "$lab/breakpoint-hits"
 if [ -e "$lab/held" ] || [ -e "$lab/release" ]; then
  printf '%s\n' DUPLICATE_OR_STALE >> "$lab/breakpoint-hits"
  exit 1
 fi
-# Publish a complete, mode-specific signal atomically, not an empty touch.
 printf '%s\n' "$mode" > "$lab/held.tmp"
 mv "$lab/held.tmp" "$lab/held"
 if ! timeout 30 /bin/sh -c 'until test -e "$1/release"; do sleep 0.1; done' sh "$lab"; then
@@ -105,7 +98,49 @@ if ! timeout 30 /bin/sh -c 'until test -e "$1/release"; do sleep 0.1; done' sh "
 fi
 SH_LIST_HOOK
 chmod 0644 "$work/p1-list-boundary-hook.sh"
-cat > "$work/p1-list-boundary.gdb" <<EOF
+
+debug_pid=""
+cleanup() {
+ if [ -n "$debug_pid" ]; then
+  sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
+  kill "$debug_pid" 2>/dev/null || :
+  wait "$debug_pid" 2>/dev/null || :
+  debug_pid=""
+ fi
+}
+report_exit() {
+ status=$?
+ trap - EXIT
+ if [ "$status" -ne 0 ]; then
+  echo "S2_P1_LIST_BOUNDARY_FAIL: mode=$mode exit=$status" >&2
+  if [ -f "$results" ]; then cat "$results" >&2; fi
+  if sudo test -f "$lab/breakpoint-hits"; then
+   echo "S2_P1_LIST_BOUNDARY_RECORDED_HITS:" >&2
+   sudo cat "$lab/breakpoint-hits" >&2
+  fi
+  if [ -f "$log" ]; then tail -100 "$log" >&2; fi
+ fi
+ cleanup
+ exit "$status"
+}
+
+run_case() {
+ mode="$1"
+ case "$mode" in revoke|expire) ;; *) exit 93 ;; esac
+ lab="$work/p1-list-boundary-$mode"
+ db="$lab/ledger.sqlite"
+ log="$work/p1-list-debugger-$mode.redacted.log"
+ results="$work/p1-list-boundary-$mode-results.txt"
+ gdb_script="$work/p1-list-boundary-$mode.gdb"
+ # Refuse stale fixture/port before starting another independent inferior.
+ test -z "$(ss -H -ltn 'sport = :18667')"
+ mkdir -m 0700 "$lab"
+ sudo chown boxweave:incus "$lab"
+ trap report_exit EXIT
+ # Seed only this mode's ledger. No native mutation or shared credential.
+ actor "$work/boxweave" token-create -db "$db" > "$work/p1-list-debugger-$mode-admin.secret"
+ chmod 0600 "$work/p1-list-debugger-$mode-admin.secret"
+ cat > "$gdb_script" <<EOF
 set pagination off
 set confirm off
 set debuginfod enabled off
@@ -113,91 +148,79 @@ set breakpoint pending off
 set print thread-events off
 handle SIGURG nostop noprint pass
 handle SIGPIPE nostop noprint pass
-break *$boundary_pc
+tbreak *$boundary_pc
 commands 1
 silent
 printf "S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT\\n"
-shell /bin/sh "$work/p1-list-boundary-hook.sh" "$lab"
+shell /bin/sh "$work/p1-list-boundary-hook.sh" "$lab" "$mode"
 continue
 end
 run
 EOF
-sudo chown boxweave:incus "$work/p1-list-boundary.gdb"
-debug_pid=""
-cleanup() {
- sudo pkill -TERM -u boxweave -f "^$work/boxweave serve -db $db" || :
- if [ -n "$debug_pid" ]; then
-  kill "$debug_pid" 2>/dev/null || :
-  wait "$debug_pid" 2>/dev/null || :
- fi
-}
-report_exit() {
- status=$?
- trap - EXIT
- if [ "$status" -ne 0 ]; then
-  echo "S2_P1_LIST_BOUNDARY_FAIL: exit=$status" >&2
-  if [ -f "$work/p1-list-boundary-results.txt" ]; then
-   cat "$work/p1-list-boundary-results.txt" >&2
-  fi
-  if sudo test -f "$lab/breakpoint-hits"; then
-   echo "S2_P1_LIST_BOUNDARY_RECORDED_HITS:" >&2
-   sudo cat "$lab/breakpoint-hits" >&2
-  fi
-  if [ -f "$work/p1-list-debugger.redacted.log" ]; then
-   tail -100 "$work/p1-list-debugger.redacted.log" >&2
-  fi
- fi
- cleanup
- exit "$status"
-}
-trap report_exit EXIT
-actor gdb -nx -q --batch -x "$work/p1-list-boundary.gdb" --args \
+ sudo chown boxweave:incus "$gdb_script"
+ actor gdb -nx -q --batch -x "$gdb_script" --args \
   "$work/boxweave" serve -db "$db" -incus-socket "$socket" \
-  -project "$project" -listen 127.0.0.1:18667 \
-  > "$work/p1-list-debugger.redacted.log" 2>&1 &
-debug_pid=$!
-attempt=0
-until [ "$attempt" -ge 60 ]; do
- if ! kill -0 "$debug_pid" 2>/dev/null; then
-  cat "$work/p1-list-debugger.redacted.log"
-  echo "S2_P1_FAIL: debugger failed before source-boundary reachability" >&2
-  exit 95
+  -project "$project" -listen 127.0.0.1:18667 > "$log" 2>&1 &
+ debug_pid=$!
+ attempt=0
+ until [ "$attempt" -ge 60 ]; do
+  if ! kill -0 "$debug_pid" 2>/dev/null; then
+   echo "S2_P1_FAIL: debugger failed before source-boundary reachability" >&2
+   exit 95
+  fi
+  code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18667/mcp 2>/dev/null || :)"
+  if [ "$code" = 401 ]; then break; fi
+  attempt=$((attempt+1))
+  sleep 1
+ done
+ test "$attempt" -lt 60
+ if ! grep -Eq 'Temporary breakpoint 1 at|Temporary breakpoint 1,|Temporary breakpoint 1 \(' "$log"; then
+  echo "S2_P1_FAIL: candidate lacks one-shot compiled boundary" >&2
+  exit 96
  fi
- code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18667/mcp 2>/dev/null || :)"
- if [ "$code" = 401 ]; then break; fi
- attempt=$((attempt+1))
- sleep 1
-done
-test "$attempt" -lt 60
-if ! grep -Eq 'Breakpoint 1 at|Breakpoint 1,|Breakpoint 1 \(' "$work/p1-list-debugger.redacted.log"; then
- cat "$work/p1-list-debugger.redacted.log"
- echo "S2_P1_FAIL: candidate lacks source-mapped boundary; cannot accept race" >&2
- exit 96
-fi
-actor BW_S2_LIST_LAB="$lab" BW_S2_LIST_PROJECT="$project" \
- "$work/s2-p1-list-debugger-probe" > "$work/p1-list-boundary-results.txt" 2>&1 || {
- cat "$work/p1-list-boundary-results.txt"
- tail -100 "$work/p1-list-debugger.redacted.log"
- echo "S2_P1_FAIL: in-flight operation_list auth" >&2
- exit 97
+ actor BW_S2_LIST_LAB="$lab" BW_S2_LIST_PROJECT="$project" BW_S2_LIST_MODE="$mode" \
+  "$work/s2-p1-list-debugger-probe" > "$results" 2>&1 || {
+  echo "S2_P1_FAIL: in-flight operation_list auth" >&2
+  exit 97
+ }
+ case "$mode" in revoke) label=REVOKED ;; expire) label=EXPIRED ;; esac
+ grep -Fqx "S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_${label}_NO_LEAK=PASS" "$results"
+ cat "$results"
+ # Wait for the independent service completion log, not another request.
+ attempt=0
+ until [ "$(grep -c 'mcp_request method=tools/call ' "$log" || :)" -ge 1 ] || [ "$attempt" -ge 50 ]; do
+  attempt=$((attempt+1))
+  sleep 0.1
+ done
+ cleanup
+ if [ "$(grep -c 'mcp_request method=tools/call ' "$log" || :)" -ne 1 ]; then
+  echo "S2_P1_FAIL: expected exactly one independent service tool-call receipt ($mode)" >&2
+  exit 98
+ fi
+ if [ "$(sudo cat "$lab/breakpoint-hits")" != "$mode" ]; then
+  echo "S2_P1_FAIL: exact single breakpoint witness mismatch ($mode)" >&2
+  exit 98
+ fi
+ echo "S4_A_OPERATION_LIST_ONE_SHOT_WITNESS=$mode"
+ echo "S4_A_OPERATION_LIST_SERVICE_CALL_COUNT=$mode:1"
+ trap - EXIT
+ # Account for asynchronous inferior exit without touching any other process.
+ attempt=0
+ until [ -z "$(ss -H -ltn 'sport = :18667')" ] || [ "$attempt" -ge 50 ]; do
+  attempt=$((attempt+1))
+  sleep 0.1
+ done
+ test -z "$(ss -H -ltn 'sport = :18667')"
 }
-grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_REVOKED_NO_LEAK=PASS \
- "$work/p1-list-boundary-results.txt"
-grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_EXPIRED_NO_LEAK=PASS \
- "$work/p1-list-boundary-results.txt"
-grep -Fqx S2_P1_INSTALLED_OPERATION_LIST_TWO_INFLIGHT_AUTH_RACES=PASS \
- "$work/p1-list-boundary-results.txt"
-# Emit the probe results regardless of stdout buffering in the debugger.
-cat "$work/p1-list-boundary-results.txt"
-# The independent debugger-owned file is the exact, ordered hit witness;
-# unexpected/unarmed/duplicate/timeout entries all fail the original gate.
+run_case revoke
+run_case expire
+# Join the independent files in execution order; neither mode can reuse a
+# witness, process, token, or breakpoint from the other.
 expected="$(printf 'revoke\nexpire\n')"
-actual="$(sudo cat "$lab/breakpoint-hits")"
-if [ "$actual" != "$expected" ]; then
- echo "S2_P1_FAIL: exact ordered breakpoint witness mismatch" >&2
- exit 98
-fi
-echo "S4_A_OPERATION_LIST_BREAKPOINT_STDOUT_COUNT=$(grep -Fxc S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT "$work/p1-list-debugger.redacted.log" || :)"
+actual="$(sudo cat "$work/p1-list-boundary-revoke/breakpoint-hits" "$work/p1-list-boundary-expire/breakpoint-hits")"
+test "$actual" = "$expected"
+echo S2_P1_INSTALLED_OPERATION_LIST_TWO_INFLIGHT_AUTH_RACES=PASS
+echo "S4_A_OPERATION_LIST_BREAKPOINT_STDOUT_COUNT=$(grep -h -Fxc S4_A_OPERATION_LIST_COMPILED_CALL_BREAKPOINT_HIT "$work/p1-list-debugger-revoke.redacted.log" "$work/p1-list-debugger-expire.redacted.log" | awk '{s+=$1} END {print s}')"
 echo "S4_A_OPERATION_LIST_BREAKPOINT_FILE_ORDERED_HITS=revoke,expire"
 echo "S4_A_OPERATION_LIST_COMPILED_CALL_TWO_INDEPENDENT_AUTH_CUTS=PASS"
 test -z "$(sudo incus list --all-projects --format csv -c n)"

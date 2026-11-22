@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - feat/v1-s2-operations-20261110
+  pull_request:
+    branches: [v1]
+    paths:
+      - .github/workflows/v1-s2-native.yml
+      - scripts/s2_p1_operation_list_boundary.sh
+      - scripts/s2_p1_operation_list_boundary_probe.go
   workflow_dispatch:
 
 permissions:
@@ -11,7 +17,7 @@ permissions:
 
 jobs:
   s2-native-blackbox:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-s2-operations-20261110'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s2-operations-20261110' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:

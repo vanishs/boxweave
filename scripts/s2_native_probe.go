@@ -358,9 +358,8 @@ func hostileTypedToolMatrix(ctx context.Context, admin *mcp.ClientSession) {
 	items, ok := boxList["boxes"].([]any)
 	check(ok && len(items) == 0,
 		"unsupported root_pool attempted a native Create despite schema refusal")
-	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_SIXTEEN_TOOLS_CLOSED_INPUT_SCHEMAS=PASS")
-	fmt.Println("S4_B4_REAL_OFFICIAL_SDK_ALL_21_CLOSED_SCHEMAS=PASS")
-	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
+	fmt.Println("S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS=PASS")
+	fmt.Println("S2_P1_REAL_OFFICIAL_SDK_13_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT=PASS")
 }
 
 // Inspect the actual stateless MCP HTTP response, not merely a source-level
@@ -422,8 +421,10 @@ func main() {
 		"port_forward_list": true, "port_forward_create": true, "port_forward_delete": true, "box_wait_ready": true,
 	}
 	check(len(inv.Tools) == len(expected), "exact 23 public MCP Tools including Activity and native forwards discovery")
+	seenTools := map[string]bool{}
 	for _, t := range inv.Tools {
-		check(expected[t.Name], "unexpected Tool "+t.Name)
+		check(expected[t.Name] && !seenTools[t.Name], "unexpected or duplicate Tool "+t.Name)
+		seenTools[t.Name] = true
 		// A real SDK ListTools over HTTP must advertise safety/caching
 		// annotations, not just tool names in local registration code.
 		read := map[string]bool{
@@ -442,7 +443,7 @@ func main() {
 				"read-only MCP Tool advertised destructive action: "+t.Name)
 		}
 	}
-	fmt.Println("S4_ACTIVITY_NATIVE_MCP_DISCOVERY_18_OF_18=PASS")
+	fmt.Println("S2_NATIVE_MCP_DISCOVERY_23_OF_23=PASS")
 	fmt.Println("S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED=PASS")
 	hostileProtocolMatrix(ctx, admin, peerSession)
 	hostileTypedToolMatrix(ctx, admin)
