@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch, Mock, call
+from unittest.mock import patch, Mock
 
 SOURCE = Path(__file__).resolve().parents[1] / "install.sh"
 NS = {}

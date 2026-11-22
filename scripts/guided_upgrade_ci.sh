@@ -73,7 +73,7 @@ healthy() {
 import pathlib,sys
 from mcp_testkit import LoopbackMCP
 raw=next(l[6:] for l in pathlib.Path(sys.argv[1]).read_text().splitlines() if l.startswith("token="))
-with LoopbackMCP("http://127.0.0.1:18650/mcp", raw) as client:
+with LoopbackMCP("http://127.0.0.1:18650/mcp", token=raw) as client:
     status=client.call("host_status",{}).structured
     assert status["version"] == sys.argv[2], "unexpected authenticated running version"
     assert status["mcp_ready"] and status["native"]["service_ready"]

@@ -337,7 +337,7 @@ def apply_guided_upgrade(args, candidate, sha, version, source, reviewed, host_d
         raise InstallError("new rollback backup does not bind the reviewed previous installation")
     health = service_health(args, INSTALLED_BINARY, current)
     print("Installed:", json.dumps(current), flush=True)
-    print("Doctor:", json.dumps(health), flush=True)
+    print("Service status:", json.dumps(health), flush=True)
     print("GUIDED_UPGRADE_COMPLETE: service ready; previous version backup retained; not HOST_GO PASS")
 
 

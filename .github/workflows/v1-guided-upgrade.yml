@@ -27,15 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          sh -n install.sh scripts/guided_upgrade_ci.sh
+          sh -n install.sh
+          sh -n scripts/guided_upgrade_ci.sh
           sh scripts/guided_upgrade_ci.sh | tee "$RUNNER_TEMP/guided-upgrade.log"
           for marker in GUIDED_UPGRADE_PLAN_AND_DECLINE_READ_ONLY GUIDED_UPGRADE_PUBLISHED_RC10_RC11_NOOP GUIDED_UPGRADE_BACKUP_NEGATIVES GUIDED_UPGRADE_PREVIOUS_COMMIT_NEW_BACKUP_AND_REAL_ROLLBACK; do
             grep -Fxq "$marker=PASS" "$RUNNER_TEMP/guided-upgrade.log"
           done
           grep -Fxq GUIDED_UPGRADE_DISPOSABLE_ACCEPTANCE_PASS "$RUNNER_TEMP/guided-upgrade.log"
-      - name: Fresh installed Forward policy regression
-        # Separate job below uses a fresh independent runner.
-        run: echo "Fresh install tested by isolated job."
   fresh:
     if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-guided-upgrade-20261121'
     runs-on: ubuntu-24.04
