@@ -42,7 +42,7 @@ sudo incus admin init --auto --storage-backend=dir
 sudo useradd --create-home --gid incus --shell /usr/sbin/nologin boxweave
 uid="$(id -u boxweave)"
 project="user-$uid"
-sudo runuser -u boxweave -- incus project list --format csv >/dev/null
+sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_HOME HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config incus project list --format csv >/dev/null
 test "$(sudo incus project get "$project" restricted)" = true
 test "$(sudo runuser -u boxweave -- id -nG)" = incus
 proxy_before="$(sudo incus project get "$project" restricted.devices.proxy)"
