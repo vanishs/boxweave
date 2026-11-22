@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // NetworkAuditBinding is a local claim, not native authentication.
@@ -59,7 +61,7 @@ func (s *Store) ReadCompleteNetworkAuditLedger(ctx context.Context, project, bri
 		if err = rows.Scan(&b.UUID, &b.Name, &b.Incarnation); err != nil {
 			break
 		}
-		if len(bindings) >= 64 || !auditName(b.Name) || b.UUID == "" || len(b.UUID) > 128 || b.Incarnation == "" || len(b.Incarnation) > 128 || bindings[b.UUID].UUID != "" {
+		if len(bindings) >= networklimits.MaxProjectBoxes || !auditName(b.Name) || b.UUID == "" || len(b.UUID) > 128 || b.Incarnation == "" || len(b.Incarnation) > 128 || bindings[b.UUID].UUID != "" {
 			err = ErrResourceLocked
 			break
 		}

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // VerifiedStaticPeerBinding is an independently observed local NIC/static
@@ -209,7 +210,7 @@ func selectCreatePeerBinding(c incus.InstanceServer, project string, proj *api.P
 	if err != nil {
 		return zero, err
 	}
-	if len(names) > 256 {
+	if len(names) > networklimits.MaxProjectBoxes {
 		return zero, ErrNativeUnsupported
 	}
 	for _, name := range names {

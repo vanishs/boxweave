@@ -72,16 +72,17 @@ type Service struct {
 }
 
 type HostStatus struct {
-	TrackingID    string             `json:"tracking_id"`
-	Version       string             `json:"version"`
-	Commit        string             `json:"commit"`
-	BinarySHA256  string             `json:"binary_sha256,omitempty"`
-	GoVersion     string             `json:"go_version"`
-	SchemaVersion int                `json:"schema_version"`
-	MCPReady      bool               `json:"mcp_ready"`
-	Native        native.Status      `json:"native"`
-	Ready         bool               `json:"ready"`
-	Attention     *attentionSnapshot `json:"attention,omitempty"`
+	TrackingID      string                    `json:"tracking_id"`
+	Version         string                    `json:"version"`
+	Commit          string                    `json:"commit"`
+	BinarySHA256    string                    `json:"binary_sha256,omitempty"`
+	GoVersion       string                    `json:"go_version"`
+	SchemaVersion   int                       `json:"schema_version"`
+	MCPReady        bool                      `json:"mcp_ready"`
+	Native          native.Status             `json:"native"`
+	Ready           bool                      `json:"ready"`
+	Attention       *attentionSnapshot        `json:"attention,omitempty"`
+	ProjectCapacity *state.ProjectBoxCapacity `json:"project_capacity,omitempty"`
 }
 
 func newTrackingID() (string, error) {
@@ -111,6 +112,9 @@ func (s *Service) Status(ctx context.Context) HostStatus {
 	v, err := s.Store.Schema(ctx)
 	out := HostStatus{Version: s.BuildVersion, Commit: s.BuildCommit, GoVersion: runtime.Version(), MCPReady: err == nil && v == state.SchemaVersion, SchemaVersion: v}
 	out.Native = s.Native.Read(ctx)
+	if cap, e := s.Store.ReadProjectBoxCapacity(ctx, s.Native.Project); e == nil {
+		out.ProjectCapacity = &cap
+	}
 	out.Ready = out.MCPReady && out.Native.Ready
 	return out
 }
@@ -150,7 +154,7 @@ func (s *Service) Handler() http.Handler {
 			return result, err
 		}
 	})
-	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies, not a global health or permission to dispatch; no foreign inventory.", Annotations: readToolAnnotations()},
+	addStrictTool(server, &mcp.Tool{Name: "host_status", Description: "Read the authenticated BoxWeave build, schema, confined Incus project and readiness; attention shows bounded same-Project SQLite blockers/dependencies; project_capacity counts owned and unresolved Create slots, not native address/storage availability or permission to dispatch; no foreign inventory.", Annotations: readToolAnnotations()},
 		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, HostStatus, error) {
 			principal, err := s.requestPrincipal(req)
 			if err != nil {

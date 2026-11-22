@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // Linux conntrack belongs to the host network namespace, not an Incus
@@ -72,7 +74,7 @@ func nativePeerHostRoutePrefix(dst string, ipv6 bool) (netip.Prefix, error) {
 func nativePeerHostRouteScopeFromRows(t NativePeerBridgeAuditTarget,
 	v4, v6 []nativePeerHostRoute) (string, error) {
 	if !safePrereqName.MatchString(t.Bridge) || t.Bridge == "." ||
-		t.Bridge == ".." || len(t.Boxes) < 2 || len(t.Boxes) > 64 {
+		t.Bridge == ".." || len(t.Boxes) < 2 || len(t.Boxes) > networklimits.MaxProjectBoxes {
 		return "", errors.New("invalid root bridge route scope")
 	}
 	entries := []struct {

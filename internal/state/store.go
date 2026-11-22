@@ -681,6 +681,15 @@ func (s *Store) Admit(ctx context.Context, a Admission) (Receipt, error) {
 	// original operation has a terminal FAILED receipt. A new box_delete
 	// for that exact UUID is still allowed after native postread.
 	if a.Action == "box_create" && strings.HasPrefix(a.ResourceKey, "box:") {
+		// Reserve capacity in the same serialized transaction as admission.
+		// Exact original replay was resolved above and never uses a new slot.
+		capacity, e := readProjectBoxCapacity(ctx, tx, a.Layer)
+		if e != nil {
+			return Receipt{}, e
+		}
+		if capacity.Remaining == 0 {
+			return Receipt{}, ErrProjectCapacity
+		}
 		var owned int
 		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM owned_boxes
 			WHERE project=? AND name=? AND state='OWNED'`,

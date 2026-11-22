@@ -15,6 +15,7 @@ import (
 	incus "github.com/lxc/incus/v7/client"
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/vanishs/boxweave/internal/native"
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // NativePeerBridgeAuditTarget is an installer/root-local *read-only* evidence
@@ -56,7 +57,7 @@ func nativePeerBridgeAuditWithClient(ctx context.Context, root incus.InstanceSer
 	var out NativePeerBridgeAuditResult
 	if root == nil || !safePrereqName.MatchString(t.Project) || t.Project == "default" ||
 		!safePrereqName.MatchString(t.Bridge) || !safePrereqName.MatchString(t.ACL) ||
-		len(t.Boxes) == 0 || len(t.Boxes) > 64 {
+		len(t.Boxes) == 0 || len(t.Boxes) > networklimits.MaxProjectBoxes {
 		return out, errors.New("invalid root bridge-audit scope")
 	}
 	if err := ctx.Err(); err != nil {

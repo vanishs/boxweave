@@ -11,6 +11,7 @@ import (
 
 	incus "github.com/lxc/incus/v7/client"
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/vanishs/boxweave/internal/networklimits"
 )
 
 // PeerACLBox is an exact persisted native binding, never raw MCP input.
@@ -159,7 +160,7 @@ func peerACLCheckBox(inst *api.Instance, project, bridge, acl string, b PeerACLB
 	return nil
 }
 func isolatePeerACL(ctx context.Context, d peerACLDriver, project, bridge, acl string, boxes []PeerACLBox, check PeerACLBridgeCheck) error {
-	if check == nil || project == "" || bridge == "" || acl == "" || len(boxes) == 0 || len(boxes) > 64 {
+	if check == nil || project == "" || bridge == "" || acl == "" || len(boxes) == 0 || len(boxes) > networklimits.MaxProjectBoxes {
 		return ErrUnverified
 	}
 	if err := ctx.Err(); err != nil {
