@@ -8,10 +8,16 @@ import (
 
 // ParseExternalForwardAllow validates operator-managed startup policy.
 // Entries: interface/protocol/IP:port; IPv6 addresses use brackets.
+// The single literal all explicitly enables operator-delegated external binds.
+const ExternalForwardAll = "all"
+
 func ParseExternalForwardAllow(raw string) (map[string]string, error) {
 	rules := map[string]string{}
 	if raw == "" {
 		return rules, nil
+	}
+	if raw == ExternalForwardAll {
+		return map[string]string{ExternalForwardAll: ""}, nil
 	}
 	if len(raw) > 8192 {
 		return nil, ErrNativeUnsupported
@@ -30,7 +36,7 @@ func ParseExternalForwardAllow(raw string) (map[string]string, error) {
 			return nil, ErrNativeUnsupported
 		}
 		f := ForwardSpec{Device: "bwpf-0123456789abcdef", Protocol: parts[1], HostBind: host, HostPort: p, GuestPort: 1, ExternalAcknowledged: true}
-		if f.Validate() != nil || net.ParseIP(host).IsLoopback() || parts[2] != net.JoinHostPort(host, port) {
+		if f.Validate() != nil || net.ParseIP(host).IsLoopback() || net.ParseIP(host).IsUnspecified() || parts[2] != net.JoinHostPort(host, port) {
 			return nil, ErrNativeUnsupported
 		}
 		key := parts[1] + "/" + parts[2]
@@ -57,8 +63,15 @@ func (r Reader) AuthorizeForwardCreate(f ForwardSpec) error {
 	if err != nil {
 		return err
 	}
+	_, all := rules[ExternalForwardAll]
+	if ip.IsUnspecified() {
+		if all {
+			return nil
+		}
+		return ErrNativeUnsupported
+	}
 	iface, allowed := rules[f.Protocol+"/"+net.JoinHostPort(f.HostBind, strconv.Itoa(f.HostPort))]
-	if !allowed {
+	if !all && !allowed {
 		return ErrNativeUnsupported
 	}
 	interfaces, err := net.Interfaces()
@@ -74,7 +87,7 @@ func (r Reader) AuthorizeForwardCreate(f ForwardSpec) error {
 		for _, a := range addresses {
 			address, _, err := net.ParseCIDR(a.String())
 			if err == nil && address.Equal(ip) {
-				if dev.Name != iface || dev.Flags&net.FlagUp == 0 || dev.Flags&net.FlagLoopback != 0 {
+				if (!all && dev.Name != iface) || dev.Flags&net.FlagUp == 0 || dev.Flags&net.FlagLoopback != 0 {
 					return ErrNativeUnsupported
 				}
 				matches++

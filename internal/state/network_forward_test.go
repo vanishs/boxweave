@@ -223,3 +223,49 @@ func TestB4ForwardQueuedCancellationAndRestartRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestForwardWildcardReservation(t *testing.T) {
+	for _, pair := range [][2]string{{"0.0.0.0", "127.0.0.1"}, {"127.0.0.1", "0.0.0.0"}, {"::", "127.0.0.1"}, {"127.0.0.1", "::"}, {"::", "::1"}, {"::1", "::"}, {"0.0.0.0", "::"}} {
+		t.Run(pair[0]+"-then-"+pair[1], func(t *testing.T) {
+			ctx := context.Background()
+			s := newStore(t)
+			_, tok, err := s.IssueToken(ctx, time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			project := "user-1001"
+			a := "11111111-1111-4111-8111-111111111111"
+			b := "22222222-2222-4222-8222-222222222222"
+			b4OwnedFixture(t, s, project, "forward-a", a)
+			b4OwnedFixture(t, s, project, "forward-b", b)
+			makeAdmission := func(name, uuid, bind, proto, key string) Admission {
+				return Admission{Layer: project, ActorID: tok.ID, TokenID: tok.ID, Key: key, Action: "port_forward_create", RequestID: key, BoxUUID: uuid, Incarnation: uuid,
+					ResourceKey: "box:" + name, ResourceKeys: []string{"box:" + uuid, "listener:" + proto + ":" + bind + ":23051"}, SafeIntent: []byte(key),
+					ForwardCreate: &ForwardCreateAdmission{Protocol: proto, HostBind: bind, HostPort: 23051, GuestPort: 8080}}
+			}
+			first := makeAdmission("forward-a", a, pair[0], "tcp", "wildcard-original-001")
+			r, err := s.Admit(ctx, first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second := makeAdmission("forward-b", b, pair[1], "tcp", "wildcard-conflicting-002")
+			if _, err = s.Admit(ctx, second); !errors.Is(err, ErrResourceLocked) {
+				t.Fatalf("overlapping pending reservation admitted: %v", err)
+			}
+			if err = s.Claim(ctx, r.ID); err != nil {
+				t.Fatal(err)
+			}
+			if n, err := s.Recover(ctx); err != nil || n != 1 {
+				t.Fatalf("recover: %d %v", n, err)
+			}
+			if _, err = s.Admit(ctx, second); !errors.Is(err, ErrResourceLocked) {
+				t.Fatalf("overlapping UNKNOWN reservation admitted: %v", err)
+			}
+			// Independent protocol is not reserved by TCP, even with wildcard.
+			udp := makeAdmission("forward-b", b, pair[1], "udp", "wildcard-separate-udp-003")
+			if _, err = s.Admit(ctx, udp); err != nil {
+				t.Fatalf("unrelated UDP denied: %v", err)
+			}
+		})
+	}
+}

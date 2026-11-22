@@ -134,7 +134,12 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := &Service{Store: st, Native: native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: project, ExternalForwardAllow: "bwbr0/tcp/10.248.83.1:23095,bwbr0/udp/10.248.83.1:23096,bwbr0/tcp/[fd83:248::1]:23097,bwbr0/udp/[fd83:248::1]:23098"}, BuildVersion: "b4-native-mcp-test", BuildCommit: "source-exact"}
+	broad := os.Getenv("BOXWEAVE_B4_FORWARD_POLICY") == "all"
+	policy := "bwbr0/tcp/10.248.83.1:23095,bwbr0/udp/10.248.83.1:23096,bwbr0/tcp/[fd83:248::1]:23097,bwbr0/udp/[fd83:248::1]:23098"
+	if broad {
+		policy = native.ExternalForwardAll
+	}
+	svc := &Service{Store: st, Native: native.Reader{Socket: "/var/lib/incus/unix.socket.user", Project: project, ExternalForwardAllow: policy}, BuildVersion: "b4-native-mcp-test", BuildCommit: "source-exact"}
 	srv := httptest.NewUnstartedServer(svc.Handler())
 	svc.Listener = srv.Listener.Addr().String()
 	srv.Start()
@@ -153,31 +158,48 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 		t.Fatalf("expected exact 23 live MCP tools: %v / %d", err, len(inventory.Tools))
 	}
 	// Refuse missing acknowledgment, unmatched port, wildcard, and unapproved addresses.
-	for i, tc := range []struct {
+	type deniedBind struct {
 		bind string
 		port int
 		ack  bool
-	}{
-		{"10.248.83.1", 23095, false}, {"10.248.83.1", 23099, true}, {"10.248.83.2", 23095, true}, {"0.0.0.0", 23095, true},
-	} {
+	}
+	deniedBinds := []deniedBind{{"10.248.83.1", 23095, false}, {"10.248.83.1", 23099, true}, {"10.248.83.2", 23095, true}, {"0.0.0.0", 23095, true}}
+	if broad {
+		deniedBinds = []deniedBind{{"10.248.83.1", 23095, false}, {"10.248.83.2", 23095, true}, {"0.0.0.0", 23095, false}, {"::", 23095, false}, {"224.0.0.1", 23095, true}}
+	}
+	for i, tc := range deniedBinds {
 		args := map[string]any{"box_id": uuid, "protocol": "tcp", "host_bind": tc.bind, "host_port": tc.port, "guest_port": 19091, "confirm_external_exposure": tc.ack, "idempotency_key": fmt.Sprintf("b4-exposure-negative-%03d", i)}
 		result, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: args})
 		if e == nil && (result == nil || !result.IsError) {
 			t.Fatalf("unapproved external admission %v", args)
 		}
 	}
-	fmt.Println("S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS")
-	for _, tc := range []struct {
+	if broad {
+		fmt.Println("FORWARD_ALL_MCP_NO_ACK_OR_FOREIGN_ADDRESS_DENIED=PASS")
+	} else {
+		fmt.Println("S4_B4_MCP_EXTERNAL_DENY_MISSING_CONSENT_ADDRESS_PORT_WILDCARD=PASS")
+	}
+	type forwardCase struct {
 		name, proto, bind   string
 		hostPort, guestPort int
-	}{
+	}
+	cases := []forwardCase{
 		{"tcp", "tcp", "127.0.0.1", 23093, 19091},
 		{"udp", "udp", "127.0.0.1", 23094, 19092},
 		{"external-v4-tcp", "tcp", "10.248.83.1", 23095, 19091},
 		{"external-v4-udp", "udp", "10.248.83.1", 23096, 19092},
 		{"external-v6-tcp", "tcp", "fd83:248::1", 23097, 19091},
 		{"external-v6-udp", "udp", "fd83:248::1", 23098, 19092},
-	} {
+	}
+	if broad {
+		cases = append(cases,
+			forwardCase{"arbitrary-port", "tcp", "10.248.83.1", 23099, 19091},
+			forwardCase{"wildcard-v4-tcp", "tcp", "0.0.0.0", 23110, 19091},
+			forwardCase{"wildcard-v4-udp", "udp", "0.0.0.0", 23111, 19092},
+			forwardCase{"wildcard-v6-tcp", "tcp", "::", 23112, 19091},
+			forwardCase{"wildcard-v6-udp", "udp", "::", 23113, 19092})
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := map[string]any{"box_id": uuid, "protocol": tc.proto, "host_bind": tc.bind, "host_port": tc.hostPort, "guest_port": tc.guestPort, "confirm_external_exposure": tc.bind != "127.0.0.1", "idempotency_key": "b4-mcp-create-" + tc.name + "-001"}
 			other := cloneB4Args(args)
@@ -203,17 +225,36 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 			if !ok || item["forward_id"] != opID || item["state"] != "CONFIRMED" || item["native_verified"] != true {
 				t.Fatalf("not native verified: %+v", items[0])
 			}
-			b4MCPHostEcho(t, tc.proto, tc.bind, tc.hostPort, true)
-			alternate := "10.248.83.1"
+			dial, alternate := tc.bind, "10.248.83.1"
+			wildcard := tc.bind == "0.0.0.0" || tc.bind == "::"
 			if tc.bind != "127.0.0.1" {
 				alternate = "127.0.0.1"
 			}
-			b4MCPHostEcho(t, tc.proto, alternate, tc.hostPort, false)
+			if tc.bind == "0.0.0.0" {
+				dial = "10.248.83.1"
+			} else if tc.bind == "::" {
+				dial, alternate = "fd83:248::1", "::1"
+			}
+			b4MCPHostEcho(t, tc.proto, dial, tc.hostPort, true)
+			b4MCPHostEcho(t, tc.proto, alternate, tc.hostPort, wildcard)
 			conflicting := map[string]any{"box_id": uuid, "protocol": tc.proto, "host_port": tc.hostPort,
 				"guest_port": tc.guestPort, "host_bind": tc.bind, "confirm_external_exposure": tc.bind != "127.0.0.1", "idempotency_key": "s4b4-native-mcp-collision-" + tc.name + "-003"}
 			denied, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: conflicting})
 			if e == nil && (denied == nil || !denied.IsError) {
 				t.Fatal("listener collision was accepted")
+			}
+			if broad {
+				overlap := cloneB4Args(conflicting)
+				overlap["idempotency_key"] = "b4-overlap-" + tc.name + "-001"
+				overlap["host_bind"] = "0.0.0.0"
+				overlap["confirm_external_exposure"] = true
+				if wildcard {
+					overlap["host_bind"] = alternate
+				}
+				denial, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: overlap})
+				if err == nil && (denial == nil || !denial.IsError) {
+					t.Fatal("overlapping wildcard listener accepted")
+				}
 			}
 			delArgs := map[string]any{"forward_id": opID, "idempotency_key": "b4-mcp-delete-" + tc.name + "-004"}
 			rival := cloneB4Args(delArgs)
@@ -229,7 +270,10 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 			if deleteReplay["operation_id"] != removeID || deleteReplay["duplicate"] != true {
 				t.Fatalf("delete replay %+v", deleteReplay)
 			}
-			b4MCPHostEcho(t, tc.proto, tc.bind, tc.hostPort, false)
+			b4MCPHostEcho(t, tc.proto, dial, tc.hostPort, false)
+			if wildcard {
+				b4MCPHostEcho(t, tc.proto, alternate, tc.hostPort, false)
+			}
 			listed, e = sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_list", Arguments: map[string]any{"box_id": uuid}})
 			data = b4MCPData(t, listed, e)
 			items, ok = data["forwards"].([]any)
@@ -249,6 +293,10 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 		}
 		defer guard.Close()
 		args := map[string]any{"box_id": uuid, "protocol": "tcp", "host_port": port, "guest_port": 19091, "idempotency_key": "b4-occupied-real-listener-001"}
+		if broad {
+			args["host_bind"] = "0.0.0.0"
+			args["confirm_external_exposure"] = true
+		}
 		result, e := sess.CallTool(ctx, &mcp.CallToolParams{Name: "port_forward_create", Arguments: args})
 		original := b4MCPData(t, result, e)
 		id, ok := original["operation_id"].(string)
@@ -347,6 +395,9 @@ func TestB4InstalledMCPNativeCreateListDelete(t *testing.T) {
 		fmt.Println("S4_B4_MCP_NATIVE_OCCUPIED_HOST_LISTENER_NO_FALSE_SUCCESS=PASS")
 	})
 	fmt.Println("S4_B4_INSTALLED_AUTHENTICATED_23_TOOL_HTTP_MCP_ORIGINAL_SQLITE_INCUS_TCP_UDP=PASS")
+	if broad {
+		fmt.Println("FORWARD_ALL_NATIVE_WILDCARD_PACKET_AND_CLEANUP=PASS")
+	}
 }
 
 // Two different keys simultaneously contend for the same native resource.

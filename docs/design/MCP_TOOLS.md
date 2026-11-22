@@ -1,5 +1,7 @@
 # Public MCP tool catalog — intentionally narrow v1 P0
 
+**2026-11-21 proposed Forward update:** See [Host policy and wildcard binding](../development/V1_FORWARD_ALL_POLICY_2026-11-21.md).
+
 **S5A2 (2026-11-20):** PR #163 adds exactly one public Tool, `operation_recover`, bringing the candidate catalog to **23**. RC8 installed catalog remains 22. Source implementation and Box tests completed; independent installed acceptance pending. See [S5A2 checkpoint](../development/S5A2_RECOVERY_2026-11-20.md). Historical counts below describe their original checkpoints.
 
 **2026-11-19 additive decision:** Draft PR #153 now registers the Owner-approved read-only `box_activity_get` as its **18th current Tool**, over bounded, authenticated SQLite Operation/Peer/network/Exec-GC evidence; it does not change the previous 17 public Tool contracts. Long-term planned count is **22** (20 baseline + S4-C readiness + Activity), not a claim that S4-B4–B6/S4-C are implemented. [Approval](../decisions/PRODUCT_BOUNDARY.md) · [implementation and test gates](../development/V1_ACTIVITY_PUBLIC_MCP_P0_IMPLEMENTATION_2026-11-19.md).
