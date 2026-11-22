@@ -1,0 +1,59 @@
+name: v1 guided installed upgrade acceptance
+on:
+  push:
+    branches: [feat/v1-guided-upgrade-20261121]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guided-upgrade:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-guided-upgrade-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Offline coordinator tests
+        run: python3 -m unittest discover -s scripts -p 'test_guided_upgrade.py' -q
+      - name: Real original RC10, RC11 and candidate guided upgrade and rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sh -n install.sh
+          sh -n scripts/guided_upgrade_ci.sh
+          sh scripts/guided_upgrade_ci.sh | tee "$RUNNER_TEMP/guided-upgrade.log"
+          for marker in GUIDED_UPGRADE_PLAN_AND_DECLINE_READ_ONLY GUIDED_UPGRADE_PUBLISHED_RC10_RC11_NOOP GUIDED_UPGRADE_BACKUP_NEGATIVES GUIDED_UPGRADE_PREVIOUS_COMMIT_NEW_BACKUP_AND_REAL_ROLLBACK; do
+            grep -Fxq "$marker=PASS" "$RUNNER_TEMP/guided-upgrade.log"
+          done
+          grep -Fxq GUIDED_UPGRADE_DISPOSABLE_ACCEPTANCE_PASS "$RUNNER_TEMP/guided-upgrade.log"
+  fresh:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-guided-upgrade-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      FORWARD_INSTALL_MODE: fresh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Original fresh install and Forward default regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/forward_install_policy_ci.sh | tee "$RUNNER_TEMP/fresh.log"
+          grep -Fxq FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT=PASS "$RUNNER_TEMP/fresh.log"
+          grep -Fxq FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE=PASS "$RUNNER_TEMP/fresh.log"
+          grep -Fxq FORWARD_INSTALL_DISPOSABLE_SCOPE_PASS "$RUNNER_TEMP/fresh.log"

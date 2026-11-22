@@ -68,6 +68,9 @@ jobs:
       - name: Python MCP loopback client and protocol negative tests
         if: steps.scope.outputs.full == 'true'
         run: python3 -m unittest discover -s scripts -p 'test_mcp_testkit.py' -q
+      - name: Offline guided upgrade approval and fail-closed tests
+        if: steps.scope.outputs.full == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_guided_upgrade.py' -q
       - name: Offline scoped uninstall planner/approval/negative tests
         if: steps.scope.outputs.full == 'true'
         run: python3 -m unittest discover -s scripts -p 'test_uninstall_core.py' -q
