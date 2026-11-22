@@ -1,7 +1,7 @@
 name: S4-B4 disposable native instance proxy TCP/UDP
 on:
   push:
-    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120]
+    branches: [feat/v1-s4-runtime-integration-20261116, feat/v1-s5a-closeout-20261120, feat/v1-s5b-acceptance-20261120, feat/v1-forward-all-20261121]
     paths:
       - internal/state/network_recovery*.go
       - internal/recovery/**
@@ -37,7 +37,7 @@ permissions:
   contents: read
 jobs:
   owned-proxy-native:
-    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120'))
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-s4-runtime-integration-20261116' || (github.ref == 'refs/heads/feat/v1-s5a-closeout-20261120' || github.ref == 'refs/heads/feat/v1-s5b-acceptance-20261120') || github.ref == 'refs/heads/feat/v1-forward-all-20261121')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -154,6 +154,14 @@ jobs:
           for binding in external-v4-tcp external-v4-udp external-v6-tcp external-v6-udp; do
             grep -Fq "S4_B4_MCP_${binding}_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS" "$RUNNER_TEMP/s4b4-mcp.log"
           done
+          if test "$GITHUB_REF" = "refs/heads/feat/v1-forward-all-20261121"; then
+            sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 BOXWEAVE_B4_FORWARD_POLICY=all /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4InstalledMCPNativeCreateListDelete$' | tee "$RUNNER_TEMP/forward-all.log"
+            grep -Fq 'FORWARD_ALL_MCP_NO_ACK_OR_FOREIGN_ADDRESS_DENIED=PASS' "$RUNNER_TEMP/forward-all.log"
+            for binding in arbitrary-port wildcard-v4-tcp wildcard-v4-udp wildcard-v6-tcp wildcard-v6-udp; do
+              grep -Fq "S4_B4_MCP_${binding}_REAL_CREATION_REPLAY_CONFLICT_PACKET_DELETE=PASS" "$RUNNER_TEMP/forward-all.log"
+            done
+            grep -Fq 'FORWARD_ALL_NATIVE_WILDCARD_PACKET_AND_CLEANUP=PASS' "$RUNNER_TEMP/forward-all.log"
+          fi
           sudo -u boxweave env GITHUB_ACTIONS=true BOXWEAVE_B4_MCP_ONE_USE=s4b4-disposable-only-20261119 /usr/local/bin/s4b4-control-test -test.v -test.run '^TestB4NativeOriginalCrashRecovery$' | tee "$RUNNER_TEMP/s4b4-crash.log"
           grep -Fq 'S4_B4_NATIVE_REAL_PROCESS_KILL_ACK_AND_POSTREAD_MATRIX=PASS' "$RUNNER_TEMP/s4b4-crash.log"
           sudo incus --project "$S4_B4_PROJECT" config device show s4b4native | tee "$RUNNER_TEMP/s4b4-device-readback.txt"

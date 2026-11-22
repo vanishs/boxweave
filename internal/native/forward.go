@@ -35,7 +35,7 @@ func (f ForwardSpec) Validate() error {
 		return ErrNativeUnsupported
 	}
 	ip := net.ParseIP(f.HostBind)
-	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.Equal(net.IPv4bcast) {
+	if ip == nil || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.Equal(net.IPv4bcast) {
 		return ErrNativeUnsupported
 	}
 	// Structural and caller-intent check only. Reader separately enforces host policy before create.

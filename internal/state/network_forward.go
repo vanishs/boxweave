@@ -37,7 +37,7 @@ func validForwardCreate(f ForwardCreateAdmission) bool {
 	ip := net.ParseIP(f.HostBind)
 	return (f.Protocol == "tcp" || f.Protocol == "udp") &&
 		f.HostPort >= 1 && f.HostPort <= 65535 && f.GuestPort >= 1 && f.GuestPort <= 65535 &&
-		ip != nil && f.HostBind == ip.String() && !ip.IsUnspecified() && !ip.IsMulticast() &&
+		ip != nil && f.HostBind == ip.String() && !ip.IsMulticast() &&
 		!ip.IsLinkLocalUnicast() && !ip.Equal(net.IPv4bcast) && (!ip.IsLoopback() || f.HostBind == "127.0.0.1" || f.HostBind == "::1")
 }
 
@@ -65,7 +65,10 @@ func stageForwardAdmission(ctx context.Context, tx *sql.Tx, a Admission, operati
 		}
 		f := a.ForwardCreate
 		var busy int
-		err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM forward_claims WHERE host_bind=? AND protocol=? AND host_port=? AND state!='REVOKED'", f.HostBind, f.Protocol, f.HostPort).Scan(&busy)
+		// Either wildcard conservatively reserves the protocol/port across
+		// both address families (IPv6 may also listen for mapped IPv4).
+		// All non-revoked claims, including uncertain originals, participate.
+		err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM forward_claims WHERE protocol=? AND host_port=? AND state!='REVOKED' AND (host_bind=? OR host_bind IN ('0.0.0.0','::') OR ? IN ('0.0.0.0','::'))", f.Protocol, f.HostPort, f.HostBind, f.HostBind).Scan(&busy)
 		if err != nil {
 			return err
 		}

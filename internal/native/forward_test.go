@@ -17,8 +17,10 @@ func TestB4ForwardSpecAndExactProxyDevice(t *testing.T) {
 		{"::1", "udp", 22002, 53, false, true},
 		{"192.0.2.8", "tcp", 80, 8080, true, true},
 		{"192.0.2.8", "tcp", 80, 8080, false, false},
-		{"0.0.0.0", "tcp", 80, 80, true, false},
-		{"::", "udp", 53, 53, true, false},
+		{"0.0.0.0", "tcp", 80, 80, true, true},
+		{"::", "udp", 53, 53, true, true},
+		{"0.0.0.0", "tcp", 80, 80, false, false},
+		{"::", "udp", 53, 53, false, false},
 		{"127.0.0.9", "tcp", 80, 80, false, false},
 		{"127.0.0.1", "sctp", 80, 80, false, false},
 		{"127.0.0.1", "tcp", 0, 80, false, false},
@@ -47,7 +49,7 @@ func TestB4ForwardSpecAndExactProxyDevice(t *testing.T) {
 			t.Fatalf("overwrote existing device: %v", err)
 		}
 		tampered := copyInstanceDevices(added)
-		tampered[f.Device]["listen"] = "tcp:0.0.0.0:80"
+		tampered[f.Device]["listen"] = "tcp:127.0.0.1:65535"
 		if _, err := forwardDeviceChange(tampered, f, false); err != ErrNativeDependents {
 			t.Fatalf("deleted foreign device: %v", err)
 		}
@@ -84,5 +86,38 @@ func TestB4HostLocalForwardPolicy(t *testing.T) {
 	f.ExternalAcknowledged = false
 	if (Reader{}).AuthorizeForwardCreate(f) != nil {
 		t.Fatal("loopback default denied")
+	}
+}
+
+func TestForwardOperatorAllPolicy(t *testing.T) {
+	all := Reader{ExternalForwardAllow: ExternalForwardAll}
+	if p, err := ParseExternalForwardAllow("all"); err != nil || len(p) != 1 {
+		t.Fatalf("operator all policy rejected: %v %v", p, err)
+	}
+	for _, bad := range []string{"ALL", " all", "all,", "all,eth0/tcp/192.0.2.8:80", "*"} {
+		if _, err := ParseExternalForwardAllow(bad); err == nil {
+			t.Fatalf("ambiguous broad policy accepted: %q", bad)
+		}
+	}
+	for _, bind := range []string{"0.0.0.0", "::"} {
+		for _, proto := range []string{"tcp", "udp"} {
+			f := ForwardSpec{Device: "bwpf-0123456789abcdef", Protocol: proto, HostBind: bind, HostPort: 23099, GuestPort: 8080, ExternalAcknowledged: true}
+			if err := all.AuthorizeForwardCreate(f); err != nil {
+				t.Fatalf("explicit operator policy refused %s %s: %v", proto, bind, err)
+			}
+			if (Reader{}).AuthorizeForwardCreate(f) == nil || (Reader{ExternalForwardAllow: "eth0/tcp/192.0.2.8:23099"}).AuthorizeForwardCreate(f) == nil {
+				t.Fatal("wildcard bypassed empty or exact policy")
+			}
+			f.ExternalAcknowledged = false
+			if all.AuthorizeForwardCreate(f) == nil {
+				t.Fatal("wildcard bypassed explicit exposure acknowledgement")
+			}
+		}
+	}
+	for _, bind := range []string{"192.0.2.8", "224.0.0.1", "169.254.0.1", "127.0.0.9", "::ffff:127.0.0.1"} {
+		f := ForwardSpec{Device: "bwpf-0123456789abcdef", Protocol: "tcp", HostBind: bind, HostPort: 23099, GuestPort: 8080, ExternalAcknowledged: true}
+		if all.AuthorizeForwardCreate(f) == nil {
+			t.Fatalf("foreign, special or noncanonical address accepted: %s", bind)
+		}
 	}
 }
