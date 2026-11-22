@@ -1,5 +1,7 @@
 # v1 versioning and publication
 
+**2026-11-21 current release sequence:** [Formal v1.0.0 publication](../development/V1_STABLE_PUBLICATION_PLAN_2026-11-21.md) and the implemented protected stable workflows supersede earlier general automatic-first-release wording. Exact stable candidate, independent dual signatures, protected dry-run and separate publication authorization are mandatory; publication does not change V1_PUBLISHED_RELEASE. Actual default branch was verified as protected v1 at planning review; older main/default-branch references are historical. After verified stable closeout, [unified Box environment reuse](../development/V1_POST_RELEASE_ENVIRONMENT_REUSE_PLAN_2026-11-21.md) is the proposed next feature increment, normally 1.1.0 only when implemented and accepted. No version change or stable selector promotion authorized by planning.
+
 **2026-11-13 distribution update:** See [v1 dedicated-host pilot + installer + Release contract](../development/V1_PILOT_DEPLOY_AND_RELEASE_CONTRACT.md). A checked, owner-authorized, reversible pre-release **physical development-host pilot** may occur before final HOST_GO/physical postflight, with no stable release or pointer promotion. The protected v1 branch's separate `V1_PUBLISHED_RELEASE` pointer is `UNPUBLISHED` until a reviewed stable release exists; do not infer it from `VERSION` or the mixed main/v1 GitHub latest Release endpoint.
 
 **Version:** `1.0.0`, recorded in the root [VERSION](../../VERSION) file.

@@ -1,5 +1,7 @@
 # BoxWeave v1 — Agent instructions
 
+**Current execution priority (2026-11-21):** [Formal v1.0.0 publication plan](docs/development/V1_STABLE_PUBLICATION_PLAN_2026-11-21.md). Freeze features, build exact stable candidate, reconcile mandatory evidence, independently dual-sign, dry-run and separately authorized publication. [Post-release environment reuse](docs/development/V1_POST_RELEASE_ENVIRONMENT_REUSE_PLAN_2026-11-21.md) (Snapshot/Restore/Clone/Backup/Import) is later owner-selected development, not current release scope. No implementation until stable publication/readback closeout.
+
 **Stable rules, not a status snapshot.** Read only what the task needs. Verify current branch/HEAD, relevant PR, actual running version and original Box/Operation IDs; do not infer today's state from old reports. Start with the [active plan](docs/process/IMPLEMENTATION_PLAN.md), [phase protocol](docs/development/PHASE_EXECUTION_PROTOCOL.md) and [current checkpoint](docs/development/EXECUTION_LOG.md#current-checkpoint) as relevant.
 
 **Authority order:** latest explicit owner decision + [permanent product boundary](docs/decisions/PRODUCT_BOUNDARY.md) / [operational policy](docs/decisions/P0_OPERATIONAL_POLICIES.md) → [MCP catalog](docs/design/MCP_TOOLS.md) and [contracts](docs/design/MCP_TOOL_CONTRACTS.md) → active phase design → dated research. Confirm implemented capabilities from source and actual MCP discovery. **22 Tools are implemented in the RC8 development candidate; verify actual installed discovery.**
