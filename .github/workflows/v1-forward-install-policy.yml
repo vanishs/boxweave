@@ -1,0 +1,49 @@
+name: v1 installed Forward default policy regression
+on:
+  push:
+    branches: [feat/v1-forward-all-20261121]
+    paths:
+      - internal/install/**
+      - internal/native/forward*.go
+      - internal/control/forward_tools.go
+      - cmd/boxweave/main.go
+      - install.sh
+      - scripts/forward_install_policy_ci.sh
+      - .github/workflows/v1-forward-install-policy.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install-policy:
+    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-forward-all-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [fresh, legacy-unset, legacy-exact]
+    env:
+      RUNNER_ENVIRONMENT: github-hosted
+      FORWARD_INSTALL_MODE: ${{ matrix.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Real staged service and exact upgrade rollback policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          sh -n scripts/forward_install_policy_ci.sh
+          sh scripts/forward_install_policy_ci.sh | tee "$RUNNER_TEMP/forward-install.log"
+          grep -Fxq FORWARD_INSTALL_DISPOSABLE_SCOPE_PASS "$RUNNER_TEMP/forward-install.log"
+          if test "$FORWARD_INSTALL_MODE" = fresh; then
+            grep -Fxq FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE=PASS "$RUNNER_TEMP/forward-install.log"
+          else
+            grep -Fxq "FORWARD_INSTALL_UPGRADE_ROLLBACK_PRESERVED=$FORWARD_INSTALL_MODE PASS" "$RUNNER_TEMP/forward-install.log"
+          fi

@@ -187,9 +187,14 @@ func Status(p Plan) (Manifest, error) {
 	m.ServiceActive = serviceActive() == nil
 	return m, nil
 }
+
+// unit is used only by fresh Stage; Upgrade preserves the reviewed installed
+// unit byte-for-byte, including legacy absence of this opt-in. An operator
+// drop-in may narrow the effective startup policy. Manual serve stays local.
 func unit(p Plan) string {
 	return "[Unit]\nDescription=BoxWeave v1 local MCP controller\nAfter=network.target incus.service\n\n[Service]\n" +
 		"Type=simple\nUser=" + p.User + "\nUMask=0077\n" +
+		"Environment=BOXWEAVE_FORWARD_EXTERNAL_ALLOW=all\n" +
 		"ExecStart=" + p.BinaryPath + " serve -db " + p.StateDir + "/ledger.sqlite -incus-socket " + p.Socket + " -project " + p.Project + " -listen 127.0.0.1:18650\n" +
 		"Restart=on-failure\nRestartSec=5s\nNoNewPrivileges=true\nPrivateTmp=true\nProtectHome=true\nProtectSystem=strict\nReadWritePaths=" + p.StateDir + "\n" +
 		"CapabilityBoundingSet=\nAmbientCapabilities=\n\n[Install]\nWantedBy=multi-user.target\n"
@@ -281,6 +286,7 @@ func Stage(p Plan, approve bool) (Manifest, error) {
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return Manifest{}, e
 	}
+	fmt.Fprintln(os.Stderr, "Fresh install: external Forward policy defaults to all; explicit external binds may expose public interfaces. Default bind is loopback; native Project authorization is unchanged.")
 	if err = os.MkdirAll(p.StateDir, 0700); err != nil {
 		return Manifest{}, err
 	}

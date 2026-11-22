@@ -8,15 +8,21 @@ Trusted service environment BOXWEAVE_FORWARD_EXTERNAL_ALLOW:
 
 | Value | New listener authority |
 |---|---|
-| Empty (default) | Loopback only (127.0.0.1 default, ::1 explicit) |
+| Unset or empty | Loopback only (127.0.0.1 default, ::1 explicit) |
 | Existing interface/protocol/IP:port entries | Exact assigned host address and port; wildcard entries invalid |
-| Single literal all | Caller-selected valid TCP/UDP ports, unique assigned up non-loopback host addresses, explicit 0.0.0.0 or :: |
+| Single literal all (fresh installed service default) | Caller-selected valid TCP/UDP ports, unique assigned up non-loopback host addresses, explicit 0.0.0.0 or :: |
 
-An operator selects all once at service startup and must separately permit restricted Project proxy devices. The MCP caller explicitly acknowledges each external bind with confirm_external_exposure; this is not independent human authentication. Wildcards can include current/future public interfaces and privileged ports. IPv6 dual-stack behavior is native-dependent. No automatic wildcard default, arbitrary destination, generic proxy device, firewall/ACL change, TLS or connectivity guarantee. Destination remains exact owned Box guest loopback port.
+The owner subsequently approved all as the default for a fresh installer-created systemd unit. Manual serve with an unset/empty policy remains loopback-only; the existing exact policy and root-local drop-in override remain supported. Native restricted Project proxy devices must be separately permitted by the operator; the installer does not change Incus authorization. The MCP caller explicitly acknowledges each external bind with confirm_external_exposure; this is not independent human authentication. Wildcards can include current/future public interfaces and privileged ports. IPv6 dual-stack behavior is native-dependent. No automatic wildcard default, arbitrary destination, generic proxy device, firewall/ACL change, TLS or connectivity guarantee. Destination remains exact owned Box guest loopback port.
 
-Removing the policy prevents new external creates, not existing native listeners. Explicitly remove existing owned forwards before withdrawing Project proxy capability. No new Host management tool. The original idempotency, native readback and UNKNOWN rules remain.
+Setting the effective policy explicitly empty prevents new external creates, not existing native listeners. Explicitly remove existing owned forwards before withdrawing Project proxy capability. No new Host management tool. The original idempotency, native readback and UNKNOWN rules remain.
 
 Either wildcard conservatively reserves the whole same-protocol/port across address families against all non-revoked claims, including pending/uncertain originals. Different protocols and ports remain independent. Native Incus still checks actual foreign/kernel listener conflicts. No replay or forced cleanup of UNKNOWN.
+
+## Fresh-install default (owner decision after the initial scoped acceptance)
+
+Fresh Stage generates Environment=BOXWEAVE_FORWARD_EXTERNAL_ALLOW=all in its installer-owned service unit. Both the install plan and direct fresh Stage warn about public exposure. The management MCP listener and default Forward host_bind remain loopback. Existing installations are not silently expanded: existing same-binary Stage is a no-op, Upgrade retains the verified unit and replaces only the binary, and Rollback restores the original unit. Root-local systemd drop-ins may narrow the policy to an explicit empty value (loopback only) or exact allowlist. Existing persistent forwards are not revoked by policy reduction. Manual serve without the environment remains loopback-only. Native Project proxy permission remains a separate operator-controlled prerequisite, not changed by this installer. No extra CLI/MCP authority, Schema migration or physical Host change.
+
+The earlier runtime acceptance remains valid for the unchanged Forward behavior with explicit all. New installer/plan tests and separate hosted installer acceptance cover this refinement.
 
 ## Evidence
 
