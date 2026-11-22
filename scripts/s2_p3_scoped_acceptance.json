@@ -35,7 +35,7 @@
     "id": "TC-004",
     "verdict": "PASS_TESTED_S2_SCOPE",
     "required_markers": [
-      "S2_NATIVE_CREATE_ACK_LOSS_RESTART_NO_REPLAY",
+      "S2_NATIVE_CREATE_ACK_LOSS_POSTRESTART_NO_SECOND_POST",
       "S2_NATIVE_SAME_KEY_CONFLICT_AND_DIFFERENT_KEY_DUPLICATE_DENIED",
       "S2_P1_NATIVE_TWELVE_INDEPENDENT_SDK_CREATE_SAME_KEY_ONE_RECEIPT",
       "S2_P1_REAL_STOP_AND_DELETE_NATIVE_202_ACK_LOSS_NO_REPLAY",
@@ -79,10 +79,10 @@
     "verdict": "PASS_TESTED_S2_SCOPE",
     "required_markers": [
       "S2_NATIVE_MCP_TOOL_ANNOTATIONS_ACTUALLY_ADVERTISED",
-      "S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS",
+      "S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS",
       "S2_P1_REAL_AUTHENTICATED_HTTP_PRIVATE_ZERO_TTL_CACHE_CONTROL"
     ],
-    "limits": "Exact current 13 public Tools, private no-store cache; no future-spec compatibility claim."
+    "limits": "Exact current 23 public Tools, private no-store cache; no future-spec compatibility claim."
   },
   {
     "id": "TC-009",
@@ -138,8 +138,10 @@
     "required_markers": [
       "S2_NATIVE_DELETE_VERIFIED_AND_REPLAY",
       "S2_NATIVE_NAME_REUSE_OLD_UUID_AND_DELETE_KEY_DENIED",
-      "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE",
-      "S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED"
+      "S4_A_REAL_NATIVE_PREATOMIC_CONCURRENT_DELETE_FULL_LIFECYCLE",
+      "S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED",
+      "S4_A_NATIVE_UUID_PREATOMIC_INDEPENDENT_INCUS_CONFIRM",
+      "S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE"
     ],
     "limits": "No-dependent Box Delete proved; forward/peer-dependent Delete and peer IP reuse remain S4."
   },
@@ -200,10 +202,10 @@
     "id": "A-077",
     "verdict": "PASS_TESTED_S2_SCOPE",
     "required_markers": [
-      "S2_P1_REAL_OFFICIAL_SDK_ALL_THIRTEEN_TOOLS_CLOSED_INPUT_SCHEMAS",
-      "S2_P1_REAL_OFFICIAL_SDK_ALL_TWELVE_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT",
+      "S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS",
+      "S2_P1_REAL_OFFICIAL_SDK_13_TYPED_TOOL_NEGATIVES_NO_NATIVE_EFFECT",
       "S2_NATIVE_INVALID_SCHEMA_CREATE_REFUSED"
     ],
-    "limits": "Finite negative contract for 13 Tools; unbounded nested model fuzz outside accepted support boundary."
+    "limits": "Finite 13-case typed negative matrix and closed-schema discovery of 23 Tools; unbounded nested model fuzz outside accepted support boundary."
   }
 ]

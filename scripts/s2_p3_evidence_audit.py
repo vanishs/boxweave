@@ -14,7 +14,8 @@ import sys
 
 MANDATORY = (
     "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS",
-    "S2_NATIVE_MCP_DISCOVERY_13_OF_13",
+    "S2_NATIVE_MCP_DISCOVERY_23_OF_23",
+    "S2_NATIVE_MCP_ALL_23_CLOSED_INPUT_SCHEMAS",
     "S2_NATIVE_PACKET_IPV4_IPV6_SAME_BRIDGE_DEFAULT_DENY",
     "S2_NATIVE_PACKET_INTERNET_TOGGLE_IPV4_IPV6_GATEWAY_EGRESS",
     "S2_NATIVE_SQLITE_FOREIGN_CORRUPT_FAIL_CLOSED",
@@ -27,8 +28,10 @@ MANDATORY = (
     "S2_P1_SIMULATED_WAN_HTTPS_OFFLINE_DENIED",
     "S2_P1_SIMULATED_WAN_HTTPS_ON_OFF_ON_GUEST",
     "S2_NATIVE_SIMULATED_WAN_SERVER_INDEPENDENT_ON_OFF_ON_TWO_HITS",
-    "S2_P1_REAL_NATIVE_BOUND_VERIFYING_CONCURRENT_DELETE_FULL_LIFECYCLE",
-    "S2_P1_REAL_NATIVE_BOUND_VERIFYING_TWELVE_SDK_DELETE_REFUSED",
+    "S4_A_REAL_NATIVE_PREATOMIC_CONCURRENT_DELETE_FULL_LIFECYCLE",
+    "S4_A_REAL_NATIVE_PREATOMIC_TWELVE_SDK_DELETE_REFUSED",
+    "S4_A_NATIVE_UUID_PREATOMIC_INDEPENDENT_INCUS_CONFIRM",
+    "S4_A_REAL_NATIVE_OVERLAP_ATOMIC_CREATE_DELETE_TOMBSTONE",
     "S2_P1_PREVIOUS_OFFICIAL_MCP_SDK_NATIVE_CREATE_UPDATE_EXEC_DELETE",
     "S2_P1_TWO_CONTROLLER_INDEPENDENT_NATIVE_AND_MCP_ISOLATION",
     "S2_NATIVE_SAME_KEY_DISTINCT_ACTOR_CANNOT_BORROW_ORIGINAL",
@@ -42,6 +45,14 @@ MANDATORY = (
     "S2_GC_APPROVED_SEVEN_DAY_COMPLETE_NATIVE_MCP_CYCLE",
 )
 SUITE_MARKER = "S2_NATIVE_SDK_MCP_BLACKBOX_REAL_INCUS"
+LIST_WITNESS = (
+    "S4_A_OPERATION_LIST_ONE_SHOT_WITNESS=revoke",
+    "S4_A_OPERATION_LIST_SERVICE_CALL_COUNT=revoke:1",
+    "S4_A_OPERATION_LIST_ONE_SHOT_WITNESS=expire",
+    "S4_A_OPERATION_LIST_SERVICE_CALL_COUNT=expire:1",
+    "S4_A_OPERATION_LIST_BREAKPOINT_STDOUT_COUNT=2",
+    "S4_A_OPERATION_LIST_BREAKPOINT_FILE_ORDERED_HITS=revoke,expire",
+)
 
 def main() -> int:
     p = argparse.ArgumentParser()
@@ -69,6 +80,15 @@ def main() -> int:
     missing = [name for name in MANDATORY if name + "=PASS" not in found]
     if missing:
         raise SystemExit("missing required exact acceptance witnesses: " + ", ".join(missing))
+    # No missing, duplicate, stale or out-of-order debugger/service witness.
+    actual = tuple(line.strip() for line in lines if line.strip().startswith((
+        "S4_A_OPERATION_LIST_ONE_SHOT_WITNESS=",
+        "S4_A_OPERATION_LIST_SERVICE_CALL_COUNT=",
+        "S4_A_OPERATION_LIST_BREAKPOINT_STDOUT_COUNT=",
+        "S4_A_OPERATION_LIST_BREAKPOINT_FILE_ORDERED_HITS=",
+    )))
+    if actual != LIST_WITNESS:
+        raise SystemExit("invalid independent operation_list one-shot witness sequence")
     # Native gateway packet egress alone can never certify Internet access.
     if "S2_NATIVE_PUBLIC_WAN_HTTPS_TOGGLE=PASS" in found and (
         "S2_NATIVE_EXTERNAL_IPV4_WAN_HTTPS_POSITIVE_CONTROL=PASS" not in found
@@ -86,6 +106,7 @@ def main() -> int:
         "log_sha256": hashlib.sha256(raw).hexdigest(),
         "required_markers_checked": len(MANDATORY),
         "passed_required_markers": list(MANDATORY),
+        "operation_list_witnesses": list(LIST_WITNESS),
         "wan_public_ipv4_https": wan,
         "physical_power_removal": "BLOCKED_NO_AUTHORIZED_HARDWARE",
         "live_guest_readiness_positive": "UNSUPPORTED_NOT_CLAIMED",

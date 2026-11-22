@@ -18,6 +18,7 @@ BASE = (
     [f"S2_NATIVE_CANDIDATE_SOURCE_SHA={SOURCE}",
      f"{HASH}  /tmp/bw-v1-s2-ghci.test/boxweave"]
     + [f"{marker}=PASS" for marker in audit.MANDATORY]
+    + list(audit.LIST_WITNESS)
 )
 
 class EvidenceNegativeControls(unittest.TestCase):
@@ -45,6 +46,14 @@ class EvidenceNegativeControls(unittest.TestCase):
 
     def test_exact_source_binary_and_required_markers(self):
         self.check_log(BASE, success=True, wan="UNVERIFIED_GUEST_WAN_POSITIVE")
+
+    def test_missing_duplicate_reordered_or_excess_list_witness_rejected(self):
+        for witness in audit.LIST_WITNESS:
+            with self.subTest(witness=witness):
+                self.check_log([line for line in BASE if line != witness])
+                self.check_log(BASE + [witness])
+        self.check_log(BASE[:-len(audit.LIST_WITNESS)] + list(reversed(audit.LIST_WITNESS)))
+        self.check_log([line.replace("revoke:1", "revoke:2") for line in BASE])
 
     def test_wrong_source_or_duplicate_source(self):
         self.check_log(BASE, source="c" * 40)
