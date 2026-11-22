@@ -341,7 +341,7 @@ func (r Reader) create(ctx context.Context, a InstanceAction, reserve ReserveCre
 		return "", err
 	}
 	if a.Nesting && project.Config["restricted.containers.nesting"] != "allow" {
-		return "", ErrNativeUnsupported
+		return "", ErrProjectNestingDenied
 	}
 	if err := a.Options.CheckInheritedAppArmor(); err != nil {
 		return "", err
@@ -579,7 +579,7 @@ func (r Reader) UpdateBox(ctx context.Context, name, uuid string, changes Instan
 				return "", err
 			}
 			if p.Config["restricted.containers.nesting"] != "allow" {
-				return "", ErrNativeUnsupported
+				return "", ErrProjectNestingDenied
 			}
 		}
 		config["security.nesting"] = strconv.FormatBool(*changes.Nesting)

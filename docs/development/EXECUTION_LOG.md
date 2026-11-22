@@ -1370,3 +1370,8 @@ Inner Incus Cowsql recovered with supported daemon restart f6e84f46d3f29efebe963
 ### RC8 merge/release preparation — 2026-11-20 PT
 
 Owner directed sequential reconciliation, S4-A CI, ordinary PR merge and controlled prerelease. S4-A attempt 2 SUCCESS on 9c42137; six conflicts against v1 e3d85a6 reconciled in separate retained Box worktree. [Preflight and remaining gates](V1_RC8_MERGE_RELEASE_PREFLIGHT_2026-11-20.md). Development prerelease only; no stable/host promotion.
+
+
+## 2026-11-21 — Project capability diagnostics and reviewed Proxy preparation
+
+See [capability decision and evidence](V1_PROJECT_CAPABILITIES_2026-11-21.md). Source tests passed in a disposable development Box; installed native acceptance pending. No physical host policy change or unverified merge.

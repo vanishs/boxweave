@@ -449,12 +449,12 @@ def main():
     print("changes=only existing v1 Go installer-owned binary/unit/SQLite; never Incus setup or tunnel")
     print("known_risk=Incus storage quotas and remote Guest image downloads require operator review; instance preparation is independent of service installation")
     if args.upgrade:
-        print("forward_policy=preserve existing systemd unit and operator overrides")
+        print("forward_policy=preserve existing systemd unit and operator overrides; native Project permissions remain unchanged")
         if upgrade_review:
             print_upgrade_review(upgrade_review, sha)
     else:
         print("forward_policy=current fresh installer defaults to all; older candidate binaries keep their original defaults")
-        print("forward_risk=explicit external Forward may expose guest services on public and future Host interfaces; default bind stays loopback; native Project proxy permission remains separately operator-controlled")
+        print("forward_risk=explicit external Forward may expose guest services on public and future Host interfaces; default bind stays loopback; reviewed fresh native preparation explicitly grants Project proxy permission; service-only installation does not")
     if not args.apply and not guided:
         if args.upgrade:
             print("PLAN_ONLY: no host changes (run sudo sh install.sh --upgrade --version TAG for terminal approval)")

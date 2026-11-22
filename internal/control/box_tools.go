@@ -218,6 +218,9 @@ func preflightNative(err error) error {
 	if err == nil {
 		return nil
 	}
+	if class := native.CapabilityDenialClass(err); class != "" {
+		return state.PreDispatchError{Class: class}
+	}
 	if errors.Is(err, native.ErrNativeExecQuotaLow) {
 		return state.PreDispatchError{Class: "NATIVE_EXEC_SPOOL_QUOTA_HEADROOM_LOW"}
 	}

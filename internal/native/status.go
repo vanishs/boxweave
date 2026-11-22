@@ -16,21 +16,23 @@ import (
 )
 
 type Status struct {
-	Ready                 bool            `json:"ready"`
-	ServiceReady          bool            `json:"service_ready"`
-	Version               string          `json:"incus_version,omitempty"`
-	Project               string          `json:"project"`
-	ProfileReady          bool            `json:"default_profile_ready"`
-	StorageReady          bool            `json:"selected_storage_pool_ready"`
-	StorageSpaceChecked   bool            `json:"selected_storage_space_checked"`
-	StorageAvailableBytes uint64          `json:"selected_storage_available_bytes,omitempty"`
-	StorageSeparateMount  bool            `json:"selected_storage_separate_mount"`
-	StorageQuotaVerified  bool            `json:"selected_storage_quota_verified"`
-	Warnings              []string        `json:"warnings,omitempty"`
-	NICConfigured         bool            `json:"default_nic_configured"`
-	ImageReady            bool            `json:"default_image_local_ready"`
-	APIExtensions         map[string]bool `json:"required_extensions"`
-	ErrorClass            string          `json:"error_class,omitempty"`
+	Ready                 bool              `json:"ready"`
+	ServiceReady          bool              `json:"service_ready"`
+	Version               string            `json:"incus_version,omitempty"`
+	Project               string            `json:"project"`
+	ProfileReady          bool              `json:"default_profile_ready"`
+	StorageReady          bool              `json:"selected_storage_pool_ready"`
+	StorageSpaceChecked   bool              `json:"selected_storage_space_checked"`
+	StorageAvailableBytes uint64            `json:"selected_storage_available_bytes,omitempty"`
+	StorageSeparateMount  bool              `json:"selected_storage_separate_mount"`
+	StorageQuotaVerified  bool              `json:"selected_storage_quota_verified"`
+	Warnings              []string          `json:"warnings,omitempty"`
+	NICConfigured         bool              `json:"default_nic_configured"`
+	ImageReady            bool              `json:"default_image_local_ready"`
+	ProjectPermissions    map[string]string `json:"project_permissions,omitempty"`
+	ExternalForwardPolicy string            `json:"external_forward_policy"`
+	APIExtensions         map[string]bool   `json:"required_extensions"`
+	ErrorClass            string            `json:"error_class,omitempty"`
 }
 
 type Reader struct {
@@ -62,7 +64,7 @@ func CompatibleIncusVersion(version string) bool {
 }
 
 func (r Reader) Read(ctx context.Context) Status {
-	s := Status{Project: r.Project, APIExtensions: map[string]bool{}}
+	s := Status{Project: r.Project, APIExtensions: map[string]bool{}, ExternalForwardPolicy: r.ExternalForwardPolicyMode()}
 	if os.Geteuid() == 0 {
 		s.ErrorClass = "REFUSE_ROOT_RUNTIME"
 		return s
@@ -121,6 +123,13 @@ func (r Reader) Read(ctx context.Context) Status {
 	if project.Config["restricted"] != "true" {
 		s.ErrorClass = "PROJECT_NOT_RESTRICTED"
 		return s
+	}
+	s.ProjectPermissions = ProjectPermissions(project.Config)
+	if requireProjectProxy(project.Config) != nil {
+		s.Warnings = append(s.Warnings, "PROJECT_PROXY_DENIED: native Project proxy permission is not enabled; Forward creation requires separate host review.")
+	}
+	if s.ExternalForwardPolicy == "disabled" || s.ExternalForwardPolicy == "invalid" {
+		s.Warnings = append(s.Warnings, "FORWARD_EXTERNAL_POLICY_DENIED: effective service policy does not allow external binds; loopback is independent of this policy.")
 	}
 	server, _, err := scoped.GetServer()
 	if err != nil {

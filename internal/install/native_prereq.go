@@ -36,6 +36,7 @@ type NativePrereqReport struct {
 	ACL                    string              `json:"selected_acl,omitempty"`
 	ImageFingerprint       string              `json:"approved_image_fingerprint,omitempty"`
 	NativeStateSHA256      string              `json:"native_state_sha256"`
+	ProjectPermissions     map[string]string   `json:"project_permissions,omitempty"`
 	Checks                 []NativePrereqCheck `json:"checks"`
 	ConfigReady            bool                `json:"config_ready"`
 	ReviewSHA256           string              `json:"review_sha256"`
@@ -255,8 +256,12 @@ func NativePrerequisites(ctx context.Context, project string) (NativePrereqRepor
 	prereqRecord(&r, "native_extensions", extensions, "required actual daemon extensions")
 	scoped := c.UseProject(project)
 	p, projectTag, err := scoped.GetProject(project)
-	if err == nil {
+	if err == nil && p != nil {
 		observe("project", p, projectTag)
+		r.ProjectPermissions = native.ProjectPermissions(p.Config)
+		if p.Config["restricted.devices.proxy"] != "allow" {
+			r.Warnings = append(r.Warnings, "PROJECT_PROXY_DENIED: native Forward unavailable until the host operator explicitly approves the owned Project proxy permission.")
+		}
 	}
 	projectOK := err == nil && p != nil && p.Config["restricted"] == "true" &&
 		p.Config["restricted.containers.nesting"] == "allow"
