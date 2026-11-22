@@ -147,17 +147,15 @@ func runCase(ctx context.Context, st *state.Store, project, dir, mode string) {
 	fmt.Println("S2_P1_INSTALLED_OPERATION_LIST_POST_QUERY_PRE_RESPONSE_" + label + "_NO_LEAK=PASS")
 }
 func main() {
-	dir, project := os.Getenv("BW_S2_LIST_LAB"), os.Getenv("BW_S2_LIST_PROJECT")
+	dir, project, mode := os.Getenv("BW_S2_LIST_LAB"), os.Getenv("BW_S2_LIST_PROJECT"), os.Getenv("BW_S2_LIST_MODE")
 	must(os.Geteuid() != 0 && os.Getenv("GITHUB_ACTIONS") == "true" &&
 		os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" &&
-		strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") && filepath.Base(dir) == "p1-list-boundary" &&
+		strings.HasPrefix(dir, "/tmp/bw-v1-s2-ghci.") && (mode == "revoke" || mode == "expire") && filepath.Base(dir) == "p1-list-boundary-"+mode &&
 		project == "user-"+os.Getenv("BW_S2_TEST_UID"), "only real disposable restricted CI")
 	ctx, cancel := context.WithTimeout(context.Background(), 115*time.Second)
 	defer cancel()
 	st, e := state.Open(filepath.Join(dir, "ledger.sqlite"))
 	must(e == nil, "cannot open service's exact disposable ledger")
 	defer st.Close()
-	runCase(ctx, st, project, dir, "revoke")
-	runCase(ctx, st, project, dir, "expire")
-	fmt.Println("S2_P1_INSTALLED_OPERATION_LIST_TWO_INFLIGHT_AUTH_RACES=PASS")
+	runCase(ctx, st, project, dir, mode)
 }
