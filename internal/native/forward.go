@@ -131,8 +131,11 @@ func (r Reader) UpdateOwnedForward(ctx context.Context, name, uuid string, f For
 	if err != nil {
 		return "", err
 	}
-	if project.Config["restricted"] == "true" && project.Config["restricted.devices.proxy"] != "allow" {
+	if project == nil {
 		return "", ErrNativeUnsupported
+	}
+	if err := requireProjectProxy(project.Config); err != nil {
+		return "", err
 	}
 	inst, etag, err := c.GetInstance(name)
 	if err != nil {

@@ -10,12 +10,22 @@ on:
       - install.sh
       - scripts/forward_install_policy_ci.sh
       - .github/workflows/v1-forward-install-policy.yml
+  pull_request:
+    branches: [v1]
+    paths:
+      - internal/install/native_prereq*.go
+      - internal/native/project_capabilities*.go
+      - internal/native/forward*.go
+      - internal/control/forward_tools.go
+      - scripts/forward_install_policy_ci.sh
+      - scripts/forward_project_capabilities_native.py
+      - .github/workflows/v1-forward-install-policy.yml
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   install-policy:
-    if: github.repository == 'vanishs/boxweave' && github.ref == 'refs/heads/feat/v1-forward-all-20261121'
+    if: github.repository == 'vanishs/boxweave' && (github.ref == 'refs/heads/feat/v1-forward-all-20261121' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -44,6 +54,11 @@ jobs:
           if test "$FORWARD_INSTALL_MODE" = fresh; then
             grep -Fxq FORWARD_INSTALL_FRESH_ALL_AND_LOOPBACK_MANAGEMENT=PASS "$RUNNER_TEMP/forward-install.log"
             grep -Fxq FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_GRANT=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_EXTERNAL_POLICY_DENIAL=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_WILDCARD_HTTP_PACKET=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_PROJECT_PROXY_DENIAL=PASS "$RUNNER_TEMP/forward-install.log"
+            grep -Fxq FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_ROLLBACK=PASS "$RUNNER_TEMP/forward-install.log"
           else
             grep -Fxq "FORWARD_INSTALL_UPGRADE_ROLLBACK_PRESERVED=$FORWARD_INSTALL_MODE PASS" "$RUNNER_TEMP/forward-install.log"
           fi

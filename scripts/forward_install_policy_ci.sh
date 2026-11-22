@@ -90,6 +90,37 @@ if [ "$FORWARD_INSTALL_MODE" = fresh ]; then
   test "$(unit_hash)" = "$old_unit"
   policy ""
   echo FORWARD_INSTALL_FRESH_EXPLICIT_EMPTY_OVERRIDE_AND_REPEAT_STAGE=PASS
+  # New, empty owned Project: the operator-approved native preparation, not
+  # an ad-hoc incus project set, must grant proxy capability and read it back.
+  sudo systemctl stop boxweave.service
+  case "$proxy_before" in ""|block) ;; *) exit 84;; esac
+  bridge="incusbr-$uid"
+  acl="bw-forward-install-owned"
+  sudo "$installed" native-prepare-plan -project "$project" -pool default -network "$bridge" -acl "$acl" > "$work/native-plan.json"
+  plan_sha="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert any("restricted.devices.proxy" in a for a in d["actions"]);print(d["review_sha256"])' "$work/native-plan.json")"
+  if sudo "$installed" native-prepare-apply -project "$project" -pool default -network "$bridge" -acl "$acl" -native-prepare-sha256 0000000000000000000000000000000000000000000000000000000000000000 -approve-local >/dev/null 2>&1; then
+    exit 85
+  fi
+  test "$(sudo incus project get "$project" restricted.devices.proxy)" = "$proxy_before"
+  sudo "$installed" native-prepare-apply -project "$project" -pool default -network "$bridge" -acl "$acl" -native-prepare-sha256 "$plan_sha" -approve-local > "$work/native-applied.json"
+  test "$(sudo incus project get "$project" restricted.devices.proxy)" = allow
+  test "$(sudo incus project get "$project" restricted)" = true
+  sudo "$installed" native-prereq-plan -project "$project" > "$work/native-readback.json"
+  python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["config_ready"] and d["project_permissions"]["restricted.devices.proxy"] == "allow"' "$work/native-readback.json"
+  echo FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_GRANT=PASS
+  sudo incus image copy images:ubuntu/24.04 local: --target-project "$project" --alias boxweave-ubuntu-24.04 >/dev/null
+  (umask 077; sudo runuser -u boxweave -- "$installed" token-create > "$work/actor.receipt")
+  (umask 077; awk 'NR==2 && /^token=[^[:space:]]+$/ {sub(/^token=/,""); print; ok=1} END {if(!ok || NR!=2) exit 1}' "$work/actor.receipt" > "$work/actor.secret")
+  sudo systemctl start boxweave.service
+  policy ""
+  addr="$(sudo incus network get "$bridge" ipv4.address | cut -d/ -f1)"
+  test -n "$addr"
+  python3 scripts/forward_project_capabilities_native.py "$work" "$project" "$addr" "$candidate_sha"
+  sudo systemctl stop boxweave.service
+  test -z "$(sudo incus list --all-projects --format csv -c n)"
+  sudo "$installed" native-prepare-rollback -project "$project" -native-prepare-sha256 "$plan_sha" -approve-local > "$work/native-rollback.json"
+  test "$(sudo incus project get "$project" restricted.devices.proxy)" = "$proxy_before"
+  echo FORWARD_INSTALL_REVIEWED_NATIVE_PROXY_ROLLBACK=PASS
 else
   old_sha="$(sha256sum "$work/legacy" | cut -d' ' -f1)"
   sudo "$work/legacy" install-stage -project "$project" -source-binary "$work/legacy" -expect-sha256 "$old_sha" -approve-stage > "$work/stage.json"

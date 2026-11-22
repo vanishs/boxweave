@@ -89,6 +89,9 @@ func nativePrepareProject(original api.ProjectPut) api.ProjectPut {
 		p.Config[k] = v
 	}
 	p.Config["restricted.containers.nesting"] = "allow"
+	// Only root-reviewed preparation on an empty owned Project grants
+	// native proxy devices. No service install-stage or MCP side effect.
+	p.Config["restricted.devices.proxy"] = "allow"
 	// Incus multi-user bootstrapping can permit home-path mounts and GPUs.
 	// This dedicated MCP service needs neither; tighten only its own Project.
 	p.Config["restricted.devices.disk"] = "managed"
@@ -328,7 +331,8 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 		return plan, rec, errors.New("selected Incus storage pool is not created")
 	}
 	plan.Warnings = append(plan.Warnings,
-		"STORAGE_QUOTA_UNVERIFIED: Incus owns storage pool backing, capacity and quota enforcement; inspect these independently before physical deployment")
+		"STORAGE_QUOTA_UNVERIFIED: Incus owns storage pool backing, capacity and quota enforcement; inspect these independently before physical deployment",
+		"NATIVE_PROXY_PERMISSION: approval permits instance proxy devices for the confined native Project actor; BoxWeave still restricts exact owned targets and external binds by service policy and caller acknowledgment.")
 	network, nETag, err := c.GetNetwork(t.Network)
 	if err != nil {
 		return plan, rec, err
@@ -357,6 +361,7 @@ func nativePrepareInspect(ctx context.Context, t NativePrepareTarget) (NativePre
 	plan.Actions = []string{
 		"Create exact new dedicated ACL " + t.ACL + " (never edit shared network)",
 		"Set nesting permission only on empty restricted Project " + t.Project,
+		fmt.Sprintf("Set restricted.devices.proxy from %q to allow only on empty restricted Project %s", project.Config["restricted.devices.proxy"], t.Project),
 		"Set selected Incus root pool and private reject/anti-spoof NIC only in owned empty default profile",
 		"Independently read back same owned Project, profile, pool, ACL; image is resolved on Box Create",
 	}
@@ -488,7 +493,8 @@ func NativePrepareApply(ctx context.Context, t NativePrepareTarget, approvedSHA 
 	// Snapshot readback is not optional. If any check fails retain journal
 	// so the operator cannot unknowingly re-dispatch writes.
 	report, err := NativePrerequisites(ctx, t.Project)
-	if err != nil || !report.ConfigReady || report.ACL != t.ACL || report.Pool != t.Pool || report.Network != t.Network {
+	if err != nil || !report.ConfigReady || report.ACL != t.ACL || report.Pool != t.Pool || report.Network != t.Network ||
+		report.ProjectPermissions["restricted.devices.proxy"] != "allow" {
 		rec.Status = "VERIFY_BLOCKED"
 		_ = nativePrepareSave(rec)
 		return rec, errors.New("native preparation applied but readback blocked; exact journal requires review")

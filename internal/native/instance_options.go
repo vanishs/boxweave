@@ -51,7 +51,7 @@ func (o InstanceOptions) RequiresStop() bool {
 // unconfined, privileged guests, or unleased UID/GID range requests.
 func (o InstanceOptions) Apply(config api.ConfigMap, project map[string]string) error {
 	if o.Privileged != nil && *o.Privileged {
-		return ErrNativeUnsupported // admin OAuth is not host high-trust authorization
+		return ErrPrivilegedBoxDenied // admin OAuth is not host high-trust authorization
 	}
 	if !approvedRawLXC(config["raw.lxc"]) {
 		return ErrNativeUnsupported
@@ -61,7 +61,7 @@ func (o InstanceOptions) Apply(config api.ConfigMap, project map[string]string) 
 		case "unset": // omit: do not mutate any existing override
 		case "unchanged", "generated":
 			if project["restricted.containers.lowlevel"] != "allow" {
-				return ErrNativeUnsupported
+				return ErrProjectLowlevelDenied
 			}
 			config["raw.lxc"] = "lxc.apparmor.profile = " + *o.AppArmorProfile
 		default: // unconfined has no BoxWeave high-trust grant
@@ -69,9 +69,11 @@ func (o InstanceOptions) Apply(config api.ConfigMap, project map[string]string) 
 		}
 	}
 	if o.AppArmorAllowNesting != nil {
-		if o.AppArmorProfile == nil || *o.AppArmorProfile != "generated" ||
-			project["restricted.containers.lowlevel"] != "allow" {
+		if o.AppArmorProfile == nil || *o.AppArmorProfile != "generated" {
 			return ErrNativeUnsupported
+		}
+		if project["restricted.containers.lowlevel"] != "allow" {
+			return ErrProjectLowlevelDenied
 		}
 		value := "0"
 		if *o.AppArmorAllowNesting {
@@ -81,7 +83,7 @@ func (o InstanceOptions) Apply(config api.ConfigMap, project map[string]string) 
 	}
 	if o.IDMapBase != nil || o.IDMapSize != nil ||
 		(o.IDMapIsolated != nil && *o.IDMapIsolated) {
-		return ErrNativeUnsupported // no persistent UID+GID pool reservation yet
+		return ErrIDMapReservationUnavailable // no persistent UID+GID pool reservation yet
 	}
 	if o.IDMapIsolated != nil && !*o.IDMapIsolated {
 		config["security.idmap.isolated"] = "false"
@@ -111,7 +113,7 @@ func (o InstanceOptions) Apply(config api.ConfigMap, project map[string]string) 
 			continue
 		}
 		if *request.value && project["restricted.containers.interception"] != "allow" {
-			return ErrNativeUnsupported
+			return ErrProjectInterceptionDenied
 		}
 		config[request.key] = strconv.FormatBool(*request.value)
 	}

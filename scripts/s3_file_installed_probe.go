@@ -642,7 +642,14 @@ func s5b1ExactOwned(ctx context.Context, admin *mcp.ClientSession, uuid, createI
 	need(policy == "deny" || policy == "allow", "S5B1 missing explicit native proxy policy witness")
 	if policy == "deny" {
 		op := await(ctx, admin, original, "FAILED")
-		need(field(op, "error_class") == "SAFE_NATIVE_PREFLIGHT_DENIED" && field(op, "native_operation_id") == "", "S5B1 default proxy refusal lacks exact predispatch proof")
+		status := call(ctx, admin, "host_status", map[string]any{})
+		nativeStatus := object(status, "native")
+		wantClass := "SAFE_NATIVE_PREFLIGHT_DENIED" // immutable older releases
+		if permissions, ok := nativeStatus["project_permissions"].(map[string]any); ok {
+			need(permissions["restricted.devices.proxy"] != "allow", "S5B1 reported proxy permission differs from independent host witness")
+			wantClass = "PROJECT_PROXY_DENIED"
+		}
+		need(field(op, "error_class") == wantClass && field(op, "native_operation_id") == "", "S5B1 default proxy refusal lacks exact predispatch proof")
 		listed := call(ctx, admin, "port_forward_list", map[string]any{"box_id": uuid})
 		items, ok := listed["forwards"].([]any)
 		need(ok && len(items) == 0, "S5B1 refused proxy retained live claim")

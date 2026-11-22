@@ -61,41 +61,41 @@ func (r Reader) AuthorizeForwardCreate(f ForwardSpec) error {
 	}
 	rules, err := ParseExternalForwardAllow(r.ExternalForwardAllow)
 	if err != nil {
-		return err
+		return ErrForwardPolicyDenied
 	}
 	_, all := rules[ExternalForwardAll]
 	if ip.IsUnspecified() {
 		if all {
 			return nil
 		}
-		return ErrNativeUnsupported
+		return ErrForwardPolicyDenied
 	}
 	iface, allowed := rules[f.Protocol+"/"+net.JoinHostPort(f.HostBind, strconv.Itoa(f.HostPort))]
 	if !all && !allowed {
-		return ErrNativeUnsupported
+		return ErrForwardPolicyDenied
 	}
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return ErrNativeUnsupported
+		return ErrForwardAddressUnverified
 	}
 	matches := 0
 	for _, dev := range interfaces {
 		addresses, err := dev.Addrs()
 		if err != nil {
-			return ErrNativeUnsupported
+			return ErrForwardAddressUnverified
 		}
 		for _, a := range addresses {
 			address, _, err := net.ParseCIDR(a.String())
 			if err == nil && address.Equal(ip) {
 				if (!all && dev.Name != iface) || dev.Flags&net.FlagUp == 0 || dev.Flags&net.FlagLoopback != 0 {
-					return ErrNativeUnsupported
+					return ErrForwardAddressUnverified
 				}
 				matches++
 			}
 		}
 	}
 	if matches != 1 {
-		return ErrNativeUnsupported
+		return ErrForwardAddressUnverified
 	}
 	return nil
 }

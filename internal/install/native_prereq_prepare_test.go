@@ -54,15 +54,18 @@ func TestS25NativePrepareProfileContainsOnlySafeDevices(t *testing.T) {
 	}
 }
 
-func TestS25NativePrepareProjectOnlyWidensOwnedNesting(t *testing.T) {
-	before := api.ProjectPut{Description: "restricted", Config: api.ConfigMap{"restricted": "true", "features.images": "true"}}
+func TestS25NativePrepareProjectOnlyWidensReviewedNestingAndProxy(t *testing.T) {
+	before := api.ProjectPut{Description: "restricted", Config: api.ConfigMap{"restricted": "true", "features.images": "true", "restricted.containers.lowlevel": "block", "restricted.containers.interception": "block"}}
 	after := nativePrepareProject(before)
-	if before.Config["restricted.containers.nesting"] != "" {
+	if before.Config["restricted.containers.nesting"] != "" || before.Config["restricted.devices.proxy"] != "" {
 		t.Fatal("original mutated")
 	}
 	if after.Config["restricted.containers.nesting"] != "allow" || after.Config["restricted"] != "true" ||
 		after.Config["features.images"] != "true" || after.Config["restricted.devices.disk"] != "managed" ||
-		after.Config["restricted.devices.gpu"] != "block" {
+		after.Config["restricted.devices.gpu"] != "block" ||
+		after.Config["restricted.devices.proxy"] != "allow" ||
+		after.Config["restricted.containers.lowlevel"] != "block" ||
+		after.Config["restricted.containers.interception"] != "block" {
 		t.Fatal("Project restrictions lost")
 	}
 }
