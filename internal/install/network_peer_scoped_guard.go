@@ -30,7 +30,7 @@ type NativePeerGuardMember struct {
 // drop. The terminal drop is intentionally restricted to managed-to-managed
 // traffic so unrelated host/forward traffic is unaffected.
 type NativePeerGuardPlan struct {
-	Table, Install, Replace, DigestSHA256 string
+	Table, Install, Replace, ExpectedKernelJSON, DigestSHA256 string
 }
 
 func NativePeerGuardFromSnapshot(t NativePrepareTarget, network *api.Network,
@@ -139,9 +139,14 @@ func NativePeerGuardFromSnapshot(t NativePrepareTarget, network *api.Network,
 		fmt.Fprintf(&replaced, "add rule bridge %s protect %s\n", name, rule)
 	}
 	installed.WriteString(" }\n}\n")
-	id := sha256.Sum256([]byte("bw-peer-nft-guard-v1\n" + installed.String() + "\n" + replaced.String()))
-	return NativePeerGuardPlan{
+	expected, err := nativePeerGuardExpectedKernelJSON(t.Network, base4, base6, byUUID, active)
+	if err != nil {
+		return zero, err
+	}
+	plan := NativePeerGuardPlan{
 		Table: name, Install: installed.String(), Replace: replaced.String(),
-		DigestSHA256: hex.EncodeToString(id[:]),
-	}, nil
+		ExpectedKernelJSON: expected,
+	}
+	plan.DigestSHA256 = nativePeerGuardDigest(plan)
+	return plan, nil
 }

@@ -104,3 +104,8 @@ Source files `internal/install/network_peer_scoped_guard.go` and tests compile a
 ## Strict full-Project per-Box ACL inventory preflight
 
 New pure read-only `NativePeerGuardValidateScopedInventory` and tests in `internal/install/network_peer_scoped_inventory*.go`: fails closed unless complete root-observed Project instance names, exact each native UUID/MAC/static IPv4/IPv6/anti-spoof state, unique per-owner ACL+ETag+UsedBy and all expected bridge consumers are consistent. The returned members can be compiled into the separate nft guard; no native write or Root/MCP integration is enabled. Unit negative cases and whole isolated Box `make verify` original `60c257449b6d1209fa808d2d940e8c72` **Guest exit 0**. Complete evidence/limits: [root inventory preflight](V1_PR178_ROOT_GUARD_READONLY_INVENTORY_2026-11-23.md). #178 remains Draft and unsafe to merge.
+
+
+## Exact sysfs veth and nftables JSON kernel verification
+
+Root-only read-only witnesses added: `network_peer_scoped_kernel_ports.go` (strict Incus host veth to live bridge `brif` mapping, foreign raw ports refused) and `network_peer_guard_kernel_readback.go` (fixed absolute `nft -j` read, complete semantic kernel JSON v1 verification; only counters/handles ignored). The guard plan SHA now v2 binds actual expected kernel JSON. Native disposable A/B/C/D tests: exact 4 running ports accepted, inserted foreign raw veth made 5 and was refused; extra nft `accept` rule refused; C→D monitor ended at 2932 HTTP/TCP successes, zero failures, all temporary rules/devices cleaned. Clean `make verify` Operation `846272014e7588a47a7caad8f37ca3ca` **guest exit 0**. [Full witness report](V1_PR178_ROOT_KERNEL_PORTS_NFT_READBACK_2026-11-23.md). No Root network writer or MCP auto dispatcher yet; #178 remains Draft.
