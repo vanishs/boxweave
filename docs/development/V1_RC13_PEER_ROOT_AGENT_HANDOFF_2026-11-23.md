@@ -2,6 +2,18 @@
 
 **Status:** Design and exact real incident evidence committed; product/runtime changes **NOT implemented**. Continue the Draft PR branch `fix/rc13-peer-blast-radius-lifecycle-20261123` targeting `v1`; **do not merge, deploy, reset Host OAuth/tunnel, modify L0 root ACL/systemd or run global Incus operations without a new explicit Owner instruction**. The separate Draft [PR #177](https://github.com/vanishs/boxweave/pull/177) owns unified Doctor/Recover implementation, and its original guided-uninstall completion must not be disturbed.
 
+## Owner updated acceptance and changed schedule (supersedes earlier prompt)
+
+**FIRST READ:** [authoritative owner requirements and #178→#177 dependency](V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md). The following original handoff describes the **historical RC13** safety constraints, and earlier advice such as “do not restore `boot.autostart=false`” applies **only until a new safe replacement has been developed and independently proven**. It is **not** the final acceptance target.
+
+The #178 Agent is now authorized to **design and test** the safe replacement, with these target behaviors: (1) new Box `boot.autostart=true` by default and preserve the user's chosen setting across Peer operations; (2) routine Peer grant/revoke through authenticated MCP without per-operation Host commands after trusted initial least-privilege installation; (3) no stop/restart, service loss or network disruption for **unrelated** Boxes. Choose a proven network-authorization architecture, not a speculative change to shared ACL/conntrack. If no proven non-disruptive path exists, fail closed and report blocked rather than claim full completion. Current physical L0 and historical PRS remain untouched unless separately authorized.
+
+**Dependency:** #178 must finish with tested runtime source + exact-head CI/native proof + effective permissions/Operation schema handoff **before #177 starts implementing new unified Doctor/Recover features**. Do not tell #177 to compile any diagnostic status against old RC13-only `ADMITTED` manual approval, whole-Project STOP, retained false or old Root helper unit as a permanent expected state. Existing #177 uninstall recovery work is preserved.
+
+**Updated next-Agent prompt (start here, rather than executing the original prompt verbatim):**
+
+> 接手 #178。先阅读本分支的 `V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md`、RCA 和修复计划。Owner 的最终验收是：新 Box 默认自动启动，Peer 操作保留用户自启动设置；完成初始安全安装后，日常 Peer 操作与可证明安全的恢复都由 MCP 自动完成；授权 A→B 不得中断 C/D 的实例、应用和网络。先分析现有共享 ACL、全 Project STOP、Root helper 权限及替代架构，列出安全证明与兼容代价，然后在隔离 Box 中开发和跑真实 IPv4/IPv6/conntrack/ACK-loss、负向隔离、第三方长连接、重启/autostart、权限逃逸测试。不能为了不中断而出现短暂 fail-open，也不能为了安全继续把整个 Project STOP 当成新方案正常成功。候选代码验收后交付最终网络/Helper/Operation 语义给 #177。不要改物理 L0、未经批准合并、或声称未测项目 PASS。
+
 ## Copy-ready Chinese prompt
 
 > 接手 BoxWeave RC13 Peer Root 生命周期与中断影响修复 Draft PR（分支 `fix/rc13-peer-blast-radius-lifecycle-20261123`，base `v1`）。先阅读本目录 [源码与真实环境 RCA](V1_RC13_PEER_ROOT_RCA_2026-11-23.md) 和 [完整修复/验收计划](V1_RC13_PEER_ROOT_REMEDIATION_PLAN_2026-11-23.md)，再阅读 [#177 的新增 Doctor 案例](https://github.com/vanishs/boxweave/blob/fix/rc12-rc13-guided-uninstall-review/docs/development/V1_RC13_NESTED_PEER_DOCTOR_CASES_2026-11-23.md)。
