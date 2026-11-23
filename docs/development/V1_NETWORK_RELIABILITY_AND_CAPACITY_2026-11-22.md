@@ -1,6 +1,8 @@
 # V1 network reliability and 1024-Box capacity
 
-Status: DRAFT / implementation started. Owner decision, 2026-11-22 PT: no legacy Box migration is required before the first stable release. Normal owned-Box faults must be diagnosable and, where independent proof permits, recoverable by the authorized MCP actor. Host-local intervention is reserved for genuine service/daemon/host trust failures, not routine Box administration. Do not remove fail-closed authorization or claim recovery when native state cannot be established.
+Status: N1-N4 scoped acceptance complete (2026-11-22 PT; owner-approved N4 capacity substitute).
+
+**Superseding acceptance decision:** N4_PASS after actual native Peer/PRS, Forward, bounded 1024 SQLite/model auditing and required CI. The user accepts full 1024-row SQLite and 1024/1025 model capacity tests instead of real 1024 native containers; the latter is deferred and not claimed as tested. Details: V1_N4_ACCEPTANCE_MATRIX_2026-11-22.md. PR #172 remains Draft and must NOT be merged without the user's explicit instruction. Historical partial checkpoints below are retained as evidence. Owner decision, 2026-11-22 PT: no legacy Box migration is required before the first stable release. Normal owned-Box faults must be diagnosable and, where independent proof permits, recoverable by the authorized MCP actor. Host-local intervention is reserved for genuine service/daemon/host trust failures, not routine Box administration. Do not remove fail-closed authorization or claim recovery when native state cannot be established.
 
 ## Evidence and current boundaries
 
