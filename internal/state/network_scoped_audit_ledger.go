@@ -1,0 +1,205 @@
+package state
+
+import (
+	"context"
+	"database/sql"
+	"slices"
+	"strings"
+
+	"github.com/vanishs/boxweave/internal/networklimits"
+	"github.com/vanishs/boxweave/internal/peerscope"
+)
+
+// ScopedNetworkAuditBinding is a read-only durable claim for ONE separately
+// owned per-Box ACL. It is NOT a native ACL/lease proof or an approval to
+// migrate existing shared-ACL Boxes. Install Root must independently prove
+// exact ACL UsedBy, Incus UUID/NIC, sysfs ports, nft and host route scope.
+type ScopedNetworkAuditBinding struct {
+	NetworkAuditBinding
+	ACL string
+}
+
+// ScopedNetworkAuditLedger is an atomic SQLite snapshot of a fully converted
+// Project. ReadCompleteNetworkAuditLedger remains the conservative v1 shared-
+// ACL implementation. This new endpoint is NOT wired to MCP/Root mutation.
+type ScopedNetworkAuditLedger struct {
+	Project, Bridge string
+	Boxes           []ScopedNetworkAuditBinding
+}
+
+// ReadCompleteScopedNetworkAuditLedger requires a complete, nonempty Project
+// with one exact derived ACL for EVERY owned Box. Current v1 databases
+// (shared ACL, partially migrated, deleted/retired historical rows) fail
+// closed. Historical retirement migration requires a separate reviewed
+// provenance contract; this reader never silently discards prior leases.
+func (s *Store) ReadCompleteScopedNetworkAuditLedger(ctx context.Context, project, bridge string) (ScopedNetworkAuditLedger, error) {
+	var zero ScopedNetworkAuditLedger
+	if s == nil || s.db == nil || !strings.HasPrefix(project, "user-") ||
+		!auditName(project) || !auditName(bridge) {
+		return zero, ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return zero, err
+	}
+	defer tx.Rollback()
+
+	// A migration cannot silently proceed past deleted or archived
+	// historical leases whose ACL shape has not been separately proved.
+	var retired int
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM network_ipv4_retirements WHERE project=? AND bridge=?", project, bridge,
+	).Scan(&retired); err != nil {
+		return zero, err
+	}
+	if retired != 0 {
+		return zero, ErrResourceLocked
+	}
+
+	rows, err := tx.QueryContext(ctx,
+		"SELECT uuid,name,incarnation FROM owned_boxes WHERE project=? AND state='OWNED' ORDER BY uuid", project)
+	if err != nil {
+		return zero, err
+	}
+	claimed := map[string]ScopedNetworkAuditBinding{}
+	names := map[string]bool{}
+	for rows.Next() {
+		var b ScopedNetworkAuditBinding
+		if err = rows.Scan(&b.UUID, &b.Name, &b.Incarnation); err != nil {
+			break
+		}
+		if len(claimed) >= networklimits.MaxProjectBoxes ||
+			!auditName(b.Name) || names[b.Name] ||
+			b.UUID == "" || len(b.UUID) > 128 ||
+			b.Incarnation == "" || len(b.Incarnation) > 128 ||
+			claimed[b.UUID].UUID != "" {
+			err = ErrResourceLocked
+			break
+		}
+		var e error
+		b.ACL, e = peerscope.ACLName(project, bridge, b.UUID)
+		if e != nil {
+			err = ErrResourceLocked
+			break
+		}
+		claimed[b.UUID] = b
+		names[b.Name] = true
+	}
+	if e := rows.Err(); err == nil {
+		err = e
+	}
+	if e := rows.Close(); err == nil {
+		err = e
+	}
+	if err != nil {
+		return zero, err
+	}
+	if len(claimed) == 0 {
+		return zero, ErrResourceLocked
+	}
+
+	// Read every Project binding, including unexpected historical rows.
+	// No disallowed row can disappear by filtering for the target ACL.
+	rows, err = tx.QueryContext(ctx,
+		"SELECT box_uuid,incarnation,nic,bridge,acl,mac,ipv4,ipv6,state FROM network_bindings WHERE project=?", project)
+	if err != nil {
+		return zero, err
+	}
+	found := map[string]bool{}
+	allIPs := map[string]bool{}
+	allMACs := map[string]bool{}
+	for rows.Next() {
+		var uuid, inc, nic, nw, acl, mac, v4, v6, status string
+		if err = rows.Scan(&uuid, &inc, &nic, &nw, &acl, &mac, &v4, &v6, &status); err != nil {
+			break
+		}
+		box, ok := claimed[uuid]
+		if !ok || found[uuid] || inc != box.Incarnation ||
+			nic != "eth0" || nw != bridge || acl != box.ACL ||
+			status != "PINNED" || !auditMAC(mac) ||
+			!auditIP(v4, false) || !auditIP(v6, true) ||
+			allIPs[v4] || allIPs[v6] || allMACs[mac] {
+			err = ErrResourceLocked
+			break
+		}
+		found[uuid], allIPs[v4], allIPs[v6], allMACs[mac] = true, true, true, true
+		box.MAC, box.IPv4, box.IPv6 = mac, v4, v6
+		claimed[uuid] = box
+	}
+	if e := rows.Err(); err == nil {
+		err = e
+	}
+	if e := rows.Close(); err == nil {
+		err = e
+	}
+	if err != nil {
+		return zero, err
+	}
+	if len(found) != len(claimed) {
+		return zero, ErrResourceLocked
+	}
+
+	var foreign int
+	if err = tx.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM network_bindings WHERE bridge=? AND project!=? AND state!='RELEASED'",
+		bridge, project).Scan(&foreign); err != nil {
+		return zero, err
+	}
+	if foreign != 0 {
+		return zero, ErrResourceLocked
+	}
+
+	// Every active dual-stack lease must be reserved exactly once, and
+	// no foreign/stale/released address may escape the full-bridge view.
+	rows, err = tx.QueryContext(ctx,
+		"SELECT family,address,project,box_uuid,incarnation,state FROM network_address_fences WHERE bridge=?", bridge)
+	if err != nil {
+		return zero, err
+	}
+	seen := map[string]bool{}
+	for rows.Next() {
+		var family, addr, p, uuid, inc, status string
+		if err = rows.Scan(&family, &addr, &p, &uuid, &inc, &status); err != nil {
+			break
+		}
+		b, ok := claimed[uuid]
+		key := uuid + "|" + family
+		if !ok || p != project || inc != b.Incarnation ||
+			status != "RESERVED" || seen[key] ||
+			!((family == "ipv4" && addr == b.IPv4) ||
+				(family == "ipv6" && addr == b.IPv6)) {
+			err = ErrResourceLocked
+			break
+		}
+		seen[key] = true
+	}
+	if e := rows.Err(); err == nil {
+		err = e
+	}
+	if e := rows.Close(); err == nil {
+		err = e
+	}
+	if err != nil {
+		return zero, err
+	}
+	if len(seen) != 2*len(claimed) {
+		return zero, ErrResourceLocked
+	}
+
+	result := ScopedNetworkAuditLedger{
+		Project: project, Bridge: bridge, Boxes: make([]ScopedNetworkAuditBinding, 0, len(claimed)),
+	}
+	for _, box := range claimed {
+		result.Boxes = append(result.Boxes, box)
+	}
+	slices.SortFunc(result.Boxes, func(a, b ScopedNetworkAuditBinding) int {
+		return strings.Compare(a.UUID, b.UUID)
+	})
+	if err = tx.Commit(); err != nil {
+		return zero, err
+	}
+	return result, nil
+}

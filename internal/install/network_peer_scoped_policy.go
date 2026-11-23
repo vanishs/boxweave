@@ -1,13 +1,12 @@
 package install
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net/netip"
 	"regexp"
 
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/vanishs/boxweave/internal/peerscope"
 	"github.com/vanishs/boxweave/internal/state"
 )
 
@@ -26,12 +25,7 @@ var scopedPeerUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 // Actual provisioning MUST refuse adoption/collision and independently check
 // UsedBy, host leases and the exact instance UUID before attaching it.
 func NativePeerScopedACLName(project, bridge, uuid string) (string, error) {
-	if !safePrereqName.MatchString(project) || !safePrereqName.MatchString(bridge) ||
-		!scopedPeerUUID.MatchString(uuid) {
-		return "", errors.New("invalid scoped peer ACL identity")
-	}
-	sum := sha256.Sum256([]byte(project + "\x00" + bridge + "\x00" + uuid))
-	return "bw-peer-" + hex.EncodeToString(sum[:24]), nil
+	return peerscope.ACLName(project, bridge, uuid)
 }
 
 // NativePeerScopedACLFromPolicySnapshot compiles only the directions involving
