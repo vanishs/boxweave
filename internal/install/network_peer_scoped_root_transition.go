@@ -36,6 +36,8 @@ type NativePeerScopedRootTransition struct {
 	TargetACLBefore, TargetACLAfter api.NetworkACLsPost
 	UnrelatedACLsVerifiedUnchanged  int
 	OriginalBootAutostart           map[string]string
+	ExpectedBeforeByUUID            map[string]api.NetworkACLsPost
+	ExpectedAfterByUUID             map[string]api.NetworkACLsPost
 }
 
 // NativePeerScopedRootTransitionFromEvidence joins immutable scoped v2
@@ -109,6 +111,8 @@ func NativePeerScopedRootTransitionFromEvidence(proof state.ScopedPeerOriginalPr
 		SourceACLName: source.ACL, TargetACLName: target.ACL,
 		GuardBefore: before, GuardAfter: after,
 		OriginalBootAutostart: map[string]string{},
+		ExpectedBeforeByUUID:  map[string]api.NetworkACLsPost{},
+		ExpectedAfterByUUID:   map[string]api.NetworkACLsPost{},
 	}
 	for _, member := range members {
 		box := identities[member.UUID]
@@ -130,6 +134,8 @@ func NativePeerScopedRootTransitionFromEvidence(proof state.ScopedPeerOriginalPr
 		if err1 != nil || err2 != nil {
 			return zero, errors.New("native per-Box ACL compiler refused global protected snapshot")
 		}
+		out.ExpectedBeforeByUUID[box.UUID] = beforeACL
+		out.ExpectedAfterByUUID[box.UUID] = afterACL
 		switch box.UUID {
 		case source.UUID:
 			out.SourceACLBefore = beforeACL
