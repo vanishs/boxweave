@@ -1783,8 +1783,10 @@ if [ "$(sudo incus config get bw-s2-ack-native-110d volatile.uuid --project "$pr
 fi
 echo "S4_A_NATIVE_STAGE=ACK_LOSS_BIND_UUID_PASS"
 # Genuine native Create accepted once, its ACK lost, and the original
-# controller's ledger is still UNKNOWN. Bind ONLY a consistent isolated
-# SQLite copy; original remains immutable and receives no retry/delete.
+# controller's ledger is still UNKNOWN. The staged Create recovery probe
+# first REFUSES legacy identity-only binding, then reconciles the precise
+# native pin/lease/marker in an isolated SQLite copy. The live ledger remains
+# immutable and receives no retry/delete.
 ack_original_id="$(python3 - "$ack_checkpoint" <<'PY_SCRIPT'
 import json,sys
 op=json.load(open(sys.argv[1]))["original_id"]
@@ -1834,9 +1836,9 @@ sudo runuser -u boxweave -- env -u INCUS_CONF -u INCUS_CONFIG_DIR -u XDG_CONFIG_
   HOME=/home/boxweave XDG_CONFIG_HOME=/home/boxweave/.config \
   "$work/s2-unknown-create-bind-probe" "$ack_copy/ack-original.json" \
   "$ack_copy/ledger.sqlite" "$project" "$ack_uuid"
-echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_BIND_PASS"
-# This original database remains truly unbound UNKNOWN; the test binding
-# happened ONLY on a disposable standalone copy.
+echo "S4_A_NATIVE_STAGE=ACK_LOSS_SQLITE_COPY_STAGED_RECOVERY_PASS"
+# This original database remains truly unbound UNKNOWN; the modern staged
+# reconciliation and its durable original receipt happened ONLY in a copy.
 if ! sudo runuser -u boxweave -- python3 - "$ack_db" "$ack_original_id" <<'PY_SCRIPT'
 import sqlite3,sys
 db,op=sys.argv[1:]
@@ -1853,7 +1855,7 @@ then
   echo "S4_A_ACK_ORIGINAL_SQLITE_UNCHANGED=FAIL" >&2
   exit 96
 fi
-echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_VERIFIED_BIND_COPY=PASS"
+echo "S2_NATIVE_CREATE_ORIGINAL_SQLITE_UNCHANGED_BY_STAGED_RECOVERY_COPY=PASS"
 echo "S4_A_NATIVE_STAGE=ACK_LOSS_ORIGINAL_SQLITE_UNCHANGED_PASS"
 echo "S2_NATIVE_CREATE_LOST_ACK_ORIGINAL_NATIVE_FINISHED_BEFORE_CLEANUP=PASS"
 sudo incus delete bw-s2-ack-native-110d --project "$project"
