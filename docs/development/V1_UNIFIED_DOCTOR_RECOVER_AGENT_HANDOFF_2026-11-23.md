@@ -2,6 +2,16 @@
 
 **As of 2026-11-23. Owner-approved direction, design committed; feature code is NOT implemented.** Do not claim existing RC13 `doctor --full` or `recover --plan --issue` work. You must read [the full design and incident ledger](V1_UNIFIED_DOCTOR_RECOVER_DESIGN_2026-11-23.md) before coding.
 
+## DEVELOPMENT HOLD — owner dependency: complete #178 FIRST (2026-11-23)
+
+**Important correction superseding the earlier “implement #177 immediately” language below:** The Owner explicitly instructed **not to implement the new unified Doctor/Recover now**. Complete [Draft PR #178](https://github.com/vanishs/boxweave/pull/178) first; #178 owns the new normal-operation behavior and must deliver independently verified runtime code, integration and handoff before #177's new diagnostic features are developed. Preserve #177's already-completed guided-uninstall fixes/evidence as-is; do not redo old Host retirement or alter installed L0. #177 remains Draft in the meantime.
+
+**Final #178 product target (not RC13 current behavior):** newly created Box defaults to `boot.autostart=true`; Peer must preserve user-intended autostart; authorized routine grant/revoke and safe recoveries are performed through MCP after trusted initial least-privilege setup with no repeated Host shell approval; A→B changes must not stop/restart or interrupt unrelated C/D, their Guest services or network sessions. Safety must still fail closed under partial native fan-out, kernel ACK uncertainty and address reuse. See [owner decision and dependency contract on #178](https://github.com/vanishs/boxweave/blob/fix/rc13-peer-blast-radius-lifecycle-20261123/docs/development/V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md).
+
+**Diagnostic correctness gate:** The real RC13 evidence below is historical, not final behavioral specification. Do **not** hardcode diagnostic codes or prescribe host remedies for missing one-use helper, permanent `boot.autostart=false`, whole-project STOP, manual per-Peer approval or old permission/env model before #178 defines their replacements. After #178 reaches reviewed/accepted target branch, reread *actual final code*, compare new privileges/SQLite/Operation states/root native journal/network scope, adjust the incident taxonomy to post-#178 invariants and only then design/implement true read-only Doctor and guarded Recover. Where uncertain, report evidence coverage, versioned capabilities and `UNVERIFIED`, never automatically “repair” a now-normal state.
+
+**Agent first action for #177 today:** leave feature implementation paused; maintain references and preserve old #177 work, not run new #177 code tests while underlying behavior is changing. The older prompt below is retained as historical implementation planning; it resumes **only after #178 verification/integration**.
+
 ## New RC13 real nested acceptance / incident regression (2026-11-23)
 
 **Mandatory additional reading:** [RC13 nested Peer + Port Forward real incident matrix](V1_RC13_NESTED_PEER_DOCTOR_CASES_2026-11-23.md). It records an actual working L0 Client → L1 RC13 Forward → L2 Python HTTP chain and separate default-deny, allowed, and unapproved-third-party packet witnesses. **Do not reclassify this feature acceptance as a diagnostic-system implementation.**
