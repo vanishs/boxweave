@@ -1,5 +1,7 @@
 # Documentation index
 
+**Owner-updated #178 network product requirements, 2026-11-23:** [Default Box autostart=true; routine authenticated MCP Peer without per-operation Host shell; no unrelated Box downtime; #177 Doctor implementation postponed until #178 verified and integrated](development/V1_PEER_MCP_AUTOSTART_NONDISRUPTIVE_OWNER_DECISION_2026-11-23.md). These are future acceptance criteria, **not existing RC13 capabilities**.
+
 **RC13 real nested Peer/Forward and PRS lifecycle (2026-11-23, Draft documentation only):** [Exact real incident/source-level RCA](development/V1_RC13_PEER_ROOT_RCA_2026-11-23.md), [narrow remediation plan + native safety/acceptance](development/V1_RC13_PEER_ROOT_REMEDIATION_PLAN_2026-11-23.md), [copy-ready next Agent handoff](development/V1_RC13_PEER_ROOT_AGENT_HANDOFF_2026-11-23.md). End-to-end L0→L1→L2 HTTP and Peer negative packet tests passed on immutable published RC13; **PRS changes beyond existing native behavior are proposed, not implemented or signed off**. Unified diagnostic changes belong to [PR #177](https://github.com/vanishs/boxweave/pull/177). Do not modify physical L0 or merge this Draft without Owner review.
 
 **S5 execution order (2026-11-20):** [Canonical S5A1–A6 development with immediate acceptance → S5B1–B6 full feature-frozen acceptance](development/phases/05_RELEASE_ACCEPTANCE.md#canonical-execution-order--s5a-development-then-s5b-integrated-acceptance-2026-11-20). The independent engineering review below remains supporting technical reference, not a second execution plan.
