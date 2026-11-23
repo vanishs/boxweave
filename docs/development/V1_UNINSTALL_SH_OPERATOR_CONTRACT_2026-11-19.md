@@ -18,6 +18,23 @@ This prints blockers/hashed evidence; it **does not apply**, stop, delete, or ar
 
 The source patch does **not** change published RC13 bytes. Do not run unvalidated branch source on a real Host; require full offline tests, native CI, a reviewed and digest-pinned delivery artifact, and a fresh target-Host plan before executing.
 
+## Exact resume after an interrupted guided retirement (PR #177)
+
+This is **not a fresh uninstall**. If `--full` has already fsynced a `retired-XXXXXXXX` archive and the exact native rollback then fails *before* writing `ROLLBACK_IN_FLIGHT`, the controller remains stopped with audit `STARTED`. An operator may first resolve a verified foreign native drift (do not overwrite the original journal) and use:
+
+```sh
+sudo sh uninstall.sh --resume-plan --project user-1001 \
+  --retirement-archive /var/lib/boxweave-retired/retired-XXXXXXXX
+# Only when ready=true, explicitly reviewed:
+sudo sh uninstall.sh --resume --project user-1001 \
+  --retirement-archive /var/lib/boxweave-retired/retired-XXXXXXXX
+# type RESUME user-1001 on the trusted Host console
+```
+
+Read-only preflight requires the **same original** `STARTED` audit review SHA, original archived `review.json` and plan input hash, root-owned private archive with no unexpected entries, all copied originals and exact binary/unit/backup/exec proofs, the same empty Box inventory and SQLite semantic hash, source journal still `APPLIED`, and inactive controller. A moved/changed host, active service, altered unit, unknown native work, nonempty Box inventory, foreign/changed archive contents, mismatch between journal and saved plan, or any unrelated blocker refuses without writing. Both plan and confirmed resume independently repeat this check. A partial native rollback (`ROLLBACK_IN_FLIGHT`) is **never** resumed by this path.
+
+Confirmed `--resume` does **not** invoke original `audited_write`, does **not** regenerate the archive, and does **not** replay Box stop/delete operations. It proceeds from the already archived/stopped phase, invokes the original journal-approved native rollback and archive, then performs exact controller cleanup, and marks the **original** audit `COMPLETE` only on success. Errors leave original audit and materials intact for specific recovery; do not run `--full` again.
+
 ## Commands and approval model
 
 No arguments or `--help` displays help and performs no filesystem, service, Incus or network action.
