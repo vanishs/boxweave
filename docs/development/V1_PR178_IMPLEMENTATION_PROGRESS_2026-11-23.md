@@ -89,3 +89,8 @@ The experiment overrides the four NICs individually; every ACL `used_by` contain
 ### CI for the first source commit
 
 At commit `7151831092a776a0dfd99042cd5fe8482836b56c`: `v1 S1 source checks` run `45241210248` **success**, `v1 required quality gate` run `45241210103` **success**, `v1 Linux amd64 and arm64 candidate artifacts` run `45241210101` **success**. These are *that exact commit's* CI results, not evidence that any later docs/source HEAD also passed or that Native full contract passed.
+
+
+## Scoped compiler and native conntrack research (second implementation slice)
+
+New pure compiler/test source and complete disposable Incus 7.6 dual-stack + long-lived-flow evidence: [PR #178 scoped ACL experiment](V1_PR178_SCOPED_POLICY_EXPERIMENT_2026-11-23.md). **Security finding:** per-Box DROP alone denied new A→B but left preexisting A→B TCP alive; after exact A/B conntrack purge the stream stopped while C/D's TCP/HTTP remained healthy. No production per-Box writer or Root/MCP path is enabled; full no-interruption acceptance is still BLOCKED. Clean isolated Box full `make verify` passed on second code slice; separately run exact-head CI when submitted.
