@@ -99,3 +99,8 @@ New pure compiler/test source and complete disposable Incus 7.6 dual-stack + lon
 ## Separate pre-Incus bridge kernel guard candidate
 
 Source files `internal/install/network_peer_scoped_guard.go` and tests compile a strict bridge-family nftables policy. A/B live grant/revoke and dual-stack packets were confirmed separately from Incus's own ACLs while the C/D long-lived HTTP/TCP monitor had zero failures. Hardened full-subnet and IPv6 link-local unicast rule tests passed. Exact evidence, original operations and remaining safety gates: [PR178 guard lab report](V1_PR178_SCOPED_KERNEL_GUARD_PROTOTYPE_2026-11-23.md). This is **only a pure compiler**: no production nft writer, Root authority, MCP hook, guard boot persistence, ownership verifier or migration. Existing shared-ACL barrier untouched; full Peer acceptance still BLOCKED. Isolated Box full `make verify` operation `c6e78141ee0be4d2a5b03588deb11320` Guest exit 0; exact-code-commit CI should be checked separately.
+
+
+## Strict full-Project per-Box ACL inventory preflight
+
+New pure read-only `NativePeerGuardValidateScopedInventory` and tests in `internal/install/network_peer_scoped_inventory*.go`: fails closed unless complete root-observed Project instance names, exact each native UUID/MAC/static IPv4/IPv6/anti-spoof state, unique per-owner ACL+ETag+UsedBy and all expected bridge consumers are consistent. The returned members can be compiled into the separate nft guard; no native write or Root/MCP integration is enabled. Unit negative cases and whole isolated Box `make verify` original `60c257449b6d1209fa808d2d940e8c72` **Guest exit 0**. Complete evidence/limits: [root inventory preflight](V1_PR178_ROOT_GUARD_READONLY_INVENTORY_2026-11-23.md). #178 remains Draft and unsafe to merge.
