@@ -30,7 +30,7 @@ RETIRED = Path("/var/lib/boxweave-retired")
 VALID_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 VALID_UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 VALID_SHA = re.compile(r"[0-9a-f]{64}\Z")
-TERMINAL = {"SUCCEEDED", "FAILED", "CANCELLED"}
+TERMINAL = {"SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT"}
 SERVE_LOCK_NAME = "ledger.sqlite.serve.lock"
 EXEC_ARCHIVE_NAME = "ledger.sqlite.exec-archive"
 EXEC_ARCHIVE_RE = re.compile(r"[a-f0-9]{32}\.(stdout|stderr)\Z")
@@ -175,16 +175,19 @@ def inspect_sqlite(dbpath, guided=False):
         blockers = []
         unresolved = 0
         historical = []
+        historical_released_other = []
         for op, layer, box, state, native in conn.execute(
                 "SELECT id,layer,box_uuid,state,native_operation_id FROM operations ORDER BY id"):
             operation_hash.update(canonical([op, layer, box, state, native]) + b"\n")
             operation_count += 1
             if state not in TERMINAL:
-                # Keep UNKNOWN unchanged. Only retire a reviewed historical
-                # Exec with exact successful Delete lineage.
+                # A reviewed UNKNOWN is never rewritten to SUCCEEDED/FAILED.
+                # For full retirement, exact successful *later* Box Delete
+                # and an earlier local release audit must prove that no live
+                # Box is being abandoned. Network/foreign UNKNOWNs remain blocked.
                 if guided and version[0] in (5, 6) and state == "UNKNOWN":
                     witness = conn.execute("""
-                        SELECT o.id, b.uuid, d.id, r.seq, r.evidence_digest
+                        SELECT o.id, b.uuid, d.id, r.seq, r.evidence_digest, o.action
                         FROM operations o
                         JOIN owned_boxes b ON b.uuid=o.box_uuid AND b.incarnation=o.incarnation
                            AND b.project=o.layer AND b.state='DELETED' AND b.deleted_at>0
@@ -192,12 +195,18 @@ def inspect_sqlite(dbpath, guided=False):
                            AND d.state='SUCCEEDED' AND d.layer=b.project
                            AND d.box_uuid=b.uuid AND d.incarnation=b.incarnation
                         JOIN recovery_audit r ON r.operation_id=o.id AND r.decision='RELEASED'
-                        WHERE o.id=? AND o.action='box_exec' AND r.at<=b.deleted_at
+                        WHERE o.id=? AND o.action IN
+                            ('box_exec','box_start','box_stop','box_update','box_wait_ready')
+                            AND r.at<=b.deleted_at
                         ORDER BY r.seq
                     """, (op,)).fetchall()
                     if len(witness) == 1 and VALID_SHA.fullmatch(witness[0][4]):
-                        historical.append(list(witness[0]))
-                        operation_hash.update(canonical(witness[0]) + b"\n")
+                        proof = list(witness[0])
+                        if proof[5] == "box_exec":
+                            historical.append(proof[:5])
+                        else:
+                            historical_released_other.append(proof)
+                        operation_hash.update(canonical(proof) + b"\n")
                         continue
                 unresolved += 1
                 if unresolved <= 24:
@@ -227,6 +236,7 @@ def inspect_sqlite(dbpath, guided=False):
         return {"version": version[0], "operations": operation_count,
                 "operations_sha256": operation_hash.hexdigest(), "boxes": boxes,
                 "unresolved_operations": unresolved, "historical_released_exec": historical,
+                "historical_released_other": historical_released_other,
                 "blockers": blockers}
     except sqlite3.Error as exc:
         raise UninstallError("SQLite snapshot cannot be verified: " + str(exc)) from exc
@@ -828,6 +838,8 @@ def main(argv=None):
     action.add_argument("--plan", action="store_true", help="read-only host inventory and review hashes")
     action.add_argument("--apply", action="store_true", help="apply one reviewed plan; requires two exact digests")
     action.add_argument("--full", action="store_true", help="guided full retirement with terminal review and backup")
+    parser.add_argument("--guided-full-plan", action="store_true",
+                        help="with --plan --scope full: use the same guided read-only archive/inventory checks as --full")
     parser.add_argument("--scope", choices=SCOPES, help="service | controller | full (never shared Incus)")
     parser.add_argument("--project", help="exact restricted service Project (user-UID)")
     parser.add_argument("--box-uuid", action="append", default=[], help="full only: complete exact immutable UUID allowlist")
@@ -838,6 +850,8 @@ def main(argv=None):
     if not args.plan and not args.apply and not args.full:
         parser.print_help()
         return 0 if not any((args.scope, args.project, args.box_uuid)) else 2
+    if args.guided_full_plan and (not args.plan or args.scope != "full"):
+        parser.error("--guided-full-plan requires --plan --scope full")
     if args.full:
         if args.scope or args.confirm_host_sha256 or args.confirm_review_sha256:
             parser.error("--full uses terminal approval, not explicit scope/digests")
@@ -847,7 +861,8 @@ def main(argv=None):
         parser.error("--scope and --project required for plan/apply")
     if os.geteuid() != 0 or sys.platform != "linux":
         raise UninstallError("root on the reviewed Linux host required for safe ledger/Incus inspection")
-    plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256, guided=args.full)
+    plan = inspect(args.scope, args.project, args.box_uuid, args.native_prepare_sha256,
+                   guided=args.full or args.guided_full_plan)
     if args.plan:
         print(json.dumps(plan, indent=2, sort_keys=True))
         return 0 if plan["ready"] else 2
@@ -875,7 +890,8 @@ def main(argv=None):
                    "host_sha256": plan["host_machine_id_sha256"],
                    "review_sha256": plan["review_sha256"],
                    "actions": plan["actions"],
-                   "historical_released_exec": plan["sqlite"]["historical_released_exec"]})
+                   "historical_released_exec": plan["sqlite"]["historical_released_exec"],
+                    "historical_released_other": plan["sqlite"]["historical_released_other"]})
     result = apply(plan)
     # Completion is a separate fsynced audit transition; interruptions keep
     # the original STARTED receipt and require deliberate manual reconciliation.
