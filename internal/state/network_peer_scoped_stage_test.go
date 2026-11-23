@@ -8,15 +8,10 @@ import (
 
 func pr178ScopedReadyToStage(t *testing.T, allow bool) (*Store, *Store, string) {
 	t.Helper()
-	s, r, id := pr178ScopedOriginalFixture(t, allow)
-	sql := "DELETE FROM peer_grants WHERE status='PENDING'"
-	if !allow {
-		sql = "UPDATE peer_grants SET status='CONFIRMED',desired=1,operation_id='' WHERE status='PENDING'"
+	if allow {
+		return pr178ScopedOriginalFixtureMode(t, true, "ready-grant")
 	}
-	if _, e := s.db.Exec(sql); e != nil {
-		t.Fatal(e)
-	}
-	return s, r, id
+	return pr178ScopedOriginalFixtureMode(t, false, "ready-revoke")
 }
 func TestPR178V2StageScopedPeerGrantAndRevokeAtomic(t *testing.T) {
 	for _, allow := range []bool{true, false} {
@@ -59,11 +54,8 @@ func TestPR178V2StageScopedPeerGrantAndRevokeAtomic(t *testing.T) {
 	}
 }
 func TestPR178V2StageScopedPeerRegrantOnlyExactTombstone(t *testing.T) {
-	s, r, id := pr178ScopedOriginalFixture(t, true)
+	s, r, id := pr178ScopedOriginalFixtureMode(t, true, "ready-regrant")
 	ctx := context.Background()
-	if _, e := s.db.Exec("UPDATE peer_grants SET status='REVOKED',desired=0,operation_id='' WHERE status='PENDING'"); e != nil {
-		t.Fatal(e)
-	}
 	if e := s.StageScopedPeerOriginal(ctx, id); e != nil {
 		t.Fatal("v2 regrant of same pinned revoked Box incarnation rejected", e)
 	}

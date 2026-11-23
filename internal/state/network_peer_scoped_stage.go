@@ -108,8 +108,8 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 	}
 	rows, e = tx.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,
   target_incarnation,source_ipv4,target_ipv4,source_ipv6,target_ipv6,
-  desired,status,operation_id FROM peer_grants WHERE project=?
-  ORDER BY source_uuid,target_uuid`, i.Project)
+  desired,status,operation_id,COALESCE(last_verified_operation_id,'')
+  FROM peer_grants WHERE project=? ORDER BY source_uuid,target_uuid`, i.Project)
 	if e != nil {
 		return e
 	}
@@ -118,9 +118,10 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 	for rows.Next() {
 		var p PeerGrantBinding
 		var desired int
-		var state, original string
+		var state, original, verified string
 		if e = rows.Scan(&p.SourceUUID, &p.SourceIncarnation, &p.TargetUUID, &p.TargetIncarnation,
-			&p.SourceIPv4, &p.TargetIPv4, &p.SourceIPv6, &p.TargetIPv6, &desired, &state, &original); e != nil {
+			&p.SourceIPv4, &p.TargetIPv4, &p.SourceIPv6, &p.TargetIPv6,
+			&desired, &state, &original, &verified); e != nil {
 			break
 		}
 		a, okA := owners[p.SourceUUID]
@@ -130,8 +131,13 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 			p.SourceIncarnation != a.Incarnation || p.TargetIncarnation != b.Incarnation ||
 			p.SourceIPv4 != a.IPv4 || p.TargetIPv4 != b.IPv4 ||
 			p.SourceIPv6 != a.IPv6 || p.TargetIPv6 != b.IPv6 ||
-			original != "" || !(desired == 1 && state == "CONFIRMED" || desired == 0 && state == "REVOKED") {
+			!(desired == 1 && state == "CONFIRMED" || desired == 0 && state == "REVOKED") {
 			e = ErrResourceLocked
+			break
+		}
+		e = scopedPeerVerifyTerminalLineageTx(ctx, tx, i.Project, i.Bridge,
+			p, desired, state, original, verified)
+		if e != nil {
 			break
 		}
 		if p.SourceUUID == i.SourceUUID && p.TargetUUID == i.TargetUUID {
@@ -160,7 +166,9 @@ func (s *Store) StageScopedPeerOriginal(ctx context.Context, id string) error {
 			res, e := tx.ExecContext(ctx, `UPDATE peer_grants SET desired=1,status='PENDING',
     operation_id=? WHERE project=? AND source_uuid=? AND target_uuid=?
     AND source_incarnation=? AND target_incarnation=? AND desired=0
-    AND status='REVOKED' AND operation_id='' AND source_ipv4=? AND target_ipv4=?
+    AND status='REVOKED' AND operation_id=last_verified_operation_id
+    AND last_verified_operation_id IS NOT NULL
+    AND source_ipv4=? AND target_ipv4=?
     AND source_ipv6=? AND target_ipv6=?`,
 				id, i.Project, src.UUID, dst.UUID, src.Incarnation, dst.Incarnation,
 				src.IPv4, dst.IPv4, src.IPv6, dst.IPv6)

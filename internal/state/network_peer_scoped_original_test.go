@@ -11,15 +11,31 @@ import (
 
 // Construct only a DB-level v2 original, not an installed MCP or Root
 // dispatcher. The old controller never issues this intent schema.
+// A complete synthetic v1 history is installed through the REAL legacy
+// SQLite terminal original APIs before any v2 original is admitted. No
+// actual native kernel success is inferred from this test fixture.
 func pr178ScopedOriginalFixture(t *testing.T, allow bool) (*Store, *Store, string) {
+	return pr178ScopedOriginalFixtureMode(t, allow, "pending")
+}
+func pr178ScopedOriginalFixtureMode(t *testing.T, allow bool, mode string) (*Store, *Store, string) {
 	t.Helper()
 	ctx := context.Background()
 	s := pr178ScopedStoreFixture(t)
+	src, dst, third := s4b2RootSrc, s4b2RootDst, s4b2RootThird
+	pr178LegacyVerifiedPeerFixture(t, s, third, src,
+		"10.243.18.13", "10.243.18.11", "fd43:18::13", "fd43:18::11", true)
+	if !allow || mode == "ready-revoke" || mode == "ready-regrant" {
+		pr178LegacyVerifiedPeerFixture(t, s, src, dst,
+			"10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12", true)
+	}
+	if mode == "ready-regrant" {
+		pr178LegacyVerifiedPeerFixture(t, s, src, dst,
+			"10.243.18.11", "10.243.18.12", "fd43:18::11", "fd43:18::12", false)
+	}
 	_, tok, e := s.IssueToken(ctx, time.Hour)
 	if e != nil {
 		t.Fatal(e)
 	}
-	src, dst, third := s4b2RootSrc, s4b2RootDst, s4b2RootThird
 	intent := ScopedPeerOriginalIntent{Schema: 2, Project: "user-1001", Bridge: "bwbr0",
 		SourceUUID: src, SourceIncarnation: src, TargetUUID: dst, TargetIncarnation: dst, Allow: allow}
 	raw, e := json.Marshal(intent)
@@ -40,27 +56,21 @@ func pr178ScopedOriginalFixture(t *testing.T, allow bool) (*Store, *Store, strin
 	if e != nil {
 		t.Fatal(e)
 	}
-	// A confirmed C->A Peer must stay *byte-for-byte* unchanged by A->B,
-	// regardless of the grant/revoke direction of this original.
-	_, e = s.db.Exec(`INSERT INTO peer_grants
- (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
- desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
- VALUES('user-1001',?,?,?, ?,1,'CONFIRMED','10.243.18.13','10.243.18.11',
- 'fd43:18::13','fd43:18::11','')`, third, third, src, src)
-	if e != nil {
-		t.Fatal(e)
-	}
-	desired := 0
-	if allow {
-		desired = 1
-	}
-	_, e = s.db.Exec(`INSERT INTO peer_grants
- (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
- desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
- VALUES('user-1001',?,?,?, ?,?,'PENDING','10.243.18.11','10.243.18.12',
- 'fd43:18::11','fd43:18::12',?)`, src, src, dst, dst, desired, receipt.ID)
-	if e != nil {
-		t.Fatal(e)
+	if mode == "pending" {
+		if allow {
+			_, e = s.db.Exec(`INSERT INTO peer_grants
+    (project,source_uuid,source_incarnation,target_uuid,target_incarnation,
+    desired,status,source_ipv4,target_ipv4,source_ipv6,target_ipv6,operation_id)
+    VALUES('user-1001',?,?,?,?,1,'PENDING','10.243.18.11','10.243.18.12',
+    'fd43:18::11','fd43:18::12',?)`, src, src, dst, dst, receipt.ID)
+		} else {
+			_, e = s.db.Exec(`UPDATE peer_grants SET desired=0,status='PENDING',operation_id=?
+    WHERE project='user-1001' AND source_uuid=? AND target_uuid=?
+    AND status='CONFIRMED' AND desired=1`, receipt.ID, src, dst)
+		}
+		if e != nil {
+			t.Fatal(e)
+		}
 	}
 	var seq int
 	var name, path string
@@ -70,12 +80,12 @@ func pr178ScopedOriginalFixture(t *testing.T, allow bool) (*Store, *Store, strin
 	if e = os.Chmod(path, 0600); e != nil {
 		t.Fatal(e)
 	}
-	reader, e := OpenNetworkAuditReadOnly(path)
+	r, e := OpenNetworkAuditReadOnly(path)
 	if e != nil {
 		t.Fatal(e)
 	}
-	t.Cleanup(func() { _ = reader.Close() })
-	return s, reader, receipt.ID
+	t.Cleanup(func() { _ = r.Close() })
+	return s, r, receipt.ID
 }
 func TestPR178ScopedOriginalReadOnlyDirectionGrantAndRevoke(t *testing.T) {
 	for _, allow := range []bool{true, false} {

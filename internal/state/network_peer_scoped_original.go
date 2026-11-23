@@ -160,10 +160,17 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	if e != nil || busy != 0 {
 		return zero, ErrResourceLocked
 	}
+	var regrant int
+	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_events
+	 WHERE operation_id=? AND safe_detail='SCOPED_PEER_V2_REGRANT_FROM_REVOKED'`,
+		id).Scan(&regrant); e != nil || regrant > 1 ||
+		(regrant == 1 && !intent.Allow) {
+		return zero, ErrResourceLocked
+	}
 	rows, e = tx.QueryContext(ctx, `SELECT source_uuid,source_incarnation,target_uuid,
   target_incarnation,source_ipv4,target_ipv4,source_ipv6,target_ipv6,
-  desired,status,operation_id FROM peer_grants WHERE project=?
-  ORDER BY source_uuid,target_uuid`, project)
+  desired,status,operation_id,COALESCE(last_verified_operation_id,'')
+  FROM peer_grants WHERE project=? ORDER BY source_uuid,target_uuid`, project)
 	if e != nil {
 		return zero, e
 	}
@@ -173,10 +180,10 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 	for rows.Next() {
 		var p PeerGrantBinding
 		var desired int
-		var st, original string
+		var st, original, verified string
 		if e = rows.Scan(&p.SourceUUID, &p.SourceIncarnation, &p.TargetUUID,
 			&p.TargetIncarnation, &p.SourceIPv4, &p.TargetIPv4, &p.SourceIPv6,
-			&p.TargetIPv6, &desired, &st, &original); e != nil {
+			&p.TargetIPv6, &desired, &st, &original, &verified); e != nil {
 			break
 		}
 		src, ok1 := owners[p.SourceUUID]
@@ -190,16 +197,37 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 			break
 		}
 		switch {
-		case desired == 1 && st == "CONFIRMED" && original == "":
-			before = append(before, p)
-			after = append(after, p)
-		case desired == 0 && st == "REVOKED" && original == "":
-			revoked = append(revoked, p)
+		case desired == 1 && st == "CONFIRMED":
+			e = scopedPeerVerifyTerminalLineageTx(ctx, tx, project, bridge,
+				p, desired, st, original, verified)
+			if e == nil {
+				before = append(before, p)
+				after = append(after, p)
+			}
+		case desired == 0 && st == "REVOKED":
+			e = scopedPeerVerifyTerminalLineageTx(ctx, tx, project, bridge,
+				p, desired, st, original, verified)
+			if e == nil {
+				revoked = append(revoked, p)
+			}
 		case st == "PENDING" && original == id && pending == 0 &&
 			p.SourceUUID == intent.SourceUUID && p.TargetUUID == intent.TargetUUID &&
 			p.SourceIncarnation == intent.SourceIncarnation &&
 			p.TargetIncarnation == intent.TargetIncarnation &&
 			(intent.Allow && desired == 1 || !intent.Allow && desired == 0):
+			// A fresh grant has no prior verified original. Revoke and
+			// regrant retain the exact previously successful A/B operation.
+			if intent.Allow && regrant == 0 {
+				if verified != "" {
+					e = ErrResourceLocked
+				}
+			} else {
+				e = scopedPeerVerifyHistoricalOperationTx(ctx, tx,
+					project, bridge, p, verified, !intent.Allow)
+			}
+			if e != nil {
+				break
+			}
 			pending++
 			pendingPair = p
 			if intent.Allow {
@@ -224,13 +252,6 @@ func (s *Store) readRootScopedPeerOriginal(ctx context.Context, id, project, bri
 		return zero, e
 	}
 	if pending != 1 || len(before) > 32 || len(after) > 32 {
-		return zero, ErrResourceLocked
-	}
-	var regrant int
-	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM operation_events
-	 WHERE operation_id=? AND safe_detail='SCOPED_PEER_V2_REGRANT_FROM_REVOKED'`,
-		id).Scan(&regrant); e != nil || regrant > 1 ||
-		(regrant == 1 && !intent.Allow) {
 		return zero, ErrResourceLocked
 	}
 	revokedBefore := slices.Clone(revoked)
