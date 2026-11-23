@@ -2,6 +2,12 @@
 
 **As of 2026-11-23. Owner-approved direction, design committed; feature code is NOT implemented.** Do not claim existing RC13 `doctor --full` or `recover --plan --issue` work. You must read [the full design and incident ledger](V1_UNIFIED_DOCTOR_RECOVER_DESIGN_2026-11-23.md) before coding.
 
+## New RC13 real nested acceptance / incident regression (2026-11-23)
+
+**Mandatory additional reading:** [RC13 nested Peer + Port Forward real incident matrix](V1_RC13_NESTED_PEER_DOCTOR_CASES_2026-11-23.md). It records an actual working L0 Client → L1 RC13 Forward → L2 Python HTTP chain and separate default-deny, allowed, and unapproved-third-party packet witnesses. **Do not reclassify this feature acceptance as a diagnostic-system implementation.**
+
+Prioritize the newly observed Doctor/Recover cases alongside the existing RC12/RC13 cases: (a) Peer original waiting in `ADMITTED` with root helper `not-found`, claims locking both endpoints plus ACL, and `operation_cancel` blocked; (b) one-use Host PRS approval, exact original/digest and no MCP root bypass; (c) whole-Project stop/autostart=false barrier and volatile guest-process loss; (d) native Forward device confirmed despite absent Guest listener; (e) Exec Operation `SUCCEEDED` with `guest_exit_code=124` represents a **failed Guest command**, not a successful install; (f) per-layer host bind `0.0.0.0` vs L0 reachability and Peer isolation; (g) effective systemd/MCP policy `all` vs standalone CLI `disabled`; (h) nested L1 `unconfined` and L2 AppArmor `enforce` are observations, not full multi-layer security proof; (i) signed apt source / missing `gnupg` are Guest environment facts, not permission to run APT from Host Doctor; (j) original-specific PRS unit lifecycle and absent automatic status. **Root behavior redesign is delegated to a separate Draft PR; #177 owns readonly diagnosis and recovery navigation only.**
+
 ## Copy-ready agent instruction (中文)
 
 > 接手 BoxWeave [PR #177](https://github.com/vanishs/boxweave/pull/177)，只在既有 Draft 分支 `fix/rc12-rc13-guided-uninstall-review` 继续开发。Owner 已同意统一诊断/修复设计：**一个 binary、两个公开 CLI 入口 `boxweave doctor`（只读诊断）和 `boxweave recover`（经过独立审核的修复）**，不要新增第三套恢复引擎或 MCP Host root 工具。
